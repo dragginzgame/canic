@@ -15,6 +15,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use ic_host_artifacts::artifact::{ArtifactError, CopyError, copy_reader, hash_reader};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error as ThisError;
@@ -61,20 +62,10 @@ impl ArtifactChecksum {
 
     /// Compute a file checksum from an already-open artifact descriptor.
     pub(crate) fn from_reader(reader: &mut impl Read) -> Result<Self, ArtifactChecksumError> {
-        let mut hasher = Sha256::new();
-        let mut buffer = vec![0u8; 64 * 1024];
-
-        loop {
-            let read = reader.read(&mut buffer)?;
-            if read == 0 {
-                break;
-            }
-            hasher.update(&buffer[..read]);
-        }
-
+        let identity = hash_reader(reader, u64::MAX).map_err(artifact_io_error)?;
         Ok(Self {
             algorithm: SHA256_ALGORITHM.to_string(),
-            hash: hex_bytes(hasher.finalize()),
+            hash: identity.sha256.to_string(),
         })
     }
 
@@ -82,21 +73,13 @@ impl ArtifactChecksum {
         reader: &mut impl Read,
         writer: &mut impl Write,
     ) -> Result<Self, ArtifactChecksumError> {
-        let mut hasher = Sha256::new();
-        let mut buffer = vec![0u8; 64 * 1024];
-
-        loop {
-            let read = reader.read(&mut buffer)?;
-            if read == 0 {
-                break;
-            }
-            writer.write_all(&buffer[..read])?;
-            hasher.update(&buffer[..read]);
-        }
-
+        let identity = copy_reader(reader, writer, u64::MAX).map_err(|error| match error {
+            CopyError::Input(error) => artifact_io_error(error),
+            CopyError::Output(error) => error,
+        })?;
         Ok(Self {
             algorithm: SHA256_ALGORITHM.to_string(),
-            hash: hex_bytes(hasher.finalize()),
+            hash: identity.sha256.to_string(),
         })
     }
 
@@ -181,6 +164,13 @@ impl ArtifactChecksum {
         destination: &Path,
     ) -> Result<Self, ArtifactChecksumError> {
         secure::stage_relative_path(root, relative, destination)
+    }
+}
+
+fn artifact_io_error(error: ArtifactError) -> io::Error {
+    match error {
+        ArtifactError::Io(error) => error,
+        error => io::Error::other(error),
     }
 }
 

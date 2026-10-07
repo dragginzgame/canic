@@ -283,7 +283,7 @@ fn renewal_response_preserves_typed_remote_error() {
 fn renewal_response_rejects_invalid_response_bytes() {
     assert!(matches!(
         codec::parse_renewal_status_summary(r#"{"response_bytes":"no"}"#),
-        Err(IcpJsonResponseError::Hex(_))
+        Err(IcpJsonResponseError::Envelope(_))
     ));
 }
 
@@ -301,7 +301,7 @@ fn renewal_response_rejects_wrong_candid_type() {
 fn renewal_response_rejects_invalid_json() {
     assert!(matches!(
         codec::parse_renewal_status_summary("not json"),
-        Err(IcpJsonResponseError::Json(_))
+        Err(IcpJsonResponseError::Envelope(_))
     ));
 }
 

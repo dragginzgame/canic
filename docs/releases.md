@@ -192,7 +192,15 @@ bindings together during adoption. A failed consumer check still stops recovery.
 
 Release selections propagate through Make command-line variables, including
 `MAKEFLAGS` and `MAKEOVERRIDES`. Preserve them in normal adapters and same-checkout
-nested validation. An independently configured fixture owns its own selections:
+nested validation. The release runner, validation logger and formatting hook use
+`scripts/ci/check-make-execution.sh` to reject inherited ignore-errors, dry-run,
+question, touch and version-only modes before dispatch. An isolated Make probe
+must execute a harmless failing recipe and report its failure; it loads no consumer
+Makefile. Ordinary release variables and jobserver settings remain inherited by
+the actual targets. Rerun without the rejected mode. Consumer
+recipes must still propagate failures and execute their declared gate.
+
+An independently configured fixture owns its own selections:
 clear inherited `MAKEFLAGS`, `MFLAGS` and `MAKEOVERRIDES` before its Make calls,
 then supply the fixture's intended release variables explicitly.
 
@@ -296,7 +304,8 @@ The Makefile pattern specifies a contract; adding this document does not install
 helpers or prove consumer adoption. Consumers implement or align their targets,
 vendor a clean reviewed Shared Tooling revision with this document,
 `scripts/ci/run-release.sh`, `scripts/ci/next-release-version.sh` and any selected
-changelog helper in the [governance snapshot](consuming-snapshots.md), and qualify the workflow on their
+changelog helper, together with `scripts/ci/check-make-execution.sh`, in the
+[governance snapshot](consuming-snapshots.md), and qualify the workflow on their
 declared Linux and macOS hosts. Report upstream policy changes separately from
 verified consumer adoption.
 

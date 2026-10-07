@@ -13,6 +13,7 @@ Run the refresh helper from a clean Shared Tooling checkout:
   --consumer /path/to/consumer \
   --file scripts/ci/verify-file-checksum.sh \
   --file scripts/ci/verify-shared-tooling-snapshot.sh \
+  --file scripts/ci/check-make-execution.sh \
   --file scripts/ci/run-validation-targets.sh
 ```
 
@@ -70,6 +71,10 @@ source revision. Verify the completed snapshot before resuming validation.
 
 To change the declared file set, edit or recreate the manifest as an explicit
 reviewed consumer change; ordinary refresh does not silently widen it.
+
+The release runner, validation logger and formatting hook require
+`scripts/ci/check-make-execution.sh`. Include it when adding or refreshing any of
+those entrypoints; existing manifests need that explicit file-set addition.
 
 When refreshing `install-actionlint.sh`, `install-shellcheck.sh`, `install-gitleaks.sh`,
 `install-sccache.sh` or `install-yq.sh`, also declare `scripts/ci/install-ci-tool.sh`
@@ -158,9 +163,10 @@ baseline. It must identify the exact source revision and document; a branch URL
 or moving sibling path does not establish which rules were reviewed. Snapshot
 integrity checks detect changes to declared files; they do not prove that a
 consumer has adopted the newest policy or resolved its local instruction conflicts.
-Rust consumers also add `.githooks/pre-commit` and
-`scripts/dev/install-git-hooks.sh` to the declared file set, align their formatting
-targets with the [hook contract](../rules/git-hooks.md), and enable the hook through
+Rust consumers also add `.githooks/pre-commit`,
+`scripts/dev/install-git-hooks.sh` and `scripts/ci/check-make-execution.sh` to the
+declared file set, align their formatting targets with the
+[hook contract](../rules/git-hooks.md), and enable the hook through
 `make install-hooks`. Refresh preserves executable modes but does not activate
 hooks or replace Git configuration. Review existing local hooks before declaring
 their paths for replacement; preserve and reconcile their obligations.

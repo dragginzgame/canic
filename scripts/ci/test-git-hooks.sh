@@ -23,13 +23,14 @@ new_fixture() {
     mkdir -p "$FIXTURE/$1"
     cd "$FIXTURE/$1"
     git init --quiet
-    mkdir -p .git/objects/info .githooks scripts/dev
+    mkdir -p .git/objects/info .githooks scripts/dev scripts/ci
     printf '%s\n' "$source_objects" > .git/objects/info/alternates
     git update-ref HEAD "$source_commit"
     git read-tree HEAD
     git checkout-index --all
     cp "$ROOT/.githooks/pre-commit" .githooks/pre-commit
     cp "$ROOT/scripts/dev/install-git-hooks.sh" scripts/dev/install-git-hooks.sh
+    cp "$ROOT/scripts/ci/check-make-execution.sh" scripts/ci/check-make-execution.sh
     cat > Makefile <<'MAKE'
 .PHONY: fmt
 fmt:
@@ -55,7 +56,7 @@ esac
 [[ "${FORMAT_TEST_FAIL:-}" != yes ]]
 FORMAT
     printf 'unformatted\n' > Cargo.toml
-    git add Makefile scripts/fixture-fmt.sh Cargo.toml
+    git add Makefile scripts/fixture-fmt.sh scripts/ci/check-make-execution.sh Cargo.toml
 }
 expect_failure() {
     if "$@" > output 2>&1; then
@@ -114,6 +115,15 @@ for race in index worktree; do
         index) [[ "$(git show :concurrent.txt)" == 'concurrent staged edit' && "$(cat staged.rs)" == unformatted ]] ;;
         worktree) [[ "$(git write-tree)" == "$tree" && "$(cat staged.rs)" == 'concurrent working edit' ]] ;;
     esac
+done
+
+for flags in i n q t v; do
+    new_fixture "make-mode-$flags"
+    printf 'unformatted\n' > staged.rs
+    git add staged.rs
+    tree="$(git write-tree)"
+    expect_failure env MAKEFLAGS="$flags" bash .githooks/pre-commit
+    [[ "$(git write-tree)" == "$tree" && "$(cat staged.rs)" == unformatted ]]
 done
 
 new_fixture alternate-index

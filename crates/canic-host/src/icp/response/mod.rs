@@ -8,17 +8,10 @@
 mod tests;
 
 use candid::CandidType;
-use canic_core::{
-    cdk::utils::hash::{DecodeHexError, decode_hex},
-    dto::error::Error as CanicError,
-};
-use serde::{Deserialize, de::DeserializeOwned};
+use canic_core::dto::error::Error as CanicError;
+use ic_host_tools::response::{ResponseError, ResponseFormat, ResponseLimits, decode};
+use serde::de::DeserializeOwned;
 use thiserror::Error as ThisError;
-
-#[derive(Deserialize)]
-struct IcpJsonResponseEnvelope {
-    response_bytes: Option<String>,
-}
 
 ///
 /// IcpJsonResponseError
@@ -31,14 +24,8 @@ pub enum IcpJsonResponseError {
     #[error("ICP response_bytes Candid was invalid: {0}")]
     Candid(#[source] candid::Error),
 
-    #[error("ICP response_bytes was invalid hexadecimal: {0}")]
-    Hex(#[source] DecodeHexError),
-
-    #[error("ICP response was invalid JSON: {0}")]
-    Json(#[source] serde_json::Error),
-
-    #[error("ICP JSON response is missing top-level string `response_bytes`")]
-    MissingResponseBytes,
+    #[error("ICP response envelope was invalid: {0}")]
+    Envelope(#[from] ResponseError),
 
     #[error(
         "canister rejected request: {diagnostic}",
@@ -68,10 +55,15 @@ where
 }
 
 pub fn response_bytes(output: &str) -> Result<Vec<u8>, IcpJsonResponseError> {
-    let envelope = serde_json::from_str::<IcpJsonResponseEnvelope>(output)
-        .map_err(IcpJsonResponseError::Json)?;
-    let response_bytes = envelope
-        .response_bytes
-        .ok_or(IcpJsonResponseError::MissingResponseBytes)?;
-    decode_hex(&response_bytes).map_err(IcpJsonResponseError::Hex)
+    // Capture admission belongs to the command owner. Hex cannot produce more
+    // than half the captured input; the codec owns validation and allocation.
+    decode(
+        output.as_bytes(),
+        ResponseFormat::Json,
+        ResponseLimits {
+            input_bytes: output.len(),
+            decoded_bytes: output.len() / 2,
+        },
+    )
+    .map_err(IcpJsonResponseError::Envelope)
 }

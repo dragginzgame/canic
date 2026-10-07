@@ -42,7 +42,7 @@ fn failed_cargo_input_capture_leaves_no_stage_or_published_changes() {
 fn install_limit_failure_preserves_the_published_artifact_set() {
     for network in [BuildNetwork::Ic, BuildNetwork::Local] {
         for oversized in [
-            wasm_with_code_section_size(super::wasm::SUPPORTED_CODE_SECTION_LIMIT_BYTES + 1),
+            wasm_with_code_section_size(12 * 1024 * 1024 + 1),
             wasm_with_defined_functions(super::wasm::SUPPORTED_DEFINED_FUNCTION_LIMIT + 1),
         ] {
             let root = unique_temp_dir("canic-artifact-set-limit");
@@ -88,7 +88,7 @@ fn install_limits_accept_exact_supported_boundaries() {
     fs::create_dir_all(&root).unwrap();
     let path = root.join("app.wasm");
     for wasm in [
-        wasm_with_code_section_size(super::wasm::SUPPORTED_CODE_SECTION_LIMIT_BYTES),
+        wasm_with_code_section_size(12 * 1024 * 1024),
         wasm_with_defined_functions(super::wasm::SUPPORTED_DEFINED_FUNCTION_LIMIT),
     ] {
         fs::write(&path, wasm).unwrap();

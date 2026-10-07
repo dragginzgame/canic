@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Apply [DRAGGINZGAME.md](DRAGGINZGAME.md), recorded at `33c2a6f0018a94915f819ff219e270500ed5b73b` in [.shared-tooling.snapshot](.shared-tooling.snapshot). This file is the local product overlay.
+Apply [DRAGGINZGAME.md](DRAGGINZGAME.md), recorded at `25e7ce83149e081e4dcc52c55c33724e44153f2a` in [.shared-tooling.snapshot](.shared-tooling.snapshot). This file is the local product overlay.
 
 This file is normative for automated agents and contributors. If code conflicts
 with this file, the code is wrong.
@@ -110,6 +110,31 @@ with this file, the code is wrong.
 - Testing: sibling `ic-testkit`, `canic-testing-internal`, `canic-tests`.
 - `scripts/dev/*` are intentional maintainer helpers, not stale CLI leftovers.
 - Keep flat `crates/` unless doing a full Cargo/CI/docs/publish migration.
+
+### Maintainer-approved workspace layout exceptions — 2026-10-07
+
+Keep the established boundaries under [Shared Tooling's workspace rule](rules/rust-workspaces.md),
+as explicitly approved by the maintainer for this adoption
+([#473](https://github.com/dragginzgame/canic/issues/473)):
+
+- The 17 framework audit, sandbox and managed-test packages under
+  `canisters/{audit,sandbox,test}/` retain their current locations and package
+  names. They remain members of the virtual repository-root workspace, inherit
+  its catalog and version, and use the root `Cargo.lock`. They are Canic-owned
+  validation/probe artifacts, separate from application-owned `apps/` packages.
+  Root formatting and metadata inventory cover them; their owning targeted
+  native and PocketIC cases qualify their selected managed graphs.
+- `integrations/blob-service/`, `integrations/blob-service/consumer/` and
+  `integrations/blob-service/embedded-consumer/` retain their independent
+  root-package workspaces and existing package locations. Each root owns its
+  `Cargo.toml` catalog and `Cargo.lock`. These private adapter, dedicated and
+  embedded consumers independently qualify the published blob dependency graph
+  without merging it into the framework workspace. Formatting explicitly
+  covers all three roots; locked managed Wasm builds, runtime-identity checks,
+  Candid parity and the owning managed installation/recovery cases cover them.
+
+These exceptions preserve existing paths and dependency boundaries; they do not
+authorize additional independent workspaces, package renames or dependency changes.
 
 ## Pre-1.0 Hard Cuts
 - Prefer deleting obsolete contracts and correcting current-state defects over

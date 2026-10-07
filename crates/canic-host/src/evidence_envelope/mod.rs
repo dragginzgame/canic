@@ -1,13 +1,14 @@
 //! Stable evidence envelopes for CI/GitOps automation.
 
-use canic_core::cdk::utils::hash::sha256_hex;
-use serde::{Deserialize, Serialize};
 use std::{
-    fs,
-    io::{self, Read},
+    fs, io,
     path::{Component, Path},
     time::UNIX_EPOCH,
 };
+
+use canic_core::cdk::utils::hash::sha256_hex;
+use ic_host_artifacts::artifact::{ArtifactError, hash_reader};
+use serde::{Deserialize, Serialize};
 
 ///
 /// EvidenceEnvelopeV1
@@ -334,16 +335,27 @@ pub fn file_input_fingerprint(
     note: Option<String>,
 ) -> io::Result<InputFingerprintV1> {
     let mut file = fs::File::open(path)?;
-    let mut bytes = Vec::new();
-    file.read_to_end(&mut bytes)?;
-    let mut fingerprint = bytes_input_fingerprint(kind, path, root, &bytes, schema, note);
-    fingerprint.modified_unix_secs = file
+    let identity = hash_reader(&mut file, u64::MAX).map_err(|error| match error {
+        ArtifactError::Io(error) => error,
+        error => io::Error::other(error),
+    })?;
+    let path_summary = input_path_summary(path, root);
+    let modified_unix_secs = file
         .metadata()?
         .modified()
         .ok()
         .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
         .map(|duration| duration.as_secs());
-    Ok(fingerprint)
+    Ok(InputFingerprintV1 {
+        kind: kind.to_string(),
+        path: path_summary.path,
+        path_display: path_summary.display,
+        sha256: Some(identity.sha256.to_string()),
+        size_bytes: Some(identity.bytes),
+        modified_unix_secs,
+        schema,
+        note,
+    })
 }
 
 /// Fingerprint the exact bytes consumed by a caller without re-reading the path.

@@ -22,6 +22,8 @@ fi
 remote="$2"
 branch="$3"
 [[ "$remote" =~ ^[A-Za-z0-9._-]+$ ]] || usage
+make_bin="${RELEASE_MAKE:-make}"
+bash "$(dirname "${BASH_SOURCE[0]}")/check-make-execution.sh" "$make_bin"
 git check-ref-format "refs/heads/$branch" >/dev/null
 root="$(git rev-parse --show-toplevel)"
 cd "$root"
@@ -44,7 +46,6 @@ trap 'exit 143' TERM
 printf '%s\n' "$$" > "$state_root/lock/owner"
 trap 'rm -f "$state_root/lock/owner"; rmdir "$state_root/lock"' EXIT
 
-make_bin="${RELEASE_MAKE:-make}"
 hook() {
     "$make_bin" --no-print-directory "$@" \
         "RELEASE_KIND=$kind" "RELEASE_PREVIOUS=$previous" \

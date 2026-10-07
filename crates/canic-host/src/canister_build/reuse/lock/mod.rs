@@ -13,7 +13,7 @@ use super::{BuildReuseProgress, WorkspaceBuildContext};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
-    io::{self, Read, Seek, SeekFrom, Write},
+    io::{self, Seek, SeekFrom, Write},
     path::PathBuf,
     sync::Mutex,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -141,13 +141,7 @@ fn read_owner(mut file: &fs::File) -> Option<BuildLockOwner> {
         return None;
     }
     file.seek(SeekFrom::Start(0)).ok()?;
-    let mut bytes = Vec::new();
-    file.take(OWNER_LIMIT as u64 + 1)
-        .read_to_end(&mut bytes)
-        .ok()?;
-    if bytes.len() > OWNER_LIMIT {
-        return None;
-    }
+    let bytes = ic_host_artifacts::artifact::read_reader(file, OWNER_LIMIT).ok()?;
     let owner: BuildLockOwner = serde_json::from_slice(&bytes).ok()?;
     (owner.pid > 0 && matches!(owner.profile.as_str(), "debug" | "fast" | "release"))
         .then_some(owner)

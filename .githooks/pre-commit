@@ -7,6 +7,7 @@ set -euo pipefail
 # Dependencies: Bash 3.2, Git, GNU Make and consumer-owned fmt prerequisites.
 root="$(git rev-parse --show-toplevel)"
 cd "$root"
+bash "$root/scripts/ci/check-make-execution.sh"
 snapshot="$(mktemp -d "${TMPDIR:-/tmp}/pre-commit-format.XXXXXX")"
 trap 'rm -rf -- "$snapshot"' EXIT
 

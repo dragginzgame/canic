@@ -48,8 +48,13 @@ The common installer combines existing Canic and IcyDB Binaryen/PocketIC setup
 requirements with IC Timers' verification-before-execution checks and IC Metrics'
 retained provisioning evidence. Exact default versions match the inspected
 consumers; Quill is added from the official release. Platform digests and release
-sources are recorded in [IC tools](ic-tools.md). This is setup orchestration;
-artifact inspection and execution contracts owned by `ic-host-tools` remain there.
+sources are recorded in [IC tools](ic-tools.md). This is setup orchestration.
+The current [IC Host Tooling](https://github.com/dragginzgame/ic-host-tooling)
+packages retain their library contracts: artifact streams and inspection in
+`ic-host-artifacts`, bounded filesystem reads/publication/locks in `ic-host-fs`,
+admitted executable execution in `ic-host-process`, and Candid extraction/IC
+response decoding in `ic-host-tools`. The inspected historical provisioning
+requirements above retain their original attribution.
 
 The local jq/yq pair extends the existing shared yq selection in
 `ci/tool-versions.env`; jq 1.8.2 digests were read from official release-asset

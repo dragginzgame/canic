@@ -1,6 +1,9 @@
 use super::*;
 use crate::test_support::temp_path;
-use std::fs;
+use std::{
+    fs,
+    io::{Read, Write},
+};
 
 const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
@@ -32,6 +35,32 @@ fn file_checksum_matches_byte_checksum() {
 
     fs::remove_file(&path).expect("remove temp artifact");
     assert_eq!(from_file, from_bytes);
+}
+
+#[test]
+fn stream_checksum_projection_preserves_source_and_sink_io_errors() {
+    let path = temp_path("canic-backup-checksum-io");
+    fs::write(&path, b"source").unwrap();
+    let mut unreadable = fs::OpenOptions::new().write(true).open(&path).unwrap();
+    let expected_read = unreadable.read(&mut [0; 1]).unwrap_err().raw_os_error();
+    let ArtifactChecksumError::Io(read_error) =
+        ArtifactChecksum::from_reader(&mut unreadable).unwrap_err()
+    else {
+        panic!("expected source I/O error");
+    };
+    assert_eq!(read_error.raw_os_error(), expected_read);
+
+    let mut unwritable = fs::File::open(&path).unwrap();
+    let expected_write = unwritable.write(b"write").unwrap_err().raw_os_error();
+    let mut source = std::io::Cursor::new(b"source");
+    let ArtifactChecksumError::Io(write_error) =
+        ArtifactChecksum::copy_from_reader(&mut source, &mut unwritable).unwrap_err()
+    else {
+        panic!("expected sink I/O error");
+    };
+    assert_eq!(write_error.raw_os_error(), expected_write);
+    assert_eq!(fs::read(&path).unwrap(), b"source");
+    fs::remove_file(path).unwrap();
 }
 
 // Ensure directory checksums are stable regardless of file creation order.

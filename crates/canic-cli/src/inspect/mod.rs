@@ -632,7 +632,7 @@ mod tests {
 
         assert!(matches!(
             err,
-            InspectCommandError::InvalidResponse(IcpJsonResponseError::MissingResponseBytes)
+            InspectCommandError::InvalidResponse(IcpJsonResponseError::Envelope(_))
         ));
     }
 
@@ -698,7 +698,7 @@ mod tests {
 
         assert!(matches!(
             err,
-            InspectCommandError::InvalidResponse(IcpJsonResponseError::Hex(_))
+            InspectCommandError::InvalidResponse(IcpJsonResponseError::Envelope(_))
         ));
     }
 

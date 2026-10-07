@@ -1,5 +1,103 @@
 # Current handoff — 2026-10-07
 
+Host's stale Wasm code-section ceiling is corrected from 10 MiB to the current
+documented 12 MiB, including Local builds. Pre-publication refusal still protects
+the previous artifact set; the warning now starts at 11.25 MiB. All 25 targeted
+`artifact_io::` native tests pass, including explicit 12 MiB acceptance and
+one-byte-over refusal with previous Wasm/Candid/gzip preservation. Scoped rustfmt,
+diff hygiene and the changed documentation's local links pass. This result uses
+the current Memory 0.30.0 / Metrics 0.2.4 / Timers 0.14.6 root graph below, whose
+manifest and lock hashes remained unchanged during qualification. Synthetic
+Wasm/tool fixtures qualify Host admission, not managed installation at the new
+ceiling. [#476](https://github.com/dragginzgame/canic/issues/476) owns the correction;
+logs remain under `target/review-validation/wasm-code-limit-20261007/`.
+Earlier footprint evidence retains its dated limits. The complete batch's
+managed-stack and minor-boundary blockers remain; no release effects ran.
+
+After the focused adoption qualification below, a concurrent dependency update
+selected Memory 0.30.0, Metrics 0.2.4 and Timers 0.14.6. It is preserved. Targeted
+Host `cargo check --locked --offline` passes with root lock SHA-256
+`7932e45632560aa4eeefe30349410e4c280c7cfec58567cdc7e4a84cc266578f`;
+this later selection has compile-only evidence, not the earlier native/managed
+qualification. All three independent blob locks refuse locked Wasm metadata.
+Published Blob Storage 0.15.3 and the current adapter still require Memory 0.28,
+which cannot collapse into the new 0.30 identity. Published service alignment,
+adapter/lock updates and renewed managed qualification are owned by
+[Blob Storage#20](https://github.com/dragginzgame/ic-blob-storage/issues/20) and
+[Canic#444](https://github.com/dragginzgame/canic/issues/444).
+
+Shared Tooling now selects reviewed committed 0.1.14,
+`25e7ce83149e081e4dcc52c55c33724e44153f2a`; all 68 canonical files and governance
+link closure verify. The maintainer explicitly retained `apps/`, the framework
+fixtures under `canisters/{audit,sandbox,test}` and the three independent blob
+root-package workspaces. [AGENTS.md](../../AGENTS.md) records the scoped exceptions;
+no package moved or dependency graph merged
+([#473](https://github.com/dragginzgame/canic/issues/473#issuecomment-6033246970)).
+The shared Make-execution guard protects release dispatch, the validation runner
+and isolated hook. The canonical LOC reporter inventories all Cargo members;
+only the JSON-tool projection remains Canic-owned. Hook, validation runner, release
+recovery and snapshot-distribution fixtures, actual metadata/LOC roster equality,
+explicit JSON-tool admission/refusal and scoped ShellCheck pass. The unchanged
+LOC fixture passes from a neutral directory; its Canic configuration-isolation
+failure remains reported upstream. Exact upstream 0.1.14 CI passes its configured
+matrix. These are native/tooling results, not Canic macOS or managed qualification.
+Results and remaining shared reuse boundaries belong to
+[#461](https://github.com/dragginzgame/canic/issues/461#issuecomment-6033246207),
+[Shared Tooling#31](https://github.com/dragginzgame/shared-tooling/issues/31#issuecomment-6033151305),
+[#33](https://github.com/dragginzgame/shared-tooling/issues/33) and
+[#37](https://github.com/dragginzgame/shared-tooling/issues/37).
+
+Published IC Host Tooling 0.3.1 now owns ICP JSON/hex envelopes, Backup descriptor
+hashing/copy, advisory missing-path observations, bounded lock/Observatory reads
+and streamed file evidence. Canic retains Candid/rejection policy, private tree
+framing, publication recovery and paid-effect custody. Public response-error
+callers adopt `IcpJsonResponseError::Envelope(ResponseError)`; the three local
+JSON/hex variants and private parser are removed without a shim. Focused Linux
+results: 31 Host boundary tests, 21 CLI projections, eight Backup artifact tests
+and five native publication/checksum recovery cases pass. Package-scoped strict
+Clippy for Host/CLI/Backup all targets/features passes. These do not qualify live
+paid commands or native macOS. This adoption added one inherited Backup dependency
+edge without changing external selections; the later concurrent update is separate.
+Results and retained process/archive
+boundaries are owned by [#458](https://github.com/dragginzgame/canic/issues/458) and
+[IC Host Tooling#5](https://github.com/dragginzgame/ic-host-tooling/issues/5#issuecomment-6033152454).
+
+The embedded allocation peer was explicitly refreshed and independently verified
+against the preceding qualified lock SHA-256
+`1bd26dadd972057ce8b5ac6fdf9bd79b8f07662d10fdd1cfa59808f6c5720545`.
+Its Wasm remains byte-identical to the already managed-qualified peer, SHA-256
+`01f9170c9a10292e2ccbe6ea45ea8fa3e425a820fa884038ce6643db55139b94`.
+The exact governed PocketIC case
+`pic::lifecycle::tests::published_managed_component_group_support_drives_child_lifecycle`
+passes against that Host/lock graph: real installation, lifecycle restoration
+and authorization refusals. The case took 27.22s; the runner completed in 166s,
+including native inventory compilation and an inherited output pipe held until
+an invocation-owned detached PocketIC server exited. No manual termination was
+performed. This is managed lifecycle evidence, not production deployment or a
+complete PocketIC suite; [#450](https://github.com/dragginzgame/canic/issues/450#issuecomment-6033333375)
+records the final proof. Native/tooling logs remain under
+`target/review-validation/host-reuse-20261007/` and
+`target/review-validation/shared-tooling-014-refresh/`.
+
+Changes remain uncommitted and the maintainer-selected `0.110.53` draft stays.
+No broad gate, version bump, publication or deployment ran. Public hard cuts and
+the existing #457/#459 minor-boundary conflicts still prevent declaring the
+complete batch push/publication ready. Existing staged entries were not changed;
+Git may refresh its index stat cache during observation.
+
+## Earlier Host reuse result — 2026-10-07
+
+Host reuse follow-up delegates gzip publication, bounded frontend file hashing
+and strict lowercase network digests to published Host 0.3.1
+([Canic #458](https://github.com/dragginzgame/canic/issues/458)).
+On Linux, 14 network tests, two payload inventory tests and 16 artifact tests
+pass. The latter filters used the already-built native executable while another
+workspace Cargo build was active. Tool invocations in artifact fixtures are
+substitutes. These checks retain the existing lock selections and do not qualify
+managed execution, full CI or native macOS. The maintainer committed the source
+replacement separately as d7698e1f0541cb52ad8d762bc1549a700b412e88 during review;
+this agent created no commit. Existing minor-boundary conflicts remain.
+
 This file records implementation and validation handoffs. Track bugs, review
 findings and follow-up work in [GitHub issues](https://github.com/dragginzgame/canic/issues).
 

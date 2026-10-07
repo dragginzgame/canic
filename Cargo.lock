@@ -501,6 +501,7 @@ name = "canic-backup"
 version = "0.110.52"
 dependencies = [
  "candid",
+ "ic-host-artifacts",
  "rustix",
  "serde",
  "serde_json",
@@ -2356,9 +2357,9 @@ dependencies = [
 
 [[package]]
 name = "ic-memory"
-version = "0.28.4"
+version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec8681210aab5889446cd14022e055deaf33c4f2f4ff9652cdb1cbadabefc7fe"
+checksum = "edb2f74daec8ae346fe7e7ac32900ec5758a9419e84724cf6ad2eaafda0e3549"
 dependencies = [
  "ciborium",
  "ctor",
@@ -2369,9 +2370,9 @@ dependencies = [
 
 [[package]]
 name = "ic-metrics"
-version = "0.2.3"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "27bb8ca9caa9b67570031d26f2f35f9e113f69b73278cca59b08e9447e13b593"
+checksum = "7bec2da218f678f1e91693bb890a30e185daf0ac1b97475bf42e280dade2d9b6"
 
 [[package]]
 name = "ic-query"
@@ -2469,9 +2470,9 @@ dependencies = [
 
 [[package]]
 name = "ic-timers"
-version = "0.14.5"
+version = "0.14.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9426d58359913fadd239cee4591c72d8295f734345e9c30f4acad1d3028a23f"
+checksum = "c6ca732dc587ad4f1b2bb1d781551ca7827116022e2a9bd0b64363fcf18150f1"
 dependencies = [
  "ic-cdk-timers",
  "ic-metrics",

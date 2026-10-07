@@ -354,7 +354,7 @@ mod tests {
             CanisterProtocolError::Response {
                 canister: candid::Principal::management_canister(),
                 method: canic_core::protocol::CANIC_ROOT_COMMAND,
-                source: IcpJsonResponseError::MissingResponseBytes,
+                source: canic_host::icp::decode_json_result_response::<u64>("{}").unwrap_err(),
             },
         ));
         let mut source = std::error::Error::source(&error);
@@ -362,7 +362,7 @@ mod tests {
         while let Some(cause) = source {
             if matches!(
                 cause.downcast_ref::<IcpJsonResponseError>(),
-                Some(IcpJsonResponseError::MissingResponseBytes)
+                Some(IcpJsonResponseError::Envelope(_))
             ) {
                 preserved = true;
                 break;

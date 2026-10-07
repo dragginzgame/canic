@@ -116,7 +116,7 @@ help:
 	@echo "  dependency-risk-gate  Reject vulnerability or transitive advisory drift"
 	@echo ""
 	@echo "Utilities:"
-	@echo "  cloc             Show runtime vs test Rust LOC across canic crates"
+	@echo "  cloc             Show runtime vs test Rust LOC across Cargo workspace members"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make validate    # Run the complete local validation workflow"
@@ -499,7 +499,7 @@ clean-wasm:
 	rm -rf -- target/standalone-scaling_probe
 
 cloc:
-	bash scripts/dev/cloc.sh
+	bash scripts/dev/report-cloc.sh
 
 # Shared Tooling owns the standard release order and Git effects.
 RELEASE_REMOTE ?= origin

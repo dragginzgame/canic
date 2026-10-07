@@ -358,8 +358,9 @@ proof. Never add synthetic dependencies to qualify a dependency-free consumer.
 Remaining relative arguments explicitly overlay additional current
 files needed by the consumer's formatter (other manifests, source, lockfiles,
 configuration or Make includes). The checker exports existing HEAD, overlays
-the named inputs plus Makefile/hook/installer, and stages them only in temporary
-repositories. It never creates commits or activates the real checkout's hook.
+the named inputs plus the Makefile, hook, installer and Make execution check,
+and stages them only in temporary repositories. It never creates commits or
+activates the real checkout's hook.
 README.md must exist as an unrelated-edit preservation input. Tracked files must
 be regular files, matching the shared hook's support contract.
 

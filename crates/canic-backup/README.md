@@ -9,6 +9,11 @@ manifests, topology hashing, download journals, durable artifact integrity,
 backup layout validation, restore planning, restore apply journals, and native
 runner summaries.
 
+Stream hashing and copying use `ic-host-artifacts` directly. Backup retains
+no-follow traversal, deterministic directory-checksum framing, private staging,
+publication barriers, custody and same-operation recovery; the generic stream
+owner neither opens paths nor publishes artifacts.
+
 Backup creation/execution, restore preparation/run and prune share a parent-side
 layout lock. Restore journal publication requires a `BackupLayoutGuard` and
 durably retains the source layout before publishing recovery authority. Paused

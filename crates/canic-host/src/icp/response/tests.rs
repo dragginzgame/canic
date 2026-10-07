@@ -3,6 +3,7 @@ use candid::Encode;
 use canic_core::{
     cdk::utils::hash::hex_bytes, diagnostics::codes, dto::error::Error as CanicError,
 };
+use ic_host_tools::response::{JsonErrorKind, ResponseError};
 
 #[test]
 fn decodes_plain_typed_response_bytes() {
@@ -47,7 +48,9 @@ fn requires_top_level_string_response_bytes() {
     for output in [r"{}", r#"{"response_bytes":null}"#] {
         assert!(matches!(
             decode_json_response::<u64>(output),
-            Err(IcpJsonResponseError::MissingResponseBytes)
+            Err(IcpJsonResponseError::Envelope(
+                ResponseError::MissingResponseBytes
+            ))
         ));
     }
 }
@@ -56,12 +59,58 @@ fn requires_top_level_string_response_bytes() {
 fn rejects_invalid_hex_and_candid() {
     assert!(matches!(
         decode_json_response::<u64>(r#"{"response_bytes":"not-hex"}"#),
-        Err(IcpJsonResponseError::Hex(_))
+        Err(IcpJsonResponseError::Envelope(ResponseError::InvalidHex {
+            offset: 0
+        }))
     ));
     assert!(matches!(
         decode_json_response::<u64>(r#"{"response_bytes":"00"}"#),
         Err(IcpJsonResponseError::Candid(_))
     ));
+}
+
+#[test]
+fn envelope_errors_preserve_shared_categories_and_source() {
+    for output in [
+        r#"{"response_bytes":42}"#,
+        r#"{"response_bytes":"00","response_bytes":"01"}"#,
+    ] {
+        let error = decode_json_response::<u64>(output).unwrap_err();
+        assert!(matches!(
+            error,
+            IcpJsonResponseError::Envelope(ResponseError::Json {
+                kind: JsonErrorKind::Data,
+                ..
+            })
+        ));
+        assert!(
+            std::error::Error::source(&error)
+                .unwrap()
+                .downcast_ref::<ResponseError>()
+                .is_some()
+        );
+    }
+    assert!(matches!(
+        decode_json_response::<u64>("not json"),
+        Err(IcpJsonResponseError::Envelope(ResponseError::Json {
+            kind: JsonErrorKind::Syntax,
+            ..
+        }))
+    ));
+    assert!(matches!(
+        super::response_bytes(r#"{"response_bytes":"f"}"#),
+        Err(IcpJsonResponseError::Envelope(ResponseError::OddHexLength))
+    ));
+    assert!(matches!(
+        super::response_bytes(r#"{"response_bytes":" 00"}"#),
+        Err(IcpJsonResponseError::Envelope(ResponseError::InvalidHex {
+            offset: 0
+        }))
+    ));
+    assert_eq!(
+        super::response_bytes(r#"{"response_bytes":""}"#).unwrap(),
+        Vec::<u8>::new()
+    );
 }
 
 fn response_json<T: candid::CandidType>(response: &T) -> String {

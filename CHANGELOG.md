@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- Accept Wasm code sections up to the IC's current 12 MiB ceiling while
+  preserving pre-publication rejection and artifact-set protection
+  ([#476](https://github.com/dragginzgame/canic/issues/476)).
+
 - **Breaking; incompatible with the selected patch target:** adopt `ic-memory
   0.27`'s current ownership ledger. Diagnostic consumers must replace history
   fields with current schema metadata; earlier installations require clean
@@ -35,7 +39,12 @@ Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   filesystem publication and locks, executable resolution and Candid formats.
   Remove Canic's copied durable-file engine and public `durable_io` surface;
   direct callers use `ic-host-fs`. Preserve Canic admission, install limits and
-  journal ordering. This public hard cut adds to the minor-release requirement
+  journal ordering. Stream gzip publication and file hashing through shared
+  mechanics; use the shared strict lowercase digest parser and encoder.
+  Delegate Backup stream hashing/copy, bounded evidence reads and path observations.
+  **Breaking for response-error callers:** match the shared codec error through
+  `IcpJsonResponseError::Envelope` instead of local JSON/hex variants.
+  These public hard cuts add to the minor-release requirement
   ([#458](https://github.com/dragginzgame/canic/issues/458)).
 
 - Adopt reviewed shared repository tool setup and pin checks, shared pinned CI
@@ -43,10 +52,14 @@ Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   portable digests, isolated RustSec preparation and explicit-cutoff tag maintenance.
   Verify snapshots independently, bind release pushes to the captured URL and
   inspect CI by exact commit. Replace stale native CI selection with guarded
-  recovery tests. Isolate formatting hooks, validate retained release commits and
+  recovery tests. Reject Make modes that skip execution or ignore failures;
+  use shared Cargo-member LOC reporting with build-output exclusion. Preserve
+  App, framework-fixture and independent blob layouts through approved boundaries.
+  Isolate formatting hooks, validate retained release commits and
   consolidate audit methods;
   preserve macOS Binaryen's runtime library during Rust installation
   ([#461](https://github.com/dragginzgame/canic/issues/461),
+  [#473](https://github.com/dragginzgame/canic/issues/473),
   [#454](https://github.com/dragginzgame/canic/issues/454),
   [#453](https://github.com/dragginzgame/canic/issues/453),
   [#460](https://github.com/dragginzgame/canic/issues/460),

@@ -62,10 +62,14 @@ captured, before another workspace can overwrite a shared Cargo output filename.
 An unreported stale file never becomes the selected artifact.
 
 Every final artifact, including a Local build, must fit Canic's supported
-10 MiB code-section and 50,000 defined-function ceilings before the Wasm,
+12 MiB code-section and 50,000 defined-function ceilings before the Wasm,
 Candid and gzip outputs are published. Rejection preserves any previous output
 set and reports the offending artifact and measured limit. These are build
 admission checks, not a substitute for replica validation of the whole module.
+The code-section ceiling follows the
+[IC resource limits](https://docs.internetcomputer.org/references/resource-limits/);
+it is distinct from the IC's 100 MiB total-module limit. The size warning starts
+with 768 KiB of remaining code-section headroom.
 
 ## Boundary
 

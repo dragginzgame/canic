@@ -6,7 +6,7 @@
 
 use crate::canister_build::cache::{canister_build_target_root, declaration_target_root};
 use std::{
-    fs, io,
+    fs,
     path::{Path, PathBuf},
 };
 
@@ -19,7 +19,7 @@ struct OutputRootObservation {
 
 impl OutputRootObservation {
     fn observe(workspace: &Path, selected: PathBuf) -> Self {
-        let resolved = resolve_existing_ancestor(&selected).ok();
+        let resolved = ic_host_fs::path::canonicalize_allow_missing(&selected, workspace).ok();
         let workspace = fs::canonicalize(workspace).ok();
         let shared_workspace = resolved.as_ref().and_then(|output| {
             let workspace = workspace.as_ref()?;
@@ -69,30 +69,6 @@ pub fn diagnostic_lines(workspace: &Path) -> Vec<String> {
     .into_iter()
     .flat_map(|(label, selected)| OutputRootObservation::observe(workspace, selected).lines(label))
     .collect()
-}
-
-// Resolve symlinked parents even before Cargo has created its output subtree.
-fn resolve_existing_ancestor(path: &Path) -> io::Result<PathBuf> {
-    let mut ancestor = path;
-    let mut suffix = Vec::new();
-    loop {
-        match fs::canonicalize(ancestor) {
-            Ok(mut resolved) => {
-                for component in suffix.into_iter().rev() {
-                    resolved.push(component);
-                }
-                return Ok(resolved);
-            }
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                let Some(name) = ancestor.file_name() else {
-                    return Err(error);
-                };
-                suffix.push(name);
-                ancestor = ancestor.parent().ok_or(error)?;
-            }
-            Err(error) => return Err(error),
-        }
-    }
 }
 
 #[cfg(test)]

@@ -10,12 +10,18 @@ use the build and `fleet_ensure` modules when embedding the same current
 contract.
 
 Generic host mechanics use the published IC Host Tooling 0.3 packages:
-`ic-host-artifacts` owns Wasm inspection and bounded gzip decoding,
-`ic-host-fs` owns regular/private reads, durable publication and descriptor locks,
+`ic-host-artifacts` owns Wasm inspection, gzip encoding/decoding and bounded
+stream reads, copying and hashing; `ic-host-fs` owns regular/private reads,
+path observations, durable publication and descriptor locks,
 `ic-host-process` owns executable resolution, and `ic-host-tools` owns Candid
-normalization. Direct consumers import filesystem operations from
+normalization and ICP JSON/hex envelope decoding. Direct consumers import filesystem operations from
 `ic_host_fs::durable`. Canic retains schemas, authority, byte budgets, tool pins,
 transaction ordering and interruption recovery.
+
+Direct response-error consumers match
+`IcpJsonResponseError::Envelope(ic_host_tools::response::ResponseError)` for
+JSON/hex/envelope failures. Canic retains typed Candid and canister rejection
+errors. This is a public hard cut; no old parser or compatibility variants remain.
 
 ## Build
 

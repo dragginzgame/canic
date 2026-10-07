@@ -7,6 +7,7 @@ trap 'rm -rf "$FIXTURE"' EXIT
 
 mkdir -p "$FIXTURE/scripts/ci" "$FIXTURE/failure-logs"
 cp "$ROOT/scripts/ci/run-validation-targets.sh" "$FIXTURE/scripts/ci/"
+cp "$ROOT/scripts/ci/check-make-execution.sh" "$FIXTURE/scripts/ci/"
 printf '%s\n' \
     '.PHONY: pass mutate-runner fail-coded fail-one fail-two fail-after-caught-panic' \
     'pass:' \
@@ -151,4 +152,13 @@ success_log="$(awk -F '\t' '$1 == "pass" && $2 == "PASS" { print $4 }' "$success
 rg -F 'pass-marker' "$success_log" >/dev/null
 cmp "$FIXTURE/prior-failure.log" "$FIXTURE/failure-logs/latest.log"
 
+for flags in i n q t v; do
+    status=0
+    MAKEFLAGS="$flags" CANIC_VALIDATION_ROOT="$FIXTURE" \
+        bash "$FIXTURE/scripts/ci/run-validation-targets.sh" pass >"$FIXTURE/make-$flags.log" 2>&1 || status=$?
+    [[ "$status" != 0 ]] || { echo 'validation accepted a nonexecuting Make mode' >&2; exit 1; }
+    if rg -F pass-marker "$FIXTURE/make-$flags.log" >/dev/null; then
+        echo 'validation dispatched a target under an inadmissible Make mode' >&2; exit 1
+    fi
+done
 echo "validation target runner test passed"

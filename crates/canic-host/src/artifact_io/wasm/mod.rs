@@ -10,9 +10,10 @@ use std::{collections::BTreeMap, fmt, fs, path::Path};
 use canic_core::ids::BuildNetwork;
 use ic_host_artifacts::wasm::{ExportKind, InspectionError, InspectionLimits};
 
-pub(super) const SUPPORTED_CODE_SECTION_LIMIT_BYTES: usize = 10 * 1024 * 1024;
+// IC resource limits: https://docs.internetcomputer.org/references/resource-limits/
+pub(super) const SUPPORTED_CODE_SECTION_LIMIT_BYTES: usize = 12 * 1024 * 1024;
 pub(super) const SUPPORTED_DEFINED_FUNCTION_LIMIT: u32 = 50_000;
-const IC_WASM_CODE_SECTION_WARNING_BYTES: usize = 9 * 1024 * 1024 + 256 * 1024;
+const IC_WASM_CODE_SECTION_WARNING_BYTES: usize = SUPPORTED_CODE_SECTION_LIMIT_BYTES - 768 * 1024;
 #[cfg(test)]
 const WASM_HEADER: &[u8; 8] = b"\0asm\x01\0\0\0";
 const PUBLIC_CANDID_METADATA_SECTION: &str = "icp:public candid:service";
@@ -265,19 +266,16 @@ mod tests {
 
     #[test]
     fn accepts_the_exact_ic_code_section_limit() {
-        assert_eq!(
-            validate_wasm_code_section_size(SUPPORTED_CODE_SECTION_LIMIT_BYTES),
-            Ok(())
-        );
+        assert_eq!(validate_wasm_code_section_size(12 * 1024 * 1024), Ok(()));
     }
 
     #[test]
     fn rejects_one_byte_over_the_ic_code_section_limit() {
         assert_eq!(
-            validate_wasm_code_section_size(SUPPORTED_CODE_SECTION_LIMIT_BYTES + 1),
+            validate_wasm_code_section_size(12 * 1024 * 1024 + 1),
             Err(WasmCodeSectionError::LimitExceeded {
-                actual: SUPPORTED_CODE_SECTION_LIMIT_BYTES + 1,
-                limit: SUPPORTED_CODE_SECTION_LIMIT_BYTES,
+                actual: 12 * 1024 * 1024 + 1,
+                limit: 12 * 1024 * 1024,
             })
         );
     }

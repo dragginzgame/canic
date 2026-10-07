@@ -215,6 +215,13 @@ Consumer choices described in those guides remain subject to this baseline.
   verified tool downloads, and explicitly qualified sibling or moving inputs.
   Run the declaration checker in CI and release gates; consumers own the chosen
   versions, approved exceptions and runtime qualification evidence.
+- Use the [standard Rust workspace layout](rules/rust-workspaces.md): a virtual
+  repository-root workspace, including single-package repositories. Maintained
+  packages use `crates/<package-name>/` or application-owned `apps/<app-name>/`
+  trees, including component packages grouped beneath an App. Both inherit from
+  the same root. Approved independent workspaces use those shapes relative to
+  their own roots; other layouts need explicit exceptions.
+  Repositories without Rust packages do not need a Cargo workspace.
 - Cargo workspace members inherit package versions from the root. Apply the
   [Cargo dependency rules](rules/cargo-dependencies.md): every direct dependency
   is declared in root `[workspace.dependencies]`, and every child manifest uses
@@ -224,8 +231,9 @@ Consumer choices described in those guides remain subject to this baseline.
   without an established need and appropriate validation.
 - Follow the [Rust hygiene baseline](docs/principles/rust-code-hygiene.md): narrow
   visibility, documented APIs/invariants, ordinary module discovery, bounded
-  fallible decoding and typed errors. Exact edition, layout and lint choices stay
-  local. Do not fake platform behavior with production cfg(test) paths.
+  fallible decoding and typed errors. Exact edition, internal module layout and
+  lint choices stay local within the workspace rules. Do not fake platform
+  behavior with production cfg(test) paths.
 - Rust repositories adopt the [standard formatting hook](rules/git-hooks.md):
   `make install-hooks` enables a reviewed repository-local pre-commit hook that
   auto-formats and refreshes only selected files, rejects partial staging and

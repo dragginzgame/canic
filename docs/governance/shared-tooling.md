@@ -1,7 +1,7 @@
 # Shared Tooling adoption
 
-The [manifest](../../.shared-tooling.snapshot) records 63 files from reviewed
-committed revision `33c2a6f0018a94915f819ff219e270500ed5b73b`.
+The [manifest](../../.shared-tooling.snapshot) records 68 files from reviewed
+committed revision `25e7ce83149e081e4dcc52c55c33724e44153f2a` (0.1.14).
 [AGENTS.md](../../AGENTS.md) retains the product overlay. Refresh only through
 the upstream distribution helper; verify exact snapshot bytes and executable
 modes before release validation. Dirty sibling source is never inherited. The
@@ -11,9 +11,16 @@ the checksum helper being verified. The committed governance file list is select
 with its linked guides. Canic's governance adapter first verifies snapshot bytes
 and exact file-list membership, then runs the shared link checker on a private
 export containing only those files. It enforces file/link closure, not prose.
-The upstream distribution fixture assumes its root has no committed snapshot,
-so it is not selected as a Canic release gate; its consumer limitation is tracked
-in [Shared Tooling#28](https://github.com/dragginzgame/shared-tooling/issues/28#issuecomment-6032229331).
+The canonical distribution fixture now isolates its own manifest while preserving
+the checkout's existing snapshot. Its focused consumer qualification passes;
+the earlier failure remains historical evidence in
+[Shared Tooling#28](https://github.com/dragginzgame/shared-tooling/issues/28#issuecomment-6032229331).
+
+The maintainer approved retaining Canic's framework fixtures and independent
+blob root-package workspaces as scoped exceptions in [AGENTS.md](../../AGENTS.md).
+Application packages already satisfy the standard `apps/` layout. Snapshot
+adoption does not move packages or merge independently selected managed graphs;
+[#473](https://github.com/dragginzgame/canic/issues/473) records this boundary.
 
 ## Repository setup
 
@@ -40,6 +47,24 @@ the common complete toolset excludes that host. It remains install-capable, with
 establishing Canic release support or complete-toolset availability there.
 
 ## CI and verification helpers
+
+Release dispatch, the Canic validation logger, formatting hooks and hook installation
+use the canonical Make-execution guard. It qualifies actual recipe execution and
+failure propagation, refusing ignore-errors, dry-run, question, touch and
+version-only modes before consumer effects. Canic's logger keeps retained success
+logs, timing rows and structured failure events pending
+[shared convergence](https://github.com/dragginzgame/shared-tooling/issues/37).
+
+`make cloc` uses the canonical metadata-derived workspace-member reporter through
+a thin Canic JSON-tool projection that preserves `JQ_BIN` and prepared-tool selection;
+`apps/`, `crates/` and framework fixtures share that inventory. Cargo's selected
+output directory is excluded from both LOC and test-function counts, including
+custom paths. The unchanged shared fixture passes from a neutral directory;
+invoking it within Canic inherits Canic's Cargo configuration and exposes the
+[fixture isolation limitation](https://github.com/dragginzgame/shared-tooling/issues/31#issuecomment-6033151305).
+The reporter's actual Canic member roster is qualified independently. Reporting
+needs explicit prepared `cargo` and `cloc`; direct canonical calls also need `jq`
+on PATH. Adoption does not install cloc into the user's environment.
 
 Canic's pin adapter selects existing actionlint, ShellCheck and CI sccache
 versions, archive digests and destinations; the shared installer owns download,
