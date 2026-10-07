@@ -1,9 +1,6 @@
 use super::*;
 use crate::test_support::temp_path;
-use std::{
-    fs,
-    io::{Read, Write},
-};
+use std::{fs, io::Read};
 
 const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
@@ -38,7 +35,7 @@ fn file_checksum_matches_byte_checksum() {
 }
 
 #[test]
-fn stream_checksum_projection_preserves_source_and_sink_io_errors() {
+fn stream_checksum_projection_preserves_source_io_errors() {
     let path = temp_path("canic-backup-checksum-io");
     fs::write(&path, b"source").unwrap();
     let mut unreadable = fs::OpenOptions::new().write(true).open(&path).unwrap();
@@ -50,15 +47,6 @@ fn stream_checksum_projection_preserves_source_and_sink_io_errors() {
     };
     assert_eq!(read_error.raw_os_error(), expected_read);
 
-    let mut unwritable = fs::File::open(&path).unwrap();
-    let expected_write = unwritable.write(b"write").unwrap_err().raw_os_error();
-    let mut source = std::io::Cursor::new(b"source");
-    let ArtifactChecksumError::Io(write_error) =
-        ArtifactChecksum::copy_from_reader(&mut source, &mut unwritable).unwrap_err()
-    else {
-        panic!("expected sink I/O error");
-    };
-    assert_eq!(write_error.raw_os_error(), expected_write);
     assert_eq!(fs::read(&path).unwrap(), b"source");
     fs::remove_file(path).unwrap();
 }
@@ -82,6 +70,10 @@ fn directory_checksum_is_order_independent() {
     fs::remove_dir_all(first).expect("remove first");
     fs::remove_dir_all(second).expect("remove second");
     assert_eq!(first_checksum, second_checksum);
+    assert_eq!(
+        first_checksum.hash,
+        "e4d330f138b8f1b3044e84b5dcbe4fd1cb7e043d0c20810c083d791b6de01266"
+    );
 }
 
 // Ensure checksum verification reports mismatches.
@@ -136,6 +128,124 @@ fn filesystem_checksums_reject_symlinked_files_and_entries() {
         .expect_err("symlinked directory entry must reject");
 
     std::assert_matches!(file_error, ArtifactChecksumError::Io(_));
-    std::assert_matches!(tree_error, ArtifactChecksumError::UnsupportedEntry { .. });
+    std::assert_matches!(
+        tree_error,
+        ArtifactChecksumError::Artifact(ArtifactError::UnsupportedEntry { .. })
+    );
     fs::remove_dir_all(root).expect("remove fixture");
+}
+
+#[cfg(unix)]
+#[test]
+fn private_staging_preserves_bytes_digest_modes_and_existing_output() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = temp_path("canic-backup-shared-stage");
+    fs::create_dir_all(root.join("source/nested")).unwrap();
+    fs::write(root.join("source/a.txt"), b"a").unwrap();
+    fs::write(root.join("source/nested/b.txt"), b"b").unwrap();
+    let destination = root.join("staged tree");
+    let checksum =
+        ArtifactChecksum::stage_relative_path_no_follow(&root, Path::new("source"), &destination)
+            .unwrap();
+    assert_eq!(
+        checksum.hash,
+        "e4d330f138b8f1b3044e84b5dcbe4fd1cb7e043d0c20810c083d791b6de01266"
+    );
+    assert_eq!(
+        ArtifactChecksum::from_directory(&destination).unwrap(),
+        checksum
+    );
+    assert_eq!(fs::read(destination.join("nested/b.txt")).unwrap(), b"b");
+    for directory in [&destination, &destination.join("nested")] {
+        assert_eq!(
+            fs::metadata(directory).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+    }
+    assert_eq!(
+        fs::metadata(destination.join("a.txt"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777,
+        0o600
+    );
+
+    let file_destination = root.join("staged file");
+    let checksum = ArtifactChecksum::stage_relative_path_no_follow(
+        &root,
+        Path::new("source/a.txt"),
+        &file_destination,
+    )
+    .unwrap();
+    assert_eq!(checksum, ArtifactChecksum::from_bytes(b"a"));
+    fs::write(root.join("source/a.txt"), b"changed").unwrap();
+    let ArtifactChecksumError::Io(error) = ArtifactChecksum::stage_relative_path_no_follow(
+        &root,
+        Path::new("source/a.txt"),
+        &file_destination,
+    )
+    .unwrap_err() else {
+        panic!("expected create-new destination refusal");
+    };
+    assert_eq!(error.kind(), io::ErrorKind::AlreadyExists);
+    assert_eq!(fs::read(file_destination).unwrap(), b"a");
+    assert_eq!(fs::read(root.join("source/a.txt")).unwrap(), b"changed");
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn relative_artifacts_refuse_traversal_and_symlinked_parents_before_staging() {
+    let root = temp_path("canic-backup-relative-artifacts");
+    fs::create_dir_all(root.join("source")).unwrap();
+    fs::create_dir_all(root.join("outside")).unwrap();
+    fs::write(root.join("outside/sentinel"), b"must survive").unwrap();
+    std::os::unix::fs::symlink(root.join("outside"), root.join("source/link")).unwrap();
+    let source = root.join("source");
+    let destination = root.join("destination");
+    for relative in [Path::new("../outside/sentinel"), Path::new("link/sentinel")] {
+        assert!(ArtifactChecksum::from_relative_path_no_follow(&source, relative).is_err());
+        assert!(
+            ArtifactChecksum::stage_relative_path_no_follow(&source, relative, &destination)
+                .is_err()
+        );
+        assert!(!destination.exists());
+        assert_eq!(
+            fs::read(root.join("outside/sentinel")).unwrap(),
+            b"must survive"
+        );
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn non_utf8_tree_names_retain_shared_typed_refusal() {
+    use std::os::unix::ffi::OsStringExt;
+
+    let root = temp_path("canic-backup-utf8-artifacts");
+    fs::create_dir_all(root.join("source")).unwrap();
+    let invalid = root
+        .join("source")
+        .join(std::ffi::OsString::from_vec(vec![0xff]));
+    fs::write(&invalid, b"source").unwrap();
+    for result in [
+        ArtifactChecksum::from_directory(&root.join("source")),
+        ArtifactChecksum::stage_relative_path_no_follow(
+            &root,
+            Path::new("source"),
+            &root.join("staged"),
+        ),
+    ] {
+        std::assert_matches!(
+            result,
+            Err(ArtifactChecksumError::Artifact(
+                ArtifactError::NonUtf8Path { .. }
+            ))
+        );
+    }
+    assert_eq!(fs::read(invalid).unwrap(), b"source");
+    fs::remove_dir_all(root).unwrap();
 }

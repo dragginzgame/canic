@@ -72,6 +72,15 @@ fn parent_resolution_changes_refresh_once_without_overwriting_unchanged_cargo_re
     fs::write(&parent, original).unwrap();
     refresh_seed(&directory, &parent, b"manifest").unwrap();
     assert_eq!(fs::read(&lock).unwrap(), original);
+    let expected_record = format!(
+        "{{\n  \"schema_version\": 1,\n  \"parent_lock_sha256\": \"{}\",\n  \"manifest_sha256\": \"{}\"\n}}",
+        sha256_hex(original),
+        sha256_hex(b"manifest"),
+    );
+    assert_eq!(
+        fs::read(directory.join("lock-seed.json")).unwrap(),
+        expected_record.as_bytes()
+    );
     let resolved = b"Cargo's resolved wrapper graph";
     fs::write(&lock, resolved).unwrap();
     let modified = fs::metadata(&lock).unwrap().modified().unwrap();

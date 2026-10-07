@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- Adopt published IC Backup for artifact checksums, no-follow traversal and private
+  staging; remove the copied filesystem engine and retain publication/recovery
+  boundaries. **Breaking for checksum-error callers:** traversal errors use the
+  shared typed cause through `ArtifactChecksumError::Artifact`; tree names require UTF-8
+  ([#488](https://github.com/dragginzgame/canic/issues/488)).
+
 - Prepare the locked Cargo dependency cache before offline release validation,
   preserving explicit offline policy and existing dependency selections
   ([#486](https://github.com/dragginzgame/canic/issues/486)).
@@ -18,8 +24,8 @@ Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   preserving pre-publication rejection and artifact-set protection
   ([#476](https://github.com/dragginzgame/canic/issues/476)).
 
-- **Breaking; incompatible with the selected patch target:** adopt `ic-memory
-  0.27`'s current ownership ledger. Diagnostic consumers must replace history
+- **Breaking; incompatible with the selected patch target:** adopt `ic-memory`'s
+  current ownership ledger. Diagnostic consumers must replace history
   fields with current schema metadata; earlier installations require clean
   reinstall. This change requires a minor release
   ([#459](https://github.com/dragginzgame/canic/issues/459)).
@@ -51,6 +57,9 @@ Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   Delegate Wasm transform staging to Host 0.4.1 and Observatory rendering limits
   to the shared bounded writer, preserving artifact and output validation.
   Bound compiled Candid capture and delegate process-evidence stream collection.
+  Require Host 0.4.6 for the macOS publication fix; compare gzip without a second
+  Wasm allocation, share chunk identities and stream generated lock-seed JSON.
+  Delegate build-input and local executable fingerprints to the shared reader.
   **Breaking for response-error callers:** match the shared codec error through
   `IcpJsonResponseError::Envelope` instead of local JSON/hex variants.
   These public hard cuts add to the minor-release requirement
@@ -81,8 +90,9 @@ Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   memory registration and public framework APIs, including guarded Root membership
   discovery, compiled receiver permissions and publication-bound application
   startup. It also adopts ic-memory’s checked allocation-slot API and ic-timers’
-  policy-specific callback results, and aligns dedicated and embedded blob consumers on
-  one Memory/Timers runtime with durable target-bound production initialization
+  policy-specific callback results, and aligns dedicated and embedded blob consumers
+  with published Blob 0.17.1 on the current Memory/Timers/Metrics runtime, retaining
+  durable target-bound production initialization
   ([#444](https://github.com/dragginzgame/canic/issues/444)).
 
 - Use published `ic-metrics` arithmetic and the existing CDK call-context reader,

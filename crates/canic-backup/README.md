@@ -9,10 +9,16 @@ manifests, topology hashing, download journals, durable artifact integrity,
 backup layout validation, restore planning, restore apply journals, and native
 runner summaries.
 
-Stream hashing and copying use `ic-host-artifacts` directly. Backup retains
-no-follow traversal, deterministic directory-checksum framing, private staging,
-publication barriers, custody and same-operation recovery; the generic stream
-owner neither opens paths nor publishes artifacts.
+Published `ic-backup` owns file/tree checksums, descriptor no-follow traversal and
+create-new private artifact staging. Canic projects its checksum records into the
+maintained manifest shape and preserves native I/O failures. Other traversal
+failures use `ArtifactChecksumError::Artifact(ic_backup::ops::artifacts::ArtifactError)`.
+Tree names must be UTF-8 so checksum paths retain exact identity.
+
+Canic retains publication barriers, layout custody and same-operation recovery.
+Its publication walk synchronizes admitted descriptors and computes the existing
+directory framing before the no-replace rename; a path-based checksum cannot
+replace that walk without losing its descriptor and barrier guarantees.
 
 Backup creation/execution, restore preparation/run and prune share a parent-side
 layout lock. Restore journal publication requires a `BackupLayoutGuard` and

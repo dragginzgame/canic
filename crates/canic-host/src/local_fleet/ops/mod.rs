@@ -15,21 +15,20 @@ use crate::local_fleet::{
     },
     view::{LocalCanisterView, LocalFleetView},
 };
-use ic_host_fs::durable;
-
-use candid::Principal;
-use canic_core::cdk::utils::hash::hex_bytes;
-use ic_testkit::pocket_ic::{PocketIc, common::rest::Topology};
-use sha2_host::{Digest, Sha256};
 #[cfg(unix)]
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
-
 use std::{
     collections::BTreeSet,
     fs::{self, File, OpenOptions},
-    io::Read,
     path::{Path, PathBuf},
 };
+
+use candid::Principal;
+use ic_host_artifacts::artifact::{ArtifactError, hash_reader};
+use ic_host_fs::durable;
+use ic_testkit::pocket_ic::{PocketIc, common::rest::Topology};
+
+const MAX_BINARY_BYTES: u64 = 512 * 1024 * 1024;
 
 /// Own one exact named local state directory; reject symlinks before creating descendants.
 pub fn lock_directory(root: &Path, name: &str) -> Result<(PathBuf, File), LocalFleetError> {
@@ -357,26 +356,17 @@ pub fn binary_sha256(path: &Path) -> Result<String, LocalFleetError> {
                 .map_err(|_| LocalFleetError::Configuration)?,
         );
     }
-    let mut file = options.open(path)?;
+    let file = options.open(path)?;
     let metadata = file.metadata()?;
-    if !metadata.is_file() || metadata.len() > 512 * 1024 * 1024 {
+    if !metadata.is_file() || metadata.len() > MAX_BINARY_BYTES {
         return Err(LocalFleetError::UnsafePath);
     }
-    let mut hash = Sha256::new();
-    let mut buffer = [0; 16_384];
-    let mut read = 0_u64;
-    loop {
-        let count = file.read(&mut buffer)?;
-        if count == 0 {
-            break;
-        }
-        read += count as u64;
-        if read > 512 * 1024 * 1024 {
-            return Err(LocalFleetError::Capacity);
-        }
-        hash.update(&buffer[..count]);
-    }
-    Ok(hex_bytes(hash.finalize()))
+    hash_reader(file, MAX_BINARY_BYTES)
+        .map(|identity| identity.sha256.to_string())
+        .map_err(|source| match source {
+            ArtifactError::LimitExceeded { .. } => LocalFleetError::Capacity,
+            source => LocalFleetError::Io(source.into()),
+        })
 }
 
 /// A reset receives a fresh environment namespace, so old Ensure journals cannot be resumed there.

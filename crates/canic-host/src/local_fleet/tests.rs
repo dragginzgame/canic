@@ -2,6 +2,44 @@ use super::{LocalFleetError, model::*, ops, policy, workflow::LocalFleetSession}
 use candid::Principal;
 use std::{fs, net::TcpListener, path::PathBuf};
 
+#[test]
+fn binary_fingerprint_preserves_digest_size_admission_and_native_read_errors() {
+    let root = crate::test_support::temp_dir("local-binary-fingerprint");
+    fs::create_dir_all(&root).unwrap();
+    let binary = root.join("binary");
+    fs::write(&binary, b"abc").unwrap();
+    assert_eq!(
+        ops::binary_sha256(&binary).unwrap(),
+        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    );
+    std::assert_matches!(ops::binary_sha256(&root), Err(LocalFleetError::UnsafePath));
+    std::assert_matches!(
+        ops::binary_sha256(&root.join("missing")),
+        Err(LocalFleetError::Io(source)) if source.kind() == std::io::ErrorKind::NotFound
+    );
+    #[cfg(unix)]
+    {
+        let link = root.join("link");
+        std::os::unix::fs::symlink(&binary, &link).unwrap();
+        std::assert_matches!(
+            ops::binary_sha256(&link),
+            Err(LocalFleetError::Io(source))
+                if source.raw_os_error() == Some(rustix::io::Errno::LOOP.raw_os_error())
+        );
+    }
+    fs::File::options()
+        .write(true)
+        .open(&binary)
+        .unwrap()
+        .set_len(512 * 1024 * 1024 + 1)
+        .unwrap();
+    std::assert_matches!(
+        ops::binary_sha256(&binary),
+        Err(LocalFleetError::UnsafePath)
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
 fn reset_fixture(label: &str) -> (PathBuf, PathBuf, LocalFleetRecord) {
     let root = crate::test_support::temp_dir(label);
     fs::create_dir_all(&root).unwrap();

@@ -1,5 +1,32 @@
 use super::*;
-use crate::{canister_build::reuse::collect_files, test_support::temp_dir};
+use crate::{
+    canister_build::reuse::{collect_files, file_hash},
+    test_support::temp_dir,
+};
+
+#[test]
+fn input_fingerprint_preserves_exact_hash_and_regular_no_follow_admission() {
+    let root = temp_dir("reuse-file-fingerprint");
+    fs::create_dir_all(&root).unwrap();
+    let source = root.join("input");
+    fs::write(&source, b"abc").unwrap();
+    assert_eq!(
+        file_hash(&source).unwrap(),
+        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    );
+    std::assert_matches!(file_hash(&root), Err(BuildReuseError::Unsupported(path)) if path == root);
+    std::assert_matches!(
+        file_hash(&root.join("missing")),
+        Err(BuildReuseError::Io(source)) if source.kind() == std::io::ErrorKind::NotFound
+    );
+    #[cfg(unix)]
+    {
+        let link = root.join("link");
+        std::os::unix::fs::symlink(&source, &link).unwrap();
+        std::assert_matches!(file_hash(&link), Err(BuildReuseError::Unsupported(path)) if path == link);
+    }
+    fs::remove_dir_all(root).unwrap();
+}
 
 fn snapshot(root: &Path) -> BuildInputSnapshot {
     let mut files = BTreeMap::new();

@@ -86,11 +86,13 @@ use canic_core::{
     },
     protocol,
 };
+use ic_host_artifacts::artifact::chunk_digests;
 use serde::Deserialize;
 use sha2_host::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
+    num::NonZeroUsize,
     path::{Path, PathBuf},
 };
 use thiserror::Error as ThisError;
@@ -2390,28 +2392,31 @@ fn append_chunk_actions(
     bytes: &[u8],
     manifest: Option<TemplateManifestInput>,
 ) -> Result<(), CurrentProtocolError> {
-    let chunks = bytes
-        .chunks(canic_core::CANIC_WASM_CHUNK_BYTES)
-        .map(<[u8]>::to_vec)
-        .collect::<Vec<_>>();
-    let chunk_hashes = chunks
-        .iter()
-        .map(|chunk| canic_core::cdk::utils::hash::wasm_hash(chunk))
-        .collect::<Vec<_>>();
-    let mut preparation = Some(TemplateChunkSetPrepareInput {
-        manifest,
-        template_id: template_id.clone(),
-        version: version.clone(),
-        payload_hash: canic_core::cdk::utils::hash::wasm_hash(bytes),
-        payload_size_bytes: bytes.len() as u64,
-        chunk_hashes,
-    });
-    if chunks.is_empty() {
+    if bytes.is_empty() {
         return Err(CurrentProtocolError::Configuration(
             "Store publication payload is empty".into(),
         ));
     }
-    for (index, bytes) in chunks.into_iter().enumerate() {
+    let (chunk_hashes, payload) = chunk_digests(
+        bytes,
+        NonZeroUsize::new(canic_core::CANIC_WASM_CHUNK_BYTES)
+            .expect("the governed Wasm chunk size is nonzero"),
+        MAX_ARTIFACT_READ_BYTES as u64,
+        MAX_ARTIFACT_READ_BYTES.div_ceil(canic_core::CANIC_WASM_CHUNK_BYTES),
+    )
+    .map_err(|source| CurrentProtocolError::Configuration(source.to_string()))?;
+    let mut preparation = Some(TemplateChunkSetPrepareInput {
+        manifest,
+        template_id: template_id.clone(),
+        version: version.clone(),
+        payload_hash: payload.sha256.as_bytes().to_vec(),
+        payload_size_bytes: payload.bytes,
+        chunk_hashes: chunk_hashes
+            .into_iter()
+            .map(|digest| digest.as_bytes().to_vec())
+            .collect(),
+    });
+    for (index, bytes) in bytes.chunks(canic_core::CANIC_WASM_CHUNK_BYTES).enumerate() {
         let request = TemplateChunkInput {
             preparation: preparation.take(),
             template_id: template_id.clone(),
@@ -2419,7 +2424,7 @@ fn append_chunk_actions(
             chunk_index: u32::try_from(index).map_err(|_| {
                 CurrentProtocolError::Configuration("Store artifact has too many chunks".into())
             })?,
-            bytes,
+            bytes: bytes.to_vec(),
         };
         let encoded = candid::encode_one(&request)
             .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?;

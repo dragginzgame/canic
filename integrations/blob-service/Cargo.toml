@@ -11,9 +11,9 @@ license = "MIT"
 [workspace.dependencies]
 candid = "0.10.36"
 canic = { path = "../../crates/canic", default-features = false }
-ic-blob-storage = "=0.15.2"
+ic-blob-storage = "=0.17.1"
 ic-cdk = "0.20.3"
-ic-memory = "0.28"
+ic-memory = "0.31"
 
 [package]
 name = "canic-blob-service"

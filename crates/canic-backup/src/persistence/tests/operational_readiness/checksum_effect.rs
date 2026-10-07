@@ -85,7 +85,9 @@ fn pending_checksum_rejects_unsafe_staging_without_following_it() {
 
     std::assert_matches!(
         error,
-        BackupRunnerError::Checksum(ArtifactChecksumError::UnsupportedEntry { .. })
+        BackupRunnerError::Checksum(ArtifactChecksumError::Artifact(
+            ic_backup::ops::artifacts::ArtifactError::UnsupportedEntry { .. }
+        ))
     );
     assert_failed_checksum_state(&layout, &verify);
     assert!(executor.commands.is_empty());

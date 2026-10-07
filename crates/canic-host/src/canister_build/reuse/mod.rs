@@ -664,20 +664,14 @@ pub(super) fn file_hash(path: &Path) -> Result<String, BuildReuseError> {
         use std::os::unix::fs::OpenOptionsExt as _;
         options.custom_flags(rustix::fs::OFlags::NOFOLLOW.bits().cast_signed());
     }
-    let mut file = options.open(path)?;
+    let file = options.open(path)?;
     if !file.metadata()?.is_file() {
         return Err(BuildReuseError::Unsupported(path.to_path_buf()));
     }
-    let mut digest = Sha256::new();
-    let mut buffer = [0_u8; 8 * 1024];
-    loop {
-        let count = file.read(&mut buffer)?;
-        if count == 0 {
-            break;
-        }
-        digest.update(&buffer[..count]);
-    }
-    Ok(hex_bytes(digest.finalize()))
+    // Build inputs have no total-byte quota; the shared traversal uses constant storage.
+    let identity =
+        ic_host_artifacts::artifact::hash_reader(file, u64::MAX).map_err(io::Error::from)?;
+    Ok(identity.sha256.to_string())
 }
 
 fn hash_field(digest: &mut Sha256, value: &[u8]) {

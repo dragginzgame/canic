@@ -37,7 +37,7 @@ timings are implemented and qualified against published .50 in the independent
 source/target bundle `.canic/local-work/toko-feedback-20261002/`.
 The maintainer requested integration; the patch is applied to the primary worktree
 after its active build finished, preserving the other session's edits.
-The [current handoff](../../status/current.md#integrated-toko-import-diagnostics-canic-183--2026-10-02)
+The [current handoff](../../status/current.md#earlier-integration-evidence)
 owns the exact source, evidence and integration boundary.
 
 Root/Coordinator queries, signed handoff, certified request-status reconciliation

@@ -2342,12 +2342,28 @@ fn store_chunk_compilation_fuses_only_the_first_chunk_within_the_byte_envelope()
     )
     .unwrap();
     assert_eq!(actions.len(), 2);
+    let expected_hashes = bytes
+        .chunks(canic_core::CANIC_WASM_CHUNK_BYTES)
+        .map(|chunk| Sha256::digest(chunk).to_vec())
+        .collect::<Vec<_>>();
     for (index, action) in actions.iter().enumerate() {
         let CurrentFleetProtocolAction::PublishStoreChunk { request } = action else {
             panic!("chunk publication")
         };
         assert_eq!(request.chunk_index as usize, index);
+        assert_eq!(
+            request.bytes,
+            bytes
+                .chunks(canic_core::CANIC_WASM_CHUNK_BYTES)
+                .nth(index)
+                .unwrap()
+        );
         assert_eq!(request.preparation.is_some(), index == 0);
+        if let Some(preparation) = &request.preparation {
+            assert_eq!(preparation.payload_hash, Sha256::digest(&bytes).to_vec());
+            assert_eq!(preparation.payload_size_bytes, bytes.len() as u64);
+            assert_eq!(preparation.chunk_hashes, expected_hashes);
+        }
         assert!(
             candid::encode_one(request).unwrap().len()
                 <= canic_core::CANIC_WASM_CHUNK_REQUEST_MAX_BYTES
@@ -2365,4 +2381,52 @@ fn store_chunk_compilation_fuses_only_the_first_chunk_within_the_byte_envelope()
         Err(CurrentProtocolError::Configuration(_))
     ));
     assert!(rejected.is_empty());
+}
+
+#[test]
+fn store_chunk_compilation_rejects_empty_payload_without_actions() {
+    let mut actions = Vec::new();
+    std::assert_matches!(
+        append_chunk_actions(
+            &mut actions,
+            TemplateId::new("app"),
+            TemplateVersion::new("current"),
+            &[],
+            None,
+        ),
+        Err(CurrentProtocolError::Configuration(_))
+    );
+    assert!(actions.is_empty());
+}
+
+#[test]
+fn store_chunk_compilation_binds_the_upload_representation_not_the_raw_module() {
+    let wasm = b"\0asm\x01\0\0\0";
+    let mut encoder = GzBuilder::new().write(Vec::new(), Compression::default());
+    encoder.write_all(wasm).unwrap();
+    let compressed = encoder.finish().unwrap();
+    let mut actions = Vec::new();
+    append_chunk_actions(
+        &mut actions,
+        TemplateId::new("app"),
+        TemplateVersion::new("current"),
+        &compressed,
+        None,
+    )
+    .unwrap();
+    let [CurrentFleetProtocolAction::PublishStoreChunk { request }] = actions.as_slice() else {
+        panic!("one compressed upload chunk")
+    };
+    let preparation = request.preparation.as_ref().unwrap();
+    assert_eq!(request.bytes, compressed);
+    assert_eq!(
+        preparation.payload_hash,
+        Sha256::digest(&compressed).to_vec()
+    );
+    assert_eq!(
+        preparation.chunk_hashes,
+        vec![preparation.payload_hash.clone()]
+    );
+    assert_ne!(preparation.payload_hash, Sha256::digest(wasm).to_vec());
+    assert_eq!(preparation.payload_size_bytes, compressed.len() as u64);
 }

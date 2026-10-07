@@ -23,8 +23,8 @@ Fleet, lifecycle and memory tests. The upstream service suite owns blob authorit
 certificate replies, restoration, provider behavior and accounting; those results
 do not establish deployment qualification for an arbitrary wrapper.
 
-The composition selects published Blob Storage 0.15.2, Memory 0.28.3,
-Timers 0.14.3 and arithmetic-only Metrics 0.2.2 in the isolated lockfiles.
+The composition selects published Blob Storage 0.17.1, Memory 0.31.1,
+Timers 0.14.12 and arithmetic-only Metrics 0.2.9 in the isolated lockfiles.
 Each complete managed artifact must share one Memory and Timers runtime.
 See [Canic#444](https://github.com/dragginzgame/canic/issues/444) and the
 [current handoff](../../status/current.md) for scoped qualification. Building
@@ -90,9 +90,8 @@ The example's input schema is not mandatory. An application may construct the
 typed installation input from its own compiled configuration and actual canister
 Principal inside its synchronous participant. Externally supplied configuration
 must use bounded decoding. The adapter validates the supplied service identity;
-it does not silently rewrite it. Root's missing argument-delivery path described
-below affects deployments that require runtime-supplied installation arguments,
-including both checked-in examples.
+it does not silently rewrite it. Runtime-supplied installation arguments use the
+production target binding described below, including both checked-in examples.
 
 Compose `canic_blob_service::metrics::sample()?` with application rows in the
 host's one `ApplicationMetricsSampler`. Register that callback after installation
@@ -188,8 +187,8 @@ arguments to Root. `app.init_mode` controls Fleet operating mode.
 [Canic#444](https://github.com/dragginzgame/canic/issues/444) records qualified
 execution and downstream acceptance separately.
 
-The maintained adapter selects published Blob Storage 0.15.2 with Memory 0.28.3,
-Timers 0.14.3 and arithmetic-only Metrics 0.2.2. Each complete managed Wasm graph
+The maintained adapter selects published Blob Storage 0.17.1 with Memory 0.31.1,
+Timers 0.14.12 and arithmetic-only Metrics 0.2.9. Each complete managed Wasm graph
 must contain one Memory and Timers identity. Canic owns the runtime and lifecycle;
 the service participant restores synchronously before deferred work. These
 configuration, wire and persisted record changes are a pre-1.0 hard cut requiring

@@ -72,7 +72,10 @@ pub fn commit_artifact_directory_at_barriers(
 #[cfg(any(target_os = "linux", target_os = "android", target_vendor = "apple"))]
 mod supported {
     use super::ArtifactCommitOutcome;
-    use crate::{artifacts::ArtifactChecksum, persistence::PersistenceError};
+    use crate::{
+        artifacts::{ArtifactChecksum, ArtifactChecksumError},
+        persistence::PersistenceError,
+    };
 
     use std::{
         ffi::OsStr,
@@ -223,6 +226,12 @@ mod supported {
             let name = OsStr::from_bytes(name_bytes);
             let relative_path = relative_directory.join(name);
             let display_path = display_root.join(&relative_path);
+            if name.to_str().is_none() {
+                return Err(ArtifactChecksumError::Artifact(
+                    ic_backup::ops::artifacts::ArtifactError::NonUtf8Path { path: display_path },
+                )
+                .into());
+            }
             let observed =
                 unix_fs::statat(directory_fd, entry.file_name(), AtFlags::SYMLINK_NOFOLLOW)
                     .map_err(errno_to_io)?;
@@ -330,6 +339,35 @@ mod tests {
         assert_eq!(checksum(&canonical), expected);
 
         fs::remove_dir_all(root).expect("remove temp root");
+    }
+
+    #[test]
+    fn non_utf8_staging_names_refuse_publication_and_retain_source() {
+        use std::os::unix::ffi::OsStringExt;
+
+        let root = temp_dir("canic-backup-artifact-non-utf8");
+        let temporary = root.join("snapshot.tmp");
+        let canonical = root.join("snapshot");
+        write_tree(&temporary);
+        let expected = checksum(&temporary);
+        let invalid = temporary.join(std::ffi::OsString::from_vec(vec![0xff]));
+        fs::write(&invalid, b"retained").unwrap();
+        let mut published = false;
+        let error = commit_with_hook(&temporary, &canonical, &expected, |step, _| {
+            published |= step == ArtifactCommitStep::Publication;
+            Ok(())
+        })
+        .unwrap_err();
+        std::assert_matches!(
+            error,
+            PersistenceError::Checksum(crate::artifacts::ArtifactChecksumError::Artifact(
+                ic_backup::ops::artifacts::ArtifactError::NonUtf8Path { .. }
+            ))
+        );
+        assert!(!published);
+        assert!(!canonical.exists());
+        assert_eq!(fs::read(invalid).unwrap(), b"retained");
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

@@ -1,10 +1,10 @@
 # Blob Extraction Implementation Status
 
-Date: 2026-10-06
+Date: 2026-10-07
 
-The current Canic-owned adapter selects published Blob Storage 0.15.2. Its
-independent workspace and both consumer lockfiles select Memory 0.28.3,
-Timers 0.14.3 and arithmetic-only Metrics 0.2.2, matching Canic's runtime stack.
+The current Canic-owned adapter selects published Blob Storage 0.17.1. Its
+independent workspace and both consumer lockfiles select Memory 0.31.1,
+Timers 0.14.12 and arithmetic-only Metrics 0.2.9, matching Canic's runtime stack.
 Timers directly re-exports Metrics' summary type. There are no cross-version
 conversion adapters, application overrides or copied storage implementations.
 [Canic#444](https://github.com/dragginzgame/canic/issues/444) owns the downstream
@@ -34,32 +34,43 @@ after observing the real target. A fixture callback is test support only.
 
 Complete release-bound dedicated and embedded Fast builds pass. Single-role
 compilation does not embed the required release-build identity and therefore does
-not qualify managed installation. Native registry bound/target/capacity/replay
-checks and strict focused runtime/Host/probe library and test Clippy pass.
+not qualify managed installation. Four native initializer boundary/recovery cases,
+one install-intent reservation/replay case and two Host encoding cases pass.
+Current Core native all-target/all-feature
+and Wasm library Clippy, plus adapter Wasm library Clippy, pass with warnings
+denied. Both consumer shells pass native scoped lint; authoritative Wasm qualification
+belongs to the managed builds. Direct consumer Wasm Clippy correctly refuses
+without validated build authority; no admission flag or guard was bypassed.
 Both current-stack consumer forms pass PocketIC installation, typed caller and
 tenant refusals, discarded mutation-response reconciliation, aggregate metrics,
 same-release restoration and repeated current-instance recovery. Their complete
 blob endpoint schemas match structurally. Eight complete normal Wasm graphs
 (two application roles and their six infrastructure roles) each contain exactly
 one Memory, Timers and Metrics identity. Evidence is retained in
-`target/review-validation/blob-stack-consumer-pocketic-current-stack.log`,
-`blob-stack-current-*-tree.txt` and `blob-stack-current-runtime-identities.json`.
+`target/review-validation/blob-memory-qualification-20261007/consumer-pocketic.log`,
+its per-package tree files and `runtime-identities.json`. That inventory derives
+its graphs from the built application/infrastructure manifests and verifies
+their exact artifact hashes. All three independent locks are refreshed; the
+primary manifest/lock and earlier dirty work are unchanged.
 
-The governed production Root case also passes on this stack. It verifies held
+The governed production Root case passes on this current graph in 192.98s.
+It verifies held
 allocation, wrong-target and caller refusals, controller allocation inspection,
 Root interruption before binding, a discarded binding-command ingress reply,
 exact full-bound 16,384-byte delivery, effect-free binding replay and synchronous
 same-release application restoration. Its retained log is
-`target/review-validation/blob-stack-production-pocketic-current-stack.log`.
+`target/review-validation/blob-memory-qualification-20261007/production-pocketic.log`;
+the exact governed runner finishes in 328s with normal server/scratch cleanup.
 Root upgrade during installation quiesces pending IC management callbacks; this
 case does not drop an install callback. Native tests separately qualify retained
 install-intent bytes/hash and renewal after interruption. An actual uncertain
 management install-response interruption is therefore not claimed as managed
 execution evidence. These are local PocketIC results, not live deployment proof.
 
-Read-only Toko inspection now passes its locked complete blob Wasm graph, with
-one identity each for Blob Storage 0.15.2, Memory 0.28.3, Timers 0.14.3 and
-Metrics 0.2.2. This supersedes the earlier stale-lock observation. Its blob
+Read-only Toko source inspection still finds a consumer-owned shell using the
+reusable adapter. Its retained lock includes older Blob Storage 0.15.2 and
+Memory 0.28.4 alongside Memory 0.31.1; no current complete Toko managed graph is
+qualified by the Canic proofs above. Its blob
 Component Spec still lacks the required-init flag, and no application-owned
 initializer producer or production binding caller was found in the inspected
 source. Downstream acceptance needs those application changes and its own managed
@@ -78,7 +89,6 @@ These configuration, wire and stable-record changes are a pre-1.0 hard cut,
 requiring clean reinstall across releases while retaining same-release recovery.
 The maintainer-selected 0.110.53 draft remains unchanged; its existing human-owned
 minor/release boundaries remain in
-[#457](https://github.com/dragginzgame/canic/issues/457) and
 [#459](https://github.com/dragginzgame/canic/issues/459). No commit, version bump,
 publication, deployment, broad gate or sibling mutation ran. Source removal does
 not delete provider data, end billing or settle existing cycle/storage liabilities.

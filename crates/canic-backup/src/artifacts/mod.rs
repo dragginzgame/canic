@@ -1,21 +1,23 @@
 //! Module: artifacts
 //!
-//! Responsibility: derive artifact path identities and compute or validate checksums.
+//! Responsibility: project shared artifact checksums into Canic manifests and validate them.
 //! Does not own: snapshot capture, artifact storage, or restore planning.
-//! Boundary: provides deterministic checksum primitives to backup workflows.
+//! Boundary: IC Backup owns no-follow traversal and private staging; Canic owns publication.
 
-mod secure;
 #[cfg(test)]
 mod tests;
 
-use crate::hash::{hex_bytes, sha256_hex};
+use crate::hash::hex_bytes;
 
 use std::{
-    io::{self, Read, Write},
+    io::{self, Read},
     path::{Path, PathBuf},
 };
 
-use ic_host_artifacts::artifact::{ArtifactError, CopyError, copy_reader, hash_reader};
+use ic_backup::{
+    model::artifacts::ArtifactChecksumRecord,
+    ops::artifacts::{self, ArtifactError},
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error as ThisError;
@@ -49,48 +51,35 @@ impl ArtifactChecksum {
     /// Compute a SHA-256 checksum from in-memory bytes.
     #[must_use]
     pub fn from_bytes(bytes: &[u8]) -> Self {
-        Self {
-            algorithm: SHA256_ALGORITHM.to_string(),
-            hash: sha256_hex(bytes),
-        }
+        Self::from_record(ArtifactChecksumRecord::from_bytes(bytes))
     }
 
     /// Compute a SHA-256 checksum from one filesystem file.
     pub fn from_file(path: &Path) -> Result<Self, ArtifactChecksumError> {
-        secure::checksum_path(path, secure::ExpectedArtifactType::File)
+        artifacts::checksum_file(path)
+            .map(Self::from_record)
+            .map_err(artifact_error)
     }
 
     /// Compute a file checksum from an already-open artifact descriptor.
     pub(crate) fn from_reader(reader: &mut impl Read) -> Result<Self, ArtifactChecksumError> {
-        let identity = hash_reader(reader, u64::MAX).map_err(artifact_io_error)?;
-        Ok(Self {
-            algorithm: SHA256_ALGORITHM.to_string(),
-            hash: identity.sha256.to_string(),
-        })
-    }
-
-    pub(crate) fn copy_from_reader(
-        reader: &mut impl Read,
-        writer: &mut impl Write,
-    ) -> Result<Self, ArtifactChecksumError> {
-        let identity = copy_reader(reader, writer, u64::MAX).map_err(|error| match error {
-            CopyError::Input(error) => artifact_io_error(error),
-            CopyError::Output(error) => error,
-        })?;
-        Ok(Self {
-            algorithm: SHA256_ALGORITHM.to_string(),
-            hash: identity.sha256.to_string(),
-        })
+        artifacts::checksum_reader(reader)
+            .map(Self::from_record)
+            .map_err(artifact_error)
     }
 
     /// Compute a SHA-256 checksum from a file or deterministic directory listing.
     pub fn from_path(path: &Path) -> Result<Self, ArtifactChecksumError> {
-        secure::checksum_path(path, secure::ExpectedArtifactType::Any)
+        artifacts::checksum_path(path)
+            .map(Self::from_record)
+            .map_err(artifact_error)
     }
 
     /// Compute a deterministic SHA-256 checksum over all files in a directory.
     pub fn from_directory(path: &Path) -> Result<Self, ArtifactChecksumError> {
-        secure::checksum_path(path, secure::ExpectedArtifactType::Directory)
+        artifacts::checksum_directory(path)
+            .map(Self::from_record)
+            .map_err(artifact_error)
     }
 
     /// Compose the maintained directory checksum from relative file checksums.
@@ -98,7 +87,10 @@ impl ArtifactChecksum {
         files.sort_by(|left, right| left.0.cmp(&right.0));
         let mut hasher = Sha256::new();
         for (relative_path, file_checksum) in files {
-            hasher.update(relative_path.to_string_lossy().as_bytes());
+            let relative_path = relative_path
+                .to_str()
+                .expect("artifact publication admitted UTF-8 relative paths");
+            hasher.update(relative_path.as_bytes());
             hasher.update([0]);
             hasher.update(file_checksum.hash.as_bytes());
             hasher.update(*b"\n");
@@ -155,7 +147,9 @@ impl ArtifactChecksum {
         root: &Path,
         relative: &Path,
     ) -> Result<Self, ArtifactChecksumError> {
-        secure::checksum_relative_path(root, relative)
+        artifacts::checksum_relative_path(root, relative)
+            .map(Self::from_record)
+            .map_err(artifact_error)
     }
 
     pub(crate) fn stage_relative_path_no_follow(
@@ -163,14 +157,23 @@ impl ArtifactChecksum {
         relative: &Path,
         destination: &Path,
     ) -> Result<Self, ArtifactChecksumError> {
-        secure::stage_relative_path(root, relative, destination)
+        artifacts::stage_relative_path(root, relative, destination)
+            .map(Self::from_record)
+            .map_err(artifact_error)
+    }
+
+    fn from_record(record: ArtifactChecksumRecord) -> Self {
+        Self {
+            algorithm: record.algorithm().to_owned(),
+            hash: record.hash().to_owned(),
+        }
     }
 }
 
-fn artifact_io_error(error: ArtifactError) -> io::Error {
+fn artifact_error(error: ArtifactError) -> ArtifactChecksumError {
     match error {
-        ArtifactError::Io(error) => error,
-        error => io::Error::other(error),
+        ArtifactError::Io(error) => ArtifactChecksumError::Io(error),
+        error => ArtifactChecksumError::Artifact(error),
     }
 }
 
@@ -195,9 +198,7 @@ pub enum ArtifactChecksumError {
     #[error("unsupported checksum algorithm {0}")]
     UnsupportedAlgorithm(String),
 
-    #[error("unsupported artifact filesystem entry at {path}: {kind}")]
-    UnsupportedEntry { path: String, kind: String },
-
-    #[error("secure artifact traversal is unsupported on platform {0}")]
-    UnsupportedPlatform(&'static str),
+    /// Shared no-follow traversal, path-identity or platform-admission failure.
+    #[error(transparent)]
+    Artifact(ArtifactError),
 }

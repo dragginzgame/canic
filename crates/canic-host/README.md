@@ -9,7 +9,7 @@ Normal operators use the installed `canic` binary. Direct Rust consumers may
 use the build and `fleet_ensure` modules when embedding the same current
 contract.
 
-Generic host mechanics use the published IC Host Tooling 0.4 packages:
+Generic host mechanics use the published IC Host Tooling 0.4.6 packages:
 `ic-host-artifacts` owns Wasm inspection, gzip encoding/decoding and bounded
 stream reads, copying and hashing; `ic-host-fs` owns regular/private reads,
 path observations, durable publication and descriptor locks,
@@ -18,6 +18,14 @@ path observations, durable publication and descriptor locks,
 Direct consumers import reads from `ic_host_fs::read` and publication/locks from
 `ic_host_fs::durable`. Canic retains schemas, authority, byte budgets, tool pins,
 transaction ordering and interruption recovery.
+
+Release representation checks compare gzip output directly with raw Wasm without
+allocating another complete decoded payload. Store publication uses shared chunk
+and whole-upload identities; Canic retains chunk sizes, request bounds and order.
+Generated lock-seed JSON streams through typed durable publication within its
+4 KiB budget, retaining exact pretty bytes and publication/cleanup causes.
+Build-input and local executable fingerprints share descriptor hashing while
+Canic retains regular-file/no-follow admission and the executable's 512 MiB limit.
 
 Compiled Candid extraction retains at most 16 MiB of stdout and 64 KiB of
 diagnostics, with a 120-second capture deadline. Failed or over-budget extraction

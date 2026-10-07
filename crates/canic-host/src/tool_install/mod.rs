@@ -351,13 +351,7 @@ pub fn sha256_file(path: &Path) -> Result<String, InstallError> {
     // constant space and accepts every representable file size.
     ic_host_fs::read::hash_file(path, u64::MAX)
         .map(|identity| identity.sha256.to_string())
-        .map_err(|source| {
-            let source = match source {
-                ic_host_artifacts::artifact::ArtifactError::Io(source) => source,
-                source => io::Error::other(source),
-            };
-            io_error("hash admitted tool file", path, source)
-        })
+        .map_err(|source| io_error("hash admitted tool file", path, source.into()))
 }
 
 fn io_error(operation: &'static str, path: &Path, source: io::Error) -> InstallError {

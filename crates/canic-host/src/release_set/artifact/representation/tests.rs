@@ -58,6 +58,29 @@ fn decoded_difference_and_expansion_beyond_raw_size_are_rejected() {
 }
 
 #[test]
+fn shorter_and_equal_length_differences_are_mismatches() {
+    let wasm = b"\0asm\x01\0\0\0";
+    for different in [b"short".as_slice(), b"\0asm\x01\0\0\x01".as_slice()] {
+        std::assert_matches!(
+            qualify_representation(wasm, &gzip(different)),
+            Err(RepresentationError::RepresentationMismatch)
+        );
+    }
+}
+
+#[test]
+fn a_content_mismatch_does_not_hide_a_corrupt_trailer() {
+    let wasm = b"\0asm\x01\0\0\0";
+    let mut compressed = gzip(b"\0asm\x01\0\0\x01");
+    let crc_offset = compressed.len() - 8;
+    compressed[crc_offset] ^= 1;
+    std::assert_matches!(
+        qualify_representation(wasm, &compressed),
+        Err(RepresentationError::InvalidGzip { .. })
+    );
+}
+
+#[test]
 fn exact_raw_match_does_not_admit_trailing_data_or_an_extra_member() {
     let wasm = b"\0asm\x01\0\0\0";
     for trailing in [b"trailing".to_vec(), gzip(&[])] {
