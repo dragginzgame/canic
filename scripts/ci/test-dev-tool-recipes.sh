@@ -7,10 +7,11 @@ fixture="$(mktemp -d "${TMPDIR:-/tmp}/canic-dev-tool-recipes.XXXXXX")"
 trap 'rm -rf "$fixture"' EXIT
 real_bash="$(command -v bash)"
 real_make="$(command -v make)"
-mkdir -p "$fixture/bin" "$fixture/cargo tools" "$fixture/.tools/ic/bin"
-cp "$ROOT/tool-versions.env" "$fixture/"
-mkdir -p "$fixture/ci" "$fixture/scripts/ci"
-cp "$ROOT/ci/ic-tools.tsv" "$fixture/ci/"
+mkdir -p "$fixture/bin" "$fixture/cargo tools" "$fixture/.tools/ic/bin" \
+    "$fixture/.tools/host/bin" "$fixture/make" "$fixture/ci" "$fixture/scripts/ci"
+cp "$ROOT/Makefile" "$ROOT/tool-versions.env" "$fixture/"
+cp "$ROOT/make/tools.mk" "$fixture/make/"
+cp "$ROOT/ci/ic-tools.tsv" "$ROOT/ci/tool-versions.env" "$fixture/ci/"
 cp "$ROOT/scripts/ci/ic-tool-pins.sh" "$fixture/scripts/ci/"
 export EVENTS="$fixture/events" INSTALL_SELECTION="$fixture/install-selection"
 
@@ -25,7 +26,7 @@ case "$name:$*" in
     'wasm-opt:--version') exit "${FAIL_WASM_OPT:-0}" ;;
 esac
 SH
-for executable in bin/bash bin/cargo 'cargo tools/rg' 'cargo tools/sccache' \
+for executable in bin/bash bin/cargo '.tools/host/bin/rg' 'cargo tools/sccache' \
     '.tools/ic/bin/icp' '.tools/ic/bin/ic-wasm' '.tools/ic/bin/wasm-opt'; do
     { printf '#!%s\n' "$real_bash"; cat "$fixture/record"; } >"$fixture/$executable"
     chmod +x "$fixture/$executable"
@@ -40,7 +41,7 @@ cd "$fixture"
 run_recipe() {
     : >"$EVENTS"
     rm -f "$INSTALL_SELECTION"
-    PATH="$fixture/bin:$PATH" "$real_make" --no-print-directory -f "$ROOT/Makefile" \
+    PATH="$fixture/bin:$PATH" "$real_make" --no-print-directory \
         CARGO_INSTALL_BIN_DIR="$fixture/cargo tools" \
         "$@" >"$fixture/output" 2>&1
 }

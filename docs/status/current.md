@@ -1,5 +1,31 @@
 # Current handoff — 2026-10-07
 
+The maintainer's release-integrity failure is repaired under
+[#450](https://github.com/dragginzgame/canic/issues/450). Development and standard
+release-entry fixtures now include the actual Makefile and its shared records;
+the development ripgrep stub uses the current repository-local path. The
+authority corruption fixture checks a maintained Canic-owned version pin.
+The complete focused `make release-integrity-contract-gate`, scoped ShellCheck,
+syntax checks and diff hygiene pass. Final evidence remains at
+`target/review-validation/release-fixture-20261007/gate-final.log`.
+Only local test scripts and this handoff change; routine fixture-only work adds
+no changelog entry. Changes remain uncommitted. No broad validation or actual
+release/publication effects ran, and the inherited dirty lock is preserved.
+The separate cold-cache preflight defect remains owned by
+[#486](https://github.com/dragginzgame/canic/issues/486).
+
+A read-only review of Host 0.4.1 records named-output writer reuse candidates in
+[#458](https://github.com/dragginzgame/canic/issues/458#issuecomment-6037236922).
+The current lock already selects its four direct packages; this review does not
+qualify runtime behavior on that graph. Manifest SHA-256 remains
+`bda220b51c2aa13a7e683311c7b3ad1fb06bb100a2580402ea3ac83377609963`;
+lock SHA-256 remains
+`852aab7a13f5fc9c6a6a2c5b7f031f586745b80e77d8d2d7a873044ec2596728`.
+Earlier managed-stack and minor-boundary findings below still prevent declaring
+the complete batch push/publication ready.
+
+## Earlier membership qualification — 2026-10-07
+
 Both remaining initial-membership regressions in
 [#457](https://github.com/dragginzgame/canic/issues/457) now pass. The inherited
 fixture change uses normal Host observation pacing while establishing the source
