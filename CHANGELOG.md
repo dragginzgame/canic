@@ -90,7 +90,8 @@ Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   current contracts, bind release fixtures to their own identity and explain
   release version mismatches ([#450](https://github.com/dragginzgame/canic/issues/450)).
 - Refresh the embedded allocation peer and its provenance for the selected
-  dependency graph; preserve external lock selections during fixture version
+  dependency graph after runtime updates; keep ordinary preflight read-only
+  and preserve external lock selections during fixture version
   normalization ([#450](https://github.com/dragginzgame/canic/issues/450)).
 - Align managed admission fixtures with publication-bound application startup
   and bound imported-pool cycle assertions by observed IC idle charges

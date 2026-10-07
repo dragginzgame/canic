@@ -1,5 +1,25 @@
 # Current handoff — 2026-10-07
 
+The repeated embedded allocation-peer preflight failure is repaired for the
+maintainer's new registry stack: Memory 0.30.0, Metrics 0.2.5, Timers 0.14.6,
+Host 0.3.2, Query 0.47.7 and Testkit 0.20.0. Explicit regeneration with the new
+Testkit producer and independent `verify_embedded_root` pass. Primary lock
+SHA-256 is `104254fce8363bd75103194fdffd55c10ad3c5fa872131c22c8baab667c52518`;
+the refreshed peer SHA-256 is
+`1cfcad34cd22ce59e1b73953823c30031ffeb28ba07a3c917917266666069c15`.
+The peer and provenance are updated together; verification remains read-only.
+The exact governed PocketIC case
+`pic::lifecycle::tests::published_managed_component_group_support_drives_child_lifecycle`
+passes: real installation, lifecycle restoration and authorization refusals.
+The case took 163.60s; the targeted runner completed in 376s, including fresh
+framework canister builds and normal PocketIC cleanup. Logs remain under
+`target/review-validation/embedded-peer-current-20261007/`.
+[#450](https://github.com/dragginzgame/canic/issues/450) owns the result. Staged
+dependency changes are preserved. No broad validation or release effects ran;
+this focused repair does not establish complete-batch push/publication readiness.
+
+## Earlier qualification — 2026-10-07
+
 Host's stale Wasm code-section ceiling is corrected from 10 MiB to the current
 documented 12 MiB, including Local builds. Pre-publication refusal still protects
 the previous artifact set; the warning now starts at 11.25 MiB. All 25 targeted

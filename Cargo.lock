@@ -591,7 +591,7 @@ dependencies = [
  "ic-host-artifacts",
  "ic-host-fs",
  "ic-host-process",
- "ic-host-tools 0.3.1",
+ "ic-host-tools",
  "ic-query",
  "ic-testkit",
  "ic-verify-bls-signature",
@@ -2260,20 +2260,21 @@ dependencies = [
 
 [[package]]
 name = "ic-host-artifacts"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6d9330517c7596c8fa43c40c1a95fc584578f66afcb966a144b5b27e63c02c9"
+checksum = "ba671b53201931c956da08b619ef2fd29646bd7f9c7548cdf8e87bbabfe84d78"
 dependencies = [
  "flate2",
  "sha2 0.10.9",
- "wasmparser 0.261.0",
+ "tar",
+ "wasmparser",
 ]
 
 [[package]]
 name = "ic-host-fs"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a69ee91e296dbf938000e0a72ab4a50ffcd2f58352048eff21ed1a6cc9a128d2"
+checksum = "f5e45570b39852101bdc3e607ecc1a0f7b0eb66da58e0977ea91e65092440bd9"
 dependencies = [
  "ic-host-artifacts",
  "rustix",
@@ -2281,9 +2282,9 @@ dependencies = [
 
 [[package]]
 name = "ic-host-process"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b2eecf7bc6e99344bbdf32ff123c2e4653506f09f2edea8918aa0978955c557"
+checksum = "7fe8b63654c780d7c4b555df593c6702b4909fd9c0390c64bf2f8e51c4729c74"
 dependencies = [
  "ic-host-artifacts",
  "ic-host-fs",
@@ -2292,39 +2293,9 @@ dependencies = [
 
 [[package]]
 name = "ic-host-tools"
-version = "0.1.14"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1276e52058f6ef8e3ca3bdf118a18e8f2d79440bfa34a6a080b2f5fead3a0b6a"
-dependencies = [
- "flate2",
- "rustix",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tar",
- "wasmparser 0.253.0",
-]
-
-[[package]]
-name = "ic-host-tools"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6491f3e87d4d7b72c7ffddae3360170c65fe0dbd26eaf1a1f0a3d2a04a029dc6"
-dependencies = [
- "flate2",
- "rustix",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tar",
- "wasmparser 0.261.0",
-]
-
-[[package]]
-name = "ic-host-tools"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e72b6f926e666bb00a04e8f5795bed21a8473541d9d03833e0edebb9e3837d4d"
+checksum = "68a8f8aab0138eaa76027db243465a1b2541103b1ef76521b4116083444d91ac"
 dependencies = [
  "ic-host-artifacts",
  "ic-host-fs",
@@ -2370,22 +2341,22 @@ dependencies = [
 
 [[package]]
 name = "ic-metrics"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7bec2da218f678f1e91693bb890a30e185daf0ac1b97475bf42e280dade2d9b6"
+checksum = "f03846f188137170575ee48c04ece8a5d2d54096206d55bd7f56cd97afeac2fe"
 
 [[package]]
 name = "ic-query"
-version = "0.47.6"
+version = "0.47.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1ed16da5d433d9a50d224b462bd830bba71d353b4d6315463b4ab71a9ad638a"
+checksum = "2c23443f58dc7b4ede933657ac90289f0215ca96be16b8b3e159b48b5273814e"
 dependencies = [
  "candid",
  "cap-fs-ext",
  "cap-std",
  "futures",
  "ic-agent",
- "ic-host-tools 0.2.0",
+ "ic-host-artifacts",
  "prost",
  "serde",
  "serde_json",
@@ -2452,14 +2423,17 @@ dependencies = [
 
 [[package]]
 name = "ic-testkit"
-version = "0.19.2"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a6fa765920608adb447e6929fd2f633671ded5fa15ca74796428866bdd7ee37"
+checksum = "98d12baac58866f7012572b08d834a3b3ccfc3d6adf378883d1502a8386ab565"
 dependencies = [
  "candid",
  "fs2",
  "ic-cdk",
- "ic-host-tools 0.1.14",
+ "ic-host-artifacts",
+ "ic-host-fs",
+ "ic-host-process",
+ "ic-host-tools",
  "libc",
  "pocket-ic",
  "serde",
@@ -5193,16 +5167,6 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
-]
-
-[[package]]
-name = "wasmparser"
-version = "0.253.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19db11f87d2486580e1e8b6f494c54df7e0566b87d0b599db843c24019667339"
-dependencies = [
- "bitflags",
- "indexmap",
 ]
 
 [[package]]
