@@ -33,18 +33,13 @@ pub mod retained_contract;
 pub(super) mod startup_funding;
 pub(super) mod terminal;
 
-use crate::{
-    durable_io::{
-        RegularFileLockError, RegularFileReadError, lock_regular_file_with_parents,
-        read_optional_regular_bytes, write_bytes,
-    },
-    fleet_ensure::model::{
-        DesiredCanisterKind, DesiredFleet, DesiredFleetArtifacts, EffectRecord, EnsureAction,
-        FLEET_ENSURE_SCHEMA_VERSION, FleetEnsureJournalRecord, FleetEnsurePlan,
-        FleetEnsureStateRecord, FleetObservation, ProtocolArtifactDigests,
-        RetainedRootStartAuthorityRecord, RootManagementObservation, RootOwnedCanisterLifecycle,
-    },
+use crate::fleet_ensure::model::{
+    DesiredCanisterKind, DesiredFleet, DesiredFleetArtifacts, EffectRecord, EnsureAction,
+    FLEET_ENSURE_SCHEMA_VERSION, FleetEnsureJournalRecord, FleetEnsurePlan, FleetEnsureStateRecord,
+    FleetObservation, ProtocolArtifactDigests, RetainedRootStartAuthorityRecord,
+    RootManagementObservation, RootOwnedCanisterLifecycle,
 };
+
 use canic_core::{
     cdk::{types::Cycles, utils::hash::sha256_hex},
     dto::pool::CanisterPoolAssetStatus,
@@ -55,6 +50,11 @@ use std::{
     fs::File,
     io,
     path::{Path, PathBuf},
+};
+
+use ic_host_fs::durable::{
+    RegularFileLockError, RegularFileReadError, lock_regular_file_with_parents,
+    read_optional_regular_bytes, write_bytes,
 };
 use thiserror::Error as ThisError;
 

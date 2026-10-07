@@ -1,13 +1,13 @@
 //! Exact-session local state discard with interruption and terminal replay records.
 
-use crate::{
-    durable_io,
-    local_fleet::{LocalFleetError, model::LocalResetRecord, ops},
-};
+use crate::local_fleet::{LocalFleetError, model::LocalResetRecord, ops};
+
 use std::{fs, path::Path};
 
+use ic_host_fs::durable;
+
 fn read(directory: &Path) -> Result<Option<LocalResetRecord>, LocalFleetError> {
-    match durable_io::read_regular_bytes(&directory.join("reset.json"), 4096) {
+    match durable::read_regular_bytes(&directory.join("reset.json"), 4096) {
         Ok(bytes) => Ok(Some(serde_json::from_slice(&bytes)?)),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(error) => Err(error.into()),
@@ -46,7 +46,7 @@ pub fn begin(directory: &Path, expected: &str) -> Result<bool, LocalFleetError> 
         session_id: expected.into(),
         complete: false,
     };
-    durable_io::write_bytes(&directory.join("reset.json"), &serde_json::to_vec(&intent)?)?;
+    durable::write_bytes(&directory.join("reset.json"), &serde_json::to_vec(&intent)?)?;
     Ok(true)
 }
 
@@ -86,6 +86,6 @@ pub fn finish(directory: &Path, expected: &str) -> Result<(), LocalFleetError> {
         session_id: expected.into(),
         complete: true,
     };
-    durable_io::write_bytes(&directory.join("reset.json"), &serde_json::to_vec(&record)?)?;
+    durable::write_bytes(&directory.join("reset.json"), &serde_json::to_vec(&record)?)?;
     Ok(())
 }

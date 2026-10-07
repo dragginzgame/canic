@@ -155,7 +155,7 @@ ic-tools-check:
 	bash scripts/dev/install-ic-tools.sh --pins "$(IC_TOOL_PINS)" --check
 
 dependency-pins-gate:
-	bash scripts/ci/check-dependency-pins.sh
+	bash scripts/ci/check-dependency-pins.sh --cargo-inheritance
 
 # Configure the one repository-owned hook without installing the full toolchain.
 install-hooks:
@@ -354,7 +354,8 @@ recovery-runbooks-gate:
 	bash scripts/ci/check-recovery-runbooks.sh
 
 release-integrity-contract-gate:
-	bash scripts/ci/verify-shared-tooling-snapshot.sh
+	bash scripts/ci/check-shared-governance.sh
+	bash scripts/ci/test-gh-ci.sh
 	bash scripts/ci/test-release-runner.sh
 	bash scripts/ci/check-release-integrity-contract.sh
 	bash scripts/ci/test-require-jq.sh
@@ -362,6 +363,13 @@ release-integrity-contract-gate:
 	bash scripts/ci/test-host-tools.sh
 	bash scripts/ci/test-dev-tool-recipes.sh
 	bash scripts/ci/test-release-tools.sh
+	bash scripts/ci/test-pinned-ci-tools.sh
+	bash scripts/ci/test-shared-release-adoption.sh
+	perl scripts/ci/test-local-lock-versions.pl
+	bash scripts/ci/test-format-tools.sh
+	bash scripts/ci/test-cargo-metadata.sh
+	bash scripts/ci/test-file-digests.sh
+	bash scripts/ci/test-rustsec-db.sh
 	bash scripts/ci/test-release-commit-view.sh
 	bash scripts/ci/test-commit-release.sh
 	bash scripts/ci/test-release-recipes.sh
@@ -462,11 +470,13 @@ clippy:
 	$(CARGO_ENV) bash scripts/ci/run-workspace-cargo.sh clippy -D warnings
 
 fmt:
+	bash scripts/ci/check-format-tools.sh "$(CANIC_CARGO_SORT_VERSION)"
 	cargo sort --workspace
 	cargo sort-derives
 	cargo fmt --all
 
 fmt-check:
+	bash scripts/ci/check-format-tools.sh "$(CANIC_CARGO_SORT_VERSION)"
 	cargo sort --workspace --check
 	cargo sort-derives --check
 	cargo fmt --all -- --check

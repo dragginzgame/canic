@@ -2,7 +2,7 @@
 //!
 //! Responsibility: qualify exact raw fixture instrumentation outside readiness dispatch.
 //! Does not own: application endpoints, authorization implementations or runtime behavior.
-//! Boundary: exact unpublished probes exercise readiness, codecs and bare-CDK ingress limits.
+//! Boundary: exact unpublished probes exercise readiness, codecs, ingress limits and counters.
 
 use std::{
     collections::BTreeSet,
@@ -33,6 +33,26 @@ fn reviewed_endpoints() -> Vec<ReviewedEndpoint> {
             path: "canisters/test/payload_limit_probe/src/lib.rs".into(),
             name: "bare_echo",
             kind: "update",
+            guard: None,
+        },
+        // Simulator polling must observe invocation state and measurements
+        // without dispatch instrumentation adding samples to the measured table.
+        ReviewedEndpoint {
+            path: "canisters/test/runtime_probe/src/perf_context/mod.rs".into(),
+            name: "perf_context_entered",
+            kind: "query",
+            guard: None,
+        },
+        ReviewedEndpoint {
+            path: "canisters/test/runtime_probe/src/perf_context/mod.rs".into(),
+            name: "perf_context_completed",
+            kind: "query",
+            guard: None,
+        },
+        ReviewedEndpoint {
+            path: "canisters/test/runtime_probe/src/perf_context/mod.rs".into(),
+            name: "perf_context_metrics",
+            kind: "query",
             guard: None,
         },
     ]
@@ -159,6 +179,10 @@ pub fn violations(workspace: &Path, paths: &BTreeSet<PathBuf>) -> Vec<String> {
     violations
 }
 
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -214,6 +238,30 @@ mod tests {
             assert!(!check(source, path).is_empty());
         }
         assert!(!check(&format!("{probe}\n{probe}"), path).is_empty());
+    }
+
+    #[test]
+    fn performance_observation_exceptions_require_exact_exports() {
+        let path = "canisters/test/runtime_probe/src/perf_context/mod.rs";
+        for name in [
+            "perf_context_entered",
+            "perf_context_completed",
+            "perf_context_metrics",
+        ] {
+            let probe = format!("#[ic_cdk::query] fn {name}() {{}}");
+            assert!(check(&probe, path).is_empty());
+            assert!(!check(&probe, "apps/production/src/lib.rs").is_empty());
+            assert!(!check(&format!("{probe}\n{probe}"), path).is_empty());
+            for attribute in [
+                "#[ic_cdk::update]",
+                r#"#[ic_cdk::query(name = "application_method")]"#,
+                "#[ic_cdk::query(composite = true)]",
+                r#"#[ic_cdk::query(guard = "different_guard")]"#,
+            ] {
+                assert!(!check(&format!("{attribute} fn {name}() {{}}"), path).is_empty());
+            }
+        }
+        assert!(!check("#[ic_cdk::query] fn another_query() {}", path).is_empty());
     }
 
     #[test]

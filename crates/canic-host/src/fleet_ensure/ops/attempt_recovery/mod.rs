@@ -7,13 +7,12 @@ mod owner;
 #[cfg(test)]
 mod tests;
 
-use crate::{
-    durable_io::{read_regular_bytes, write_bytes},
-    fleet_ensure::{
-        model::attempt_recovery::AttemptRecoveryReviewRecord,
-        ops::{EnsurePaths, capacity_import::journal::CapacityImportJournalError},
-    },
+use crate::fleet_ensure::{
+    model::attempt_recovery::AttemptRecoveryReviewRecord,
+    ops::{EnsurePaths, capacity_import::journal::CapacityImportJournalError},
 };
+use ic_host_fs::durable::{read_regular_bytes, write_bytes};
+
 use canic_core::cdk::utils::hash::hex_bytes;
 use sha2_host::{Digest, Sha256};
 
@@ -40,7 +39,7 @@ pub(in crate::fleet_ensure) fn review(
     if bytes.len() > owner::MAX_BYTES {
         return Err(CapacityImportJournalError::Integrity);
     }
-    match crate::durable_io::read_optional_regular_bytes_bounded(&path, owner::MAX_BYTES)
+    match ic_host_fs::durable::read_optional_regular_bytes_bounded(&path, owner::MAX_BYTES)
         .map_err(|_| CapacityImportJournalError::Integrity)?
     {
         Some(bytes) if serde_json::from_slice::<AttemptRecoveryReviewRecord>(&bytes)? != review => {

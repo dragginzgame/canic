@@ -118,7 +118,7 @@ fn interrupted_local_grant_publication_resumes_exactly_once() {
         crate::fleet_ensure::workflow::attempt_recovery::review(&directory, "local", "survey")
             .unwrap();
     let (path, bytes) = owner::prepare(&paths, &review.owners[0]).unwrap().unwrap();
-    crate::durable_io::write_bytes(&path, &bytes).unwrap();
+    ic_host_fs::durable::write_bytes(&path, &bytes).unwrap();
     crate::fleet_ensure::workflow::attempt_recovery::apply(
         &directory,
         "local",

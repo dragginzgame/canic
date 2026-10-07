@@ -1,35 +1,35 @@
 //! Typed retained-counter owners for exact, bounded local continuation grants.
 
-use crate::{
-    durable_io::read_regular_bytes,
-    fleet_ensure::{
-        model::{
-            attempt_recovery::{AttemptRecoveryGrantRecord, AttemptRecoveryOwnerRecord},
-            capacity_import::{CapacityImportJournalRecord, survey::CapacityImportSurveyRecord},
-            infrastructure_bootstrap::{
-                BOOTSTRAP_EFFECT_INSPECTION_ROUNDS, BOOTSTRAP_PHASE_INSPECTION_ROUNDS,
-                InfrastructureBootstrapInspectionRecord,
-                registration_recovery::RECOVERY_INSPECTION_ROUNDS,
-            },
-        },
-        ops::{
-            EnsurePaths,
-            attempt_recovery::allowance,
-            capacity_import::{
-                admission::survey::{self, MAXIMUM_ATTEMPTS},
-                journal::{self, CapacityImportJournalError},
-                publication,
-            },
-            infrastructure_bootstrap::inspection,
+use crate::fleet_ensure::{
+    model::{
+        attempt_recovery::{AttemptRecoveryGrantRecord, AttemptRecoveryOwnerRecord},
+        capacity_import::{CapacityImportJournalRecord, survey::CapacityImportSurveyRecord},
+        infrastructure_bootstrap::{
+            BOOTSTRAP_EFFECT_INSPECTION_ROUNDS, BOOTSTRAP_PHASE_INSPECTION_ROUNDS,
+            InfrastructureBootstrapInspectionRecord,
+            registration_recovery::RECOVERY_INSPECTION_ROUNDS,
         },
     },
+    ops::{
+        EnsurePaths,
+        attempt_recovery::allowance,
+        capacity_import::{
+            admission::survey::{self, MAXIMUM_ATTEMPTS},
+            journal::{self, CapacityImportJournalError},
+            publication,
+        },
+        infrastructure_bootstrap::inspection,
+    },
 };
+
 use canic_core::cdk::utils::hash::hex_bytes;
 use sha2_host::{Digest, Sha256};
 use std::{
     fs,
     path::{Component, Path, PathBuf},
 };
+
+use ic_host_fs::durable::read_regular_bytes;
 
 pub(super) const MAX_BYTES: usize = 8 * 1024 * 1024;
 const MAX_OWNERS: usize = 4096;

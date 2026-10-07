@@ -851,7 +851,7 @@ fn publish_generated(
             if existing == bytes {
                 return Ok(());
             }
-            canic_host::durable_io::write_bytes(&resolved, bytes)?;
+            ic_host_fs::durable::write_bytes(&resolved, bytes)?;
             return Ok(());
         }
         Err(error) if error.kind() == io::ErrorKind::NotFound && expected_sha256.is_some() => {
@@ -862,7 +862,7 @@ fn publish_generated(
         Err(error) if error.kind() == io::ErrorKind::NotFound => {}
         Err(error) => return Err(error.into()),
     }
-    canic_host::durable_io::create_new_bytes_with_parents(&resolved, bytes)?;
+    ic_host_fs::durable::create_new_bytes_with_parents(&resolved, bytes)?;
     Ok(())
 }
 

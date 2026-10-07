@@ -8,8 +8,9 @@ trap 'if [[ $? == 0 ]]; then rm -rf -- "$fixture"; else printf "Failed commit-vi
 mkdir -p "$fixture/source/src" "$fixture/source/scripts/dev" \
     "$fixture/source/docs/changelog" "$fixture/bin" "$fixture/scripts/ci" "$fixture/scripts/release"
 cp "$root/scripts/ci/check-release-candidate.sh" "$root/scripts/ci/check-release-surface-content.sh" \
-    "$root/scripts/ci/require-jq.sh" "$root/scripts/ci/check-release-tag.sh" "$fixture/scripts/ci/"
-cp "$root/scripts/release/adapter.sh" "$root/scripts/release/retain-lock-selection.pl" "$fixture/scripts/release/"
+    "$root/scripts/ci/require-jq.sh" "$root/scripts/ci/check-release-tag.sh" \
+    "$root/scripts/ci/read-cargo-workspace-version.sh" "$root/scripts/ci/rewrite-local-lock-versions.pl" "$fixture/scripts/ci/"
+cp "$root/scripts/release/adapter.sh" "$root/scripts/release/rewrite-owned-lock.sh" "$fixture/scripts/release/"
 cat > "$fixture/source/Cargo.toml" <<'TOML'
 [workspace]
 resolver = "3"

@@ -9,17 +9,18 @@ mod release;
 mod tests;
 
 use crate::{
-    durable_io::{RegularFileReadError, read_optional_regular_bytes},
-    icp::existing_local_canister_candid_path,
-    registry::RegistryEntry,
+    icp::existing_local_canister_candid_path, registry::RegistryEntry,
     release_set::CanicInfrastructureArtifactEntry,
 };
+
 use canic_core::{
     ids::CanisterRole,
     role_contract::{ProtocolProfileDigest, RoleCapabilityKey, derive_protocol_profile_hashes},
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, io, path::PathBuf};
+
+use ic_host_fs::durable::{RegularFileReadError, read_optional_regular_bytes};
 use thiserror::Error as ThisError;
 
 pub use release::{ReleaseProtocolBindingError, resolve_release_registry_protocol_binding};

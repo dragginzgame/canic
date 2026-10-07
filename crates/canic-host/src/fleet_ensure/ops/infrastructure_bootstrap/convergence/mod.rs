@@ -1,26 +1,24 @@
 //! Admit ordinary convergence only after setup and every held import have durable completion.
 
-use crate::{
-    durable_io::{
-        create_new_bytes_with_parents, read_optional_regular_bytes_bounded, read_regular_bytes,
+use crate::fleet_ensure::{
+    model::{
+        DesiredFleet, FleetEnsureCompletion, FleetEnsureJournalRecord, FleetEnsurePlan,
+        FleetEnsurePlanScope, FleetEnsureStateRecord,
+        capacity_import::{CapacityImportJournalRecord, operation::CapacityImportPublicationKind},
     },
-    fleet_ensure::{
-        model::{
-            DesiredFleet, FleetEnsureCompletion, FleetEnsureJournalRecord, FleetEnsurePlan,
-            FleetEnsurePlanScope, FleetEnsureStateRecord,
-            capacity_import::{
-                CapacityImportJournalRecord, operation::CapacityImportPublicationKind,
-            },
-        },
-        ops::{
-            EnsurePaths,
-            capacity_import::{journal, publication},
-            infrastructure_bootstrap::{InfrastructureBootstrapError, terminal},
-        },
+    ops::{
+        EnsurePaths,
+        capacity_import::{journal, publication},
+        infrastructure_bootstrap::{InfrastructureBootstrapError, terminal},
     },
 };
+
 use candid::Principal;
 use std::{collections::BTreeSet, path::Path};
+
+use ic_host_fs::durable::{
+    create_new_bytes_with_parents, read_optional_regular_bytes_bounded, read_regular_bytes,
+};
 
 const MAX_BYTES: usize = 8 * 1024 * 1024;
 

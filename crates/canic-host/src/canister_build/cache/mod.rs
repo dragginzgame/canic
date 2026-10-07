@@ -7,7 +7,6 @@
 #[cfg(test)]
 mod tests;
 
-use crate::durable_io::{RegularFileLockError, lock_regular_file_with_parents};
 use std::{
     env,
     ffi::OsStr,
@@ -16,6 +15,8 @@ use std::{
     process::{Command, Output},
     time::{Duration, Instant},
 };
+
+use ic_host_fs::durable::{RegularFileLockError, lock_regular_file_with_parents};
 
 const DEFAULT_WASM_TARGET_RELATIVE: &str = "target/canic-wasm";
 const CANISTER_BUILD_LOCK_RELATIVE: &str = ".canic/locks/canister-artifact-build.lock";

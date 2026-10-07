@@ -554,6 +554,8 @@ pub struct RootComponentInitialInventoryView {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootComponentAllocationView {
+    pub application_initialization:
+        Option<canic_core::dto::component_registry::ComponentApplicationInitialization>,
     pub operation_id: [u8; 32],
     pub allocation_sequence: u64,
     pub component: ComponentInstanceId,
@@ -983,6 +985,7 @@ pub struct RootComponentCreationEffectView {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootComponentInstallEffectView {
+    pub application_init_hash: Option<[u8; 32]>,
     pub fixture_grant_revision: Option<u64>,
     pub raw_module_hash: [u8; 32],
     pub protocol_profile_digest: ProtocolProfileDigest,

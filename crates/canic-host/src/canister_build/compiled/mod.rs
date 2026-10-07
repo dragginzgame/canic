@@ -64,7 +64,7 @@ impl CompiledCanisterArtifact {
             toolchain,
         )?;
         if let Some(path) = &self.profile_marker {
-            crate::durable_io::write_bytes(path, self.profile.target_dir_name().as_bytes())?;
+            ic_host_fs::durable::write_bytes(path, self.profile.target_dir_name().as_bytes())?;
         }
         Ok(self.output)
     }

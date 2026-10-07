@@ -131,7 +131,8 @@ if [[ "$NEW" != "$PLANNED" ]]; then
   rollback_release_surfaces 1
 fi
 
-perl scripts/release/retain-lock-selection.pl "$TRANSACTION_DIR/metadata.json" "$TRANSACTION_DIR/Cargo.lock" "$PREV" "$NEW" > Cargo.lock
+bash scripts/release/rewrite-owned-lock.sh "$TRANSACTION_DIR/metadata.json" "$TRANSACTION_DIR/Cargo.lock" "$PREV" "$NEW" > "$TRANSACTION_DIR/candidate.lock"
+cat "$TRANSACTION_DIR/candidate.lock" > Cargo.lock
 cargo metadata --locked --offline --no-deps --format-version 1 >/dev/null
 
 scripts/ci/sync-release-surface-version.sh "$NEW"
@@ -141,7 +142,7 @@ RELEASE_DATE="${CANIC_RELEASE_DATE:-$(date -u +%F)}"
 mkdir -p "$(dirname "$DETAILED_CHANGELOG")"
 if [[ "$NOTES_EXISTED" -eq 0 ]]; then printf '# %s\n\n' "$PLANNED_MINOR_LINE" > "$DETAILED_CHANGELOG"; fi
 for notes in CHANGELOG.md "$DETAILED_CHANGELOG"; do
-  awk -v version="$NEW" -v date="$RELEASE_DATE" \
+  awk -v version="$NEW" -v previous="$PREV" -v date="$RELEASE_DATE" \
     -f scripts/ci/finalize-release-changelog.awk "$notes" > "$TRANSACTION_DIR/notes"
   cat "$TRANSACTION_DIR/notes" > "$notes"
 done

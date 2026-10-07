@@ -63,6 +63,7 @@ fn default_component_spec_id() -> ComponentSpecId {
 
 fn component_spec_config(role: &str, maximum_instances: u32) -> ComponentSpecConfig {
     ComponentSpecConfig {
+        application_init_required: false,
         component_role: CanisterRole::owned(role.to_string()),
         maximum_instances,
         limits: ComponentLimitsConfig::default(),

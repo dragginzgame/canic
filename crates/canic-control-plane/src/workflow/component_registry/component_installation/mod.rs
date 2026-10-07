@@ -308,6 +308,7 @@ fn reconcile_existing_child_creation(
 
 #[derive(Clone, Debug)]
 pub(super) struct ComponentInstallPlan {
+    pub(super) application_init_args: Option<Vec<u8>>,
     pub(super) durable: RootComponentInstallPlan,
     pub(super) source: ApprovedModuleSource,
     pub(super) payload: CanisterInitPayload,
@@ -346,26 +347,13 @@ pub(super) async fn component_install_plan_with_deployment(
 ) -> Result<ComponentInstallPlan, InternalError> {
     let (creation, canister) = allocation_creation_and_canister(allocation)?;
     let expected_creation = creation_plan(root.fleet_subnet_root, store, allocation)?;
+    let application_init_args =
+        ComponentRegistryOps::application_init_arguments(allocation, canister)?;
     validate_creation_effect(creation, &expected_creation)?;
 
     let artifact = exact_store_artifact(store, &allocation.role)?;
-    let source = resolved_root_store_module_source(
-        store.wasm_store,
-        allocation.release_set.release_build_id,
-        &allocation.role,
-        artifact.payload_hash,
-        artifact.payload_size_bytes,
-    )
-    .await?;
-    if source.source_canister() != &store.wasm_store {
-        return Err(InternalError::invariant());
-    }
+    let source = component_module_source(store, allocation, artifact).await?;
     let chunk_hashes = source.chunk_hashes().to_vec();
-    if source.module_hash() != artifact.payload_hash
-        || source.payload_size_bytes() != artifact.payload_size_bytes
-    {
-        return Err(InternalError::invariant());
-    }
 
     let binding = ComponentBinding {
         authority: root.authority.clone(),
@@ -424,6 +412,9 @@ pub(super) async fn component_install_plan_with_deployment(
     let selection = fixture_grant::component_selection(&allocation.progress)?;
     let fixture = fixture::select(store, &mut payload, selection).await?;
     let durable = RootComponentInstallPlan {
+        application_init_hash: ComponentRegistryOps::application_init_hash(
+            allocation.application_initialization.as_ref(),
+        )?,
         fixture_grant_revision: fixture.as_ref().map(|selected| selected.revision),
         raw_module_hash: artifact.raw_module_hash,
         protocol_profile_digest: artifact.protocol_profile_digest,
@@ -432,6 +423,7 @@ pub(super) async fn component_install_plan_with_deployment(
         maximum_registry_bytes,
     };
     Ok(ComponentInstallPlan {
+        application_init_args,
         fixture,
         durable,
         source,
@@ -440,6 +432,30 @@ pub(super) async fn component_install_plan_with_deployment(
         canister,
         expected_status_module_hash: artifact.payload_hash,
     })
+}
+
+async fn component_module_source(
+    store: &RootStoreBootstrapResponse,
+    allocation: &RootComponentAllocationView,
+    artifact: &canic_core::dto::root_store::RootStoreCatalogEntry,
+) -> Result<ApprovedModuleSource, InternalError> {
+    let source = resolved_root_store_module_source(
+        store.wasm_store,
+        allocation.release_set.release_build_id,
+        &allocation.role,
+        artifact.payload_hash,
+        artifact.payload_size_bytes,
+    )
+    .await?;
+    if source.source_canister() != &store.wasm_store {
+        return Err(InternalError::invariant());
+    }
+    if source.module_hash() != artifact.payload_hash
+        || source.payload_size_bytes() != artifact.payload_size_bytes
+    {
+        return Err(InternalError::invariant());
+    }
+    Ok(source)
 }
 
 pub(super) async fn child_component_install_plan(
@@ -899,7 +915,7 @@ async fn perform_install(
         plan.canister,
         &plan.source,
         plan.payload.clone(),
-        None,
+        plan.application_init_args.clone(),
     )
     .await
     {

@@ -205,6 +205,7 @@ impl ConfigTestBuilder {
 
     fn component_spec_config(component_role: CanisterRole) -> ComponentSpecConfig {
         ComponentSpecConfig {
+            application_init_required: false,
             component_role,
             maximum_instances: 1,
             limits: ComponentLimitsConfig::default(),

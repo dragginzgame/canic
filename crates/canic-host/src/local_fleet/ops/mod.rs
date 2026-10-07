@@ -7,23 +7,23 @@ pub mod prepare;
 pub mod reset;
 pub mod runtime;
 
-use crate::{
-    durable_io,
-    local_fleet::{
-        LocalFleetError,
-        model::{
-            LocalAllocationInput, LocalAllocationIntentRecord, LocalAllocationRecord,
-            LocalCheckpoint, LocalFleetConfig, LocalFleetRecord,
-        },
-        view::{LocalCanisterView, LocalFleetView},
+use crate::local_fleet::{
+    LocalFleetError,
+    model::{
+        LocalAllocationInput, LocalAllocationIntentRecord, LocalAllocationRecord, LocalCheckpoint,
+        LocalFleetConfig, LocalFleetRecord,
     },
+    view::{LocalCanisterView, LocalFleetView},
 };
+
 use candid::Principal;
 use canic_core::cdk::utils::hash::hex_bytes;
 use ic_testkit::pocket_ic::{PocketIc, common::rest::Topology};
 use sha2_host::{Digest, Sha256};
 #[cfg(unix)]
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+
+use ic_host_fs::durable;
 use std::{
     collections::BTreeSet,
     fs::{self, File, OpenOptions},
@@ -71,7 +71,7 @@ pub fn lock_directory(root: &Path, name: &str) -> Result<(PathBuf, File), LocalF
 
 /// Read only the maintained record, with a finite no-follow document bound.
 pub fn read_record(directory: &Path) -> Result<Option<LocalFleetRecord>, LocalFleetError> {
-    match durable_io::read_regular_bytes(&directory.join("environment.json"), 1024 * 1024) {
+    match durable::read_regular_bytes(&directory.join("environment.json"), 1024 * 1024) {
         Ok(bytes) => Ok(Some(serde_json::from_slice(&bytes)?)),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(error) => Err(error.into()),
@@ -84,7 +84,7 @@ pub fn write_record(directory: &Path, record: &LocalFleetRecord) -> Result<(), L
     if bytes.len() > 1024 * 1024 {
         return Err(LocalFleetError::Capacity);
     }
-    durable_io::write_bytes(&directory.join("environment.json"), &bytes)?;
+    durable::write_bytes(&directory.join("environment.json"), &bytes)?;
     Ok(())
 }
 

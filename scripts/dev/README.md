@@ -9,7 +9,14 @@ maintenance tasks.
 
 - `gh-ci.sh` is an optional maintainer helper for inspecting GitHub Actions CI
   with an authenticated local GitHub CLI session. It is not required for normal
-  Canic development or CI.
+  Canic development or CI. Its shared implementation can select exact committed
+  source with `--commit HEAD --all-workflows --limit 100`; this bounded list is
+  evidence for inspection, not a complete CI verdict. `--failed` searches
+  historical failures even when later runs passed.
+
+Tag maintenance uses `perl scripts/dev/delete-github-tags-up-to.pl` with an
+explicit cutoff. Review its dry-run output before selecting deletion; no default
+cutoff is inferred. See [the shared maintenance contract](../../docs/tag-maintenance.md).
 
 ## Continue From Here
 

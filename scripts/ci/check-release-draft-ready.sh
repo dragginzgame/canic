@@ -21,9 +21,9 @@ if [[ ! -f "$detailed_changelog" ]]; then
 fi
 scratch="$(mktemp "${TMPDIR:-/tmp}/canic-release-notes.XXXXXX")"
 trap 'rm -f "$scratch"' EXIT
-awk -v version="$planned" -v date="${RELEASE_DATE:-$(date -u +%F)}" \
+awk -v version="$planned" -v previous="$current" -v date="${RELEASE_DATE:-$(date -u +%F)}" \
     -f scripts/ci/finalize-release-changelog.awk "$detailed_changelog" > "$scratch"
-awk -v version="$planned" -v date="${RELEASE_DATE:-$(date -u +%F)}" \
+awk -v version="$planned" -v previous="$current" -v date="${RELEASE_DATE:-$(date -u +%F)}" \
   -f scripts/ci/finalize-release-changelog.awk CHANGELOG.md > "$scratch"
 
 if [[ "$CHECK_REMOTE" == --check-remote ]]; then

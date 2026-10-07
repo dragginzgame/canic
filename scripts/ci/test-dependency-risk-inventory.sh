@@ -35,7 +35,8 @@ GATE="$fixture/scripts/ci/check-dependency-risk-inventory.sh"
 mkdir -p "$fixture/scripts/ci" "$fixture/app/src" \
     "$fixture/direct/src" "$fixture/transitive/src"
 cp "$ROOT/scripts/ci/check-dependency-risk-inventory.sh" "$GATE"
-cp "$ROOT/scripts/ci/require-jq.sh" "$fixture/scripts/ci/"
+cp "$ROOT/scripts/ci/require-jq.sh" "$ROOT/scripts/ci/prepare-rustsec-db.sh" \
+    "$ROOT/scripts/ci/verify-file-checksum.sh" "$fixture/scripts/ci/"
 cp "$ROOT/tool-versions.env" "$fixture/tool-versions.env"
 cat >"$fixture/Cargo.toml" <<'TOML'
 [workspace]
@@ -67,7 +68,7 @@ edition = "2024"
 TOML
 touch "$fixture/app/src/lib.rs" "$fixture/direct/src/lib.rs" "$fixture/transitive/src/lib.rs"
 cargo generate-lockfile --offline --manifest-path "$fixture/Cargo.toml"
-checksum="$(sha256sum "$fixture/transitive/Cargo.toml" | cut -d ' ' -f1)"
+checksum="$(bash "$ROOT/scripts/ci/verify-file-checksum.sh" --print sha256 "$fixture/transitive/Cargo.toml")"
 printf 'RUSTSEC-2099-0001\tunmaintained\tcanic-risk-transitive-fixture\t1.0.0\t%s\tserde\n' \
     "$checksum" >"$fixture/scripts/ci/dependency-risk-inventory.tsv"
 "$JQ_BIN" -n --arg checksum "$checksum" '{

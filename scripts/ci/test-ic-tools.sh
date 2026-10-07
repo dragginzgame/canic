@@ -70,6 +70,7 @@ for tool in quill icp didc ic-wasm pocket-ic wasm-opt; do
                 mkdir -p "$fixture/payload/$member/bin" "$fixture/payload/$member/lib"
                 cp "$fixture/payload/$tool" "$fixture/payload/$member/bin/wasm-opt"
                 echo library > "$fixture/payload/$member/lib/libbinaryen.dylib"
+                echo library > "$fixture/payload/$member/lib/library with spaces.dylib"
                 tar -czf "$fixture/assets/$asset" -C "$fixture/payload" "$member" ;;
             *)
                 package="$tool"; [[ "$tool" != icp ]] || package=icp-cli
@@ -130,6 +131,23 @@ expect_failure install --check
 [[ ! -s "$fixture/executions" ]]
 install > /dev/null 2>&1
 [[ "$(readlink "$consumer/.tools/ic")" != "$original" && -d "$consumer/.tools/$original" ]]
+
+# Receipt traversal failure must not activate a candidate or lose its evidence.
+original="$(readlink "$consumer/.tools/ic")"
+cp "$pins" "$fixture/receipt-pins.tsv"
+printf '# force a new reviewed matrix identity\n' >> "$fixture/receipt-pins.tsv"
+selected_pins="$fixture/receipt-pins.tsv"
+cat > "$fixture/bin/find" <<'SCRIPT'
+#!/usr/bin/env bash
+echo 'receipt traversal failed' >&2
+exit 9
+SCRIPT
+chmod +x "$fixture/bin/find"
+expect_failure install
+[[ "$(readlink "$consumer/.tools/ic")" == "$original" ]]
+rg -F 'receipt traversal failed' "$fixture/refusal.log" >/dev/null
+rg -F 'Failed tool installation retained:' "$fixture/refusal.log" >/dev/null
+rm "$fixture/bin/find"
 
 # Version prefix matches are not accepted, even with an authentic digest.
 selected_pins="$fixture/prefix.tsv"

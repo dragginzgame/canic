@@ -6,22 +6,21 @@ mod reset;
 #[cfg(test)]
 mod tests;
 
-use crate::{
-    durable_io::read_optional_regular_bytes_bounded,
-    fleet_ensure::{
-        model::completed_operation::{CompletedOperationRetirementRecord, OperationArchiveRecord},
-        ops::{
-            EnsurePaths, EnsureStateError, is_sha256, operation_selection, read_current,
-            write_current,
-        },
+use crate::fleet_ensure::{
+    model::completed_operation::{CompletedOperationRetirementRecord, OperationArchiveRecord},
+    ops::{
+        EnsurePaths, EnsureStateError, is_sha256, operation_selection, read_current, write_current,
     },
 };
+
 use canic_core::cdk::utils::hash::sha256_hex;
 use std::{
     collections::BTreeSet,
     fs,
     path::{Component, Path, PathBuf},
 };
+
+use ic_host_fs::durable::read_optional_regular_bytes_bounded;
 
 pub(in crate::fleet_ensure) use reset::ResetRetirement;
 

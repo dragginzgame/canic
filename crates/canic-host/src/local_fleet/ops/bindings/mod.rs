@@ -1,10 +1,11 @@
 //! Materialize exact sealed Candid into the maintained selected-environment binding layout.
 
-use crate::{
-    durable_io, fleet_ensure::model::DesiredFleet, local_fleet::LocalFleetError, release_set,
-};
+use crate::{fleet_ensure::model::DesiredFleet, local_fleet::LocalFleetError, release_set};
+
 use canic_core::cdk::utils::hash::{hex_bytes, sha256_hex};
 use std::path::Path;
+
+use ic_host_fs::durable;
 
 fn failure(error: impl std::fmt::Display) -> LocalFleetError {
     LocalFleetError::Preparation(error.to_string())
@@ -71,7 +72,7 @@ fn publish(
     crate::component_operation::policy::validate_label(role)
         .map_err(|_| LocalFleetError::Identity)?;
     release_set::validate_release_artifact_relative_path(wasm).map_err(failure)?;
-    let bytes = durable_io::read_regular_bytes(
+    let bytes = durable::read_regular_bytes(
         &workspace.join(wasm).with_extension("did"),
         crate::frontend::ops::MAX_FRONTEND_FILE_BYTES,
     )?;
@@ -79,6 +80,6 @@ fn publish(
         return Err(LocalFleetError::Identity);
     }
     let destination = crate::icp::local_canister_candid_path(workspace, environment, role);
-    durable_io::write_bytes(&destination, &bytes)?;
+    durable::write_bytes(&destination, &bytes)?;
     Ok(())
 }

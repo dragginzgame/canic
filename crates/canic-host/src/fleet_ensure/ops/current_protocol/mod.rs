@@ -2451,19 +2451,19 @@ fn read_qualified_artifact(
             "Store artifact escapes the workspace".to_string(),
         ));
     }
-    let bytes = crate::durable_io::read_optional_regular_bytes(&path)
+    let bytes = ic_host_fs::durable::read_optional_regular_bytes(&path)
         .map_err(|error| match error {
-            crate::durable_io::RegularFileReadError::NotRegular => {
+            ic_host_fs::durable::RegularFileReadError::NotRegular => {
                 CurrentProtocolError::Configuration(format!(
                     "Store artifact is not a regular no-follow file: {}",
                     path.display()
                 ))
             }
-            crate::durable_io::RegularFileReadError::Io(source) => {
+            ic_host_fs::durable::RegularFileReadError::Io(source) => {
                 CurrentProtocolError::Configuration(source.to_string())
             }
             #[cfg(not(unix))]
-            crate::durable_io::RegularFileReadError::UnsupportedPlatform => {
+            ic_host_fs::durable::RegularFileReadError::UnsupportedPlatform => {
                 CurrentProtocolError::Configuration(
                     "Store artifact reads are unsupported on this platform".to_string(),
                 )

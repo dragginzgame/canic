@@ -35,10 +35,11 @@ printf '## [1.2.4]\n' >"$fixture/base/docs/changelog/1.2.md"
 cargo generate-lockfile --offline --manifest-path "$fixture/base/Cargo.toml" >"$fixture/output.log" 2>&1
 cp -R "$fixture/base" "$fixture/candidate"
 mkdir -p "$fixture/candidate/scripts/ci" "$fixture/candidate/scripts/release"
-cp "$ROOT/scripts/release/retain-lock-selection.pl" "$fixture/candidate/scripts/release/"
-for script in check-release-candidate check-release-surface-content read-workspace-version require-jq; do
+cp "$ROOT/scripts/release/rewrite-owned-lock.sh" "$fixture/candidate/scripts/release/"
+for script in check-release-candidate check-release-surface-content read-workspace-version read-cargo-workspace-version require-jq; do
     cp "$ROOT/scripts/ci/$script.sh" "$fixture/candidate/scripts/ci/"
 done
+cp "$ROOT/scripts/ci/rewrite-local-lock-versions.pl" "$fixture/candidate/scripts/ci/"
 cat >"$fixture/bin/git" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail

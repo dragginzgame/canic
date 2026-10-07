@@ -8,7 +8,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use ic_host_tools::tool::{ResolutionError, resolve_executable};
+use ic_host_process::tool::{ResolutionError, resolve_executable};
 
 pub fn resolve(requested: &Path, directories: &[PathBuf]) -> Result<Option<PathBuf>, io::Error> {
     let cwd = env::current_dir()?;

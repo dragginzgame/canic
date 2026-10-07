@@ -378,6 +378,7 @@ fn remote_progress_must_match_the_exact_request_caller_and_release() {
     let record = ops::new_record("core", authority()).unwrap();
     let binding = &record.plan.authority;
     let allocation = RootComponentAllocationResponse {
+        application_initialization: None,
         operation_id: record.plan.operation_id,
         allocation_sequence: 1,
         component: progress(binding).component,

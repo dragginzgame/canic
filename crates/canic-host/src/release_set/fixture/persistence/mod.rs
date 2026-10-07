@@ -10,13 +10,10 @@ use super::{
     topology_roles,
 };
 use crate::{
-    durable_io::{
-        BoundedRegularFileReadError, RegularFileReadError, create_new_bytes_with_parents,
-        read_optional_regular_bytes_bounded,
-    },
     release_build::{ReleaseBuildPlanState, load_release_build_plan},
     release_set::validate_release_artifact_relative_path,
 };
+
 use canic_core::{
     cdk::utils::hash::hex_bytes,
     dto::{
@@ -29,6 +26,11 @@ use std::{
     collections::BTreeMap,
     fs, io,
     path::{Path, PathBuf},
+};
+
+use ic_host_fs::durable::{
+    BoundedRegularFileReadError, RegularFileReadError, create_new_bytes_with_parents,
+    read_optional_regular_bytes_bounded,
 };
 
 ///
@@ -179,7 +181,7 @@ pub(super) fn read_workspace_file(
         .map_err(|_| FixtureArtifactError::Path(path.clone()))?;
     let mut parent = root.to_path_buf();
     // Reject symlinked parent directories as well as final symlinks. Retained artifact
-    // writes additionally use durable_io's atomic regular-file publication.
+    // writes additionally use ic-host-fs's atomic regular-file publication.
     for component in Path::new(relative).components() {
         parent.push(component);
         if fs::symlink_metadata(&parent).is_ok_and(|metadata| metadata.file_type().is_symlink()) {

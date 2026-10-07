@@ -11,7 +11,7 @@ fail() {
 }
 
 version="$(bash "$VERSION_READER" --committed)" ||
-    fail "cargo-get could not read the committed workspace version"
+    fail "shared reader could not read the committed workspace version"
 
 branch="$(git symbolic-ref --quiet --short HEAD)" ||
     fail "HEAD is detached"

@@ -8,10 +8,10 @@ use crate::{
         ArtifactTransformKind, ArtifactTransformOutcome, ArtifactTransformOutput,
         CanisterBuildProfile, WasmTransformMetrics,
     },
-    durable_io::write_bytes,
     ic_wasm::IcWasmExecutable,
     output_with_executable_busy_retry,
 };
+
 use std::{
     collections::BTreeSet,
     fs,
@@ -20,6 +20,8 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
     time::Instant,
 };
+
+use ic_host_fs::durable::write_bytes;
 
 use canic_core::ids::BuildNetwork;
 use flate2::{Compression, GzBuilder};

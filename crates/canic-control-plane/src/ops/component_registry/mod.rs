@@ -11,6 +11,7 @@ mod child_failure;
 mod component_retirement;
 mod directory_refresh;
 mod initial_inventory;
+mod initialization;
 mod root_retirement;
 mod subtree_retirement;
 mod top_level_activation;
@@ -989,6 +990,7 @@ impl RootComponentCreationPlan {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootComponentInstallPlan {
+    pub application_init_hash: Option<[u8; 32]>,
     pub fixture_grant_revision: Option<u64>,
     pub raw_module_hash: [u8; 32],
     pub protocol_profile_digest: ProtocolProfileDigest,
@@ -999,6 +1001,7 @@ pub struct RootComponentInstallPlan {
 
 #[derive(Debug, Eq, PartialEq)]
 struct RootComponentInstallAuthority<'a> {
+    application_init_hash: Option<[u8; 32]>,
     fixture_grant_revision: Option<u64>,
     raw_module_hash: [u8; 32],
     protocol_profile_digest: ProtocolProfileDigest,
@@ -1009,6 +1012,7 @@ struct RootComponentInstallAuthority<'a> {
 impl<'a> From<&'a RootComponentInstallPlan> for RootComponentInstallAuthority<'a> {
     fn from(plan: &'a RootComponentInstallPlan) -> Self {
         Self {
+            application_init_hash: plan.application_init_hash,
             fixture_grant_revision: plan.fixture_grant_revision,
             raw_module_hash: plan.raw_module_hash,
             protocol_profile_digest: plan.protocol_profile_digest,
@@ -1021,6 +1025,7 @@ impl<'a> From<&'a RootComponentInstallPlan> for RootComponentInstallAuthority<'a
 impl<'a> From<&'a RootComponentInstallEffectView> for RootComponentInstallAuthority<'a> {
     fn from(effect: &'a RootComponentInstallEffectView) -> Self {
         Self {
+            application_init_hash: effect.application_init_hash,
             fixture_grant_revision: effect.fixture_grant_revision,
             raw_module_hash: effect.raw_module_hash,
             protocol_profile_digest: effect.protocol_profile_digest,
@@ -1033,6 +1038,7 @@ impl<'a> From<&'a RootComponentInstallEffectView> for RootComponentInstallAuthor
 impl<'a> From<&'a RootComponentInstallEffectRecord> for RootComponentInstallAuthority<'a> {
     fn from(effect: &'a RootComponentInstallEffectRecord) -> Self {
         Self {
+            application_init_hash: effect.application_init_hash,
             fixture_grant_revision: effect.fixture_grant_revision,
             raw_module_hash: effect.raw_module_hash,
             protocol_profile_digest: effect.protocol_profile_digest,
@@ -2104,6 +2110,7 @@ const fn initial_inventory_record_to_view(
 
 fn allocation_record_to_view(record: RootComponentAllocationRecord) -> RootComponentAllocationView {
     RootComponentAllocationView {
+        application_initialization: record.application_initialization,
         operation_id: record.operation_id,
         allocation_sequence: record.allocation_sequence,
         component: record.component,
@@ -2198,6 +2205,7 @@ fn install_effect_record_to_view(
     effect: RootComponentInstallEffectRecord,
 ) -> RootComponentInstallEffectView {
     RootComponentInstallEffectView {
+        application_init_hash: effect.application_init_hash,
         fixture_grant_revision: effect.fixture_grant_revision,
         raw_module_hash: effect.raw_module_hash,
         protocol_profile_digest: effect.protocol_profile_digest,
@@ -3502,6 +3510,11 @@ fn install_charged_entry_bytes(
     record: &RootComponentAllocationRecord,
     plan: &RootComponentInstallPlan,
 ) -> Result<u64, InternalError> {
+    if ComponentRegistryOps::application_init_hash(record.application_initialization.as_ref())?
+        != plan.application_init_hash
+    {
+        return Err(InternalError::conflict());
+    }
     if plan.fixture_grant_revision == Some(0) {
         return Err(InternalError::conflict());
     }
@@ -3515,6 +3528,7 @@ fn install_charged_entry_bytes(
     };
     let mut maximum = record.clone();
     let installation = RootComponentInstallEffectRecord {
+        application_init_hash: plan.application_init_hash,
         fixture_grant_revision: plan.fixture_grant_revision,
         raw_module_hash: plan.raw_module_hash,
         protocol_profile_digest: plan.protocol_profile_digest,

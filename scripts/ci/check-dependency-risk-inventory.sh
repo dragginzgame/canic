@@ -31,9 +31,15 @@ audit_version="$(cargo audit --version 2>/dev/null | awk '{print $2}')" ||
     fail "cargo-audit version mismatch: expected $CANIC_CARGO_AUDIT_VERSION, got ${audit_version:-unavailable}"
 
 tmp_dir="$(mktemp -d)"
-trap 'rm -rf "$tmp_dir"' EXIT
+finish() {
+    local status=$?
+    if [[ "$status" == 0 ]]; then rm -rf -- "$tmp_dir"
+    else echo "Dependency audit evidence retained: $tmp_dir" >&2; fi
+}
+trap finish EXIT
 audit_json="$tmp_dir/audit.json"
-audit_db="$tmp_dir/advisory-db"
+prepared_db="$tmp_dir/advisory-source"
+audit_db="$prepared_db/db"
 
 case "$#" in
 0)
@@ -44,16 +50,15 @@ case "$#" in
         cd "$ROOT"
         cargo fetch --locked
     )
-    audit_args=(--db "$audit_db" --json)
+    mode=online
+    source_db=https://github.com/RustSec/advisory-db
     if [ "${CANIC_CARGO_AUDIT_NO_FETCH:-0}" = "1" ]; then
+        mode=local
         cargo_home="${CARGO_HOME:-$HOME/.cargo}"
         source_db="${CANIC_CARGO_AUDIT_DB:-$cargo_home/advisory-db}"
-        [ -d "$source_db/.git" ] ||
-            fail "offline advisory database is unavailable: $source_db"
-        git clone --quiet --local --no-hardlinks "$source_db" "$audit_db" ||
-            fail "offline advisory database could not be isolated: $source_db"
-        audit_args=(--no-fetch --db "$audit_db" --json)
     fi
+    bash "$ROOT/scripts/ci/prepare-rustsec-db.sh" "$mode" "$source_db" "$prepared_db" >/dev/null
+    audit_args=(--no-fetch --db "$audit_db" --json)
     (
         cd "$ROOT"
         cargo audit "${audit_args[@]}"

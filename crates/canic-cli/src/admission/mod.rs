@@ -54,7 +54,6 @@ use canic_core::{
 };
 use canic_host::{
     CanisterProtocolError, call_canister_with_arg,
-    durable_io::write_bytes,
     fleet_ensure::{CurrentFleetInventoryError, CurrentFleetResolution, resolve_current_fleet},
     icp::IcpCli,
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
@@ -64,9 +63,12 @@ use canic_host::{
     },
     query_canister_with_arg,
 };
+
 use clap::{ArgGroup, Command as ClapCommand};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, ffi::OsString, fs, path::PathBuf};
+
+use ic_host_fs::durable::write_bytes;
 use thiserror::Error as ThisError;
 
 const FLEET_ARG: &str = "fleet";

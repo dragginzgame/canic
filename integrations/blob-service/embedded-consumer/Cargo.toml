@@ -13,7 +13,7 @@ candid = "0.10.36"
 canic = { path = "../../../crates/canic", default-features = false }
 canic-blob-service = { path = ".." }
 ic-cdk = "0.20.3"
-ic-memory = "0.25"
+ic-memory = "0.28"
 serde = { version = "1.0", features = ["derive"] }
 
 [package]

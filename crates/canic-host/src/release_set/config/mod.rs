@@ -5,7 +5,6 @@ mod projection;
 #[cfg(test)]
 mod tests;
 
-use crate::durable_io::write_bytes;
 use canic_core::bootstrap::{
     compiled::{ComponentTopology, ConfigModel},
     parse_config_model,
@@ -15,6 +14,8 @@ use std::{
     fs, io,
     path::{Path, PathBuf},
 };
+
+use ic_host_fs::durable::write_bytes;
 
 pub use error::{
     AppConfigDeclaration, AppConfigError, AppConfigIoOperation, AppConfigMutationConflict,

@@ -37,9 +37,9 @@ git -C "$ROOT" archive "$source" | tar -xf - -C "$scratch/expected"
     cd "$scratch/expected"
     cargo metadata --locked --offline --no-deps --format-version 1 > "$scratch/expected/metadata.json"
     cp -p Cargo.lock "$scratch/expected/source.lock"
-    previous="$(cargo get workspace.package.version)"
+    previous="$(bash "$ROOT/scripts/ci/read-cargo-workspace-version.sh" "$scratch/expected/Cargo.toml")"
     cargo set-version --workspace --offline "$version" >/dev/null
-    perl "$ROOT/scripts/release/retain-lock-selection.pl" "$scratch/expected/metadata.json" "$scratch/expected/source.lock" "$previous" "$version" > Cargo.lock
+    bash "$ROOT/scripts/release/rewrite-owned-lock.sh" "$scratch/expected/metadata.json" "$scratch/expected/source.lock" "$previous" "$version" > Cargo.lock
 )
 while IFS= read -r -d '' manifest; do
     relative="${manifest#"$scratch/expected/"}"

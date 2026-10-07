@@ -135,11 +135,12 @@ and executable fixture inputs and record the resulting value in each run.
 | `4ff697d1ed68db19bca8810f609ea40547486a2174e81271312828ef034ca7c8` | `docs/audits/scripts/measure-complexity-v2.sh` |
 | `8f4a46a26e56b845290c3adc4994826b8a10084c97a2c68579ca60038f8e1be8` | `docs/audits/scripts/run-nonempty-cargo-test.sh` |
 | `ac7ab348d0e9a18df9def45f89f1c403f7c23e523eaf58da03b5099fb2634417` | `scripts/ci/audit-product-tree-hash.sh` |
-| `429d994c26a87ed9d0d8a2525ece3f265db37a4a73d7242f0cd0897d4fe63b74` | `scripts/ci/check-audit-method-catalog.sh` |
+| `8d15916d94674d4fef698ea21d1d5dab3e770c84fae709964fb8ca341dc3931a` | `scripts/ci/check-audit-method-catalog.sh` |
 | `f9bd2763e713d5805e9502163d4b8c963ebb5b9ad1659158cf495231c9af38da` | `scripts/ci/check-release-integrity-contract.sh` |
 | `934b2eff431db36626c5811cea77ad2f568c67920b50718495b54546bba7efea` | `scripts/ci/instruction-audit-report.sh` |
 | `93ac1f3c77d9d58009cae84c4570e51306a077a207262c9316aea6f2fdae122c` | `scripts/ci/run-layering-guards.sh` |
 | `d4923f84ce221736e71619a148069f7e77b42e1270689224716fa28ede7e4542` | `scripts/ci/list-config-canisters.sh` |
 | `f2d37cdd60f85a3e7be5d4f57694cf62122f01c6576a3397e76c73b4f93cc216` | `scripts/ci/require_icp.sh` |
 | `68c3164708aab17a5a58217f9f9374c3505130e0b8eb36c3a435cc4f779366d0` | `scripts/ci/wasm-audit-report.sh` |
-| `69fd5073c920a27eca8137d3131007a2dc5d112f5f4a9bf300558a8c8f551265` | `tool-versions.env` |
+| `fae2dc306d301d200755a1276bd946c98cfb84d0b53debc8fbdd41dc35515381` | `tool-versions.env` |
+| `4c981184847462ab3c01cac087e28309f8e054253fd95c7bbe56f643877aa708` | `scripts/ci/verify-file-checksum.sh` |

@@ -145,11 +145,11 @@ while IFS=$'\t' read -r tool version selected_host digest; do
         gzip) gzip -dc "$archive" > "$stage/bin/$tool" ;;
         xz)
             tar -xJf "$archive" -C "$scratch" "$member"
-            [[ -f "$scratch/$member" && ! -L "$scratch/$member" ]]
+            [[ -f "$scratch/$member" && ! -L "$scratch/$member" ]] || exit 1
             cp "$scratch/$member" "$stage/bin/$tool" ;;
         binaryen)
             tar -xzf "$archive" -C "$scratch" "$member/bin/wasm-opt" "$member/lib"
-            [[ -f "$scratch/$member/bin/wasm-opt" && ! -L "$scratch/$member/bin/wasm-opt" ]]
+            [[ -f "$scratch/$member/bin/wasm-opt" && ! -L "$scratch/$member/bin/wasm-opt" ]] || exit 1
             cp "$scratch/$member/bin/wasm-opt" "$stage/bin/wasm-opt"
             cp -R "$scratch/$member/lib/." "$stage/lib/" ;;
     esac
@@ -161,10 +161,21 @@ done < "$stage/pins.tsv"
 # Record installed bytes for offline verification before future execution.
 (
     cd "$stage"
+    # The receipt format uses unescaped line records. Reject names it cannot
+    # represent, and observe traversal failure before writing any receipt.
+    find bin lib -type f -print0 > receipt-files.nul
+    while IFS= read -r -d '' file; do
+        case "$file" in
+            *$'\n'*|*\\*) echo 'installed filename cannot be represented in checksum receipt' >&2; exit 1 ;;
+        esac
+        printf '%s\n' "$file"
+    done < receipt-files.nul > receipt-files.txt
+    LC_ALL=C sort receipt-files.txt > receipt-files.sorted
     while IFS= read -r file; do
-        if command -v sha256sum >/dev/null; then sha256sum "$file";
-        else shasum -a 256 "$file"; fi
-    done < <(find bin lib -type f | LC_ALL=C sort)
+        digest="$(bash "$ROOT/scripts/ci/verify-file-checksum.sh" --print sha256 "$file")"
+        printf '%s  %s\n' "$digest" "$file"
+    done < receipt-files.sorted
+    rm receipt-files.nul receipt-files.txt receipt-files.sorted
 ) > "$stage/files.sha256"
 verify_bundle "$stage"
 cmp -s "$pins" "$stage/pins.tsv" || { echo 'IC tool pins changed during installation' >&2; exit 1; }

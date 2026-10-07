@@ -22,6 +22,7 @@ macro_rules! canic_emit_root_command_endpoint {
                 ::canic::dto::fleet_funding::FleetFundingPolicyRotationRootActivateRequest,
             ),
             AdoptStore(::canic::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionRequest),
+            BindComponentInitialization(::canic::dto::component_registry::RootComponentInitializationRequest),
             BootstrapStore(::canic::dto::root_store::RootStoreBootstrapRequest),
             #[cfg(canic_capability_root_delegation)]
             GetOrCreateDelegationProof,
@@ -142,6 +143,10 @@ macro_rules! canic_emit_root_command_endpoint {
             #[doc(hidden)]
             const fn __canic_payload_max_bytes(&self) -> usize {
                 match self {
+                    RootCommand::BindComponentInitialization(_) => {
+                        ::canic::dto::component_registry::MAX_COMPONENT_APPLICATION_INIT_BYTES
+                            + ::canic::__internal::core::ingress::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES
+                    }
                     RootCommand::ProvisionComponents(_) => {
                         ::canic::__internal::core::control_plane_support::ops::component_provisioning_plan::MAX_FLEET_SUBNET_ROOT_PROVISIONING_ACCEPTANCE_PAYLOAD_BYTES
                     }
@@ -215,6 +220,7 @@ macro_rules! canic_emit_root_command_endpoint {
             let controller_command = matches!(
                 &command,
                 RootCommand::AdoptStore(_)
+                    | RootCommand::BindComponentInitialization(_)
                     | RootCommand::BootstrapStore(_)
                     | RootCommand::PrepareStoreFixture(_)
                     | RootCommand::HandoffPoolCanister(_)
@@ -364,6 +370,7 @@ macro_rules! canic_emit_root_command_endpoint {
                 &command,
                 RootCommand::AcceptFunding(_)
                     | RootCommand::AdoptStore(_)
+                    | RootCommand::BindComponentInitialization(_)
                     | RootCommand::BootstrapStore(_)
                     | RootCommand::PrepareStoreFixture(_)
                     | RootCommand::HandoffPoolCanister(_)
@@ -400,6 +407,11 @@ macro_rules! canic_emit_root_command_endpoint {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::activate_root_funding_policy_rotation(request)
                         .await
                         .map(RootCommandResponse::ActivateFundingPolicyRotation)
+                }
+                RootCommand::BindComponentInitialization(request) => {
+                    let operation_id = request.operation_id;
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::bind_component_initialization(request)?;
+                    Ok(RootCommandResponse::OperationAccepted(::canic::dto::role::OperationReceipt { operation_id }))
                 }
                 RootCommand::AdoptStore(request) => {
                     let operation_id = request.operation_id;

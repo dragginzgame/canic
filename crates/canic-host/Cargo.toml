@@ -36,6 +36,9 @@ getrandom = { workspace = true }
 hmac = { workspace = true }
 ic-agent = { workspace = true }
 ic-certification = { workspace = true }
+ic-host-artifacts = { workspace = true, features = ["gzip", "wasm"] }
+ic-host-fs = { workspace = true }
+ic-host-process = { workspace = true }
 ic-host-tools = { workspace = true }
 ic-query = { workspace = true }
 ic-testkit = { workspace = true, optional = true }

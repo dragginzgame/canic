@@ -19,9 +19,6 @@ use crate::{
         RootPoolImportCapacityError, RootPoolImportCapacityInput, plan_initial_fleet_topology,
         validate_root_pool_capacity, validate_root_pool_import_capacity,
     },
-    durable_io::{
-        RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes,
-    },
     fleet_ensure::model::{
         CanisterRuntimeStatus, DesiredCanister, DesiredCanisterInit, DesiredCanisterKind,
         DesiredComponentGroupPlacement, DesiredFleet, DesiredFleetBootstrap,
@@ -42,6 +39,7 @@ use crate::{
     },
     subnet_catalog::MainnetCatalogClient,
 };
+
 use candid::{Nat, Principal};
 use canic_core::{
     cdk::types::Cycles,
@@ -66,6 +64,10 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
+};
+
+use ic_host_fs::durable::{
+    RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes,
 };
 use thiserror::Error as ThisError;
 

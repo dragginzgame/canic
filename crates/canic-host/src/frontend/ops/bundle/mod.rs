@@ -2,21 +2,21 @@
 //!
 //! The manifest is published last; a retry may fill only identical missing files.
 
-use crate::{
-    durable_io::{create_new_bytes_with_parents, read_regular_bytes},
-    frontend::{
-        FrontendError,
-        model::{FrontendFileRecord, FrontendManifestRecord},
-        ops::{MAX_FRONTEND_BUNDLE_BYTES, MAX_FRONTEND_FILE_BYTES},
-        view::FrontendBundleView,
-    },
+use crate::frontend::{
+    FrontendError,
+    model::{FrontendFileRecord, FrontendManifestRecord},
+    ops::{MAX_FRONTEND_BUNDLE_BYTES, MAX_FRONTEND_FILE_BYTES},
+    view::FrontendBundleView,
 };
+
 use canic_core::cdk::utils::hash::sha256_hex;
 use std::{
     collections::BTreeSet,
     fs,
     path::{Component, Path},
 };
+
+use ic_host_fs::durable::{create_new_bytes_with_parents, read_regular_bytes};
 
 /// Digest all typed browser data and file identities, excluding the self digest.
 pub fn manifest_digest(manifest: &FrontendManifestRecord) -> Result<String, FrontendError> {

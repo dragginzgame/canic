@@ -1,5 +1,7 @@
 //! Canic-owned managed lifecycle and explicit admission guard qualification.
 
+mod initialization;
+
 use candid::CandidType;
 use canic::{Error, prelude::*};
 use std::cell::Cell;
@@ -15,7 +17,13 @@ thread_local! {
     static MANAGED_GUARD_WORKFLOW_RUNS: Cell<u32> = const { Cell::new(0) };
 }
 
-canic::start!();
+canic::start!(
+    argument_limits = initialization::LIMITS,
+    lifecycle_participant(
+        init = initialization::install,
+        post_upgrade = initialization::restore
+    ),
+);
 
 #[expect(clippy::unused_async, reason = "framework lifecycle hook signature")]
 async fn canic_setup() {}
@@ -64,6 +72,12 @@ fn managed_guard_workflow_runs() -> Result<u32, Error> {
 #[canic_query(requires(caller::is_fleet_admitted()))]
 fn canic_fleet_admission_parity_probe() -> Result<candid::Principal, Error> {
     Ok(ic_cdk::api::msg_caller())
+}
+
+/// Exact application init bytes retained by the synchronous lifecycle owner.
+#[canic_query(public)]
+fn managed_initialization_bytes() -> Result<Vec<u8>, Error> {
+    Ok(initialization::bytes())
 }
 
 canic::finish!();

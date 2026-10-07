@@ -7,12 +7,8 @@
 #[cfg(test)]
 mod tests;
 
-use crate::{
-    durable_io::{
-        RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes,
-    },
-    icp_config::{IcpConfigError, resolve_icp_build_network_from_root},
-};
+use crate::icp_config::{IcpConfigError, resolve_icp_build_network_from_root};
+
 use canic_core::ids::{BuildNetwork, CanonicalNetworkId};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 use sha2_host::{Digest, Sha256};
@@ -21,6 +17,10 @@ use std::{
     io,
     path::{Path, PathBuf},
     time::{SystemTime, SystemTimeError, UNIX_EPOCH},
+};
+
+use ic_host_fs::durable::{
+    RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes,
 };
 use thiserror::Error as ThisError;
 

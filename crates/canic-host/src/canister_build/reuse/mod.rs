@@ -15,7 +15,6 @@ use crate::{
     build_toolchain::BuildToolchain,
     canister_build::WorkspaceBuildContext,
     cargo_metadata::{CargoFeatureSelection, cargo_metadata_catalog_for_manifest},
-    durable_io::{read_regular_bytes, write_bytes},
     release_build::validate_finalized_release_build_manifest,
     release_set::{
         AppConfigSnapshot, load_persisted_application_artifact_union,
@@ -23,6 +22,7 @@ use crate::{
         load_persisted_current_release_set_manifest,
     },
 };
+
 use canic_core::{cdk::utils::hash::hex_bytes, ids::ReleaseBuildId};
 use serde::{Deserialize, Serialize};
 use sha2_host::{Digest, Sha256};
@@ -35,6 +35,8 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
+
+use ic_host_fs::durable::{read_regular_bytes, write_bytes};
 use thiserror::Error;
 
 pub use lock::{

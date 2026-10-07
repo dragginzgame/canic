@@ -67,7 +67,7 @@ fn lock_owner_fixture() {
     };
     let role = std::env::var(FIXTURE_ROLE).unwrap();
     fs::write(root.join(format!("{role}-started")), b"").unwrap();
-    let lock = canic_host::durable_io::lock_file(&root.join("lock")).unwrap();
+    let lock = ic_host_fs::durable::lock_file(&root.join("lock")).unwrap();
     let pid = std::process::id();
     let stat = fs::read_to_string(format!("/proc/{pid}/stat")).unwrap();
     let start_ticks = stat

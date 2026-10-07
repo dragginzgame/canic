@@ -16,6 +16,7 @@ package = "."
 enabled = false
 
 [component_specs.backend]
+application_init_required = true
 component_role = "backend"
 maximum_instances = 1
 

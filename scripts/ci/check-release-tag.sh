@@ -8,11 +8,14 @@ if [[ $# != 2 || ! "$1" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ||
 fi
 commit="$1"
 version="$2"
-[[ "$(git rev-parse --verify "$commit^{commit}")" == "$commit" ]]
+resolved="$(git rev-parse --verify "$commit^{commit}")" || exit 1
+[[ "$resolved" == "$commit" ]] || exit 1
 tag="refs/tags/v$version"
-[[ "$(git cat-file -t "$tag")" == tag ]] || {
+kind="$(git cat-file -t "$tag")" || exit 1
+[[ "$kind" == tag ]] || {
     echo "release tag v$version must be annotated" >&2; exit 1;
 }
-[[ "$(git rev-parse --verify "$tag^{commit}")" == "$commit" ]] || {
+tagged_commit="$(git rev-parse --verify "$tag^{commit}")" || exit 1
+[[ "$tagged_commit" == "$commit" ]] || {
     echo "release tag v$version does not point to $commit" >&2; exit 1;
 }

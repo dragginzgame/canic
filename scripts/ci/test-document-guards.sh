@@ -25,6 +25,7 @@ inputs+=(
     docs/governance/ci-deployment.md
     scripts/ci/check-release-validation-matrix.sh
     scripts/ci/doc-guard-lib.sh
+    scripts/ci/verify-file-checksum.sh
     scripts/ci/verify-packaged-downstream-wasm-store.sh
     Makefile
 )
@@ -53,7 +54,7 @@ expect_failure() {
 refresh_fingerprint_hash() {
     local path="$1"
     local hash
-    hash="$(sha256sum "$fixture/$path" | awk '{print $1}')"
+    hash="$(bash "$ROOT/scripts/ci/verify-file-checksum.sh" --print sha256 "$fixture/$path")"
     awk -F '|' -v OFS='|' -v path="$path" -v hash="$hash" '
         NF == 4 || NF == 6 {
             path_column = NF - 1

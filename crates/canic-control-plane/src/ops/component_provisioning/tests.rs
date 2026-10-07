@@ -330,6 +330,7 @@ fn installed_allocation(
         creation: effect,
         canister,
         installation: RootComponentInstallEffectView {
+            application_init_hash: None,
             fixture_grant_revision: None,
             raw_module_hash: [33; 32],
             protocol_profile_digest: canic_core::role_contract::ProtocolProfileDigest::from_bytes(
@@ -445,6 +446,7 @@ fn reserve_single_member(
     let member = RootComponentProvisioningOps::next_member_reservation(&accepted)
         .expect("next member reservation");
     let allocation = RootComponentAllocationView {
+        application_initialization: None,
         operation_id: member.member_operation_id,
         allocation_sequence: 1,
         component: ComponentInstanceId::from_generated_bytes([31; 32]),
@@ -1240,6 +1242,7 @@ fn reserve_claim_install_and_commit_later_operation_member(
     let member = RootComponentProvisioningOps::next_member_reservation(&accepted)
         .expect("next scale-out member reservation");
     let allocation = RootComponentAllocationView {
+        application_initialization: None,
         operation_id: member.member_operation_id,
         allocation_sequence: 2,
         component: ComponentInstanceId::from_generated_bytes([73; 32]),
@@ -1482,6 +1485,7 @@ fn prepaid_claim_cannot_precede_complete_identity_reservation() {
     let member = RootComponentProvisioningOps::next_member_reservation(&accepted)
         .expect("unreserved member");
     let allocation = RootComponentAllocationView {
+        application_initialization: None,
         operation_id: member.member_operation_id,
         allocation_sequence: 1,
         component: ComponentInstanceId::from_generated_bytes([31; 32]),
@@ -1570,6 +1574,7 @@ fn reservation_cursor_crosses_canonical_placements_without_reusing_identity() {
         assert_eq!(member.group_placement.ordinal, expected);
         assert!(operation_ids.insert(member.member_operation_id));
         let allocation = RootComponentAllocationView {
+            application_initialization: None,
             operation_id: member.member_operation_id,
             allocation_sequence: u64::from(expected) + 1,
             component: ComponentInstanceId::from_generated_bytes(

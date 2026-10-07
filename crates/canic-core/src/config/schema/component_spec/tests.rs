@@ -14,6 +14,7 @@ use crate::{
 
 fn component_spec(role: &str) -> ComponentSpecConfig {
     ComponentSpecConfig {
+        application_init_required: false,
         component_role: CanisterRole::owned(role.to_string()),
         maximum_instances: 1,
         limits: ComponentLimitsConfig::default(),

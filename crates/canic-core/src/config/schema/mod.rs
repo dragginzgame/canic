@@ -325,6 +325,7 @@ impl ConfigModel {
             .parse::<ComponentSpecId>()
             .expect("valid default Component Spec ID");
         let default_component_spec = ComponentSpecConfig {
+            application_init_required: false,
             component_role: CanisterRole::from("app"),
             maximum_instances: 1,
             limits: ComponentLimitsConfig::default(),

@@ -21,7 +21,6 @@ use crate::{
 };
 use canic_core::ids::ReleaseBuildId;
 use canic_host::{
-    durable_io::read_regular_bytes,
     fleet_ensure::{
         FleetEnsureReport, FleetGenerateRequest, IcpEnsurePlatform,
         dto::infrastructure_bootstrap::InfrastructureBootstrapReviewRequest,
@@ -32,8 +31,11 @@ use canic_host::{
     icp::IcpCli,
     icp_config::resolve_current_canic_icp_root,
 };
+
 use clap::{ArgAction, ArgMatches, Command};
 use std::{ffi::OsString, path::PathBuf};
+
+use ic_host_fs::durable::read_regular_bytes;
 
 pub(super) fn command() -> Command {
     let mut command = Command::new("bootstrap").bin_name("canic fleet bootstrap")

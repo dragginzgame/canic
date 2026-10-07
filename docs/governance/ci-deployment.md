@@ -556,9 +556,9 @@ bump script rejects direct invocation without the private validation marker
 supplied by the owner.
 The root `Cargo.toml` is the sole live workspace package-version authority;
 ordinary status and planning prose must not act as a parallel package-version
-source. Current and committed version queries must use the shared pinned
-`cargo-get` reader; release scripts must not maintain parallel manifest
-parsers. The governed bump is the one exception: after validating one exact
+source. Current and committed version queries select their source through the
+Canic adapter and use Shared Tooling’s structural workspace-version reader;
+release scripts must not maintain parallel manifest parsers. The governed bump is the one exception: after validating one exact
 clean source commit, it seals the numbered pending detailed changelog entry with the
 release date or preserves its existing valid ISO date, then writes one generated
 `release-validation.json` containing schema `1`, exact release version, validated

@@ -277,17 +277,40 @@ fn canonical_spec_and_topology_hashes_match_frozen_golden_values() {
     let topology = topology();
 
     assert_eq!(
-        hex_bytes(topology.component_specs[0].spec_hash),
-        "1eb1344874c92de6a4cfe039f0761f5e14e34d1e9e5fa09eed135952df65b435",
+        [
+            hex_bytes(topology.component_specs[0].spec_hash),
+            hex_bytes(topology.component_specs[1].spec_hash),
+            topology.digest().expect("topology digest").to_string(),
+        ],
+        [
+            "0d2990f75d0649c4016aa8636769442d6b8fdf5c91dfe3adb2b13567ee865517".to_string(),
+            "b9d39ea6b85c85499a070e9f5ec65ddd18680d393b38927519e7076cb7b67b84".to_string(),
+            "f51d4bcff7b7833c940699cd222a6cc8dc0f1f388af9a9caf7fa2d96bf818fe1".to_string(),
+        ],
     );
-    assert_eq!(
-        hex_bytes(topology.component_specs[1].spec_hash),
-        "662f725d751caadaa910b4eec2cbf6139733a87aec14dc77891fc6706d65253d",
+}
+
+#[test]
+fn application_initialization_requirement_binds_spec_and_topology() {
+    let mut config = Config::parse_toml(CONFIG).expect("valid Component config");
+    let before = ComponentTopology::compile(&config).unwrap();
+    config
+        .component_specs
+        .get_mut("projects")
+        .unwrap()
+        .application_init_required = true;
+    let after = ComponentTopology::compile(&config).unwrap();
+    assert!(
+        after
+            .get(&component_spec("projects"))
+            .unwrap()
+            .application_init_required
     );
-    assert_eq!(
-        topology.digest().expect("topology digest").to_string(),
-        "16a46d2fabfadd18b7d045142ba383d0c400b67068d9d78d6e8d4d0d4d6d763e",
+    assert_ne!(
+        before.get(&component_spec("projects")).unwrap().spec_hash,
+        after.get(&component_spec("projects")).unwrap().spec_hash
     );
+    assert_ne!(before.digest().unwrap(), after.digest().unwrap());
 }
 
 #[test]

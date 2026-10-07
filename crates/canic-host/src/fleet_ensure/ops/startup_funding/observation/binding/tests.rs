@@ -47,6 +47,7 @@ fn top() -> RootComponentOperationStatus {
     RootComponentOperationStatus {
         complete: true,
         allocation: RootComponentAllocationResponse {
+            application_initialization: None,
             operation_id: [9; 32],
             allocation_sequence: 1,
             component: binding.component,

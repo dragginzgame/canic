@@ -1,10 +1,19 @@
 # Shared Tooling adoption
 
-The [manifest](../../.shared-tooling.snapshot) records 41 files from reviewed
-committed revision `a37771f1b6b5fc9a88ed6ab3b705bdda35cd8fa3`.
+The [manifest](../../.shared-tooling.snapshot) records 63 files from reviewed
+committed revision `33c2a6f0018a94915f819ff219e270500ed5b73b`.
 [AGENTS.md](../../AGENTS.md) retains the product overlay. Refresh only through
 the upstream distribution helper; verify exact snapshot bytes and executable
-modes before release validation. Dirty sibling source is never inherited.
+modes before release validation. Dirty sibling source is never inherited. The
+repository description is reviewed against the README during baseline adoption.
+Snapshot verification hashes the inspected files independently, without executing
+the checksum helper being verified. The committed governance file list is selected
+with its linked guides. Canic's governance adapter first verifies snapshot bytes
+and exact file-list membership, then runs the shared link checker on a private
+export containing only those files. It enforces file/link closure, not prose.
+The upstream distribution fixture assumes its root has no committed snapshot,
+so it is not selected as a Canic release gate; its consumer limitation is tracked
+in [Shared Tooling#28](https://github.com/dragginzgame/shared-tooling/issues/28#issuecomment-6032229331).
 
 ## Repository setup
 
@@ -30,6 +39,41 @@ The existing standalone Linux ARM64 ic-wasm archive pin stays Canic-owned becaus
 the common complete toolset excludes that host. It remains install-capable, without
 establishing Canic release support or complete-toolset availability there.
 
+## CI and verification helpers
+
+Canic's pin adapter selects existing actionlint, ShellCheck and CI sccache
+versions, archive digests and destinations; the shared installer owns download,
+verification and installation mechanics. CI and developer setup use that adapter.
+Linux installations pass in isolated evidence directories. Native macOS execution
+remains upstream CI evidence; local fixtures qualify the four host pin selections.
+The shared ripgrep installer is not selected; Canic's Cargo-installed pin remains.
+
+The read-only `scripts/dev/gh-ci.sh` helper now comes from the snapshot. Explicit
+`--commit HEAD --all-workflows --limit 100` inspects the exact committed source;
+listing is bounded evidence, not a complete CI verdict. `--failed` intentionally
+searches historical failures. Stub fixtures qualify argument selection, invalid
+combinations and failed observations without contacting GitHub.
+
+macOS durability CI selects Canic's maintained publication/recovery tests through
+the shared nonempty Cargo-test wrapper, which rejects zero passing tests and
+retains failed output. Native Linux execution qualifies the selector; actual
+macOS execution remains for the configured CI cells.
+
+`fmt` and `fmt-check` use the shared pinned formatter prerequisite check before
+running Canic's existing formatter sequence. Dependency invariants enable shared
+Cargo inheritance checks; Canic's Rust manifest tests retain only product role and
+artifact policy. The shared Cargo version reader replaces cargo-get. Canic's
+adapter selects current source or an archived committed view; release candidate
+checks select their own exact commit view.
+
+The portable checksum helper owns current file digest calculation. RustSec
+preparation makes a private commit-bound database view, then Canic audits with
+`--no-fetch`; Canic retains classification policy and failed evidence. This does
+not relabel historical audit evidence or qualify a new advisory result. Tag
+maintenance uses the shared Perl utility with an explicit cutoff, exact object
+identities and retained retry evidence; see [tag maintenance](../tag-maintenance.md).
+No tag deletion is part of adoption qualification.
+
 ## Release recovery
 
 Standard `make release-patch`, `release-minor` and `release-major` use the
@@ -45,13 +89,22 @@ preflight and validation; earlier evidence is retained. Prepared intent keeps
 its exact candidate, source, UTC date and destination. When newer descendant
 fixes or another increment are selected, the runner reconciles the older release
 first, then validates the next candidate separately. It stops on identity,
-payload, destination, unknown remote history and concurrency conflicts.
+payload, destination, unknown remote history and concurrency conflicts. Atomic
+push dispatch uses the captured push URL, with destination checks before intent
+and dispatch, rather than resolving the remote name again when pushing.
+Focused stub fixtures cover destination drift and lost-response recovery.
 
 Late Canic checks read archived metadata and structured validation evidence from
 `RELEASE_COMMIT`, which may precede HEAD. Prepared checks retain their current
 worktree/index boundary. The exact annotated tag must identify that selected
 commit. `make release-resume VERSION=X.Y.Z` remains an explicit recovery entry.
-No adoption check creates real commits, tags, pushes or deployment effects.
+Cargo metadata selects Canic's owned package roster; the shared lock transformer
+rewrites only those local selections into a private candidate. Canic owns the
+transaction, source authority, validation receipt, publication boundary and
+rollback. Focused toy-workspace execution uses real Cargo and fake Git authority:
+receipt creation/replacement, retained undated history, failed synchronization,
+partial transformer output and exact rollback all pass. No adoption check creates
+real commits, tags, pushes or deployment effects.
 
 ## Hooks and audits
 
@@ -61,7 +114,13 @@ stage-zero blobs, leaves unrelated symlinks in the real index and rejects select
 symlinks, submodules and unresolved entries. It rejects partial staging and
 checks concurrent changes before refreshing selected index entries. The unchanged
 shared installer preserves an existing hook configuration. Adoption does not
-activate Git configuration; `make install-hooks` remains explicit.
+activate Git configuration; `make install-hooks` remains explicit. Its fixture
+stays Canic-owned as well: the newer shared whole-checkout hook checker rejects
+historical symlinks before reaching the product adapter. Canic's isolated-index
+regressions pass; adoption does not claim that shared checker passed here.
+[Shared Tooling#33](https://github.com/dragginzgame/shared-tooling/issues/33) owns
+the consumer checker limitation; [Canic#461](https://github.com/dragginzgame/canic/issues/461)
+owns qualification.
 
 Generic reviews use the [shared methods](../../audits/README.md) with the
 [local catalog](../audits/METHODS.md) supplying Canic obligations. Superseded

@@ -113,6 +113,7 @@ impl ComponentRegistryOps {
         let current =
             RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let record = RootComponentAllocationRecord {
+            application_initialization: None,
             operation_id,
             allocation_sequence: decision.allocation_sequence,
             component: decision.component,
@@ -337,6 +338,7 @@ impl ComponentRegistryOps {
             creation,
             canister,
             installation: RootComponentInstallEffectRecord {
+                application_init_hash: plan.application_init_hash,
                 fixture_grant_revision: plan.fixture_grant_revision,
                 raw_module_hash: plan.raw_module_hash,
                 protocol_profile_digest: plan.protocol_profile_digest,
@@ -384,6 +386,7 @@ impl ComponentRegistryOps {
             creation,
             canister,
             installation: RootComponentInstallEffectRecord {
+                application_init_hash: plan.application_init_hash,
                 fixture_grant_revision: plan.fixture_grant_revision,
                 raw_module_hash: plan.raw_module_hash,
                 protocol_profile_digest: plan.protocol_profile_digest,

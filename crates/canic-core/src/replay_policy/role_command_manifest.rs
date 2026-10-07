@@ -48,6 +48,10 @@ pub const ROOT_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &[
         None,
         None,
     ),
+    response_idempotent(
+        "BindComponentInitialization",
+        "root.bind_component_initialization.v1",
+    ),
     replay_protected(
         "BootstrapStore",
         "root.bootstrap_store.v1",

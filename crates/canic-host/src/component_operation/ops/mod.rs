@@ -6,20 +6,20 @@ pub mod transport;
 
 pub use progress::project_progress;
 
-use crate::{
-    component_operation::{
-        ComponentOperationError,
-        model::{
-            ComponentAuthorityRecord, ComponentOperationRecord, ComponentPlanRecord,
-            ComponentProgressRecord,
-        },
-        policy::validate_label,
-        view::{ComponentObservation, ComponentProgressObservation},
+use crate::component_operation::{
+    ComponentOperationError,
+    model::{
+        ComponentAuthorityRecord, ComponentOperationRecord, ComponentPlanRecord,
+        ComponentProgressRecord,
     },
-    durable_io::{read_regular_bytes, write_bytes},
+    policy::validate_label,
+    view::{ComponentObservation, ComponentProgressObservation},
 };
+
 use canic_core::cdk::utils::hash::sha256_hex;
 use std::path::{Path, PathBuf};
+
+use ic_host_fs::durable::{read_regular_bytes, write_bytes};
 
 const MAX_RECORD_BYTES: usize = 4 * 1024 * 1024;
 

@@ -196,6 +196,10 @@ pub fn finding_detail(finding: &RoleContractFinding) -> String {
             "the selected Wasm role reaches multiple ic-memory package identities: {}. Align the application's framework and database dependencies to one ic-memory package identity before building; matching version labels from different sources is insufficient",
             packages.join(", ")
         ),
+        RoleContractFinding::MultipleTimerRuntimes { packages } => format!(
+            "the selected Wasm role reaches multiple ic-timers package identities: {}. Select one timer runtime and its shared metrics types before building",
+            packages.join(", ")
+        ),
         RoleContractFinding::PackageAmbiguous { role } => {
             format!("multiple Cargo packages resolve for role {role}")
         }

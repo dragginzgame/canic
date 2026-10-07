@@ -15,7 +15,6 @@ use super::current_protocol::{
 };
 use crate::{
     canister_protocol::{call_with_candid, query_with_candid},
-    durable_io::{RegularFileReadError, read_optional_regular_bytes},
     fleet_ensure::model::{
         DesiredCanisterKind, DesiredFleet, DesiredPresence, FleetEnsureStateRecord,
     },
@@ -31,6 +30,7 @@ use crate::{
     },
     role_contract::{PackageValidationMode, resolve_declared_role_contracts},
 };
+
 use candid::{CandidType, Principal};
 use canic_core::{
     cdk::utils::hash::hex_bytes,
@@ -73,6 +73,8 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
+
+use ic_host_fs::durable::{RegularFileReadError, read_optional_regular_bytes};
 
 const CHILD_PAGE_LIMIT: u64 = 1_000;
 
@@ -2630,6 +2632,7 @@ mod tests {
         let operation = RootComponentOperationStatus {
             complete: true,
             allocation: RootComponentAllocationResponse {
+                application_initialization: None,
                 operation_id: member.member_operation_id,
                 allocation_sequence: 1,
                 component: member.binding.component,

@@ -65,7 +65,10 @@ fn install_version_reader(root: &Path) {
     for path in [
         "scripts/ci/next-release-version.sh",
         "scripts/ci/finalize-release-changelog.awk",
-        "scripts/release/retain-lock-selection.pl",
+        "scripts/release/rewrite-owned-lock.sh",
+        "scripts/ci/read-cargo-workspace-version.sh",
+        "scripts/ci/rewrite-local-lock-versions.pl",
+        "scripts/ci/require-jq.sh",
     ] {
         write_file(
             root,
@@ -658,12 +661,7 @@ case "$*" in
     "set-version --help")
         exit 0
         ;;
-    "get --version")
-        printf 'cargo-get 1.4.0\n'
-        ;;
-    get\ --entry\ *\ workspace.package.version)
-        awk '/^version = / { gsub(/"/, "", $3); print $3; exit }' "$3/Cargo.toml"
-        ;;
+    locate-project\ *) exit 0 ;;
     "set-version --workspace --bump patch")
         sed -i 's/0.92.7/0.92.8/g' Cargo.toml crates/demo/Cargo.toml
         ;;

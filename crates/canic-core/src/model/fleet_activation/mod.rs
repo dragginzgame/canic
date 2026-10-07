@@ -476,6 +476,7 @@ mod tests {
     fn topology() -> ComponentTopology {
         ComponentTopology {
             component_specs: vec![ComponentSpec {
+                application_init_required: false,
                 component_spec: "projects".parse().expect("Component Spec"),
                 spec_hash: [8; 32],
                 component_role: CanisterRole::from("project_hub"),

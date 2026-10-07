@@ -39,17 +39,15 @@ jobs:
           bash scripts/dev/install-host-tools.sh
           echo "$GITHUB_WORKSPACE/.tools/host/bin" >> "$GITHUB_PATH"
           export PATH="$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
-          cargo install cargo-get --version "$CANIC_CARGO_GET_VERSION" --locked
           cargo install cargo-edit --version "$CANIC_CARGO_EDIT_VERSION" --locked
           cargo install ripgrep --version "$CANIC_RIPGREP_VERSION" --locked --features pcre2
-          ACTIONLINT_BIN="$(bash scripts/ci/install-actionlint.sh)"
-          SHELLCHECK_BIN="$(bash scripts/ci/install-shellcheck.sh)"
+          ACTIONLINT_BIN="$(bash scripts/ci/install-pinned-ci-tool.sh actionlint)"
+          SHELLCHECK_BIN="$(bash scripts/ci/install-pinned-ci-tool.sh shellcheck)"
           echo "ACTIONLINT_BIN=$ACTIONLINT_BIN" >> "$GITHUB_ENV"
           echo "SHELLCHECK_BIN=$SHELLCHECK_BIN" >> "$GITHUB_ENV"
       - name: Check preflight tools
         shell: bash
         run: |
-          cargo get --version
           rg --version
           rg --pcre2-version
           "$ACTIONLINT_BIN" -version
@@ -134,7 +132,7 @@ jobs:
       - name: Qualify native durability and backup recovery
         shell: bash
         run: |
-          cargo test --locked -p canic-host --lib durable_io::
+          bash scripts/ci/run-nonempty-cargo-test.sh --locked -p canic-host --lib fleet_ensure::ops::attempt_recovery::tests::
           cargo test --locked -p canic-cli --lib output::tests::
           cargo test --locked -p canic-cli --lib fleet::tests::generated_desired_output_
           cargo test --locked -p canic-backup --lib persistence::
@@ -231,7 +229,7 @@ jobs:
       - name: Install compiler cache
         shell: bash
         run: |
-          bash scripts/ci/install-sccache-ci.sh
+          bash scripts/ci/install-pinned-ci-tool.sh sccache
           {
             echo "SCCACHE_DIR=$RUNNER_TEMP/canic-sccache"
             echo "SCCACHE_CACHE_SIZE=2G"
@@ -297,7 +295,7 @@ jobs:
       - name: Install compiler cache
         shell: bash
         run: |
-          bash scripts/ci/install-sccache-ci.sh
+          bash scripts/ci/install-pinned-ci-tool.sh sccache
           {
             echo "SCCACHE_DIR=$RUNNER_TEMP/canic-sccache"
             echo "SCCACHE_CACHE_SIZE=2G"
@@ -310,7 +308,6 @@ jobs:
           bash scripts/dev/install-host-tools.sh
           echo "$GITHUB_WORKSPACE/.tools/host/bin" >> "$GITHUB_PATH"
           export PATH="$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
-          cargo install cargo-get --version "$CANIC_CARGO_GET_VERSION" --locked
           cargo install cargo-edit --version "$CANIC_CARGO_EDIT_VERSION" --locked
           cargo install ripgrep --version "$CANIC_RIPGREP_VERSION" --locked --features pcre2
       - name: Install ordinary test Wasm prerequisites
@@ -322,7 +319,6 @@ jobs:
       - name: Check ordinary test helper tools
         shell: bash
         run: |
-          cargo get --version
           cargo set-version --version
           rg --version
           rg --pcre2-version
@@ -369,7 +365,7 @@ jobs:
       - name: Install compiler cache
         shell: bash
         run: |
-          bash scripts/ci/install-sccache-ci.sh
+          bash scripts/ci/install-pinned-ci-tool.sh sccache
           {
             echo "SCCACHE_DIR=$RUNNER_TEMP/canic-sccache"
             echo "SCCACHE_CACHE_SIZE=2G"

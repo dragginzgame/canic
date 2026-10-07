@@ -5,7 +5,6 @@
 mod provenance;
 
 use crate::{
-    durable_io::read_regular_bytes,
     fleet_ensure::{
         dto::capacity_import::CapacityImportReviewRequest,
         model::{
@@ -41,6 +40,7 @@ use crate::{
     },
     icp::IcpCli,
 };
+
 use candid::Principal;
 use canic_core::{
     cdk::utils::hash::hex_bytes,
@@ -49,6 +49,8 @@ use canic_core::{
 };
 use sha2_host::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
+
+use ic_host_fs::durable::read_regular_bytes;
 
 /// Frozen free-query admission, retained until the initial management samples are committed.
 pub(in crate::fleet_ensure) struct ReviewSurvey {

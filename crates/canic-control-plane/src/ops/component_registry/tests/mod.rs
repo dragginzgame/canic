@@ -4,6 +4,7 @@
 
 mod caller_authority;
 mod child_failure;
+mod initialization;
 
 use super::*;
 use crate::{
@@ -4402,6 +4403,7 @@ fn install_intent_reserves_terminal_bytes_and_advances_idempotently() {
         .expect("Registry status")
         .encoded_bytes;
     let plan = RootComponentInstallPlan {
+        application_init_hash: None,
         fixture_grant_revision: Some(3),
         raw_module_hash: [20; 32],
         protocol_profile_digest: ProtocolProfileDigest::from_bytes([23; 32]),
@@ -5742,6 +5744,7 @@ fn active_component_allocation(
         charged_entry_bytes: 4_096,
     };
     let installation = RootComponentInstallEffectRecord {
+        application_init_hash: None,
         fixture_grant_revision: None,
         raw_module_hash: [19; 32],
         protocol_profile_digest: partition.protocol_profile_digest,
@@ -5754,6 +5757,7 @@ fn active_component_allocation(
         charged_entry_bytes: 16_777_216,
     };
     RootComponentAllocationRecord {
+        application_initialization: None,
         operation_id: [12; 32],
         allocation_sequence: 1,
         component: partition.binding.component,

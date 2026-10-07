@@ -19,8 +19,8 @@
     "rule": "cargo-exact",
     "file": "integrations/blob-service/Cargo.toml",
     "subject": "ic-blob-storage",
-    "value": "=0.14.9",
-    "reason": "The independent optional blob integration is bound to the qualified 0.14.9/0.25 memory composition; its current-runtime adoption has a separate owner.",
+    "value": "=0.15.2",
+    "reason": "The independent managed blob adapter selects published service 0.15.2 and the single Memory 0.28 runtime; focused Canic composition evidence owns this exact selection.",
     "evidence": "docs/features/blob-storage/README.md"
   },
   {

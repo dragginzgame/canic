@@ -9,13 +9,11 @@ mod rejection;
 #[cfg(test)]
 mod tests;
 
-use crate::{
-    canister_build::{
-        WorkspaceBuildContext,
-        reuse::{hash_field, snapshot::BuildInputSnapshot},
-    },
-    durable_io::{read_regular_bytes, write_bytes},
+use crate::canister_build::{
+    WorkspaceBuildContext,
+    reuse::{hash_field, snapshot::BuildInputSnapshot},
 };
+
 use canic_core::cdk::utils::hash::hex_bytes;
 use serde::{Deserialize, Serialize};
 use sha2_host::{Digest, Sha256};
@@ -24,6 +22,8 @@ use std::{
     ffi::OsString,
     path::{Path, PathBuf},
 };
+
+use ic_host_fs::durable::{read_regular_bytes, write_bytes};
 
 pub(super) use rejection::{InputLocations, retain_rejection};
 

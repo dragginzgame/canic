@@ -1,20 +1,20 @@
 //! Retain a completed infrastructure phase before publishing its journal completion.
 
-use crate::{
-    durable_io::{read_optional_regular_bytes_bounded, write_bytes},
-    fleet_ensure::{
-        model::{
-            ActualCycleConservation, EffectState, EnsureAction, FleetEnsureCompletion,
-            FleetEnsureJournalRecord, FleetEnsurePlan, FleetEnsureStateRecord,
-            infrastructure_bootstrap::InfrastructureBootstrapTerminalRecord,
-        },
-        ops::{EnsurePaths, infrastructure_bootstrap::InfrastructureBootstrapError},
-        view::infrastructure_bootstrap::InfrastructureBootstrapObservation,
+use crate::fleet_ensure::{
+    model::{
+        ActualCycleConservation, EffectState, EnsureAction, FleetEnsureCompletion,
+        FleetEnsureJournalRecord, FleetEnsurePlan, FleetEnsureStateRecord,
+        infrastructure_bootstrap::InfrastructureBootstrapTerminalRecord,
     },
+    ops::{EnsurePaths, infrastructure_bootstrap::InfrastructureBootstrapError},
+    view::infrastructure_bootstrap::InfrastructureBootstrapObservation,
 };
+
 use serde::Serialize;
 use sha2_host::{Digest, Sha256};
 use std::path::PathBuf;
+
+use ic_host_fs::durable::{read_optional_regular_bytes_bounded, write_bytes};
 
 const MAXIMUM_BYTES: usize = 4 * 1024 * 1024;
 

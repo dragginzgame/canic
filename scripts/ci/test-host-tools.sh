@@ -2,7 +2,16 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/host-tools-test.XXXXXX")"
-trap 'rm -rf "$fixture"' EXIT
+finish() {
+    local status=$?
+    if [[ "$status" == 0 ]]; then rm -rf "$fixture"
+    else
+        echo "Host tool fixtures retained: $fixture" >&2
+        echo "Host tool fixture stopped with status $status" >&2
+        if [[ -f "$fixture/install.log" ]]; then tail -n 80 "$fixture/install.log" >&2; fi
+    fi
+}
+trap finish EXIT
 mkdir "$fixture/bin" "$fixture/assets" "$fixture/consumer"
 export HOST_TOOLS_FIXTURE="$fixture"
 cat > "$fixture/bin/uname" <<'SCRIPT'
@@ -29,7 +38,7 @@ for tool in jq yq; do
         yq) report='yq (https://github.com/mikefarah/yq/) version v4.47.2' ;;
     esac
     # shellcheck disable=SC2016 # Read fixture location at execution time.
-    printf '#!/usr/bin/env bash\necho executed >> "$HOST_TOOLS_FIXTURE/executions"\necho "%s"\n' "$report" > "$fixture/$tool"
+    printf '#!/usr/bin/env bash\necho executed >> "$HOST_TOOLS_FIXTURE/executions"\necho "%s"\nexit "${TEST_VERSION_STATUS:-0}"\n' "$report" > "$fixture/$tool"
     digest="$(shasum -a 256 "$fixture/$tool")"
     for host in LINUX_AMD64 LINUX_ARM64 DARWIN_AMD64 DARWIN_ARM64; do
         case "$host" in
@@ -44,10 +53,13 @@ for tool in jq yq; do
     done
 done
 consumer="$fixture/consumer"
-install() { bash "$ROOT/scripts/dev/install-host-tools.sh" --consumer "$consumer" --versions "$pins" "$@"; }
+install() {
+    printf 'install %s for %s\n' "$*" "$consumer" >> "$fixture/install.log"
+    bash "$ROOT/scripts/dev/install-host-tools.sh" --consumer "$consumer" --versions "$pins" "$@" >> "$fixture/install.log" 2>&1
+}
 refuse() { if "$@" > "$fixture/refusal.log" 2>&1; then echo 'host-tool refusal failed' >&2; exit 1; fi; }
 refuse install --check
-[[ ! -e "$consumer/.tools" && ! -e "$fixture/downloads" ]]
+[[ ! -e "$consumer/.tools" && ! -e "$fixture/downloads" ]] || exit 1
 for host in Linux:x86_64 Linux:arm64 Darwin:x86_64 Darwin:arm64; do
     export TEST_OS="${host%:*}" TEST_ARCH="${host#*:}"
     consumer="$fixture/$host"; mkdir "$consumer"
@@ -55,21 +67,22 @@ for host in Linux:x86_64 Linux:arm64 Darwin:x86_64 Darwin:arm64; do
     before="$(wc -l < "$fixture/downloads")"
     install --check > /dev/null 2>&1
     install > /dev/null 2>&1
-    [[ "$(wc -l < "$fixture/downloads")" == "$before" ]]
+    [[ "$(wc -l < "$fixture/downloads")" == "$before" ]] || exit 1
 done
 original="$(readlink "$consumer/.tools/host")"
+TEST_VERSION_STATUS=9 refuse install --check
 echo changed >> "$consumer/.tools/host/bin/yq"
 : > "$fixture/executions"
 refuse install --check
-[[ ! -s "$fixture/executions" ]]
+[[ ! -s "$fixture/executions" ]] || exit 1
 TEST_INTERRUPT=1 refuse install
-[[ "$(readlink "$consumer/.tools/host")" == "$original" && ! -e "$consumer/.tools/.host-tools.lock" ]]
+[[ "$(readlink "$consumer/.tools/host")" == "$original" && ! -e "$consumer/.tools/.host-tools.lock" ]] || exit 1
 echo corrupt >> "$fixture/assets/yq_darwin_arm64"
 refuse install
-[[ ! -s "$fixture/executions" && "$(readlink "$consumer/.tools/host")" == "$original" ]]
+[[ ! -s "$fixture/executions" && "$(readlink "$consumer/.tools/host")" == "$original" ]] || exit 1
 cp "$fixture/yq" "$fixture/assets/yq_darwin_arm64"
 install > /dev/null 2>&1
-[[ "$(readlink "$consumer/.tools/host")" != "$original" && -d "$consumer/.tools/$original" ]]
+[[ "$(readlink "$consumer/.tools/host")" != "$original" && -d "$consumer/.tools/$original" ]] || exit 1
 # Authentic bytes with a wrong reported version cannot become active.
 original="$(readlink "$consumer/.tools/host")"
 cp "$pins" "$fixture/saved.env"
@@ -77,13 +90,71 @@ sed 's/jq-1.8.2/jq-1.8.20/' "$fixture/jq" > "$fixture/assets/jq-macos-arm64"
 digest="$(shasum -a 256 "$fixture/assets/jq-macos-arm64")"
 printf 'export SHARED_TOOLING_JQ_SHA256_DARWIN_ARM64=%s\n' "${digest%% *}" >> "$pins"
 refuse install
-[[ "$(readlink "$consumer/.tools/host")" == "$original" ]]
+[[ "$(readlink "$consumer/.tools/host")" == "$original" ]] || exit 1
 cp "$fixture/saved.env" "$pins"
 before="$(wc -l < "$fixture/downloads")"
 TEST_OS=FreeBSD refuse install
-[[ "$(wc -l < "$fixture/downloads")" == "$before" ]]
+[[ "$(wc -l < "$fixture/downloads")" == "$before" ]] || exit 1
 mkdir "$consumer/.tools/.host-tools.lock"
 echo changed >> "$consumer/.tools/host/bin/yq"
 refuse install
-[[ -d "$consumer/.tools/.host-tools.lock" ]]
+[[ -d "$consumer/.tools/.host-tools.lock" ]] || exit 1
+
+# ripgrep is explicitly selected; existing two-parser consumers need no new pins.
+cp "$fixture/jq" "$fixture/assets/jq-macos-arm64"
+printf 'export SHARED_TOOLING_RIPGREP_VERSION=15.2.0\n' >> "$pins"
+cat > "$fixture/rg" <<'SCRIPT'
+#!/usr/bin/env bash
+echo executed >> "$HOST_TOOLS_FIXTURE/executions"
+case "$1" in
+    --version) echo "ripgrep ${TEST_RG_VERSION:-15.2.0} (rev abc123)" ;;
+    --pcre2-version) [[ "${TEST_PCRE2:-yes}" == yes ]] || exit 1; echo 'PCRE2 available' ;;
+    *) exit 2 ;;
+esac
+SCRIPT
+for host in LINUX_AMD64 LINUX_ARM64 DARWIN_AMD64 DARWIN_ARM64; do
+    case "$host" in
+        LINUX_AMD64) target=x86_64-unknown-linux-musl ;;
+        LINUX_ARM64) target=aarch64-unknown-linux-musl ;;
+        DARWIN_AMD64) target=x86_64-apple-darwin ;;
+        DARWIN_ARM64) target=aarch64-apple-darwin ;;
+    esac
+    directory="ripgrep-15.2.0-$target"
+    mkdir "$fixture/$directory"
+    cp "$fixture/rg" "$fixture/$directory/rg"
+    tar -czf "$fixture/assets/$directory.tar.gz" -C "$fixture" "$directory/rg"
+    digest="$(shasum -a 256 "$fixture/assets/$directory.tar.gz")"
+    printf 'export SHARED_TOOLING_RIPGREP_SHA256_%s=%s\n' "$host" "${digest%% *}" >> "$pins"
+done
+for host in Linux:x86_64 Linux:arm64 Darwin:x86_64 Darwin:arm64; do
+    export TEST_OS="${host%:*}" TEST_ARCH="${host#*:}"
+    consumer="$fixture/rg-$host"; mkdir "$consumer"
+    refuse install --with-ripgrep --check
+    install --with-ripgrep > /dev/null 2>&1
+    before="$(wc -l < "$fixture/downloads")"
+    install --with-ripgrep --check > /dev/null 2>&1
+    install --with-ripgrep > /dev/null 2>&1
+    [[ "$(wc -l < "$fixture/downloads")" == "$before" ]] || exit 1
+done
+original="$(readlink "$consumer/.tools/host")"
+echo corrupt >> "$consumer/.tools/host/bin/rg"
+: > "$fixture/executions"
+refuse install --with-ripgrep --check
+[[ ! -s "$fixture/executions" ]] || exit 1
+cp "$fixture/assets/ripgrep-15.2.0-aarch64-apple-darwin.tar.gz" "$fixture/authentic-ripgrep.tar.gz"
+echo corrupt >> "$fixture/assets/ripgrep-15.2.0-aarch64-apple-darwin.tar.gz"
+refuse install --with-ripgrep
+[[ ! -s "$fixture/executions" && "$(readlink "$consumer/.tools/host")" == "$original" ]] || exit 1
+# Restore the exact authenticated bytes. Repacking can change gzip/tar headers
+# on native hosts even when the executable payload is unchanged.
+cp "$fixture/authentic-ripgrep.tar.gz" "$fixture/assets/ripgrep-15.2.0-aarch64-apple-darwin.tar.gz"
+: > "$fixture/executions"
+TEST_PCRE2=no refuse install --with-ripgrep
+[[ -s "$fixture/executions" ]] || exit 1
+: > "$fixture/executions"
+TEST_RG_VERSION=15.2.00 refuse install --with-ripgrep
+[[ -s "$fixture/executions" ]] || exit 1
+[[ "$(readlink "$consumer/.tools/host")" == "$original" ]] || exit 1
+install --with-ripgrep > /dev/null 2>&1
+[[ "$(readlink "$consumer/.tools/host")" != "$original" ]] || exit 1
 echo 'Host tool installation, offline checks and retained failure tests passed'

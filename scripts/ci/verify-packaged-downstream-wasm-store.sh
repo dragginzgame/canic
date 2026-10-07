@@ -6,7 +6,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/../ci/require-jq.sh"
 require_jq
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-MSRV="$(cargo get --entry "$ROOT" workspace.package.rust_version)"
+export PATH="$ROOT/.tools/host/bin:$PATH"
+MSRV="$(yq -p toml -o json '.workspace.package."rust-version"' "$ROOT/Cargo.toml" | "$JQ_BIN" -er 'select(type == "string" and test("^[0-9]+\\.[0-9]+(\\.[0-9]+)?$"))')"
 TMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/canic-packaged-downstream-wasm-store.XXXXXX")"
 HOST_CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
 HOST_RUSTUP_HOME="${RUSTUP_HOME:-$HOME/.rustup}"

@@ -23,12 +23,12 @@ Fleet, lifecycle and memory tests. The upstream service suite owns blob authorit
 certificate replies, restoration, provider behavior and accounting; those results
 do not establish deployment qualification for an arbitrary wrapper.
 
-The composition API below selects published ic-blob-storage 0.14.9 and
-ic-memory 0.25.0 in the isolated lockfiles. Each composed artifact shares one
-memory runtime between Canic and the service. See [Canic#444](https://github.com/dragginzgame/canic/issues/444)
-and the [current handoff](../../status/current.md#checked-memory-slots--2026-10-04)
-for scoped qualification. Building the shell does not establish live provider
-behavior. Do not bypass the single-runtime identity check.
+The composition selects published Blob Storage 0.15.2, Memory 0.28.3,
+Timers 0.14.3 and arithmetic-only Metrics 0.2.2 in the isolated lockfiles.
+Each complete managed artifact must share one Memory and Timers runtime.
+See [Canic#444](https://github.com/dragginzgame/canic/issues/444) and the
+[current handoff](../../status/current.md) for scoped qualification. Building
+the shell does not establish live provider behavior.
 
 ## Dependency version ownership
 
@@ -149,8 +149,13 @@ separate `consumer-app` workspace and configuration. Build it explicitly:
 ```sh
 cargo build --locked -p canic-cli --bin canic
 cd integrations/blob-service/consumer
-../../../target/debug/canic build consumer-app blob --workspace . --config canic.toml --icp-root . --profile fast --json
+../../../target/debug/canic build consumer-app --workspace . --config canic.toml --icp-root . --profile fast --json
 ```
+
+The complete App build above stamps the release-build identity required by
+managed installation. A single-role build is compile-only evidence and does not
+supply that identity. Use the emitted release manifest and its qualified artifact
+union for installation proof.
 
 Installation requires `canic_blob_service::dto::configuration::ServiceInstallationInput`
 as Candid bytes nested after Canic's protected init payload. Its configured
@@ -160,15 +165,35 @@ after allocation, without rewriting that identity inside the adapter. The public
 [managed Component qualification fixture](../build-and-evidence/managed-app-qualification.md)
 supports `ManagedApplicationInit::ForCanister` for this purpose in PocketIC.
 
-**Production installation is not yet wired.** Root's top-level Component installer
-passes no application arguments, including for Component Group members. Its
-current install command carries only the operation ID. The fixture callback
-therefore qualifies the composed artifact but does not provide a production
-argument-delivery path. `app.init_mode` selects the initial Fleet operating mode and defaults to
-`enabled`; it does not enable argument delivery. Do not attempt Fleet deployment
-of this shell until bounded, durably bound application arguments can be supplied
-after allocation.
-[Canic#444](https://github.com/dragginzgame/canic/issues/444) tracks consumer readiness.
+For production installation, set `application_init_required = true` on the blob
+Component Spec, as both examples do. Root allocates the canister and waits before
+installation. Controller-visible pool status supplies the allocated Principal
+and its claim operation ID; controller-authorized Root operation status exposes
+that member allocation and retained binding, including Component Group members.
+Then encode the application's `ServiceInstallationInput` for that Principal.
+The controller submits `RootCommand::BindComponentInitialization` containing
+that operation ID, exact target and 1–16,384 opaque application bytes. Host's
+`component_initialization::encode_command` encodes the complete Root command;
+retain those command bytes for reconciliation and exact retries.
+
+Root atomically retains and charges the binding before installation and includes
+its hash in the install intent. Its ordinary and Component Group installers
+supply the exact retained application bytes after Canic's protected payload.
+Wrong targets and changed initializers are refused; an identical binding remains
+an effect-free replay after installation. After an interrupted or lost reply,
+inspect the existing Root operation, then retry the retained command if needed.
+The application schema and producer remain application-owned; updating the
+independent upstream preparer does not update this managed adapter or deliver
+arguments to Root. `app.init_mode` controls Fleet operating mode.
+[Canic#444](https://github.com/dragginzgame/canic/issues/444) records qualified
+execution and downstream acceptance separately.
+
+The maintained adapter selects published Blob Storage 0.15.2 with Memory 0.28.3,
+Timers 0.14.3 and arithmetic-only Metrics 0.2.2. Each complete managed Wasm graph
+must contain one Memory and Timers identity. Canic owns the runtime and lifecycle;
+the service participant restores synchronously before deferred work. These
+configuration, wire and persisted record changes are a pre-1.0 hard cut requiring
+clean reinstall across releases, with same-release retry and recovery retained.
 
 Same-release restoration retains the upstream mutation fence. The configured
 operator uses `blob_resume_current_instance` to prove continuity from IC history

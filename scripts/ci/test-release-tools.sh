@@ -26,7 +26,7 @@ SCCACHE_WRAPPER="$ROOT/scripts/ci/run-sccache.sh"
 POCKET_IC_STOPPER="$ROOT/scripts/ci/stop-owned-pocketic-servers.sh"
 RELEASE_PUSH="$ROOT/scripts/ci/push-release.sh"
 VERSION_READER="$ROOT/scripts/ci/read-workspace-version.sh"
-TAG_DELETE_TEST="$ROOT/scripts/ci/test-delete-github-tags-up-to.sh"
+TAG_DELETE_TEST="$ROOT/scripts/ci/test-tag-maintenance.pl"
 release_clean_recipe="$(sed -n '/^release-clean:/,/^$/p' "$ROOT/Makefile")"
 # shellcheck source=/dev/null
 source "$ROOT/tool-versions.env"
@@ -240,19 +240,22 @@ unset owned_server_pid foreign_server_pid
 release_push_fixture="$tmp_dir/release-push"
 release_push_bin="$release_push_fixture/bin"
 mkdir -p "$release_push_fixture/scripts/ci" "$release_push_bin"
-cp "$RELEASE_PUSH" "$VERSION_READER" "$release_push_fixture/scripts/ci/"
+cp "$RELEASE_PUSH" "$VERSION_READER" "$ROOT/scripts/ci/read-cargo-workspace-version.sh" "$release_push_fixture/scripts/ci/"
 printf '%s\n' \
     '[workspace.package]' \
     'version = "9.9.9"' >"$release_push_fixture/Cargo.toml"
 printf '%s\n' \
     '[workspace.package]' \
     'version = "0.101.10"' >"$release_push_fixture/committed-Cargo.toml"
+mkdir "$release_push_fixture/committed"
+cp "$release_push_fixture/committed-Cargo.toml" "$release_push_fixture/committed/Cargo.toml"
 # shellcheck disable=SC2016 # Preserve argument handling for the generated fixture.
 printf '%s\n' \
     '#!/usr/bin/env bash' \
+    '[[ "${1:-}" != -C ]] || shift 2' \
     'case "${1:-}" in' \
     'symbolic-ref) printf "main\n" ;;' \
-    'show) cat "$PWD/committed-Cargo.toml" ;;' \
+    'archive) tar -cf - -C "$PWD/committed" . ;;' \
     'push) printf "%s\n" "$@" >"$PWD/push-arguments" ;;' \
     '*) exit 2 ;;' \
     'esac' >"$release_push_bin/git"
@@ -263,7 +266,7 @@ expected_push_arguments=$'push\n--no-follow-tags\n--atomic\norigin\nHEAD:refs/he
 [ "$(cat "$release_push_fixture/push-arguments")" = "$expected_push_arguments" ] ||
     fail "release push did not send the exact branch and tag refs atomically"
 
-bash "$TAG_DELETE_TEST" >/dev/null ||
+perl "$TAG_DELETE_TEST" >/dev/null ||
     fail "historical-tag deletion fixture failed"
 
 # Exercise the authority guard with equivalent record layout and real corruption.

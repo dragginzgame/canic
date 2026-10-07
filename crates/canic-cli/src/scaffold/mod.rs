@@ -23,11 +23,11 @@ use canic_host::{
         ConfigDiscoveryError, current_canic_workspace_root,
         discover_workspace_canic_config_choices, select_discovered_app_config_path,
     },
-    durable_io::write_bytes,
     release_set::{
         AppConfigError, declare_app_role, display_workspace_path, plan_declare_app_role,
     },
 };
+
 use clap::{Arg, Command as ClapCommand};
 use std::{
     ffi::OsString,
@@ -35,6 +35,8 @@ use std::{
     io::{self, BufRead, Write},
     path::{Path, PathBuf},
 };
+
+use ic_host_fs::durable::write_bytes;
 use thiserror::Error as ThisError;
 use toml::Value as TomlValue;
 

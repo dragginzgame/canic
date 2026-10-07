@@ -13,7 +13,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use canic_host::durable_io::write_bytes;
+use ic_host_fs::durable::write_bytes;
 use serde::{Serialize, de::DeserializeOwned};
 
 /// Resolve the selected output's existing parent once, including macOS `/tmp`.

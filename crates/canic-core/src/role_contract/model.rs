@@ -357,6 +357,9 @@ pub enum RoleContractFinding {
     MultipleMemoryRuntimes {
         packages: Vec<String>,
     },
+    MultipleTimerRuntimes {
+        packages: Vec<String>,
+    },
     PackageAmbiguous {
         role: CanisterRole,
     },
@@ -404,6 +407,7 @@ impl RoleContractFinding {
             Self::MemoryIdCollision { .. } => "role_contract_memory_id_collision",
             Self::MultipleCanicPackages { .. } => "role_contract_multiple_canic_packages",
             Self::MultipleMemoryRuntimes { .. } => "role_contract_multiple_memory_runtimes",
+            Self::MultipleTimerRuntimes { .. } => "role_contract_multiple_timer_runtimes",
             Self::PackageAmbiguous { .. } => "role_contract_package_ambiguous",
             Self::PackageMetadataMismatch { .. } => "role_contract_package_metadata_mismatch",
             Self::PackageMissing { .. } => "role_contract_package_missing",

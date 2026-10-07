@@ -67,7 +67,7 @@ pub fn refresh(workspace: &Path) -> Result<(), Box<dyn Error>> {
     let source = source::FixtureSource::prepare(&workspace)?;
     let spec = build_spec(&workspace, &source.root)?;
     let (bytes, _) = build(&workspace, &spec)?;
-    canic_host::durable_io::write_bytes(&workspace.join(ARTIFACT), &bytes)?;
+    ic_host_fs::durable::write_bytes(&workspace.join(ARTIFACT), &bytes)?;
     fs::write(source.root.join(ARTIFACT), &bytes)?;
     // The facade contains the host-only embedded bytes. Qualify again after
     // publication so evidence binds the final tree, with no self-hash in it.
@@ -79,7 +79,7 @@ pub fn refresh(workspace: &Path) -> Result<(), Box<dyn Error>> {
         )
         .into());
     }
-    canic_host::durable_io::write_bytes(
+    ic_host_fs::durable::write_bytes(
         &workspace.join(EVIDENCE),
         &serde_json::to_vec_pretty(&evidence)?,
     )?;

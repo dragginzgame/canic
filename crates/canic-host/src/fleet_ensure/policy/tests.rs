@@ -104,6 +104,7 @@ fn continuation_review_reserves_only_available_headroom_and_exposes_pending_disc
 #[test]
 fn estate_workload_forecast_includes_recursive_initial_children() {
     let mut spec = ComponentSpec {
+        application_init_required: false,
         component_spec: ComponentSpecId::try_from(String::from("hub"))
             .expect("hub Component Spec ID"),
         spec_hash: [1; 32],

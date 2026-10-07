@@ -4,14 +4,12 @@
 //! Does not own: source admission, reusable artifacts, environment values or source contents.
 //! Boundary: diagnostic persistence never replaces the original validation result.
 
-use crate::{
-    canister_build::{
-        WorkspaceBuildContext,
-        cache::{canister_build_target_root, declaration_target_root},
-        reuse::{BuildReuseError, snapshot::BuildInputSnapshot},
-    },
-    durable_io::write_bytes,
+use crate::canister_build::{
+    WorkspaceBuildContext,
+    cache::{canister_build_target_root, declaration_target_root},
+    reuse::{BuildReuseError, snapshot::BuildInputSnapshot},
 };
+
 use canic_core::ids::ReleaseBuildId;
 use serde::Serialize;
 use std::{
@@ -19,6 +17,8 @@ use std::{
     env,
     path::{Path, PathBuf},
 };
+
+use ic_host_fs::durable::write_bytes;
 
 const LIMIT: usize = 256 * 1024;
 

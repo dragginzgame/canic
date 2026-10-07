@@ -77,8 +77,19 @@ required to run setup. Make targets and CI select this same local parser pair.
 | Snapshot verification | A SHA-256 implementation |
 | Snapshot refresh | Git, a clean Shared Tooling checkout, and a SHA-256 implementation |
 | Dependency pin checker | Git, jq, Mike Farah yq v4.47.2+; Cargo when Cargo manifests exist |
+| Workspace-version reader | Prepared Cargo, jq and Mike Farah yq v4.47.2+; explicit Cargo.toml input; no dependency resolution |
 | Release runner | GNU Make, Git, `date`, explicit consumer metadata/check targets, and Bash 3.2 |
 | Rust pre-commit hook and installer | Git, GNU Make, consumer-owned `fmt` prerequisites (Cargo/rustfmt and an exact `cargo-sort` version), Bash 3.2 and standard Unix file utilities |
+| Consumer formatting adoption checker | The hook prerequisites above, Perl-free shell utilities, and reviewed consumer Make inputs; no implicit downloads |
+| Formatter prerequisite checker | Prepared Cargo/rustfmt and the consumer's exact cargo-sort version; optional Cargo executable and `RUSTUP_TOOLCHAIN`; no installation |
+| Local lockfile transformer | Perl core only; the caller separately validates the prepared graph with Cargo |
+| Explicit tag maintenance | Git and Perl core modules; atomic push support for remote deletion; see [tag maintenance](tag-maintenance.md) |
+
+Host setup optionally selects ripgrep with `--with-ripgrep`; Shared Tooling's
+Make/CI callers enable it. Its archive verification also requires tar/gzip and
+cmp. The selected native binary must report PCRE2 support. All four Linux/macOS
+architecture mappings have substitute fixtures; only native execution qualifies
+the corresponding official binary. See [local setup](local-setup.md).
 
 The hook regression fixture also requires `jq` and the `cargo-sort` version from
 `ci/tool-versions.env` (`2.1.4`). CI installs it before offline tests; local
@@ -96,9 +107,16 @@ installer-download CI are install-capable, not support claims.
 
 Consumers own the exact tool versions and platform digests they admit.
 
+The sccache CI installer preserves Canic's Linux x86-64 binary scope. Its
+consumer-supplied pin selects the official musl archive. Other hosts continue
+to use consumer-owned explicit setup (such as a pinned Cargo install); this
+entry point does not claim a macOS or Linux ARM64 binary installation path.
+
 The IC toolset additionally provisions and checks native executables on all
 three CI hosts above. Offline fixtures exercise digest/version refusals, retained
 failed and interrupted setup, and atomic activation using substituted payloads;
 only the separate native installation step qualifies actual upstream binaries.
+Failure-artifact collection runs after native qualification and includes installer
+logs and retained host/IC candidate directories as well as portable fixtures.
 The full IC set currently excludes Linux ARM64 because its Quill release has
 no matching ARM64 asset. No translation or source build is substituted silently.

@@ -182,12 +182,14 @@ fn render_component_spec(spec: &ComponentSpec) -> TokenStream {
     let component_spec = render_component_spec_id(&spec.component_spec);
     let spec_hash = render_byte_array(&spec.spec_hash);
     let component_role = render_canister_role(&spec.component_role);
+    let application_init_required = spec.application_init_required;
     let maximum_fleet_instances = render_u32_literal(spec.maximum_fleet_instances);
     let limits = render_component_limits(&spec.limits);
     let children = render_vec(spec.children.iter(), render_component_child_spec);
     let spawn_grants = render_vec(spec.spawn_grants.iter(), render_component_spawn_grant);
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ComponentSpec {
+            application_init_required: #application_init_required,
             component_spec: #component_spec,
             spec_hash: #spec_hash,
             component_role: #component_role,
@@ -1140,6 +1142,7 @@ fn render_fleet_init_mode(mode: FleetInitMode) -> TokenStream {
 
 // Render one flat Component Spec and its potential child-role catalog.
 fn render_component_spec_config(config: &ComponentSpecConfig) -> TokenStream {
+    let application_init_required = config.application_init_required;
     let component_role = render_canister_role(&config.component_role);
     let maximum_instances = render_u32_literal(config.maximum_instances);
     let limits = render_component_limits_config(&config.limits);
@@ -1174,6 +1177,7 @@ fn render_component_spec_config(config: &ComponentSpecConfig) -> TokenStream {
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ComponentSpecConfig {
+            application_init_required: #application_init_required,
             component_role: #component_role,
             maximum_instances: #maximum_instances,
             limits: #limits,

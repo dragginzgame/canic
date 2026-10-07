@@ -89,7 +89,7 @@ for definition in "${definitions[@]}"; do
         echo "$relative_path: missing or duplicate catalog identity" >&2
         exit 1
     }
-    content_hash="$(sha256sum "$definition" | awk '{print $1}')"
+    content_hash="$(bash "$ROOT/scripts/ci/verify-file-checksum.sh" --print sha256 "$definition")"
     fingerprint_matches="$(table_records 4 "$FINGERPRINTS" | awk -F '\t' \
         -v id="$audit_id" -v version="$method_version" -v hash="$content_hash" -v path="$relative_path" \
         '$1 == id && $2 == version && $3 == hash && $4 == path { count++ } END { print count+0 }')"
@@ -116,12 +116,13 @@ fingerprinted_inputs=(
     docs/audits/scripts/run-nonempty-cargo-test.sh
     scripts/ci/audit-product-tree-hash.sh
     scripts/ci/check-audit-method-catalog.sh
+    scripts/ci/verify-file-checksum.sh
     scripts/ci/instruction-audit-report.sh
     scripts/ci/run-layering-guards.sh
     scripts/ci/wasm-audit-report.sh
 )
 for relative_path in "${fingerprinted_inputs[@]}"; do
-    content_hash="$(sha256sum "$ROOT/$relative_path" | awk '{print $1}')"
+    content_hash="$(bash "$ROOT/scripts/ci/verify-file-checksum.sh" --print sha256 "$ROOT/$relative_path")"
     if ! table_records 2 "$FINGERPRINTS" | awk -F '\t' \
         -v hash="$content_hash" -v path="$relative_path" \
         '$2 == path { count++; if ($1 != hash) invalid = 1 }

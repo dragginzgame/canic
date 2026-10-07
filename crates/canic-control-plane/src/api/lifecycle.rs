@@ -43,6 +43,14 @@ use std::time::Duration;
 pub struct LifecycleApi;
 
 impl LifecycleApi {
+    /// Freeze target-bound application bytes after endpoint controller authentication.
+    pub fn bind_component_initialization(
+        request: canic_core::dto::component_registry::RootComponentInitializationRequest,
+    ) -> Result<RootComponentAllocationResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::bind_component_initialization(request)
+            .map_err(Into::into)
+    }
+
     /// Read release funding evidence after endpoint-level controller authentication.
     pub fn root_funding_release_status(
         start_after: Option<u64>,

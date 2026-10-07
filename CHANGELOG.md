@@ -21,7 +21,7 @@ Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   hooks with scoped measurements; background checkpoints require an owned context
   ([#99](https://github.com/dragginzgame/canic/issues/99)).
 
-- Remove the obsolete ic-metrics reader feature; read counter 1 through the
+- Adopt arithmetic-only `ic-metrics 0.2` and `ic-timers 0.14`; read counter 1 through the
   existing CDK adapter ([ic-metrics #10](https://github.com/dragginzgame/ic-metrics/issues/10)).
 
 - Adopt management-canister types `0.11` in the controlled HTTP runtime probe,
@@ -31,15 +31,20 @@ Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   map's existing order ([#456](https://github.com/dragginzgame/canic/issues/456),
   [#451](https://github.com/dragginzgame/canic/issues/451)).
 
-- Adopt published `ic-host-tools 0.1.12` for Host Wasm inspection, Candid
-  normalization, bounded descriptor reads, file hashing, gzip decoding and
-  executable resolution.
-  Preserve Canic admission and install limits; reject trailing compressed data
-  and extra gzip members. Select patched `tar 0.4.46`
+- Adopt the published IC Host Tooling 0.3 split for artifact inspection,
+  filesystem publication and locks, executable resolution and Candid formats.
+  Remove Canic's copied durable-file engine and public `durable_io` surface;
+  direct callers use `ic-host-fs`. Preserve Canic admission, install limits and
+  journal ordering. This public hard cut adds to the minor-release requirement
   ([#458](https://github.com/dragginzgame/canic/issues/458)).
 
-- Adopt reviewed shared repository tool setup and pin checks, isolate formatting
-  hooks, validate retained release commits, and consolidate audit methods;
+- Adopt reviewed shared repository tool setup and pin checks, shared pinned CI
+  installers, Cargo version/inheritance and formatter probes, local lock rewriting,
+  portable digests, isolated RustSec preparation and explicit-cutoff tag maintenance.
+  Verify snapshots independently, bind release pushes to the captured URL and
+  inspect CI by exact commit. Replace stale native CI selection with guarded
+  recovery tests. Isolate formatting hooks, validate retained release commits and
+  consolidate audit methods;
   preserve macOS Binaryen's runtime library during Rust installation
   ([#461](https://github.com/dragginzgame/canic/issues/461),
   [#454](https://github.com/dragginzgame/canic/issues/454),
@@ -53,15 +58,16 @@ Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   memory registration and public framework APIs, including guarded Root membership
   discovery, compiled receiver permissions and publication-bound application
   startup. It also adopts ic-memory’s checked allocation-slot API and ic-timers’
-  policy-specific callback results, and aligns the independent blob consumer on
-  one memory runtime.
+  policy-specific callback results, and aligns dedicated and embedded blob consumers on
+  one Memory/Timers runtime with durable target-bound production initialization
+  ([#444](https://github.com/dragginzgame/canic/issues/444)).
 
 - Use published `ic-metrics` arithmetic and the existing CDK call-context reader,
   preserving endpoint attribution and report shapes ([#447](https://github.com/dragginzgame/canic/issues/447));
   standardize SemVer release commands with exact
   resume, atomic branch/tag pushes and retained artifacts. Validation-only
   release failures restart through the same command after source corrections.
-- Repair release-note fixture inputs and compare Wasm crypto package sets
+- Repair fixture guard inputs and compare Wasm crypto package sets
   independently of host locale ([#448](https://github.com/dragginzgame/canic/issues/448)).
 - Restore ingress-payload test compilation against the current testkit pool API
   and align its lockfile with the selected `0.18` dependency line

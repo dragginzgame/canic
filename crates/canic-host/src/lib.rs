@@ -31,11 +31,11 @@ pub use canister_protocol::{
 };
 pub mod canister_ready;
 mod cargo_metadata;
+pub mod component_initialization;
 pub mod component_operation;
 pub mod component_topology;
 pub mod config_discovery;
 pub mod diagnostics;
-pub mod durable_io;
 mod entropy;
 pub mod evidence_envelope;
 pub mod fleet_ensure;

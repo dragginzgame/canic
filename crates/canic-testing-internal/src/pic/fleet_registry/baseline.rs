@@ -28,6 +28,8 @@ mod tests {
     #[cfg(test)]
     mod activation_reset;
     #[cfg(test)]
+    mod application_initialization;
+    #[cfg(test)]
     mod caller_authority;
     #[cfg(test)]
     mod capacity_import;
@@ -17788,6 +17790,10 @@ cycles = "80T"
             (
                 "fresh provisioning terminal runtime activation",
                 fresh_five_component_provisioning_reaches_runtime_active_and_publishes_catalog,
+            ),
+            (
+                "production application initialization retains target bytes and lost replies",
+                application_initialization::production_initialization_recovers_exact_target_bytes,
             ),
             (
                 "inactive Root preserves and suspends permanent activation failure",

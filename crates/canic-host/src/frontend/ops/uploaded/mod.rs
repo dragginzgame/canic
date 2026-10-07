@@ -3,7 +3,6 @@
 //! Prepares bounded expected file identities; never uploads or changes asset settings.
 
 use crate::{
-    durable_io::read_regular_bytes,
     frontend::{
         FrontendError,
         model::{FrontendManifestRecord, FrontendUploadedInput},
@@ -12,9 +11,12 @@ use crate::{
     },
     icp::IcpCli,
 };
+
 use candid::{CandidType, Deserialize, Nat, Principal};
 use canic_core::cdk::utils::hash::sha256_hex;
 use std::time::{Duration, Instant};
+
+use ic_host_fs::durable::read_regular_bytes;
 
 ///
 /// FrontendAssetReader

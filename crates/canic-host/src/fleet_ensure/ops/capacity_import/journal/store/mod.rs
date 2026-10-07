@@ -1,35 +1,33 @@
 //! Durable capacity handoff publication under the existing Fleet operation lock.
 
-use crate::{
-    durable_io::{read_regular_bytes, write_bytes},
-    fleet_ensure::{
-        model::{
-            EffectState,
-            capacity_import::{
-                CapacityImportHandoffRequestRecord, CapacityImportJournalRecord,
-                CapacityImportPlanRecord, CapacityImportReservationRecord,
-                retirement::{
-                    CapacityImportHandoffRetirementReason, CapacityImportHandoffRetirementRecord,
-                },
+use crate::fleet_ensure::{
+    model::{
+        EffectState,
+        capacity_import::{
+            CapacityImportHandoffRequestRecord, CapacityImportJournalRecord,
+            CapacityImportPlanRecord, CapacityImportReservationRecord,
+            retirement::{
+                CapacityImportHandoffRetirementReason, CapacityImportHandoffRetirementRecord,
             },
-        },
-        ops::{
-            EnsurePaths, EnsureStateError,
-            capacity_import::{
-                journal::{
-                    CapacityImportJournalError, handoff_intent, retirement, reviewed, validate,
-                },
-                publication::{ROOT_SUBMISSION_STEPS, SOURCE_SUBMISSION_STEPS},
-            },
-            lock_capacity_import_operation,
         },
     },
+    ops::{
+        EnsurePaths, EnsureStateError,
+        capacity_import::{
+            journal::{CapacityImportJournalError, handoff_intent, retirement, reviewed, validate},
+            publication::{ROOT_SUBMISSION_STEPS, SOURCE_SUBMISSION_STEPS},
+        },
+        lock_capacity_import_operation,
+    },
 };
+
 use std::{
     fs::File,
     io,
     path::{Path, PathBuf},
 };
+
+use ic_host_fs::durable::{read_regular_bytes, write_bytes};
 
 const MAXIMUM_JOURNAL_BYTES: usize = 8 * 1024 * 1024;
 
@@ -148,7 +146,7 @@ impl CapacityImportJournalStore {
                     }
                     Ok(_) => {}
                     Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                        crate::durable_io::create_new_bytes_with_parents(&archive, &bytes)?;
+                        ic_host_fs::durable::create_new_bytes_with_parents(&archive, &bytes)?;
                     }
                     Err(error) => return Err(error.into()),
                 }

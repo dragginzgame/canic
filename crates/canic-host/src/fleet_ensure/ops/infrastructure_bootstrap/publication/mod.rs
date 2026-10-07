@@ -1,26 +1,26 @@
 //! Publish the reviewed estate seed after exact infrastructure completion, with local replay.
 
-use crate::{
-    durable_io::{read_optional_regular_bytes_bounded, read_regular_bytes, write_bytes},
-    fleet_ensure::{
-        generate::infrastructure_bootstrap::seed_projection,
-        model::{
-            DesiredFleet, FleetEnsurePlan,
-            infrastructure_bootstrap::{
-                InfrastructureBootstrapPublicationRecord, InfrastructureBootstrapRecord,
-                InfrastructureBootstrapSeedRecord,
-            },
+use crate::fleet_ensure::{
+    generate::infrastructure_bootstrap::seed_projection,
+    model::{
+        DesiredFleet, FleetEnsurePlan,
+        infrastructure_bootstrap::{
+            InfrastructureBootstrapPublicationRecord, InfrastructureBootstrapRecord,
+            InfrastructureBootstrapSeedRecord,
         },
-        ops::{
-            self, EnsurePaths,
-            infrastructure_bootstrap::{InfrastructureBootstrapError, seal_sources, terminal},
-        },
-        policy::expected_plan_sha256,
     },
+    ops::{
+        self, EnsurePaths,
+        infrastructure_bootstrap::{InfrastructureBootstrapError, seal_sources, terminal},
+    },
+    policy::expected_plan_sha256,
 };
+
 use candid::Principal;
 use sha2_host::{Digest, Sha256};
 use std::path::{Component, Path, PathBuf};
+
+use ic_host_fs::durable::{read_optional_regular_bytes_bounded, read_regular_bytes, write_bytes};
 
 const MAX_BYTES: usize = 8 * 1024 * 1024;
 const MAX_SEED_BYTES: usize = 1024 * 1024;

@@ -81,6 +81,10 @@ pub struct ComponentSpecConfig {
     /// Role of the Component directly managed by a Fleet Subnet Root.
     pub component_role: CanisterRole,
 
+    /// Hold installation until a controller binds bytes to the allocated identity.
+    #[serde(default)]
+    pub application_init_required: bool,
+
     /// Fleet-wide ceiling for concrete instances of this Component Spec.
     pub maximum_instances: u32,
 

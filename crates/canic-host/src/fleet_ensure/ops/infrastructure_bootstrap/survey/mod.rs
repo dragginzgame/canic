@@ -1,7 +1,6 @@
 //! Retain the original supplied estate survey before initialization review or paid inspection.
 
 use crate::{
-    durable_io::{read_optional_regular_bytes_bounded, write_bytes},
     fleet_ensure::{
         model::{
             DesiredCanisterKind, DesiredFleet,
@@ -22,10 +21,13 @@ use crate::{
     },
     icp::IcpCli,
 };
+
 use candid::{Nat, Principal};
 use canic_core::cdk::utils::hash::{decode_hex, hex_bytes};
 use sha2_host::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
+
+use ic_host_fs::durable::{read_optional_regular_bytes_bounded, write_bytes};
 
 const MAXIMUM_BYTES: usize = 2 * 1024 * 1024;
 

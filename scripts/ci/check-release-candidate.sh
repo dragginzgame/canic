@@ -34,12 +34,12 @@ command -v rg >/dev/null 2>&1 || fail "rg is unavailable"
 
 workspace_version="$(
     if [[ -n "$release_commit" ]]; then
-        cargo get --entry "$view" workspace.package.version
+        bash "$ROOT/scripts/ci/read-cargo-workspace-version.sh" "$view/Cargo.toml"
     else
         bash "$VERSION_READER"
     fi
 )" ||
-    fail "cargo-get could not read the root workspace version"
+    fail "shared reader could not read the root workspace version"
 if [[ -n "$release_commit" && -n "${RELEASE_VERSION:-}" ]]; then
     [[ "$workspace_version" == "$RELEASE_VERSION" ]] ||
         fail "selected commit version differs from release intent"

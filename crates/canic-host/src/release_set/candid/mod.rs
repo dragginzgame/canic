@@ -7,7 +7,6 @@
 mod tests;
 
 use crate::{
-    durable_io::{RegularFileReadError, read_optional_regular_bytes},
     release_build::{ReleaseBuildPlanError, validate_finalized_release_build_manifest},
     release_set::{
         ApplicationArtifactUnionPersistenceError, CanicInfrastructureArtifactPersistenceError,
@@ -16,7 +15,10 @@ use crate::{
         load_persisted_current_release_set_manifest,
     },
 };
+
 use std::path::{Path, PathBuf};
+
+use ic_host_fs::durable::{RegularFileReadError, read_optional_regular_bytes};
 
 use canic_core::ids::ReleaseBuildId;
 use sha2_host::{Digest, Sha256};

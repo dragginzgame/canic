@@ -7,7 +7,6 @@ mod capacity;
 mod uploaded;
 
 use crate::{
-    durable_io::read_regular_bytes,
     fleet_ensure::{policy::expected_plan_sha256, resolve_current_fleet},
     frontend::{
         FrontendError,
@@ -20,6 +19,7 @@ use crate::{
     network::{frontend_root_key, resolve_canonical_network_id_from_root},
     protocol_binding::resolve_registry_protocol_binding,
 };
+
 use candid::TypeEnv;
 use candid_parser::{
     IDLProg,
@@ -28,6 +28,8 @@ use candid_parser::{
 };
 use canic_core::cdk::utils::hash::{hex_bytes, sha256_hex};
 use std::{collections::BTreeMap, path::Path};
+
+use ic_host_fs::durable::read_regular_bytes;
 
 pub use bundle::{manifest_digest, publish_bundle, verify_bundle};
 pub use capacity::{asset_capacity, payload_inventory};

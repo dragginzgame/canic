@@ -105,6 +105,7 @@ pub(super) fn allocation_response(
         ),
     };
     Ok(RootComponentAllocationResponse {
+        application_initialization: allocation.application_initialization,
         operation_id: allocation.operation_id,
         allocation_sequence: allocation.allocation_sequence,
         component: allocation.component,

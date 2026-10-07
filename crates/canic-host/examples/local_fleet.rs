@@ -1,7 +1,6 @@
 //! Public-library consumer: one foreground local Fleet owner with bounded JSON-line commands.
 
 use canic_host::{
-    durable_io,
     fleet_ensure::{FleetGenerateRequest, model::DesiredFleet},
     frontend::{self, model::FrontendEnvironmentInput},
     local_fleet::{
@@ -9,12 +8,15 @@ use canic_host::{
         workflow::LocalFleetSession,
     },
 };
+
 use serde::Deserialize;
 use std::{
     error::Error,
     io::{self, BufRead, Read, Write},
     path::{Path, PathBuf},
 };
+
+use ic_host_fs::durable;
 
 /// A caller selects all effects explicitly; the example owns no application build recipe.
 #[derive(Deserialize)]
@@ -66,7 +68,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         [mode, root, config, icp] if mode == "run" => {
             let root = Path::new(root).canonicalize()?;
             let config: LocalFleetConfig = serde_json::from_slice(
-                &durable_io::read_regular_bytes(&root.join(config), 65_536)?)?;
+                &durable::read_regular_bytes(&root.join(config), 65_536)?)?;
             run(&root, &config, icp)
         }
         [mode, root, name, session] if mode == "reset" => {
@@ -125,7 +127,7 @@ fn execute(
         }
         Command::Allocate { input } => emit(&session.allocate(&input)?),
         Command::Converge { desired } => {
-            let desired: DesiredFleet = toml::from_slice(&durable_io::read_regular_bytes(
+            let desired: DesiredFleet = toml::from_slice(&durable::read_regular_bytes(
                 &root.join(desired),
                 4 * 1024 * 1024,
             )?)?;
@@ -133,9 +135,8 @@ fn execute(
         }
         Command::Discover { fleet } => emit(&session.discover(root, &fleet)?),
         Command::Frontend { fleet, input, out } => {
-            let input: FrontendEnvironmentInput = serde_json::from_slice(
-                &durable_io::read_regular_bytes(&root.join(input), 65_536)?,
-            )?;
+            let input: FrontendEnvironmentInput =
+                serde_json::from_slice(&durable::read_regular_bytes(&root.join(input), 65_536)?)?;
             let status = session.status()?;
             let gateway_matches =
                 input.api_origin.trim_end_matches('/') == status.gateway.trim_end_matches('/');
@@ -172,7 +173,7 @@ fn execute(
                 seed: &root.join(seed),
                 source: &root.join(source),
             })?;
-            durable_io::write_bytes(
+            durable::write_bytes(
                 &root.join(out),
                 toml::to_string_pretty(&generated.desired)?.as_bytes(),
             )?;

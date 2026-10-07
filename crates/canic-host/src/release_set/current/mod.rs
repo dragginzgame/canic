@@ -8,9 +8,6 @@
 mod tests;
 
 use crate::{
-    durable_io::{
-        RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes,
-    },
     release_build::{ReleaseBuildPlanError, ReleaseBuildPlanState, load_release_build_plan},
     release_set::{
         PersistedApplicationArtifactUnion, PersistedCanicInfrastructureArtifactManifest,
@@ -20,6 +17,7 @@ use crate::{
         },
     },
 };
+
 use canic_core::{
     bootstrap::compiled::ComponentTopology,
     ids::{BuildNetwork, ReleaseBuildId},
@@ -29,6 +27,10 @@ use sha2_host::{Digest, Sha256};
 use std::{
     io,
     path::{Path, PathBuf},
+};
+
+use ic_host_fs::durable::{
+    RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes,
 };
 use thiserror::Error as ThisError;
 

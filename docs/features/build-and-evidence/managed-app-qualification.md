@@ -41,6 +41,12 @@ standalone-local build and its exact same-release upgrade. The module
 re-exports the required PocketIC call traits, so the downstream test does not
 pin or reconstruct `canic-core` or `ic-testkit` internals.
 
+Build the complete App through the canonical CLI to embed its release-build
+identity, and supply that emitted identity with the exact qualified artifact.
+A single-role compile without a release-build identity does not qualify managed
+installation. These synthetic allocation peers prove composition; production
+Root allocation and durable init delivery need their separate execution proof.
+
 Enable the `testing` feature through the normal Cargo feature resolver, then
 commit the resulting downstream lockfile. The public facade currently inherits
 PocketIC's exact `thiserror` selection; Cargo may therefore lower a previously
@@ -100,10 +106,12 @@ An encoder panic propagates to the fixture caller. Use
 `ManagedApplicationInit::Encoded(bytes)` for fixed application arguments or
 `ManagedApplicationInit::None` to omit them. Explicit child arguments supplied by
 the Root allocation request take precedence over this per-role fallback.
-This is fixture injection, not a production deployment option. Root's current
-top-level Component and Component Group installation paths supply no application
-arguments; a consumer needing them must separately qualify a production delivery
-path before deployment.
+This callback is fixture injection. The production Root path separately uses
+`application_init_required = true` and the controller-authorized
+`BindComponentInitialization` command to retain exact target-bound bytes before
+installation. Qualification of this callback does not prove production binding,
+Root restart or management-install reconciliation; those require the actual Root
+workflow. See the [blob integration boundary](../blob-storage/README.md).
 
 Configured initial sharding and scaling children are installed before the
 constructor returns. Submit an on-demand indexed, sharded or scaled child request

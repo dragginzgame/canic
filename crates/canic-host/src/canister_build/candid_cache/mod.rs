@@ -12,7 +12,6 @@ use super::{
     candid::{extract_candid_bytes, extract_candid_with_tool},
     reuse::{BuildReuseError, file_hash, require_native_tool, resolve_tool},
 };
-use crate::durable_io::{read_regular_bytes, write_bytes};
 use canic_core::cdk::utils::hash::hex_bytes;
 use serde::{Deserialize, Serialize};
 use sha2_host::{Digest, Sha256};
@@ -20,6 +19,8 @@ use std::{
     io,
     path::{Path, PathBuf},
 };
+
+use ic_host_fs::durable::{read_regular_bytes, write_bytes};
 
 // This bounds optional cache I/O, not accepted Candid size. Larger results are extracted normally.
 const CACHE_RECORD_LIMIT: usize = 4 * 1024 * 1024;

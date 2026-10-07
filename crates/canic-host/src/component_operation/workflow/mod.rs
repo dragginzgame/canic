@@ -1,16 +1,16 @@
 //! Review and reconcile one Root-owned Component operation.
 //! Every submission follows durable intent; response loss retains the same identity.
 
-use crate::{
-    component_operation::{
-        ComponentOperationError,
-        model::{ComponentAuthorityRecord, ComponentOperationRecord},
-        ops::{self, ComponentTransport},
-        policy,
-    },
-    durable_io::lock_file,
+use crate::component_operation::{
+    ComponentOperationError,
+    model::{ComponentAuthorityRecord, ComponentOperationRecord},
+    ops::{self, ComponentTransport},
+    policy,
 };
+
 use std::path::Path;
+
+use ic_host_fs::durable::lock_file;
 
 fn fleet_lock(
     root: &Path,

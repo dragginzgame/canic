@@ -137,7 +137,7 @@ fn load_role_source(
         })?;
     let manifest = package_root.join("Cargo.toml");
     let bytes =
-        crate::durable_io::read_regular_bytes(&manifest, document_limit()).map_err(|source| {
+        ic_host_fs::durable::read_regular_bytes(&manifest, document_limit()).map_err(|source| {
             FixtureArtifactError::Io {
                 path: manifest.clone(),
                 source,

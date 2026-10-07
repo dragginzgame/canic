@@ -9,7 +9,7 @@ use crate::release_set::{GZIP_MAGIC, WASM_MAGIC};
 use std::io;
 
 use canic_core::cdk::utils::hash::sha256_hex;
-use ic_host_tools::artifact::{ArtifactError, GzipError, decode_gzip};
+use ic_host_artifacts::artifact::{ArtifactError, GzipError, decode_gzip};
 
 ///
 /// QualifiedRepresentation

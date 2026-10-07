@@ -5,8 +5,11 @@
 //! Boundary: copies checked-in contracts for ordinary builds and extracts only on explicit refresh
 //! against the exact selected Canic package.
 
-use crate::{canister_build::extract_candid_bytes, durable_io::write_bytes};
+use crate::canister_build::extract_candid_bytes;
+
 use std::{fs, path::Path};
+
+use ic_host_fs::durable::write_bytes;
 
 /// Resolve one infrastructure canister's Candid bytes before artifact publication.
 pub fn resolve_infrastructure_candid(

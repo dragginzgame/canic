@@ -489,16 +489,24 @@ pub struct RootComponentCreationRequest {
     pub operation_id: [u8; 32],
 }
 
-///
-/// RootComponentInstallRequest
-///
-/// Controller command continuing one already created top-level Component operation.
-///
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RootComponentInstallRequest {
-    pub operation_id: [u8; 32],
+/// Opaque application bytes bound to the already allocated hosting identity.
+/// The application owns encoding and validation of its inner Candid contract.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentApplicationInitialization {
+    pub target_canister: Principal,
+    #[serde(with = "serde_bytes")]
+    pub arguments: Vec<u8>,
 }
+
+/// Controller command freezing initialization before the first install intent.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentInitializationRequest {
+    pub operation_id: [u8; 32],
+    pub initialization: ComponentApplicationInitialization,
+}
+
+/// Maximum retained application Candid bytes per top-level Component.
+pub const MAX_COMPONENT_APPLICATION_INIT_BYTES: usize = 16_384;
 
 ///
 /// RootComponentCommitRequest
@@ -1112,6 +1120,7 @@ pub struct RootComponentChildInstallEvidence {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentAllocationResponse {
+    pub application_initialization: Option<ComponentApplicationInitialization>,
     pub operation_id: [u8; 32],
     pub allocation_sequence: u64,
     pub component: ComponentInstanceId,
@@ -1556,6 +1565,7 @@ mod tests {
             }),
         };
         let allocation = RootComponentAllocationResponse {
+            application_initialization: None,
             operation_id: [10; 32],
             allocation_sequence: 1,
             component: ComponentInstanceId::from_generated_bytes([11; 32]),
@@ -1641,6 +1651,7 @@ mod tests {
         };
         let committed = RootComponentCommitResponse {
             allocation: RootComponentAllocationResponse {
+                application_initialization: None,
                 operation_id: [10; 32],
                 allocation_sequence: 1,
                 component,
@@ -2853,20 +2864,6 @@ mod tests {
             )
             .expect("decode child membership response"),
             membership_response
-        );
-    }
-
-    #[test]
-    fn component_install_request_round_trips_through_candid() {
-        let request = RootComponentInstallRequest {
-            operation_id: [10; 32],
-        };
-        let bytes = candid::encode_one(request).expect("encode install request");
-
-        assert_eq!(
-            candid::decode_one::<RootComponentInstallRequest>(&bytes)
-                .expect("decode install request"),
-            request
         );
     }
 

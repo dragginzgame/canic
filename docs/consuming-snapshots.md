@@ -71,6 +71,18 @@ source revision. Verify the completed snapshot before resuming validation.
 To change the declared file set, edit or recreate the manifest as an explicit
 reviewed consumer change; ordinary refresh does not silently widen it.
 
+When refreshing `install-actionlint.sh`, `install-shellcheck.sh`, `install-gitleaks.sh`,
+`install-sccache.sh` or `install-yq.sh`, also declare `scripts/ci/install-ci-tool.sh`
+and the existing `scripts/ci/verify-file-checksum.sh`. These entry points share that
+implementation; refreshing only an entry point leaves an incomplete installation.
+Pins and command arguments remain consumer-owned and unchanged.
+
+Cargo inheritance adoption refreshes `check-dependency-pins.sh` and
+`dependency-pins.jq` together, then adds `--cargo-inheritance` to the consumer's
+CI/release invocation. The workspace-version reader is independently available as
+`scripts/ci/read-cargo-workspace-version.sh`. Include
+`docs/verification-helpers.md` for their dependencies and boundary contracts.
+
 ## Drift verification
 
 Consumers that vendor the verifier and checksum helper can check their snapshot
@@ -81,8 +93,13 @@ bash scripts/ci/verify-shared-tooling-snapshot.sh
 ```
 
 The verifier fails when a declared file is absent, symlinked, has different
-content, or changes executable state. It validates local snapshot integrity;
-the source commit and normal review establish provenance.
+content, or changes executable state. It hashes files directly through the host's
+`sha256sum` or `shasum`, without executing the inspected snapshot's checksum helper
+or any other declared file. This independent bootstrap is deliberate: shared
+checksum code cannot establish its own integrity. Invoke a trusted copy of the
+verifier; this is local integrity checking, not signed provenance or protection
+against replacement of the verifier and manifest themselves. The source commit
+and normal review establish provenance.
 
 ## Shared baseline and local instructions
 
@@ -91,45 +108,24 @@ Vendor it with its linked guides so the complete rule set remains readable
 offline. Keep the consumer's `AGENTS.md` as its entry point and local overlay;
 do not copy Shared Tooling's `AGENTS.md` over it.
 
-For a new governance snapshot, use this complete documentation file set with
-the required verifiers, adding any selected tools to the same command:
+For a new governance snapshot, use the canonical
+[governance file list](../scripts/distribution/governance-files.txt), including
+linked guides and required helpers. Add selected tools explicitly to the command:
 
 ```bash
-/path/to/shared-tooling/scripts/distribution/refresh-consumer.sh \
-  --consumer /path/to/consumer \
-  --file DRAGGINZGAME.md \
-  --file rules/changelogs.md \
-  --file rules/cargo-dependencies.md \
-  --file rules/dependency-pinning.md \
-  --file rules/git-hooks.md \
-  --file rules/agent-maintenance.md \
-  --file audits/README.md \
-  --file audits/code-hygiene.md \
-  --file audits/flow-convergence-and-duplication.md \
-  --file audits/complexity-and-technical-debt.md \
-  --file audits/module-surface-hardening.md \
-  --file audits/module-cleanup.md \
-  --file docs/releases.md \
-  --file scripts/ci/run-release.sh \
-  --file scripts/ci/next-release-version.sh \
-  --file scripts/ci/finalize-release-changelog.awk \
-  --file scripts/ci/check-dependency-pins.sh \
-  --file scripts/ci/dependency-pins.jq \
-  --file docs/principles/README.md \
-  --file docs/principles/decision-artifact-discipline.md \
-  --file docs/principles/reviewable-changes.md \
-  --file docs/principles/rust-code-hygiene.md \
-  --file docs/principles/simplicity-and-maintainability.md \
-  --file docs/consuming-snapshots.md \
-  --file docs/provenance.md \
-  --file docs/ic-tools.md \
-  --file docs/local-setup.md \
-  --file ci/ic-tools.tsv \
-  --file ci/tool-versions.env \
-  --file docs/supported-hosts.md \
-  --file scripts/ci/verify-file-checksum.sh \
-  --file scripts/ci/verify-shared-tooling-snapshot.sh
+shared_tooling=/path/to/shared-tooling
+files=()
+while IFS= read -r file; do
+  files+=(--file "$file")
+done < "$shared_tooling/scripts/distribution/governance-files.txt"
+bash "$shared_tooling/scripts/distribution/refresh-consumer.sh" \
+  --consumer /path/to/consumer "${files[@]}"
 ```
+
+The distribution fixture exports this list and checks its Markdown links inside
+the isolated consumer. The source checkout's link check alone cannot establish
+that exported documentation is complete. Keep the list current when adding guides.
+It is an initial selection, not hidden inheritance or automatic manifest widening.
 
 For an existing snapshot, update its declared file set through the reviewed
 manifest procedure above, including all shared rule files. Include
@@ -139,6 +135,23 @@ adopting the release command contract. The local `AGENTS.md` must direct contrib
 state local product contracts, commands and approved exceptions. Resolve local
 conflicts before claiming adoption. Do not edit a vendored shared document in
 place or attribute dirty upstream bytes to a committed revision.
+
+When adopting the local-repair and owning-repository issue workflow, refresh
+`DRAGGINZGAME.md` and `rules/agent-maintenance.md` together from the reviewed
+commit. Remove equivalent local instructions after checking their obligations;
+retain approved scoped exceptions and consumer release boundaries. Walk through
+an authorized local repair (apply in the working tree and run focused checks)
+and an upstream finding (search, report evidence in the owning issue, then adopt
+the committed correction). Reporting an issue neither applies the upstream fix
+nor verifies consumer adoption; broad validation authority stays unchanged.
+
+Consumers using the maintenance rule's exact-commit CI inspection command also
+refresh `scripts/dev/gh-ci.sh` from that reviewed revision. It remains a read-only
+interactive helper using the consumer checkout and authenticated GitHub CLI.
+The portable-suite prerequisite check is Shared Tooling's own test setup, not a
+required consumer gate. If vendoring the complete portable suite, include its
+new `scripts/ci/check-portable-prerequisites.sh`, `scripts/ci/test-portable-prerequisites.sh`
+and `scripts/ci/test-gh-ci.sh` dependencies along with the existing suite inputs.
 
 A revision-bound baseline reference remains an allowed alternative under the
 baseline. It must identify the exact source revision and document; a branch URL
@@ -158,14 +171,15 @@ check alone does not verify those behaviors.
 Pinning adoption also requires the checker and its jq module, prepared Git/jq/yq
 tools (and Cargo for Rust workspaces), a CI/release invocation, and consumer-owned
 qualification for locked builds and external inputs. Consumers may also vendor
-`scripts/ci/install-yq.sh` with the checksum helper; choose and record their own
-reviewed version and platform digests. Resolve existing exceptions under the
+`scripts/ci/install-yq.sh` with `scripts/ci/install-ci-tool.sh` and the checksum
+helper; choose and record their own reviewed version and platform digests.
+Resolve existing exceptions under the
 [pinning policy](../rules/dependency-pinning.md) before claiming adoption.
 
 ## Audit method adoption
 
-Include the complete `audits/` file set above when adopting this baseline, so
-its method links work offline. The snapshot's reviewed source revision identifies
+Include the complete `audits/` file set in the governance list when adopting this
+baseline, so its method links work offline. The snapshot's reviewed source revision identifies
 the common contract; do not read methods from a moving sibling checkout or copy
 uncommitted documents and attribute them to an older revision.
 
@@ -248,3 +262,20 @@ The evidence-manifest helper can also be adopted independently with the existing
 checksum verifier. The nonempty Cargo test helper and exact release-tag checker
 have no shared helper dependencies. Consumers keep test arguments, manifest
 selection and publication/release authority in their adapters.
+
+The documentation-link, release-command and crates.io observation helpers also
+have no shared helper dependencies. Follow their explicit input and failure
+contracts in [verification helpers](verification-helpers.md), include that
+document and each selected helper in the snapshot, and move callers before
+deleting duplicated code. Keep product-specific checks and publication policy
+local. Adoption must wait for a reviewed committed source revision; local
+upstream tests do not establish that consumers have refreshed their snapshots.
+
+File-digest generation uses the checksum verifier's additive `--print` interface,
+so its existing snapshot file set is sufficient. Refresh that verifier before
+changing local hash callers. Advisory database preparation is independently
+available as `scripts/ci/prepare-rustsec-db.sh` with no shared-script dependencies;
+include it and `docs/verification-helpers.md` when adopting it. Replace only
+database acquisition/isolation, retain consumer audit policy and failure evidence,
+and pass `--no-fetch` when auditing the prepared database so its identity stays
+bound to the recorded commit.

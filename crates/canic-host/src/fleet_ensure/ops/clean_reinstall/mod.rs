@@ -2,32 +2,32 @@
 
 pub(in crate::fleet_ensure) mod cancellation;
 
-use crate::{
-    durable_io::{read_optional_regular_bytes_bounded, write_bytes},
-    fleet_ensure::{
-        dto::capacity_import::CapacityImportReviewRequest,
-        model::{
-            DesiredFleet, FleetEnsurePlan, ReviewedDesiredFleetRecord,
-            capacity_import::{CapacityImportJournalRecord, survey::CapacityImportSampleRecord},
-            clean_reinstall::CleanReinstallRecord,
-        },
-        ops::{
-            EnsurePaths, EnsureStateError,
-            capacity_import::{
-                admission::{
-                    CapacityImportDeclaration, CapacityImportDeclarations,
-                    CapacityImportDispositionKind,
-                },
-                journal, publication,
+use crate::fleet_ensure::{
+    dto::capacity_import::CapacityImportReviewRequest,
+    model::{
+        DesiredFleet, FleetEnsurePlan, ReviewedDesiredFleetRecord,
+        capacity_import::{CapacityImportJournalRecord, survey::CapacityImportSampleRecord},
+        clean_reinstall::CleanReinstallRecord,
+    },
+    ops::{
+        EnsurePaths, EnsureStateError,
+        capacity_import::{
+            admission::{
+                CapacityImportDeclaration, CapacityImportDeclarations,
+                CapacityImportDispositionKind,
             },
-            read_current, write_current,
+            journal, publication,
         },
+        read_current, write_current,
     },
 };
+
 use candid::Principal;
 use canic_core::cdk::utils::hash::hex_bytes;
 use sha2_host::{Digest, Sha256};
 use std::{collections::BTreeSet, path::Path};
+
+use ic_host_fs::durable::{read_optional_regular_bytes_bounded, write_bytes};
 
 /// Read current reset authority after selection establishes its current owner.
 pub(in crate::fleet_ensure) fn read(

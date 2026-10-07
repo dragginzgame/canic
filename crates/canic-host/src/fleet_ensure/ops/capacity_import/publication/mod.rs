@@ -5,28 +5,26 @@
 #[cfg(test)]
 mod tests;
 
-use crate::{
-    durable_io::{read_regular_bytes, write_bytes},
-    fleet_ensure::{
-        generate::capacity_import::{
-            prepare_capacity_import_inventory, prepare_initial_import_inventory,
+use crate::fleet_ensure::{
+    generate::capacity_import::{
+        prepare_capacity_import_inventory, prepare_initial_import_inventory,
+    },
+    model::capacity_import::{
+        CapacityImportJournalRecord,
+        operation::{
+            CapacityImportDocumentRecord, CapacityImportOperationRecord,
+            CapacityImportOperationReviewRecord, CapacityImportPublicationKind,
         },
-        model::capacity_import::{
-            CapacityImportJournalRecord,
-            operation::{
-                CapacityImportDocumentRecord, CapacityImportOperationRecord,
-                CapacityImportOperationReviewRecord, CapacityImportPublicationKind,
-            },
-        },
-        ops::{
-            EnsurePaths,
-            capacity_import::{
-                journal::{CapacityImportJournalError, CapacityImportJournalStore},
-                validate_root_status,
-            },
+    },
+    ops::{
+        EnsurePaths,
+        capacity_import::{
+            journal::{CapacityImportJournalError, CapacityImportJournalStore},
+            validate_root_status,
         },
     },
 };
+
 use canic_core::{
     cdk::utils::hash::{decode_hex, hex_bytes},
     dto::pool_import::{PoolImportPhase, PoolImportStatus},
@@ -36,6 +34,8 @@ use std::{
     collections::BTreeMap,
     path::{Component, Path, PathBuf},
 };
+
+use ic_host_fs::durable::{read_regular_bytes, write_bytes};
 
 const MAX_DOCUMENT_BYTES: usize = 1024 * 1024;
 pub(super) const MAX_STATUS_HEX_BYTES: usize = 512 * 1024;

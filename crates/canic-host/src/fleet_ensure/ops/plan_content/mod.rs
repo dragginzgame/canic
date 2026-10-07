@@ -9,16 +9,16 @@ mod fixture;
 mod tests;
 
 use super::{EnsurePaths, EnsureStateError};
-use crate::{
-    durable_io::{
-        BoundedRegularFileReadError, RegularFileReadError, create_new_bytes_with_parents,
-        read_optional_regular_bytes_bounded,
-    },
-    fleet_ensure::model::{CurrentFleetProtocolAction, EnsureAction, FleetEnsurePlan},
-};
+use crate::fleet_ensure::model::{CurrentFleetProtocolAction, EnsureAction, FleetEnsurePlan};
+
 use canic_core::cdk::utils::hash::{decode_hex, hex_bytes, wasm_hash};
 use serde_json::{Map, Value};
 use std::{collections::BTreeMap, io};
+
+use ic_host_fs::durable::{
+    BoundedRegularFileReadError, RegularFileReadError, create_new_bytes_with_parents,
+    read_optional_regular_bytes_bounded,
+};
 
 type ChunkSetKey = (String, String);
 

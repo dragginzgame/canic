@@ -634,6 +634,25 @@ struct ComponentDirectoryCursorPayload {
     last_canister_id: candid::Principal,
 }
 
+/// Freeze opaque application initialization under endpoint controller authority.
+pub fn bind_component_initialization(
+    request: canic_core::dto::component_registry::RootComponentInitializationRequest,
+) -> Result<RootComponentAllocationResponse, InternalError> {
+    let (authority, _) = root_authority()?;
+    let allocation = ComponentRegistryOps::allocation(request.operation_id)
+        .ok_or_else(InternalError::unavailable)?;
+    validate_allocation_record(
+        &authority.binding,
+        authority.initial_release_set,
+        &ConfigOps::component_topology()?,
+        &allocation,
+        request.operation_id,
+    )?;
+    allocation_response(ComponentRegistryOps::bind_application_initialization(
+        request,
+    )?)
+}
+
 /// Prepare the one empty Component Registry meta record under exact active root authority.
 pub async fn prepare(
     request: RootComponentRegistryPreparationRequest,
@@ -1025,7 +1044,8 @@ pub fn allocation_operation_status(
     };
 
     match &allocation.provisioning_origin {
-        ComponentProvisioningOrigin::FleetAdministrator { .. } => {
+        ComponentProvisioningOrigin::FleetAdministrator { .. }
+        | ComponentProvisioningOrigin::ComponentGroup { .. } => {
             if !caller_is_controller {
                 return Err(InternalError::forbidden());
             }
@@ -1043,7 +1063,6 @@ pub fn allocation_operation_status(
                 caller,
             )?;
         }
-        ComponentProvisioningOrigin::ComponentGroup { .. } => return Ok(None),
     }
 
     let complete = component_allocation_reconciliation_complete(&allocation);
@@ -5895,6 +5914,7 @@ mod tests {
     #[test]
     fn grouped_allocation_cannot_advance_through_ordinary_lifecycle() {
         let allocation = RootComponentAllocationView {
+            application_initialization: None,
             operation_id: [1; 32],
             allocation_sequence: 1,
             component: ComponentInstanceId::from_generated_bytes([2; 32]),

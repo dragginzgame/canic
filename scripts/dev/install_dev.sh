@@ -12,7 +12,6 @@ SHELLCHECK_INSTALL_DIR="${SHELLCHECK_INSTALL_DIR:-$HOME/.local/bin}"
 CANIC_DEV_TOOLS=(
     "cargo-watch@$CANIC_CARGO_WATCH_VERSION"
     "cargo-edit@$CANIC_CARGO_EDIT_VERSION"
-    "cargo-get@$CANIC_CARGO_GET_VERSION"
     "cargo-sort@$CANIC_CARGO_SORT_VERSION"
     "cargo-sort-derives@$CANIC_CARGO_SORT_DERIVES_VERSION"
     "sccache@$CANIC_SCCACHE_VERSION"
@@ -112,12 +111,12 @@ install_or_update_actionlint() {
     local bin
 
     yellow "actionlint:"
-    cyan_command "ACTIONLINT_INSTALL_DIR=$ACTIONLINT_INSTALL_DIR bash scripts/ci/install-actionlint.sh"
+    cyan_command "ACTIONLINT_INSTALL_DIR=$ACTIONLINT_INSTALL_DIR bash scripts/ci/install-pinned-ci-tool.sh actionlint"
     require_command curl
     require_command tar
     bin="$(
         ACTIONLINT_INSTALL_DIR="$ACTIONLINT_INSTALL_DIR" \
-            bash "$ROOT_DIR/scripts/ci/install-actionlint.sh"
+            bash "$ROOT_DIR/scripts/ci/install-pinned-ci-tool.sh" actionlint
     )"
 
     green "actionlint installed: $("$bin" -version 2>&1)"
@@ -132,12 +131,12 @@ install_or_update_shellcheck() {
     local bin
 
     yellow "ShellCheck:"
-    cyan_command "SHELLCHECK_INSTALL_DIR=$SHELLCHECK_INSTALL_DIR bash scripts/ci/install-shellcheck.sh"
+    cyan_command "SHELLCHECK_INSTALL_DIR=$SHELLCHECK_INSTALL_DIR bash scripts/ci/install-pinned-ci-tool.sh shellcheck"
     require_command curl
     require_command tar
     bin="$(
         SHELLCHECK_INSTALL_DIR="$SHELLCHECK_INSTALL_DIR" \
-            bash "$ROOT_DIR/scripts/ci/install-shellcheck.sh"
+            bash "$ROOT_DIR/scripts/ci/install-pinned-ci-tool.sh" shellcheck
     )"
 
     green "ShellCheck installed: $("$bin" --version 2>&1 | head -n 1)"

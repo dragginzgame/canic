@@ -1,19 +1,21 @@
 //! Bind fresh local identities and reuse the maintained release initializer owner.
 
 use crate::{
-    durable_io,
     fleet_ensure::{
         model::{DesiredCanisterKind, DesiredFleet, DesiredPresence},
         ops as ensure_ops,
     },
     local_fleet::{LocalFleetError, model::*, view::LocalRootInstallationView},
 };
+
 use candid::Principal;
 use canic_core::{cdk::utils::hash::sha256_hex, ids::CanonicalNetworkId};
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
 };
+
+use ic_host_fs::durable;
 
 fn failure(error: impl std::fmt::Display) -> LocalFleetError {
     LocalFleetError::Preparation(error.to_string())
@@ -83,7 +85,7 @@ pub fn begin(
     let source_sha256 = sha256_hex(&serde_json::to_vec(source)?);
     let workspace_root = workspace.canonicalize()?;
     let path = directory.join("preparation.json");
-    match durable_io::read_regular_bytes(&path, 4 * 1024 * 1024) {
+    match durable::read_regular_bytes(&path, 4 * 1024 * 1024) {
         Ok(bytes) => {
             let retained: LocalPreparationRecord = serde_json::from_slice(&bytes)?;
             if retained.schema_version != 1
@@ -115,7 +117,7 @@ fn save(directory: &Path, record: &LocalPreparationRecord) -> Result<(), LocalFl
     if bytes.len() > 4 * 1024 * 1024 {
         return Err(LocalFleetError::Capacity);
     }
-    durable_io::write_bytes(&directory.join("preparation.json"), &bytes)?;
+    durable::write_bytes(&directory.join("preparation.json"), &bytes)?;
     Ok(())
 }
 
@@ -246,7 +248,7 @@ pub fn root_installations(
                 .find(|canister| canister.name == name)
                 .ok_or(LocalFleetError::Identity)?;
             let path = configured.wasm.as_ref().ok_or(LocalFleetError::Identity)?;
-            let wasm = durable_io::read_regular_bytes(
+            let wasm = durable::read_regular_bytes(
                 &preparation.workspace_root.join(path),
                 32 * 1024 * 1024,
             )?;
@@ -381,7 +383,7 @@ pub fn finish(
         return Err(LocalFleetError::Identity);
     }
     let (bytes, _) = desired_document(desired)?;
-    durable_io::write_bytes(&directory.join("desired.toml"), &bytes)?;
+    durable::write_bytes(&directory.join("desired.toml"), &bytes)?;
     let mut next_preparation = preparation.clone();
     next_preparation.complete = true;
     save(directory, &next_preparation)?;
@@ -446,7 +448,7 @@ pub fn enroll(
     let key =
         canic_core::cdk::utils::hash::decode_hex(&record.root_key_der_hex).map_err(failure)?;
     let path = directory.join("root-key.der");
-    durable_io::write_bytes(&path, &key)?;
+    durable::write_bytes(&path, &key)?;
     crate::network::enroll_network(crate::network::NetworkEnrollmentOptions {
         workspace_root: workspace,
         environment,

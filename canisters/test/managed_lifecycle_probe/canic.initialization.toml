@@ -1,0 +1,29 @@
+[app]
+name = "managed_lifecycle_probe"
+init_mode = "enabled"
+
+[roles.root]
+kind = "root"
+
+[roles.test]
+kind = "canister"
+package = "../managed_lifecycle_probe"
+fleet_admission = true
+
+[auth.delegated_tokens]
+enabled = false
+
+[component_specs.test]
+application_init_required = true
+component_role = "test"
+maximum_instances = 1
+
+[component_groups.test.components.test]
+component_spec = "test"
+
+[component_group_deployments.test]
+component_group = "test"
+initial_placements = 1
+maximum_placements = 1
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1

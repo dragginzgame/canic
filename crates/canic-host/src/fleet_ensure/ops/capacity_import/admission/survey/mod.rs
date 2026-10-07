@@ -5,25 +5,24 @@
 #[cfg(test)]
 mod tests;
 
-use crate::{
-    durable_io::{read_optional_regular_bytes_bounded, write_bytes},
-    fleet_ensure::{
-        model::capacity_import::survey::{
-            CapacityImportSampleRecord, CapacityImportSurveyCanisterRecord,
-            CapacityImportSurveyRecord,
-        },
-        ops::{
-            EnsurePaths,
-            capacity_import::journal::{CapacityImportJournalError, CapacityImportJournalStore},
-        },
+use crate::fleet_ensure::{
+    model::capacity_import::survey::{
+        CapacityImportSampleRecord, CapacityImportSurveyCanisterRecord, CapacityImportSurveyRecord,
+    },
+    ops::{
+        EnsurePaths,
+        capacity_import::journal::{CapacityImportJournalError, CapacityImportJournalStore},
     },
 };
+
 use candid::Principal;
 use canic_core::{cdk::utils::hash::hex_bytes, ids::MAX_FLEET_CAPACITY_IMPORT_SOURCES};
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::PathBuf,
 };
+
+use ic_host_fs::durable::{read_optional_regular_bytes_bounded, write_bytes};
 
 pub(in crate::fleet_ensure) const MAXIMUM_BYTES: usize = 2 * 1024 * 1024;
 /// Initial planning may issue at most this many status requests per exact physical ID.

@@ -349,11 +349,11 @@ fn stage_bundle_member(source: &Path, stage: &Path) -> Result<(), InstallError> 
 pub fn sha256_file(path: &Path) -> Result<String, InstallError> {
     // Distribution owners retain their exact digest pins. Hashing streams in
     // constant space and accepts every representable file size.
-    ic_host_tools::artifact::hash_file(path, u64::MAX)
+    ic_host_fs::read::hash_file(path, u64::MAX)
         .map(|identity| identity.sha256.to_string())
         .map_err(|source| {
             let source = match source {
-                ic_host_tools::artifact::ArtifactError::Io(source) => source,
+                ic_host_artifacts::artifact::ArtifactError::Io(source) => source,
                 source => io::Error::other(source),
             };
             io_error("hash admitted tool file", path, source)

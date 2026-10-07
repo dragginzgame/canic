@@ -8,9 +8,6 @@
 mod tests;
 
 use crate::canister_build::CanisterBuildProfile;
-use crate::durable_io::{
-    RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes, write_bytes,
-};
 use crate::entropy::{EntropyError, random_bytes_32};
 use canic_core::ids::{BuildNetwork, ReleaseBuildId, ReleaseBuildNonce};
 use ciborium::Value;
@@ -18,6 +15,10 @@ use sha2_host::{Digest, Sha256};
 use std::{
     io,
     path::{Path, PathBuf},
+};
+
+use ic_host_fs::durable::{
+    RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes, write_bytes,
 };
 use thiserror::Error as ThisError;
 

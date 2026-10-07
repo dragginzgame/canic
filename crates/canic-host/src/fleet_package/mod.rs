@@ -11,8 +11,8 @@ mod tests;
 use crate::{
     canister_build::CanisterBuildProfile,
     cargo_metadata::{CargoMetadata, CargoMetadataPackage},
-    durable_io::write_bytes,
 };
+
 use std::{
     collections::BTreeMap,
     fmt::Write as _,
@@ -20,6 +20,8 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
+
+use ic_host_fs::durable::write_bytes;
 
 const CANIC_FAMILY_CRATES: &[&str] = &["canic-control-plane", "canic-core", "canic-macros"];
 const RELEASE_PROFILE: &[(&str, &str)] = &[

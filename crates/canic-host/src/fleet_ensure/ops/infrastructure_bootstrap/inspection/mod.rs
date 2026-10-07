@@ -2,19 +2,18 @@
 //!
 //! Callers hold the existing Fleet operation lock; interrupted calls remain spent.
 
-use crate::{
-    durable_io::{read_optional_regular_bytes_bounded, write_bytes},
-    fleet_ensure::{
-        model::{
-            EnsureAction, FleetEnsurePlan,
-            infrastructure_bootstrap::{
-                BOOTSTRAP_EFFECT_INSPECTION_ROUNDS, BOOTSTRAP_PHASE_INSPECTION_ROUNDS,
-                InfrastructureBootstrapInspectionRecord,
-            },
+use crate::fleet_ensure::{
+    model::{
+        EnsureAction, FleetEnsurePlan,
+        infrastructure_bootstrap::{
+            BOOTSTRAP_EFFECT_INSPECTION_ROUNDS, BOOTSTRAP_PHASE_INSPECTION_ROUNDS,
+            InfrastructureBootstrapInspectionRecord,
         },
-        ops::{EnsurePaths, infrastructure_bootstrap::InfrastructureBootstrapError},
     },
+    ops::{EnsurePaths, infrastructure_bootstrap::InfrastructureBootstrapError},
 };
+use ic_host_fs::durable::{read_optional_regular_bytes_bounded, write_bytes};
+
 use canic_core::cdk::utils::hash::hex_bytes;
 
 pub(in crate::fleet_ensure) const MAXIMUM_BYTES: usize = 256 * 1024;

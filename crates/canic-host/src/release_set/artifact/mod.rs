@@ -8,11 +8,12 @@ mod representation;
 
 pub(in crate::release_set) use representation::{RepresentationError, qualify_representation};
 
-use crate::durable_io::{RegularFileReadError, read_optional_regular_bytes};
 use std::{
     fs, io,
     path::{Component, Path},
 };
+
+use ic_host_fs::durable::{RegularFileReadError, read_optional_regular_bytes};
 
 use canic_core::ids::ReleaseBuildId;
 

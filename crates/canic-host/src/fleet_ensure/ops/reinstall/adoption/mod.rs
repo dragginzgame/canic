@@ -7,19 +7,19 @@
 #[cfg(test)]
 pub(in crate::fleet_ensure) mod tests;
 
-use crate::{
-    durable_io::{create_new_bytes_with_parents, write_bytes},
-    fleet_ensure::{
-        model::{ActivationResetAdoptionRecord, FleetEnsureJournalRecord, FleetEnsurePlan},
-        ops::{
-            EnsurePaths, EnsureStateError, is_sha256, read_current, read_document_bytes, read_plan,
-            write_current, write_plan,
-        },
-        policy::expected_plan_sha256,
+use crate::fleet_ensure::{
+    model::{ActivationResetAdoptionRecord, FleetEnsureJournalRecord, FleetEnsurePlan},
+    ops::{
+        EnsurePaths, EnsureStateError, is_sha256, read_current, read_document_bytes, read_plan,
+        write_current, write_plan,
     },
+    policy::expected_plan_sha256,
 };
+
 use canic_core::cdk::utils::hash::sha256_hex;
 use std::{io, path::Path};
+
+use ic_host_fs::durable::{create_new_bytes_with_parents, write_bytes};
 
 /// Retain a new review without replacing the active source plan, journal or state.
 pub(in crate::fleet_ensure) fn stage(

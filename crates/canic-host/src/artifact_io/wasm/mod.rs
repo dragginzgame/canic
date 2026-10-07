@@ -8,7 +8,7 @@ use crate::canister_build::WasmArtifactMetrics;
 use std::{collections::BTreeMap, fmt, fs, path::Path};
 
 use canic_core::ids::BuildNetwork;
-use ic_host_tools::wasm::{ExportKind, InspectionError, InspectionLimits};
+use ic_host_artifacts::wasm::{ExportKind, InspectionError, InspectionLimits};
 
 pub(super) const SUPPORTED_CODE_SECTION_LIMIT_BYTES: usize = 10 * 1024 * 1024;
 pub(super) const SUPPORTED_DEFINED_FUNCTION_LIMIT: u32 = 50_000;
@@ -163,7 +163,7 @@ fn wasm_code_section_size(wasm: &[u8]) -> Result<usize, InspectionError> {
 fn inspect_wasm(wasm: &[u8]) -> Result<WasmStructure, InspectionError> {
     // Every section/entry consumes source bytes. These bounds preserve the
     // existing artifact-size admission while bounding shared parser storage.
-    let facts = ic_host_tools::wasm::inspect(
+    let facts = ic_host_artifacts::wasm::inspect(
         wasm,
         InspectionLimits {
             module_bytes: wasm.len(),

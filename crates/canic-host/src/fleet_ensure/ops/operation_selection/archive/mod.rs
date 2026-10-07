@@ -6,14 +6,12 @@
 #[cfg(test)]
 mod tests;
 
-use crate::{
-    durable_io::{create_new_bytes_with_parents, read_optional_regular_bytes_bounded},
-    fleet_ensure::{
-        model::completed_operation::OperationArchiveRecord,
-        ops::{EnsurePaths, EnsureStateError, is_sha256, operation_selection},
-        policy::validate_path_labels,
-    },
+use crate::fleet_ensure::{
+    model::completed_operation::OperationArchiveRecord,
+    ops::{EnsurePaths, EnsureStateError, is_sha256, operation_selection},
+    policy::validate_path_labels,
 };
+
 use canic_core::cdk::utils::hash::sha256_hex;
 use serde_json::Value;
 use std::{
@@ -21,6 +19,8 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
+
+use ic_host_fs::durable::{create_new_bytes_with_parents, read_optional_regular_bytes_bounded};
 
 const MAX_FILE_BYTES: usize = 32 * 1024 * 1024;
 const MAX_ARCHIVE_BYTES: usize = 256 * 1024 * 1024;

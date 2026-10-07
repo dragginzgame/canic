@@ -48,7 +48,7 @@ use std::{cell::RefCell, ops::Bound};
 #[cfg(feature = "root-control-plane")]
 const ROOT_COMPONENT_REGISTRY_STATE_MAX_BYTES: u32 = 65_536;
 #[cfg(feature = "root-control-plane")]
-const ROOT_COMPONENT_ALLOCATION_RECORD_MAX_BYTES: u32 = 4_096;
+const ROOT_COMPONENT_ALLOCATION_RECORD_MAX_BYTES: u32 = 24_576;
 #[cfg(feature = "root-control-plane")]
 const COMPONENT_REGISTRY_ENTRY_KEY_MAX_BYTES: u32 = 512;
 #[cfg(feature = "root-control-plane")]
@@ -1091,6 +1091,9 @@ impl RootFleetSubnetDrainingInventoryAuthority {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentAllocationRecord {
+    #[serde(deserialize_with = "Option::deserialize")]
+    pub application_initialization:
+        Option<canic_core::dto::component_registry::ComponentApplicationInitialization>,
     pub operation_id: [u8; 32],
     pub allocation_sequence: u64,
     pub component: ComponentInstanceId,
@@ -1198,6 +1201,8 @@ pub struct RootComponentCreationEffectRecord {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentInstallEffectRecord {
+    #[serde(deserialize_with = "Option::deserialize")]
+    pub application_init_hash: Option<[u8; 32]>,
     #[serde(deserialize_with = "Option::deserialize")]
     pub fixture_grant_revision: Option<u64>,
     pub raw_module_hash: [u8; 32],

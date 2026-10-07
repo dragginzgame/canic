@@ -424,6 +424,7 @@ pub struct ComponentSpec {
     pub component_spec: ComponentSpecId,
     pub spec_hash: [u8; 32],
     pub component_role: CanisterRole,
+    pub application_init_required: bool,
     pub maximum_fleet_instances: u32,
     pub limits: ComponentLimits,
     pub children: Vec<ComponentChildSpec>,
@@ -977,6 +978,7 @@ fn compile_component_spec(
         component_spec: component_spec.clone(),
         spec_hash,
         component_role: source.component_role.clone(),
+        application_init_required: source.application_init_required,
         maximum_fleet_instances: source.maximum_instances,
         limits: ComponentLimits {
             maximum_descendants: source.limits.maximum_descendants,
@@ -1031,6 +1033,7 @@ fn component_spec_hash(
     encoder.string(source.component_role.as_str());
     encoder.string(component_package);
     encoder.u32(source.maximum_instances);
+    encoder.u8(u8::from(source.application_init_required));
     encode_component_limits(&mut encoder, source);
     encode_component_runtime_policy(&mut encoder, source);
     encode_scaling(&mut encoder, source.scaling.as_ref());
@@ -1064,6 +1067,7 @@ fn encode_compiled_component_spec(encoder: &mut CanonicalEncoder, spec: &Compone
     encoder.string(spec.component_spec.as_str());
     encoder.bytes(&spec.spec_hash);
     encoder.string(spec.component_role.as_str());
+    encoder.u8(u8::from(spec.application_init_required));
     encoder.u32(spec.maximum_fleet_instances);
     encoder.u32(spec.limits.maximum_descendants);
     encoder.u64(spec.limits.maximum_registry_bytes);

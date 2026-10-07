@@ -12,8 +12,12 @@ a publishable package, must provide these Make targets:
 The names, version arithmetic, phase order, failure behavior and external effects
 are identical across repositories. Each repository supplies its canonical version
 source, metadata file set, validation gate, branch and remote. A repository
-without package metadata uses its latest finalized changelog version as the
-version source. Pre-release versions require a separately selected release plan;
+without package metadata may use a dedicated version file; otherwise it uses
+its latest finalized changelog version. Shared Tooling owns its current local
+version in root `VERSION`, displayed by `make version`. Its undated changelog
+heading names the next proposed release. Preparation updates both files and
+stages them together; neither a version file nor a changelog heading proves
+that a tag was pushed. Pre-release versions require a separately selected release plan;
 these commands must reject ambiguous or unsupported version inputs.
 
 ## Required workflow
@@ -86,9 +90,14 @@ for their actual validation commands, not just simulated fixture evidence.
 The common runner uses exactly this push shape with its saved selections:
 
 ```bash
-git push --no-follow-tags --atomic "$remote" \
+git push --no-follow-tags --atomic -- "$destination" \
   "$push_source:refs/heads/$branch" "refs/tags/v$candidate:refs/tags/v$candidate"
 ```
+
+`destination` is the sole push URL captured from the selected remote at entry.
+The runner rechecks that selection after validation and before push, rejecting
+changed or additional URLs. Observation and dispatch both use the captured URL,
+so a later remote-name change cannot redirect the push.
 
 `--no-follow-tags` disables implicit annotated-tag publication, including a
 configured `push.followTags`. Both refspecs are explicit: push the selected branch
@@ -246,6 +255,40 @@ plan is retained evidence and does not block the next release. A later failure
 from a separately chained command does not undo that successful branch/tag push.
 Package publication requires a consumer-owned publication command and an eligible
 package; do not append `make publish` automatically to the standard release flow.
+
+## Shared changelog finalization
+
+Release adapters reuse `scripts/ci/finalize-release-changelog.awk` for candidate
+selection and heading rewriting instead of implementing another changelog parser:
+
+```bash
+awk -v version="$RELEASE_VERSION" -v previous="$RELEASE_PREVIOUS" \
+  -v date="$RELEASE_DATE" \
+  -f scripts/ci/finalize-release-changelog.awk CHANGELOG.md > "$candidate"
+```
+
+The adapter validates these identities from the saved release intent and owns
+the temporary candidate path. Check the command's status before using its
+output; never redirect directly over the input. Preflight can discard a
+successful candidate without modifying the changelog. Preparation installs it
+inside the consumer's existing metadata transaction, preserving backups,
+rollback, receipts and exact prepared-payload checks.
+
+Pass the saved previous version even after package metadata has been bumped.
+Undated numbered sections at or below that version remain history. One pending
+numbered section must agree with the target; competing candidates or a target
+already dated differently are conflicts. The helper also understands the older
+`Draft` input, but maintained notes follow the numbered-draft rules. With no
+draft it creates the selected heading; it does not invent release-note content.
+
+The optional `-v allow_finalized=1` admits exactly one already-finalized target
+at the top with the same date and no pending candidate. Select it only where
+the adapter's recovery contract admits that exact state; it does not establish
+source, payload or publication identity. The helper is not a general historical
+ledger linter or an empty-note gate. Before deleting local selectors, review
+their extra checks separately: preserve independent corruption/identity checks,
+and reconcile prose requirements with the [changelog rules](../rules/changelogs.md).
+Do not silently change a consumer's refusal or recovery behavior during adoption.
 
 ## Adoption and verification
 

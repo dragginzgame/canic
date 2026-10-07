@@ -813,7 +813,7 @@ fn memory_runtime_identity_rejects_distinct_versions_and_sources() {
     for version in ["0.13.3", "0.14.3"] {
         graph.packages.get_mut("memory@2").unwrap().version = version.to_string();
         let Err(RoleContractFinding::MultipleMemoryRuntimes { packages }) =
-            validate_memory_runtime_identity(&graph)
+            validate_runtime_identities(&graph)
         else {
             panic!("distinct runtime package identities must reject");
         };
@@ -827,7 +827,7 @@ fn memory_runtime_identity_accepts_shared_aliases_and_ignores_unreachable_packag
     let mut graph = composed_memory_graph();
     graph.edges.get_mut("domain@1").unwrap()[0].package_id = "memory@1".to_string();
     // A second package remains in the catalog, but is not in this role's runtime.
-    validate_memory_runtime_identity(&graph).unwrap();
+    validate_runtime_identities(&graph).unwrap();
     graph
         .edges
         .get_mut("domain@1")
@@ -836,20 +836,20 @@ fn memory_runtime_identity_accepts_shared_aliases_and_ignores_unreachable_packag
             alias: "cycle".to_string(),
             package_id: "role@1".to_string(),
         });
-    validate_memory_runtime_identity(&graph).unwrap();
+    validate_runtime_identities(&graph).unwrap();
 }
 
 #[test]
 fn memory_runtime_identity_excludes_proc_macro_subtrees_but_keeps_runtime_paths() {
     let mut graph = composed_memory_graph();
     graph.packages.get_mut("domain@1").unwrap().is_proc_macro = true;
-    validate_memory_runtime_identity(&graph).unwrap();
+    validate_runtime_identities(&graph).unwrap();
     graph.edges.get_mut("role@1").unwrap().push(CargoGraphEdge {
         alias: "runtime_memory".to_string(),
         package_id: "memory@2".to_string(),
     });
     assert!(matches!(
-        validate_memory_runtime_identity(&graph),
+        validate_runtime_identities(&graph),
         Err(RoleContractFinding::MultipleMemoryRuntimes { .. })
     ));
 }
@@ -1342,4 +1342,18 @@ fn rewrite_fixture_manifests(
         fs::write(path, source)?;
     }
     Ok(())
+}
+
+#[test]
+fn timer_runtime_identity_rejects_versions_and_accepts_one_shared_runtime() {
+    let mut graph = composed_memory_graph();
+    for key in ["memory@1", "memory@2"] {
+        graph.packages.get_mut(key).unwrap().name = "ic-timers".into();
+    }
+    assert!(matches!(
+        validate_runtime_identities(&graph),
+        Err(RoleContractFinding::MultipleTimerRuntimes { .. })
+    ));
+    graph.edges.get_mut("domain@1").unwrap()[0].package_id = "memory@1".into();
+    validate_runtime_identities(&graph).unwrap();
 }

@@ -1372,14 +1372,15 @@ fn validate_runtime_graph(
         return Err(unsupported_finding(render_protected_path(graph, path)));
     }
 
-    validate_memory_runtime_identity(graph)
+    validate_runtime_identities(graph)
 }
 
 // Only normal Wasm runtime edges count; proc-macro subtrees execute on the host.
-fn validate_memory_runtime_identity(graph: &CargoGraphEvidence) -> Result<(), RoleContractFinding> {
+fn validate_runtime_identities(graph: &CargoGraphEvidence) -> Result<(), RoleContractFinding> {
     let mut pending = vec![graph.selected_package_id.as_str()];
     let mut visited = BTreeSet::new();
     let mut memories = BTreeSet::new();
+    let mut timers = BTreeSet::new();
     while let Some(id) = pending.pop() {
         if !visited.insert(id) {
             continue;
@@ -1393,6 +1394,9 @@ fn validate_memory_runtime_identity(graph: &CargoGraphEvidence) -> Result<(), Ro
         }
         if package.name == "ic-memory" {
             memories.insert(id);
+        }
+        if package.name == "ic-timers" {
+            timers.insert(id);
         }
         pending.extend(
             graph
@@ -1410,6 +1414,14 @@ fn validate_memory_runtime_identity(graph: &CargoGraphEvidence) -> Result<(), Ro
             .collect::<Vec<_>>();
         packages.sort();
         return Err(RoleContractFinding::MultipleMemoryRuntimes { packages });
+    }
+    if timers.len() > 1 {
+        let mut packages = timers
+            .into_iter()
+            .map(|id| normalized_package_description(graph, &graph.packages[id]))
+            .collect::<Vec<_>>();
+        packages.sort();
+        return Err(RoleContractFinding::MultipleTimerRuntimes { packages });
     }
     Ok(())
 }

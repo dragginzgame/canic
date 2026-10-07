@@ -5,10 +5,11 @@
 #[cfg(test)]
 mod tests;
 
-use crate::durable_io::{read_optional_regular_bytes_bounded, read_regular_bytes, write_bytes};
 use canic_core::cdk::utils::hash::sha256_hex;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+
+use ic_host_fs::durable::{read_optional_regular_bytes_bounded, read_regular_bytes, write_bytes};
 
 /// Derivation identity committed after the complete parent lock is durably installed.
 #[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
