@@ -127,11 +127,12 @@ fn successful_ic_wasm_shrink_replaces_artifact() {
     fs::create_dir_all(&root).expect("create temp dir");
     let wasm_path = root.join("test.wasm");
     let command_path = root.join("ic-wasm");
-    fs::write(&wasm_path, b"original wasm").expect("write wasm placeholder");
+    let original = minimal_wasm_with_contract();
+    fs::write(&wasm_path, &original).expect("write wasm fixture");
     write_executable(
         &command_path,
         &crate::test_support::tool_script(
-            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf '@IC_WASM_IDENTITY@\\n'; exit 0; fi\nprintf 'shrunk wasm' > \"$3\"\n",
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf '@IC_WASM_IDENTITY@\\n'; exit 0; fi\ncat \"$1\" > \"$3\"\n",
         ),
     );
     let tool = crate::ic_wasm::resolve_test_ic_wasm(&command_path.display().to_string())
@@ -140,16 +141,14 @@ fn successful_ic_wasm_shrink_replaces_artifact() {
     let transform =
         shrink_wasm_artifact(&tool, &wasm_path).expect("successful shrink should replace artifact");
 
-    assert_eq!(
-        fs::read(&wasm_path).expect("read shrunk wasm"),
-        b"shrunk wasm"
-    );
+    assert_eq!(fs::read(&wasm_path).expect("read shrunk wasm"), original);
     assert_eq!(
         transform.tool_version.as_deref(),
         Some(crate::ic_wasm::IC_WASM_VERSION_IDENTITY)
     );
     assert_eq!(transform.tool_sha256, None);
     assert_eq!(transform.outcome, ArtifactTransformOutcome::Applied);
+    assert_eq!(fs::read_dir(&root).unwrap().count(), 2);
     fs::remove_dir_all(root).expect("remove temp root");
 }
 
@@ -160,7 +159,6 @@ fn failed_ic_wasm_shrink_preserves_original_and_removes_partial_output() {
     let root = unique_temp_dir("canic-failed-ic-wasm-shrink");
     fs::create_dir_all(&root).expect("create temp dir");
     let wasm_path = root.join("test.wasm");
-    let shrunk_path = wasm_path.with_extension("wasm.shrunk");
     let command_path = root.join("ic-wasm");
     fs::write(&wasm_path, b"original wasm").expect("write wasm placeholder");
     write_executable(
@@ -178,8 +176,59 @@ fn failed_ic_wasm_shrink_preserves_original_and_removes_partial_output() {
         fs::read(&wasm_path).expect("read original wasm"),
         b"original wasm"
     );
-    assert!(!shrunk_path.exists());
+    assert_eq!(fs::read_dir(&root).unwrap().count(), 2);
     fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[cfg(unix)]
+#[test]
+fn successful_shrink_without_valid_bounded_output_preserves_original() {
+    for (label, body) in [
+        ("empty", "exit 0"),
+        ("malformed", "printf 'invalid wasm' > \"$3\""),
+        (
+            "oversized",
+            "dd if=/dev/zero of=\"$3\" bs=1 count=0 seek=134217729 2>/dev/null",
+        ),
+    ] {
+        let root = unique_temp_dir(&format!("canic-shrink-output-{label}"));
+        fs::create_dir_all(&root).unwrap();
+        let wasm_path = root.join("test.wasm");
+        let command_path = root.join("ic-wasm");
+        let original = minimal_wasm_with_contract();
+        fs::write(&wasm_path, &original).unwrap();
+        write_executable(
+            &command_path,
+            &crate::test_support::tool_script(&format!(
+                "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf '@IC_WASM_IDENTITY@\\n'; exit 0; fi\n{body}\n",
+            )),
+        );
+        let tool =
+            crate::ic_wasm::resolve_test_ic_wasm(&command_path.display().to_string()).unwrap();
+        let error = shrink_wasm_artifact(&tool, &wasm_path).unwrap_err();
+        let error = error
+            .downcast::<ic_host_fs::durable::NamedWriteError<TransformProducerError>>()
+            .unwrap();
+        let ic_host_fs::durable::NamedWriteError::Producer {
+            source,
+            cleanup_error: None,
+        } = *error
+        else {
+            panic!("invalid output must fail before publication and clean its owned stage");
+        };
+        if label == "oversized" {
+            assert!(matches!(
+                source.0.downcast_ref::<ic_host_artifacts::artifact::ArtifactError>(),
+                Some(ic_host_artifacts::artifact::ArtifactError::LimitExceeded { limit })
+                    if *limit == u64::try_from(crate::MAX_ARTIFACT_READ_BYTES).unwrap()
+            ));
+        } else {
+            assert!(source.0.is::<ic_host_artifacts::wasm::InspectionError>());
+        }
+        assert_eq!(fs::read(&wasm_path).unwrap(), original);
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 2);
+        fs::remove_dir_all(root).unwrap();
+    }
 }
 
 #[test]
@@ -420,16 +469,14 @@ fn release_wasm_optimization_rejects_export_or_candid_drift() {
         (
             "exports",
             minimal_wasm_with_contract_parts("other", b"service : {}"),
-            "export inventory",
         ),
         (
             "candid",
             minimal_wasm_with_contract_parts("go", b"service : { changed : () -> (); }"),
-            "public Candid",
         ),
     ];
 
-    for (label, replacement, expected_error) in cases {
+    for (label, replacement) in cases {
         let root = unique_temp_dir(&format!("canic-release-wasm-opt-{label}"));
         fs::create_dir_all(&root).expect("create temp dir");
         let wasm_path = root.join("test.wasm");
@@ -453,9 +500,15 @@ fn release_wasm_optimization_rejects_export_or_candid_drift() {
         )
         .expect_err("contract drift must reject");
 
-        assert!(error.to_string().contains(expected_error));
+        assert!(matches!(
+            error.downcast_ref::<ic_host_fs::durable::NamedWriteError<TransformProducerError>>(),
+            Some(ic_host_fs::durable::NamedWriteError::Producer {
+                cleanup_error: None,
+                ..
+            })
+        ));
         assert_eq!(fs::read(&wasm_path).expect("read original Wasm"), original);
-        assert!(!wasm_path.with_extension("wasm.optimized").exists());
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 3);
         fs::remove_dir_all(root).expect("remove temp root");
     }
 }
@@ -472,7 +525,7 @@ fn release_wasm_optimization_rejects_required_feature_drift() {
     write_executable(
         &command_path,
         &crate::test_support::tool_script(
-            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf '@BINARYEN_IDENTITY@\\n'; exit 0; fi\ncase \" $* \" in *\" --print-features \"*) case \"$1\" in *.optimized) printf '%s\\n' --enable-bulk-memory;; *) printf '%s\\n' --enable-sign-ext --enable-bulk-memory --enable-nontrapping-float-to-int;; esac; exit 0;; esac\ncp \"$1\" \"$3\"\n",
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf '@BINARYEN_IDENTITY@\\n'; exit 0; fi\ncase \" $* \" in *\" --print-features \"*) case \"$1\" in */test.wasm) printf '%s\\n' --enable-sign-ext --enable-bulk-memory --enable-nontrapping-float-to-int;; *) printf '%s\\n' --enable-bulk-memory;; esac; exit 0;; esac\ncp \"$1\" \"$3\"\n",
         ),
     );
 
@@ -483,9 +536,15 @@ fn release_wasm_optimization_rejects_required_feature_drift() {
     )
     .expect_err("required feature drift must reject");
 
-    assert!(error.to_string().contains("changed required Wasm features"));
+    assert!(matches!(
+        error.downcast_ref::<ic_host_fs::durable::NamedWriteError<TransformProducerError>>(),
+        Some(ic_host_fs::durable::NamedWriteError::Producer {
+            cleanup_error: None,
+            ..
+        })
+    ));
     assert_eq!(fs::read(&wasm_path).expect("read original Wasm"), original);
-    assert!(!wasm_path.with_extension("wasm.optimized").exists());
+    assert_eq!(fs::read_dir(&root).unwrap().count(), 2);
     fs::remove_dir_all(root).expect("remove temp root");
 }
 

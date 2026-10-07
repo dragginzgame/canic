@@ -141,6 +141,33 @@ fn stale_and_future_observations_never_render_ready() {
 }
 
 #[test]
+fn rendering_accepts_exact_budgets_and_preserves_serialized_bytes() {
+    let value = snapshot();
+    let expected = serde_json::to_vec_pretty(&value).unwrap();
+    assert_eq!(json_bytes(&value, expected.len()).unwrap(), expected);
+    for maximum in [0, expected.len() - 1] {
+        assert!(matches!(
+            json_bytes(&value, maximum),
+            Err(ObservatoryError::Bound("rendered bytes"))
+        ));
+    }
+    let profile = profile();
+    let expected = http_response(&value, &profile, "/", 2000, 16384)
+        .unwrap()
+        .body;
+    assert_eq!(
+        http_response(&value, &profile, "/", 2000, expected.len())
+            .unwrap()
+            .body,
+        expected
+    );
+    assert!(matches!(
+        http_response(&value, &profile, "/", 2000, expected.len() - 1),
+        Err(ObservatoryError::Bound("rendered bytes"))
+    ));
+}
+
+#[test]
 fn rendering_and_collection_budgets_fail_explicitly() {
     assert!(matches!(
         json_bytes(&snapshot(), 16),

@@ -1,5 +1,37 @@
 # Current handoff — 2026-10-07
 
+Host 0.4.1 cleanup is implemented under
+[#458](https://github.com/dragginzgame/canic/issues/458). Shrink and optimization
+delegate staging, cleanup and durable replacement to `write_named_with`, with
+bounded Wasm validation before success and original producer/publication errors
+retained. Canic still owns optimizer contract checks and artifact-set
+qualification. Observatory rendering uses the shared bounded writer; its private
+writer is removed. The fs dependency minimum is 0.4.1, and Cargo.lock is unchanged.
+Both open changelog views include the cleanup; package versions remain unchanged.
+
+All 26 selected artifact tests and 36 Observatory tests pass, including missing,
+malformed and oversized producer output, original-artifact preservation, contract
+drift, exact rendering budgets and byte identity. Host all-target/all-feature
+warning-denied Clippy, scoped rustfmt, dependency declarations/inheritance and
+diff hygiene pass. A real installed ic-wasm 0.11.1/Binaryen 132 probe confirms
+precreated-inode writes and Wasm output at spaced paths. This is focused Linux
+qualification; process fixtures are substitutes and no native macOS, managed
+journey or broad gate ran. Logs remain under
+`target/review-validation/host-named-output-20261007/`.
+
+The preceding fixture repairs were committed by the maintainer in
+`ab7227f0acb216fdabdceb76fd134c7a369d2def` during this cleanup. Current cleanup
+changes remain uncommitted. Manifest SHA-256 is
+`4bb3ebb4f2dd3f78a7bd9d64996526c15a7b4f6ed898bb4ba4eef124390caa47`;
+lock SHA-256 is
+`be7245a7fea9cb6a869252062bac9f0673c8d0bb1cdc64f3848f37c73b952bf9`.
+Read-only sibling reuse feedback and qualification limits are recorded in
+[Host #8](https://github.com/dragginzgame/ic-host-tooling/issues/8#issuecomment-6037635473).
+The complete release batch remains unready for push/publication under the existing
+managed-stack and minor-boundary findings below; no release effects ran.
+
+## Earlier release-fixture qualification — 2026-10-07
+
 The maintainer's release-integrity failure is repaired under
 [#450](https://github.com/dragginzgame/canic/issues/450). Development and standard
 release-entry fixtures now include the actual Makefile and its shared records;

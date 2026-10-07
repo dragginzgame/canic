@@ -81,7 +81,7 @@ ic-canister-sig-creation = "1.3.1"
 ic-cdk = "0.20.3"
 ic-certification = "3.0"
 ic-host-artifacts = { version = "0.4", default-features = false }
-ic-host-fs = { version = "0.4", default-features = false }
+ic-host-fs = { version = "0.4.1", default-features = false }
 ic-host-process = { version = "0.4", default-features = false }
 ic-host-tools = "0.4"
 ic-management-canister-types = "0.11"

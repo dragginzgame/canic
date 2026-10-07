@@ -1,10 +1,13 @@
 //! Curated public projection, escaped HTML and framework-neutral HTTP responses.
 
 use crate::observatory::{ObservatoryError, model::ObservatoryProfile, policy, view::*};
+
 use std::{
     collections::BTreeMap,
     io::{self, Write},
 };
+
+use ic_host_artifacts::artifact::BoundedWriter;
 
 /// Strip private Fleet authority before passing data to a downstream renderer.
 pub fn public_view(
@@ -98,17 +101,16 @@ pub fn json_bytes(
     value: &impl serde::Serialize,
     maximum_bytes: usize,
 ) -> Result<Vec<u8>, ObservatoryError> {
-    let mut writer = LimitedWriter {
-        bytes: Vec::new(),
-        maximum: maximum_bytes,
-    };
+    let maximum =
+        u64::try_from(maximum_bytes).map_err(|_| ObservatoryError::Bound("rendered bytes"))?;
+    let mut writer = BoundedWriter::new(Vec::new(), maximum);
     if let Err(error) = serde_json::to_writer_pretty(&mut writer, value) {
         if error.is_io() {
             return Err(ObservatoryError::Bound("rendered bytes"));
         }
         return Err(error.into());
     }
-    Ok(writer.bytes)
+    Ok(writer.into_inner())
 }
 
 /// Serve only curated public data. The caller owns authentication, scheduling and the server.
@@ -147,10 +149,8 @@ pub fn http_response(
 
 fn html(public: &PublicObservatoryView, maximum: usize) -> Result<Vec<u8>, ObservatoryError> {
     let json = json_bytes(public, maximum)?;
-    let mut writer = LimitedWriter {
-        bytes: Vec::new(),
-        maximum,
-    };
+    let maximum = u64::try_from(maximum).map_err(|_| ObservatoryError::Bound("rendered bytes"))?;
+    let mut writer = BoundedWriter::new(Vec::new(), maximum);
     writer.write_all(b"<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Fleet observatory</title><body><h1>").map_err(render_bound)?;
     escaped(&mut writer, public.title.as_bytes())?;
     writer.write_all(b"</h1><p>Each observation records its source and time. Unavailable values are unknown.</p>").map_err(render_bound)?;
@@ -187,11 +187,11 @@ fn html(public: &PublicObservatoryView, maximum: usize) -> Result<Vec<u8>, Obser
     writer
         .write_all(b"</pre></details></body></html>")
         .map_err(render_bound)?;
-    Ok(writer.bytes)
+    Ok(writer.into_inner())
 }
 
 fn application_table(
-    writer: &mut LimitedWriter,
+    writer: &mut BoundedWriter<Vec<u8>>,
     roles: &[PublicObservatoryRoleView],
 ) -> Result<(), ObservatoryError> {
     writer.write_all(b"<table><caption>Application metrics by role instance</caption><tr><th>Instance</th><th>Label</th><th>Metric</th><th>Value</th><th>Unit</th><th>Source state</th></tr>").map_err(render_bound)?;
@@ -231,7 +231,7 @@ fn application_table(
     writer.write_all(b"</table>").map_err(render_bound)
 }
 
-fn table_row(writer: &mut LimitedWriter, values: &[&str]) -> Result<(), ObservatoryError> {
+fn table_row(writer: &mut BoundedWriter<Vec<u8>>, values: &[&str]) -> Result<(), ObservatoryError> {
     writer.write_all(b"<tr>").map_err(render_bound)?;
     for value in values {
         writer.write_all(b"<td>").map_err(render_bound)?;
@@ -241,7 +241,7 @@ fn table_row(writer: &mut LimitedWriter, values: &[&str]) -> Result<(), Observat
     writer.write_all(b"</tr>").map_err(render_bound)
 }
 
-fn escaped(writer: &mut LimitedWriter, bytes: &[u8]) -> Result<(), ObservatoryError> {
+fn escaped(writer: &mut BoundedWriter<Vec<u8>>, bytes: &[u8]) -> Result<(), ObservatoryError> {
     for byte in bytes {
         let replacement = match byte {
             b'&' => b"&amp;".as_slice(),
@@ -258,21 +258,4 @@ fn escaped(writer: &mut LimitedWriter, bytes: &[u8]) -> Result<(), ObservatoryEr
 
 fn render_bound(_: io::Error) -> ObservatoryError {
     ObservatoryError::Bound("rendered bytes")
-}
-
-struct LimitedWriter {
-    bytes: Vec<u8>,
-    maximum: usize,
-}
-impl Write for LimitedWriter {
-    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-        if bytes.len() > self.maximum.saturating_sub(self.bytes.len()) {
-            return Err(io::Error::other("render budget exceeded"));
-        }
-        self.bytes.extend_from_slice(bytes);
-        Ok(bytes.len())
-    }
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
 }

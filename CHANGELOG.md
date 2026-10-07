@@ -44,6 +44,8 @@ Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   Delegate Backup stream hashing/copy, bounded evidence reads and path observations.
   Use the shared bounded filesystem readers and typed lock errors; delegate
   Observatory query capture and remove its copied process engine.
+  Delegate Wasm transform staging to Host 0.4.1 and Observatory rendering limits
+  to the shared bounded writer, preserving artifact and output validation.
   **Breaking for response-error callers:** match the shared codec error through
   `IcpJsonResponseError::Envelope` instead of local JSON/hex variants.
   These public hard cuts add to the minor-release requirement

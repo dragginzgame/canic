@@ -21,7 +21,10 @@ use std::{
 };
 
 use ic_host_artifacts::artifact::encode_gzip;
-use ic_host_fs::durable::{write_bytes, write_with};
+use ic_host_fs::{
+    durable::{write_bytes, write_named_with, write_with},
+    read::read_file_no_follow,
+};
 
 use canic_core::ids::BuildNetwork;
 use flate2::Compression;
@@ -51,6 +54,11 @@ const CANISTER_METHOD_EXPORT_PREFIXES: [&str; 3] = [
     "canister_query ",
     "canister_update ",
 ];
+
+/// Retain a type-erased qualification cause inside the shared publication error.
+#[derive(Debug, thiserror::Error)]
+#[error(transparent)]
+struct TransformProducerError(#[from] Box<dyn std::error::Error>);
 
 /// Inputs and final paths for one qualification-before-publication Wasm artifact set.
 pub struct WasmArtifactFinalization<'a> {
@@ -315,44 +323,37 @@ fn shrink_wasm_artifact(
     tool: &IcWasmExecutable,
     wasm_path: &Path,
 ) -> Result<ArtifactTransformOutput, Box<dyn std::error::Error>> {
-    let shrunk_path = wasm_path.with_extension("wasm.shrunk");
-    let mut command = crate::build_environment::command(tool.path());
-    command
-        .arg(wasm_path)
-        .arg("-o")
-        .arg(&shrunk_path)
-        .arg("shrink");
-    match output_with_executable_busy_retry(&mut command) {
-        Ok(output) if output.status.success() => {
-            fs::rename(shrunk_path, wasm_path)?;
+    write_named_with(wasm_path, |shrunk_path| {
+        let produce = || -> Result<_, Box<dyn std::error::Error>> {
+            let mut command = crate::build_environment::command(tool.path());
+            command
+                .arg(wasm_path)
+                .arg("-o")
+                .arg(shrunk_path)
+                .arg("shrink");
+            let output = output_with_executable_busy_retry(&mut command)?;
+            if !output.status.success() {
+                return Err(format!(
+                    "ic-wasm shrink failed using {} ({}) for {} with status {}: {}",
+                    tool.path().display(),
+                    tool.version_identity(),
+                    wasm_path.display(),
+                    output.status,
+                    String::from_utf8_lossy(&output.stderr).trim()
+                )
+                .into());
+            }
+            let bytes = read_file_no_follow(shrunk_path, crate::MAX_ARTIFACT_READ_BYTES)?;
+            wasm::wasm_contract_snapshot(&bytes)?;
             Ok(transform_output(
                 ArtifactTransformKind::Shrink,
                 Some(tool.version_identity().to_string()),
                 ArtifactTransformOutcome::Applied,
             ))
-        }
-        Ok(output) => {
-            let _ = fs::remove_file(shrunk_path);
-            Err(format!(
-                "ic-wasm shrink failed using {} ({}) for {} with status {}: {}",
-                tool.path().display(),
-                tool.version_identity(),
-                wasm_path.display(),
-                output.status,
-                String::from_utf8_lossy(&output.stderr).trim()
-            )
-            .into())
-        }
-        Err(err) => {
-            let _ = fs::remove_file(shrunk_path);
-            Err(format!(
-                "failed to run ic-wasm at {} for {}: {err}",
-                tool.path().display(),
-                wasm_path.display()
-            )
-            .into())
-        }
-    }
+        };
+        produce().map_err(TransformProducerError::from)
+    })
+    .map_err(Into::into)
 }
 
 // Copy one `.wasm` artifact atomically into the local ICP artifact tree.
@@ -460,7 +461,7 @@ fn optimize_release_wasm_artifact_with_tool(
     tool: &BinaryenExecutable,
     wasm_path: &Path,
 ) -> Result<ArtifactTransformOutput, Box<dyn std::error::Error>> {
-    let before_bytes = fs::read(wasm_path)?;
+    let before_bytes = read_file_no_follow(wasm_path, crate::MAX_ARTIFACT_READ_BYTES)?;
     let before_contract = wasm::wasm_contract_snapshot(&before_bytes).map_err(|source| {
         format!(
             "failed to inspect release Wasm contract before optimization for {}: {source}",
@@ -471,31 +472,20 @@ fn optimize_release_wasm_artifact_with_tool(
     let before_gzip = deterministic_gzip_bytes(&before_bytes)?;
     let before_metrics = wasm::wasm_artifact_metrics(&before_bytes, before_gzip.len())?;
 
-    let optimized_path = wasm_path.with_extension("wasm.optimized");
-    if let Err(source) =
-        run_binaryen_optimizer(tool.path(), wasm_path, &optimized_path, &before_features)
-    {
-        let _ = fs::remove_file(&optimized_path);
-        return Err(source);
-    }
-
-    let validation = validate_optimized_wasm(
-        tool.path(),
-        wasm_path,
-        &optimized_path,
-        &before_contract,
-        &before_features,
-        before_metrics,
-    );
-
-    let metrics = match validation {
-        Ok(metrics) => metrics,
-        Err(source) => {
-            let _ = fs::remove_file(&optimized_path);
-            return Err(source);
-        }
-    };
-    fs::rename(&optimized_path, wasm_path)?;
+    let metrics = write_named_with(wasm_path, |optimized_path| {
+        run_binaryen_optimizer(tool.path(), wasm_path, optimized_path, &before_features)
+            .and_then(|()| {
+                validate_optimized_wasm(
+                    tool.path(),
+                    wasm_path,
+                    optimized_path,
+                    &before_contract,
+                    &before_features,
+                    before_metrics,
+                )
+            })
+            .map_err(TransformProducerError::from)
+    })?;
     eprintln!(
         "release Wasm optimization for {}: raw {} -> {}, gzip {} -> {}, code section {} -> {}, data section {} -> {}, functions {} -> {}",
         wasm_path.display(),
@@ -561,12 +551,7 @@ fn validate_optimized_wasm(
     before_features: &[String],
     before_metrics: crate::canister_build::WasmArtifactMetrics,
 ) -> Result<WasmTransformMetrics, Box<dyn std::error::Error>> {
-    let after_bytes = fs::read(optimized_path).map_err(|source| {
-        format!(
-            "required Binaryen optimization did not emit {}: {source}",
-            optimized_path.display()
-        )
-    })?;
+    let after_bytes = read_file_no_follow(optimized_path, crate::MAX_ARTIFACT_READ_BYTES)?;
     let after_contract = wasm::wasm_contract_snapshot(&after_bytes).map_err(|source| {
         format!(
             "failed to inspect release Wasm contract after optimization for {}: {source}",
