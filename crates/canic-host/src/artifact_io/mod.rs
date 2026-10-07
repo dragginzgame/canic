@@ -15,16 +15,16 @@ use crate::{
 use std::{
     collections::BTreeSet,
     fs,
-    io::{Read, Write},
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
     time::Instant,
 };
 
-use ic_host_fs::durable::write_bytes;
+use ic_host_artifacts::artifact::encode_gzip;
+use ic_host_fs::durable::{write_bytes, write_with};
 
 use canic_core::ids::BuildNetwork;
-use flate2::{Compression, GzBuilder};
+use flate2::Compression;
 
 pub use wasm::enforce_wasm_install_limits;
 pub use wasm::wasm_artifact_metrics;
@@ -370,20 +370,17 @@ pub fn write_gzip_artifact(
     wasm_path: &Path,
     wasm_gz_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut wasm_bytes = Vec::new();
-    fs::File::open(wasm_path)?.read_to_end(&mut wasm_bytes)?;
-
-    let gz_bytes = deterministic_gzip_bytes(&wasm_bytes)?;
-    write_bytes(wasm_gz_path, &gz_bytes)?;
+    let wasm_bytes = fs::read(wasm_path)?;
+    write_with(wasm_gz_path, |file| {
+        encode_gzip(&wasm_bytes, file, Compression::best(), u64::MAX)
+    })?;
     Ok(())
 }
 
 fn deterministic_gzip_bytes(bytes: &[u8]) -> Result<Vec<u8>, std::io::Error> {
-    let mut encoder = GzBuilder::new()
-        .mtime(0)
-        .write(Vec::new(), Compression::best());
-    encoder.write_all(bytes)?;
-    encoder.finish()
+    let mut output = Vec::new();
+    encode_gzip(bytes, &mut output, Compression::best(), u64::MAX)?;
+    Ok(output)
 }
 
 // Embed the extracted service interface for local artifacts so

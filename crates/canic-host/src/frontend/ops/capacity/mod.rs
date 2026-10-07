@@ -11,11 +11,11 @@ use crate::{
     icp::IcpCli,
 };
 use canic_core::cdk::utils::hash::hex_bytes;
+use ic_host_artifacts::artifact::{ArtifactError, hash_reader};
 use sha2_host::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
     fs,
-    io::Read as _,
     path::Path,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -101,30 +101,18 @@ fn hash_file(path: &Path, expected_bytes: u64) -> Result<[u8; 32], FrontendError
                 .map_err(|_| FrontendError::Integrity)?,
         );
     }
-    let mut file = options.open(path)?;
+    let file = options.open(path)?;
     if !file.metadata()?.is_file() {
         return Err(FrontendError::Integrity);
     }
-    let mut buffer = vec![0_u8; 64 * 1024];
-    let mut total = 0_u64;
-    let mut hash = Sha256::new();
-    loop {
-        let count = file.read(&mut buffer)?;
-        if count == 0 {
-            break;
-        }
-        total = total
-            .checked_add(count as u64)
-            .ok_or(FrontendError::Integrity)?;
-        if total > expected_bytes {
-            return Err(FrontendError::Integrity);
-        }
-        hash.update(&buffer[..count]);
-    }
-    if total != expected_bytes {
+    let identity = hash_reader(file, expected_bytes).map_err(|error| match error {
+        ArtifactError::Io(source) => FrontendError::Io(source),
+        _ => FrontendError::Integrity,
+    })?;
+    if identity.bytes != expected_bytes {
         return Err(FrontendError::Integrity);
     }
-    Ok(hash.finalize().into())
+    Ok(*identity.sha256.as_bytes())
 }
 
 /// Observe native canister cycles, distinct from any Cycles Ledger account balance.

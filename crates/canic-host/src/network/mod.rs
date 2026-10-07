@@ -10,10 +10,9 @@ mod tests;
 use crate::icp_config::{IcpConfigError, resolve_icp_build_network_from_root};
 
 use canic_core::ids::{BuildNetwork, CanonicalNetworkId};
+use ic_host_artifacts::artifact::Sha256Digest;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
-use sha2_host::{Digest, Sha256};
 use std::{
-    fmt::Write as _,
     io,
     path::{Path, PathBuf},
     time::{SystemTime, SystemTimeError, UNIX_EPOCH},
@@ -408,39 +407,18 @@ pub(crate) fn validate_environment_name(name: &str) -> Result<(), NetworkIdentit
 }
 
 fn sha256_digest(bytes: &[u8]) -> [u8; 32] {
-    Sha256::digest(bytes).into()
+    *Sha256Digest::compute(bytes).as_bytes()
 }
 
 fn parse_fingerprint(value: &str) -> Result<[u8; 32], NetworkIdentityError> {
-    if value.len() != 64
-        || !value
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-    {
-        return Err(NetworkIdentityError::InvalidFingerprint);
-    }
-    let mut digest = [0; 32];
-    for (index, pair) in value.as_bytes().as_chunks::<2>().0.iter().enumerate() {
-        digest[index] = (decode_nibble(pair[0]) << 4) | decode_nibble(pair[1]);
-    }
-    Ok(digest)
-}
-
-fn decode_nibble(byte: u8) -> u8 {
-    match byte {
-        b'0'..=b'9' => byte - b'0',
-        b'a'..=b'f' => byte - b'a' + 10,
-        _ => unreachable!("fingerprint was validated before decoding"),
-    }
+    value
+        .parse::<Sha256Digest>()
+        .map(|digest| *digest.as_bytes())
+        .map_err(|_| NetworkIdentityError::InvalidFingerprint)
 }
 
 fn encode_digest(digest: [u8; 32]) -> String {
-    digest
-        .iter()
-        .fold(String::with_capacity(64), |mut encoded, byte| {
-            write!(encoded, "{byte:02x}").expect("writing to a String cannot fail");
-            encoded
-        })
+    Sha256Digest::from_bytes(digest).to_string()
 }
 
 fn create_new(path: &Path, bytes: &[u8]) -> Result<(), NetworkIdentityError> {
