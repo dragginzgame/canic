@@ -213,6 +213,10 @@ fn semantic_digest_changes_for_every_protected_projection() {
         "authority_deployment = \"replicas\"",
     );
     let changed = [
+        BASELINE.replace(
+            "component_role = \"database\"",
+            "component_role = \"database\"\napplication_init_required = true",
+        ),
         BASELINE.replace("package = \"database\"", "package = \"database_v2\""),
         BASELINE
             .replace("components.database]", "components.primary_database]")
@@ -270,7 +274,7 @@ spawn_grants = [
 fn canonical_configuration_digest_matches_schema_one_golden_vector() {
     assert_eq!(
         digest(BASELINE).expect("golden digest").to_string(),
-        "b9c069d1e66d71830ab738a2fb863c132b2c7f815b276262c7f748618d1286e6"
+        "4175370e169584123caa9421f25fee2ab02d5e9857341b20cc79b1e0f80ac06a"
     );
 }
 

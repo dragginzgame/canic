@@ -271,9 +271,15 @@ fn create_receipt_repo(previous_receipt: Option<&str>, handoff: &str) -> PathBuf
     write_file(
         &root,
         "Cargo.toml",
-        "[workspace]\nmembers = []\n\n[workspace.package]\nversion = \"0.92.7\"\n",
+        "[workspace]\nmembers = []\n\n[workspace.package]\nversion = \"0.92.7\"\n\n\
+         [package]\nname = \"receipt-fixture\"\nversion.workspace = true\nedition = \"2024\"\n",
     );
-    write_file(&root, "Cargo.lock", "# original lock\n");
+    write_file(&root, "src/lib.rs", "");
+    write_file(
+        &root,
+        "Cargo.lock",
+        "version = 4\n\n[[package]]\nname = \"receipt-fixture\"\nversion = \"0.92.7\"\n",
+    );
     write_file(
         &root,
         "docs/changelog/0.92.md",
@@ -312,21 +318,14 @@ fn create_receipt_repo(previous_receipt: Option<&str>, handoff: &str) -> PathBuf
         r#"#!/usr/bin/env bash
 set -euo pipefail
 case "$*" in
-    "set-version --help" | "get --version")
+    "set-version --help")
         exit 0
-        ;;
-    get\ --entry\ *\ workspace.package.version)
-        awk '/^version = / { gsub(/"/, "", $3); print $3; exit }' "$3/Cargo.toml"
         ;;
     "set-version --workspace --offline 0.92.8")
         sed -i 's/0.92.7/0.92.8/' Cargo.toml
         ;;
-    "metadata --locked --offline --no-deps --format-version 1")
-        printf '%s\n' '{"workspace_members":[],"packages":[]}'
-        ;;
     *)
-        echo "unexpected cargo arguments: $*" >&2
-        exit 2
+        exec "$CANIC_FIXTURE_CARGO" "$@"
         ;;
 esac
 "#,
@@ -355,6 +354,7 @@ esac
 fn assert_governed_receipt(previous_receipt: Option<&str>, gate: &str, fail_after_receipt: bool) {
     let handoff = "Current source remains descriptive.\n";
     let root = create_receipt_repo(previous_receipt, handoff);
+    let original_lock = fs::read_to_string(root.join("Cargo.lock")).unwrap();
     let validated_head = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     if fail_after_receipt {
         write_file(&root, "occupied-tag", "retained exact tag\n");
@@ -376,6 +376,8 @@ fn assert_governed_receipt(previous_receipt: Option<&str>, gate: &str, fail_afte
         .env("CANIC_RELEASE_VALIDATED", "1")
         .env("CANIC_RELEASE_VALIDATED_HEAD", validated_head)
         .env("CANIC_RELEASE_VALIDATION_KIND", gate)
+        .env("CANIC_FIXTURE_CARGO", env!("CARGO"))
+        .env("CARGO_NET_OFFLINE", "true")
         .env("PATH", path)
         .output()
         .expect("bump script should run");
@@ -400,7 +402,13 @@ fn assert_governed_receipt(previous_receipt: Option<&str>, gate: &str, fail_afte
         );
         assert_eq!(
             fs::read_to_string(root.join("Cargo.lock")).unwrap(),
-            "# original lock\n"
+            original_lock
+        );
+    } else {
+        assert!(
+            fs::read_to_string(root.join("Cargo.lock"))
+                .unwrap()
+                .contains("version = \"0.92.8\"")
         );
     }
     let receipt_path = if fail_after_receipt {

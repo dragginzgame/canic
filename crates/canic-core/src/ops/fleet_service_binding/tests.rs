@@ -551,12 +551,11 @@ fn fixture() -> (
 #[test]
 fn compiles_complete_mode_compatible_initial_services_in_canonical_order() {
     let (config, registry, plan, receipts) = fixture();
-    // Current Candid authority includes the recovery-controller vector even when empty.
     assert_eq!(
         receipts[0].receipt_content_hash,
         [
-            83, 141, 145, 136, 197, 121, 172, 165, 116, 47, 37, 12, 69, 138, 75, 188, 38, 140, 244,
-            32, 47, 157, 208, 50, 240, 251, 255, 20, 197, 149, 74, 225,
+            200, 207, 173, 116, 124, 10, 130, 205, 161, 179, 125, 47, 237, 239, 52, 107, 11, 224,
+            123, 222, 100, 15, 252, 9, 179, 50, 54, 172, 40, 127, 127, 123,
         ]
     );
     let services = compile_initial(&config, &registry, &plan, [10; 32], &receipts)

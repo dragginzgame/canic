@@ -1,5 +1,27 @@
 # Current handoff — 2026-10-07
 
+The latest ordinary native validation failures are repaired under
+[#450](https://github.com/dragginzgame/canic/issues/450). Three release-receipt
+tests had obsolete Cargo stubs and invalid empty metadata/comment-only lock
+inputs; their private fixture now uses a valid inherited-version package and
+real offline Cargo discovery/metadata. Eight downstream golden values had missed
+the current `application_init_required` Component Spec identity hard cut in
+`335f7b02b8999723e33e3f823db9b3256ca31af6`; the configuration, provisioning,
+registry, receipt and artifact vectors now bind the maintained contract. Existing
+rejection, canonical ordering and rollback assertions remain, and configuration
+digest sensitivity directly covers the initializer requirement.
+
+All 11 reported failures pass within 75 selected native regressions (three receipt,
+63 Core and nine Host tests). Warning-denied Clippy passes for Core/Host all
+targets/features and Canic's affected release-flow target with all features.
+Independent embedded-peer verification also passes without rewriting the peer or
+its provenance. The manifest and lock hashes remain unchanged. Logs are retained
+under `target/review-validation/validation-fixture-propagation-20261007/`.
+Only tests and this handoff change; routine test-only fixes do not add a changelog
+entry. These results are focused native qualification; no new managed run or broad
+gate ran. Changes remain uncommitted. Existing managed-stack and minor-boundary
+blockers still prevent declaring the complete batch push/publication ready.
+
 The repeated embedded allocation-peer preflight failure is repaired for the
 maintainer's new registry stack: Memory 0.30.0, Metrics 0.2.5, Timers 0.14.6,
 Host 0.3.2, Query 0.47.7 and Testkit 0.20.0. Explicit regeneration with the new
