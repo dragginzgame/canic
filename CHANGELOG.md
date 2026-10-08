@@ -6,7 +6,7 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.110.53]
+## [0.110.53] - 2026-10-08
 
 Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
