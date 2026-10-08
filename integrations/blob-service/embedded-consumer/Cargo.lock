@@ -166,7 +166,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.110.52"
+version = "0.110.53"
 dependencies = [
  "candid",
  "canic-core",
@@ -190,7 +190,7 @@ dependencies = [
 
 [[package]]
 name = "canic-core"
-version = "0.110.52"
+version = "0.110.53"
 dependencies = [
  "async-trait",
  "candid",
@@ -213,7 +213,7 @@ dependencies = [
 
 [[package]]
 name = "canic-macros"
-version = "0.110.52"
+version = "0.110.53"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -571,9 +571,9 @@ dependencies = [
 
 [[package]]
 name = "ic-blob-storage"
-version = "0.17.1"
+version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35113b1fb312a67d79255e48ef64fc58611a79845bd7344e2dffef122fd1693a"
+checksum = "502d6ee8bfdcd3e37d097a3b85cc2a5966427c5743f9f5f2334190fb2329d915"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -660,9 +660,9 @@ dependencies = [
 
 [[package]]
 name = "ic-memory"
-version = "0.31.1"
+version = "0.31.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5e7c0dd200397f0064f2ac9a7727b5f89c0b09d9040314f9619ff9ea2a154e3"
+checksum = "ced4b3c769064c9bdb9cbdcef6d97762658a3e651d896aa56286b40fde5d009c"
 dependencies = [
  "ciborium",
  "ctor",
@@ -673,9 +673,9 @@ dependencies = [
 
 [[package]]
 name = "ic-metrics"
-version = "0.2.9"
+version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf016e1f1a34a25b8941522f9745dcc358f19787588efdbe53b97f509d2456e5"
+checksum = "dc75470aa6335a0b1f3dbefd30229e0ac10713f21193f21af3c03987afdfa0c9"
 
 [[package]]
 name = "ic-secp256k1"
@@ -707,9 +707,9 @@ dependencies = [
 
 [[package]]
 name = "ic-timers"
-version = "0.14.12"
+version = "0.14.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa6dc9ec51546f7e0977f1523e30f2c638df52e9da83f43e01e5bd33a5a06f47"
+checksum = "806808e2290b6a85804a68f7b95fcf227937b329455127e33c65265be11c5473"
 dependencies = [
  "ic-cdk-timers",
  "ic-metrics",

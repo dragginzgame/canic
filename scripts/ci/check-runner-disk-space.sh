@@ -1,185 +1,89 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-LABEL="runner disk"
-MIN_FREE_MIB=0
-TOP_LIMIT=16
-SUMMARY_ONLY=0
-
 usage() {
-    cat >&2 <<'USAGE'
-usage: check-runner-disk-space.sh [--label <name>] [--min-free-mib <mib>] [--top-limit <count>] [--summary-only]
+    cat <<'USAGE'
+usage: check-runner-disk-space.sh --path PATH --min-free-mib N [--label NAME] [--diagnostic-path PATH]...
 
-Print GitHub runner disk availability plus the largest likely CI disk consumers.
-When --min-free-mib is set above zero, fail if the workspace filesystem has
-less free space than that threshold.
-Use --summary-only for routine threshold checks that do not need recursive
-largest-consumer diagnostics.
+Read available capacity on the filesystem containing an existing path.
+N is a canonical non-negative decimal integer of at most 18 digits.
+Optional diagnostic paths get recursive du -sk totals; failures only warn.
+Exit 0: enough space; 1: insufficient space; 2: invalid/unavailable observation.
+No installation, cleanup or implicit diagnostic paths.
 USAGE
 }
 
-while [ "$#" -gt 0 ]; do
+fail() { printf 'disk check: %s\n' "$*" >&2; exit 2; }
+single_line() { [[ "$1" != *$'\n'* && "$1" != *$'\r'* && "$1" != *$'\t'* ]]; }
+operand() {
+    # Avoid option interpretation without relying on a BSD/GNU -- extension.
+    case "$1" in /*) printf '%s\n' "$1" ;; *) printf './%s\n' "$1" ;; esac
+}
+
+selected_path=''
+minimum_mib=''
+label='runner disk'
+diagnostics=()
+while [[ $# -gt 0 ]]; do
     case "$1" in
-    --label)
-        LABEL="${2:-}"
-        if [ -z "$LABEL" ]; then
-            echo "missing value for --label" >&2
-            exit 2
-        fi
-        shift 2
-        ;;
-    --min-free-mib)
-        MIN_FREE_MIB="${2:-}"
-        if ! [[ "$MIN_FREE_MIB" =~ ^[0-9]+$ ]]; then
-            echo "--min-free-mib must be a non-negative integer" >&2
-            exit 2
-        fi
-        shift 2
-        ;;
-    --top-limit)
-        TOP_LIMIT="${2:-}"
-        if ! [[ "$TOP_LIMIT" =~ ^[0-9]+$ ]] || [ "$TOP_LIMIT" -eq 0 ]; then
-            echo "--top-limit must be a positive integer" >&2
-            exit 2
-        fi
-        shift 2
-        ;;
-    --summary-only)
-        SUMMARY_ONLY=1
-        shift
-        ;;
-    -h | --help)
-        usage
-        exit 0
-        ;;
-    *)
-        echo "unknown argument: $1" >&2
-        usage
-        exit 2
-        ;;
+        --path|--min-free-mib|--label|--diagnostic-path)
+            [[ $# -ge 2 && -n "$2" ]] || fail "missing value for $1"
+            single_line "$2" || fail "$1 requires a single-line value without tabs"
+            case "$1" in
+                --path) selected_path="$2" ;;
+                --min-free-mib) minimum_mib="$2" ;;
+                --label) label="$2" ;;
+                --diagnostic-path) diagnostics+=("$2") ;;
+            esac
+            shift 2 ;;
+        -h|--help) usage; exit 0 ;;
+        *) fail "unknown argument: $1" ;;
     esac
 done
+[[ -n "$selected_path" && -n "$minimum_mib" ]] || fail '--path and --min-free-mib are required'
+[[ "$minimum_mib" =~ ^(0|[1-9][0-9]{0,17})$ ]] || fail '--min-free-mib must be a canonical non-negative integer of at most 18 digits'
+[[ -e "$selected_path" ]] || fail "path does not exist: $selected_path"
 
-existing_unique_paths() {
-    local seen=""
-    local path
-
-    for path in "$@"; do
-        if [ -z "$path" ] || [ ! -e "$path" ]; then
-            continue
-        fi
-
-        case "
-$seen
-" in
-        *"
-$path
-"*) ;;
-        *)
-            printf '%s\n' "$path"
-            seen="$seen
-$path"
-            ;;
-        esac
-    done
-}
-
-workspace_path() {
-    local path="${GITHUB_WORKSPACE:-$PWD}"
-
-    if [ -e "$path" ]; then
-        printf '%s\n' "$path"
-    else
-        printf '%s\n' "$PWD"
-    fi
-}
-
-available_mib() {
-    local path="$1"
-
-    df -Pm "$path" | awk 'NR == 2 { print $4 }'
-}
-
-print_filesystem_summary() {
-    local workspace
-    workspace="$(workspace_path)"
-
-    echo "==> disk availability: $LABEL"
-    mapfile -t paths < <(
-        existing_unique_paths \
-            "$workspace" \
-            "${RUNNER_TEMP:-}" \
-            "${TMPDIR:-/tmp}" \
-            "$HOME/.cargo" \
-            "$HOME/.rustup" \
-            "/opt/hostedtoolcache"
-    )
-
-    if [ "${#paths[@]}" -eq 0 ]; then
-        echo "no filesystem paths available for df"
-        return
-    fi
-
-    df -h "${paths[@]}"
-}
-
-print_largest_under() {
-    local path="$1"
-    local label="$2"
-
-    if [ ! -e "$path" ]; then
-        return
-    fi
-
-    echo
-    echo "==> largest entries under $label"
-    du -xhd1 "$path" 2>/dev/null | sort -hr | awk -v limit="$TOP_LIMIT" 'NR <= limit { print }' || true
-}
-
-print_disk_consumers() {
-    local workspace
-    workspace="$(workspace_path)"
-
-    echo
-    echo "==> likely CI disk pressure sources"
-    echo "- target/: Rust debug/test artifacts, restored rust-cache entries, wasm targets, and incremental state"
-    echo "- .icp/: generated canister wasm artifacts staged for PocketIC and local ICP flows"
-    echo "- \$HOME/.cargo and \$HOME/.rustup: installed Rust helper tools, registry/cache data, and toolchains"
-    echo "- \$RUNNER_TEMP and /tmp: PocketIC server cache, temporary installs, and test scratch space"
-    echo "- /opt/hostedtoolcache: preinstalled GitHub runner toolchains sharing the same root filesystem"
-
-    print_largest_under "$workspace" "workspace"
-    print_largest_under "$workspace/target" "workspace/target"
-    print_largest_under "$workspace/.icp" "workspace/.icp"
-    print_largest_under "$HOME/.cargo" "\$HOME/.cargo"
-    print_largest_under "$HOME/.rustup" "\$HOME/.rustup"
-    print_largest_under "${RUNNER_TEMP:-}" "\$RUNNER_TEMP"
-    print_largest_under "${TMPDIR:-/tmp}" "\${TMPDIR:-/tmp}"
-    print_largest_under "/opt/hostedtoolcache" "/opt/hostedtoolcache"
-}
-
-assert_min_free_space() {
-    local workspace
-    local free_mib
-
-    if [ "$MIN_FREE_MIB" -eq 0 ]; then
-        return
-    fi
-
-    workspace="$(workspace_path)"
-    free_mib="$(available_mib "$workspace")"
-
-    if [ "$free_mib" -lt "$MIN_FREE_MIB" ]; then
-        echo
-        echo "error: low GitHub runner disk space before $LABEL" >&2
-        echo "available: ${free_mib} MiB; required: ${MIN_FREE_MIB} MiB" >&2
-        echo "The runner is likely to fail later with 'No space left on device' while Rust writes target artifacts." >&2
-        exit 1
-    fi
-}
-
-print_filesystem_summary
-if [ "$SUMMARY_ONLY" -eq 0 ]; then
-    print_disk_consumers
+# -P selects one record per filesystem; -k fixes units regardless of host/env.
+# Check df's exit status separately: plausible partial output is not evidence.
+if ! observation="$(LC_ALL=C df -Pk "$(operand "$selected_path")")"; then
+    fail "cannot read capacity for $selected_path"
 fi
-assert_min_free_space
+if ! available_kib="$(printf '%s\n' "$observation" | LC_ALL=C awk '
+    NR == 1 { header = $1 == "Filesystem" && $2 == "1024-blocks" &&
+        $3 == "Used" && $4 == "Available" }
+    NR == 2 {
+        valid = NF >= 6 && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ &&
+            $4 ~ /^-?(0|[1-9][0-9]*)$/ && $5 ~ /^[0-9]+%$/
+        digits = $4; sub(/^-/, "", digits)
+        valid = valid && length(digits) <= 18
+        available = $4
+    }
+    END { if (NR != 2 || !header || !valid) exit 1; print available }
+')"; then
+    printf '%s\n' "$observation" >&2
+    fail "malformed df -Pk observation for $selected_path"
+fi
+
+# Bound decimal input above and divide rather than multiplying the threshold:
+# neither arithmetic overflow nor a rounded MiB value can turn a failure green.
+available_mib=$((available_kib / 1024))
+if [[ "$available_kib" -lt 0 ]]; then
+    available_mib=$((- ((-available_kib + 1023) / 1024)))
+fi
+printf '%s: %s MiB available; %s MiB required; path: %s\n' \
+    "$label" "$available_mib" "$minimum_mib" "$selected_path"
+
+# Diagnostics are explicit and best effort. They never redefine gate status.
+if [[ ${#diagnostics[@]} -gt 0 ]]; then
+    printf 'Disk usage (KiB, selected paths):\n'
+    for diagnostic in "${diagnostics[@]}"; do
+        if ! LC_ALL=C du -sk "$(operand "$diagnostic")"; then
+            printf 'warning: disk usage unavailable for %s\n' "$diagnostic" >&2
+        fi
+    done
+fi
+if [[ "$available_mib" -lt "$minimum_mib" ]]; then
+    printf 'disk check: insufficient space for %s\n' "$label" >&2
+    exit 1
+fi

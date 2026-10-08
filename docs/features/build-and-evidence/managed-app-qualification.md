@@ -68,6 +68,13 @@ responsible for assertions about its public endpoints, caller-derived
 application membership and ownership, database readiness, timers and other
 framework participants.
 
+All public qualification constructors borrow the server selected by
+`CANIC_POCKET_IC_SERVER_URL` through Testkit's bounded connect API. The caller owns
+startup, complete diagnostics and teardown. A missing or invalid URL fails before
+any canister effects through the managed constructor's existing error or the
+standalone constructor's existing panic boundary. Constructors never select a
+binary or start a hidden server.
+
 ## Managed Component trees
 
 `install_managed_component_group` qualifies a complete configured Component

@@ -19,8 +19,8 @@
     "rule": "cargo-exact",
     "file": "integrations/blob-service/Cargo.toml",
     "subject": "ic-blob-storage",
-    "value": "=0.17.1",
-    "reason": "Retain the qualified managed Blob 0.17.1 lifecycle and service protocol boundary with the single Memory 0.31.1 runtime; changing this exact selection requires renewed managed composition qualification.",
+    "value": "=0.17.2",
+    "reason": "Retain the published Blob 0.17.2 service/protocol contract; qualify the selected managed runtime graph whenever this exact dependency changes.",
     "evidence": "docs/features/blob-storage/README.md"
   },
   {

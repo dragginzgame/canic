@@ -144,7 +144,7 @@ fn staged_installer_closes_its_writer_before_executable_admission() {
     );
     let destination = root.join("bin/ic-wasm");
 
-    tool_install::publish_executable(IC_WASM_TOOL, &candidate, &destination, |path| {
+    tool_install::publish_executable(&candidate, &destination, |path| {
         admit_ic_wasm_executable(path).map(|_| ())
     })
     .expect("publish and admit closed staged executable");

@@ -7,6 +7,7 @@
 mod tests;
 
 use crate::output_with_executable_busy_retry;
+use ic_host_fs::durable::{NamedWriteError, PublicationMode, WriteOptions, write_validated_with};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::{
@@ -53,43 +54,41 @@ pub struct InstallSpec<'a> {
 /// Mechanical failures translated into each tool's existing diagnostic type.
 ///
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum InstallError {
-    ArchiveDownload {
-        status: String,
-        stderr: String,
-    },
+    #[error("archive download failed ({status}): {stderr}")]
+    ArchiveDownload { status: String, stderr: String },
 
-    ArchiveExtraction {
-        status: String,
-        stderr: String,
-    },
+    #[error("archive extraction failed ({status}): {stderr}")]
+    ArchiveExtraction { status: String, stderr: String },
 
+    #[error("archive hash mismatch at {path}: expected {expected}, observed {actual}")]
     ArchiveHashMismatch {
         path: PathBuf,
         actual: String,
         expected: &'static str,
     },
 
+    #[error("executable hash mismatch at {path}: expected {expected}, observed {actual}")]
     ExecutableHashMismatch {
         path: PathBuf,
         actual: String,
         expected: String,
     },
 
+    #[error("{operation} at {path}: {source}")]
     Io {
         operation: &'static str,
         path: PathBuf,
         source: io::Error,
     },
 
-    TempDirectoryExhausted {
-        root: PathBuf,
-    },
+    #[error("temporary installation names exhausted beneath {root}")]
+    TempDirectoryExhausted { root: PathBuf },
 }
 
 /// Admit both candidate and staged executable before publishing, then admit the installed path.
-pub fn install<T, E: From<InstallError>>(
+pub fn install<T, E: From<InstallError> + std::error::Error + Send + Sync + 'static>(
     spec: &InstallSpec<'_>,
     destination: &Path,
     admit: impl Fn(&Path) -> Result<T, E>,
@@ -110,9 +109,7 @@ pub fn install<T, E: From<InstallError>>(
             |path| admit(path).map(|_| ()),
         )?;
     } else {
-        publish_executable(spec.tool, &candidate, destination, |path| {
-            admit(path).map(|_| ())
-        })?;
+        publish_executable(&candidate, destination, |path| admit(path).map(|_| ()))?;
     }
     admit(destination)
 }
@@ -185,49 +182,67 @@ fn extract_archive(
 }
 
 /// Publish exact candidate bytes only after closing the writer and admitting the staged path.
-pub fn publish_executable<E: From<InstallError>>(
-    tool: &str,
+pub fn publish_executable<E: From<InstallError> + std::error::Error + Send + Sync + 'static>(
     candidate: &Path,
     destination: &Path,
-    admit: impl Fn(&Path) -> Result<(), E>,
+    admit: impl FnOnce(&Path) -> Result<(), E>,
 ) -> Result<(), E> {
-    let parent = destination.parent().ok_or_else(|| {
-        io_error(
-            "select tool installation directory",
-            destination,
-            io::Error::new(io::ErrorKind::InvalidInput, "destination has no parent"),
-        )
-    })?;
-    fs::create_dir_all(parent)
-        .map_err(|source| io_error("create tool installation directory", parent, source))?;
     let expected = sha256_file(candidate)?;
-    let stage = parent.join(format!(
-        ".{tool}.canic-install-{}-{}",
-        std::process::id(),
-        TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed)
-    ));
-    let result = (|| {
-        stage_executable(candidate, &stage)?;
-        let actual = sha256_file(&stage)?;
-        if actual != expected {
-            return Err(InstallError::ExecutableHashMismatch {
-                path: stage.clone(),
-                actual,
-                expected,
+    write_validated_with(
+        destination,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o755,
+        },
+        |output| {
+            let mut source = File::open(candidate)
+                .map_err(|source| io_error("open admitted tool executable", candidate, source))?;
+            io::copy(&mut source, output)
+                .map_err(|source| io_error("write staged tool executable", destination, source))?;
+            #[cfg(unix)]
+            output
+                .set_permissions(fs::Permissions::from_mode(0o755))
+                .map_err(|source| {
+                    io_error(
+                        "set staged tool executable permissions",
+                        destination,
+                        source,
+                    )
+                })?;
+            Ok(())
+        },
+        |stage, &()| {
+            let actual = sha256_file(stage)?;
+            if actual != expected {
+                return Err(InstallError::ExecutableHashMismatch {
+                    path: stage.to_path_buf(),
+                    actual,
+                    expected,
+                }
+                .into());
             }
-            .into());
+            admit(stage)
+        },
+    )
+    .map_err(|error| match error {
+        NamedWriteError::Producer {
+            source,
+            cleanup_error: None,
+        } => source,
+        error => {
+            let kind = match &error {
+                NamedWriteError::Producer { .. } => io::ErrorKind::Other,
+                NamedWriteError::BeforePublication { source, .. }
+                | NamedWriteError::AfterPublication { source } => source.kind(),
+            };
+            io_error(
+                "publish admitted tool executable",
+                destination,
+                io::Error::new(kind, error),
+            )
+            .into()
         }
-        admit(&stage)?;
-        fs::rename(&stage, destination)
-            .map_err(|source| io_error("publish tool executable", destination, source))?;
-        File::open(parent)
-            .and_then(|directory| directory.sync_all())
-            .map_err(|source| E::from(io_error("sync tool installation directory", parent, source)))
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(&stage);
-    }
-    result
+    })
 }
 
 fn stage_executable(candidate: &Path, stage: &Path) -> Result<(), InstallError> {

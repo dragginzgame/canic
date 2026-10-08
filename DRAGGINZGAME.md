@@ -42,12 +42,21 @@ Consumer choices described in those guides remain subject to this baseline.
   and issue-reporting authority do not grant cross-repository edit permission.
   Without that authorization, keep other repositories read-only and report the
   proposed fix in the owning repository's GitHub issue.
-- Never create or amend Git commits, directly or through helpers. The maintainer
-  owns commits. Inspect scripts before invoking targets that may commit.
+- Follow the [contribution rules](rules/contributions.md): ordinary contributions
+  from people and agents use branches and pull requests. Agents may create
+  scoped commits when asked to commit or deliver a PR. A PR request includes the
+  branch, commits, branch push and PR creation/update needed to deliver it;
+  do not require the maintainer to commit first or approve each substep again.
+- A PR request does not authorize merging, pushing directly to `main`, `master`
+  or another integration/release branch, or rewriting shared history. Those
+  effects require explicit authorization. Preserve branch protections and
+  required reviews/checks. Ordinary repair or continuation requests authorize
+  local work, not an unsolicited commit or push.
 - Agents may execute package/manifest version changes, tags, pushes, publication,
   deployment and paid effects when explicitly authorized for their target and effect.
-  Continuation and readiness requests do not supply that authority. Commits
-  remain maintainer-owned, including inside otherwise authorized helpers.
+  Authorization includes the necessary documented substeps of the requested
+  operation. Inspect helpers before invoking them; a contribution PR is not a
+  release request. Continuation and readiness alone do not authorize a release.
 - An explicit instruction is sufficient for its named action. Carry established
   authorization forward; do not require magic phrases or repeated confirmation.
   Complete authorized preparation so any required approval concerns a concrete
@@ -163,15 +172,24 @@ Consumer choices described in those guides remain subject to this baseline.
 - Every `dragginzgame` repository, including Shared Tooling, must expose
   `make release-patch`, `make release-minor` and `make release-major`.
   All three use the same [release contract and Makefile pattern](docs/releases.md):
-  preflight, validate, bump and finalize the changelog, stage, commit and tag,
-  then push. Only the selected semantic-version component differs.
+  preflight, validate, bump and finalize the changelog, stage and commit, then
+  deliver and tag through the repository's explicitly selected direct or PR policy.
+  Only the selected semantic-version component differs between the three targets.
 - Keep one release workflow per repository. The three entry points must delegate
-  to it; do not give patch releases an implicit fast lane or change effects by
-  repository. Consumer-owned validation gates, metadata files, branches and
-  remotes are explicit inputs, not alternate meanings for the commands.
-- These are maintainer-owned one-shot commands. Agents must not execute them
-  because they create commits. Separate preparation and inspection remain
-  available within their authorized effects; adding targets is not a release.
+  to it; do not give patch releases an implicit fast lane or different effects.
+  Consumer-owned validation gates, metadata files, branches, remotes and delivery
+  policy are explicit inputs. Direct delivery remains the
+  default; PR delivery prepares a review branch and validates the admitted merged
+  commit afresh before tagging. Never select another policy to bypass a rejected
+  push or branch protection.
+- These one-shot commands require an explicit request to run the selected release
+  for the selected repository and destination. That request authorizes the
+  documented gate, version preparation and selected delivery effects. Direct
+  delivery includes the release commit, tag and atomic branch/tag push; PR
+  delivery includes the release branch/PR and, after separately authorized merge,
+  fresh merged-source validation and its exact tag push. The runner never merges
+  or approves the PR. A request for a fix, commit or PR does not authorize a release;
+  separate preparation and inspection retain their own authorized scope.
 - Use standard semantic-version increments: patch increments the patch; minor
   increments the minor and resets the patch; major increments the major and
   resets both lower components. Apply the pre-1.0 compatibility rule above.
@@ -180,12 +198,15 @@ Consumer choices described in those guides remain subject to this baseline.
   source with fresh preflight and complete validation; retain earlier evidence.
   Persist exact release intent before preparation may begin, then reconcile an
   interrupted release automatically when a normal target is rerun, at its saved
-  version and commit. If that release is already committed and HEAD has newer
-  fixes or a different increment is requested, reconcile it first, then run fresh
-  preflight and complete validation for the requested increment from the actual
-  local version. Late evidence checks use the selected `RELEASE_COMMIT`, which
-  may precede HEAD. Select unfinished intent before computing another increment;
-  stop for identity, payload, destination or concurrency conflicts.
+  version and commit. In direct delivery, if that release is committed and HEAD
+  has newer fixes or a different increment is requested, reconcile it first,
+  then run fresh preflight and complete validation for the requested increment
+  from the actual local version. PR delivery finishes only the saved release; an open PR returns
+  a pending, nonzero result so chained publication cannot start before merge.
+  Squash/rebase merges require fresh complete validation of the exact merged
+  commit with the unchanged prepared tree. Late evidence checks use
+  `RELEASE_COMMIT`, which may precede HEAD. Select unfinished intent before
+  computing another increment; stop for identity, payload, destination or concurrency conflicts.
   Do not force-push, overwrite tags, silently bump again or add implicit package
   publication, deployment or post-release cleanup.
 

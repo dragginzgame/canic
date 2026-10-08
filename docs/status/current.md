@@ -1,221 +1,175 @@
 # Current handoff — 2026-10-08
 
-Current work refreshes the embedded allocation peer after the selected runtime
-dependencies changed. Earlier work qualified the Blob/Memory integration under
-[#444](https://github.com/dragginzgame/canic/issues/444) and
-[#459](https://github.com/dragginzgame/canic/issues/459). Earlier Host/Backup
-cleanup and fixture work remain intact. The maintainer committed the pinning repair
-at `95038e1a3` and advanced the root lock at `2140b0ba0`. The subsequent embedded
-peer refresh and its handoff/changelog updates remain uncommitted.
-Workspace packages remain `0.110.52`;
-the existing `0.110.53` changelog draft is extended rather than allocating another
-patch. Earlier Backup adoption, fixture refresh and incoming dependency changes
-are preserved. This handoff describes evidence; GitHub issues own follow-up work.
+The maintainer reports 0.110.53 pushed. HEAD remains
+`4c51a87c6a32397196bb3f65d064641194df10a5`; package versions remain 0.110.53.
+The accepted sibling audit's first cleanup outcome is implemented in the
+uncommitted worktree. Auth remains WIP. The next undated 0.110.54 changelog draft
+records this outcome without authorizing a version or publication transaction.
 
-## Current fixture refresh
+The [frozen 15-sibling audit](../audits/reports/2026-10/2026-10-08/sibling-offload/01/report.md)
+retains its original inputs and source-only verdict. The implementation evidence
+below is newer. GitHub issues own acceptance and follow-up; this descriptive
+handoff is not release authority.
 
-The root lock now selects Memory 0.31.2, Timers 0.14.13 and Testkit 0.21.3;
-its SHA-256 is `a2526c2e27312c7572670b58e410c7fbeb77cb6d79c3b990f46ec4779786038a`.
-The reported test preflight correctly rejected the earlier embedded allocation
-peer after these inputs changed. Explicit locked/offline refresh regenerated the
-Wasm and provenance together. The read-only verifier passes, as does the exact
-managed Component Group child lifecycle case (155.23s; governed invocation 286s,
-including inventory and runner completion). This covers initial/on-demand child
-allocation, typed admission refusals, timer restoration, authority delivery and
-same-release fencing. The governed runner completed its owned scratch cleanup.
+## Implemented ownership convergence
 
-The new peer SHA-256 is
-`03c973cc5314bb98910b3d0502411a7cc3137105859c5aeba99e8fd88624dd5c`;
-provenance SHA-256 is
-`4e1804cb62a5d759baa12c5d5816945d1894fe0e6bacefc0050fb64a21ad7e4d`.
-Evidence is retained under `target/review-validation/embedded-peer-refresh-20261008/`
-and `target/test-runs/20261008T074322Z-71047.tTyPL9/`. Manifests and lockfiles
-remain unchanged by the repair. No broad validation ran; the qualification below
-is bound to the preceding selected graph and must not be relabelled as current.
+[Host #458](https://github.com/dragginzgame/canic/issues/458): shared closed-writer
+publication now owns single-executable replacement. Existing installer errors
+retain admission, native I/O, publication-phase and failed-cleanup causes.
+Immutable executable/library bundles retain their distinct Canic transaction.
+Shared install reports own code-body/function/global limits; metrics keep complete
+section payloads. Gzip uses the numeric API; Host's flate2 dependency is test-only.
 
-## Earlier integration inputs and qualification
+[Backup #490](https://github.com/dragginzgame/canic/issues/490): checked upstream
+relative-checksum framing owns path ordering and exact directory identities.
+Canic keeps descriptor synchronization, manifest projection, no-replace publication
+and interruption recovery. Typed path failures use existing public error variants.
 
-The root catalog requires Host Tooling 0.4.6 for all four packages and Backup
-0.5.3 or later. The October 7 lock selected Host 0.4.6, Backup 0.5.4, Query 0.48.1,
-Testkit 0.21.2, Memory 0.31.1, Metrics 0.2.9 and Timers 0.14.12. Backup, Query and
-Testkit advanced independently after the preceding qualification; those incoming
-selections were not reverted or attributed to this cleanup.
+[Shared Tooling #453](https://github.com/dragginzgame/canic/issues/453): 81 exact
+selected exports adopt committed 0.1.23
+`0ba0ad00ed94848e54ecc82629b6b7873b7284c0`. Canonical cache/disk mechanics replace
+local copies; a thin Canic adapter retains classified compiler fallback.
+`ic-tool-pins.awk` is included as an executable installer dependency.
 
-- Manifest SHA-256:
-  `7305e716d7880a0cc5d2979cfa3290ed4b85f40a4addfe947863ea74f03902b7`.
-- Lock SHA-256:
-  `5bc37eeca0f7adc56ce9076a24e9e4ea345deb001724516b50225668864975f9`.
-- Focused Linux evidence and exact input bindings:
-  `target/review-validation/host-fingerprint-cleanup-20261007/`.
+[Progress #492](https://github.com/dragginzgame/canic/issues/492) and
+[diagnostic custody #474](https://github.com/dragginzgame/canic/issues/474): ordinary
+nested runner progress streams before EOF; worker prefix/line share one write.
+Failure and interruption stop owned processes while retaining full raw scratch,
+printing its path and preserving original status. Successful scratch clears.
+Public qualification helpers borrow the caller-owned server through bounded
+Testkit connect, eliminating three hidden starts without public API changes.
 
-On this graph, the executable fingerprint case, four build-input snapshot cases,
-seven tool installation cases and the complete build-cache repeat/tampered-output
-case pass. Warning-denied Clippy passes for Host, Backup and CLI with all targets
-and features. Six representation, 25 current-protocol and two lock-seed cases
-also pass; the existing manual query measurement remains ignored.
-Locked cache preparation succeeds. All 11 Backup artifact,
-76 persistence and 33 restore-runner tests pass against selected Backup 0.5.4.
-Independent embedded-peer verification passes without changing its executable
-bytes or provenance.
-The exact CLI live-create refusal passes before filesystem or ICP effects.
-These checks do not establish native Canic macOS or a broad validation receipt.
+[Testkit #29](https://github.com/dragginzgame/ic-testkit/issues/29) now has its
+output-file custody API in selected published registry 0.23.0, source
+`59b1c1de924116752282eac48c6531dce159ccc9`. Exact-source native CI
+[37772507706](https://github.com/dragginzgame/ic-testkit/actions/runs/37772507706)
+was queued at review. Full Canic process-owner adoption and retained-output
+qualification remain under #474/#484; API availability is not consumer adoption.
 
-## October 7 Blob and ledger qualification
+## Local readiness HTTP follow-up
 
-The adapter pins published Blob 0.17.1; all three independent locks now select
-Memory 0.31.1, Timers 0.14.12 and Metrics 0.2.9, matching the October 7 root graph. Only
-those four selected packages changed in each lock. Both complete managed Fast
-builds pass. Artifact-manifest-derived graphs verify exact Wasm hashes and one
-runtime identity across all eight application/infrastructure graphs. Dedicated
-and embedded PocketIC proofs pass complete service Candid parity, installation,
-caller/tenant refusals, lost mutation-response reconciliation, aggregate metrics,
-same-release restoration and repeated current-instance recovery.
+[Host #458](https://github.com/dragginzgame/canic/issues/458): local status and
+readiness now share reqwest for URL parsing, HTTP framing and body decoding.
+Anonymous CBOR/Candid and ICP environment selection remain Canic-owned. Requests
+use the selected origin without redirects/proxies or URL credentials, with a
+30-second deadline. Chunked replies decode correctly; transport failures retain
+the HTTP cause and native I/O kind through existing error variants.
 
-The reported dependency-pins failure came from the exception still naming Blob
-0.15.2 after the adapter adopted 0.17.1. The matching exact-selector exception and
-its current lifecycle/protocol rationale are repaired; `make dependency-pins-gate`
-passes with Cargo inheritance checks. Manifests, selected versions and all
-lockfiles remain unchanged. This focused gate is not a new broad validation receipt.
+The initial thirteen focused replica-query cases and warning-denied Host/CLI
+Clippy passed on the independently selected Query 0.49.1 / Host 0.5.2 graph,
+lock `fb0dc97742edb721c314e994a74afe6befe162bdd3722e4c076b7c1f595eb0ca`.
+Its read-only peer verifier passed without regeneration. The maintainer then
+completed selections of direct Host 0.6.0, Testkit 0.23.0, Memory 0.31.5,
+Metrics 0.2.12, Timers 0.14.16 and Backup 0.7.0. Query 0.49.1 retains Host
+Artifacts/FS 0.5.2 transitively; [Query #24](https://github.com/dragginzgame/ic-query/issues/24)
+owns upstream convergence. No dependency or package version change was made by
+this slice. The final manifest SHA-256 is
+`0262a4034e380c1506096e9d85a143a407fcac5dfe6f94cd6260e86811c54d9a`;
+lock SHA-256 is
+`607405cc74f0f5ca687201bbb4535ccc9032f4b10c1bb729c7184c510dfef79b`.
+The old Observatory error-construction fixture required the new `group_error`
+field; its test-only initializer is corrected. All 13 HTTP and two Observatory
+cases pass on that current graph, as does warning-denied Host/CLI Clippy.
+Explicit final-graph refresh regenerated Wasm/provenance together and read-only
+verification passes. Current peer SHA-256:
+`f4d0087deefefbf181eed360971b9f70c1fa117a92c870a9af221b26976ad4a7`;
+provenance SHA-256:
+`21f2d47079cc9fb9d92fe3ab6bbf3746c98351d56ac3aa37ce93fb2ec4e0990b`.
+The exact production initializer qualification passes in 174.02s (244s governed
+invocation), retaining the same exact-byte/refusal/interruption/replay scope
+described below. Complete case output is
+`target/test-runs/20261008T120314Z-2342210.drPHiO/2.log`. Owned server cleanup
+completed and successful `.tmp/test-runtime.ypy4Fr` cleared. Earlier journeys and
+results remain on their recorded inputs.
+The preceding attempt on a moving graph failed before initializer execution:
+generated artifact metadata could not obtain offline Memory 0.31.5. Its full log
+and `.tmp/test-runtime.1u56qy` remain retained; the owned server stopped.
+Explicit locked cache preparation preceded final-graph qualification.
+Focused evidence and exact source inputs are retained under
+`target/review-validation/replica-http-cleanup-20261008/inputs.json`.
 
-The exact production Root initializer case passes in 192.98s (328s governed
-invocation). It covers held allocation, exact 16,384-byte target binding,
-wrong-target/caller refusal, interruption, a discarded binding ingress reply,
-effect-free replay and application restoration. It does not discard a management
-install callback. Fifteen owning ledger tests, four memory ABI guards and the
-exact public memory Candid-shape case pass on Memory 0.31.1. Core native and Wasm
-and adapter Wasm strict Clippy pass. Both consumer shells pass native strict
-Clippy; four initializer, one install-intent and two Host encoder cases pass.
-Logs, trees, exact input
-bindings and the temporary consumer proof remain under
-`target/review-validation/blob-memory-qualification-20261007/`.
+Fleet `write_current` already uses shared durable byte publication after fallible
+serialization. That small projection stays: replacing it with streaming would
+change pre-serialization refusal and typed errors without retiring a local file
+engine. The owning issue records this inspected boundary rather than another
+wrapper or publication framework.
 
-The adapter/dedicated/embedded lock SHA-256 values are respectively
-`f373ab1664b8f63996c9f29764a7f08ece8aad7c4ac36583ff16897a88848a2a`,
-`2f263b4b205160ab4954c6570d1b202b5761d20548f55480558b3a14e7913724` and
-`6749a268db95f0fd2c128b2071070846d771ced3c2f8a08c4a153f52f088a013`.
-The published Blob archive binds `7c41e3a90996157312aa40985a9861f4c03ca35e` and
-matches its registry checksum; exact upstream CI `37640042157` passes Linux and
-both macOS architectures. This batch qualifies Canic on Linux, not native Canic
-macOS or a live provider.
+## First cleanup inputs and Linux evidence
 
-## Host consolidation
+Independent root manifest/lock edits advanced during implementation and were
+preserved. The first cleanup selected Host 0.5.2, Backup 0.7.0, Testkit 0.22.2, Memory 0.31.4,
+Metrics 0.2.11, Timers 0.14.15 and Query 0.49.0. Query shares Host 0.5 identities;
+the earlier root Host 0.4 generation is absent.
 
-[#458](https://github.com/dragginzgame/canic/issues/458) owns the accepted shared
-Host adoption. Release representation checks now use exact streaming gzip
-comparison, avoiding a second complete decoded Wasm. Store publication uses the
-shared ordered chunk/whole-upload identities without an intermediate copied
-chunk collection. Generated lock-seed JSON uses typed durable publication within
-its existing 4 KiB budget. Digest identities, request bounds/order, pretty JSON,
-permissions, typed causes and lock-before-seed recovery remain Canic-owned.
+Manifest SHA-256:
+`391a75ec3ee2e60b44ac225e8a91b49bc6fe739a14a6cebcb22d499ef645c2e8`.
+Lock SHA-256:
+`1d8847fbf1f8bd83a0ce74356546093619540dbf9fc98c77471af27dcf820719`.
 
-Build inputs and local executable fingerprints now use the same shared descriptor
-reader. Two private hashing loops and the installer's duplicate artifact-error
-conversion are removed. Regular-file/no-follow admission, the executable's
-512 MiB bound, exact SHA-256 values and native I/O causes remain. Regressions
-include directories, symlinks, missing files, oversized executables, input drift,
-cache repeat, output tampering and rejected tool staging.
+On those first-cleanup inputs, 8 executable-publication, 7 Binaryen, 6 ic-wasm,
+23 artifact-admission, 14 Backup artifact and 76 persistence cases pass.
+Warning-denied Clippy passes for Canic, Host, Backup and CLI, all targets/features.
+Focused shell fixtures qualify nested before-EOF progress, startup/test failure,
+cancellation, original status, complete out-of-tail server bytes and owned cleanup.
+Release/tool fixtures use stubs for Git effects. Snapshot/governance closure,
+prepared tool checks, shell lint and dependency pin/inheritance checks pass.
 
-The earlier adoption also removed copied durable-file, process-capture and codec
-mechanics. Direct durable consumers import `ic-host-fs`; response-error consumers
-match `IcpJsonResponseError::Envelope`. Ordinary Fleet journal publication retains
-its pre-serialization/recovery contract. Paid ICP process custody and installer
-archive/bundle admission remain local while their shared prerequisites are
-unqualified; [Host #5](https://github.com/dragginzgame/ic-host-tooling/issues/5)
-owns the process gap. [Host #20](https://github.com/dragginzgame/ic-host-tooling/issues/20)
-owns staged executable admission after closing the writer and before publication;
-the retained-writer Linux `ETXTBSY` probe passes. Do not mechanically replace
-these stronger contracts.
+Explicit embedded-peer refresh regenerated Wasm/provenance together on that
+first-cleanup root lock. Wasm SHA-256:
+`9c3de9b31340d4c52f4e5df886b4a1e01c365fced8a95460cbc69ab63e5567b1`;
+provenance SHA-256:
+`9ed6378c2dae40d96700febd9b66cf388d2c8cc2911b0f5fead2ca12b2abd029`.
+The exact production Root initializer case passes in 101.31s (175s governed
+invocation). It covers exact 16 KiB target bytes, wrong-target/caller refusal,
+interruption, a discarded binding ingress reply and effect-free replay; it does
+not discard a management install callback.
+The independent read-only peer verifier also passes. Earlier input-bound tests
+remain historical evidence, not current receipts.
 
-The preceding Host 0.4.6 graph passed 47 selected Host tests, 11 Backup artifact,
-76 persistence and 33 restore-runner tests, strict package-scoped Clippy, the CLI
-live-create guard and read-only peer verification. Its exact lock was
-`f94cd1280398bbfef86a9692f3164a5f9487b7a62ef07fa6b61b6cd5d2db42cd`; evidence is
-`target/review-validation/host-046-adoption-20261007/`, not proof of newly selected
-dependencies. Published Host archives bind commit
-`0fb05f9e18f032425188d68e1d69317a0f0127d5`; exact upstream CI `37648086908` passes
-Linux, Intel macOS, Apple Silicon macOS and MSRV. Canic macOS remains unqualified.
+## Blob adapter delivery boundary
 
-## Backup adoption and remaining boundary
+[#444](https://github.com/dragginzgame/canic/issues/444): the adapter 0.1.0 package
+candidate has registry Canic 0.110.53 requirements, license, README and bounded
+contents. `cargo package --locked --offline --allow-dirty` verifies its normalized
+registry manifest. Archive SHA-256:
+`457942bb620ae7eaeffb2d467b0405e81749e582e580ea6abb0b8c9068b91abd`.
+It is prepared, not registry-published.
 
-The artifact foundation is implemented under
-[#488](https://github.com/dragginzgame/canic/issues/488): IC Backup owns checksums,
-relative no-follow traversal and private create-new staging. Canic's 367-line
-filesystem engine and stream-copy helper are deleted. Digest bytes and manifest
-shape remain; shared traversal errors replace local entry/platform variants
-through `ArtifactChecksumError::Artifact`, preserving native I/O causes. This
-public error hard cut joins the existing minor-boundary requirement.
+Blob 0.18 was tagged but unpublished at verification. The adapter selects
+published 0.17.2; its independent consumer locks select Memory 0.31.3, Timers
+0.14.15 and Metrics 0.2.11. This separate selected deployment graph is not the
+later root graph above. [Blob #27](https://github.com/dragginzgame/ic-blob-storage/issues/27#issuecomment-6057786245)
+records the publication feedback.
 
-Canic retains descriptor publication barriers, custody and same-operation
-interruption recovery. The remaining checked directory-framing adoption belongs
-to [#490](https://github.com/dragginzgame/canic/issues/490) and
-[IC Backup #26](https://github.com/dragginzgame/ic-backup/issues/26); it requires a
-published, qualified API. A dirty sibling implementation is not an adopted
-dependency. Live capture remains unavailable under
-[#394](https://github.com/dragginzgame/canic/issues/394); artifact adoption does not
-provide complete live backup/restore runners or transport.
+Disposable Canic-owned consumers use the extracted verified candidate plus
+registry Canic 0.110.53, without overrides or local framework paths. Both complete
+managed builds pass. Eight artifact-manifest-bound Wasm graphs have exact hashes
+and one selected facade/Core/Memory/Timers/Metrics/CDK identity each. Generated
+infrastructure uses registry-cache paths verified against exact published archive
+bytes/checksums. It does not supply an application checkout acceptance claim.
+Dedicated/embedded PocketIC journeys pass with the final native helper
+(Host 0.5.2/Testkit 0.22.2/Memory 0.31.4) and refreshed peer. Complete 32-method Candid parity, actual-service initialization,
+caller/tenant refusal, discarded mutation reply reconciliation, metrics, same-release
+restoration and repeated current-instance recovery are the owning proof scope.
 
-## Release and fixture repairs
+## Review and publication boundary
 
-[#486](https://github.com/dragginzgame/canic/issues/486) owns release cache
-preparation: locked fetch precedes the offline gate without changing caller
-offline policy. [#450](https://github.com/dragginzgame/canic/issues/450) owns the
-reported fixture/compiler repairs: private Make fixtures include shared records
-and clear inherited release assignments; Testkit workspace discovery explicitly
-requires its fallible result; ordinary validation refuses stale embedded bytes.
-These repairs are already in the maintainer-owned base, except the retained peer
-Wasm/provenance refresh. Original failure fixtures and logs remain intact.
+Evidence, exact graphs and retained attempts live under
+`target/review-validation/sibling-adoption-20261008/`. Failed invocation scratch
+remains intact; successful owned processes stop and successful scratch clears.
+No broad workspace gate, commit, staging, push, package publication or live
+provider effect ran by the agent; incoming staged work was preserved. No sibling checkout was changed.
 
-The October 7 peer SHA-256 was
-`fb77457871de89db5c62c92608dfe54bdf1b02110f76f56437ef3184c80eeeef`.
-The exact managed Component lifecycle case passed in 150.59s after explicit
-refresh, with real installation/restoration and authorization refusals. Its
-evidence is bound to the older input graph under
-`target/review-validation/embedded-peer-refresh-20261007/` and
-`target/test-runs/20261007T151207Z-63666.kocik3/`. Later read-only verification
-must not be described as a new PocketIC journey or rewrite the fixture implicitly.
-
-## Publication boundary and accepted scope
-
-The Canic-owned managed graph qualification boundary under #444 was cleared on
-the October 7 selected graph; its proofs do not qualify the subsequently advanced root lock.
-the issue retains its application-owned Toko acceptance. Read-only source
-inspection finds no required-init flag or production binding caller, and its
-older lock is not this batch's managed evidence. No sibling edit or build ran.
-Downstream application acceptance is not an additional Canic release gate.
-
-The whole open release batch is **not push/publication ready**. Public/stable hard cuts still
-require the human-owned minor decision recorded in
-[#459](https://github.com/dragginzgame/canic/issues/459). Passing focused checks
-does not resolve these boundaries. Package versions and release receipts remain
-unchanged; no commit, release, publication or live IC effect ran for this cleanup.
-The ledger compiler repair is complete. The old closeout report qualifies its
-frozen .42 checkpoint; current FR1 still exposes observation/assessment without
-the accepted release-to-capacity CLI/execution outcome. The exact current
-0.110 closeout and accepted scope disposition remain human-owned.
-
-The [0.110 design](../design/0.110-fleet-runtime-contraction/0.110-design.md) and
-[status](../design/0.110-fleet-runtime-contraction/status.md) retain accepted
-sequencing; historical checkpoints are evidence, not permission to revive
-predecessor state or cross a minor boundary. Further deployment simplification
-has its own owner in [#452](https://github.com/dragginzgame/canic/issues/452).
-External checkouts remain read-only; do not sweep retained build or paid-operation
-evidence to make a release look clean.
-
-## Earlier integration evidence
-
-The imported Toko timing diagnostics were qualified against isolated published
-.50 source `718531020dd0311b682d2539c3178627549b2486` in
-`.canic/local-work/toko-feedback-20261002/`: 88 Host import, seven timing and
-15 CLI receipt tests, scoped Clippy and the exact signed-handoff PocketIC case
-(306.33s). Root/Coordinator queries and reconciliation share bounded invocation
-receipts; child attribution and incomplete cancellation/panic observations remain.
-Those logs qualify the isolated source, not today's combined graph.
+The bounded in-repository cleanup outcomes are ready for review on Linux. The
+whole planned release batch is not publication-complete: native Canic
+macOS acceptance remains separate/unrun, and #444 retains adapter publication and
+actual application-owned Toko acceptance. Paid ICP custody, further Host reporting,
+Backup transport/runners and testing-package consolidation are separate outcomes,
+not implicitly completed by this batch. Auth is deliberately deferred.
+The human-owned exact 0.110 closeout and #459 minor boundary remain in force;
+passing focused tests does not accept that audit or start the next minor.
 
 Preserve `.canic/local-work/`, `.canic/incident-repairs/canic188/` and retained
-validation logs. The withdrawn incident repair's
-[historical decision](../audits/release-lines/supporting/0.110-fleet-runtime-contraction/canic188-issued-import-recovery.md)
-is evidence only. Earlier handoffs remain in Git history and the
-[existing archive](archive/2026-10-01-prior-fleet-handoffs.md); the full pre-cleanup
-handoff is also retained with this cleanup's local review artifacts. GitHub
-issues and owning design/audit documents retain decisions without a second local
-issue queue.
+failure evidence. Earlier handoffs remain in Git history; prior historical paths
+are not asserted to survive maintainer cleanup. Do not revive predecessor-state
+compatibility or discard paid-operation custody to simplify the tree.

@@ -26,7 +26,7 @@ fn rejected_stage_preserves_destination_and_removes_temporary_copy() {
     let destination = temp.path.join("installed");
     fs::write(&candidate, b"new executable").unwrap();
     fs::write(&destination, b"previous executable").unwrap();
-    let result = publish_executable("test", &candidate, &destination, |_stage| {
+    let result = publish_executable(&candidate, &destination, |_stage| {
         Err(InstallError::ExecutableHashMismatch {
             path: destination.clone(),
             actual: "actual".into(),
@@ -36,6 +36,43 @@ fn rejected_stage_preserves_destination_and_removes_temporary_copy() {
     std::assert_matches!(result, Err(InstallError::ExecutableHashMismatch { .. }));
     assert_eq!(fs::read(&destination).unwrap(), b"previous executable");
     assert_eq!(fs::read_dir(&temp.path).unwrap().count(), 2);
+}
+
+#[test]
+fn rejected_foreign_stage_retains_original_admission_and_cleanup_causes() {
+    let temp = TempDirectory::create("publication-custody-test").unwrap();
+    let candidate = temp.path.join("candidate");
+    let destination = temp.path.join("installed");
+    fs::write(&candidate, b"new executable").unwrap();
+    fs::write(&destination, b"previous executable").unwrap();
+    let mut replacement = None;
+    let result = publish_executable(&candidate, &destination, |stage| {
+        fs::remove_file(stage).unwrap();
+        fs::create_dir(stage).unwrap();
+        replacement = Some(stage.to_path_buf());
+        Err(InstallError::ExecutableHashMismatch {
+            path: stage.to_path_buf(),
+            actual: "replaced".into(),
+            expected: "admitted".into(),
+        })
+    });
+    let Err(InstallError::Io { source, .. }) = result else {
+        panic!("expected retained publication evidence");
+    };
+    let cause = source
+        .get_ref()
+        .unwrap()
+        .downcast_ref::<NamedWriteError<InstallError>>()
+        .unwrap();
+    std::assert_matches!(
+        cause,
+        NamedWriteError::Producer {
+            source: InstallError::ExecutableHashMismatch { .. },
+            cleanup_error: Some(_),
+        }
+    );
+    assert!(replacement.unwrap().is_dir());
+    assert_eq!(fs::read(destination).unwrap(), b"previous executable");
 }
 
 #[test]
@@ -56,9 +93,7 @@ fn publication_failure_cleans_stage_and_preserves_destination_directory() {
     let destination = temp.path.join("installed");
     fs::write(&candidate, b"candidate").unwrap();
     fs::create_dir(&destination).unwrap();
-    let result = publish_executable("test", &candidate, &destination, |_| {
-        Ok::<_, InstallError>(())
-    });
+    let result = publish_executable(&candidate, &destination, |_| Ok::<_, InstallError>(()));
     std::assert_matches!(result, Err(InstallError::Io { .. }));
     assert!(destination.is_dir());
     assert_eq!(fs::read_dir(&temp.path).unwrap().count(), 2);

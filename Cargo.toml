@@ -77,23 +77,23 @@ futures = "0.3"
 getrandom = "0.4"
 hmac = "0.13.0"
 ic-agent = "=0.49.2"
-ic-backup = { version = "0.5.3", default-features = false }
+ic-backup = { version = "0.7", default-features = false }
 ic-canister-sig-creation = "1.3.1"
 ic-cdk = "0.20.3"
 ic-certification = "3.0"
-ic-host-artifacts = { version = "0.4.6", default-features = false }
-ic-host-fs = { version = "0.4.6", default-features = false }
-ic-host-process = { version = "0.4.6", default-features = false }
-ic-host-tools = "0.4.6"
+ic-host-artifacts = { version = "0.7", default-features = false }
+ic-host-fs = { version = "0.7", default-features = false }
+ic-host-process = { version = "0.7", default-features = false }
+ic-host-tools = "0.7"
 ic-management-canister-types = "0.11"
 ic-memory = "0.31"
 ic-metrics = "0.2"
-ic-query = { version = "0.48", default-features = false, features = [
+ic-query = { version = "0.49", default-features = false, features = [
     "subnet-catalog-host",
 ] }
 ic-secp256k1 = "=0.3.0"
 ic-signature-verification = "0.3.0"
-ic-testkit = "0.21"
+ic-testkit = "0.24"
 ic-timers = "0.14"
 ic-verify-bls-signature = { version = "0.6.0", default-features = false, features = [
     "alloc",

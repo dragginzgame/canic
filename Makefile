@@ -41,14 +41,14 @@ CANIC_CARGO_TARGET_DIR ?= $(CURDIR)/target
 CARGO_TARGET_DIR ?= $(CANIC_CARGO_TARGET_DIR)
 export CARGO_TARGET_DIR
 SCCACHE_BIN ?= $(shell command -v sccache 2>/dev/null)
-CANIC_SCCACHE_WRAPPER := $(CURDIR)/scripts/ci/run-sccache.sh
+CANIC_SCCACHE_WRAPPER := $(CURDIR)/scripts/ci/run-canic-sccache.sh
 ifeq ($(origin RUSTC_WRAPPER), undefined)
 ifneq ($(strip $(SCCACHE_BIN)),)
 CANIC_SCCACHE_BIN ?= $(SCCACHE_BIN)
 RUSTC_WRAPPER ?= $(CANIC_SCCACHE_WRAPPER)
 endif
 endif
-ifneq ($(filter sccache run-sccache.sh,$(notdir $(RUSTC_WRAPPER))),)
+ifneq ($(filter sccache run-canic-sccache.sh,$(notdir $(RUSTC_WRAPPER))),)
 CARGO_INCREMENTAL ?= 0
 SCCACHE_CACHE_SIZE ?= 40G
 SCCACHE_IDLE_TIMEOUT ?= 7200

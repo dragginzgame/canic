@@ -21,6 +21,87 @@ fn byte_checksum_matches_sha256_vector() {
     assert_eq!(checksum.hash, EMPTY_SHA256);
 }
 
+#[test]
+fn checked_directory_projection_preserves_identity_and_typed_refusals() {
+    use ic_backup::ops::artifacts::DirectoryChecksumError;
+    let checksum = ArtifactChecksum::from_relative_file_checksums(vec![
+        ("nested/b.txt".into(), ArtifactChecksum::from_bytes(b"b")),
+        ("a.txt".into(), ArtifactChecksum::from_bytes(b"a")),
+    ])
+    .unwrap();
+    assert_eq!(
+        checksum.hash,
+        "e4d330f138b8f1b3044e84b5dcbe4fd1cb7e043d0c20810c083d791b6de01266"
+    );
+    assert_eq!(
+        ArtifactChecksum::from_relative_file_checksums(vec![])
+            .unwrap()
+            .hash,
+        EMPTY_SHA256
+    );
+    for paths in [["a", "a"], ["../a", "b"]] {
+        let error = ArtifactChecksum::from_relative_file_checksums(
+            paths
+                .into_iter()
+                .map(|path| (path.into(), ArtifactChecksum::from_bytes(b"same")))
+                .collect(),
+        )
+        .unwrap_err();
+        let ArtifactChecksumError::Io(source) = error else {
+            panic!("expected typed path cause")
+        };
+        let cause = source
+            .get_ref()
+            .unwrap()
+            .downcast_ref::<DirectoryChecksumError>()
+            .unwrap();
+        if paths[0] == "a" {
+            std::assert_matches!(cause, DirectoryChecksumError::DuplicatePath { .. });
+        } else {
+            std::assert_matches!(cause, DirectoryChecksumError::InvalidRelativePath { .. });
+        }
+    }
+    let mut invalid = ArtifactChecksum::from_bytes(b"a");
+    invalid.algorithm = "unknown".into();
+    std::assert_matches!(
+        ArtifactChecksum::from_relative_file_checksums(vec![("a".into(), invalid)]),
+        Err(ArtifactChecksumError::UnsupportedAlgorithm(_))
+    );
+}
+
+#[test]
+fn checked_directory_projection_preserves_unicode_framing_and_hex_equivalence() {
+    let mut accent = ArtifactChecksum::from_bytes(b"accent");
+    accent.hash.make_ascii_uppercase();
+    let checksum = ArtifactChecksum::from_relative_file_checksums(vec![
+        ("é.txt".into(), accent),
+        (
+            "nested/雪.txt".into(),
+            ArtifactChecksum::from_bytes(b"snow"),
+        ),
+    ])
+    .unwrap();
+    assert_eq!(
+        checksum.hash,
+        "a7bd4da90f6e41313fd28db721c61188b9cb7cdfe11c30d455335e2a19e0f776"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn checked_directory_projection_preserves_non_utf8_identity_refusal() {
+    use std::{ffi::OsString, os::unix::ffi::OsStringExt};
+    let path = PathBuf::from(OsString::from_vec(vec![0x80]));
+    let result = ArtifactChecksum::from_relative_file_checksums(vec![(
+        path.clone(),
+        ArtifactChecksum::from_bytes(b"source"),
+    )]);
+    std::assert_matches!(
+        result,
+        Err(ArtifactChecksumError::Artifact(ArtifactError::NonUtf8Path { path: rejected })) if rejected == path
+    );
+}
+
 // Ensure file checksums use the same implementation as byte checksums.
 #[test]
 fn file_checksum_matches_byte_checksum() {

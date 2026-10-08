@@ -23,8 +23,8 @@ Fleet, lifecycle and memory tests. The upstream service suite owns blob authorit
 certificate replies, restoration, provider behavior and accounting; those results
 do not establish deployment qualification for an arbitrary wrapper.
 
-The composition selects published Blob Storage 0.17.1, Memory 0.31.1,
-Timers 0.14.12 and arithmetic-only Metrics 0.2.9 in the isolated lockfiles.
+The composition selects published Blob Storage 0.17.2, Memory 0.31.3,
+Timers 0.14.15 and arithmetic-only Metrics 0.2.11 in the isolated lockfiles.
 Each complete managed artifact must share one Memory and Timers runtime.
 See [Canic#444](https://github.com/dragginzgame/canic/issues/444) and the
 [current handoff](../../status/current.md) for scoped qualification. Building
@@ -127,9 +127,15 @@ canic_blob_service::canister!();
 ```
 
 The shell depends on `canic-blob-service`, `canic`, `candid` and `ic-cdk`.
-The adapter is currently unpublished: use its local path and select the Canic
-facade from the same checkout in the consuming workspace. Mixing that adapter's
-local facade with a registry facade creates two package identities and is rejected.
+The adapter is prepared as `canic-blob-service 0.1.0` with a registry Canic
+`0.110.53` requirement and published Blob `0.17.2`. Cargo's package manifest
+removes the development Canic path and excludes these private consumer fixtures.
+Its first registry publication remains separate from package verification; until
+then a version-only adapter declaration cannot resolve. Checked-in qualification
+uses the matching local facade. A disposable package candidate can instead select
+registry Canic and the extracted normalized adapter, without a sibling checkout.
+Use one Canic source throughout that graph: mixing local and registry facades is
+rejected by managed admission.
 See the [consumer manifest](../../../integrations/blob-service/consumer/Cargo.toml)
 and [canister shell](../../../integrations/blob-service/consumer/src/lib.rs).
 It does not declare an `ic-blob-storage` dependency. The adapter selects that

@@ -7,8 +7,6 @@
 #[cfg(test)]
 mod tests;
 
-use crate::hash::hex_bytes;
-
 use std::{
     io::{self, Read},
     path::{Path, PathBuf},
@@ -19,7 +17,6 @@ use ic_backup::{
     ops::artifacts::{self, ArtifactError},
 };
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use thiserror::Error as ThisError;
 
 const SHA256_ALGORITHM: &str = "sha256";
@@ -83,23 +80,21 @@ impl ArtifactChecksum {
     }
 
     /// Compose the maintained directory checksum from relative file checksums.
-    pub(crate) fn from_relative_file_checksums(mut files: Vec<(PathBuf, Self)>) -> Self {
-        files.sort_by(|left, right| left.0.cmp(&right.0));
-        let mut hasher = Sha256::new();
-        for (relative_path, file_checksum) in files {
-            let relative_path = relative_path
-                .to_str()
-                .expect("artifact publication admitted UTF-8 relative paths");
-            hasher.update(relative_path.as_bytes());
-            hasher.update([0]);
-            hasher.update(file_checksum.hash.as_bytes());
-            hasher.update(*b"\n");
-        }
-
-        Self {
-            algorithm: SHA256_ALGORITHM.to_string(),
-            hash: hex_bytes(hasher.finalize()),
-        }
+    pub(crate) fn from_relative_file_checksums(
+        files: Vec<(PathBuf, Self)>,
+    ) -> Result<Self, ArtifactChecksumError> {
+        let files = files
+            .into_iter()
+            .map(|(path, checksum)| {
+                checksum.validate()?;
+                ArtifactChecksumRecord::from_hash(&checksum.hash)
+                    .map(|record| (path, record))
+                    .map_err(|_| ArtifactChecksumError::InvalidHash(checksum.hash))
+            })
+            .collect::<Result<_, _>>()?;
+        artifacts::checksum_relative_files(files)
+            .map(Self::from_record)
+            .map_err(|error| artifact_error(error.into()))
     }
 
     /// Verify that the checksum matches an expected SHA-256 hash.

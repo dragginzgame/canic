@@ -69,6 +69,7 @@ mod tests {
                     stderr: b"private diagnostics".to_vec(),
                     ..ExecutionEvidence::default()
                 },
+                group_error: None,
                 kill_error: None,
                 wait_error: None,
             }));

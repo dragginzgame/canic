@@ -61,6 +61,13 @@ Canic does not fetch or execute them during inspection.
 continues to assemble the complete configured App and infrastructure artifacts
 needed by Fleet operations. ICP selection is not authority to shrink that closure.
 
+Local status and readiness reads use anonymous HTTP at the selected local gateway
+or explicit HTTP origin. The existing reqwest client owns URL parsing, framing
+and response-body decoding; Canic owns the CBOR/Candid boundary and readiness
+decision. Requests have a 30-second deadline and do not follow redirects or
+environment proxies. Credential-bearing or non-HTTP URLs reject before requests.
+HTTP refusal and transport failures remain errors; they cannot report readiness.
+
 ## Management Inspection
 
 Host observation accepts additive ICP CLI JSON fields while validating the

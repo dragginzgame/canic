@@ -22,7 +22,8 @@ VERIFY="$ROOT/scripts/ci/verify-file-checksum.sh"
 ICP_REQUIRE="$ROOT/scripts/ci/require_icp.sh"
 RELEASE_CLEANUP="$ROOT/scripts/ci/cleanup-release-artifacts.sh"
 TEST_SCRATCH_RUNNER="$ROOT/scripts/ci/run-with-test-scratch.sh"
-SCCACHE_WRAPPER="$ROOT/scripts/ci/run-sccache.sh"
+SCCACHE_WRAPPER="$ROOT/scripts/ci/run-canic-sccache.sh"
+SCCACHE_LAUNCHER="$ROOT/scripts/ci/run-sccache.sh"
 POCKET_IC_STOPPER="$ROOT/scripts/ci/stop-owned-pocketic-servers.sh"
 RELEASE_PUSH="$ROOT/scripts/ci/push-release.sh"
 VERSION_READER="$ROOT/scripts/ci/read-workspace-version.sh"
@@ -75,7 +76,7 @@ mkdir -p \
     "$release_cleanup_fixture/target" \
     "$release_cleanup_bin"
 touch "$foreign_test_scratch/live-owner"
-cp "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$SCCACHE_WRAPPER" "$POCKET_IC_STOPPER" \
+cp "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$SCCACHE_LAUNCHER" "$SCCACHE_WRAPPER" "$POCKET_IC_STOPPER" \
     "$release_cleanup_fixture/scripts/ci/"
 # shellcheck disable=SC2016 # Preserve expansion for the generated fixture.
 printf '%s\n' \
@@ -119,9 +120,9 @@ printf '%s\n' \
 chmod +x "$release_cleanup_bin/sccache"
 FAKE_SCCACHE_RECORD="$release_cleanup_fixture/sccache-record" \
     CANIC_SCCACHE_BIN="$release_cleanup_bin/sccache" \
-    RUSTC_WRAPPER="$release_cleanup_fixture/scripts/ci/run-sccache.sh" \
+    RUSTC_WRAPPER="$release_cleanup_fixture/scripts/ci/run-canic-sccache.sh" \
     bash "$release_cleanup_fixture/scripts/ci/run-with-test-scratch.sh" \
-    "$release_cleanup_fixture/scripts/ci/run-sccache.sh" --show-stats
+    "$release_cleanup_fixture/scripts/ci/run-canic-sccache.sh" --show-stats
 [ "$(cat "$release_cleanup_fixture/sccache-record.tmpdir")" = \
     "$release_cleanup_fixture/.tmp/sccache-runtime/tmp" ] ||
     fail "sccache inherited invocation-owned test scratch"
@@ -145,6 +146,20 @@ for selected_wrapper in "" /explicit/compiler-wrapper; do
         bash -c '[[ -v RUSTC_WRAPPER && "$RUSTC_WRAPPER" == "$1" ]]' _ "$selected_wrapper" ||
         fail "targeted runner replaced an explicit compiler wrapper"
 done
+
+# Failure evidence remains discoverable after the owner stops its processes.
+status=0
+PATH="$release_cleanup_bin:$PATH" \
+    bash "$release_cleanup_fixture/scripts/ci/run-with-test-scratch.sh" \
+    bash -c 'printf "%s\n" "$TMPDIR" > "$1"; printf "partial diagnostics\n" > "$TMPDIR/raw.log"; exit 101' \
+    _ "$release_cleanup_fixture/failed-tmpdir" > "$release_cleanup_fixture/failed.log" 2>&1 || status=$?
+[[ "$status" -eq 101 ]] || fail "scratch owner changed the test failure status"
+failed_scratch="$(cat "$release_cleanup_fixture/failed-tmpdir")"
+[[ -f "$failed_scratch/raw.log" ]] || fail "scratch owner deleted partial failure evidence"
+rg -Fq "$failed_scratch" "$release_cleanup_fixture/failed.log" || fail "retained evidence path was not printed"
+CANIC_TEST_SCRATCH="$failed_scratch" \
+    bash "$release_cleanup_fixture/scripts/ci/cleanup-release-artifacts.sh" --scratch-only
+[[ ! -e "$failed_scratch" ]] || fail "explicit cleanup could not delete retained evidence"
 
 rm -f "$release_cleanup_fixture/cargo-clean-attempts"
 mkdir -p "$release_cleanup_fixture/target"

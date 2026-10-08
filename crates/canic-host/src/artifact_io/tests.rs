@@ -42,8 +42,9 @@ fn failed_cargo_input_capture_leaves_no_stage_or_published_changes() {
 fn install_limit_failure_preserves_the_published_artifact_set() {
     for network in [BuildNetwork::Ic, BuildNetwork::Local] {
         for oversized in [
-            wasm_with_code_section_size(12 * 1024 * 1024 + 1),
-            wasm_with_defined_functions(super::wasm::SUPPORTED_DEFINED_FUNCTION_LIMIT + 1),
+            wasm_with_code_section_size(12 * 1024 * 1024 + 2),
+            wasm_with_defined_functions(50_001),
+            wasm_with_globals(1_001),
         ] {
             let root = unique_temp_dir("canic-artifact-set-limit");
             fs::create_dir_all(&root).unwrap();
@@ -88,8 +89,10 @@ fn install_limits_accept_exact_supported_boundaries() {
     fs::create_dir_all(&root).unwrap();
     let path = root.join("app.wasm");
     for wasm in [
-        wasm_with_code_section_size(12 * 1024 * 1024),
-        wasm_with_defined_functions(super::wasm::SUPPORTED_DEFINED_FUNCTION_LIMIT),
+        // The function-count prefix belongs to the payload, not the code-body limit.
+        wasm_with_code_section_size(12 * 1024 * 1024 + 1),
+        wasm_with_defined_functions(50_000),
+        wasm_with_globals(1_000),
     ] {
         fs::write(&path, wasm).unwrap();
         for network in [BuildNetwork::Ic, BuildNetwork::Local] {
@@ -116,6 +119,19 @@ fn wasm_with_defined_functions(count: u32) -> Vec<u8> {
     wasm.push(10);
     push_u32_leb128(&mut wasm, u32::try_from(code.len()).unwrap());
     wasm.extend(code);
+    wasm
+}
+
+fn wasm_with_globals(count: u32) -> Vec<u8> {
+    let mut wasm = b"\0asm\x01\0\0\0".to_vec();
+    let mut globals = Vec::new();
+    push_u32_leb128(&mut globals, count);
+    for _ in 0..count {
+        globals.extend([0x7f, 0, 0x41, 0, 0x0b]);
+    }
+    wasm.push(6);
+    push_u32_leb128(&mut wasm, u32::try_from(globals.len()).unwrap());
+    wasm.extend(globals);
     wasm
 }
 

@@ -31,7 +31,6 @@ canic-control-plane = { workspace = true, features = [
 canic-core = { workspace = true, features = ["auth-chain-key-ecdsa"] }
 ciborium = { workspace = true }
 crc32fast = { workspace = true }
-flate2 = { workspace = true }
 getrandom = { workspace = true }
 hmac = { workspace = true }
 ic-agent = { workspace = true }
@@ -39,7 +38,7 @@ ic-certification = { workspace = true }
 ic-host-artifacts = { workspace = true, features = ["gzip", "wasm"] }
 ic-host-fs = { workspace = true }
 ic-host-process = { workspace = true }
-ic-host-tools = { workspace = true }
+ic-host-tools = { workspace = true, features = ["ic-limits"] }
 ic-query = { workspace = true }
 ic-testkit = { workspace = true, optional = true }
 icrc-ledger-types = { workspace = true }
@@ -60,6 +59,7 @@ url = { workspace = true }
 rustix = { workspace = true }
 
 [dev-dependencies]
+flate2 = { workspace = true }
 ic-testkit = { workspace = true }
 ic-verify-bls-signature = { workspace = true }
 

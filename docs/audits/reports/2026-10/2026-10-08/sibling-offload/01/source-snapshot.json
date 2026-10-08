@@ -1,0 +1,522 @@
+{
+  "observed_at_utc": "2026-10-08T09:20:52.343232+00:00",
+  "repositories": [
+    {
+      "repository": "canic",
+      "head": "4c51a87c6a32397196bb3f65d064641194df10a5",
+      "version": "0.110.53",
+      "dirty_paths": [
+        " M Cargo.lock",
+        " M Cargo.toml"
+      ]
+    },
+    {
+      "repository": "shared-tooling",
+      "head": "0ba0ad00ed94848e54ecc82629b6b7873b7284c0",
+      "version": null,
+      "dirty_paths": [
+        " M .githooks/pre-commit",
+        " M .github/actions/retain-failure-evidence/action.yml",
+        " M .github/workflows/ci.yml",
+        " M CHANGELOG.md",
+        " M CONTRIBUTING.md",
+        " M README.md",
+        " M docs/consuming-snapshots.md",
+        " M docs/supported-hosts.md",
+        " M docs/verification-helpers.md",
+        " M scripts/ci/check-dependency-pins.sh",
+        " M scripts/ci/check-pocketic-alignment.sh",
+        " M scripts/ci/check-pocketic-binary.sh",
+        " M scripts/ci/install-actionlint.sh",
+        " M scripts/ci/install-ci-tool.sh",
+        " M scripts/ci/install-gitleaks.sh",
+        " M scripts/ci/install-sccache.sh",
+        " M scripts/ci/install-shellcheck.sh",
+        " M scripts/ci/install-yq.sh",
+        " M scripts/ci/qualify-native-failure-retention.sh",
+        " M scripts/ci/run-release.sh",
+        " M scripts/ci/run-validation-targets.sh",
+        " M scripts/ci/test-cloc-tooling.sh",
+        " M scripts/ci/test-fixture-retention.sh",
+        " M scripts/ci/test-portable-tools.sh",
+        " M scripts/ci/test-release-runner.sh",
+        " M scripts/ci/test-snapshot-distribution.sh",
+        " M scripts/ci/verify-evidence-checksums.sh",
+        " M scripts/dev/cloc-tooling.pl",
+        " M scripts/dev/install-host-tools.sh",
+        " M scripts/dev/install-ic-tools.sh",
+        " M scripts/distribution/refresh-consumer.sh",
+        "?? scripts/ci/archive-evidence.sh",
+        "?? scripts/ci/test-evidence-archive.sh"
+      ]
+    },
+    {
+      "repository": "ic-host-tooling",
+      "head": "81f9809861159def2fd0987fcb7961cda4afd969",
+      "version": "0.5.1",
+      "dirty_paths": [
+        " M docs/status/current.md",
+        "?? docs/reports/audits/2026/10/08/host-reuse/02/"
+      ]
+    },
+    {
+      "repository": "ic-backup",
+      "head": "f836d5e58170c6b16dba2552c10391666f86ce7e",
+      "version": "0.7.0",
+      "dirty_paths": []
+    },
+    {
+      "repository": "ic-testkit",
+      "head": "2951fd19e58799580e60ec0f6f5864d296271a62",
+      "version": "0.22.0",
+      "dirty_paths": [
+        " M .github/workflows/ci.yml",
+        " M CHANGELOG.md",
+        " M crates/ic-testkit/CHANGELOG.md",
+        " M docs/hosts.md",
+        "?? scripts/ci/collect-failure-evidence.sh",
+        "?? scripts/ci/test-failure-evidence.sh"
+      ]
+    },
+    {
+      "repository": "ic-auth",
+      "head": "61b113961e9ab0719a9fee417d9be484c6f2e3fa",
+      "version": "0.1.1",
+      "dirty_paths": [
+        " M CHANGELOG.md",
+        " M Cargo.lock",
+        " M Cargo.toml",
+        " M Makefile",
+        " M README.md",
+        " D crates/ic-auth-types/Cargo.toml",
+        " D crates/ic-auth-types/LICENSE",
+        " D crates/ic-auth-types/src/common.rs",
+        " D crates/ic-auth-types/src/identifiers.rs",
+        " D crates/ic-auth-types/src/lib.rs",
+        " D crates/ic-auth-types/src/proof.rs",
+        " D crates/ic-auth-types/src/token.rs",
+        " D crates/ic-auth-types/tests/wire.rs",
+        " M crates/ic-auth/Cargo.toml",
+        " M crates/ic-auth/src/canonical.rs",
+        " M crates/ic-auth/tests/canonical.rs",
+        " M docs/design/canic-source-review.md",
+        " M docs/design/extraction.md",
+        " M docs/development.md",
+        " M docs/status/current.md",
+        " M scripts/ci/check-auth-boundaries.sh",
+        " M scripts/release/metadata.sh",
+        " M scripts/release/publish.sh",
+        " M scripts/release/rewrite-manifest.pl",
+        " M scripts/release/test-tools.sh",
+        "?? crates/ic-auth-protocol-types/"
+      ]
+    },
+    {
+      "repository": "ic-memory",
+      "head": "692fbc81d698f4b8253565ff3036f3ad3fb42cd2",
+      "version": "0.31.3",
+      "dirty_paths": [
+        " M .shared-tooling.snapshot",
+        " M AGENTS.md",
+        " M CHANGELOG.md",
+        " M Cargo.lock",
+        " M Cargo.toml",
+        " M RELEASING.md",
+        " M crates/ic-memory/examples/repo_tool/mod.rs",
+        " M crates/ic-memory/examples/repo_tool/tests.rs",
+        " M docs/changelog/0.31.md",
+        " M docs/release-workflow-qualification.md",
+        " M docs/releases.md",
+        " M scripts/ci/release-pr.sh",
+        " M scripts/ci/run-release.sh",
+        " M scripts/ci/test-release-runner.sh",
+        "?? scripts/ci/collect-failure-evidence.sh",
+        "?? scripts/ci/test-failure-evidence.sh"
+      ]
+    },
+    {
+      "repository": "ic-metrics",
+      "head": "69b110b8fbefdac4773eac7631796f9dcb3f41a0",
+      "version": "0.2.11",
+      "dirty_paths": [
+        " M README.md",
+        " M docs/extraction.md",
+        " M docs/hosts.md",
+        " M docs/status/current.md",
+        "?? docs/evidence/release-0211.md"
+      ]
+    },
+    {
+      "repository": "ic-query",
+      "head": "08012b4bedd288b5882c0d8134ea94aa739228f6",
+      "version": "0.48.1",
+      "dirty_paths": [
+        " M .shared-tooling.snapshot",
+        " M AGENTS.md",
+        " M CHANGELOG.md",
+        " M Cargo.lock",
+        " M Cargo.toml",
+        " M DRAGGINZGAME.md",
+        " M crates/ic-query-cli/src/nns/data_center/reports.rs",
+        " M crates/ic-query-cli/src/nns/leaf/model.rs",
+        " M crates/ic-query-cli/src/nns/leaf/run.rs",
+        " M crates/ic-query-cli/src/nns/macros/reports.rs",
+        " M crates/ic-query-cli/src/nns/node_operator/reports.rs",
+        " M crates/ic-query-cli/src/nns/node_provider/reports.rs",
+        " M crates/ic-query/src/cache/model.rs",
+        " M crates/ic-query/src/icrc/account_transaction_cache/attempt.rs",
+        " M crates/ic-query/src/nns/governance/collection.rs",
+        " M crates/ic-query/src/snapshot_cache/attempt.rs",
+        " M crates/ic-query/src/snapshot_cache/tests.rs",
+        " M crates/ic-query/src/sns/report/cache_attempt.rs",
+        " M crates/ic-query/src/sns/report/model/reports/attempt.rs",
+        " M crates/ic-query/src/sns/report/tests/neurons/cache/status.rs",
+        " M docs/canister-smoke.md",
+        " M docs/consuming-snapshots.md",
+        " M docs/design/cache-policy.md",
+        " M docs/release-workflow.md",
+        " M docs/releases.md",
+        " M docs/supported-hosts.md",
+        " M rules/contributions.md",
+        " M scripts/canister/smoke.py",
+        " M scripts/canister/test_smoke.py",
+        " M scripts/ci/check-release-guards.sh",
+        " M scripts/ci/run-release.sh",
+        " M scripts/ci/test-release-runner.sh",
+        " M scripts/distribution/governance-files.txt",
+        " M scripts/release/adapter.sh",
+        "?? docs/changelog/0.49.md",
+        "?? docs/reports/",
+        "?? scripts/ci/release-pr.sh"
+      ]
+    },
+    {
+      "repository": "ic-timers",
+      "head": "ae26b854a1a473c5d2d153705c2d13570f378d38",
+      "version": "0.14.15",
+      "dirty_paths": [
+        " M CHANGELOG.md",
+        " M Cargo.lock",
+        " M Cargo.toml",
+        " M docs/releasing.md",
+        " M docs/shared-tooling.md",
+        " M docs/status/current.md"
+      ]
+    },
+    {
+      "repository": "ic-blob-storage",
+      "head": "704b8ebf6bea85a715e465e32e34758b601852ec",
+      "version": "0.18.0",
+      "dirty_paths": [
+        " M CHANGELOG.md",
+        " M Cargo.lock",
+        " M Cargo.toml",
+        " M crates/ic-blob-storage-contracts/README.md",
+        " M docs/dependencies.md",
+        " M docs/evidence/caffeine-probes/README.md",
+        " M docs/evidence/caffeine-probes/local/SHA256SUMS",
+        " M docs/releasing.md",
+        " M docs/status/current.md",
+        " M scripts/release/release-data.pl",
+        " M scripts/release/release.sh",
+        " M scripts/release/test-release.sh",
+        " M tests/pocketic/tests/browser_driver/mod.rs",
+        " M tests/pocketic/tests/native_session/mod.rs",
+        " M tests/pocketic/tests/support/mod.rs",
+        "?? docs/evidence/caffeine-probes/local/2026-10-08-host050-0180-03/summary.json",
+        "?? docs/evidence/host050-package0180.md",
+        "?? docs/evidence/publication-helper0181.md",
+        "?? tests/pocketic/tests/support/tests/"
+      ]
+    },
+    {
+      "repository": "icydb",
+      "head": "cb8cefca1d68c20025398eae6dfab18a2eb45883",
+      "version": "0.267.1",
+      "dirty_paths": [
+        " M .shared-tooling.snapshot",
+        " M AGENTS.md",
+        " M CHANGELOG.md",
+        " M Cargo.lock",
+        " M Cargo.toml",
+        " M DRAGGINZGAME.md",
+        " M Makefile",
+        " M crates/icydb-core/src/db/commit/store/mod.rs",
+        " M crates/icydb-core/src/db/commit/store/tests.rs",
+        " M crates/icydb-core/src/db/query/builder/scalar_projection.rs",
+        " M crates/icydb-core/src/db/schema/check/bind.rs",
+        " M crates/icydb-core/src/db/schema/check/tests.rs",
+        " M crates/icydb-core/src/db/schema/types.rs",
+        " M crates/icydb-core/src/db/sql/lowering/aggregate/grouped/validation.rs",
+        " M crates/icydb-core/src/db/sql/lowering/expr.rs",
+        " M crates/icydb-core/src/db/sql/parser/model.rs",
+        " M crates/icydb-core/src/db/sql/parser/projection/mod.rs",
+        " M crates/icydb-core/src/db/sql/parser/statement/ddl.rs",
+        " M docs/audits/targeted/metrics-lookup.md",
+        " M docs/changelog/0.267.md",
+        " M docs/consuming-snapshots.md",
+        " M docs/governance/shared-tooling.md",
+        " M docs/ic-tools.md",
+        " M docs/local-setup.md",
+        " M docs/principles/reviewable-changes.md",
+        " M docs/releases.md",
+        " M docs/supported-hosts.md",
+        " M docs/verification-helpers.md",
+        " M rules/agent-maintenance.md",
+        " M rules/changelogs.md",
+        " M rules/git-hooks.md",
+        " M scripts/ci/bump-version.sh",
+        " M scripts/ci/check-pocketic-alignment.sh",
+        " M scripts/ci/finalize-release-changelog.awk",
+        " M scripts/ci/run-icydb-validation-targets.sh",
+        " M scripts/ci/run-validation-targets.sh",
+        " M scripts/ci/test-release-runner.sh",
+        " M scripts/ci/test-rust-tools.sh",
+        " M scripts/ci/test-shared-tooling-adapters.sh",
+        " M scripts/ci/test-tool-commands.sh",
+        " M scripts/ci/test-workstation-setup.sh",
+        " M scripts/dev/install-ic-tools.sh",
+        " M scripts/dev/install-rust-tools.sh",
+        " M scripts/distribution/governance-files.txt",
+        " M scripts/release/test-pin-exceptions.sh",
+        " M testing/integration/src/bin/write_wasm_size_report.rs",
+        " M testing/integration/src/wasm_optimizer.rs",
+        "?? rules/contributions.md",
+        "?? scripts/ci/check-pocketic-binary.sh",
+        "?? scripts/ci/ic-tool-pins.awk",
+        "?? scripts/ci/test-pocketic-checks.sh"
+      ]
+    },
+    {
+      "repository": "toko",
+      "head": "44d4e2c6d41e3575b2503e79ffa369129ff3ecf2",
+      "version": "0.3.1",
+      "dirty_paths": []
+    },
+    {
+      "repository": "toko-miner",
+      "head": "aeed004b03b9b5d848de3750d77a42c5160c5fdf",
+      "version": "0.3.19",
+      "dirty_paths": [
+        " M .shared-tooling.snapshot",
+        " M Cargo.lock",
+        " M Cargo.toml",
+        " M Makefile",
+        " M docs/development.md",
+        " M docs/status/current.md",
+        " M docs/status/operations.md",
+        " M scripts/ci/run-release.sh",
+        " M scripts/dev/install-blob-preparer.py",
+        " M scripts/dev/install-node-contract-test.sh",
+        " M scripts/dev/install-node.sh",
+        " M scripts/dev/node-toolchain.sh",
+        " M scripts/release/adapter-test.sh",
+        " M scripts/release/bundle.py",
+        " M tool-versions.env",
+        "?? scripts/ci/finalize-release-changelog.awk",
+        "?? scripts/ci/release-pr.sh",
+        "?? scripts/ci/test-release-runner.sh"
+      ]
+    },
+    {
+      "repository": "ichelper",
+      "head": "0670a9887d727fb9c2cfef85e5ea1c6ebffa8157",
+      "version": null,
+      "dirty_paths": []
+    },
+    {
+      "repository": "toko-miner-assets",
+      "head": "79e2407ed0d74840658530a0dd04a0c0c69c9ba0",
+      "version": null,
+      "dirty_paths": []
+    }
+  ],
+  "source_sha256": {
+    "canic/Cargo.toml": "51c6c01d797e333cd59d65fc634e6a518d5ba7477664d4fedaf3df5018608bb5",
+    "canic/Cargo.lock": "81ac35235bf34a3807d2a6d74c08c3c9c7bc06746f6e948f2ce82113a0595d5f",
+    "canic/AGENTS.md": "8fc573e277d98271945334f172e8a744b391c811d7bb82f524cc8717d8aee5b6",
+    "canic/.shared-tooling.snapshot": "e179a2d96248b7dfc080e60f1e3e4d191552908ef86434ebb2bdedf172b89bab",
+    "canic/crates/canic-host/src/tool_install/mod.rs": "2acdb9b82bbad5a39f3192fd4f6ab77bc28f1b6bbf1392b3bf4fbd785cf0e843",
+    "canic/crates/canic-host/src/artifact_io/wasm/mod.rs": "e1f4f8e3645094df99ebc8a7b6634c63789595846ecfe758bbd13827c4452cc2",
+    "canic/crates/canic-host/src/artifact_io/mod.rs": "c989f9a4441480d56a5d9a39aad1a16dd640292ee5df3db8f5098f3f6a019b00",
+    "canic/crates/canic-host/src/icp/run.rs": "f8bceeb9304157faa5626eb61f39d8201809843a3ee0b3e4da24633a27f20d00",
+    "canic/crates/canic-host/src/icp/query/mod.rs": "c0da4bf298373765d280cedd3b1bfd0e16fd87ff8d7757917a38762fd174bf1a",
+    "canic/crates/canic-host/src/replica_query/transport/mod.rs": "dc11643d7f122891f2b0dccfedfe43cbba2b00c731d6310076fca3a803112247",
+    "canic/crates/canic-host/src/replica_query/cbor/mod.rs": "c53de2eecde7ab21472ac5597457565175dc14b26937b80d9f38dc0863b68fbe",
+    "canic/crates/canic-backup/src/artifacts/mod.rs": "2284fa4834ad1af19f9f012eb6f5197d92d8cf2f330617f216135ea9db821aa2",
+    "canic/crates/canic-backup/src/persistence/artifact_commit.rs": "bb9ff6c449a9d15aa8e7bf1ca6c8780d84713e52caf36a81427a12a9ca63a135",
+    "canic/scripts/ci/run-workspace-tests.sh": "ae5bc68defcf4b52c414ca2bc50f75c70934ac4c786ccf19ba30687d39133303",
+    "canic/scripts/ci/run-pocketic-workers.sh": "805655e4e924744b31aac10a14fb07d4c6596b2f8a8e4272debc53d646172b37",
+    "canic/scripts/ci/run-pocketic-worker.sh": "1183f56b672b6e79496662bf4f98c730449f512e4e03be07e2b4951a6e722d27",
+    "canic/scripts/ci/run-with-test-scratch.sh": "f38d095517b67e927659d1d8bcbf9b5c0a3710a6386fadca233f39431901072d",
+    "canic/scripts/ci/stop-owned-pocketic-servers.sh": "a25f31b88a5f77edbce451a2ab8572e12d84505f2a8de31b8ca1e64d259e8ba1",
+    "canic/scripts/ci/check-runner-disk-space.sh": "3e1621f771957fd58b8184f39872d651b4dadc7c685d35042ae2b90222df6621",
+    "canic/scripts/ci/run-sccache.sh": "bd611492deadde24ec501209a5c924cf1fc6dc81e233e6bb109ace4c2de4ab1c",
+    "canic/scripts/ci/prepare-rustsec-db.sh": "771cc142805d6200caddd32a2f10783516fe297e4424c051ac92a40884607e5f",
+    "canic/scripts/ci/install-sccache.sh": "64218c32570d8f406ebf644c232f3cf8e9c7e3cf5af4b27c502e151ca7078f1d",
+    "ic-host-tooling/crates/ic-host-fs/src/durable/stream/mod.rs": "920f208d2de075dd483777b2b2bdee5878376af802669e2cd01d03fd9246e27d",
+    "ic-host-tooling/crates/ic-host-tools/src/install_limits/mod.rs": "8b7cd799c5ef55fe3e481431c9773489d46e51581555e40a69063ffd1e9ff398",
+    "ic-host-tooling/crates/ic-host-process/src/child/mod.rs": "537660554af147dbd4fe9ed18fb65975f1e132fffc7d62cd8bb70abf94250521",
+    "ic-backup/crates/ic-backup/src/ops/artifacts/mod.rs": "6011fbc412cd7ab6ff438adecb33dc04a48cbcb0a8de78e6d706efe24306680a",
+    "ic-backup/crates/ic-backup/src/lib.rs": "d41ae649f8b0aa90a6015e91095edcf81c1710dba822a75695b3e8f1a1fe9e6d",
+    "ic-testkit/crates/ic-testkit/src/pic/startup.rs": "034c0141e02521f1977e99a9eb1111f6a7d3c265fadd66b75c787234579f2fb1",
+    "ic-testkit/crates/ic-testkit/src/bin/native/mod.rs": "d480ce0f4c3a6e5b9fb0c007d4f7a30234a22770eff2e066de45ccf7dc09dfe0",
+    "ic-auth/README.md": "5caeaa34af44af09cbe18942f0fa8e457c9cdefaab1e3196d476505ec08f8af6",
+    "ic-auth/crates/ic-auth-protocol-types/src/lib.rs": "84a312d25255717a8853b271b41946e6baebc0842f74811c331976cbc466b6c0",
+    "ic-auth/crates/ic-auth/src/lib.rs": "6d7811390c66ab4573476d3a57dffe89737dff2100ee33bce2b124c038482e0e",
+    "ic-auth/crates/ic-auth/src/canonical.rs": "a04346a24d17d6f07ec0793af78da5abb236b625a712a5478d358c9abd17b0e9"
+  },
+  "canic_selected_ic_packages": [
+    {
+      "name": "ic-agent",
+      "version": "0.49.2",
+      "checksum": "1f9086b59107b6d6485a915762a2a3986ef208e80bb40eff22d099bbcd71deea"
+    },
+    {
+      "name": "ic-backup",
+      "version": "0.7.0",
+      "checksum": "720b86e3982aa924a47a81fd905818d7e9e4cd3055024a8288f357a3fa27f936"
+    },
+    {
+      "name": "ic-canister-sig-creation",
+      "version": "1.3.1",
+      "checksum": "d8b2a507d1bebb111fc8c76098468e4de9c745e9b9ef160a079568ae1d6f7fef"
+    },
+    {
+      "name": "ic-cdk",
+      "version": "0.20.3",
+      "checksum": "fc6ad46670baa42b9d802e46cb0741e5da2d747b5b74b9ac8019aec9388b05b2"
+    },
+    {
+      "name": "ic-cdk-executor",
+      "version": "2.0.0",
+      "checksum": "33716b730ded33690b8a704bff3533fda87d229e58046823647d28816e9bcee7"
+    },
+    {
+      "name": "ic-cdk-macros",
+      "version": "0.20.3",
+      "checksum": "9583454462627a6a816ffa91422c8ab7e6a21f75f63eb255d03f710248d45453"
+    },
+    {
+      "name": "ic-cdk-timers",
+      "version": "1.0.0",
+      "checksum": "6852b9c1d4a82ff50fc7318599298aee8bfb082bd7e9fe7e5c1420692b2170f7"
+    },
+    {
+      "name": "ic-certification",
+      "version": "3.2.0",
+      "checksum": "754e3037360152de7e5f2bd0ccf51db8864b6a03c5a2b4ffc6a65286c0e2ffa7"
+    },
+    {
+      "name": "ic-ed25519",
+      "version": "0.6.0",
+      "checksum": "6ad3d86f2e35cb99ae7497b3e4fa92ad751a8e8978f0680d37b86dd51ef91714"
+    },
+    {
+      "name": "ic-error-types",
+      "version": "0.2.0",
+      "checksum": "bbeeb3d91aa179d6496d7293becdacedfc413c825cac79fd54ea1906f003ee55"
+    },
+    {
+      "name": "ic-host-artifacts",
+      "version": "0.4.6",
+      "checksum": "7578ed93643474eeaf7b2ae40ae32bfd014f67551c8d58d36d208e9767e6de0b"
+    },
+    {
+      "name": "ic-host-artifacts",
+      "version": "0.5.1",
+      "checksum": "d977cc396ef40cf34d71943dc1ec7abc8418b254487472a400cc536cef10f88d"
+    },
+    {
+      "name": "ic-host-fs",
+      "version": "0.4.6",
+      "checksum": "5f920e1a667af1cdaa9a9fd9322347bdbc163714d74fef2700e223a5f036f7a9"
+    },
+    {
+      "name": "ic-host-fs",
+      "version": "0.5.1",
+      "checksum": "f53d155b1e8b76fb6c332bc696b5736865911cdda8a32e97af8019f80d5af03b"
+    },
+    {
+      "name": "ic-host-process",
+      "version": "0.5.1",
+      "checksum": "59bc69d49f91a3d716487fc4a72fca5e9beb9b5a1159c2dbdcd2c0c6f818fb8d"
+    },
+    {
+      "name": "ic-host-tools",
+      "version": "0.5.1",
+      "checksum": "e3176d7e19c1d37c8ae6a37e8eda5ea06e41a25e6724915357af0bd6910ca14d"
+    },
+    {
+      "name": "ic-management-canister-types",
+      "version": "0.8.0",
+      "checksum": "3187ba94198a8df0e38a478f289812fcead6a86c658b9552b00f1f8081f06bb3"
+    },
+    {
+      "name": "ic-management-canister-types",
+      "version": "0.11.0",
+      "checksum": "b3e3162bdfbdbc6ca3b4bfa8145f9ba19cddaf3eb8d1af8dc7be6a39557b76c2"
+    },
+    {
+      "name": "ic-memory",
+      "version": "0.31.3",
+      "checksum": "ced4b3c769064c9bdb9cbdcef6d97762658a3e651d896aa56286b40fde5d009c"
+    },
+    {
+      "name": "ic-metrics",
+      "version": "0.2.11",
+      "checksum": "dc75470aa6335a0b1f3dbefd30229e0ac10713f21193f21af3c03987afdfa0c9"
+    },
+    {
+      "name": "ic-query",
+      "version": "0.48.1",
+      "checksum": "3f36d3235ff9460d776a774be86ea21611d61a4a74b4fc4a7a88465eea0db8a5"
+    },
+    {
+      "name": "ic-representation-independent-hash",
+      "version": "3.2.0",
+      "checksum": "c80c46e399bcce51c531237e1111ced114dec295cff22b0996099a6168814b03"
+    },
+    {
+      "name": "ic-secp256k1",
+      "version": "0.3.0",
+      "checksum": "3bf34836f1c4e8114b6d13b7699428939742e9ad73615bc0be4799ccc5566869"
+    },
+    {
+      "name": "ic-signature-verification",
+      "version": "0.3.0",
+      "checksum": "f0e8f6b8a33244df75bddeef3ef1255552de517785f462a090ba218cf2abd93c"
+    },
+    {
+      "name": "ic-stable-structures",
+      "version": "0.7.2",
+      "checksum": "8ee3372ddc0cf2a747fc26ce2d075a240ed6bfab151e63bc70109e8967f7ce6f"
+    },
+    {
+      "name": "ic-testkit",
+      "version": "0.22.0",
+      "checksum": "0f4df2685ce932058cb77a17df022bfd0193dec185d6ed637c440e72b4a38589"
+    },
+    {
+      "name": "ic-timers",
+      "version": "0.14.15",
+      "checksum": "806808e2290b6a85804a68f7b95fcf227937b329455127e33c65265be11c5473"
+    },
+    {
+      "name": "ic-transport-types",
+      "version": "0.49.2",
+      "checksum": "e2d13d859ea481e8d5766a54a3b4dfcf4c11ff6f21d5e2aeaf9a44dd710a76ff"
+    },
+    {
+      "name": "ic-verify-bls-signature",
+      "version": "0.6.0",
+      "checksum": "cd6c4261586eb473fe1219de63186a98e554985d5fd6f3488036c8fb82452e27"
+    }
+  ],
+  "committed_source_sha256": {
+    "shared-tooling/scripts/ci/run-sccache.sh": "4d5e38bdb9bd8f6fcc8b293159d3153d276f0c699f7c735cff11a72ac3ecfff5",
+    "shared-tooling/scripts/ci/check-runner-disk-space.sh": "fbee83715bc0d252517a59032fa9815eced3ffb5d83415ba959dd1ce51749c18",
+    "shared-tooling/scripts/ci/install-sccache.sh": "64218c32570d8f406ebf644c232f3cf8e9c7e3cf5af4b27c502e151ca7078f1d",
+    "shared-tooling/scripts/ci/prepare-rustsec-db.sh": "771cc142805d6200caddd32a2f10783516fe297e4424c051ac92a40884607e5f"
+  }
+}

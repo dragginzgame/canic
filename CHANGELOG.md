@@ -6,6 +6,14 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.110.54]
+
+Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
+
+- Consolidate shared tooling and local readiness, preserve test diagnostics and
+  live progress, and prepare Blob adapter registry packaging
+  ([#444](https://github.com/dragginzgame/canic/issues/444)).
+
 ## [0.110.53] - 2026-10-08
 
 Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)

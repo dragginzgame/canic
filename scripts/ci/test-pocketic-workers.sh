@@ -6,8 +6,10 @@ finish() {
     local status=$?
     if [[ "$status" -ne 0 ]]; then
         for log in "$fixture/"*.log; do [[ ! -f "$log" ]] || tail -n 30 "$log" >&2; done
+        echo "Worker fixture retained: $fixture" >&2
+    else
+        rm -rf "$fixture"
     fi
-    rm -rf "$fixture"
     exit "$status"
 }
 trap finish EXIT
@@ -24,6 +26,10 @@ cat > "$fixture/bin/pocket-ic" <<'FAKE'
 #!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$$" >> "$WORKER_FIXTURE_PIDS"
+printf 'raw-server-first-line\n'
+for ((line=0; line<1000; line++)); do printf 'raw-server-context-%s\n' "$line"; done
+printf 'raw-server-last-line\n' >&2
+[[ "${WORKER_FIXTURE_STARTUP_FAILURE:-0}" != 1 ]] || exit 23
 while [[ "$1" != --port-file ]]; do shift; done
 printf '%s\n' "$((10000 + $$ % 50000))" > "$2"
 exec sleep 60
@@ -64,7 +70,9 @@ exit 99
 FAKE
 chmod +x "$fixture/bin/"*
 export POCKET_IC_BIN="$fixture/bin/pocket-ic" PATH="$fixture/bin:$PATH"
-for scenario in pass left right multiple crash wrong incomplete false-success after-failure interrupt; do
+for scenario in pass startup left right multiple crash wrong incomplete false-success after-failure interrupt; do
+    export WORKER_FIXTURE_STARTUP_FAILURE=0
+    [[ "$scenario" != startup ]] || WORKER_FIXTURE_STARTUP_FAILURE=1
     export WORKER_FIXTURE_PIDS="$fixture/$scenario.pids"
     export WORKER_FIXTURE_ENV="$fixture/$scenario.env"
     export WORKER_FIXTURE_EXECUTED="$fixture/$scenario.executed"
@@ -109,14 +117,19 @@ for scenario in pass left right multiple crash wrong incomplete false-success af
         } | sort > "$fixture/expected"
         sort "$WORKER_FIXTURE_EXECUTED" > "$fixture/actual"
         diff -u "$fixture/expected" "$fixture/actual"
-    elif [[ "$scenario" != interrupt ]]; then
+    elif [[ "$scenario" != interrupt && "$scenario" != startup ]]; then
         rg -q 'invalid or incomplete case outcomes' "$fixture/$scenario.log"
         if rg -q 'pass-last' "$WORKER_FIXTURE_EXECUTED"; then exit 1; fi
         rg -q '^2 slow$' "$WORKER_FIXTURE_EXECUTED"
     fi
     # Every resumed process owns a different scratch and server, and no case is retried.
-    [[ "$(sort -u "$WORKER_FIXTURE_ENV" | wc -l)" -eq "$(wc -l < "$WORKER_FIXTURE_ENV")" ]]
-    [[ "$(sort -u "$WORKER_FIXTURE_EXECUTED" | wc -l)" -eq "$(wc -l < "$WORKER_FIXTURE_EXECUTED")" ]]
+    if [[ "$scenario" == startup ]]; then
+        [[ ! -e "$WORKER_FIXTURE_ENV" && ! -e "$WORKER_FIXTURE_EXECUTED" ]]
+        if rg -q '^raw-server-first-line$' "$fixture/$scenario.log"; then exit 1; fi
+    else
+        [[ "$(sort -u "$WORKER_FIXTURE_ENV" | wc -l)" -eq "$(wc -l < "$WORKER_FIXTURE_ENV")" ]]
+        [[ "$(sort -u "$WORKER_FIXTURE_EXECUTED" | wc -l)" -eq "$(wc -l < "$WORKER_FIXTURE_EXECUTED")" ]]
+    fi
     while read -r pid; do
         if [[ -r "/proc/$pid/stat" ]]; then
             # A killed orphan may briefly await its OS reaper; it must not run.
@@ -124,7 +137,21 @@ for scenario in pass left right multiple crash wrong incomplete false-success af
             [[ "$state" == Z ]] || { echo "worker left process $pid ($state) alive" >&2; exit 1; }
         fi
     done < "$WORKER_FIXTURE_PIDS"
-    if compgen -G "$fixture/.tmp/test-runtime.*" >/dev/null; then exit 1; fi
-    rg -q '\[FLEET-MEASURE\] worker evidence' "$fixture/target/test-runs"
+    if [[ "$scenario" == pass ]]; then
+        if compgen -G "$fixture/.tmp/test-runtime.*" >/dev/null; then exit 1; fi
+    else
+        compgen -G "$fixture/.tmp/test-runtime.*" >/dev/null
+        rg -q 'retained interrupted or failed test scratch:' "$fixture/$scenario.log"
+        # Partial raw worker output survives failure and cancellation, including
+        # attempts that never completed their structured outcome report.
+        rg -q '^raw-server-first-line$' "$fixture/.tmp"
+        rg -q '^raw-server-context-999$' "$fixture/.tmp"
+        rg -q '^raw-server-last-line$' "$fixture/.tmp"
+        [[ "$scenario" != interrupt || "$status" -eq 143 ]]
+        for retained in "$fixture/.tmp"/test-runtime.*; do
+            CANIC_TEST_SCRATCH="$retained" bash "$fixture/scripts/ci/cleanup-release-artifacts.sh" --scratch-only
+        done
+    fi
+    [[ "$scenario" == startup ]] || rg -q '\[FLEET-MEASURE\] worker evidence' "$fixture/target/test-runs"
 done
 echo 'isolated workers: complete outcomes, fresh continuation, invalid reports, interruption and cleanup passed'

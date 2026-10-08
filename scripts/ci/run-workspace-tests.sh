@@ -362,12 +362,14 @@ run_test_command() {
     local statuses=()
     : > "$log" || return 1
     echo "==> complete test output: $log"
-    if "$@" 2>&1 | tee "$log" | awk -v worker="${CANIC_POCKETIC_WORKER:-}" '
-        !/\[(CANIC-(REQUEST|OBSERVATION|TIMING|CACHE)|FLEET-MEASURE)\]/ {
-            if (worker != "" && $0 !~ /^\[CANIC-TEST:/) printf "[worker %s] ", worker
-            print; fflush()
-        }
-    '; then
+    if "$@" 2>&1 | tee "$log" | while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ ! "$line" =~ $trace_pattern ]] || continue
+        if [[ -n "${CANIC_POCKETIC_WORKER:-}" && "$line" != '[CANIC-TEST:'* ]]; then
+            printf '[worker %s] %s\n' "$CANIC_POCKETIC_WORKER" "$line"
+        else
+            printf '%s\n' "$line"
+        fi
+    done; then
         statuses=("${PIPESTATUS[@]}")
     else
         statuses=("${PIPESTATUS[@]}")

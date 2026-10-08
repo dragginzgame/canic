@@ -39,6 +39,7 @@ use crate::{
         FleetSubnetRootLimits, ManagedCanisterBinding, SubnetId,
     },
     protocol::{CANIC_ADMISSION_STATUS, CANIC_COMMAND, CANIC_CONTROL_STATUS},
+    testing::build_pocketic,
 };
 use candid::{CandidType, Deserialize, Principal, encode_args, encode_one};
 use canic_core::{
@@ -52,9 +53,7 @@ use canic_core::{
         compile_fleet_admission_projection, compile_installed_fleet_admission_policy,
     },
 };
-use ic_testkit::pic::{
-    CandidCallError, CandidCallExt, CanisterInstallExt, PocketIc, PocketIcBuilder,
-};
+use ic_testkit::pic::{CandidCallError, CandidCallExt, CanisterInstallExt, PocketIc};
 use std::{fmt, time::Duration};
 
 const DEFAULT_INSTALL_CYCLES: u128 = 10_000_000_000_000;
@@ -345,7 +344,7 @@ impl StandaloneAppFixture {
 pub fn install_managed_app(
     input: ManagedAppQualificationInput<'_>,
 ) -> Result<ManagedAppFixture, ManagedAppQualificationError> {
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = build_pocketic().map_err(ManagedAppQualificationError::Install)?;
     let app = pic.create_canister();
     pic.add_cycles(app, input.install_cycles);
     let compiled = compile_managed_app(&input, app)?;
@@ -367,7 +366,7 @@ pub fn install_managed_app(
 /// Panics if PocketIC rejects creation or installation.
 #[must_use]
 pub fn install_standalone_app(wasm: Vec<u8>, install_cycles: u128) -> StandaloneAppFixture {
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = build_pocketic().expect("caller-owned PocketIC startup");
     let app = pic.create_canister();
     pic.add_cycles(app, install_cycles);
     pic.install_canister(

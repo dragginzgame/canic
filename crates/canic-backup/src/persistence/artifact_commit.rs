@@ -205,7 +205,7 @@ mod supported {
             &mut checksums,
             at_step,
         )?;
-        Ok(ArtifactChecksum::from_relative_file_checksums(checksums))
+        Ok(ArtifactChecksum::from_relative_file_checksums(checksums)?)
     }
 
     fn sync_directory(

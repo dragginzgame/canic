@@ -1,7 +1,7 @@
 # Shared Tooling adoption
 
-The [manifest](../../.shared-tooling.snapshot) records 75 files from reviewed
-committed revision `a3430b34b32a60f3b245a2b4f7e2f5321556fe56` (committed 0.1.18 draft).
+The [manifest](../../.shared-tooling.snapshot) records reviewed files from
+committed revision `0ba0ad00ed94848e54ecc82629b6b7873b7284c0` (committed 0.1.23).
 [AGENTS.md](../../AGENTS.md) retains the product overlay. Refresh only through
 the upstream distribution helper; verify exact snapshot bytes and executable
 modes before release validation. Dirty sibling source is never inherited. The
@@ -48,6 +48,15 @@ the common complete toolset excludes that host. It remains install-capable, with
 establishing Canic release support or complete-toolset availability there.
 
 ## CI and verification helpers
+
+The canonical `run-sccache.sh` owns binary selection, protected persistent runtime
+paths and the server socket. Canic's `run-canic-sccache.sh` projects its explicit
+binary override and retains quiet compiler fallback for classified cache failures;
+cache-management commands preserve the shared launcher's result. Make, CI and
+direct test entrypoints select that adapter. The canonical disk-space checker
+owns filesystem admission and explicitly selected diagnostic paths; CI supplies
+the workspace and Cargo cache paths without a second local scanner.
+
 
 Release dispatch, the Canic validation logger, formatting hooks and hook installation
 use the canonical Make-execution guard. It qualifies actual recipe execution and

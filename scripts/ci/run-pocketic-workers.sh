@@ -14,15 +14,18 @@ SCRATCHES=()
 # CLI descendants without signalling the caller or another validation process.
 # shellcheck disable=SC2329 # Invoked by the EXIT trap.
 finish() {
-    local status=$? pid scratch
+    local status=$? pid scratch cleanup_mode=--scratch-only
     trap - EXIT INT TERM
     for pid in "${PIDS[@]}"; do kill -TERM -- "-$pid" 2>/dev/null || true; done
     for pid in "${PIDS[@]}"; do
         kill -KILL -- "-$pid" 2>/dev/null || true
         wait "$pid" 2>/dev/null || true
     done
+    [[ "$status" -eq 0 ]] || cleanup_mode=--retain-scratch
     for scratch in "${SCRATCHES[@]}"; do
-        CANIC_TEST_SCRATCH="$scratch" bash "$ROOT/scripts/ci/cleanup-release-artifacts.sh" --scratch-only || status=1
+        if ! CANIC_TEST_SCRATCH="$scratch" bash "$ROOT/scripts/ci/cleanup-release-artifacts.sh" "$cleanup_mode"; then
+            [[ "$status" -ne 0 ]] || status=1
+        fi
     done
     exit "$status"
 }

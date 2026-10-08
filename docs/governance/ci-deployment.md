@@ -85,7 +85,11 @@ retains complete command output under `target/test-runs/` and prints each log
 path before execution. Request, observation, artifact-cache and structured timing
 traces stay out of live output; a failed command prints the last 100 trace lines. Complete
 logs survive invocation-owned scratch cleanup, including partial logs from
-interrupted runs. Expected rejected requests inside passing cases do not trigger
+interrupted runs. The console filter forwards complete progress lines as they
+arrive, without waiting for the producing command to close its output. On failure
+or interruption, the scratch owner stops its processes, retains complete server
+streams and attempt records, and prints the retained path. Successful owned
+scratch is removed; explicit `--scratch-only` cleanup can remove retained evidence. Expected rejected requests inside passing cases do not trigger
 trace output. Document-layout preferences
 and drift in transitive informational advisory inventories are warnings. Missing
 required authority documents, known vulnerabilities, yanked dependencies and
@@ -360,10 +364,11 @@ the process a two-hour idle and hard lifetime. It retains the exact child PID,
 stops and waits for it on every handled exit, and leaves invocation-scratch
 cleanup as a crash-safety fallback bound to the numeric direct-child port path.
 A failed suite prints bounded tails from both server streams next to its own
-retained log. `ic-testkit` 0.9.0 owns the corrected bounded managed-server
-primitive for one Rust process; Canic keeps a runner-owned server because the
-serial lane still crosses the internal harness and several integration-test
-processes. Repository fixtures use
+retained log. Selected `ic-testkit 0.22` owns a command-scoped managed-server
+primitive and native process-group teardown. Canic retains its runner owner until
+[Testkit #29](https://github.com/dragginzgame/ic-testkit/issues/29) supplies caller-owned
+complete diagnostics independent of server teardown. The current bounded excerpt
+and private-file removal cannot satisfy Canic's failure-evidence contract. Repository fixtures use
 testkit connect mode with their own 30-second instance-construction deadline.
 Direct PocketIC test commands outside the governed runner must supply
 `CANIC_POCKET_IC_SERVER_URL`; they fail immediately when it is absent rather
@@ -627,11 +632,12 @@ downstream preflight and normal release gate both identify that unchanged
 source candidate.
 
 The test target allocates one private repository-owned
-`.tmp/test-runtime.<suffix>` directory. It clears only that scratch on success,
-ordinary failure or handled interrupt. Before removing it, cleanup forcibly
-stops only a detached PocketIC server whose exact `--port-file` is a direct
-child of that invocation's scratch; this avoids the upstream server's late
-socket-teardown panic without touching another invocation's server. Cleanup
+`.tmp/test-runtime.<suffix>` directory. It clears only that scratch on success;
+failure or handled interrupt retains the scratch and prints its path. On every
+exit, cleanup forcibly stops only a detached PocketIC server whose exact
+`--port-file` is a direct child of that invocation's scratch; this avoids the
+upstream server's late socket-teardown panic without touching another
+invocation's server. Cleanup
 never sweeps a shared path or another concurrent invocation's scratch. Canic
 scripts must clean their own temporary files; explicit cleanup must not sweep
 unrelated repository scratch or global `/tmp` content.

@@ -194,13 +194,13 @@ jobs:
           cache-targets: false
       - name: Check runner disk before MSRV
         shell: bash
-        run: bash scripts/ci/check-runner-disk-space.sh --label "MSRV before check" --min-free-mib 3072 --summary-only
+        run: bash scripts/ci/check-runner-disk-space.sh --label "MSRV before check" --min-free-mib 3072 --path "$GITHUB_WORKSPACE"
       - name: Check workspace MSRV
         run: bash scripts/ci/run-workspace-cargo.sh check --keep-going
       - name: Report runner disk after MSRV failure
         if: ${{ failure() }}
         shell: bash
-        run: bash scripts/ci/check-runner-disk-space.sh --label "MSRV failure"
+        run: bash scripts/ci/check-runner-disk-space.sh --label "MSRV failure" --path "$GITHUB_WORKSPACE" --min-free-mib 0 --diagnostic-path "$GITHUB_WORKSPACE/target" --diagnostic-path "$HOME/.cargo"
 
   checks:
     needs: [preflight, security]
@@ -232,7 +232,7 @@ jobs:
           {
             echo "SCCACHE_DIR=$RUNNER_TEMP/canic-sccache"
             echo "SCCACHE_CACHE_SIZE=2G"
-            echo "RUSTC_WRAPPER=$GITHUB_WORKSPACE/scripts/ci/run-sccache.sh"
+            echo "RUSTC_WRAPPER=$GITHUB_WORKSPACE/scripts/ci/run-canic-sccache.sh"
           } >> "$GITHUB_ENV"
       - name: Install formatting tools
         shell: bash
@@ -254,14 +254,14 @@ jobs:
         run: bash scripts/ci/test-git-hooks.sh
       - name: Check runner disk before Rust checks
         shell: bash
-        run: bash scripts/ci/check-runner-disk-space.sh --label "checks before Rust validation" --min-free-mib 4096 --summary-only
+        run: bash scripts/ci/check-runner-disk-space.sh --label "checks before Rust validation" --min-free-mib 4096 --path "$GITHUB_WORKSPACE"
       - name: Run Rust checks with complete feedback
         shell: bash
         run: make ci-checks
       - name: Report runner disk after checks failure
         if: ${{ failure() }}
         shell: bash
-        run: bash scripts/ci/check-runner-disk-space.sh --label "checks failure"
+        run: bash scripts/ci/check-runner-disk-space.sh --label "checks failure" --path "$GITHUB_WORKSPACE" --min-free-mib 0 --diagnostic-path "$GITHUB_WORKSPACE/target" --diagnostic-path "$HOME/.cargo"
       - name: Save compiler cache
         if: ${{ !cancelled() && steps.compiler-cache.outputs.cache-primary-key != '' && steps.compiler-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
@@ -299,7 +299,7 @@ jobs:
           {
             echo "SCCACHE_DIR=$RUNNER_TEMP/canic-sccache"
             echo "SCCACHE_CACHE_SIZE=2G"
-            echo "RUSTC_WRAPPER=$GITHUB_WORKSPACE/scripts/ci/run-sccache.sh"
+            echo "RUSTC_WRAPPER=$GITHUB_WORKSPACE/scripts/ci/run-canic-sccache.sh"
           } >> "$GITHUB_ENV"
       - name: Install ordinary test helper tools
         shell: bash
@@ -325,13 +325,13 @@ jobs:
           ic-wasm --version
       - name: Check runner disk before ordinary tests
         shell: bash
-        run: bash scripts/ci/check-runner-disk-space.sh --label "ordinary tests before run" --min-free-mib 4096 --summary-only
+        run: bash scripts/ci/check-runner-disk-space.sh --label "ordinary tests before run" --min-free-mib 4096 --path "$GITHUB_WORKSPACE"
       - name: Run workspace ordinary tests
         run: make test-ordinary
       - name: Report runner disk after ordinary-test failure
         if: ${{ failure() }}
         shell: bash
-        run: bash scripts/ci/check-runner-disk-space.sh --label "ordinary-test failure"
+        run: bash scripts/ci/check-runner-disk-space.sh --label "ordinary-test failure" --path "$GITHUB_WORKSPACE" --min-free-mib 0 --diagnostic-path "$GITHUB_WORKSPACE/target" --diagnostic-path "$HOME/.cargo"
       - name: Save compiler cache
         if: ${{ !cancelled() && steps.compiler-cache.outputs.cache-primary-key != '' && steps.compiler-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
@@ -368,7 +368,7 @@ jobs:
           {
             echo "SCCACHE_DIR=$RUNNER_TEMP/canic-sccache"
             echo "SCCACHE_CACHE_SIZE=2G"
-            echo "RUSTC_WRAPPER=$GITHUB_WORKSPACE/scripts/ci/run-sccache.sh"
+            echo "RUSTC_WRAPPER=$GITHUB_WORKSPACE/scripts/ci/run-canic-sccache.sh"
           } >> "$GITHUB_ENV"
       - name: Install PocketIC test helper tools
         shell: bash
@@ -412,7 +412,7 @@ jobs:
           echo "POCKET_IC_BIN=$BIN" >> "$GITHUB_ENV"
       - name: Check runner disk before PocketIC tests
         shell: bash
-        run: bash scripts/ci/check-runner-disk-space.sh --label "PocketIC tests before run" --min-free-mib 4096 --summary-only
+        run: bash scripts/ci/check-runner-disk-space.sh --label "PocketIC tests before run" --min-free-mib 4096 --path "$GITHUB_WORKSPACE"
       - name: Run serial PocketIC tests
         run: make test-pocketic
       - name: Save validated PocketIC test artifacts
@@ -426,7 +426,7 @@ jobs:
       - name: Report runner disk after PocketIC-test failure
         if: ${{ failure() }}
         shell: bash
-        run: bash scripts/ci/check-runner-disk-space.sh --label "PocketIC-test failure"
+        run: bash scripts/ci/check-runner-disk-space.sh --label "PocketIC-test failure" --path "$GITHUB_WORKSPACE" --min-free-mib 0 --diagnostic-path "$GITHUB_WORKSPACE/target" --diagnostic-path "$HOME/.cargo"
       - name: Save compiler cache
         if: ${{ !cancelled() && steps.compiler-cache.outputs.cache-primary-key != '' && steps.compiler-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
@@ -453,10 +453,10 @@ jobs:
           cache-targets: false
       - name: Check runner disk before release build
         shell: bash
-        run: bash scripts/ci/check-runner-disk-space.sh --label "release build before compile" --min-free-mib 4096 --summary-only
+        run: bash scripts/ci/check-runner-disk-space.sh --label "release build before compile" --min-free-mib 4096 --path "$GITHUB_WORKSPACE"
       - name: Build release workspace
         run: bash scripts/ci/run-workspace-cargo.sh build --release --keep-going
       - name: Report runner disk after release-build failure
         if: ${{ failure() }}
         shell: bash
-        run: bash scripts/ci/check-runner-disk-space.sh --label "release-build failure"
+        run: bash scripts/ci/check-runner-disk-space.sh --label "release-build failure" --path "$GITHUB_WORKSPACE" --min-free-mib 0 --diagnostic-path "$GITHUB_WORKSPACE/target" --diagnostic-path "$HOME/.cargo"

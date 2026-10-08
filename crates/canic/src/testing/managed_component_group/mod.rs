@@ -53,6 +53,7 @@ use crate::{
         CANIC_ADMISSION_STATUS, CANIC_COMMAND, CANIC_CONTROL_STATUS, CANIC_OBSERVABILITY,
         CANIC_PUBLIC_STATUS,
     },
+    testing::build_pocketic,
 };
 use candid::{CandidType, Deserialize, Principal, encode_args, encode_one};
 use canic_core::{
@@ -74,7 +75,7 @@ use canic_core::{
     },
 };
 use ic_testkit::{
-    pic::{CandidCallError, CandidCallExt, CanisterInstallExt, PocketIc, PocketIcBuilder},
+    pic::{CandidCallError, CandidCallExt, CanisterInstallExt, PocketIc},
     pocket_ic::common::rest::RawMessageId,
 };
 use std::{
@@ -865,7 +866,7 @@ pub fn install_managed_component_group(
 fn create_fixture_canisters(
     component_count: usize,
 ) -> Result<(PocketIc, Principal, Vec<Principal>), ManagedComponentGroupQualificationError> {
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = build_pocketic().map_err(ManagedComponentGroupQualificationError::Install)?;
     let root = pic.create_canister();
     pic.add_cycles(root, 100_000_000_000_000);
     let init_args = encode_one(())

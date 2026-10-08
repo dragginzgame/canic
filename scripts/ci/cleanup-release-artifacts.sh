@@ -12,9 +12,9 @@ status=0
 cd "$ROOT" || exit 1
 
 case "$CLEANUP_MODE" in
-    all | --scratch-only) ;;
+    all | --scratch-only | --retain-scratch) ;;
     *)
-        echo "usage: $0 [--scratch-only]" >&2
+        echo "usage: $0 [--scratch-only | --retain-scratch]" >&2
         exit 2
         ;;
 esac
@@ -71,12 +71,14 @@ if [[ -n "$TEST_SCRATCH" ]]; then
         if [[ "$pocket_ic_cleanup_status" -ne 0 ]]; then
             echo "release cleanup retained scratch used by a live PocketIC server" >&2
             status=1
+        elif [[ "$CLEANUP_MODE" == "--retain-scratch" ]]; then
+            echo "==> retained interrupted or failed test scratch: $TEST_SCRATCH" >&2
         else
             echo "==> clearing invocation-owned test scratch: ${TEST_SCRATCH##*/}"
-        fi
-        if [[ "$pocket_ic_cleanup_status" -eq 0 ]] && ! rm -rf -- "$TEST_SCRATCH"; then
-            echo "release cleanup failed to clear invocation-owned test scratch" >&2
-            status=1
+            if ! rm -rf -- "$TEST_SCRATCH"; then
+                echo "release cleanup failed to clear invocation-owned test scratch" >&2
+                status=1
+            fi
         fi
     fi
 elif [[ "$CLEANUP_MODE" == "--scratch-only" ]]; then

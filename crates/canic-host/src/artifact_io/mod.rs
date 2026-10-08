@@ -27,7 +27,6 @@ use ic_host_fs::{
 };
 
 use canic_core::ids::BuildNetwork;
-use flate2::Compression;
 
 pub use wasm::enforce_wasm_install_limits;
 pub use wasm::wasm_artifact_metrics;
@@ -373,14 +372,14 @@ pub fn write_gzip_artifact(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let wasm_bytes = fs::read(wasm_path)?;
     write_with(wasm_gz_path, |file| {
-        encode_gzip(&wasm_bytes, file, Compression::best(), u64::MAX)
+        encode_gzip(&wasm_bytes, file, 9, u64::MAX)
     })?;
     Ok(())
 }
 
 fn deterministic_gzip_bytes(bytes: &[u8]) -> Result<Vec<u8>, std::io::Error> {
     let mut output = Vec::new();
-    encode_gzip(bytes, &mut output, Compression::best(), u64::MAX)?;
+    encode_gzip(bytes, &mut output, 9, u64::MAX)?;
     Ok(output)
 }
 

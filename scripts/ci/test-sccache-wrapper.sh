@@ -6,13 +6,13 @@ mkdir -p "$ROOT/.tmp"
 fixture="$(mktemp -d "$ROOT/.tmp/sccache-wrapper-test.XXXXXX")"
 trap 'rm -rf -- "$fixture"' EXIT
 mkdir -p "$fixture/scripts/ci" "$fixture/bin with spaces"
-cp "$ROOT/scripts/ci/run-sccache.sh" "$fixture/scripts/ci/"
+cp "$ROOT/scripts/ci/run-canic-sccache.sh" "$ROOT/scripts/ci/run-sccache.sh" "$fixture/scripts/ci/"
 export CANIC_SCCACHE_BIN="$fixture/cache"
 export COMPILER_RECORD="$fixture/compiler-args"
 export CACHE_RECORD="$fixture/cache-args"
 export CANIC_SCCACHE_VERBOSE=0
 compiler="$fixture/bin with spaces/rustc"
-wrapper="$fixture/scripts/ci/run-sccache.sh"
+wrapper="$fixture/scripts/ci/run-canic-sccache.sh"
 
 cat > "$compiler" <<'COMPILER'
 #!/usr/bin/env bash

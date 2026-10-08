@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/canic-workspace-runner-test.XXXXXX")"
-trap 'rm -rf "$fixture"' EXIT
+trap 'status=$?; if [[ "$status" == 0 ]]; then rm -rf "$fixture"; else echo "Runner fixture retained: $fixture" >&2; fi; exit "$status"' EXIT
 mkdir -p "$fixture/scripts/ci" "$fixture/bin"
 cp "$ROOT/scripts/ci/run-workspace-tests.sh" \
     "$ROOT/scripts/ci/workspace-scope.sh" \
@@ -93,6 +93,13 @@ if [[ "$phase" == list ]]; then
     [[ "${RUNNER_TEST_DUPLICATE:-0}" == 0 ]] || echo "${RUNNER_TEST_LIST_IDENTITY}: test"
     exit 0
 fi
+if [[ "$phase/$stage" == execute/ordinary && "${RUNNER_TEST_NESTED:-0}" == 1 && "${RUNNER_TEST_CHILD:-0}" == 0 ]]; then
+    mkdir -p "$CANIC_TEST_SCRATCH/inner"
+    CANIC_TEST_SCRATCH="$CANIC_TEST_SCRATCH/inner" CANIC_POCKETIC_WORKER=1 \
+        RUNNER_TEST_CHILD=1 bash scripts/ci/run-workspace-tests.sh ordinary
+    echo 'test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s'
+    exit 0
+fi
 # Successful tests can contain rejected requests; only the command outcome
 # decides whether these diagnostics belong in the console.
 printf '[CANIC-REQUEST] %s/%s succeeded=false\n' "$phase" "$stage"
@@ -102,6 +109,10 @@ printf '[CANIC-CACHE] %s/%s\n' "$phase" "$stage" >&2
 printf '[FLEET-MEASURE] %s/%s stdout\n' "$phase" "$stage"
 printf '[FLEET-MEASURE] %s/%s stderr\n' "$phase" "$stage" >&2
 printf 'fixture progress %s/%s\n' "$phase" "$stage"
+if [[ "$phase/$stage" == execute/ordinary && -n "${RUNNER_TEST_STREAM_ACK:-}" ]]; then
+    # Wait for the observer to acknowledge progress before finishing the producer.
+    while [[ ! -f "$RUNNER_TEST_STREAM_ACK" ]]; do sleep 0.05; done
+fi
 fails=0
 case " $RUNNER_TEST_FAIL_STAGE " in *" $phase/$stage "*) fails=1 ;; esac
 if [[ "$fails" -eq 1 ]]; then
@@ -127,6 +138,30 @@ if [[ "$phase" == execute ]]; then
 fi
 SH
 chmod +x "$fixture/bin/"*
+
+# The console must show progress while the producing command is still running.
+# A small input deliberately cannot fill an awk input buffer before this barrier.
+scratch="$fixture/live-progress"
+mkdir -p "$scratch"
+CI=0 RUSTC_WRAPPER='' CANIC_TEST_PLAN_ONLY=0 CANIC_TEST_SCRATCH="$scratch" \
+    PATH="$fixture/bin:$PATH" RUNNER_TEST_TRACE="$scratch/trace.tsv" \
+    RUNNER_TEST_FAIL_STAGE=none RUNNER_TEST_NESTED=1 CANIC_POCKETIC_WORKER=2 \
+    RUNNER_TEST_STREAM_ACK="$scratch/ack" \
+    timeout 10s bash "$fixture/scripts/ci/run-workspace-tests.sh" ordinary > "$scratch/output.log" 2>&1 &
+stream_pid=$!
+visible=0
+for ((attempt=0; attempt<100; attempt++)); do
+    if rg -q '^\[worker 2\] \[worker 1\] fixture progress execute/ordinary$' "$scratch/output.log"; then visible=1; break; fi
+    sleep 0.05
+done
+producer_running=0
+kill -0 "$stream_pid" 2>/dev/null && producer_running=1
+printf 'acknowledged\n' > "$scratch/ack"
+wait "$stream_pid"
+[[ "$visible" -eq 1 && "$producer_running" -eq 1 ]]
+if rg -q '\[CANIC-REQUEST\]' "$scratch/output.log"; then exit 1; fi
+rg -q '\[CANIC-REQUEST\]' "$fixture/target/test-runs"
+rm -rf "$fixture/target/test-runs"
 
 serial_stages=(internal host runtime payload-limits)
 for mode in full pocketic; do

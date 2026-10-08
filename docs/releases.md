@@ -9,9 +9,11 @@ a publishable package, must provide these Make targets:
 | `make release-minor` | Increment minor; reset patch | `0.2.0` |
 | `make release-major` | Increment major; reset minor and patch | `1.0.0` |
 
-The names, version arithmetic, phase order, failure behavior and external effects
-are identical across repositories. Each repository supplies its canonical version
-source, metadata file set, validation gate, branch and remote. A repository
+The names, version arithmetic and recovery contract are shared across repositories.
+Each repository supplies its canonical version source, metadata file set,
+validation gate, branch, remote and explicit delivery policy. Direct delivery is
+the default; [PR delivery](#pr-delivery) adds review and fresh merged-commit
+validation before tagging. A repository
 without package metadata may use a dedicated version file; otherwise it uses
 its latest finalized changelog version. Shared Tooling owns its current local
 version in root `VERSION`, displayed by `make version`. Its undated changelog
@@ -21,6 +23,8 @@ that a tag was pushed. Pre-release versions require a separately selected releas
 these commands must reject ambiguous or unsupported version inputs.
 
 ## Required workflow
+
+The default `RELEASE_DELIVERY=direct` workflow is:
 
 1. **Preflight.** Select exactly one release kind, compute and display the current
    and candidate versions, repository, branch, remote and exact effects before
@@ -47,7 +51,7 @@ these commands must reject ambiguous or unsupported version inputs.
    metadata change before staging.
 4. **Stage.** Stage the explicit release file set. Do not use an indiscriminate
    `git add -A` or include unrelated work.
-5. **Commit and tag.** Create the maintainer-owned release commit with subject
+5. **Commit and tag.** Create the explicitly authorized release commit with subject
    `Release X.Y.Z` and an annotated `vX.Y.Z` tag on that exact commit. The
    declared release files, candidate version and validation evidence must agree.
    Before creating the commit, verify that the entire index contains only
@@ -65,7 +69,7 @@ entry under the [automatic next-version rules](../rules/changelogs.md).
 
 Agents maintain that proposed changelog version during ordinary development.
 The proposal does not bump package metadata or execute a release. Select the
-matching release kind when invoking the maintainer-owned command; its computed
+matching release kind when invoking the explicitly authorized command; its computed
 candidate must agree with the pending heading and the complete batch's
 compatibility impact before finalization.
 
@@ -87,7 +91,7 @@ convenience copy. If retention fails, the logger preserves its temporary logs
 and reports their location. Consumer adapters must provide equivalent retention
 for their actual validation commands, not just simulated fixture evidence.
 
-The common runner uses exactly this push shape with its saved selections:
+Direct delivery uses exactly this push shape with its saved selections:
 
 ```bash
 git push --no-follow-tags --atomic -- "$destination" \
@@ -112,6 +116,16 @@ preserve its verified tip when atomically publishing a missing tag. Never rewind
 the branch. Unknown or diverged remote history stops with a fetch/reconciliation
 diagnostic; remote inspection failure does not authorize replay.
 
+After `release-push-check`, both delivery policies recheck the committed payload
+and require the selected annotated tag object to remain unchanged, including its
+annotation. Direct delivery also checks the index independently of working files.
+A completed direct resume verifies the local tag, exact remote tag object and
+that the observed branch still contains the release commit. A known descendant
+tip is valid; missing tags, conflicting history or unavailable observations stop
+completion without recreating or pushing anything. Fetch unknown branch history
+and reconcile actual conflicts before retrying; retain the completed plan and
+earlier evidence.
+
 ## Makefile example
 
 All three entry points delegate to the same vendored runner. Keep a harmless
@@ -121,6 +135,7 @@ default target and reject multiple release selections before dispatch:
 .DEFAULT_GOAL := help
 RELEASE_REMOTE ?= origin
 RELEASE_BRANCH ?= main
+export RELEASE_DELIVERY ?= direct
 
 .PHONY: help release-patch release-minor release-major release-resume
 
@@ -168,6 +183,7 @@ Consumer Make targets provide these adapters:
 | `release-version` | Print only the canonical `X.Y.Z` version. |
 | `release-preflight` | Check candidate/changelog agreement; admit only declared release metadata as dirty work; inspect staged and unstaged paths separately, reject unrelated untracked paths, and prepare the selected offline cache. |
 | `release-verify` | Run the same complete gate for every release kind. |
+| `release-merged-preflight` | Required for PR delivery: check finalized candidate metadata and prepare the exact merged checkout's dependencies/cache before repeating the complete gate. Do not bump or require the previous version. |
 | `release-prepare-version` | Apply exactly the saved candidate and finalize notes; preserve dependency selection and verify all directly owned metadata. |
 | `release-prepared-check` | Check the candidate and prepared metadata without another bump. |
 | `release-files` | Print the explicit relative release paths, each terminated by NUL, and no explanatory output. |
@@ -177,16 +193,112 @@ Consumer Make targets provide these adapters:
 | `release-push-check` | Check the selected `RELEASE_COMMIT`, tag, evidence and destination before dispatch/reconciliation. |
 
 The runner passes `RELEASE_KIND`, `RELEASE_PREVIOUS`, `RELEASE_VERSION`,
-`RELEASE_DATE`, `RELEASE_SOURCE`, `RELEASE_COMMIT`, `RELEASE_BRANCH` and `RELEASE_REMOTE` as Make
+`RELEASE_DATE`, `RELEASE_SOURCE`, `RELEASE_COMMIT`, `RELEASE_BRANCH`, `RELEASE_REMOTE`,
+`RELEASE_DELIVERY`, `RELEASE_PREPARATION_SOURCE` and `RELEASE_PREPARED_COMMIT` as Make
 variables. Adapters consume those selections instead of independently choosing a
 version or target. Git staging, commit creation, annotated tagging and atomic
 push belong only to the common runner. Publishing and deployment stay separate.
 `RELEASE_COMMIT` is empty until the exact staged release commit exists. Late
 checks must read committed metadata and receipts from that selected SHA, rather
 than equating it with HEAD. The current maintained adapter code runs the checks;
-the runner does not reconstruct an old checkout or substitute new validation for
-the older release. Update receipt verifier arguments and their source/tree/tag
+direct delivery does not reconstruct an old checkout or substitute new validation
+for the older release. PR delivery has the separate merged checkout and fresh
+evidence contract below. Update receipt verifier arguments and their source/tree/tag
 bindings together during adoption. A failed consumer check still stops recovery.
+
+## PR delivery
+
+Repositories requiring review before release can explicitly select
+`export RELEASE_DELIVERY ?= pr` in their Makefile after adopting the adapters and
+fixtures below. All three standard targets retain the same interface. An explicit
+`make release-patch RELEASE_DELIVERY=pr` also selects this policy; use the same
+selection on retries. Never switch policies to work around branch protection.
+
+The first invocation must start on the selected base branch at its published
+commit. It runs preflight and complete validation, saves intent, switches to
+`release/vX.Y.Z`, and uses the common metadata/staging/commit engine. It pushes
+only that prepared branch and opens one same-repository PR into the selected base.
+The runner never approves, merges or bypasses required checks. An open PR returns
+status **75** (GNU Make reports a failed recipe/status 2), with its URL and retry
+instructions. This is pending review, not release completion: a chained
+`&& make publish` cannot proceed.
+
+After the separately authorized merge, rerun the same normal release target.
+Merge, squash and rebase merges are accepted when GitHub's recorded merged commit
+is in the selected remote base history and its tree exactly equals the saved
+prepared tree. A merge that changes the payload, including unrelated base changes,
+requires reconciliation; fresh validation does not authorize silently expanding
+the prepared release. The runner retains a detached checkout of the admitted
+commit, runs `release-merged-preflight`, then repeats the **complete**
+`release-verify` gate. Only successful fresh validation and consumer evidence
+checks permit an annotated tag on that merged SHA and its atomic tag-only push.
+The base branch is changed by the reviewed merge, never by the runner's push.
+
+Both pushes retain `--no-follow-tags --atomic` and the captured destination:
+
+```bash
+git push --no-follow-tags --atomic -- "$destination" "$prepared_commit:refs/heads/$pr_branch"
+git push --no-follow-tags --atomic -- "$destination" "refs/tags/v$candidate:refs/tags/v$candidate"
+```
+
+These are separate phases around review, not an atomic branch/tag pair. No
+package publication, GitHub Release object or cleanup is implicit. No branch
+deletion or checkout reset is implicit either. Finish the saved release first;
+then deliberately return to and synchronize the base before requesting another
+release. PR recovery never starts a follow-up increment in the same invocation.
+
+### PR adapters and retained state
+
+Adoption requires authenticated `gh`, jq, a Git version supporting `switch`,
+`worktree` and `fetch --no-write-fetch-head`, and the sourced
+`scripts/ci/release-pr.sh` beside the runner. PR lookup uses `gh api --paginate`
+and jq to read every response page; it does not require the newer GitHub CLI
+`--slurp` option. Failed, incomplete or malformed queries stop reconciliation
+before another external effect. The initial implementation accepts
+explicit github.com HTTPS/SSH push URLs and same-repository PRs; fork heads and
+GitHub Enterprise destinations are outside this contract. Run from an ordinary
+checkout without inherited Git directory, worktree, index or object-store overrides.
+PR attempts share the common Git directory's release lock across linked worktrees.
+
+Before merging, `RELEASE_SOURCE` identifies the original validated source,
+`RELEASE_COMMIT` identifies the prepared commit once it exists, and
+`RELEASE_PREPARATION_SOURCE` retains the original source. In the merged checkout,
+both `RELEASE_SOURCE` and `RELEASE_COMMIT` identify the exact merged commit;
+`RELEASE_PREPARED_COMMIT` identifies the original PR commit. Update receipt creation
+and verification together: the earlier source's validation cannot qualify the
+merged source, even when their prepared trees match. Adapters run from the
+retained merged checkout and must prepare its tools, dependencies and evidence
+paths explicitly. Preserve all earlier logs and build artifacts.
+The ordinary `release-preflight` runs initially on the base and again immediately
+before metadata preparation on the release branch; branch checks must admit those
+explicit PR phases. The merged preflight admits finalized candidate metadata and
+detached HEAD instead of applying the previous-version preparation checks.
+
+PR plans use `release-pr-plan-1` and a required `X.Y.Z.plan.pr.json` sidecar for
+repository, prepared commit, PR number, creation intent and merged commit. The
+common Git directory retains these alongside API requests/responses and
+`release-state/X.Y.Z.merged/`. Do not delete the plan, sidecar, local release branch
+or merged checkout to unblock a retry. A changed/dirty retained checkout stops
+tagging; retain the evidence and reconcile the actual change. An interrupted or
+failed merged validation reruns its preflight and complete gate at the saved SHA.
+
+Before repeating an external effect, the runner observes exact branch, PR and tag
+identities. A lost successful push/create reply is recovered without another
+effect when the saved identity is observable, including an already-merged PR
+whose remote head was automatically deleted. A failed remote query never permits
+replay. An explicit GitHub creation rejection (HTTP 401/403/404/422) permits retry
+after correcting access/inputs. A lost or server-error creation response with no
+observable PR remains uncertain: inspect the retained request/response and GitHub
+state. Only after establishing that no creation occurred may an operator explicitly
+clear the sidecar's `attempted` flag while preserving the remaining identity and
+evidence. Never clear it merely because a query returned no results.
+
+Qualify `scripts/ci/test-release-pr.sh` alongside the direct runner fixture. It
+uses real isolated Git histories/bare destinations and substituted GitHub API
+responses to cover review, merge/squash/rebase, fresh evidence, conflicts and lost
+replies. Consumers still need actual adapter/receipt tests and native host
+qualification. A fixture pass does not prove real GitHub permissions, branch
+protection or live PR delivery.
 
 ## Nested validation and adoption fixtures
 
@@ -202,7 +314,8 @@ recipes must still propagate failures and execute their declared gate.
 
 An independently configured fixture owns its own selections:
 clear inherited `MAKEFLAGS`, `MFLAGS` and `MAKEOVERRIDES` before its Make calls,
-then supply the fixture's intended release variables explicitly.
+then supply the fixture's intended release variables explicitly, including
+`RELEASE_DELIVERY`. Direct fixtures must not inherit an enclosing PR selection.
 
 The validation logger's `VALIDATION_REPOSITORY_ROOT` and
 `VALIDATION_RUNNER_SNAPSHOT_PATH` bind its temporary source snapshot. They stop
@@ -244,12 +357,22 @@ not a deletion target. Existing adoption work is tracked in
 [IC Backup #18](https://github.com/dragginzgame/ic-backup/issues/18) and
 [IC Blob Storage #22](https://github.com/dragginzgame/ic-blob-storage/issues/22).
 
-### Maintainer effects
+### Authorized release effects
 
-The maintainer invokes the one-shot commands. Agents never run them, even when a
-push or version change has been authorized, because commits remain
-maintainer-owned under the [engineering baseline](../DRAGGINZGAME.md). Agents
-may use separate read-only or preparation phases within existing authorization.
+The maintainer may invoke a one-shot command or explicitly ask an agent to run
+the selected release for the identified repository and destination. That request
+covers the documented complete gate, version preparation, release commit, tag
+and selected delivery effects. Direct delivery includes the atomic branch/tag
+push; PR delivery includes its branch/PR, fresh validation after an independently
+authorized merge, and exact tag push. Permission to fix code, create a commit, open a PR,
+push a topic branch or change a version alone is not permission to run this flow.
+Agents may use separate read-only or preparation phases within existing scope.
+
+Ordinary contributions follow the [PR rules](../rules/contributions.md). The
+runner defaults to direct delivery and supports explicit PR delivery under
+the contract above ([#42](https://github.com/dragginzgame/shared-tooling/issues/42)).
+Neither policy bypasses branch protection or required reviews. Publication,
+deployment and cleanup remain separate effects.
 
 Once version preparation may have started, rerun a normal target to
 automatically reconcile the unfinished release at its saved version. The runner
@@ -262,7 +385,7 @@ source parent and release subject still verified. A dirty tree, changed release
 payload, competing unfinished identities, conflicting tag or destination, or an
 occupied lock stops recovery; the existence of a plan alone does not.
 
-An unchanged same-kind retry finishes only the saved release. If HEAD contains
+An unchanged same-kind retry finishes only the saved release. In direct delivery, if HEAD contains
 newer committed fixes, or a different increment is explicitly requested after the
 release commit exists, the normal command first finishes the older release and
 then computes the requested increment from the actual local version. Fresh
@@ -314,6 +437,14 @@ already dated differently are conflicts. The helper also understands the older
 `Draft` input, but maintained notes follow the numbered-draft rules. With no
 draft it creates the selected heading; it does not invent release-note content.
 
+Horizontal spaces and tabs in headings are normalized only for classification;
+an already-dated target with extra separator whitespace cannot become a second
+release entry. Retained content keeps its original bytes, including a historical
+body without a terminal newline. A draft moved from EOF gains only the separator
+needed before the following history. The helper reads the document as one awk
+record using regular-expression `RS`, supported by the system awks on the host
+matrix; it does not depend on GNU awk's `RT` extension.
+
 The optional `-v allow_finalized=1` admits exactly one already-finalized target
 at the top with the same date and no pending candidate. Select it only where
 the adapter's recovery contract admits that exact state; it does not establish
@@ -331,7 +462,9 @@ vendor a clean reviewed Shared Tooling revision with this document,
 `scripts/ci/run-release.sh`, `scripts/ci/next-release-version.sh` and any selected
 changelog helper, together with `scripts/ci/check-make-execution.sh`, in the
 [governance snapshot](consuming-snapshots.md), and qualify the workflow on their
-declared Linux and macOS hosts. Report upstream policy changes separately from
+declared Linux and macOS hosts. PR adopters also include `scripts/ci/release-pr.sh`,
+add `release-merged-preflight`, and qualify fresh merged-source receipts and their
+complete gate from the retained checkout. Report upstream policy changes separately from
 verified consumer adoption.
 
 Snapshot verification establishes the declared files' integrity at the recorded

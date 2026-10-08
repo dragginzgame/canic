@@ -10,8 +10,8 @@ license = "MIT"
 
 [workspace.dependencies]
 candid = "0.10.36"
-canic = { path = "../../crates/canic", default-features = false }
-ic-blob-storage = "=0.17.1"
+canic = { version = "0.110.53", path = "../../crates/canic", default-features = false }
+ic-blob-storage = "=0.17.2"
 ic-cdk = "0.20.3"
 ic-memory = "0.31"
 
@@ -21,7 +21,11 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-publish = false
+publish = true
+description = "Canic endpoint and lifecycle composition for the independent IC Blob service"
+repository = "https://github.com/dragginzgame/canic"
+readme = "README.md"
+include = ["src/**", "README.md", "LICENSE"]
 
 [lib]
 test = false

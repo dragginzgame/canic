@@ -1,4 +1,5 @@
 DRAGGINZGAME.md
+rules/contributions.md
 rules/changelogs.md
 rules/cargo-dependencies.md
 rules/rust-workspaces.md
@@ -14,6 +15,7 @@ audits/module-surface-hardening.md
 audits/module-cleanup.md
 docs/releases.md
 scripts/ci/run-release.sh
+scripts/ci/release-pr.sh
 scripts/ci/check-make-execution.sh
 scripts/ci/next-release-version.sh
 scripts/ci/finalize-release-changelog.awk

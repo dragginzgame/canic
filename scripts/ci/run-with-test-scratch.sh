@@ -47,12 +47,13 @@ fi
 # shellcheck disable=SC2329 # Invoked by the EXIT trap.
 finish() {
     local command_status="$?"
-    local cleanup_status=0
+    local cleanup_status=0 cleanup_mode=--scratch-only
 
     trap - EXIT INT TERM
     if [[ "$OWNS_TEST_SCRATCH" -eq 1 ]]; then
+        [[ "$command_status" -eq 0 ]] || cleanup_mode=--retain-scratch
         CANIC_TEST_SCRATCH="$TEST_SCRATCH" \
-            bash "$ROOT/scripts/ci/cleanup-release-artifacts.sh" --scratch-only
+            bash "$ROOT/scripts/ci/cleanup-release-artifacts.sh" "$cleanup_mode"
         cleanup_status=$?
     fi
 
@@ -72,7 +73,7 @@ export TMPDIR="$TEST_SCRATCH"
 # Direct targeted runs need the same persistent cache lifetime as Make runs.
 # Preserve explicit wrappers, including an empty value that disables caching.
 if [[ ! -v RUSTC_WRAPPER ]] && command -v sccache >/dev/null 2>&1; then
-    export RUSTC_WRAPPER="$ROOT/scripts/ci/run-sccache.sh"
+    export RUSTC_WRAPPER="$ROOT/scripts/ci/run-canic-sccache.sh"
 fi
 
 "$@"
