@@ -1,19 +1,42 @@
-# Current handoff — 2026-10-07
+# Current handoff — 2026-10-08
 
-Current work qualifies the Blob/Memory integration requested under
+Current work refreshes the embedded allocation peer after the selected runtime
+dependencies changed. Earlier work qualified the Blob/Memory integration under
 [#444](https://github.com/dragginzgame/canic/issues/444) and
 [#459](https://github.com/dragginzgame/canic/issues/459). Earlier Host/Backup
-cleanup and fixture work remain intact. The maintainer committed that integration at
-`aec62712f`; the subsequent dependency-pinning metadata repair remains uncommitted.
+cleanup and fixture work remain intact. The maintainer committed the pinning repair
+at `95038e1a3` and advanced the root lock at `2140b0ba0`. The subsequent embedded
+peer refresh and its handoff/changelog updates remain uncommitted.
 Workspace packages remain `0.110.52`;
 the existing `0.110.53` changelog draft is extended rather than allocating another
 patch. Earlier Backup adoption, fixture refresh and incoming dependency changes
 are preserved. This handoff describes evidence; GitHub issues own follow-up work.
 
-## Current inputs and qualification
+## Current fixture refresh
+
+The root lock now selects Memory 0.31.2, Timers 0.14.13 and Testkit 0.21.3;
+its SHA-256 is `a2526c2e27312c7572670b58e410c7fbeb77cb6d79c3b990f46ec4779786038a`.
+The reported test preflight correctly rejected the earlier embedded allocation
+peer after these inputs changed. Explicit locked/offline refresh regenerated the
+Wasm and provenance together. The read-only verifier passes, as does the exact
+managed Component Group child lifecycle case (155.23s; governed invocation 286s,
+including inventory and runner completion). This covers initial/on-demand child
+allocation, typed admission refusals, timer restoration, authority delivery and
+same-release fencing. The governed runner completed its owned scratch cleanup.
+
+The new peer SHA-256 is
+`03c973cc5314bb98910b3d0502411a7cc3137105859c5aeba99e8fd88624dd5c`;
+provenance SHA-256 is
+`4e1804cb62a5d759baa12c5d5816945d1894fe0e6bacefc0050fb64a21ad7e4d`.
+Evidence is retained under `target/review-validation/embedded-peer-refresh-20261008/`
+and `target/test-runs/20261008T074322Z-71047.tTyPL9/`. Manifests and lockfiles
+remain unchanged by the repair. No broad validation ran; the qualification below
+is bound to the preceding selected graph and must not be relabelled as current.
+
+## Earlier integration inputs and qualification
 
 The root catalog requires Host Tooling 0.4.6 for all four packages and Backup
-0.5.3 or later. The retained lock selects Host 0.4.6, Backup 0.5.4, Query 0.48.1,
+0.5.3 or later. The October 7 lock selected Host 0.4.6, Backup 0.5.4, Query 0.48.1,
 Testkit 0.21.2, Memory 0.31.1, Metrics 0.2.9 and Timers 0.14.12. Backup, Query and
 Testkit advanced independently after the preceding qualification; those incoming
 selections were not reverted or attributed to this cleanup.
@@ -37,10 +60,10 @@ bytes or provenance.
 The exact CLI live-create refusal passes before filesystem or ICP effects.
 These checks do not establish native Canic macOS or a broad validation receipt.
 
-## Current Blob and ledger qualification
+## October 7 Blob and ledger qualification
 
 The adapter pins published Blob 0.17.1; all three independent locks now select
-Memory 0.31.1, Timers 0.14.12 and Metrics 0.2.9, matching the root graph. Only
+Memory 0.31.1, Timers 0.14.12 and Metrics 0.2.9, matching the October 7 root graph. Only
 those four selected packages changed in each lock. Both complete managed Fast
 builds pass. Artifact-manifest-derived graphs verify exact Wasm hashes and one
 runtime identity across all eight application/infrastructure graphs. Dedicated
@@ -142,7 +165,7 @@ requires its fallible result; ordinary validation refuses stale embedded bytes.
 These repairs are already in the maintainer-owned base, except the retained peer
 Wasm/provenance refresh. Original failure fixtures and logs remain intact.
 
-The peer SHA-256 is
+The October 7 peer SHA-256 was
 `fb77457871de89db5c62c92608dfe54bdf1b02110f76f56437ef3184c80eeeef`.
 The exact managed Component lifecycle case passed in 150.59s after explicit
 refresh, with real installation/restoration and authorization refusals. Its
@@ -153,7 +176,8 @@ must not be described as a new PocketIC journey or rewrite the fixture implicitl
 
 ## Publication boundary and accepted scope
 
-The Canic-owned managed graph qualification boundary under #444 is cleared;
+The Canic-owned managed graph qualification boundary under #444 was cleared on
+the October 7 selected graph; its proofs do not qualify the subsequently advanced root lock.
 the issue retains its application-owned Toko acceptance. Read-only source
 inspection finds no required-init flag or production binding caller, and its
 older lock is not this batch's managed evidence. No sibling edit or build ran.
