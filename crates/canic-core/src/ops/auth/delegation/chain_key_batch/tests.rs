@@ -189,7 +189,8 @@ fn verifier_policy(signing_policy: &ChainKeySigningPolicy) -> ChainKeyRootVerifi
         root_canister_id: signing_policy.root_canister_id,
         algorithm: signing_policy.algorithm,
         key_id: signing_policy.key_id.clone(),
-        derivation_path_hash: chain_key_derivation_path_hash(&signing_policy.derivation_path),
+        derivation_path_hash: chain_key_derivation_path_hash(&signing_policy.derivation_path)
+            .unwrap(),
         public_key: signing_policy.public_key.clone(),
         key_version: signing_policy.key_version,
         min_accepted_key_version: signing_policy.key_version,
@@ -205,7 +206,7 @@ fn verifier_policy(signing_policy: &ChainKeySigningPolicy) -> ChainKeyRootVerifi
 
 fn sign_header(header: &ChainKeyBatchHeaderV1) -> crate::dto::auth::ChainKeyRootSignatureV1 {
     let signature: K256TestSignature = signing_key()
-        .sign_prehash(&chain_key_batch_header_hash(header))
+        .sign_prehash(&chain_key_batch_header_hash(header).unwrap())
         .expect("test prehash signature should sign");
     let policy = signing_policy();
     crate::dto::auth::ChainKeyRootSignatureV1 {
@@ -324,7 +325,7 @@ fn chain_key_batch_builder_prepares_merkle_batch_that_verifier_accepts() {
     assert_eq!(batch.header.expires_at_ns, 60_000_001_000);
     assert_eq!(
         batch.header_hash,
-        chain_key_batch_header_hash(&batch.header)
+        chain_key_batch_header_hash(&batch.header).unwrap()
     );
     assert_eq!(batch.issuers[0].issuer_pid, issuer_b);
     assert_eq!(batch.issuers[1].issuer_pid, issuer_a);

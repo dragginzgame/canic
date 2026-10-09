@@ -1,12 +1,7 @@
-use sha2::{Digest, Sha256};
-
 ///
 /// IC_ROOT_PUBLIC_KEY_RAW_LENGTH
 ///
 pub const IC_ROOT_PUBLIC_KEY_RAW_LENGTH: usize = 96;
-
-const CHAIN_KEY_DERIVATION_PATH_DOMAIN: &[u8] =
-    b"CANIC_ROOT_DELEGATION_CHAIN_KEY_DERIVATION_PATH_V1";
 
 ///
 /// MAINNET_IC_ROOT_PUBLIC_KEY_RAW
@@ -25,26 +20,6 @@ const IC_ROOT_PK_DER_PREFIX: &[u8; 37] = b"\x30\x81\x82\x30\x1d\x06\x0d\x2b\x06\
 
 pub fn is_mainnet_ic_root_public_key_raw(root_key: &[u8]) -> bool {
     root_key == MAINNET_IC_ROOT_PUBLIC_KEY_RAW
-}
-
-pub fn chain_key_derivation_path_hash(derivation_path: &[Vec<u8>]) -> [u8; 32] {
-    let mut out = Vec::with_capacity(CHAIN_KEY_DERIVATION_PATH_DOMAIN.len() + 32);
-    out.extend_from_slice(CHAIN_KEY_DERIVATION_PATH_DOMAIN);
-    encode_len(&mut out, derivation_path.len());
-    for component in derivation_path {
-        encode_bytes(&mut out, component);
-    }
-    Sha256::digest(out).into()
-}
-
-fn encode_bytes(out: &mut Vec<u8>, bytes: &[u8]) {
-    encode_len(out, bytes.len());
-    out.extend_from_slice(bytes);
-}
-
-fn encode_len(out: &mut Vec<u8>, len: usize) {
-    let len = u32::try_from(len).expect("chain-key derivation path length exceeds u32");
-    out.extend_from_slice(&len.to_be_bytes());
 }
 
 pub fn ic_root_public_key_raw_from_der_or_raw(root_key: &[u8]) -> Result<Vec<u8>, String> {

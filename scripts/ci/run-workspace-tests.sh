@@ -20,7 +20,8 @@ PLAN_ONLY="${CANIC_TEST_PLAN_ONLY:-0}"
 STEP_SUMMARY_INITIALIZED=0
 RUN_STARTED_AT="$SECONDS"
 POCKET_IC_SERVER_TTL_SECONDS=7200
-POCKET_IC_SERVER_PID=""
+TESTKIT_SERVER=""
+INTERRUPTED_STATUS=0
 SCCACHE_STATS_ACTIVE=0
 SCCACHE_START_REQUESTS=0
 SCCACHE_START_HITS=0
@@ -100,7 +101,7 @@ start_compiler_cache_observation() {
         return
     fi
     local wrapper="$RUSTC_WRAPPER"
-    if [[ ! "$(basename "$wrapper")" =~ ^(run-sccache\.sh|sccache)$ ]]; then
+    if [[ ! "$(basename "$wrapper")" =~ ^(run-canic-sccache\.sh|run-sccache\.sh|sccache)$ ]]; then
         echo "==> compiler cache observation: disabled (RUSTC_WRAPPER is not sccache)"
         return
     fi
@@ -138,112 +139,30 @@ report_compiler_cache_observation() {
     echo "==> compiler cache delta: requests=$((counts[0] - SCCACHE_START_REQUESTS)) hits=$((counts[1] - SCCACHE_START_HITS)) misses=$((counts[2] - SCCACHE_START_MISSES)) uncacheable=$((counts[3] - SCCACHE_START_UNCACHEABLE)) cache_errors=$((counts[4] - SCCACHE_START_ERRORS))"
 }
 
-report_owned_pocketic_server_output() {
-    if [[ -z "${CANIC_TEST_SCRATCH:-}" ]]; then
-        return
-    fi
-    echo "==> shared PocketIC server stderr (last 40 lines)" >&2
-    tail -40 "$CANIC_TEST_SCRATCH/pocketic.stderr" >&2 || true
-    echo "==> shared PocketIC server stdout (last 40 lines)" >&2
-    tail -40 "$CANIC_TEST_SCRATCH/pocketic.stdout" >&2 || true
-}
-
-report_owned_pocketic_server_resources() {
-    local label="$1"
-    local server_pid="$POCKET_IC_SERVER_PID"
-    if [[ -z "$server_pid" || ! -r "/proc/$server_pid/status" ]]; then
-        echo "==> shared PocketIC resources after $label: unavailable" >&2
-        return
-    fi
-
-    local key value rss="unknown" high_water="unknown" threads="unknown"
-    while IFS=: read -r key value; do
-        value="${value#"${value%%[![:space:]]*}"}"
-        value="${value%"${value##*[![:space:]]}"}"
-        case "$key" in
-            Threads) threads="$value" ;;
-            VmHWM) high_water="$value" ;;
-            VmRSS) rss="$value" ;;
-        esac
-    done <"/proc/$server_pid/status"
-    echo "==> shared PocketIC resources after $label: rss=$rss high_water=$high_water threads=$threads"
-}
-
-stop_owned_pocketic_server() {
-    local server_pid="$POCKET_IC_SERVER_PID"
-    if [[ -z "$server_pid" ]]; then
-        return
-    fi
-    POCKET_IC_SERVER_PID=""
-    if kill -0 "$server_pid" 2>/dev/null; then
-        kill -KILL "$server_pid" 2>/dev/null || true
-    fi
-    wait "$server_pid" 2>/dev/null || true
-}
-
-start_owned_pocketic_server() {
-    if [[ "$PLAN_ONLY" -eq 1 ]]; then
-        return
-    fi
-    if [[ -z "${CANIC_TEST_SCRATCH:-}" || ! -d "$CANIC_TEST_SCRATCH" ]]; then
-        echo "PocketIC startup requires the governed private test scratch" >&2
-        return 1
-    fi
-
-    local port_file="$CANIC_TEST_SCRATCH/pocket_ic_${BASHPID}.port"
-    local stdout_file="$CANIC_TEST_SCRATCH/pocketic.stdout"
-    local stderr_file="$CANIC_TEST_SCRATCH/pocketic.stderr"
-    if [[ -e "$port_file" || -e "$stdout_file" || -e "$stderr_file" ]]; then
-        echo "PocketIC startup files already exist in the governed scratch" >&2
-        return 1
-    fi
-
-    # Keep tool selection local to this invocation and out of ordinary lanes.
+prepare_pocketic_execution() {
+    [[ "$PLAN_ONLY" -eq 0 ]] || return 0
+    TESTKIT_SERVER="$(bash "$ROOT/scripts/ci/testkit-server.sh" --check)"
+    # ICP environment isolation remains a Canic fixture obligation.
     # shellcheck source=./scripts/ci/native-icp-lib.sh
     source "$ROOT/scripts/ci/native-icp-lib.sh"
-    local required_icp_version
-    required_icp_version="$(
-        # shellcheck source=/dev/null
-        source "$ROOT/tool-versions.env"
-        # shellcheck source=/dev/null
-        source "$ROOT/scripts/ci/ic-tool-pins.sh"
-        printf '%s' "$CANIC_ICP_CLI_VERSION"
-    )"
-    use_native_test_icp "$CANIC_TEST_SCRATCH" "$required_icp_version"
+    # shellcheck source=/dev/null
+    source "$ROOT/scripts/ci/ic-tool-pins.sh"
+    use_native_test_icp "$CANIC_TEST_SCRATCH" "$CANIC_ICP_CLI_VERSION"
+}
 
-    "$POCKET_IC_BIN" \
+run_pocketic_command() {
+    local sequence="$((TEST_LOG_SEQUENCE + 1))" status=0
+    local stdout="$CANIC_TEST_SCRATCH/pocketic-$sequence.stdout"
+    local stderr="$CANIC_TEST_SCRATCH/pocketic-$sequence.stderr"
+    run_test_command 1 "$TESTKIT_SERVER" run \
         --ttl "$POCKET_IC_SERVER_TTL_SECONDS" \
-        --hard-ttl "$POCKET_IC_SERVER_TTL_SECONDS" \
-        --port-file "$port_file" \
-        >"$stdout_file" 2>"$stderr_file" &
-    POCKET_IC_SERVER_PID="$!"
-    local attempt server_port
-    for ((attempt = 0; attempt < 150; attempt++)); do
-        if ! kill -0 "$POCKET_IC_SERVER_PID" 2>/dev/null; then
-            local server_status=0
-            wait "$POCKET_IC_SERVER_PID" || server_status="$?"
-            POCKET_IC_SERVER_PID=""
-            echo "PocketIC server exited before readiness (status $server_status)" >&2
-            report_owned_pocketic_server_output
-            return 1
-        fi
-        server_port=""
-        if [[ -f "$port_file" ]]; then
-            IFS= read -r server_port <"$port_file" || true
-        fi
-        if [[ "$server_port" =~ ^[0-9]+$ ]] &&
-            ((server_port >= 1 && server_port <= 65535)); then
-            export CANIC_POCKET_IC_SERVER_URL="http://127.0.0.1:$server_port/"
-            echo "==> shared PocketIC server ready: $CANIC_POCKET_IC_SERVER_URL"
-            return
-        fi
-        sleep 0.2
-    done
-
-    echo "PocketIC server did not publish a valid port within 30 seconds" >&2
-    stop_owned_pocketic_server
-    report_owned_pocketic_server_output
-    return 1
+        --idle-ttl "$POCKET_IC_SERVER_TTL_SECONDS" \
+        --server-stdout "$stdout" --server-stderr "$stderr" -- "$@" || status=$?
+    if [[ "$status" -ne 0 ]]; then
+        echo '==> PocketIC server output (last 40 lines per stream; complete files retained in scratch)' >&2
+        tail -n 40 "$stderr" "$stdout" >&2 || true
+    fi
+    return "$status"
 }
 
 record_summary() {
@@ -374,6 +293,7 @@ run_test_command() {
     else
         statuses=("${PIPESTATUS[@]}")
     fi
+    [[ "$INTERRUPTED_STATUS" -eq 0 ]] || exit "$INTERRUPTED_STATUS"
     local status="${statuses[0]}"
     if [[ "${statuses[1]}" -ne 0 || "${statuses[2]}" -ne 0 ]]; then
         echo "test output capture failed: $log" >&2
@@ -494,7 +414,7 @@ run_test() {
                 verify_test_selection "${cargo_args[@]}" -- "${libtest_args[@]}" || status=$?
             fi
             if [[ "$status" -eq 0 ]]; then
-                run_test_command 1 cargo test --locked --no-fail-fast "${cargo_args[@]}" -- --test-threads=1 --nocapture \
+                run_pocketic_command cargo test --locked --no-fail-fast "${cargo_args[@]}" -- --test-threads=1 --nocapture \
                     "${libtest_args[@]}" || status=$?
             fi
             ;;
@@ -505,9 +425,6 @@ run_test() {
     esac
     local elapsed
     elapsed="$(elapsed_seconds "$started_at")"
-    if [[ "$execution" = "pocketic-serial" ]]; then
-        report_owned_pocketic_server_resources "$label"
-    fi
     if [[ "$status" -eq 0 ]]; then
         record_summary "$label" "$elapsed" "$summary_execution" "PASS"
         echo "==> $label done in $elapsed"
@@ -517,9 +434,6 @@ run_test() {
     record_summary "$label" "$elapsed" "$summary_execution" "FAIL"
     FAILED_LABELS+=("$label")
     echo "==> $label failed in $elapsed (exit $status)" >&2
-    if [[ "$execution" = "pocketic-serial" ]]; then
-        report_owned_pocketic_server_output
-    fi
     append_step_summary "$summary_execution" "$elapsed" "$label" "FAIL ($status)"
     if [[ "$execution" = "compile" ]]; then
         echo "POCKETIC COMPILE BARRIER FAILED: skipping server startup and serial execution." >&2
@@ -670,7 +584,6 @@ cleanup_workspace_test_run() {
     local cleanup_status=0
 
     trap - EXIT INT TERM
-    stop_owned_pocketic_server || cleanup_status="$?"
     cleanup_heavy_build_targets || cleanup_status="$?"
     if [[ "$run_status" -ne 0 ]]; then
         exit "$run_status"
@@ -718,19 +631,17 @@ run_pocketic_suites() {
 }
 
 trap cleanup_workspace_test_run EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
+trap 'INTERRUPTED_STATUS=130' INT
+trap 'INTERRUPTED_STATUS=143' TERM
 
 # The governed parent compiled this binary; workers need no native Cargo
 # recursion and own independent servers, ICP shims, scratch and test logs.
 if [[ "$MODE" == "native-pocketic" ]]; then
-    start_owned_pocketic_server
+    prepare_pocketic_execution
     status=0
-    run_test_command 1 "$TARGETED_POCKETIC_TEST" \
+    run_pocketic_command "$TARGETED_POCKETIC_TEST" \
         pic::governed_suite::governed_internal_pocketic_suite \
         --exact --ignored --nocapture --test-threads=1 || status=$?
-    report_owned_pocketic_server_resources "internal worker"
-    if [[ "$status" -ne 0 ]]; then report_owned_pocketic_server_output; fi
     exit "$status"
 fi
 
@@ -741,15 +652,6 @@ if [ "$PLAN_ONLY" -eq 0 ]; then
     # Role-package contract tests inspect the Wasm graph with locked offline Cargo
     # metadata. Populate the complete locked graph once so results do not depend on
     # whether the restored Cargo cache contains every target and host/build package.
-    if [[ ("$MODE" == "full" || "$MODE" == "pocketic" || "$MODE" == "targeted-pocketic") && -z "${POCKET_IC_BIN:-}" ]]; then
-        bash scripts/dev/install-ic-tools.sh --check >/dev/null
-        POCKET_IC_BIN="$ROOT/.tools/ic/bin/pocket-ic"
-        bash scripts/ci/check-pocketic-version-alignment.sh
-        export POCKET_IC_BIN
-        echo "==> using pinned PocketIC server binary: $POCKET_IC_BIN"
-    else
-        bash scripts/ci/check-pocketic-version-alignment.sh
-    fi
     echo "==> prefetching locked dependency graph for offline metadata checks"
     cargo fetch --locked
 fi
@@ -796,7 +698,7 @@ elif [[ "$TARGETED_POCKETIC_TEST" == pic::* ]]; then
         exit 1
     fi
 fi
-start_owned_pocketic_server
+prepare_pocketic_execution
 
 if [[ "$MODE" == "targeted-pocketic" ]]; then
     targeted_integration_count=0

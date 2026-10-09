@@ -53,6 +53,11 @@ case "${FORMAT_TEST_RACE:-}" in
         ;;
     worktree) printf 'concurrent working edit\n' > "$FORMAT_TEST_REAL_ROOT/staged.rs" ;;
 esac
+if [[ "${FORMAT_TEST_PREPARED_TOOLS:-}" == yes ]]; then
+    fixture-host-tool
+    fixture-ic-tool
+    fixture-rust-tool
+fi
 [[ "${FORMAT_TEST_FAIL:-}" != yes ]]
 FORMAT
     printf 'unformatted\n' > Cargo.toml
@@ -80,6 +85,18 @@ bash .githooks/pre-commit > output
 tree="$(git write-tree)"
 bash .githooks/pre-commit > output
 [[ "$(git write-tree)" == "$tree" ]]
+
+# The index export has no .tools; lookup must use the original checkout.
+new_fixture prepared-tools
+for kind in host ic rust; do
+    mkdir -p ".tools/$kind/bin"
+    printf '#!/usr/bin/env bash\nprintf "%%s\\n" %s >> "$FORMAT_TEST_TOOL_LOG"\n' "$kind" > ".tools/$kind/bin/fixture-$kind-tool"
+    chmod +x ".tools/$kind/bin/fixture-$kind-tool"
+done
+FORMAT_TEST_PREPARED_TOOLS=yes FORMAT_TEST_TOOL_LOG="$FIXTURE/prepared-tools.log" bash .githooks/pre-commit > output
+printf 'host\nic\nrust\n' > "$FIXTURE/expected-tools.log"
+cmp "$FIXTURE/expected-tools.log" "$FIXTURE/prepared-tools.log"
+[[ "$(git show :Cargo.toml)" == formatted ]]
 
 new_fixture no-selection
 git read-tree HEAD

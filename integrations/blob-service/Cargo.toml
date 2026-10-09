@@ -5,15 +5,16 @@ resolver = "3"
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.99"
+rust-version = "1.91.0"
 license = "MIT"
 
 [workspace.dependencies]
 candid = "0.10.36"
 canic = { version = "0.110.53", path = "../../crates/canic", default-features = false }
-ic-blob-storage = "=0.17.2"
+ic-blob-storage = "=0.21.0"
+ic-blob-storage-contracts = "0.21.0"
 ic-cdk = "0.20.3"
-ic-memory = "0.31"
+ic-memory = "0.33"
 
 [package]
 name = "canic-blob-service"
@@ -35,5 +36,9 @@ doctest = false
 candid.workspace = true
 canic = { workspace = true, features = [] }
 ic-blob-storage.workspace = true
+ic-blob-storage-contracts.workspace = true
 ic-cdk.workspace = true
 ic-memory.workspace = true
+
+[dev-dependencies]
+canic = { workspace = true, features = ["testing"] }

@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
-root="$(cd "$(dirname "$0")/../.." && pwd -P)"
+root="$0"
+[[ "$root" == /* ]] || root="$PWD/$root"
+root="$(cd -P "${root%/*}/../.." && printf '%s/.' "$PWD")"
+root="${root%/.}"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/rustsec-db-test.XXXXXX")"
 # Local source selection uses physical paths, including macOS /var aliases.
 fixture="$(cd "$fixture" && pwd -P)"

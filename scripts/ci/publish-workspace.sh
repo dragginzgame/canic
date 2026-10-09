@@ -5,12 +5,18 @@ set -euo pipefail
 SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SELF_DIR/../.." && pwd)"
 VERSION_READER="$ROOT_DIR/scripts/ci/read-workspace-version.sh"
+REGISTRY_OBSERVER="$ROOT_DIR/scripts/ci/check-crates-io-version.sh"
 cd "$ROOT_DIR"
 
 PUBLISH_DRY_RUN="${PUBLISH_DRY_RUN:-0}"
 PUBLISH_FROM="${PUBLISH_FROM:-}"
 PUBLISH_POLL_SECS="${PUBLISH_POLL_SECS:-10}"
 PUBLISH_TIMEOUT_SECS="${PUBLISH_TIMEOUT_SECS:-300}"
+
+if [[ "${CARGO_NET_OFFLINE:-false}" == true || "${CARGO_NET_OFFLINE:-false}" == 1 ]]; then
+    echo 'Publication admission requires registry HTTP access; offline policy is preserved' >&2
+    exit 2
+fi
 
 PUBLISH_ORDER=(
     canic-backup
@@ -36,25 +42,21 @@ if [ -n "$PUBLISH_FROM" ]; then
     fi
 fi
 
-# Returns success once crates.io reports the expected version for a crate.
-registry_has_version() {
-    local crate="$1"
-    local version="$2"
-
-    cargo info "$crate@$version" --registry crates-io >/dev/null 2>&1
-}
-
 # Waits until crates.io exposes the freshly published version.
 wait_for_registry_version() {
     local crate="$1"
     local version="$2"
     local deadline=$((SECONDS + PUBLISH_TIMEOUT_SECS))
+    local status
 
     while [ "$SECONDS" -lt "$deadline" ]; do
-        if registry_has_version "$crate" "$version"; then
-            echo "Observed $crate $version on crates.io"
-            return 0
-        fi
+        status=0
+        bash "$REGISTRY_OBSERVER" "$crate" "$version" || status=$?
+        case "$status" in
+            0) echo "Observed $crate $version on crates.io"; return 0 ;;
+            1) ;;
+            *) return "$status" ;;
+        esac
 
         echo "Waiting for crates.io to expose $crate $version..."
         sleep "$PUBLISH_POLL_SECS"
@@ -102,11 +104,17 @@ for crate in "${PUBLISH_ORDER[@]}"; do
         started=1
     fi
 
-    if run_publication_step "lookup-$crate" registry_has_version "$crate" "$version"; then
-        observed_packages["$crate"]=1
-        echo "Skipping $crate $version (already on crates.io)"
-        continue
-    fi
+    lookup_status=0
+    run_publication_step "lookup-$crate" bash "$REGISTRY_OBSERVER" "$crate" "$version" || lookup_status=$?
+    case "$lookup_status" in
+        0)
+            observed_packages["$crate"]=1
+            echo "Skipping $crate $version (already on crates.io)"
+            continue
+            ;;
+        1) ;;
+        *) exit "$lookup_status" ;;
+    esac
 
     echo "Publishing $crate $version"
     publish_args=(publish -p "$crate" --locked)
@@ -130,9 +138,13 @@ if [ "$PUBLISH_DRY_RUN" != "1" ]; then
         if [[ "${observed_packages[$crate]:-0}" == 1 ]]; then
             continue
         fi
-        if ! run_publication_step "verify-$crate" registry_has_version "$crate" "$version"; then
-            missing_packages+=("$crate")
-        fi
+        lookup_status=0
+        run_publication_step "verify-$crate" bash "$REGISTRY_OBSERVER" "$crate" "$version" || lookup_status=$?
+        case "$lookup_status" in
+            0) ;;
+            1) missing_packages+=("$crate") ;;
+            *) exit "$lookup_status" ;;
+        esac
     done
     if [ "${#missing_packages[@]}" -ne 0 ]; then
         echo "Publication is incomplete for $version:" >&2

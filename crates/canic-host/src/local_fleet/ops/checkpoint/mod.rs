@@ -2,7 +2,7 @@
 
 use crate::local_fleet::{LocalFleetError, ops::runtime::guarded};
 use ic_testkit::{pic::PocketIcManagedServer, pocket_ic::PocketIc};
-use std::{io::Read, sync::mpsc, time::Duration};
+use std::{sync::mpsc, time::Duration};
 
 /// Save the instance and confirm its terminal server status before recording success.
 pub fn save(
@@ -33,7 +33,7 @@ pub fn save(
                 .and_then(reqwest::blocking::Response::error_for_status)
                 .map_err(|error| LocalFleetError::Platform(error.to_string()))?;
             drop(pic);
-            let mut response = client
+            let response = client
                 .get(
                     url.join("instances")
                         .map_err(|_| LocalFleetError::Identity)?,
@@ -41,11 +41,15 @@ pub fn save(
                 .send()
                 .and_then(reqwest::blocking::Response::error_for_status)
                 .map_err(|error| LocalFleetError::Platform(error.to_string()))?;
-            let mut bytes = Vec::new();
-            response.by_ref().take(65_537).read_to_end(&mut bytes)?;
-            if bytes.len() > 65_536 {
-                return Err(LocalFleetError::Capacity);
-            }
+            let bytes =
+                ic_host_artifacts::artifact::read_reader(response, 65_536).map_err(|error| {
+                    match error {
+                        ic_host_artifacts::artifact::ArtifactError::LimitExceeded { .. } => {
+                            LocalFleetError::Capacity
+                        }
+                        error => LocalFleetError::Io(error.into()),
+                    }
+                })?;
             let states: Vec<String> = serde_json::from_slice(&bytes)?;
             if states.get(id).map(String::as_str) != Some("Deleted") {
                 return Err(LocalFleetError::UncleanCheckpoint);

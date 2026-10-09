@@ -21,7 +21,6 @@ on:
 jobs:
   preflight:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
@@ -40,6 +39,7 @@ jobs:
           echo "$GITHUB_WORKSPACE/.tools/host/bin" >> "$GITHUB_PATH"
           export PATH="$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
           cargo install cargo-edit --version "$CANIC_CARGO_EDIT_VERSION" --locked
+          bash scripts/ci/testkit-server.sh >/dev/null
           ACTIONLINT_BIN="$(bash scripts/ci/install-pinned-ci-tool.sh actionlint)"
           SHELLCHECK_BIN="$(bash scripts/ci/install-pinned-ci-tool.sh shellcheck)"
           echo "ACTIONLINT_BIN=$ACTIONLINT_BIN" >> "$GITHUB_ENV"
@@ -66,7 +66,6 @@ jobs:
           - runner: macos-15-intel
             target: x86_64-apple-darwin
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 45
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
@@ -96,11 +95,6 @@ jobs:
             echo "$(brew --prefix coreutils)/libexec/gnubin"
             echo "$(brew --prefix gnu-sed)/libexec/gnubin"
           } >> "$GITHUB_PATH"
-      - name: Qualify test worker failure and cancellation cleanup
-        shell: bash
-        run: |
-          bash scripts/ci/test-pocketic-workers.sh
-          bash scripts/ci/test-workspace-test-runner.sh
       - name: Install and qualify pinned native build tools
         shell: bash
         run: |
@@ -111,11 +105,14 @@ jobs:
           make install-rust-tools
           echo "$GITHUB_WORKSPACE/.tools/rust/bin" >> "$GITHUB_PATH"
           export PATH="$GITHUB_WORKSPACE/.tools/rust/bin:$PATH"
-          make install-ic-tools
+          make install-ic-tools install-testkit-server
           echo "$GITHUB_WORKSPACE/.tools/ic/bin" >> "$GITHUB_PATH"
-          pocket_bin="$GITHUB_WORKSPACE/.tools/ic/bin/pocket-ic"
-          "$pocket_bin" --version
-          echo "POCKET_IC_BIN=$pocket_bin" >> "$GITHUB_ENV"
+          make testkit-server-check
+      - name: Qualify test worker failure and cancellation cleanup
+        shell: bash
+        run: |
+          bash scripts/ci/test-pocketic-workers.sh
+          bash scripts/ci/test-workspace-test-runner.sh
       - name: Qualify isolated formatting and safe hook setup
         shell: bash
         run: bash scripts/ci/test-git-hooks.sh
@@ -146,7 +143,6 @@ jobs:
 
   security:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
@@ -178,7 +174,6 @@ jobs:
   msrv:
     needs: [preflight, security]
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
@@ -205,7 +200,6 @@ jobs:
   checks:
     needs: [preflight, security]
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
@@ -272,7 +266,6 @@ jobs:
   tests-ordinary:
     needs: [checks]
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
@@ -342,7 +335,6 @@ jobs:
   tests-pocketic:
     needs: [checks]
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
@@ -385,7 +377,7 @@ jobs:
         run: |
           echo "RUSTUP_TOOLCHAIN=$CANIC_INTERNAL_TOOLCHAIN" >> "$GITHUB_ENV"
           rustup target add --toolchain "$CANIC_INTERNAL_TOOLCHAIN" wasm32-unknown-unknown
-          make install-ic-tools
+          make install-ic-tools install-testkit-server
           echo "$GITHUB_WORKSPACE/.tools/ic/bin" >> "$GITHUB_PATH"
       - name: Check PocketIC test helper tools
         run: |
@@ -407,9 +399,7 @@ jobs:
       - name: Verify and select prepared PocketIC server
         shell: bash
         run: |
-          make install-ic-tools --check
-          BIN="$GITHUB_WORKSPACE/.tools/ic/bin/pocket-ic"
-          echo "POCKET_IC_BIN=$BIN" >> "$GITHUB_ENV"
+          make ic-tools-check testkit-server-check
       - name: Check runner disk before PocketIC tests
         shell: bash
         run: bash scripts/ci/check-runner-disk-space.sh --label "PocketIC tests before run" --min-free-mib 4096 --path "$GITHUB_WORKSPACE"
@@ -440,7 +430,6 @@ jobs:
       ${{ success() && github.event_name == 'push' && github.ref ==
       'refs/heads/main' && startsWith(github.event.head_commit.message, 'Release ') }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:

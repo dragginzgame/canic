@@ -35,7 +35,7 @@ pub fn delegated_token_cache_key(
 ) -> Result<[u8; 32], CanonicalAuthError> {
     let proof_hash = proof_hash(&token.proof)?;
     let claims_hash = claims_hash(&token.claims)?;
-    let issuer_proof_digest = issuer_proof_hash(&token.issuer_proof);
+    let issuer_proof_digest = issuer_proof_hash(&token.issuer_proof)?;
 
     Ok(delegated_token_cache_key_from_hashes(
         proof_hash,
@@ -153,7 +153,7 @@ mod tests {
             seed_hash: [10; 32],
         };
         let issuer_proof_binding_hash =
-            issuer_proof_binding_hash(p(2), issuer_proof_alg, issuer_proof_binding);
+            issuer_proof_binding_hash(p(2), issuer_proof_alg, issuer_proof_binding).unwrap();
         let cert = DelegationCert {
             root_pid: p(1),
             issuer_pid: p(2),

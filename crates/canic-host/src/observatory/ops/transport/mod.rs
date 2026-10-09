@@ -30,6 +30,7 @@ use canic_core::{
         role::RoleOverviewResponse,
     },
     protocol,
+    role_contract::RoleCapabilityKey,
 };
 use std::path::Path;
 
@@ -110,6 +111,25 @@ enum MetricResponse {
 }
 
 impl IcpObservatoryTransport<'_> {
+    fn metric_query(
+        &mut self,
+        entry: &RegistryEntry,
+        request: &MetricRequest,
+    ) -> Result<MetricResponse, ObservationFailure> {
+        let binding = entry
+            .protocol_binding
+            .as_ref()
+            .ok_or(ObservationFailure::BindingUnavailable)?;
+        let capability = match request {
+            MetricRequest::Metrics(_) => RoleCapabilityKey::ObservabilityMetrics,
+            MetricRequest::History(_) => RoleCapabilityKey::ObservabilityHistory,
+        };
+        if !binding.capabilities.contains(&capability) {
+            return Err(ObservationFailure::Unsupported);
+        }
+        self.query(entry, protocol::CANIC_PUBLIC_STATUS, request)
+    }
+
     fn query<I: CandidType, O: CandidType + serde::de::DeserializeOwned>(
         &mut self,
         entry: &RegistryEntry,
@@ -281,9 +301,8 @@ impl ObservatoryTransport for IcpObservatoryTransport<'_> {
         entry: &RegistryEntry,
         family: PublicMetricFamily,
     ) -> Result<MetricSamplesView, ObservationFailure> {
-        let reply: MetricResponse = self.query(
+        let reply = self.metric_query(
             entry,
-            protocol::CANIC_PUBLIC_STATUS,
             &MetricRequest::Metrics(PublicMetricsRequest {
                 family,
                 page: PageRequest {
@@ -299,9 +318,8 @@ impl ObservatoryTransport for IcpObservatoryTransport<'_> {
     }
 
     fn cost_window(&mut self, entry: &RegistryEntry) -> Result<CostWindowView, ObservationFailure> {
-        let reply: MetricResponse = self.query(
+        let reply = self.metric_query(
             entry,
-            protocol::CANIC_PUBLIC_STATUS,
             &MetricRequest::History(PublicHistoryRequest {
                 family: PublicMetricFamily::Cycles,
                 name: "balance".into(),

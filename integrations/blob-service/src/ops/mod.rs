@@ -13,18 +13,15 @@ use crate::ops::memory::{Grants, Memory};
 
 use std::cell::RefCell;
 
-use ic_blob_storage::{
-    dto::configuration::ServiceInstallationInput,
-    model::service::{
-        read::download::CaffeineDownloadScope, upload::completion::CompletionAuthority,
+use ic_blob_storage::ops::service::{
+    installation::{
+        ServiceInstallation, ServiceInstallationMemories, ValidatedServiceInstallation,
     },
-    ops::service::{
-        installation::{
-            ServiceInstallation, ServiceInstallationCandidate, ServiceInstallationMemories,
-            ValidatedServiceInstallation,
-        },
-        stores::ServiceStores,
-    },
+    stores::ServiceStores,
+};
+use ic_blob_storage_contracts::{
+    configuration::ServiceInstallationCandidate, download::scope::CaffeineDownloadScope,
+    dto::configuration::ServiceInstallationInput, upload::completion::CompletionAuthority,
 };
 
 /// Application owner of the shared service and its observed platform version.
@@ -43,7 +40,6 @@ pub(crate) fn install(input: &ServiceInstallationInput) {
             configuration: input.configuration,
             project: &input.project,
             completion_verifier: input.completion_verifier,
-            trusted_uploader: input.trusted_uploader,
             release: ic_blob_storage::LIBRARY_VERSION,
             platform_installation_version: ic_cdk::api::canister_version(),
         },

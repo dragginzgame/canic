@@ -203,14 +203,9 @@ REPORT_PATH="$DAY_DIR/$RUN_STEM.md"
 ARTIFACTS_DIR="$DAY_DIR/artifacts/$RUN_STEM"
 mkdir -p "$ARTIFACTS_DIR"
 
-if [[ -z "${POCKET_IC_BIN:-}" ]]; then
-  bash scripts/dev/install-ic-tools.sh --check >/dev/null
-  export POCKET_IC_BIN="$ROOT/.tools/ic/bin/pocket-ic"
-fi
-if [[ -z "${POCKET_IC_BIN:-}" || ! -x "$POCKET_IC_BIN" ]]; then
-  echo "error: pinned PocketIC $CANIC_POCKET_IC_VERSION executable is unavailable; set POCKET_IC_BIN" >&2
-  exit 2
-fi
+testkit_server="$(bash "$ROOT/scripts/ci/testkit-server.sh" --check)"
+POCKET_IC_BIN="$("$testkit_server" check)"
+export POCKET_IC_BIN
 
 RUN_TMP="$(mktemp -d)"
 mkdir -p "$RUN_TMP/tmp"

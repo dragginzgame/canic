@@ -249,8 +249,19 @@ from caller, prepare operation id, issuer, and selected cert hash without
 
 ## 4. Canonical Encoding
 
-Signed payloads use Canic's auth canonical encoding in
-`ops/auth/delegated/canonical.rs`, not Candid bytes and not serde bytes.
+Signed payloads use published `ic-auth::canonical` encoding, not Candid or Serde
+bytes. Core's `ops/auth/delegated/protocol/mod.rs` projects exact Canic Fleet
+identity bytes and checked role labels into the library's protocol values;
+`ops/auth/delegated/canonical/mod.rs` maps fallible encoding errors. Grant order,
+extension presence and all signed domains remain exact. Canic retains key-policy
+and registry-snapshot framing because those envelopes describe its protected
+deployment authority.
+
+Shared passive proof atoms and request metadata come from
+`ic-auth-protocol-types` through the existing DTO namespace. Fleet-bearing DTOs
+remain Canic-owned in this encoding slice. Token verification, certification and
+durable sessions still use their existing Canic engines; their adoption and host
+qualification belong to [#491](https://github.com/dragginzgame/canic/issues/491).
 
 Canonical hashes:
 
@@ -273,7 +284,8 @@ Strict canonical rules:
 - role grants must already be strictly sorted by role and duplicate-free
 - scopes inside each grant must already be strictly sorted and duplicate-free
 - role and scope strings must be non-empty ASCII strings using only `[a-z0-9_:-]`
-- Fleet audience strings must be non-empty ASCII strings using only `[a-z0-9_:-.]`
+- Fleet audiences bind the exact 32-byte canonical network and Fleet IDs; their
+  wire identifiers use 64 lowercase hexadecimal characters
 - token `ext` payloads are optional opaque bytes and must not exceed 4096 bytes
 - no verifier-role or verifier-principal audience exists
 - verifier rejects noncanonical vectors rather than normalizing them

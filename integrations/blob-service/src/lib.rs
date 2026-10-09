@@ -14,13 +14,13 @@ pub mod metrics;
 pub mod workflow;
 
 /// Upstream typed service contracts, shared without a second DTO schema.
-pub use ic_blob_storage::dto;
+pub use ic_blob_storage_contracts::dto;
 
 /// Dependencies used by the canister composition macro.
 #[doc(hidden)]
 pub mod __private {
     pub use crate::ops::memory;
-    pub use ic_blob_storage;
+    pub use ic_blob_storage_contracts;
     pub use ic_cdk;
     pub use ic_memory;
 }

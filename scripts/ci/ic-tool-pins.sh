@@ -14,5 +14,4 @@ canic_ic_tool_pin() {
 CANIC_BINARYEN_VERSION="$(canic_ic_tool_pin wasm-opt)" || return 1
 CANIC_IC_WASM_VERSION="$(canic_ic_tool_pin ic-wasm)" || return 1
 CANIC_ICP_CLI_VERSION="$(canic_ic_tool_pin icp)" || return 1
-CANIC_POCKET_IC_VERSION="$(canic_ic_tool_pin pocket-ic)" || return 1
-export CANIC_BINARYEN_VERSION CANIC_IC_WASM_VERSION CANIC_ICP_CLI_VERSION CANIC_POCKET_IC_VERSION
+export CANIC_BINARYEN_VERSION CANIC_IC_WASM_VERSION CANIC_ICP_CLI_VERSION

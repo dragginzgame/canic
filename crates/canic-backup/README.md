@@ -16,6 +16,11 @@ failures use `ArtifactChecksumError::Artifact(ic_backup::ops::artifacts::Artifac
 Tree names must be UTF-8 so checksum paths retain exact identity.
 
 Canic retains publication barriers, layout custody and same-operation recovery.
+Ordinary JSON creation and replacement use Host Tooling's durable publication
+engine after serialization succeeds. The existing `PersistenceError::Io` kind
+is retained; its source carries typed publication visibility, native filesystem
+failure and any independent staging-cleanup failure. A failure after publication
+requires reconciliation against the retained document before retrying.
 Its publication walk synchronizes admitted descriptors and computes the existing
 directory framing before the no-replace rename; a path-based checksum cannot
 replace that walk without losing its descriptor and barrier guarantees.

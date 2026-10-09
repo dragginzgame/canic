@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Apply [DRAGGINZGAME.md](DRAGGINZGAME.md), recorded at `0ba0ad00ed94848e54ecc82629b6b7873b7284c0` in [.shared-tooling.snapshot](.shared-tooling.snapshot). This file is the local product overlay.
+Apply [DRAGGINZGAME.md](DRAGGINZGAME.md), recorded at `ee48bb37c98c771e77b92fd891f0757d8c1c8b99` in [.shared-tooling.snapshot](.shared-tooling.snapshot). This file is the local product overlay.
 
 This file is normative for automated agents and contributors. If code conflicts
 with this file, the code is wrong.

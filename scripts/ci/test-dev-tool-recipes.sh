@@ -7,7 +7,7 @@ fixture="$(mktemp -d "${TMPDIR:-/tmp}/canic-dev-tool-recipes.XXXXXX")"
 trap 'rm -rf "$fixture"' EXIT
 real_bash="$(command -v bash)"
 real_make="$(command -v make)"
-mkdir -p "$fixture/bin" "$fixture/cargo tools" "$fixture/.tools/ic/bin" \
+mkdir -p "$fixture/.tools/rust/bin" "$fixture/bin" "$fixture/cargo tools" "$fixture/.tools/ic/bin" \
     "$fixture/.tools/host/bin" "$fixture/make" "$fixture/ci" "$fixture/scripts/ci"
 cp "$ROOT/Makefile" "$ROOT/tool-versions.env" "$fixture/"
 cp "$ROOT/make/tools.mk" "$fixture/make/"
@@ -23,11 +23,15 @@ case "$name:$*" in
     'bash:scripts/dev/install_dev.sh' | 'bash:scripts/dev/install_dev.sh --update-prereqs')
         printf '%s\n' "$PWD/.tools/ic/bin" >"$INSTALL_SELECTION"
         ;;
+    'bash:scripts/ci/testkit-server.sh' | 'bash:scripts/ci/testkit-server.sh --check')
+        printf '%s\n' "$PWD/.tools/rust/bin/testkit-runner"
+        ;;
+    'testkit-runner:setup' | 'testkit-runner:check') exit "${FAIL_TESTKIT:-0}" ;;
     'wasm-opt:--version') exit "${FAIL_WASM_OPT:-0}" ;;
 esac
 SH
 for executable in bin/bash bin/cargo '.tools/host/bin/rg' 'cargo tools/sccache' \
-    '.tools/ic/bin/icp' '.tools/ic/bin/ic-wasm' '.tools/ic/bin/wasm-opt'; do
+    '.tools/ic/bin/icp' '.tools/ic/bin/ic-wasm' '.tools/ic/bin/wasm-opt' '.tools/rust/bin/testkit-runner'; do
     { printf '#!%s\n' "$real_bash"; cat "$fixture/record"; } >"$fixture/$executable"
     chmod +x "$fixture/$executable"
 done
@@ -66,4 +70,13 @@ if grep -Fq 'scripts/ci/check-dependency-risk-inventory.sh' "$EVENTS"; then
     echo 'update-dev continued after a failed installed-tool probe' >&2
     exit 1
 fi
+for target in install-testkit-server testkit-server-check; do
+    run_recipe "$target"
+    if [[ "$target" == install-testkit-server ]]; then action=setup; else action=check; fi
+    grep -Fxq "$fixture/.tools/rust/bin/testkit-runner"$'\t'"$action" "$EVENTS"
+    if FAIL_TESTKIT=17 run_recipe "$target"; then
+        echo 'Testkit recipe accepted a failed owner command' >&2
+        exit 1
+    fi
+done
 echo 'Development Make recipes: configured paths, spaces, PATH shadowing and failure propagation passed'

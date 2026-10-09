@@ -24,7 +24,6 @@ RELEASE_CLEANUP="$ROOT/scripts/ci/cleanup-release-artifacts.sh"
 TEST_SCRATCH_RUNNER="$ROOT/scripts/ci/run-with-test-scratch.sh"
 SCCACHE_WRAPPER="$ROOT/scripts/ci/run-canic-sccache.sh"
 SCCACHE_LAUNCHER="$ROOT/scripts/ci/run-sccache.sh"
-POCKET_IC_STOPPER="$ROOT/scripts/ci/stop-owned-pocketic-servers.sh"
 RELEASE_PUSH="$ROOT/scripts/ci/push-release.sh"
 VERSION_READER="$ROOT/scripts/ci/read-workspace-version.sh"
 TAG_DELETE_TEST="$ROOT/scripts/ci/test-tag-maintenance.pl"
@@ -58,11 +57,6 @@ fi
 
 tmp_dir="$(mktemp -d)"
 cleanup() {
-    for fixture_pid in "${owned_server_pid:-}" "${foreign_server_pid:-}"; do
-        [[ -n "$fixture_pid" ]] || continue
-        kill -KILL "$fixture_pid" 2>/dev/null || :
-        wait "$fixture_pid" 2>/dev/null || :
-    done
     rm -rf "$tmp_dir"
 }
 trap cleanup EXIT
@@ -76,7 +70,7 @@ mkdir -p \
     "$release_cleanup_fixture/target" \
     "$release_cleanup_bin"
 touch "$foreign_test_scratch/live-owner"
-cp "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$SCCACHE_LAUNCHER" "$SCCACHE_WRAPPER" "$POCKET_IC_STOPPER" \
+cp "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$SCCACHE_LAUNCHER" "$SCCACHE_WRAPPER" \
     "$release_cleanup_fixture/scripts/ci/"
 # shellcheck disable=SC2016 # Preserve expansion for the generated fixture.
 printf '%s\n' \
@@ -226,32 +220,6 @@ fi
 [ -f "$foreign_test_scratch/live-owner" ] ||
     fail "release cleanup followed a symlink into another invocation's scratch"
 
-owned_server_scratch="$release_cleanup_fixture/.tmp/test-runtime.SERVER"
-owned_server_port="$owned_server_scratch/pocket_ic_12345.port"
-foreign_server_port="$foreign_test_scratch/pocket_ic_67890.port"
-mkdir -p "$owned_server_scratch"
-touch "$owned_server_port" "$foreign_server_port"
-bash -c 'exec -a pocket-ic bash -c "while :; do sleep 1; done" -- --port-file "$1"' \
-    _ "$owned_server_port" &
-owned_server_pid=$!
-bash -c 'exec -a pocket-ic bash -c "while :; do sleep 1; done" -- --port-file "$1"' \
-    _ "$foreign_server_port" &
-foreign_server_pid=$!
-sleep 0.1
-CANIC_TEST_SCRATCH="$owned_server_scratch" \
-    bash "$release_cleanup_fixture/scripts/ci/cleanup-release-artifacts.sh" --scratch-only
-wait "$owned_server_pid" 2>/dev/null || :
-if kill -0 "$owned_server_pid" 2>/dev/null; then
-    fail "release cleanup retained its invocation-owned PocketIC server"
-fi
-kill -0 "$foreign_server_pid" 2>/dev/null ||
-    fail "release cleanup stopped another invocation's PocketIC server"
-[ ! -e "$owned_server_scratch" ] ||
-    fail "release cleanup retained scratch after its PocketIC server stopped"
-kill -KILL "$foreign_server_pid" 2>/dev/null || :
-wait "$foreign_server_pid" 2>/dev/null || :
-unset owned_server_pid foreign_server_pid
-
 release_push_fixture="$tmp_dir/release-push"
 release_push_bin="$release_push_fixture/bin"
 mkdir -p "$release_push_fixture/scripts/ci" "$release_push_bin"
@@ -287,8 +255,7 @@ perl "$TAG_DELETE_TEST" >/dev/null ||
 # Exercise the authority guard with equivalent record layout and real corruption.
 authority_fixture="$tmp_dir/authority"
 mkdir -p "$authority_fixture/scripts/ci" "$authority_fixture/.github/workflows"
-cp "$ROOT/scripts/ci/check-release-integrity-contract.sh" \
-    "$ROOT/scripts/ci/check-pocketic-version-alignment.sh" "$authority_fixture/scripts/ci/"
+cp "$ROOT/scripts/ci/check-release-integrity-contract.sh" "$authority_fixture/scripts/ci/"
 cp "$ROOT/Cargo.lock" "$ROOT/rust-toolchain.toml" "$authority_fixture/"
 mkdir -p "$authority_fixture/ci"
 cp "$ROOT/ci/ic-tools.tsv" "$authority_fixture/ci/"

@@ -438,7 +438,8 @@ fn build_chain_key_root_delegation_batch(
 
     let leaf_hashes = leaves.iter().map(|leaf| leaf.leaf_hash).collect::<Vec<_>>();
     let (tree_root, witnesses) = merkle_root_and_witnesses(&leaf_hashes)?;
-    let derivation_path_hash = chain_key_derivation_path_hash(&plan.signing_policy.derivation_path);
+    let derivation_path_hash =
+        chain_key_derivation_path_hash(&plan.signing_policy.derivation_path)?;
     let batch_id = chain_key_batch_id(ChainKeyBatchIdInput {
         root_canister_id: plan.signing_policy.root_canister_id,
         proof_epoch,
@@ -486,7 +487,7 @@ fn build_chain_key_root_delegation_batch(
     Ok(ChainKeyRootDelegationBatch {
         batch_id,
         status: ChainKeyRootDelegationBatchStatus::Prepared,
-        header_hash: chain_key_batch_header_hash(&header),
+        header_hash: chain_key_batch_header_hash(&header)?,
         header,
         signature: None,
         issuers,

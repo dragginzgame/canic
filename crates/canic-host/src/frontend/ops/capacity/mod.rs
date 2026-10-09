@@ -11,7 +11,8 @@ use crate::{
     icp::IcpCli,
 };
 use canic_core::cdk::utils::hash::hex_bytes;
-use ic_host_artifacts::artifact::{ArtifactError, hash_reader};
+use ic_host_artifacts::artifact::ArtifactError;
+use ic_host_fs::read::hash_file_no_follow;
 use sha2_host::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
@@ -91,21 +92,7 @@ pub fn payload_inventory(
 }
 
 fn hash_file(path: &Path, expected_bytes: u64) -> Result<[u8; 32], FrontendError> {
-    let mut options = fs::OpenOptions::new();
-    options.read(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt as _;
-        options.custom_flags(
-            i32::try_from(rustix::fs::OFlags::NOFOLLOW.bits())
-                .map_err(|_| FrontendError::Integrity)?,
-        );
-    }
-    let file = options.open(path)?;
-    if !file.metadata()?.is_file() {
-        return Err(FrontendError::Integrity);
-    }
-    let identity = hash_reader(file, expected_bytes).map_err(|error| match error {
+    let identity = hash_file_no_follow(path, expected_bytes).map_err(|error| match error {
         ArtifactError::Io(source) => FrontendError::Io(source),
         _ => FrontendError::Integrity,
     })?;
@@ -158,4 +145,50 @@ pub fn asset_capacity(
         payload,
         sufficient: native >= input.minimum_native_cycles,
     })
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn selected_file_hash_requires_exact_bytes_and_preserves_native_errors() {
+        let root = crate::test_support::temp_dir("frontend-file-hash");
+        fs::create_dir_all(&root).unwrap();
+        let file = root.join("asset");
+        fs::write(&file, b"abc").unwrap();
+        assert_eq!(
+            hex_bytes(hash_file(&file, 3).unwrap()),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+        for expected_bytes in [2, 4] {
+            assert!(matches!(
+                hash_file(&file, expected_bytes),
+                Err(FrontendError::Integrity)
+            ));
+        }
+        assert!(matches!(hash_file(&root, 3), Err(FrontendError::Integrity)));
+        assert!(matches!(
+            hash_file(&root.join("missing"), 3),
+            Err(FrontendError::Io(source)) if source.kind() == std::io::ErrorKind::NotFound
+        ));
+        #[cfg(unix)]
+        {
+            let link = root.join("link");
+            std::os::unix::fs::symlink(&file, &link).unwrap();
+            assert!(matches!(
+                hash_file(&link, 3),
+                Err(FrontendError::Io(source))
+                    if source.raw_os_error() == Some(rustix::io::Errno::LOOP.raw_os_error())
+            ));
+            let fifo = root.join("fifo");
+            crate::test_support::create_fifo(&fifo);
+            assert!(matches!(hash_file(&fifo, 3), Err(FrontendError::Integrity)));
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
 }

@@ -23,7 +23,7 @@ use crate::{
     },
 };
 use ic_host_fs::durable::write_bytes;
-use ic_host_fs::read::read_file_no_follow;
+use ic_host_fs::read::{hash_file_no_follow, read_file_no_follow};
 
 use canic_core::{cdk::utils::hash::hex_bytes, ids::ReleaseBuildId};
 use serde::{Deserialize, Serialize};
@@ -657,20 +657,13 @@ pub(super) fn file_hash(path: &Path) -> Result<String, BuildReuseError> {
     if !fs::symlink_metadata(path)?.is_file() {
         return Err(BuildReuseError::Unsupported(path.to_path_buf()));
     }
-    let mut options = fs::OpenOptions::new();
-    options.read(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt as _;
-        options.custom_flags(rustix::fs::OFlags::NOFOLLOW.bits().cast_signed());
-    }
-    let file = options.open(path)?;
-    if !file.metadata()?.is_file() {
-        return Err(BuildReuseError::Unsupported(path.to_path_buf()));
-    }
     // Build inputs have no total-byte quota; the shared traversal uses constant storage.
-    let identity =
-        ic_host_artifacts::artifact::hash_reader(file, u64::MAX).map_err(io::Error::from)?;
+    let identity = hash_file_no_follow(path, u64::MAX).map_err(|error| match error {
+        ic_host_artifacts::artifact::ArtifactError::NotRegularFile => {
+            BuildReuseError::Unsupported(path.to_path_buf())
+        }
+        source => BuildReuseError::Io(source.into()),
+    })?;
     Ok(identity.sha256.to_string())
 }
 

@@ -5,8 +5,21 @@ Applications own their Canic App configuration and canister artifacts. IC Blob
 owns storage, tenant policy, accounting and provider behavior.
 
 This package is prepared for its first registry publication. The registry form
-depends on `canic 0.110.53` and published Blob `0.17.2`. Local paths support
-qualification in this checkout; Cargo removes them from the packaged manifest. Package preparation is not registry publication.
+depends on `canic 0.110.53` and published Blob runtime/contracts `0.21.0`.
+Local paths support qualification in this checkout; Cargo removes them from the
+packaged manifest. Package preparation is not registry publication. The local facade uses
+Memory 0.33; an aligned published Canic graph is still required under
+[#33](https://github.com/dragginzgame/canic/issues/33) before registry-only managed
+qualification or adapter delivery.
+
+The minimum supported Rust version is 1.91.0, including the checked-in dedicated
+and embedded managed consumers. Checkout maintenance uses the pinned Rust 1.99
+toolchain. Minimum-version qualification also needs the
+`wasm32-unknown-unknown` target for 1.91.0 and Canic's managed build tools; build
+consumer canister artifacts through `canic build`. The complete managed 1.91
+qualification includes Canic's current role-specific descriptor-gating fix
+([#495](https://github.com/dragginzgame/canic/issues/495)); older published
+generated tooling is not retroactively qualified by it.
 
 For a dedicated canister, a consumer-owned `cdylib` shell declares its own
 `package.metadata.canic` App and role and invokes:

@@ -5,7 +5,7 @@
 //! Boundary: auth-internal helper between root renewal workflow and management ops.
 
 use super::{
-    canonical::{chain_key_batch_header_hash, chain_key_derivation_path_hash},
+    canonical::{CanonicalAuthError, chain_key_batch_header_hash, chain_key_derivation_path_hash},
     chain_key::{
         ChainKeySignatureVerificationInput, verify_chain_key_ecdsa_public_key_shape,
         verify_chain_key_ecdsa_signature, verify_chain_key_ecdsa_signature_shape,
@@ -104,6 +104,8 @@ impl ChainKeySigner for ManagementCanisterChainKeySigner {
 
 #[derive(Debug, Error)]
 pub(in crate::ops::auth) enum ChainKeySignerError {
+    #[error(transparent)]
+    Canonical(#[from] CanonicalAuthError),
     #[error("chain-key signer header/policy mismatch: {field}")]
     HeaderPolicyMismatch { field: &'static str },
     #[error("chain-key signer test key is rejected for this build network")]
@@ -127,7 +129,7 @@ pub(in crate::ops::auth) fn chain_key_signing_policy_from_config(
         chain_key.derivation_path_hash_hex.as_deref(),
         "derivation_path_hash_hex",
     )?;
-    let actual_derivation_path_hash = chain_key_derivation_path_hash(&derivation_path);
+    let actual_derivation_path_hash = chain_key_derivation_path_hash(&derivation_path)?;
     if actual_derivation_path_hash != derivation_path_hash {
         return Err(AuthValidationError::Auth(
             "auth.delegated_tokens.chain_key_root_proof.derivation_path_hash_hex does not match derivation_path_hex"
@@ -176,7 +178,7 @@ where
         name: input.policy.key_id.name.clone(),
     };
     let derivation_path = input.policy.derivation_path.clone();
-    let message_hash = chain_key_batch_header_hash(input.header);
+    let message_hash = chain_key_batch_header_hash(input.header)?;
     let signature = signer
         .sign_with_ecdsa(SignWithEcdsaArgs {
             message_hash,
@@ -247,7 +249,7 @@ fn validate_signing_policy(
     if header.key_id != policy.key_id {
         return Err(ChainKeySignerError::HeaderPolicyMismatch { field: "key_id" });
     }
-    if header.derivation_path_hash != chain_key_derivation_path_hash(&policy.derivation_path) {
+    if header.derivation_path_hash != chain_key_derivation_path_hash(&policy.derivation_path)? {
         return Err(ChainKeySignerError::HeaderPolicyMismatch {
             field: "derivation_path_hash",
         });
@@ -374,7 +376,7 @@ mod tests {
 
     fn high_s_signature(header: &ChainKeyBatchHeaderV1) -> Vec<u8> {
         let signature: K256TestSignature = signing_key()
-            .sign_prehash(&chain_key_batch_header_hash(header))
+            .sign_prehash(&chain_key_batch_header_hash(header).unwrap())
             .expect("test prehash signature should sign");
         if signature.normalize_s().is_some() {
             return signature.to_bytes().to_vec();
@@ -400,7 +402,7 @@ mod tests {
     fn config() -> DelegatedTokenConfig {
         let signing_key = signing_key();
         let derivation_path = derivation_path();
-        let derivation_path_hash = chain_key_derivation_path_hash(&derivation_path);
+        let derivation_path_hash = chain_key_derivation_path_hash(&derivation_path).unwrap();
 
         let mut config = DelegatedTokenConfig::default();
         config.chain_key_root_proof.key_id = Some("test_key_1".to_string());
@@ -451,7 +453,7 @@ mod tests {
             expires_at_ns: 500,
             algorithm: policy.algorithm,
             key_id: policy.key_id.clone(),
-            derivation_path_hash: chain_key_derivation_path_hash(&policy.derivation_path),
+            derivation_path_hash: chain_key_derivation_path_hash(&policy.derivation_path).unwrap(),
             key_version: policy.key_version,
         }
     }
@@ -498,7 +500,7 @@ mod tests {
     impl MockSigner {
         fn valid(header: &ChainKeyBatchHeaderV1) -> Self {
             let signature: K256TestSignature = signing_key()
-                .sign_prehash(&chain_key_batch_header_hash(header))
+                .sign_prehash(&chain_key_batch_header_hash(header).unwrap())
                 .expect("test prehash signature should sign");
             Self {
                 signature: signature.to_bytes().to_vec(),
@@ -564,7 +566,10 @@ mod tests {
         assert_eq!(signature.derivation_path, policy.derivation_path);
         assert_eq!(signature.public_key, policy.public_key);
         let sign_args = signer.last_sign_args.expect("sign args should be captured");
-        assert_eq!(sign_args.message_hash, chain_key_batch_header_hash(&header));
+        assert_eq!(
+            sign_args.message_hash,
+            chain_key_batch_header_hash(&header).unwrap()
+        );
         assert_eq!(sign_args.key_id.name, policy.key_id.name);
         assert_eq!(sign_args.derivation_path, policy.derivation_path);
     }
@@ -576,7 +581,7 @@ mod tests {
         let mut signer = MockSigner::valid(&header);
         let other_key = K256SigningKey::from_bytes((&[42; 32]).into()).unwrap();
         let wrong_signature: K256TestSignature = other_key
-            .sign_prehash(&chain_key_batch_header_hash(&header))
+            .sign_prehash(&chain_key_batch_header_hash(&header).unwrap())
             .unwrap();
         signer.signature = wrong_signature.to_bytes().to_vec();
 

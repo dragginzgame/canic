@@ -9,11 +9,11 @@ Normal operators use the installed `canic` binary. Direct Rust consumers may
 use the build and `fleet_ensure` modules when embedding the same current
 contract.
 
-Generic host mechanics use the published IC Host Tooling 0.4.6 packages:
+Generic host mechanics use the published IC Host Tooling 0.8.8 packages:
 `ic-host-artifacts` owns Wasm inspection, gzip encoding/decoding and bounded
 stream reads, copying and hashing; `ic-host-fs` owns regular/private reads,
 path observations, durable publication and descriptor locks,
-`ic-host-process` owns executable resolution and bounded capture, and
+`ic-host-process` owns executable resolution, child cleanup and communication, and
 `ic-host-tools` owns Candid normalization and ICP JSON/hex envelope decoding.
 Direct consumers import reads from `ic_host_fs::read` and publication/locks from
 `ic_host_fs::durable`. Canic retains schemas, authority, byte budgets, tool pins,
@@ -24,8 +24,15 @@ allocating another complete decoded payload. Store publication uses shared chunk
 and whole-upload identities; Canic retains chunk sizes, request bounds and order.
 Generated lock-seed JSON streams through typed durable publication within its
 4 KiB budget, retaining exact pretty bytes and publication/cleanup causes.
-Build-input and local executable fingerprints share descriptor hashing while
-Canic retains regular-file/no-follow admission and the executable's 512 MiB limit.
+Build-input, frontend-file and local executable fingerprints share no-follow
+descriptor hashing. Canic retains trusted ancestors, exact frontend file lengths,
+aggregate identity framing and the executable's 512 MiB limit.
+
+Foreground replica startup uses shared communication with direct-child ownership,
+preserving the command's terminal process group and forwarding stderr live.
+It retains the existing absence of a runtime deadline or diagnostic byte quota;
+terminal-write failure kills and reaps the direct child with typed cleanup evidence.
+Descendant lifetime and paid-effect lock custody retain their existing owners.
 
 Compiled Candid extraction retains at most 16 MiB of stdout and 64 KiB of
 diagnostics, with a 120-second capture deadline. Failed or over-budget extraction

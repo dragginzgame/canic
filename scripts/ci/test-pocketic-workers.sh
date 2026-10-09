@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+WORKER_FIXTURE_TESTKIT_SERVER="$(bash "$ROOT/scripts/ci/testkit-server.sh" --check)"
+export WORKER_FIXTURE_TESTKIT_SERVER
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/canic-pocketic-workers.XXXXXX")"
 finish() {
     local status=$?
@@ -14,7 +16,7 @@ finish() {
 }
 trap finish EXIT
 mkdir -p "$fixture/scripts/ci" "$fixture/.tmp" "$fixture/bin"
-for name in run-pocketic-workers run-pocketic-worker run-workspace-tests workspace-scope cleanup-release-artifacts stop-owned-pocketic-servers; do
+for name in run-pocketic-workers run-pocketic-worker run-workspace-tests workspace-scope cleanup-release-artifacts; do
     cp "$ROOT/scripts/ci/$name.sh" "$fixture/scripts/ci/"
 done
 cp "$ROOT/tool-versions.env" "$fixture/"
@@ -22,9 +24,14 @@ mkdir -p "$fixture/ci" "$fixture/scripts/ci"
 cp "$ROOT/ci/ic-tools.tsv" "$fixture/ci/"
 cp "$ROOT/scripts/ci/ic-tool-pins.sh" "$fixture/scripts/ci/"
 printf 'use_native_test_icp() { :; }\n' > "$fixture/scripts/ci/native-icp-lib.sh"
+cat > "$fixture/scripts/ci/testkit-server.sh" <<'RESOLVE'
+#!/usr/bin/env bash
+printf '%s\n' "$WORKER_FIXTURE_TESTKIT_SERVER"
+RESOLVE
 cat > "$fixture/bin/pocket-ic" <<'FAKE'
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ "${1:-}" == --version ]]; then printf 'pocket-ic-server 16.1.0\n'; exit 0; fi
 printf '%s\n' "$$" >> "$WORKER_FIXTURE_PIDS"
 printf 'raw-server-first-line\n'
 for ((line=0; line<1000; line++)); do printf 'raw-server-context-%s\n' "$line"; done
@@ -38,7 +45,7 @@ cat > "$fixture/bin/tests" <<'FAKE'
 #!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$$" >> "$WORKER_FIXTURE_PIDS"
-printf '%s %s\n' "$CANIC_TEST_SCRATCH" "$CANIC_POCKET_IC_SERVER_URL" >> "$WORKER_FIXTURE_ENV"
+printf '%s %s\n' "$CANIC_TEST_SCRATCH" "$IC_TESTKIT_POCKET_IC_URL" >> "$WORKER_FIXTURE_ENV"
 printf '[FLEET-MEASURE] worker evidence\n'
 printf 'worker progress\n'
 while IFS= read -r scenario; do

@@ -34,10 +34,9 @@ that needs a different path or behavior owns an adapter rather than a patched
 shared copy.
 
 Refresh checks every declared destination before replacing any file. It refuses
-to overwrite staged or unstaged changes, deletions, or existing untracked/ignored
-files. Preserve or reconcile those changes before retrying; unrelated dirty paths
-remain allowed. A destination already matching the selected source bytes and
-executable state is safe to retry, including after an interrupted refresh. Only
+to overwrite consumer edits, deletions, or unrelated untracked/ignored files.
+Unrelated dirty paths remain allowed. A destination already matching the selected
+source bytes and executable state is safe to retry, including after an interrupted refresh. Only
 declare paths owned by the shared snapshot; the consumer's `AGENTS.md` remains local.
 The manifest is reviewed configuration: an intentional file-set edit is read as
 input and replaced with the resulting manifest, rather than rejected as dirty work.
@@ -55,6 +54,21 @@ set:
 Review the resulting consumer diff normally. Refresh never deletes a file and
 does not commit, stage, or push changes.
 
+A previous export need not be committed before refreshing it again. An unchanged
+file may advance when its bytes and executable mode match both the previous
+manifest and that manifest's exact source commit. The old commit must be available
+in the selected source checkout; refresh never fetches it or trusts edited hashes
+without that proof. A selected file that would change must have no staged changes;
+preserve or reconcile those index changes before retrying. Files already matching
+the new source keep the existing interrupted-refresh behavior.
+
+Preparation captures consumer file identities, bytes, modes, selected index
+entries and the manifest, then rechecks them before replacement. Changed paths,
+parents redirected through symlinks, index conflicts and concurrent manifest edits
+are refused. These checks do not lock out editors or make the whole file set
+atomic; stop other edits/validation of selected paths during refresh. A late
+conflict can leave an incomplete refresh, with the same recovery procedure below.
+
 The source remote must continue to match the manifest exactly. Switching
 between SSH, HTTPS, or a fork is an explicit provenance change and requires a
 reviewed manifest recreation.
@@ -69,10 +83,31 @@ an atomic replacement of the whole file set. If interrupted, stop consumer
 validation, inspect the partial diff, and refresh again from the same reviewed
 source revision. Verify the completed snapshot before resuming validation.
 
-To change the declared file set, edit or recreate the manifest as an explicit
-reviewed consumer change; ordinary refresh does not silently widen it.
+To extend an existing selection, repeat `--add-file` for each reviewed addition:
 
-The release runner, validation logger and formatting hook require
+```bash
+/path/to/shared-tooling/scripts/distribution/refresh-consumer.sh \
+  --consumer /path/to/consumer \
+  --add-file scripts/ci/archive-evidence.sh
+```
+
+An already selected addition is harmless. Use the same `--manifest` for a custom
+location. Existing source, provenance and destination checks still apply, and
+all additions are admitted before any destination is replaced. Ordinary refresh
+preserves the selection. Removing records remains an explicit reviewed manifest
+edit; refresh never deletes the corresponding consumer files.
+
+Selected committed files can declare unconditional shared dependencies on their
+second line as `# Shared companions: relative/path another/path`. Refresh checks
+those declarations in the exported blobs, including companions' own declarations,
+and refuses an incomplete selection with the missing path before replacing files.
+Add the named companions explicitly; refresh never silently expands the selection.
+These declarations belong to the selected source revision. Older files without
+them retain integrity checks but provide no dependency-completeness guarantee.
+Conditional features and consumer configuration still need adoption review.
+
+The release runner requires `scripts/ci/next-release-version.sh`. The runner,
+validation logger and formatting hook also require
 `scripts/ci/check-make-execution.sh`. Include it when adding or refreshing any of
 those entrypoints; existing manifests need that explicit file-set addition.
 
@@ -87,9 +122,9 @@ the runner alone does not adopt PR delivery. See the
 
 The IC installer now shares matrix admission through `scripts/ci/ic-tool-pins.awk`.
 Add that file explicitly before refreshing `scripts/dev/install-ic-tools.sh`;
-refresh never widens the selected file set automatically. The optional PocketIC
-alignment and binary checkers have their own
-[documented dependencies](verification-helpers.md#pocketic-alignment-and-external-binaries).
+refresh never widens the selected file set automatically. Adopting 0.2.0 also
+requires the [PocketIC ownership handoff](ic-tools.md#pocketic-ownership-handoff):
+remove retired helper selections and update consumer pins and callers together.
 
 Logger adoption can replace local batch concatenation with the runner's announced
 unique combined failure file and `latest-combined.log`. Its existing `latest.log`
@@ -97,7 +132,9 @@ still names only the last failed target. Move consumer readers to the combined
 path before removing a local aggregator; preserve target selection, storage-root
 selection and any product-owned presentation in the caller.
 
-Consumers running the tooling LOC regression vendor `scripts/ci/test-cloc-tooling.sh`,
+Fleet reports and their regression tests are optional consumer selections;
+normally run them centrally from Shared Tooling. Consumers intentionally running
+the tooling LOC regression vendor `scripts/ci/test-cloc-tooling.sh`,
 `scripts/dev/cloc-tooling.pl` and `scripts/ci/verify-file-checksum.sh`, in addition
 to their normal snapshot verifier. That test runs against adopted working-tree
 bytes before a consumer commit and does not need the distribution helper.
@@ -165,8 +202,8 @@ the isolated consumer. The source checkout's link check alone cannot establish
 that exported documentation is complete. Keep the list current when adding guides.
 It is an initial selection, not hidden inheritance or automatic manifest widening.
 
-For an existing snapshot, update its declared file set through the reviewed
-manifest procedure above, including all shared rule files. Include
+For an existing snapshot, add missing paths with the reviewed `--add-file`
+procedure above, including all shared rule files. Include
 `docs/releases.md`, the release runner and its version/changelog helpers when
 adopting the release command contract. The local `AGENTS.md` must direct contributors to
 `DRAGGINZGAME.md`, identify `.shared-tooling.snapshot` as its source record, and
@@ -191,13 +228,23 @@ When adopting the local-repair and owning-repository issue workflow, refresh
 commit. Remove equivalent local instructions after checking their obligations;
 retain approved scoped exceptions and consumer release boundaries. Walk through
 an authorized local repair (apply in the working tree and run focused checks)
-and an upstream finding (search, report evidence in the owning issue, then adopt
-the committed correction). Reporting an issue neither applies the upstream fix
-nor verifies consumer adoption; broad validation authority stays unchanged.
+and an upstream finding (search, confirm issue authority for the GitHub owner,
+report evidence in the authorized owning issue, then adopt the committed
+correction). Standing issue permission covers only `dragginzgame/*`; other
+GitHub destinations require explicit authorization. Remove broader local issue
+permissions when adopting this rule, and refresh scheduled prompts that repeat
+them. Reporting an issue neither applies the upstream fix nor verifies consumer
+adoption; broad validation authority stays unchanged.
 
 Consumers using the maintenance rule's exact-commit CI inspection command also
 refresh `scripts/dev/gh-ci.sh` from that reviewed revision. It remains a read-only
 interactive helper using the consumer checkout and authenticated GitHub CLI.
+When adopting the repeatable task commands, include the `tasks/` catalog,
+definitions, prompt and schedule guidance plus linked companions from the
+governance file list. Shared Tooling coordinates central runs; consumers retain
+their focused commands and product scope. Copying those files never installs a
+timer, activates an agent, grants sibling edit authority or requires Codex/systemd
+on every consumer host. Enable one local scheduler separately when requested.
 The portable-suite prerequisite check is Shared Tooling's own test setup, not a
 required consumer gate. If vendoring the complete portable suite, include its
 new `scripts/ci/check-portable-prerequisites.sh`, `scripts/ci/test-portable-prerequisites.sh`
@@ -220,6 +267,11 @@ instructions and checks with the [release contract](releases.md), including
 artifact retention and the exact atomic branch/tag push. A passing snapshot
 check alone does not verify those behaviors. Explicit PR adopters instead qualify
 the exact branch push, review boundary, merged-source validation and tag-only push.
+The direct release runner's consumer fixture, `scripts/ci/test-release-runner.sh`,
+simulates Git effects. Real-Git tracking qualification is independently selected
+as `scripts/ci/test-release-tracking.sh`; the owner portable suite always runs it.
+Select fixtures according to their documented effects and local authority rather
+than editing vendored tests or invoking an unauthorized broader suite.
 Pinning adoption also requires the checker and its jq module, prepared Git/jq/yq
 tools (and Cargo for Rust workspaces), a CI/release invocation, and consumer-owned
 qualification for locked builds and external inputs. Consumers may also vendor
@@ -263,7 +315,7 @@ After the new files are committed and reviewed, add `ci/ic-tools.tsv`,
 `scripts/ci/verify-evidence-checksums.sh` and
 `scripts/ci/verify-file-checksum.sh` to the snapshot, with `docs/ic-tools.md`.
 Also include `make/tools.mk`, `scripts/dev/install-host-tools.sh`,
-`scripts/dev/cloc.sh`, `scripts/dev/cloc-tooling.pl`, `ci/tool-versions.env` and `docs/local-setup.md` for the
+`scripts/dev/cloc.sh`, `ci/tool-versions.env` and `docs/local-setup.md` for the
 common commands and pinned host setup. Adopt the complete
 [required tool inventory](local-setup.md#required-tool-inventory), including
 ripgrep and cloc pins, and add `/.tools/` to the consumer's ignore rules. Remove
@@ -275,7 +327,7 @@ include make/tools.mk
 ```
 
 That include supplies `install-tools`, `tools-check`, `install-host-tools`,
-`host-tools-check`, `install-ic-tools`, `ic-tools-check`, `cloc` and `cloc-tooling`, plus the
+`host-tools-check`, `install-ic-tools`, `ic-tools-check` and `cloc`, plus the
 checkout-local PATH. It preserves the consumer's default Make goal; including it
 does not trigger installation. Future changes to these recipes and tool
 selections arrive with the reviewed snapshot rather than another copied recipe.
@@ -289,6 +341,11 @@ The include provides `install-rust-tools` and `rust-tools-check`; Rust consumers
 attach these to their aggregate commands as shown in
 [Rust setup](local-setup.md#rust-development-tools). Retire their duplicate
 Cargo-tool install recipes and version constants after qualified adoption.
+Consumer-selected registry binaries/examples use this same installer and its
+`scripts/ci/verify-file-checksum.sh` companion, with prepared host tools and an
+explicit local selection; see [Cargo tool setup](local-setup.md#consumer-selected-cargo-tools).
+Retire synthetic Cargo resolvers only after qualifying the selected package and
+profile. Source-checkout builds and application executable overrides stay local.
 
 Defaults use scripts and pins at the checkout root. For a snapshot stored below
 that root, set `SHARED_TOOLING_ROOT` to its reviewed local directory before the
@@ -302,9 +359,23 @@ including the extra inputs to `check-release-commands.sh`.
 Rust toolchain. Shared Tooling itself selects `CLOC_REPORT` and `CLOC_ROOT` before
 the include to summarize sibling workspaces; consumers normally use the defaults.
 Installing the raw cloc executable alone does not add these Make commands.
-`make cloc-tooling` scans sibling CI and tooling, including non-Rust repositories;
+The optional `make cloc-tooling` scans sibling CI and tooling, including non-Rust repositories;
 `CLOC_PARENT` selects its parent directory. It needs Git, cloc and core Perl
-modules, with no Cargo dependency or consumer command execution.
+modules, with no Cargo dependency or consumer command execution. Run it from
+Shared Tooling by default. A consumer that intentionally needs its own command
+can explicitly select `scripts/dev/cloc-tooling.pl`; existing selections continue
+to work. Without that file the target explains where to run or adopt the report,
+and never invokes another checkout implicitly.
+
+To retire unnecessary fleet copies, review their local callers first, then remove
+the report/test files and their snapshot records together with Make/CI/help
+references. Candidates are `cloc-tooling.pl`, `cloc-siblings.sh` and their
+dedicated tests; keep `cloc.sh` for the consumer's own workspace. Preserve
+checksum/verifier helpers used by other selected tools, local integration checks
+and historical evidence. Snapshot refresh never prunes files automatically.
+This is a consumer-owned selection change, not permission for another repository
+to edit its files. Fleet reports and their regression coverage remain maintained
+and tested in Shared Tooling.
 
 Review pins against existing qualified versions before activation. A local
 exception uses its own explicitly selected matrix outside the snapshot; remove
@@ -327,6 +398,14 @@ Qualify explicit installation and offline checking on the consumer's declared
 native hosts, plus relevant product checks for changed tool selections. Do not
 claim deployment or PocketIC client/server compatibility from `--version` alone.
 Snapshot integrity and consumer adoption remain separate from upstream fixtures.
+
+The evidence archiver can be adopted independently as
+`scripts/ci/archive-evidence.sh`; see its
+[selection and retention contract](verification-helpers.md#evidence-archives).
+Vendoring `.github/actions/retain-failure-evidence/action.yml` requires that helper
+at its canonical relative path. Downloaded artifacts from this action contain
+`evidence.tar.gz`; extract it before inspecting the retained files. Consumers
+with their own evidence layouts keep their collector and call the helper directly.
 
 The evidence-manifest helper can also be adopted independently with the existing
 checksum verifier. The nonempty Cargo test helper and exact release-tag checker

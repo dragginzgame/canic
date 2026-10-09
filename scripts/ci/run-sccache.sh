@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="${SCCACHE_REPOSITORY_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
+if [[ -n "${SCCACHE_REPOSITORY_ROOT:-}" ]]; then
+    ROOT="$SCCACHE_REPOSITORY_ROOT"
+else
+    ROOT="$0"
+    [[ "$ROOT" == /* ]] || ROOT="$PWD/$ROOT"
+    ROOT="$(cd -P "${ROOT%/*}/../.." && printf '%s/.' "$PWD")"
+    ROOT="${ROOT%/.}"
+fi
 SCCACHE_RUNTIME_ROOT="${SCCACHE_RUNTIME_DIR:-$ROOT/.tmp/sccache-runtime}"
 while [[ "$SCCACHE_RUNTIME_ROOT" == */ && "$SCCACHE_RUNTIME_ROOT" != / ]]; do
     SCCACHE_RUNTIME_ROOT="${SCCACHE_RUNTIME_ROOT%/}"

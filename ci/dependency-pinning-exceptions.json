@@ -19,8 +19,8 @@
     "rule": "cargo-exact",
     "file": "integrations/blob-service/Cargo.toml",
     "subject": "ic-blob-storage",
-    "value": "=0.17.2",
-    "reason": "Retain the published Blob 0.17.2 service/protocol contract; qualify the selected managed runtime graph whenever this exact dependency changes.",
+    "value": "=0.21.0",
+    "reason": "Retain the published Blob 0.21.0 service/protocol contract; qualify the selected managed runtime graph whenever this exact dependency changes.",
     "evidence": "docs/features/blob-storage/README.md"
   },
   {

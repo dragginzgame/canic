@@ -36,6 +36,9 @@ pub enum AuthOpsError {
 
 #[derive(Debug, ThisError)]
 pub enum AuthValidationError {
+    #[error(transparent)]
+    Canonical(#[from] crate::ops::auth::delegated::canonical::CanonicalAuthError),
+
     #[error("delegation cert root pid mismatch (expected {expected}, found {found})")]
     InvalidRootAuthority {
         expected: Principal,
@@ -183,9 +186,9 @@ impl From<AuthValidationError> for InternalError {
             AuthValidationError::AttestationProofFieldTooLarge { .. } => {
                 codes::SECURITY_INVALID_STATE
             }
-            AuthValidationError::AttestationInvalidWindow { .. } | AuthValidationError::Auth(_) => {
-                codes::SECURITY_INVALID
-            }
+            AuthValidationError::AttestationInvalidWindow { .. }
+            | AuthValidationError::Auth(_)
+            | AuthValidationError::Canonical(_) => codes::SECURITY_INVALID,
             AuthValidationError::DelegatedTokenAuthDisabled => codes::SECURITY_INACTIVE,
         };
         Self::public(code)
@@ -229,6 +232,12 @@ impl From<AuthExpiryError> for InternalError {
             AuthExpiryError::AttestationEpochRejected { .. } => codes::VERSION_INACTIVE,
         };
         Self::public(code)
+    }
+}
+
+impl From<crate::ops::auth::delegated::canonical::CanonicalAuthError> for InternalError {
+    fn from(error: crate::ops::auth::delegated::canonical::CanonicalAuthError) -> Self {
+        AuthValidationError::Canonical(error).into()
     }
 }
 

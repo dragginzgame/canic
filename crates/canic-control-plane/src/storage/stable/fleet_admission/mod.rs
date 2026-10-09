@@ -135,18 +135,8 @@ pub struct FleetAdmissionAuthorityRecord {
     pub last_result: Option<FleetAdmissionRetainedResultRecord>,
 }
 
+#[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
 impl FleetAdmissionAuthorityRecord {
-    #[cfg_attr(
-        all(
-            feature = "fleet-coordinator-canister",
-            not(feature = "root-control-plane"),
-            not(feature = "wasm-store-canister")
-        ),
-        expect(
-            dead_code,
-            reason = "Coordinator-only artifacts do not materialize host state-contract descriptors"
-        )
-    )]
     pub const STATE_CONTRACT_NAME: &'static str = "FleetAdmissionAuthorityRecord";
 }
 
@@ -157,34 +147,14 @@ impl_storable_bounded!(
 );
 
 /// Test/audit snapshot of the optional Coordinator admission record.
-#[cfg_attr(
-    all(
-        feature = "fleet-coordinator-canister",
-        not(feature = "root-control-plane"),
-        not(feature = "wasm-store-canister")
-    ),
-    expect(
-        dead_code,
-        reason = "Coordinator-only artifacts do not materialize host state-contract descriptors"
-    )
-)]
+#[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct FleetAdmissionAuthorityData {
     pub record: Option<FleetAdmissionAuthorityRecord>,
 }
 
+#[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
 impl FleetAdmissionAuthorityData {
-    #[cfg_attr(
-        all(
-            feature = "fleet-coordinator-canister",
-            not(feature = "root-control-plane"),
-            not(feature = "wasm-store-canister")
-        ),
-        expect(
-            dead_code,
-            reason = "Coordinator-only artifacts do not materialize host state-contract descriptors"
-        )
-    )]
     pub const STATE_CONTRACT_NAME: &'static str = "FleetAdmissionAuthorityData";
 }
 

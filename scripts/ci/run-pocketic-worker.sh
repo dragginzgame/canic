@@ -8,6 +8,10 @@ scratch="${CANIC_TEST_SCRATCH:?private worker scratch required}"
 attempt=0
 failed=0
 
+# The foreground Testkit owner receives the worker-group signal and must finish
+# its separate command/server groups before this shell releases the attempt.
+trap : INT TERM
+
 # Success keeps the warm process-local fixture. A case panic ends that process;
 # only its unexecuted suffix may start on a fresh server and private scratch.
 # A crash, invalid report or infrastructure failure never authorizes continuation.
@@ -17,7 +21,7 @@ while [[ -s "$selection" ]]; do
     mkdir "$run"
     report="$run/outcomes.tsv"
     status=0
-    CANIC_TEST_SCRATCH="$run" TMPDIR="$run" \
+    env -u IC_TESTKIT_POCKET_IC_URL CANIC_TEST_SCRATCH="$run" TMPDIR="$run" \
         CANIC_GOVERNED_CASE_FILE="$selection" CANIC_GOVERNED_REPORT_FILE="$report" \
         bash "$ROOT/scripts/ci/run-workspace-tests.sh" native-pocketic "$BINARY" || status=$?
 

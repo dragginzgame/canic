@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
+# Shared companions: scripts/ci/verify-file-checksum.sh scripts/ci/verify-evidence-checksums.sh scripts/ci/ic-tool-pins.awk
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+ROOT="${BASH_SOURCE[0]}"
+[[ "$ROOT" == /* ]] || ROOT="$PWD/$ROOT"
+ROOT="$(cd -P "${ROOT%/*}/../.." && printf '%s/.' "$PWD")"
+ROOT="${ROOT%/.}"
 consumer="$ROOT"
 pins=""
 check=false
@@ -19,10 +23,15 @@ while [[ $# -gt 0 ]]; do
         *) usage; exit 2 ;;
     esac
 done
-consumer="$(cd "$consumer" && pwd -P)"
+[[ "$consumer" == /* ]] || consumer="$PWD/$consumer"
+consumer="$(cd -P "$consumer" && printf '%s/.' "$PWD")"
+consumer="${consumer%/.}"
 pins="${pins:-$consumer/ci/ic-tools.tsv}"
 [[ -f "$pins" ]] || { echo "missing IC tool pins: $pins" >&2; exit 1; }
-pins="$(cd "$(dirname "$pins")" && pwd -P)/$(basename "$pins")"
+[[ "$pins" == /* ]] || pins="$PWD/$pins"
+pins_name="${pins##*/}"
+pins="$(cd -P "${pins%/*}" && printf '%s/.' "$PWD")"
+pins="${pins%/.}/$pins_name"
 case "$(uname -s):$(uname -m)" in
     Linux:x86_64|Linux:amd64) host=linux-x86_64; target=x86_64-unknown-linux-gnu; os=linux; arch=x86_64 ;;
     Darwin:x86_64|Darwin:amd64) host=darwin-x86_64; target=x86_64-apple-darwin; os=macos; arch=x86_64 ;;
@@ -31,17 +40,16 @@ case "$(uname -s):$(uname -m)" in
 esac
 
 validate_pins() {
-    awk -f "$ROOT/scripts/ci/ic-tool-pins.awk" "$1" || {
+    awk -v records=1 -f "$ROOT/scripts/ci/ic-tool-pins.awk" "$1" | LC_ALL=C sort || {
         echo 'invalid or incomplete IC tool pin matrix' >&2; return 1;
     }
 }
-validate_pins "$pins"
+selected_records="$(validate_pins "$pins")"
 
 version_check() {
     local executable="$1" tool="$2" version="$3" expected output
     [[ -f "$executable" && ! -L "$executable" && -x "$executable" ]] || return 1
     case "$tool" in
-        pocket-ic) expected="pocket-ic-server $version" ;;
         wasm-opt) expected="wasm-opt version $version" ;;
         *) expected="$tool $version" ;;
     esac
@@ -54,10 +62,11 @@ version_check() {
 verify_bundle() (
     set -e
     cd "$1" || exit 1
-    cmp -s "$pins" pins.tsv || exit 1
+    installed_records="$(validate_pins pins.tsv)" || exit 1
+    [[ "$selected_records" == "$installed_records" ]] || exit 1
     [[ "$(cat host)" == "$host" ]] || exit 1
     bash "$ROOT/scripts/ci/verify-evidence-checksums.sh" files.sha256 >&2 || exit 1
-    while IFS=$'\t' read -r tool version selected_host digest; do
+    while IFS=$'\t' read -r tool version selected_host digest || [[ -n "$tool" ]]; do
         [[ "$tool" != \#* && "$selected_host" == "$host" ]] || continue
         # Each executable must have a checksum before any version execution.
         awk -v file="bin/$tool" '$2 == file { n++ } END { if (n != 1) exit 1 }' files.sha256 || exit 1
@@ -72,7 +81,9 @@ if [[ -e "$active" && ! -L "$active" ]]; then
     echo 'refusing to replace an unmanaged .tools/ic path' >&2; exit 1
 fi
 if [[ -L "$active" ]]; then
-    selection="$(readlink "$active")"
+    # Preserve trailing newlines so admission checks the literal link target.
+    selection="$(perl -e 'my $s=readlink($ARGV[0]); defined($s) or exit 1; print $s,"/."' "$active")"
+    selection="${selection%/.}"
     [[ "$selection" =~ ^ic-set\.[[:alnum:]]+$ ]] || {
         echo 'refusing an unmanaged .tools/ic link' >&2; exit 1;
     }
@@ -102,17 +113,15 @@ printf 'pid=%s\nconsumer=%s\n' "$$" "$consumer" > "$lock/owner"
 stage="$(mktemp -d "$tool_root/ic-set.XXXXXX")"
 mkdir "$stage/bin" "$stage/lib" "$stage/downloads"
 cp "$pins" "$stage/pins.tsv"
-validate_pins "$stage/pins.tsv"
+validate_pins "$stage/pins.tsv" >/dev/null
 printf '%s\n' "$host" > "$stage/host"
-while IFS=$'\t' read -r tool version selected_host digest; do
+while IFS=$'\t' read -r tool version selected_host digest || [[ -n "$tool" ]]; do
     [[ "$tool" != \#* && "$selected_host" == "$host" ]] || continue
     scratch="$stage/downloads/$tool"
     mkdir "$scratch"
     case "$tool" in
         quill)
             repo=dfinity/quill; tag="v$version"; asset="quill-$os-$arch"; format=raw; member='' ;;
-        pocket-ic)
-            repo=dfinity/pocketic; tag="$version"; asset="pocket-ic-$arch-${host%-*}.gz"; format=gzip; member='' ;;
         wasm-opt)
             repo=WebAssembly/binaryen; tag="version_$version"; asset="binaryen-version_$version-$arch-$os.tar.gz"
             format=binaryen; member="binaryen-version_$version" ;;
@@ -132,7 +141,6 @@ while IFS=$'\t' read -r tool version selected_host digest; do
     bash "$ROOT/scripts/ci/verify-file-checksum.sh" sha256 "$digest" "$archive"
     case "$format" in
         raw) cp "$archive" "$stage/bin/$tool" ;;
-        gzip) gzip -dc "$archive" > "$stage/bin/$tool" ;;
         xz)
             tar -xJf "$archive" -C "$scratch" "$member"
             [[ -f "$scratch/$member" && ! -L "$scratch/$member" ]] || exit 1

@@ -79,9 +79,12 @@ balances or conservation receipts.
 
 ## Application metrics
 
-Every role instance includes an independent `application_metrics` observation
-from `canic_public_status`'s cached `Application` family. Collection issues at
-most one additional query per instance, with no retries, inside the existing
+Every role instance includes an independent `application_metrics` observation.
+The retained protocol binding's `ObservabilityMetrics` capability selects
+`canic_public_status`'s cached `Application` family. Roles without that capability,
+including the Coordinator, report `unsupported` without a metric query or tool
+version probe. Collection issues at most one additional query per supported instance,
+with no retries, inside the existing
 response and collection budgets. It reads at most 256 rows; pagination or source
 truncation remains explicit. A failure leaves other role observations intact.
 No application-specific library or endpoint is linked into the collector.
@@ -117,14 +120,19 @@ private `roles[].costs` evidence. The default is `null` and adds no queries.
 evidence. The existing current schema remains version 1, with a required nullable
 `costs` field; this is a pre-1.0 hard cut of the private host JSON/Rust contract.
 
-Four bounded reads per selected role collect the existing cached Cycles,
+Up to four bounded reads per selected role collect the existing cached Cycles,
 Operations and Performance families, then the Cycles history's heap-start and
 canister-version anchor. Each family reads at most 256 rows once, without
 pagination retries. Independent failures, source freshness, source timestamps,
 counter windows, saturation and incomplete pages remain visible. Source values
 use decimal strings. Missing, disabled or truncated rows never mean zero.
 These reads do not sample or update a canister and use the ordinary collection
-deadline. Unsupported roles or publication configurations remain explicit.
+deadline. The retained `ObservabilityMetrics` and `ObservabilityHistory`
+capabilities independently select family and window requests. An unsupported
+selector reports `unsupported` without dispatch; missing bindings report
+`binding_unavailable`. The Coordinator supports neither selector and therefore
+adds no cost queries. Its protected Funding observation remains the source of
+its native balance and policy status.
 
 The report separates balance, parent-owned total/per-child grants, callback
 starts, scheduler instructions and work instructions. Total and per-child grants

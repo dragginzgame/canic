@@ -17,25 +17,32 @@ endpoints, bounded decoders and synchronous lifecycle participants. It registers
 its service memory grants before Canic bootstraps the sole memory runtime. Its
 managed lifecycle retains Fleet admission.
 
-Blob-specific tests live upstream. This workspace contains no blob test harness,
-PocketIC runner or standalone test mode. Canic retains its generic endpoint,
+Blob unit/protocol/provider tests live upstream. The isolated adapter qualifies
+its dedicated and embedded managed composition through Canic's public fixtures
+and a caller-owned PocketIC server. It adds no separate server owner or standalone
+service mode to the framework workspace. Canic retains its generic endpoint,
 Fleet, lifecycle and memory tests. The upstream service suite owns blob authority,
 certificate replies, restoration, provider behavior and accounting; those results
 do not establish deployment qualification for an arbitrary wrapper.
 
-The composition selects published Blob Storage 0.17.2, Memory 0.31.3,
-Timers 0.14.15 and arithmetic-only Metrics 0.2.11 in the isolated lockfiles.
+The composition selects published Blob Storage 0.21.0, Memory 0.33.0,
+Timers 0.16.0 and arithmetic-only Metrics 0.3.1 in the isolated lockfiles.
 Each complete managed artifact must share one Memory and Timers runtime.
 See [Canic#444](https://github.com/dragginzgame/canic/issues/444) and the
 [current handoff](../../status/current.md) for scoped qualification. Building
-the shell does not establish live provider behavior.
+the shell does not establish live provider behavior. Upload capacity replies expose
+tenant logical, global physical and global billing-liability byte headroom
+separately; `remaining_bytes` is their minimum. Consumers must rebuild against
+Blob 0.21 contracts. This is a pre-1.0 hard cut with cross-release reinstall, while
+same-release restoration and the upstream mutation fence remain required.
 
 ## Dependency version ownership
 
 The service pin has one source:
 [`integrations/blob-service/Cargo.toml`](../../../integrations/blob-service/Cargo.toml),
 under `[workspace.dependencies]`. Its package inherits that declaration with
-`ic-blob-storage.workspace = true`. The two consumer examples depend on the
+`ic-blob-storage.workspace = true`; passive wire contracts come directly from
+`ic-blob-storage-contracts` at the matching 0.21.0 release. The two consumer examples depend on the
 adapter and resolve that same pin through their own lockfiles.
 
 The exact requirement retains the qualified service protocol and lifecycle
@@ -48,6 +55,19 @@ Rust crate versions. The adapter is deliberately outside Canic's main Cargo
 workspace, so it cannot inherit that workspace's dependencies. Adding an unused
 second pin to the root manifest would not control this adapter. Keep the pin here
 and refresh the adapter and consumer lockfiles when adopting a published release.
+
+## Rust toolchain
+
+The adapter and both independent consumer workspaces support Rust 1.91.0.
+This matches Canic's package floor; the checkout's pinned Rust 1.99 toolchain
+remains the maintenance default. Install the minimum-version Wasm target with
+`rustup target add --toolchain 1.91.0 wasm32-unknown-unknown`. Use
+`RUSTUP_TOOLCHAIN=1.91.0 canic build ...` to qualify a managed consumer with
+that compiler. Direct Cargo Wasm builds do not supply managed App/role authority.
+
+The complete managed minimum-version builds include the current Coordinator
+descriptor-gating correction. Adapter package verification alone does not qualify
+older Canic build tools or generated infrastructure at that compiler floor.
 
 ## Choose placement
 
@@ -128,8 +148,12 @@ canic_blob_service::canister!();
 
 The shell depends on `canic-blob-service`, `canic`, `candid` and `ic-cdk`.
 The adapter is prepared as `canic-blob-service 0.1.0` with a registry Canic
-`0.110.53` requirement and published Blob `0.17.2`. Cargo's package manifest
+`0.110.53` requirement and published Blob `0.21.0`. Cargo's package manifest
 removes the development Canic path and excludes these private consumer fixtures.
+The local facade already uses Memory 0.33. Registry Canic
+0.110.54 uses Memory 0.31, so an aligned framework publication and selected
+registry requirement remain necessary under [Canic #33](https://github.com/dragginzgame/canic/issues/33).
+A compilable package archive cannot substitute for exact managed runtime admission.
 Its first registry publication remains separate from package verification; until
 then a version-only adapter declaration cannot resolve. Checked-in qualification
 uses the matching local facade. A disposable package candidate can instead select
@@ -198,8 +222,8 @@ arguments to Root. `app.init_mode` controls Fleet operating mode.
 [Canic#444](https://github.com/dragginzgame/canic/issues/444) records qualified
 execution and downstream acceptance separately.
 
-The maintained adapter selects published Blob Storage 0.17.1 with Memory 0.31.1,
-Timers 0.14.12 and arithmetic-only Metrics 0.2.9. Each complete managed Wasm graph
+The maintained adapter selects published Blob Storage 0.21.0 with Memory 0.33.0,
+Timers 0.16.0 and arithmetic-only Metrics 0.3.1 in its independent locks. Each complete managed Wasm graph
 must contain one Memory and Timers identity. Canic owns the runtime and lifecycle;
 the service participant restores synchronously before deferred work. These
 configuration, wire and persisted record changes are a pre-1.0 hard cut requiring
@@ -222,6 +246,42 @@ commands and passive Medic inspection. Use the service's own operator tools for
 its maintained API. Its status response does not promise the former readiness
 exit code, and there is no qualified replacement for Canic's direct funding
 command. Neither limitation requires retaining the old runtime.
+
+## Browser and per-project adoption
+
+The enrolled tenant grants an exact per-upload permission naming the browser
+uploader and exclusive deadline. The certificate endpoint authenticates that
+actual uploader against the retained permission; the installation no longer
+selects one trusted uploader. Application sessions and capabilities still belong
+to the consumer. The adapter delegates this contract to
+[Blob #31](https://github.com/dragginzgame/ic-blob-storage/issues/31); it does not
+relay an ingress response certificate to another user.
+
+The adapter does not export `_immutableObjectStorageBlobsAreLive`,
+`_immutableObjectStorageBlobsToDelete` or
+`_immutableObjectStorageConfirmBlobDeletion`. Provider behavior when those
+callbacks are absent is unqualified; logical release alone cannot establish
+provider deletion. [Blob #32](https://github.com/dragginzgame/ic-blob-storage/issues/32)
+owns that gateway contract. Upload completion also requires the configured
+external `completion_verifier`; the adapter supplies no verifier deployment
+([Blob #33](https://github.com/dragginzgame/ic-blob-storage/issues/33)). The service
+includes an [application-operated private native worker recipe](https://github.com/dragginzgame/ic-blob-storage/blob/v0.21.0/docs/completion-verifier.md)
+using its existing observation, attestation and exact-reconciliation commands.
+Its two-browser reference uses a local provider substitute. Application signer
+operation, worker availability and real provider acceptance remain required.
+
+Production post-allocation binding currently requires a Root controller. The
+top-level Toko Miner Blob installation can use this existing controller route;
+its Component Spec must require application initialization and its application
+producer must retain the target-bound command bytes. The
+existing parent/peer provisioning APIs do not authorize an application hub to
+bind target-dependent bytes. [Canic #493](https://github.com/dragginzgame/canic/issues/493)
+owns that authority path. A configured project `payment_account` also does not
+establish provider linkage or attributable external top-up credit. The current
+passive funding views do not dispatch payments; provider funding evidence and
+its adapter composition remain separate prerequisites
+([Blob #34](https://github.com/dragginzgame/ic-blob-storage/issues/34),
+[Canic #494](https://github.com/dragginzgame/canic/issues/494)).
 
 ## Usage reporting
 

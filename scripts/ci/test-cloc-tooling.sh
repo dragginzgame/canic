@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
+ROOT="$0"
+[[ "$ROOT" == /* ]] || ROOT="$PWD/$ROOT"
+ROOT="$(cd -P "${ROOT%/*}/../.." && printf '%s/.' "$PWD")"
+ROOT="${ROOT%/.}"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/cloc-tooling-test.XXXXXX")"
 trap 'if [[ $? == 0 ]]; then rm -rf "$fixture"; else printf "Failed tooling LOC fixture retained: %s\n" "$fixture" >&2; fi' EXIT
 parent="$fixture/parent projects"
@@ -59,6 +62,21 @@ rm "$repo/config/.shared-tooling-extra.snapshot"
 mv "$repo/config/.shared-tooling.snapshot" "$repo/.shared-tooling.snapshot"
 # Multiple manifests and nested snapshots retain their real shared ownership.
 sed 's|scripts/ci/a.sh|scripts/ci/b.sh|' "$repo/.shared-tooling.snapshot" > "$repo/.shared-tooling-extra.snapshot"
+# Dotted names are part of the advertised .shared-tooling*.snapshot family.
+# Overlapping records count once, and still reject conflicting declarations.
+cat "$repo/.shared-tooling.snapshot" > "$repo/.shared-tooling.archives.snapshot"
+awk -F '\t' '$1 == "file"' "$repo/.shared-tooling-extra.snapshot" >> "$repo/.shared-tooling.archives.snapshot"
+perl "$ROOT/scripts/dev/cloc-tooling.pl" --json "$parent" > "$fixture/dotted.json"
+jq -e '.partial == false and .totals.shared_loc == 2 and .totals.local_loc == 7 and
+  (.repositories[0].snapshot_manifests | length) == 3' "$fixture/dotted.json" >/dev/null
+awk -F '\t' -v OFS='\t' '$1 == "file" { $3 = "x" } { print }' "$repo/.shared-tooling.archives.snapshot" > "$fixture/conflict"
+cp "$fixture/conflict" "$repo/.shared-tooling.archives.snapshot"
+if perl "$ROOT/scripts/dev/cloc-tooling.pl" --json "$parent" > "$fixture/conflict.json" 2> "$fixture/conflict.err"; then
+    echo 'conflicting dotted snapshot was accepted' >&2; exit 1
+fi
+jq -e '.partial == true and (.repositories[0].error | contains("conflicting snapshot declarations"))' "$fixture/conflict.json" >/dev/null
+rm "$repo/.shared-tooling.archives.snapshot"
+mv "$repo/.shared-tooling-extra.snapshot" "$repo/.shared-tooling.archives.snapshot"
 mkdir -p "$repo/vendor/shared/scripts/ci"
 cp "$repo/scripts/ci/a.sh" "$repo/vendor/shared/scripts/ci/c.sh"
 cp "$repo/scripts/ci/a.sh" "$repo/vendor/shared/scripts/ci/d.sh"
@@ -95,4 +113,29 @@ grep -F 'Failed tooling inventory retained:' "$fixture/failed.err" >/dev/null
 if perl "$ROOT/scripts/dev/cloc-tooling.pl" "$fixture/absent" > /dev/null 2>&1; then exit 1; fi
 if perl "$ROOT/scripts/dev/cloc-tooling.pl" --snapshot-root "$fixture/manifest" "$fixture" "$parent" > /dev/null 2>&1; then exit 1; fi
 perl "$ROOT/scripts/dev/cloc-tooling.pl" --help >/dev/null
+# A real bootstrap has no source commit, but both indexed and untracked tooling
+# still have captured hashes/LOC. bin/ includes ordinary extensionless scripts.
+bootstrap_parent="$fixture/bootstrap-parent"
+bootstrap="$bootstrap_parent/bootstrap"
+mkdir -p "$bootstrap/bin" "$bootstrap/src" "$bootstrap/bin/node_modules"
+git init -q "$bootstrap"
+printf '#!/bin/sh\nprintf "selected\\n"\n' > "$bootstrap/bin/runner"
+printf 'print "untracked\\n";\n' > "$bootstrap/bin/local.pl"
+printf 'print "excluded\\n";\n' > "$bootstrap/bin/node_modules/generated.pl"
+printf 'print "runtime\\n";\n' > "$bootstrap/src/runtime.pl"
+git -C "$bootstrap" add bin/runner
+perl "$ROOT/scripts/dev/cloc-tooling.pl" --json "$bootstrap_parent" > "$fixture/bootstrap.json"
+jq -e '.partial == false and .repositories[0].head == null and
+  .repositories[0].unborn == true and .repositories[0].dirty == true and
+  .totals.total_loc == 3 and .totals.local_loc == 3 and
+  (.repositories[0].files | map(.path) | sort) == ["bin/local.pl", "bin/runner"]' "$fixture/bootstrap.json" >/dev/null
+perl "$ROOT/scripts/dev/cloc-tooling.pl" "$bootstrap_parent" > "$fixture/bootstrap.txt" 2> "$fixture/bootstrap.err"
+grep -F 'uncommitted bootstrap' "$fixture/bootstrap.err" >/dev/null
+[[ "$(awk 'END { print $1,$4 }' "$fixture/bootstrap.txt")" == 'TOTAL 3' ]]
+# An existing corrupt branch reference is not a harmless first-commit state.
+git -C "$bootstrap" symbolic-ref HEAD refs/heads/broken
+printf 'not-an-object\n' > "$bootstrap/.git/refs/heads/broken"
+if perl "$ROOT/scripts/dev/cloc-tooling.pl" --json "$bootstrap_parent" \
+    > "$fixture/broken.json" 2> "$fixture/broken.err"; then exit 1; fi
+jq -e '.partial == true and .repositories[0].error != null' "$fixture/broken.json" >/dev/null
 echo 'Tooling LOC, source/data separation and snapshot ownership tests passed'

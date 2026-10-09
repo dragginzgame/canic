@@ -42,7 +42,7 @@ pub(in crate::ops::auth) struct ChainKeyDelegatedAuthRegistry {
 pub(in crate::ops::auth) fn current_chain_key_delegated_auth_registry(
     root_key_policy: &RootKeyPolicyV1,
 ) -> Result<ChainKeyDelegatedAuthRegistry, InternalError> {
-    let snapshot = current_chain_key_delegated_auth_registry_snapshot(root_key_policy);
+    let snapshot = current_chain_key_delegated_auth_registry_snapshot(root_key_policy)?;
     let hash =
         delegated_auth_registry_hash(&snapshot).map_err(|_err| InternalError::invariant())?;
     Ok(ChainKeyDelegatedAuthRegistry { snapshot, hash })
@@ -50,7 +50,7 @@ pub(in crate::ops::auth) fn current_chain_key_delegated_auth_registry(
 
 fn current_chain_key_delegated_auth_registry_snapshot(
     root_key_policy: &RootKeyPolicyV1,
-) -> DelegatedAuthRegistrySnapshotV1 {
+) -> Result<DelegatedAuthRegistrySnapshotV1, InternalError> {
     let root_key_policy_hash = root_key_policy_hash(root_key_policy);
     let mut issuer_policies = RootDelegationStateOps::root_issuer_policies()
         .into_iter()
@@ -72,7 +72,7 @@ fn current_chain_key_delegated_auth_registry_snapshot(
             let mut allowed_grants = delegated_role_grant_views(&policy.allowed_grants);
             normalize_grants(&mut allowed_grants);
 
-            DelegatedAuthIssuerPolicySnapshotV1 {
+            Ok(DelegatedAuthIssuerPolicySnapshotV1 {
                 issuer_canister_id: policy.issuer_pid,
                 enabled: policy.enabled,
                 allowed_audiences,
@@ -84,24 +84,24 @@ fn current_chain_key_delegated_auth_registry_snapshot(
                     policy.issuer_pid,
                     issuer_proof_algorithm,
                     issuer_proof_binding,
-                ),
+                )?,
                 renewal_template_hash,
-            }
+            })
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, InternalError>>()?;
     issuer_policies.sort_by(|left, right| {
         left.issuer_canister_id
             .as_slice()
             .cmp(right.issuer_canister_id.as_slice())
     });
 
-    DelegatedAuthRegistrySnapshotV1 {
+    Ok(DelegatedAuthRegistrySnapshotV1 {
         schema_version: DELEGATED_AUTH_REGISTRY_SCHEMA_VERSION_V1,
         root_canister_id: root_key_policy.root_canister_id,
         registry_epoch: RootDelegationStateOps::delegated_auth_registry_epoch(),
         root_key_policy_hash,
         issuer_policies,
-    }
+    })
 }
 
 fn normalize_audiences(audiences: &mut Vec<DelegationAudience>) {

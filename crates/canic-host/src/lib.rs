@@ -2,7 +2,7 @@
 
 use std::{
     io,
-    process::{Child, Command, Output},
+    process::{Command, Output},
     thread,
     time::Duration,
 };
@@ -97,10 +97,6 @@ fn with_executable_busy_retry<T>(mut launch: impl FnMut() -> io::Result<T>) -> i
 
 pub(crate) fn output_with_executable_busy_retry(command: &mut Command) -> io::Result<Output> {
     with_executable_busy_retry(|| command.output())
-}
-
-pub(crate) fn spawn_with_executable_busy_retry(command: &mut Command) -> io::Result<Child> {
-    with_executable_busy_retry(|| command.spawn())
 }
 
 pub(crate) fn should_embed_candid_metadata(build_network: canic_core::ids::BuildNetwork) -> bool {

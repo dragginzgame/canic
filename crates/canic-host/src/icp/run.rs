@@ -1,11 +1,19 @@
 use std::{
-    io::{self, Read, Write},
+    cell::Cell,
+    io::{self, Write},
     path::Path,
     process::{Command, Stdio},
-    thread,
 };
 
-use crate::{output_with_executable_busy_retry, spawn_with_executable_busy_retry};
+use ic_host_process::{
+    child::OwnedChild,
+    tool::{
+        CommunicationLimits, ExecutionFailure, ExecutionOperation, SuccessfulExit, ToolError,
+        communicate_child_with_observer,
+    },
+};
+
+use crate::{output_with_executable_busy_retry, with_executable_busy_retry};
 
 use super::{
     command::{command_display, configure_inherited_fd, ensure_command_compatible},
@@ -117,50 +125,81 @@ pub(super) fn run_status_inherit(command: &mut Command) -> Result<(), IcpCommand
 }
 
 pub(super) fn run_status_inherit_unchecked(command: &mut Command) -> Result<(), IcpCommandError> {
-    let display = command_display(command);
-    command.stdout(Stdio::inherit()).stderr(Stdio::piped());
-    let mut child = spawn_with_executable_busy_retry(command)?;
-    let stderr_handle = child
-        .stderr
-        .take()
-        .map(|stderr| thread::spawn(move || stream_and_capture_stderr(stderr)));
-    let status = child.wait()?;
-    let stderr = match stderr_handle {
-        Some(handle) => match handle.join() {
-            Ok(result) => result?,
-            Err(_) => Vec::new(),
-        },
-        None => Vec::new(),
-    };
-    if status.success() {
-        Ok(())
-    } else {
-        let stderr = if stderr.is_empty() {
-            format!("command exited with status {}", exit_status_label(status))
-        } else {
-            String::from_utf8_lossy(&stderr).to_string()
-        };
-        Err(IcpCommandError::Failed {
-            command: display,
-            stderr,
-        })
-    }
+    run_status_inherit_to(command, &mut io::stderr().lock())
 }
 
-fn stream_and_capture_stderr(mut stderr: impl Read) -> io::Result<Vec<u8>> {
-    let mut captured = Vec::new();
-    let mut buffer = [0_u8; 8192];
-    let mut terminal = io::stderr().lock();
-    loop {
-        let read = stderr.read(&mut buffer)?;
-        if read == 0 {
-            break;
+fn run_status_inherit_to(
+    command: &mut Command,
+    terminal: &mut impl Write,
+) -> Result<(), IcpCommandError> {
+    let display = command_display(command);
+    command.stdout(Stdio::inherit()).stderr(Stdio::piped());
+    let mut child = with_executable_busy_retry(|| OwnedChild::spawn_direct(command))?;
+    let forwarding_failed = Cell::new(false);
+    let mut forwarding_error = None;
+    let result = communicate_child_with_observer(
+        &mut child,
+        None,
+        CommunicationLimits {
+            stdout_bytes: 0,
+            // Foreground diagnostics retain their existing no-quota contract.
+            // The shared engine reports allocation failure instead of panicking.
+            stderr_bytes: usize::MAX,
+            timeout: None,
+        },
+        SuccessfulExit::Cleanup,
+        || forwarding_failed.get(),
+        |_, bytes| {
+            if let Err(source) = terminal.write_all(bytes) {
+                forwarding_error = Some(source);
+                forwarding_failed.set(true);
+            }
+        },
+    );
+    if let Some(source) = forwarding_error {
+        let kind = source.kind();
+        if let Err(ToolError::Execution(mut error)) = result {
+            error.failure = ExecutionFailure::Io {
+                operation: ExecutionOperation::ReadOutput,
+                source,
+            };
+            return Err(io::Error::new(kind, ToolError::Execution(error)).into());
         }
-        terminal.write_all(&buffer[..read])?;
-        captured.extend_from_slice(&buffer[..read]);
+        return Err(source.into());
     }
     terminal.flush()?;
-    Ok(captured)
+    result
+        .map(|_| ())
+        .map_err(|error| foreground_command_error(display, error))
+}
+
+fn foreground_command_error(command: String, error: ToolError) -> IcpCommandError {
+    if let Some(execution) = error.execution_error() {
+        let cleanup_complete = [
+            execution.term_error.as_ref(),
+            execution.group_error.as_ref(),
+            execution.kill_error.as_ref(),
+            execution.wait_error.as_ref(),
+        ]
+        .iter()
+        .all(Option::is_none);
+        if matches!(execution.failure, ExecutionFailure::ExitStatus) && cleanup_complete {
+            let stderr = if execution.evidence.stderr.is_empty() {
+                execution.evidence.status.map_or_else(
+                    || "command exited unsuccessfully".to_string(),
+                    |status| format!("command exited with status {}", exit_status_label(status)),
+                )
+            } else {
+                String::from_utf8_lossy(&execution.evidence.stderr).to_string()
+            };
+            return IcpCommandError::Failed { command, stderr };
+        }
+    }
+    let kind = match error.execution_error().map(|execution| &execution.failure) {
+        Some(ExecutionFailure::Io { source, .. }) => source.kind(),
+        _ => io::ErrorKind::Other,
+    };
+    IcpCommandError::Io(io::Error::new(kind, error))
 }
 
 /// Execute a command and return whether it exits successfully.
@@ -226,5 +265,119 @@ impl IcpCli {
         } else {
             ensure_command_compatible(command)
         }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::{fs, os::unix::process::CommandExt as _};
+
+    #[test]
+    fn foreground_runner_forwards_bytes_and_retains_failed_command_diagnostics() {
+        for (script, expected) in [
+            ("printf 'progress' >&2", None),
+            ("printf 'failed' >&2; exit 7", Some("failed")),
+            ("exit 7", Some("command exited with status 7")),
+        ] {
+            let mut terminal = Vec::new();
+            let result =
+                run_status_inherit_to(Command::new("sh").args(["-c", script]), &mut terminal);
+            match expected {
+                None => {
+                    result.unwrap();
+                    assert_eq!(terminal, b"progress");
+                }
+                Some(expected) => {
+                    let IcpCommandError::Failed { stderr, .. } = result.unwrap_err() else {
+                        panic!("expected failed command diagnostics");
+                    };
+                    assert_eq!(stderr, expected);
+                    if expected == "failed" {
+                        assert_eq!(terminal, b"failed");
+                    } else {
+                        assert!(terminal.is_empty());
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn foreground_runner_preserves_inherited_and_configured_process_groups() {
+        for configured_group in [false, true] {
+            let mut command = Command::new("sh");
+            command.args(["-c", "printf '%s ' \"$$\" >&2; ps -o pgid= -p $$ >&2"]);
+            if configured_group {
+                command.process_group(0);
+            }
+            let mut terminal = Vec::new();
+            run_status_inherit_to(&mut command, &mut terminal).unwrap();
+            let ids = String::from_utf8(terminal)
+                .unwrap()
+                .split_whitespace()
+                .map(|id| id.parse::<u32>().unwrap())
+                .collect::<Vec<_>>();
+            let expected_group = if configured_group {
+                ids[0]
+            } else {
+                rustix::process::getpgrp()
+                    .as_raw_nonzero()
+                    .get()
+                    .cast_unsigned()
+            };
+            assert_eq!(ids[1], expected_group);
+        }
+    }
+
+    #[test]
+    fn foreground_terminal_failure_reaps_the_direct_child_and_retains_io_cause() {
+        struct BrokenTerminal;
+        impl Write for BrokenTerminal {
+            fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+                Err(io::ErrorKind::BrokenPipe.into())
+            }
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+        let root = crate::test_support::temp_dir("foreground-terminal-error");
+        fs::create_dir_all(&root).unwrap();
+        let pid_file = root.join("pid");
+        let mut command = Command::new("sh");
+        command.env("FOREGROUND_PID_FILE", &pid_file).args([
+            "-c",
+            "printf '%s' \"$$\" > \"$FOREGROUND_PID_FILE\"; printf ready >&2; exec sleep 30",
+        ]);
+        let IcpCommandError::Io(source) =
+            run_status_inherit_to(&mut command, &mut BrokenTerminal).expect_err("terminal failure")
+        else {
+            panic!("expected terminal IO failure");
+        };
+        assert_eq!(source.kind(), io::ErrorKind::BrokenPipe);
+        let execution = source
+            .get_ref()
+            .and_then(|source| source.downcast_ref::<ToolError>())
+            .and_then(ToolError::execution_error)
+            .expect("shared cleanup evidence");
+        assert!(matches!(
+            &execution.failure,
+            ExecutionFailure::Io { source, .. } if source.kind() == io::ErrorKind::BrokenPipe
+        ));
+        assert!(execution.kill_error.is_none());
+        assert!(execution.wait_error.is_none());
+        let pid = fs::read_to_string(pid_file)
+            .unwrap()
+            .parse::<i32>()
+            .unwrap();
+        assert_eq!(
+            rustix::process::test_kill_process(rustix::process::Pid::from_raw(pid).unwrap()),
+            Err(rustix::io::Errno::SRCH)
+        );
+        fs::remove_dir_all(root).unwrap();
     }
 }

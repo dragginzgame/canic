@@ -110,7 +110,6 @@ if [[ "$BUILD_NETWORK" != "local" && "$BUILD_NETWORK" != "ic" ]]; then
 fi
 
 require_jq
-require_command sha256sum
 require_command twiggy
 
 OUTPUT_DIR="$(dirname "$OUTPUT_PATH")"
@@ -131,7 +130,7 @@ ITEMS_PATH="$SCRATCH/twiggy-top.json"
 twiggy top -f json "$WASM_PATH" >"$ITEMS_PATH"
 
 ARTIFACT_BYTES="$(wc -c <"$WASM_PATH" | tr -d ' ')"
-ARTIFACT_SHA256="$(sha256sum "$WASM_PATH" | awk '{print $1}')"
+ARTIFACT_SHA256="$(bash "$ROOT/scripts/ci/verify-file-checksum.sh" --print sha256 "$WASM_PATH")"
 TWIGGY_VERSION="$(twiggy --version 2>&1 | head -n 1)"
 
 "$JQ_BIN" -n \

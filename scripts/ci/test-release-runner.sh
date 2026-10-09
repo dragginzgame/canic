@@ -1,17 +1,45 @@
 #!/usr/bin/env bash
+# Shared companions: scripts/ci/run-release.sh scripts/ci/next-release-version.sh scripts/ci/finalize-release-changelog.awk
 set -euo pipefail
 
 # This fixture owns its Make controls; production admission is tested below.
 unset MAKEFLAGS MFLAGS MAKEOVERRIDES GNUMAKEFLAGS MAKEFILES
 export RELEASE_DELIVERY=direct
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT="${BASH_SOURCE[0]}"
+[[ "$ROOT" == /* ]] || ROOT="$PWD/$ROOT"
+ROOT="$(cd -P "${ROOT%/*}/../.." && printf '%s/.' "$PWD")"
+ROOT="${ROOT%/.}"
 FIXTURE_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/release-runner-test.XXXXXX")"
 trap 'if [[ $? == 0 ]]; then rm -rf "$FIXTURE_ROOT"; else printf "Failed release-runner fixture retained: %s\n" "$FIXTURE_ROOT" >&2; fi' EXIT
 export REAL_GIT REAL_MAKE
-REAL_GIT="$(command -v git)"
+export RELEASE_FIXTURE_HASH_GIT RELEASE_FIXTURE_GIT_REFUSALS
+RELEASE_FIXTURE_HASH_GIT="$(command -v git)"
+RELEASE_FIXTURE_GIT_REFUSALS="$FIXTURE_ROOT/forbidden-git"
 REAL_MAKE="$(command -v make)"
 mkdir -p "$FIXTURE_ROOT/bin"
+
+# The simulation may use Git's inert hash implementation, never its repository
+# operations. Record any attempted escape even if an expected-failure case masks
+# its exit status; the suite checks this record before reporting success.
+REAL_GIT="$FIXTURE_ROOT/bin/hash-git"
+cat > "$REAL_GIT" <<'GUARD'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ $# == 2 && "$1" == hash-object && "$2" == --stdin ]]; then
+    exec "$RELEASE_FIXTURE_HASH_GIT" "$@"
+fi
+printf '%s\n' "$*" >> "$RELEASE_FIXTURE_GIT_REFUSALS"
+echo 'simulation fixture refused a real Git operation' >&2
+exit 97
+GUARD
+chmod +x "$REAL_GIT"
+for effect in commit tag push; do
+    status=0
+    "$REAL_GIT" "$effect" > "$FIXTURE_ROOT/guard-$effect.log" 2>&1 || status=$?
+    [[ "$status" == 97 ]]
+done
+: > "$RELEASE_FIXTURE_GIT_REFUSALS"
 
 cat > "$FIXTURE_ROOT/bin/make" <<'STUB'
 #!/usr/bin/env bash
@@ -78,6 +106,7 @@ ancestor() {
     done
 }
 case "$1" in
+    for-each-ref) printf '\n' ;;
     check-ref-format) [[ "$2" == refs/heads/main ]] ;;
     symbolic-ref) echo main ;;
     remote)
@@ -343,6 +372,10 @@ for kind in patch minor major; do
         expect_failure "$kind" origin main
         [[ ! -e ".release-state/$candidate.plan" && ! -e .release-state/lock ]]
         cp output failed-output
+        if [[ "$target" == release-preflight ]]; then
+            grep -F 'this attempt has not started validation or version preparation' failed-output > /dev/null
+            [[ "$(count_event release-verify)" == 0 && "$(count_event release-prepare-version)" == 0 ]]
+        fi
         if [[ "$target" == release-verify ]]; then
             cp validation.1.log failed-log
             cp build.1.evidence failed-evidence
@@ -880,4 +913,6 @@ cat history-bytes >> byte-expected
 awk -v version=0.1.1 -v previous=0.1.0 -v date=2026-10-06 \
     -f "$ROOT/scripts/ci/finalize-release-changelog.awk" byte-notes > byte-result
 cmp byte-expected byte-result
+
+[[ ! -s "$RELEASE_FIXTURE_GIT_REFUSALS" ]]
 echo 'release runner command-stub tests passed'

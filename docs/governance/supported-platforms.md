@@ -58,10 +58,9 @@ also checks the Control Plane's Wasm target. Its first successful
 native results remain outstanding; the Wasm check does not qualify a linked
 release artifact or its installation tools. Runner architectures follow
 [GitHub's runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
-The PocketIC installer selects pinned binaries for all three declared hosts.
+Testkit setup selects checksum-admitted PocketIC binaries for all three declared hosts.
 The complete serial PocketIC lane is qualified on Linux; native macOS execution
-of that lane still needs evidence. Linux-only process resource observations are
-reported as unavailable on hosts without `/proc`.
+of that lane still needs evidence. Server admission and lifetime remain owned by Testkit on each host.
 
 ## Install-Capable But Not Release-Supported
 
@@ -77,7 +76,7 @@ does not widen this matrix.
 ## Explicit Exclusions
 
 - Windows is not release-supported and the repository installers reject it.
-- PocketIC's repository installer supports the three declared native hosts;
+- Testkit's PocketIC setup supports the three declared native hosts;
   upstream Linux ARM assets do not extend this release matrix.
 - Native targets outside the three declared matrix entries are not release
   targets.

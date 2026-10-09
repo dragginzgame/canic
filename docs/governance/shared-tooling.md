@@ -1,7 +1,7 @@
 # Shared Tooling adoption
 
 The [manifest](../../.shared-tooling.snapshot) records reviewed files from
-committed revision `0ba0ad00ed94848e54ecc82629b6b7873b7284c0` (committed 0.1.23).
+committed revision `ee48bb37c98c771e77b92fd891f0757d8c1c8b99` (committed 0.2.2).
 [AGENTS.md](../../AGENTS.md) retains the product overlay. Refresh only through
 the upstream distribution helper; verify exact snapshot bytes and executable
 modes before release validation. Dirty sibling source is never inherited. The
@@ -33,8 +33,14 @@ and PocketIC test entrypoints check prepared tools without downloading them.
 
 `ci/ic-tools.tsv` owns common versions and archive digests. Root
 `tool-versions.env` retains Canic Cargo/lint pins, Binaryen executable/runtime-library
-digests and PocketIC executable digests. The shell projection reads the matrix; it defines no independent
-version. PocketIC lock/server alignment, Host exact tool admission and packaged
+digests and the exact published Testkit command selection. The shell projection reads the matrix; it defines no independent
+version. Testkit owns PocketIC provisioning, offline byte/receipt admission, the
+16.x protocol policy and command-scoped server custody. `make install-testkit-server`
+explicitly installs the registry CLI through the shared Cargo installer and calls
+its setup; `make testkit-server-check` checks both retained selections offline.
+Ordinary validation never installs these tools. The five-tool IC bundle must be
+prepared again through `make install-ic-tools`; old bundles and receipts are retained.
+Host exact tool admission and packaged
 `canic toolchain install` remain product-owned. Shared setup is qualified on
 Linux; native macOS CI owns both architectures' actual execution evidence.
 The declaration checker runs in CI and release invariants. Maintained independent

@@ -468,6 +468,133 @@ fn exhausted_collection_never_launches_a_query_or_version_probe() {
     assert!(transport.compatibility.is_none());
 }
 
+#[test]
+fn coordinator_metric_selectors_are_unsupported_without_transport_effects() {
+    use canic_core::{
+        ids::CanisterRole,
+        role_contract::{BuiltInRoleKind, ProtocolProfileDigest, built_in_role_capabilities},
+    };
+
+    let icp = crate::icp::IcpCli::new("/does-not-exist", Some("local".into()));
+    let mut transport = ops::transport::IcpObservatoryTransport {
+        icp: &icp,
+        root: std::path::Path::new("/does-not-exist"),
+        environment: "local",
+        maximum_response_bytes: 1024,
+        attempted_queries: 0,
+        query_timeout: std::time::Duration::from_secs(1),
+        deadline: std::time::Instant::now() + std::time::Duration::from_secs(60),
+        compatibility: None,
+    };
+    let entry = RegistryEntry {
+        pid: candid::Principal::anonymous().to_text(),
+        role: Some(CanisterRole::FLEET_COORDINATOR.to_string()),
+        parent_pid: None,
+        module_hash: None,
+        protocol_binding: Some(crate::protocol_binding::RegistryProtocolBinding {
+            release_identity: "selected-release".into(),
+            role: CanisterRole::FLEET_COORDINATOR,
+            capabilities: built_in_role_capabilities(BuiltInRoleKind::FleetCoordinator),
+            candid_sha256: [0; 32],
+            protocol_profile_digest: ProtocolProfileDigest::from_bytes([0; 32]),
+        }),
+    };
+    for family in [
+        PublicMetricFamily::Application,
+        PublicMetricFamily::Cycles,
+        PublicMetricFamily::Operations,
+        PublicMetricFamily::Performance,
+    ] {
+        assert_eq!(
+            transport.metric_samples(&entry, family),
+            Err(ObservationFailure::Unsupported)
+        );
+    }
+    assert_eq!(
+        transport.cost_window(&entry),
+        Err(ObservationFailure::Unsupported)
+    );
+    assert_eq!(transport.attempts(), 0);
+    assert!(transport.compatibility.is_none());
+}
+
+#[test]
+fn metric_and_history_capabilities_are_independent() {
+    use canic_core::{
+        ids::CanisterRole,
+        role_contract::{ProtocolProfileDigest, RoleCapabilityKey},
+    };
+
+    let icp = crate::icp::IcpCli::new("/does-not-exist", Some("local".into()));
+    let mut transport = ops::transport::IcpObservatoryTransport {
+        icp: &icp,
+        root: std::path::Path::new("/does-not-exist"),
+        environment: "local",
+        maximum_response_bytes: 1024,
+        attempted_queries: 0,
+        query_timeout: std::time::Duration::from_secs(1),
+        deadline: std::time::Instant::now(),
+        compatibility: None,
+    };
+    let mut entry = RegistryEntry {
+        pid: candid::Principal::anonymous().to_text(),
+        role: Some("configured_component".into()),
+        parent_pid: None,
+        module_hash: None,
+        protocol_binding: None,
+    };
+    assert_eq!(
+        transport.metric_samples(&entry, PublicMetricFamily::Application),
+        Err(ObservationFailure::BindingUnavailable)
+    );
+    assert_eq!(
+        transport.cost_window(&entry),
+        Err(ObservationFailure::BindingUnavailable)
+    );
+    for metrics in [false, true] {
+        for history in [false, true] {
+            let mut capabilities = std::collections::BTreeSet::new();
+            if metrics {
+                capabilities.insert(RoleCapabilityKey::ObservabilityMetrics);
+            }
+            if history {
+                capabilities.insert(RoleCapabilityKey::ObservabilityHistory);
+            }
+            entry.protocol_binding = Some(crate::protocol_binding::RegistryProtocolBinding {
+                release_identity: "selected-release".into(),
+                role: CanisterRole::new("configured_component"),
+                capabilities,
+                candid_sha256: [0; 32],
+                protocol_profile_digest: ProtocolProfileDigest::from_bytes([0; 32]),
+            });
+            let expected_metrics = if metrics {
+                ObservationFailure::TimedOut
+            } else {
+                ObservationFailure::Unsupported
+            };
+            for family in [
+                PublicMetricFamily::Application,
+                PublicMetricFamily::Cycles,
+                PublicMetricFamily::Operations,
+                PublicMetricFamily::Performance,
+            ] {
+                assert_eq!(
+                    transport.metric_samples(&entry, family),
+                    Err(expected_metrics.clone())
+                );
+            }
+            let expected_history = if history {
+                ObservationFailure::TimedOut
+            } else {
+                ObservationFailure::Unsupported
+            };
+            assert_eq!(transport.cost_window(&entry), Err(expected_history));
+        }
+    }
+    assert_eq!(transport.attempts(), 0);
+    assert!(transport.compatibility.is_none());
+}
+
 fn application_samples(canister: &str) -> MetricSamplesView {
     MetricSamplesView {
         state: MetricSampleState::Fresh,

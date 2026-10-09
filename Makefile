@@ -29,6 +29,13 @@ include make/tools.mk
 # Rust setup shares the reviewed formatter/Candid tool selection.
 install-tools: install-rust-tools
 tools-check: rust-tools-check
+
+.PHONY: install-testkit-server testkit-server-check
+install-testkit-server:
+	@runner="$$(bash scripts/ci/testkit-server.sh)" && "$$runner" setup
+
+testkit-server-check:
+	@runner="$$(bash scripts/ci/testkit-server.sh --check)" && "$$runner" check
 ACTIONLINT_INSTALL_DIR ?= $(HOME)/.local/bin
 SHELLCHECK_INSTALL_DIR ?= $(HOME)/.local/bin
 ACTIONLINT_BIN ?= $(ACTIONLINT_INSTALL_DIR)/actionlint
@@ -37,6 +44,9 @@ SHELLCHECK_BIN ?= $(SHELLCHECK_INSTALL_DIR)/shellcheck
 ICP_ENVIRONMENT ?= local
 export ICP_ENVIRONMENT
 CARGO_ENV := ICP_ENVIRONMENT=$(ICP_ENVIRONMENT)
+CANIC_BLOB_WORKSPACES := integrations/blob-service \
+                         integrations/blob-service/consumer \
+                         integrations/blob-service/embedded-consumer
 CANIC_CARGO_TARGET_DIR ?= $(CURDIR)/target
 CARGO_TARGET_DIR ?= $(CANIC_CARGO_TARGET_DIR)
 export CARGO_TARGET_DIR
@@ -75,7 +85,9 @@ help:
 	@echo "Setup / Installation:"
 	@echo "  install          Install only the local canic CLI binary"
 	@echo "  install-dev      Install the shared Rust/Cargo/ripgrep/ShellCheck/actionlint/ICP CLI/Binaryen/Canic toolchain"
-	@echo "  install-tools    Install pinned repository host and IC tools"
+	@echo "  install-testkit-server  Prepare the published Testkit CLI and PocketIC"
+	@echo "  testkit-server-check    Verify the prepared Testkit CLI and PocketIC offline"
+	@echo "  install-tools    Install pinned repository host, IC and Rust tools"
 	@echo "  tools-check      Verify repository tool bytes and versions offline"
 	@echo "  install-hooks    Configure the repository formatting-only pre-commit hook"
 	@echo "  update-dev       Synchronize reviewed development tools and report Binaryen updates"
@@ -365,6 +377,7 @@ release-integrity-contract-gate:
 	bash scripts/ci/test-release-validation-lane.sh
 	bash scripts/ci/check-publish-manifest-boundary.sh
 	bash scripts/ci/test-publish-manifest-boundary.sh
+	bash scripts/ci/test-crates-io-version.sh
 	bash scripts/ci/test-publish-workspace.sh
 
 release-validation-matrix-gate:
@@ -463,12 +476,20 @@ fmt:
 	cargo sort --workspace
 	cargo sort-derives
 	cargo fmt --all
+	@set -eu; for workspace in $(CANIC_BLOB_WORKSPACES); do \
+		cargo sort --workspace --order workspace,package,lib,dependencies,dev-dependencies,build-dependencies,profile "$$workspace"; \
+		(cd "$$workspace" && cargo fmt --all); \
+	done
 
 fmt-check:
 	bash scripts/ci/check-format-tools.sh "$(SHARED_TOOLING_CARGO_SORT_VERSION)"
 	cargo sort --workspace --check
 	cargo sort-derives --check
 	cargo fmt --all -- --check
+	@set -eu; for workspace in $(CANIC_BLOB_WORKSPACES); do \
+		cargo sort --workspace --check --order workspace,package,lib,dependencies,dev-dependencies,build-dependencies,profile "$$workspace"; \
+		(cd "$$workspace" && cargo fmt --all -- --check); \
+	done
 
 clean:
 	@bash scripts/ci/cleanup-release-artifacts.sh

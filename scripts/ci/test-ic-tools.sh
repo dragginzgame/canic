@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
+# Shared companions: scripts/ci/test-tool-evidence.sh
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
+ROOT="$0"
+[[ "$ROOT" == /* ]] || ROOT="$PWD/$ROOT"
+ROOT="$(cd -P "${ROOT%/*}/../.." && printf '%s/.' "$PWD")"
+ROOT="${ROOT%/.}"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/ic-tools-test.XXXXXX")"
 finish() {
     local status=$?
@@ -39,13 +43,12 @@ export PATH="$fixture/bin:$PATH"
 
 pins="$fixture/pins.tsv"
 : > "$pins"
-for tool in quill icp didc ic-wasm pocket-ic wasm-opt; do
+for tool in quill icp didc ic-wasm wasm-opt; do
     case "$tool" in
         quill) version=0.5.4; report="quill $version" ;;
         icp) version=1.6.0; report="icp $version" ;;
         didc) version=0.6.2; report="didc $version" ;;
         ic-wasm) version=0.11.1; report="ic-wasm $version" ;;
-        pocket-ic) version=16.0.0; report="pocket-ic-server $version" ;;
         wasm-opt) version=132; report="wasm-opt version $version (version_$version)" ;;
     esac
     # shellcheck disable=SC2016 # The generated executable reads its runtime fixture.
@@ -61,9 +64,6 @@ for tool in quill icp didc ic-wasm pocket-ic wasm-opt; do
             quill)
                 asset="quill-$os-$arch"
                 cp "$fixture/payload/$tool" "$fixture/assets/$asset" ;;
-            pocket-ic)
-                asset="pocket-ic-$arch-${host%-*}.gz"
-                gzip -c "$fixture/payload/$tool" > "$fixture/assets/$asset" ;;
             wasm-opt)
                 asset="binaryen-version_$version-$arch-$os.tar.gz"
                 member="binaryen-version_$version"
@@ -100,13 +100,141 @@ for host in Linux:x86_64 Darwin:x86_64 Darwin:arm64; do
     install --check > /dev/null 2>&1
     install > /dev/null 2>&1
     [[ "$(wc -l < "$fixture/downloads")" == "$before" ]]
+    (cd "$fixture"; CDPATH="$fixture" bash "$ROOT/scripts/dev/install-ic-tools.sh" \
+        --consumer "${consumer#"$fixture/"}" --pins pins.tsv --check) > /dev/null 2>&1
+    # Comments and record order do not change selection or rewrite provenance.
+    original="$(readlink "$consumer/.tools/ic")"
+    cp "$consumer/.tools/ic/files.sha256" "$fixture/original-receipt"
+    for edit in comments reordered; do
+        selected_pins="$fixture/$edit.tsv"
+        if [[ "$edit" == comments ]]; then
+            { printf '# consumer qualification notes\n'; cat "$pins"; } > "$selected_pins"
+        else
+            awk '{ rows[NR]=$0 } END { for (i=NR; i>0; i--) print rows[i] }' "$pins" > "$selected_pins"
+        fi
+        cp "$selected_pins" "$fixture/caller-pins"
+        install --check > /dev/null 2>&1
+        install > /dev/null 2>&1
+        [[ "$(wc -l < "$fixture/downloads")" == "$before" &&
+           "$(readlink "$consumer/.tools/ic")" == "$original" &&
+           ! -e "$consumer/.tools/.ic-tools.lock" ]]
+        cmp "$consumer/.tools/ic/pins.tsv" "$pins"
+        cmp "$consumer/.tools/ic/files.sha256" "$fixture/original-receipt"
+        cmp "$selected_pins" "$fixture/caller-pins"
+    done
+    selected_pins="$pins"
+    # Compaction retains distinct caller and installation provenance too.
+    bash "$ROOT/scripts/ci/test-tool-evidence.sh" "$consumer" ic "$fixture/comments.tsv"
+    # A malformed active link must not authenticate its newline-trimmed sibling.
+    original="$(readlink "$consumer/.tools/ic")"
+    for target in "$original"$'\n' "$original"$'\n\n'; do
+        rm "$consumer/.tools/ic"
+        ln -s "$target" "$consumer/.tools/ic"
+        [[ ! -e "$consumer/.tools/ic/bin" ]]
+        : > "$fixture/executions"
+        expect_failure install --check
+        expect_failure install
+        [[ ! -s "$fixture/executions" && "$(wc -l < "$fixture/downloads")" == "$before" &&
+           ! -e "$consumer/.tools/.ic-tools.lock" ]]
+        perl -e 'my $s=readlink($ARGV[0]); exit(defined($s) && $s eq $ARGV[1] ? 0 : 1)' \
+            "$consumer/.tools/ic" "$target"
+    done
+    rm "$consumer/.tools/ic"
+    ln -s "$original" "$consumer/.tools/ic"
+    install --check > /dev/null 2>&1
 done
 (
     cd "$fixture"
     bash "$ROOT/scripts/dev/install-ic-tools.sh" --consumer "$consumer" --pins pins.tsv --check > /dev/null 2>&1
 )
+# A text file's final record remains a selected tool without a final newline.
+# Put this host's wasm-opt last so both installation and offline admission must
+# consume it, rather than merely accepting the same complete matrix in awk.
+for host in Linux:x86_64 Darwin:x86_64 Darwin:arm64; do
+    export IC_TOOLS_TEST_OS="${host%:*}" IC_TOOLS_TEST_ARCH="${host#*:}"
+    case "$host" in
+        Linux:*) pin_host=linux-x86_64 ;;
+        Darwin:x86_64) pin_host=darwin-x86_64 ;;
+        Darwin:arm64) pin_host=darwin-arm64 ;;
+    esac
+    selected_pins="$fixture/no-final-newline-$pin_host.tsv"
+    awk -F '\t' -v host="$pin_host" '
+        $1 == "wasm-opt" && $3 == host { final=$0; next }
+        { print }
+        END { printf "%s", final }
+    ' "$pins" > "$selected_pins"
+    consumer="$fixture/no-final-newline $host"
+    mkdir "$consumer"
+    install > "$fixture/no-final-newline-$pin_host.log" 2>&1
+    [[ -x "$consumer/.tools/ic/bin/wasm-opt" ]] || {
+        echo "IC setup omitted the final selected tool for $pin_host" >&2; exit 1;
+    }
+    cmp "$selected_pins" "$consumer/.tools/ic/pins.tsv"
+    install --check > /dev/null 2>&1
+    # Even a receipt matching changed bytes must not bypass its version check.
+    sed 's/wasm-opt version 132/wasm-opt version 133/' "$fixture/payload/wasm-opt" > "$consumer/.tools/ic/bin/wasm-opt"
+    digest="$(shasum -a 256 "$consumer/.tools/ic/bin/wasm-opt")"
+    awk -v hash="${digest%% *}" '$2 == "bin/wasm-opt" { printf "%s  %s\n", hash, $2; next } { print }' \
+        "$consumer/.tools/ic/files.sha256" > "$fixture/changed-receipt"
+    mv "$fixture/changed-receipt" "$consumer/.tools/ic/files.sha256"
+    expect_failure install --check
+    rg -F 'wasm-opt version mismatch' "$fixture/refusal.log" > /dev/null
+done
 export IC_TOOLS_TEST_OS=Linux IC_TOOLS_TEST_ARCH=x86_64
 consumer="$fixture/consumer Linux:x86_64"
+original="$(readlink "$consumer/.tools/ic")"
+
+# Only equivalent, complete selections may reuse the bundle, before execution.
+before="$(wc -l < "$fixture/downloads")"
+selected_pins="$fixture/changed.tsv"
+for change in version digest other-host host duplicate malformed extra-tool; do
+    case "$change" in
+        version) awk -F '\t' 'BEGIN { OFS="\t" } $1 == "quill" { $2="0.5.5" } { print }' "$pins" > "$selected_pins" ;;
+        digest|other-host)
+            changed_host=linux-x86_64
+            [[ "$change" != other-host ]] || changed_host=darwin-arm64
+            awk -F '\t' -v host="$changed_host" 'BEGIN { OFS="\t" } $1 == "quill" && $3 == host { $4=sprintf("%064d",0) } { print }' "$pins" > "$selected_pins" ;;
+        host) sed 's/linux-x86_64/linux-arm64/' "$pins" > "$selected_pins" ;;
+        duplicate) { cat "$pins"; head -n 1 "$pins"; } > "$selected_pins" ;;
+        malformed) { cat "$pins"; printf 'not a pin record\n'; } > "$selected_pins" ;;
+        extra-tool) { cat "$pins"; awk -F '\t' 'BEGIN { OFS="\t" } $1 == "quill" { $1="pocket-ic"; $2="16.1.0"; print }' "$pins"; } > "$selected_pins" ;;
+    esac
+    : > "$fixture/executions"
+    expect_failure install --check
+    case "$change" in host|duplicate|malformed|extra-tool) expect_failure install ;; esac
+    [[ ! -s "$fixture/executions" && "$(wc -l < "$fixture/downloads")" == "$before" &&
+       "$(readlink "$consumer/.tools/ic")" == "$original" ]]
+done
+# Retained pins are independently admitted, not merely stripped of comments.
+selected_pins="$pins"
+head -n 1 "$pins" >> "$consumer/.tools/ic/pins.tsv"
+: > "$fixture/executions"
+expect_failure install --check
+[[ ! -s "$fixture/executions" && "$(wc -l < "$fixture/downloads")" == "$before" ]]
+cp "$pins" "$consumer/.tools/ic/pins.tsv"
+
+# Replacing an old six-tool bundle requires explicit setup. Offline checks and
+# failed setup preserve its pins, receipts and payload; no old executable runs.
+awk -F '\t' 'BEGIN { OFS="\t" } $1 == "quill" { $1="pocket-ic"; $2="16.1.0"; print }' "$pins" >> "$consumer/.tools/ic/pins.tsv"
+# shellcheck disable=SC2016 # The retained executable reads its runtime fixture.
+printf '#!/usr/bin/env bash\necho executed >> "$IC_TOOLS_TEST_FIXTURE/executions"\necho "pocket-ic-server 16.1.0"\n' > "$consumer/.tools/ic/bin/pocket-ic"
+chmod +x "$consumer/.tools/ic/bin/pocket-ic"
+digest="$(shasum -a 256 "$consumer/.tools/ic/bin/pocket-ic")"
+printf '%s  bin/pocket-ic\n' "${digest%% *}" >> "$consumer/.tools/ic/files.sha256"
+cp "$consumer/.tools/ic/pins.tsv" "$fixture/retained-pins"
+cp "$consumer/.tools/ic/files.sha256" "$fixture/retained-receipt"
+cp "$consumer/.tools/ic/bin/pocket-ic" "$fixture/retained-server"
+: > "$fixture/executions"
+expect_failure install --check
+[[ ! -s "$fixture/executions" && "$(wc -l < "$fixture/downloads")" == "$before" ]]
+IC_TOOLS_TEST_INTERRUPT=1 expect_failure install
+[[ "$(readlink "$consumer/.tools/ic")" == "$original" ]]
+install > /dev/null 2>&1
+[[ "$(readlink "$consumer/.tools/ic")" != "$original" && ! -e "$consumer/.tools/ic/bin/pocket-ic" ]]
+cmp "$fixture/retained-pins" "$consumer/.tools/$original/pins.tsv"
+cmp "$fixture/retained-receipt" "$consumer/.tools/$original/files.sha256"
+cmp "$fixture/retained-server" "$consumer/.tools/$original/bin/pocket-ic"
+install --check > /dev/null 2>&1
 original="$(readlink "$consumer/.tools/ic")"
 
 # Wrong digests never execute downloaded content or replace the active bundle.
@@ -119,7 +247,7 @@ expect_failure install
 rg -F 'Failed tool installation retained:' "$fixture/refusal.log" >/dev/null
 
 # Failure after earlier tools succeeded also preserves the previous activation.
-awk -F '\t' 'BEGIN { OFS="\t" } $1 == "pocket-ic" && $3 == "linux-x86_64" { $4=sprintf("%064d",0) } { print }' "$pins" > "$selected_pins"
+awk -F '\t' 'BEGIN { OFS="\t" } $1 == "wasm-opt" && $3 == "linux-x86_64" { $4=sprintf("%064d",0) } { print }' "$pins" > "$selected_pins"
 expect_failure install
 [[ "$(readlink "$consumer/.tools/ic")" == "$original" ]]
 
@@ -134,8 +262,8 @@ install > /dev/null 2>&1
 
 # Receipt traversal failure must not activate a candidate or lose its evidence.
 original="$(readlink "$consumer/.tools/ic")"
-cp "$pins" "$fixture/receipt-pins.tsv"
-printf '# force a new reviewed matrix identity\n' >> "$fixture/receipt-pins.tsv"
+# Change another host's record to require a new candidate with valid Linux assets.
+awk -F '\t' 'BEGIN { OFS="\t" } $1 == "quill" && $3 == "darwin-arm64" { $4=sprintf("%064d",0) } { print }' "$pins" > "$fixture/receipt-pins.tsv"
 selected_pins="$fixture/receipt-pins.tsv"
 cat > "$fixture/bin/find" <<'SCRIPT'
 #!/usr/bin/env bash
@@ -165,7 +293,7 @@ rg -F 'Failed tool installation retained:' "$fixture/refusal.log" >/dev/null
 
 # Invalid/incomplete matrices and unknown hosts fail without downloading.
 before="$(wc -l < "$fixture/downloads")"
-head -n 17 "$pins" > "$selected_pins"
+head -n 14 "$pins" > "$selected_pins"
 expect_failure install
 selected_pins="$pins"
 IC_TOOLS_TEST_ARCH=aarch64 expect_failure install

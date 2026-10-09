@@ -34,7 +34,7 @@ tool_version() {
 }
 
 file_hash() {
-    sha256sum "$1" | awk '{print $1}'
+    bash "$METHOD_ROOT/scripts/ci/verify-file-checksum.sh" --print sha256 "$1"
 }
 
 root_independent_composite() {
@@ -43,6 +43,7 @@ root_independent_composite() {
     for relative_path in \
         "$DEFINITION_PATH" \
         scripts/ci/wasm-audit-report.sh \
+        scripts/ci/verify-file-checksum.sh \
         scripts/ci/list-config-canisters.sh \
         scripts/ci/require_icp.sh \
         tool-versions.env; do

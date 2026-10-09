@@ -7,6 +7,7 @@
 pub mod caller_authority;
 use caller_authority::{CallerJournalKey, CallerJournalRowRecord};
 
+#[cfg(feature = "root-control-plane")]
 use canic_core::dto::fleet_registry::{FleetSubnetRootEntry, FleetSubnetRootStatus};
 #[cfg(feature = "root-control-plane")]
 use canic_core::impl_storable_bounded;
@@ -2319,9 +2320,12 @@ impl<'a> ComponentChildIndexAuthority<'a> {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "stable Registry values retain direct canonical records without heap-indirection semantics"
+#[cfg_attr(
+    target_pointer_width = "64",
+    expect(
+        clippy::large_enum_variant,
+        reason = "native 64-bit Registry values retain direct canonical records without heap-indirection semantics"
+    )
 )]
 pub enum ComponentRegistryEntryRecord {
     CallerAuthority(Box<CallerJournalRowRecord>),

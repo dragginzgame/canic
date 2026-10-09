@@ -27,12 +27,6 @@ fn inspect(source: &str) -> Result<Value, Vec<String>> {
             }
             continue;
         }
-        if job["timeout-minutes"]
-            .as_u64()
-            .is_none_or(|timeout| timeout == 0)
-        {
-            failures.push(format!("{name}: timeout"));
-        }
         for step in job["steps"].as_array().into_iter().flatten() {
             if let Some(action) = step["uses"].as_str() {
                 if !action_is_pinned(action) {
@@ -111,7 +105,7 @@ fn maintained_ci_preserves_pins_credentials_and_validation_dependencies() {
 fn equivalent_yaml_layout_preserves_authority_and_real_changes_reject() {
     let pin = "a".repeat(40);
     let source = format!(
-        "permissions: {{contents: read}}\njobs:\n  verify:\n    timeout-minutes: 10\n    steps:\n      - {{uses: 'actions/checkout@{pin}', with: {{persist-credentials: false}}}}\n"
+        "permissions: {{contents: read}}\njobs:\n  verify:\n    steps:\n      - {{uses: 'actions/checkout@{pin}', with: {{persist-credentials: false}}}}\n"
     );
     assert!(inspect(&source).is_ok());
     for (from, to, expected) in [
@@ -119,11 +113,6 @@ fn equivalent_yaml_layout_preserves_authority_and_real_changes_reject() {
             "permissions: {contents: read}",
             "description: explanatory",
             "permissions",
-        ),
-        (
-            "timeout-minutes: 10",
-            "timeout-minutes: 0",
-            "verify: timeout",
         ),
         (
             "persist-credentials: false",

@@ -18,7 +18,6 @@ finish() {
     trap - EXIT INT TERM
     for pid in "${PIDS[@]}"; do kill -TERM -- "-$pid" 2>/dev/null || true; done
     for pid in "${PIDS[@]}"; do
-        kill -KILL -- "-$pid" 2>/dev/null || true
         wait "$pid" 2>/dev/null || true
     done
     [[ "$status" -eq 0 ]] || cleanup_mode=--retain-scratch

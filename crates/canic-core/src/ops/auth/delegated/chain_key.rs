@@ -211,7 +211,7 @@ where
     verify_signature(ChainKeySignatureVerificationInput {
         algorithm: signature.algorithm,
         public_key: &signature.public_key,
-        message_hash: chain_key_batch_header_hash(header),
+        message_hash: chain_key_batch_header_hash(header)?,
         signature: &signature.signature,
     })
     .map_err(ChainKeyRootProofError::SignatureInvalid)
@@ -403,7 +403,7 @@ fn verify_header_signature_binding(
     if signature.key_id != header.key_id {
         return Err(ChainKeyRootProofError::HeaderSignatureMismatch { field: "key_id" });
     }
-    if chain_key_derivation_path_hash(&signature.derivation_path) != header.derivation_path_hash {
+    if chain_key_derivation_path_hash(&signature.derivation_path)? != header.derivation_path_hash {
         return Err(ChainKeyRootProofError::HeaderSignatureMismatch {
             field: "derivation_path_hash",
         });
@@ -565,7 +565,7 @@ mod tests {
             key_id: ChainKeyKeyId {
                 name: "test_key_1".to_string(),
             },
-            derivation_path_hash: chain_key_derivation_path_hash(&derivation_path()),
+            derivation_path_hash: chain_key_derivation_path_hash(&derivation_path()).unwrap(),
             public_key: vec![2; 33],
             key_version: 4,
             min_accepted_key_version: 4,
@@ -587,7 +587,7 @@ mod tests {
         let issuer_proof_alg = IssuerProofAlgorithm::IcCanisterSignatureV1;
         let issuer_proof_binding = IssuerProofBinding::IcCanisterSignatureV1 { seed_hash: [5; 32] };
         let issuer_proof_binding_hash =
-            issuer_proof_binding_hash(p(3), issuer_proof_alg, issuer_proof_binding);
+            issuer_proof_binding_hash(p(3), issuer_proof_alg, issuer_proof_binding).unwrap();
 
         DelegationCert {
             root_pid: p(1),
@@ -1006,7 +1006,7 @@ mod tests {
             |input| {
                 assert_eq!(input.message_hash, {
                     let RootProof::IcChainKeyBatchSignatureV1(proof) = &proof;
-                    chain_key_batch_header_hash(&proof.header)
+                    chain_key_batch_header_hash(&proof.header).unwrap()
                 });
                 Err("bad signature".to_string())
             },

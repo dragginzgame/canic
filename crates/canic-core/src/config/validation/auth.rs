@@ -9,12 +9,10 @@ use crate::config::schema::{
 };
 use crate::{
     cdk::{types::Principal, utils::hash::decode_hex},
-    domain::auth::{
-        IC_ROOT_PUBLIC_KEY_RAW_LENGTH, chain_key_derivation_path_hash,
-        is_mainnet_ic_root_public_key_raw,
-    },
+    domain::auth::{IC_ROOT_PUBLIC_KEY_RAW_LENGTH, is_mainnet_ic_root_public_key_raw},
     ids::BuildNetwork,
 };
+use ic_auth::canonical::chain_key_derivation_path_hash;
 #[cfg(any(feature = "auth-chain-key-ecdsa", test))]
 use k256::ecdsa::VerifyingKey as K256VerifyingKey;
 
@@ -111,7 +109,9 @@ fn validate_chain_key_root_proof_config(
         chain_key.derivation_path_hex.as_deref(),
         "auth.delegated_tokens.chain_key_root_proof.derivation_path_hex",
     )?;
-    if chain_key_derivation_path_hash(&derivation_path).as_slice()
+    if chain_key_derivation_path_hash(&derivation_path)
+        .map_err(|error| ConfigSchemaError::ValidationError(error.to_string()))?
+        .as_slice()
         != derivation_path_hash.as_slice()
     {
         return Err(ConfigSchemaError::ValidationError(

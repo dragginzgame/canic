@@ -6,7 +6,7 @@
 
 use super::{
     audience::{AudienceError, validate_role_grants},
-    canonical::issuer_proof_binding_hash,
+    canonical::{CanonicalAuthError, issuer_proof_binding_hash},
 };
 use crate::{cdk::types::Principal, dto::auth::DelegationCert};
 use thiserror::Error;
@@ -31,6 +31,8 @@ pub struct DelegatedAuthTtlLimits {
 
 #[derive(Debug, Eq, Error, PartialEq)]
 pub enum CertRuleError {
+    #[error(transparent)]
+    Canonical(#[from] CanonicalAuthError),
     #[error("delegated auth cert root pid mismatch (expected {expected}, found {found})")]
     RootPidMismatch {
         expected: Principal,
@@ -108,7 +110,7 @@ pub fn validate_cert_issuance_rules(
         cert.issuer_pid,
         cert.issuer_proof_alg,
         cert.issuer_proof_binding,
-    ) != cert.issuer_proof_binding_hash
+    )? != cert.issuer_proof_binding_hash
     {
         return Err(CertRuleError::IssuerProofBindingHashMismatch);
     }
@@ -146,7 +148,7 @@ mod tests {
         let issuer_proof_alg = IssuerProofAlgorithm::IcCanisterSignatureV1;
         let issuer_proof_binding = IssuerProofBinding::IcCanisterSignatureV1 { seed_hash: [5; 32] };
         let issuer_proof_binding_hash =
-            issuer_proof_binding_hash(p(2), issuer_proof_alg, issuer_proof_binding);
+            issuer_proof_binding_hash(p(2), issuer_proof_alg, issuer_proof_binding).unwrap();
 
         DelegationCert {
             root_pid: p(1),

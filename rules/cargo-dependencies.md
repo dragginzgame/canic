@@ -46,6 +46,46 @@ exact constraints, immutable Git revisions, lockfiles and external path inputs.
   automatic pre-commit formatting and independent CI/release checks; ordering
   must preserve the catalog and every inherited selection.
 
+## Cargo network policy
+
+- An authorized dependency update includes normal registry/Git access needed to
+  resolve and obtain the selected dependencies. Agents and helpers must not add
+  `--offline`, `--frozen` or `CARGO_NET_OFFLINE=true` to `cargo update` merely
+  because ordinary validation is offline. Do not require another permission
+  request for network access already inherent in that authorized operation;
+  actual execution-environment network restrictions still apply.
+- Scope the update to the requested packages/versions and affected workspaces.
+  Use `cargo update --package NAME --precise VERSION` when an exact version was
+  selected. Review its lockfile changes, including required transitive changes.
+  Network access does not authorize unrelated upgrades or a broad `cargo update`.
+- Release/deployment preparation for an already selected graph uses
+  `cargo fetch --locked` before dependent builds or checks. That preparation is
+  included in the authorized release/deployment workflow. A plain deployment
+  request does not authorize dependency upgrades; when updating dependencies is
+  expressly part of the request, finish that bounded update before qualifying
+  and freezing the deployment inputs.
+- Keep `--locked` on validation and artifact builds; it preserves dependency
+  selection without prohibiting downloads. Add `--offline` or `--frozen` only
+  where the workflow deliberately validates against an already prepared cache.
+  Scope offline environment settings to those commands, rather than exporting
+  them across a workflow that must also prepare dependencies.
+- Honour an explicit caller-selected offline mode, including Cargo environment
+  or configuration settings. If required inputs are unavailable, identify the
+  setting and missing input; do not silently unset it, retry online, or substitute
+  an older cached version. Agent-added flags are not a maintainer request to work
+  offline. Do not repeatedly retry the same cache-only resolution when registry
+  access is required.
+- Offline dependency-free fixtures and qualified local workspace-version
+  synchronization may stay offline when the external dependency graph is
+  unchanged and the required inputs are prepared. They do not establish the
+  policy for adopting newly published dependencies.
+
+Cargo documents that [offline updates](https://doc.rust-lang.org/cargo/commands/cargo-update.html)
+are limited by the local cache and can resolve differently from online updates.
+[Locked fetching](https://doc.rust-lang.org/cargo/commands/cargo-fetch.html)
+prepares the selected graph for subsequent offline commands. Use these distinct
+operations according to their purpose rather than applying one flag everywhere.
+
 ## Preparing authorized dependency changes
 
 - For an authorized version, source or feature change, trace every affected
@@ -70,6 +110,55 @@ exact constraints, immutable Git revisions, lockfiles and external path inputs.
   validation gate. Never silently unlock, upgrade or automatically repair
   dependencies during release. Preserve the complete consumer gate and its
   existing phase order.
+
+## Minimum supported Rust version (MSRV)
+
+- Keep each package's MSRV as low as its supported code, edition and dependency
+  graph permit. Declare the verified minimum in `package.rust-version`; inherit
+  a common floor from `[workspace.package]` where applicable. A development
+  toolchain pin is a separate choice: installing newer Rust for rustfmt, Clippy
+  or internal tests does not justify copying that version into the MSRV.
+- Document intentional package groups with different floors and their CI
+  coverage. Public libraries may support older Rust than application binaries,
+  internal tools or test harnesses. This is permitted within one workspace;
+  do not raise every member to the highest internal requirement merely to make
+  metadata uniform. A public package's supported normal/build dependencies,
+  including local packages and proc macros, must work on its advertised floor.
+- Before raising a floor, identify the concrete language feature, standard
+  library API, manifest/edition requirement or selected dependency that needs it.
+  Prefer a simple equivalent supported on the existing floor. Explain any
+  retained higher requirement and the cost or security/support reason for
+  rejecting the lower alternative; convenience or matching a sibling's current
+  development compiler alone is insufficient. Do not downgrade necessary
+  dependency fixes or add compatibility machinery simply to retain an older
+  compiler.
+- Qualify a proposed lower floor with that actual compiler before changing the
+  support claim. Record the packages, supported feature combinations, targets
+  and selected dependency graph checked, and the blocker if a lower candidate
+  fails. Edition minima and dependency manifests narrow the candidates but do
+  not prove a complete build works. Do not treat a manifest edit, Clippy's MSRV
+  lint or `--ignore-rust-version` as qualification.
+- CI must check the advertised minimum explicitly with `cargo +<MSRV>` or a
+  scoped `RUSTUP_TOOLCHAIN=<MSRV>`, and record the Cargo/rustc versions used by
+  that check. Merely installing a toolchain or setting rustup's default can
+  leave `rust-toolchain.toml` selecting the newer development compiler. Keep
+  formatting and lint checks on their separately selected development toolchain.
+- The minimum lane checks the supported package dependency path with the
+  selected lockfile, covering supported features and relevant native/Wasm
+  targets. For libraries, check the consumer path without relying on workspace
+  feature unification; retain a focused consumer fixture where workspace-only
+  checks cannot establish this. Document any higher test-harness floor rather
+  than silently dropping minimum coverage or forcing it onto consumers.
+  Dependency and lockfile changes must retain this CI coverage. Rust-version-aware
+  resolution can help choose compatible dependencies; it does not replace the
+  old-compiler check or authorize resolver changes, unlocked retries or automatic
+  dependency downgrades.
+
+These rules follow Cargo's [Rust version contract](https://doc.rust-lang.org/cargo/reference/rust-version.html)
+and rustup's [toolchain selection order](https://rust-lang.github.io/rustup/overrides.html).
+Repositories own their tested floors and focused commands; Shared Tooling does
+not prescribe one global Rust version. Tool/cache preparation and sibling edits
+retain their existing authorization boundaries.
 
 ## Example
 

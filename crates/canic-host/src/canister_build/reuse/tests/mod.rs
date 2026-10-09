@@ -17,6 +17,37 @@ maximum_instances = 1
 "#;
 
 #[test]
+fn file_fingerprint_preserves_digest_and_typed_path_refusals() {
+    let root = temp_dir("build-input-hash");
+    fs::create_dir_all(&root).unwrap();
+    let source = root.join("source");
+    fs::write(&source, b"abc").unwrap();
+    assert_eq!(
+        file_hash(&source).unwrap(),
+        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    );
+    assert!(matches!(file_hash(&root), Err(BuildReuseError::Unsupported(path)) if path == root));
+    assert!(matches!(
+        file_hash(&root.join("missing")),
+        Err(BuildReuseError::Io(source)) if source.kind() == io::ErrorKind::NotFound
+    ));
+    #[cfg(unix)]
+    {
+        let link = root.join("link");
+        std::os::unix::fs::symlink(&source, &link).unwrap();
+        assert!(
+            matches!(file_hash(&link), Err(BuildReuseError::Unsupported(path)) if path == link)
+        );
+        let fifo = root.join("fifo");
+        crate::test_support::create_fifo(&fifo);
+        assert!(
+            matches!(file_hash(&fifo), Err(BuildReuseError::Unsupported(path)) if path == fifo)
+        );
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn generated_lock_and_derivation_changes_invalidate_complete_build_inputs() {
     let (root, context) = infrastructure_build_fixture();
     let mut files = BTreeMap::new();

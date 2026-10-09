@@ -12,13 +12,13 @@ use canic::{
     protocol,
 };
 use canic_control_plane::dto::template::WasmStoreOverviewResponse;
-use ic_testkit::pic::{PocketIc, PocketIcBuilder, prelude::*};
+use ic_testkit::pic::{PocketIc, PocketIcBuilder, PocketIcStartupError, prelude::*};
 use std::{collections::HashMap, fs, time::Instant};
 
 use crate::pic::{
     CanicPicExt,
     canic::{adopt_sibling_wasm_store, create_and_install_pre_adoption_root},
-    startup::{PocketIcHarnessStartupError, try_start_pocket_ic},
+    startup::try_start_pocket_ic,
 };
 
 #[derive(CandidType)]
@@ -200,7 +200,7 @@ pub(super) fn wait_for_snapshot_pids_ready(
 }
 
 // Start one root baseline through the testkit's typed fallible builder boundary.
-fn try_start_root_pic() -> Result<PocketIc, PocketIcHarnessStartupError> {
+fn try_start_root_pic() -> Result<PocketIc, PocketIcStartupError> {
     try_start_pocket_ic(
         PocketIcBuilder::new()
             .with_ii_subnet()

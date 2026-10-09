@@ -8,7 +8,7 @@ use canic::{
     api::public_status::{ApplicationMetricsSampler, PublicStatusApi},
     endpoint::ArgumentLimits,
 };
-use ic_blob_storage::dto::configuration::ServiceInstallationInput;
+use ic_blob_storage_contracts::dto::configuration::ServiceInstallationInput;
 
 pub const REQUEST_LIMITS: ArgumentLimits = ArgumentLimits {
     max_bytes: 4096,

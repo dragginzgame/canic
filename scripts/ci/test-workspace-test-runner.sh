@@ -2,6 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+RUNNER_TEST_TESTKIT_SERVER="$(bash "$ROOT/scripts/ci/testkit-server.sh" --check)"
+export RUNNER_TEST_TESTKIT_SERVER
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/canic-workspace-runner-test.XXXXXX")"
 trap 'status=$?; if [[ "$status" == 0 ]]; then rm -rf "$fixture"; else echo "Runner fixture retained: $fixture" >&2; fi; exit "$status"' EXIT
 mkdir -p "$fixture/scripts/ci" "$fixture/bin"
@@ -15,14 +17,18 @@ cp "$ROOT/ci/ic-tools.tsv" "$fixture/ci/"
 cp "$ROOT/scripts/ci/ic-tool-pins.sh" "$fixture/scripts/ci/"
 
 # Exercise the real runner's ordering, exit and cleanup boundaries without
-# building crates, opening sockets or executing canisters.
-for prerequisite in check-workspace-test-inventory check-pocketic-version-alignment; do
-    printf '#!/usr/bin/env bash\nexit 0\n' > "$fixture/scripts/ci/$prerequisite.sh"
-done
+# building Canic crates, opening sockets or executing canisters. The published
+# Testkit CLI owns the synthetic servers and command cleanup.
+printf '#!/usr/bin/env bash\nexit 0\n' > "$fixture/scripts/ci/check-workspace-test-inventory.sh"
 printf 'use_native_test_icp() { :; }\n' > "$fixture/scripts/ci/native-icp-lib.sh"
+cat > "$fixture/scripts/ci/testkit-server.sh" <<'RESOLVE'
+#!/usr/bin/env bash
+printf '%s\n' "$RUNNER_TEST_TESTKIT_SERVER"
+RESOLVE
 cat > "$fixture/bin/pocket-ic" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ "${1:-}" == --version ]]; then printf 'pocket-ic-server 16.1.0\n'; exit 0; fi
 printf '%s\n' "$$" > "$CANIC_TEST_SCRATCH/server.pid"
 while [[ "$#" -gt 0 ]]; do
     if [[ "$1" == --port-file ]]; then
@@ -383,10 +389,13 @@ printf 'Non-cacheable calls %s\nCache errors %s\n' "$((10 + count * 5))" "$((2 +
 printf 'Cache read errors 0\nCache write errors 0\nCache timeouts 0\n'
 SH
 chmod +x "$fixture/bin/sccache"
+cp "$fixture/bin/sccache" "$fixture/bin/run-canic-sccache.sh"
+cp "$fixture/bin/sccache" "$fixture/bin/run-sccache.sh"
+for wrapper in sccache run-canic-sccache.sh run-sccache.sh; do
 for scenario in healthy reset malformed unavailable; do
-    scratch="$fixture/cache-$scenario"
+    scratch="$fixture/cache-$wrapper-$scenario"
     mkdir -p "$scratch"
-    CI=0 RUSTC_WRAPPER="$fixture/bin/sccache" CANIC_TEST_PLAN_ONLY=0 \
+    CI=0 RUSTC_WRAPPER="$fixture/bin/$wrapper" CANIC_TEST_PLAN_ONLY=0 \
         CANIC_TEST_SCRATCH="$scratch" PATH="$fixture/bin:$PATH" \
         RUNNER_TEST_TRACE="$scratch/trace.tsv" RUNNER_TEST_FAIL_STAGE=none \
         RUNNER_CACHE_SCENARIO="$scenario" \
@@ -396,6 +405,7 @@ for scenario in healthy reset malformed unavailable; do
         reset) rg -q 'compiler cache delta: unavailable' "$scratch/output.log" ;;
         *) rg -q 'compiler cache observation: unavailable' "$scratch/output.log" ;;
     esac
+done
 done
 echo 'compiler cache observation tests passed'
 

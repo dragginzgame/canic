@@ -27,7 +27,7 @@ pub use managed_component_group::{
 
 /// Borrow the governed caller's server; never discover or launch a hidden child.
 fn build_pocketic() -> Result<PocketIc, String> {
-    let server_url = std::env::var("CANIC_POCKET_IC_SERVER_URL")
+    let server_url = std::env::var("IC_TESTKIT_POCKET_IC_URL")
         .map_err(|error| format!("caller-owned PocketIC server URL is required: {error}"))?;
     PocketIcBuilder::new()
         .with_application_subnet()

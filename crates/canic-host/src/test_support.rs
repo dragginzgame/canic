@@ -12,7 +12,7 @@ use canic_core::{
 };
 use ic_testkit::pic::{PocketIc, PocketIcBuilder, PocketIcBuilderExt, PocketIcStartupConfig};
 
-const POCKET_IC_SERVER_URL_ENV: &str = "CANIC_POCKET_IC_SERVER_URL";
+const POCKET_IC_SERVER_URL_ENV: &str = "IC_TESTKIT_POCKET_IC_URL";
 const POCKET_IC_STARTUP_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub fn start_pocket_ic(builder: PocketIcBuilder) -> PocketIc {

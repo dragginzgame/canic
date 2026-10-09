@@ -6,6 +6,76 @@ policy. They require Perl core modules or Bash 3.2+, as noted below, and run on
 Linux and macOS. The portable regression suite includes offline fixtures;
 native CI qualifies each supported host separately.
 
+## Evidence archives
+
+```bash
+bash scripts/ci/archive-evidence.sh "$RUNNER_TEMP/evidence.tar.gz" \
+  "$RUNNER_TEMP" portable-fixtures "$PWD" .tools/ic-set.failed
+```
+
+The Bash 3.2 helper takes a new output path followed by explicit root/relative-path
+pairs. Relative roots and output paths resolve from the caller's current directory,
+independently of `CDPATH` or option-like names. It requires tar and gzip.
+Select only existing evidence; the caller decides
+which optional paths exist. The output parent must exist and the output must stay
+outside every selected input. Creation refuses an occupied output, including a
+symlink or a named pipe. Failed creation retains any partial archive and all original inputs.
+Success prints the archive's absolute path and leaves the inputs intact.
+
+Each path becomes an archive member relative to its supplied root. Paths must
+be canonical and relative; `.` selects a complete root. Duplicate or overlapping
+member paths are refused, including across different roots. Parent-directory
+symlinks are refused; final symlinks are archived without following their targets.
+Git metadata named `.git` is excluded. If release-state evidence is needed,
+select the specific evidence directory as a root rather than archiving `.git`.
+
+Upload the resulting single `.tar.gz` file to preserve filenames, modes and links
+that a raw artifact upload cannot reliably represent. The archive supports Unix
+filenames containing spaces, colons and newlines; it does not widen line-oriented
+checksum-manifest formats. Callers retain ownership of selection, source and run
+identity, command outcomes, manifests, upload and retention. Archiving alone
+does not qualify evidence or prove a hosted upload/download round trip.
+
+Adopt `scripts/ci/archive-evidence.sh` through a reviewed snapshot; it has no
+shared-script dependencies. Shared Tooling's failure-collection action uses this
+helper too. Consumers can replace their tar mechanics while preserving their
+product-specific collection and identity records.
+
+## Tool-bundle evidence selection
+
+`select-tool-evidence.sh full REPOSITORY DIAGNOSTICS` emits NUL-separated
+root/relative-path pairs for every host/IC candidate. Both directories must
+already exist; diagnostics must be a regular directory. The neutral archiver
+continues to own path admission, namespace collision checks and tar creation.
+
+`select-tool-evidence.sh compact REPOSITORY DIAGNOSTICS HOST-VERSIONS IC-PINS`
+opts into smaller successful-installation evidence. For each managed relative
+active link independently, it runs the existing installer in offline `--check`
+mode against a retained copy of the caller's pins. Host checking includes jq,
+yq, ripgrep and cloc. Partial, missing, unknown or failed selections stay full;
+unselected and failed candidates stay full even when the active set passes.
+A changed selection, bundle directory identity or caller pin file refuses
+compaction. This is a fresh observation, not authority derived from an earlier
+successful installation; stop concurrent toolset mutation during collection.
+
+Successful checks retain caller pin bytes, command output and the exact selected
+bundle path. IC checks also retain `pins.tsv`, `host` and `files.sha256`; host
+sets have no equivalent bundle receipt, so caller configuration and check evidence
+remain explicit. Tiny tool fixtures can grow because diagnostic metadata exceeds
+the omitted payload. Archive size and collection time depend on the actual sets.
+The selector requires Perl core modules and the declared host/IC check companions;
+it never installs or downloads tools. Invalid selections refuse before dispatch.
+
+The common failure action defaults to full retention. Set
+`compact-successful-tools: 'true'` to opt in; `host-versions` and `ic-pins` select
+absolute caller pin files, defaulting to the repository's common configuration.
+Its native CI control uploads/downloads successful-set diagnostics alongside a
+failed candidate, separately from the existing full-failure control. Native
+acceptance requires matching executed jobs; a configured control is not evidence
+of a successful hosted transport. Rust build evidence and original logs retain
+their independent collection contract. Consumers adopt the selector only from a
+reviewed committed snapshot, rather than recreating its classifier locally.
+
 ## Runner disk capacity
 
 ```bash
@@ -51,54 +121,13 @@ to a consumer-owned caller and express summary-only checks by omitting diagnosti
 paths. Retire the duplicated body after qualifying those callers. Any disposable
 runner-image cleanup remains a separate, explicitly scoped consumer operation.
 
-## PocketIC alignment and external binaries
+## PocketIC provisioning and admission
 
-```bash
-bash scripts/ci/check-pocketic-alignment.sh \
-  --manifest testing/Cargo.toml --pins ci/ic-tools.tsv
-bash scripts/ci/check-pocketic-binary.sh "$server_version" "$binary_sha256" "$POCKET_IC_BIN"
-```
-
-The alignment helper implements the exact client/server version equality policy
-already selected by Canic and IcyDB. Adopt it only for an explicitly qualified
-consumer pairing; equal version strings do not prove runtime compatibility.
-Select the owning Cargo manifest, including an independent testing workspace
-when applicable. With a prepared toolchain and dependency cache, it runs Cargo
-metadata from that manifest's directory using `--locked --offline`, disables
-implicit Rustup installation, and admits exactly one `pocket-ic` package with a
-stable version. Cargo owns manifest parsing, lock validity and graph selection;
-there is no second Cargo.lock parser. Missing or multiple client packages,
-prereleases, mismatched pins and failed metadata producers are refused. Failed
-metadata output remains in an announced temporary directory. The checker does
-not build, update the lockfile, fetch dependencies or install tools.
-
-The complete existing IC pin matrix is validated by `scripts/ci/ic-tool-pins.awk`,
-also used by the installer; no second version catalog is introduced. The helper
-requires Cargo, jq and awk, and prints only the agreed version on success.
-
-The independent binary checker takes an exact stable server version, an explicit
-reviewed host-specific SHA-256 digest and an executable path. It reuses
-`verify-file-checksum.sh` to authenticate bytes before calling `--version`, and
-requires a successful probe reporting exactly `pocket-ic-server VERSION`.
-Read-only executable symlinks are allowed. It neither installs nor searches
-caches, and emits no stdout on success. Callers retain ownership of the external
-binary's reviewed identity and host selection; generating a digest from an
-untrusted candidate does not authenticate it. For a combined check, pass both
-`--bin PATH --sha256 DIGEST` to the alignment helper.
-
-Managed bundle users can instead obtain the verified absolute directory through
-`install-ic-tools.sh --check` and project its `pocket-ic` path, as described in
-[IC tool setup](ic-tools.md#snapshot-and-pin-selection). Its archive pins and
-installed-file receipt already own managed-bundle admission. An external binary
-digest is a separate identity for an override outside that bundle.
-
-Vendor both checkers, `ic-tool-pins.awk`, `verify-file-checksum.sh` and this guide
-for alignment with optional binary admission. The binary checker alone needs
-only the checksum helper. Consumers keep runtime environment variables, endpoint
-selection and lifecycle policy in their adapters. Qualify callers on their native
-hosts before removing local checks; the upstream fixture exercises real offline
-Cargo selection and controlled metadata/binary rejection cases, without claiming
-consumer runtime compatibility.
+IC Testkit owns server selection, provisioning, offline admission and
+compatibility. Shared 0.2.0 removes its former alignment and binary checkers;
+consumer callers and snapshot selections move together under the
+[PocketIC ownership handoff](ic-tools.md#pocketic-ownership-handoff).
+Generic checksum and evidence helpers remain available for their other callers.
 
 ## Cargo inheritance and workspace version
 
@@ -137,14 +166,18 @@ of working versus committed sources and their release/preparation transactions.
 
 ## CI binary installers
 
-The actionlint, ShellCheck, gitleaks and sccache entry points delegate to
+The actionlint, ShellCheck, gitleaks, sccache and yq entry points delegate to
 `scripts/ci/install-ci-tool.sh`. Their existing version, SHA-256 and installation
 directory arguments are unchanged. The implementation shares host selection,
 HTTPS download, checksum admission, extraction, exact version admission and
 publication. Asset names and version-output formats remain explicit per tool.
 Staging lives on the destination filesystem; failures retain the candidate and
 leave the installed executable intact. Successful installation removes its own
-staging files. This does not merge repository-local host/IC bundle activation
+staging files. Publication uses Perl core's exact-path atomic rename: a directory
+introduced at the executable destination during setup is refused, and a late
+symlink is replaced without following its target. Perl must be available before
+setup starts; no tool is downloaded when this prerequisite is missing.
+This does not merge repository-local host/IC bundle activation
 or change any consumer's pins. Include the internal helper and checksum verifier
 in snapshots with any of these entry points.
 
@@ -472,7 +505,10 @@ make this checker pass. See [#33](https://github.com/dragginzgame/shared-tooling
 
 Review the consumer's Makefile and formatting commands before execution. This
 helper executes those commands; it is not a sandbox for arbitrary Make code.
-Prerequisites must already be installed. Cargo is forced offline, rustup auto
+Prerequisites must already be installed. The selected consumer's `.tools/host/bin`,
+`.tools/ic/bin` and `.tools/rust/bin` precede inherited PATH for executable lookup;
+formatter inputs and configuration still come from the disposable checkout.
+Cargo is forced offline, rustup auto
 installation is disabled, and inherited Git/Make/logger checkout selections are
 cleared. The baseline must pass its real `fmt-check` before perturbation.
 

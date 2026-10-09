@@ -26,23 +26,22 @@ macro_rules! mount {
                 clippy::large_types_passed_by_value,
                 reason = "Candid endpoint macros own decoded inputs"
             )]
-            pub(super) use ic_blob_storage::dto::funding::assessment::{
+            pub(super) use ic_blob_storage_contracts::dto::funding::assessment::{
                 FundingPreparationFailure, FundingPreparationRequest, FundingPreparationResponse,
             };
-            pub(super) use ic_blob_storage::dto::funding::outcome::{
+            pub(super) use ic_blob_storage_contracts::dto::funding::outcome::{
                 FundingOutcomeFailure, FundingOutcomeRequest, FundingOutcomeResponse,
             };
-            pub(super) use ic_blob_storage::dto::funding::{
+            pub(super) use ic_blob_storage_contracts::dto::funding::{
                 FundingHistoryFailure, FundingHistoryPage, FundingHistoryRequest,
             };
-            pub(super) use ic_blob_storage::dto::operator::{
+            pub(super) use ic_blob_storage_contracts::dto::operator::{
                 LocalServiceStatus, LocalStatusFailure, OperatorScope,
             };
-            pub(super) use ic_blob_storage::dto::upload::history::{
+            pub(super) use ic_blob_storage_contracts::dto::upload::history::{
                 UploadHistoryFailure, UploadHistoryPage, UploadHistoryRequest,
             };
-            pub(super) use ic_blob_storage::{
-                dto::{
+            pub(super) use ic_blob_storage_contracts::dto::{
                     configuration::{HostConfigurationView, HostFailure},
                     reference::{
                         ReferenceCommand, ReferenceFailure, ReferenceMutationResponse,
@@ -62,10 +61,9 @@ macro_rules! mount {
                             UploadManifestResponse,
                         },
                     },
-                },
-                model::service::upload::UploadContext,
             };
-            pub(super) use $crate::__private::{ic_blob_storage, ic_cdk};
+            pub(super) use ic_blob_storage_contracts::upload::binding::UploadContext;
+            pub(super) use $crate::__private::{ic_blob_storage_contracts, ic_cdk};
             use $crate::{
                 lifecycle::{MANIFEST_LIMITS, REQUEST_LIMITS},
                 workflow,
@@ -78,7 +76,7 @@ macro_rules! mount {
             }
             #[canic::canic_update(public, on_access_denied = "reject", decode = REQUEST_LIMITS)]
             async fn blob_resume_current_instance()
-            -> Result<(), ic_blob_storage::dto::recovery::CurrentInstanceRecoveryFailure> {
+            -> Result<(), ic_blob_storage_contracts::dto::recovery::CurrentInstanceRecoveryFailure> {
                 workflow::resume_current_instance(context()).await
             }
             #[canic::canic_query(public, on_access_denied = "reject", decode = REQUEST_LIMITS)]
@@ -119,10 +117,10 @@ macro_rules! mount {
             }
             #[canic::canic_query(public, on_access_denied = "reject", decode = REQUEST_LIMITS)]
             fn blob_upload_status(
-                input: ic_blob_storage::dto::reference::ReferenceUpload,
+                input: ic_blob_storage_contracts::dto::reference::ReferenceUpload,
             ) -> Result<
-                ic_blob_storage::dto::upload::UploadStatusResponse,
-                ic_blob_storage::dto::upload::UploadStatusFailure,
+                ic_blob_storage_contracts::dto::upload::UploadStatusResponse,
+                ic_blob_storage_contracts::dto::upload::UploadStatusFailure,
             > {
                 workflow::upload_status(context(), input)
             }
@@ -146,15 +144,15 @@ macro_rules! mount {
             fn blob_upload_certificate_assessment(
                 root: String,
             ) -> Result<
-                ic_blob_storage::dto::upload::certificate::UploadCertificateAssessmentResponse,
-                ic_blob_storage::dto::upload::exposure::UploadExposureFailure,
+                ic_blob_storage_contracts::dto::upload::certificate::UploadCertificateAssessmentResponse,
+                ic_blob_storage_contracts::dto::upload::exposure::UploadExposureFailure,
             > {
                 workflow::certificate_assessment(context(), &root, ic_cdk::api::time())
             }
             #[canic::canic_update(public, on_access_denied = "reject", decode = REQUEST_LIMITS, name = "_immutableObjectStorageCreateCertificate")]
             async fn caffeine_upload_certificate(
                 root: String,
-            ) -> ic_blob_storage::dto::upload::certificate::CaffeineUploadCertificateResponse {
+            ) -> ic_blob_storage_contracts::dto::upload::certificate::CaffeineUploadCertificateResponse {
                 let call_context = context();
                 workflow::before_update().await;
                 // Never encode an error as a successful provider reply. Shared workflow
@@ -208,10 +206,10 @@ macro_rules! mount {
             }
             #[canic::canic_update(public, on_access_denied = "reject", decode = REQUEST_LIMITS)]
             async fn blob_revoke_gateway(
-                input: ic_blob_storage::dto::gateway::GatewayRevocationRequest,
+                input: ic_blob_storage_contracts::dto::gateway::GatewayRevocationRequest,
             ) -> Result<
-                ic_blob_storage::dto::gateway::GatewayRevocationResponse,
-                ic_blob_storage::dto::gateway::GatewayRevocationFailure,
+                ic_blob_storage_contracts::dto::gateway::GatewayRevocationResponse,
+                ic_blob_storage_contracts::dto::gateway::GatewayRevocationFailure,
             > {
                 let call_context = context();
                 workflow::before_update().await;
@@ -221,8 +219,8 @@ macro_rules! mount {
             async fn blob_sync_gateways(
                 input: OperatorScope,
             ) -> Result<
-                ic_blob_storage::dto::gateway::sync::GatewaySyncResponse,
-                ic_blob_storage::dto::gateway::sync::GatewaySyncFailure,
+                ic_blob_storage_contracts::dto::gateway::sync::GatewaySyncResponse,
+                ic_blob_storage_contracts::dto::gateway::sync::GatewaySyncFailure,
             > {
                 let call_context = context();
                 workflow::before_update().await;
@@ -230,46 +228,46 @@ macro_rules! mount {
             }
             #[canic::canic_update(public, on_access_denied = "reject", decode = REQUEST_LIMITS)]
             async fn blob_cancel_gateway_sync(
-                input: ic_blob_storage::dto::gateway::sync::GatewaySyncCancellation,
-            ) -> Result<(), ic_blob_storage::dto::gateway::sync::GatewaySyncFailure> {
+                input: ic_blob_storage_contracts::dto::gateway::sync::GatewaySyncCancellation,
+            ) -> Result<(), ic_blob_storage_contracts::dto::gateway::sync::GatewaySyncFailure> {
                 let call_context = context();
                 workflow::before_update().await;
                 workflow::cancel_gateway_sync(call_context, input)
             }
             #[canic::canic_query(public, on_access_denied = "reject", decode = REQUEST_LIMITS)]
             fn blob_upload_capacity(
-                input: ic_blob_storage::dto::tenant::TenantScope,
+                input: ic_blob_storage_contracts::dto::tenant::TenantScope,
             ) -> Result<
-                ic_blob_storage::dto::upload::capacity::UploadCapacityResponse,
-                ic_blob_storage::dto::upload::capacity::UploadCapacityFailure,
+                ic_blob_storage_contracts::dto::upload::capacity::UploadCapacityResponse,
+                ic_blob_storage_contracts::dto::upload::capacity::UploadCapacityFailure,
             > {
                 workflow::upload_capacity(context(), input)
             }
             #[canic::canic_query(public, on_access_denied = "reject", decode = REQUEST_LIMITS)]
             fn blob_reference_capacity(
-                input: ic_blob_storage::dto::reference::capacity::ReferenceCapacityRequest,
+                input: ic_blob_storage_contracts::dto::reference::capacity::ReferenceCapacityRequest,
             ) -> Result<
-                ic_blob_storage::dto::reference::capacity::ReferenceCapacityResponse,
-                ic_blob_storage::dto::reference::capacity::ReferenceCapacityFailure,
+                ic_blob_storage_contracts::dto::reference::capacity::ReferenceCapacityResponse,
+                ic_blob_storage_contracts::dto::reference::capacity::ReferenceCapacityFailure,
             > {
                 workflow::reference_capacity(context(), input)
             }
             #[canic::canic_query(public, on_access_denied = "reject", decode = REQUEST_LIMITS)]
             fn blob_lookup_content(
-                input: ic_blob_storage::dto::upload::discovery::UploadDiscoveryRequest,
+                input: ic_blob_storage_contracts::dto::upload::discovery::UploadDiscoveryRequest,
             ) -> Result<
-                ic_blob_storage::dto::upload::discovery::UploadDiscoveryResponse,
-                ic_blob_storage::dto::upload::discovery::UploadDiscoveryFailure,
+                ic_blob_storage_contracts::dto::upload::discovery::UploadDiscoveryResponse,
+                ic_blob_storage_contracts::dto::upload::discovery::UploadDiscoveryFailure,
             > {
                 workflow::discover(context(), input)
             }
 
             #[canic::canic_update(public, on_access_denied = "reject", decode = REQUEST_LIMITS)]
             async fn blob_download_descriptor(
-                input: ic_blob_storage::dto::download::DownloadRequest,
+                input: ic_blob_storage_contracts::dto::download::DownloadRequest,
             ) -> Result<
-                ic_blob_storage::dto::download::DownloadResponse,
-                ic_blob_storage::dto::download::DownloadFailure,
+                ic_blob_storage_contracts::dto::download::DownloadResponse,
+                ic_blob_storage_contracts::dto::download::DownloadFailure,
             > {
                 let call_context = context();
                 workflow::before_update().await;
@@ -277,20 +275,20 @@ macro_rules! mount {
             }
             #[canic::canic_query(public, on_access_denied = "reject", decode = REQUEST_LIMITS)]
             fn blob_reference_status(
-                input: ic_blob_storage::dto::reference::status::ReferenceStatusRequest,
+                input: ic_blob_storage_contracts::dto::reference::status::ReferenceStatusRequest,
             ) -> Result<
-                ic_blob_storage::dto::reference::status::ReferenceStatusResponse,
-                ic_blob_storage::dto::reference::ReferenceFailure,
+                ic_blob_storage_contracts::dto::reference::status::ReferenceStatusResponse,
+                ic_blob_storage_contracts::dto::reference::ReferenceFailure,
             > {
                 workflow::reference_status(context(), input)
             }
 
             #[canic::canic_update(public, on_access_denied = "reject", decode = REQUEST_LIMITS)]
             async fn blob_inspect_account(
-                input: ic_blob_storage::dto::account::AccountInspectionRequest,
+                input: ic_blob_storage_contracts::dto::account::AccountInspectionRequest,
             ) -> Result<
-                ic_blob_storage::dto::account::AccountInspectionResponse,
-                ic_blob_storage::dto::account::AccountInspectionFailure,
+                ic_blob_storage_contracts::dto::account::AccountInspectionResponse,
+                ic_blob_storage_contracts::dto::account::AccountInspectionFailure,
             > {
                 let call_context = context();
                 workflow::before_update().await;
@@ -299,10 +297,10 @@ macro_rules! mount {
 
             #[canic::canic_update(public, on_access_denied = "reject", decode = REQUEST_LIMITS)]
             async fn blob_attest_upload(
-                input: ic_blob_storage::dto::upload::completion::UploadAttestationRequest,
+                input: ic_blob_storage_contracts::dto::upload::completion::UploadAttestationRequest,
             ) -> Result<
-                ic_blob_storage::dto::upload::completion::UploadAttestationMutation,
-                ic_blob_storage::dto::upload::completion::UploadAttestationFailure,
+                ic_blob_storage_contracts::dto::upload::completion::UploadAttestationMutation,
+                ic_blob_storage_contracts::dto::upload::completion::UploadAttestationFailure,
             > {
                 let call_context = context();
                 workflow::before_update().await;
@@ -312,8 +310,8 @@ macro_rules! mount {
             fn blob_upload_attestation(
                 input: UploadAdmissionRequest,
             ) -> Result<
-                ic_blob_storage::dto::upload::completion::UploadAttestationResponse,
-                ic_blob_storage::dto::upload::completion::UploadAttestationFailure,
+                ic_blob_storage_contracts::dto::upload::completion::UploadAttestationResponse,
+                ic_blob_storage_contracts::dto::upload::completion::UploadAttestationFailure,
             > {
                 workflow::attestation(context(), input)
             }
@@ -329,8 +327,8 @@ macro_rules! mount {
             fn blob_verification_plan(
                 input: UploadAdmissionRequest,
             ) -> Result<
-                ic_blob_storage::dto::upload::completion::UploadVerificationPlan,
-                ic_blob_storage::dto::upload::completion::UploadAttestationFailure,
+                ic_blob_storage_contracts::dto::upload::completion::UploadVerificationPlan,
+                ic_blob_storage_contracts::dto::upload::completion::UploadAttestationFailure,
             > {
                 workflow::verification_plan(context(), input)
             }

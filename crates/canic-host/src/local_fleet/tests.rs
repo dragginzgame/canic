@@ -26,6 +26,9 @@ fn binary_fingerprint_preserves_digest_size_admission_and_native_read_errors() {
             Err(LocalFleetError::Io(source))
                 if source.raw_os_error() == Some(rustix::io::Errno::LOOP.raw_os_error())
         );
+        let fifo = root.join("fifo");
+        crate::test_support::create_fifo(&fifo);
+        std::assert_matches!(ops::binary_sha256(&fifo), Err(LocalFleetError::UnsafePath));
     }
     fs::File::options()
         .write(true)

@@ -65,7 +65,7 @@ fail() {
 }
 
 file_hash() {
-    sha256sum "$1" | awk '{print $1}'
+    bash "$METHOD_ROOT/scripts/ci/verify-file-checksum.sh" --print sha256 "$1"
 }
 
 tool_version() {
@@ -442,6 +442,7 @@ mkdir -p "$RUN_ROOT/artifacts" "$RUN_ROOT/logs" "$RUN_ROOT/analysis" "$RUN_ROOT/
 cp "$EXPERIMENTS" "$RUN_ROOT/experiments.tsv"
 cp "$ARTIFACTS" "$RUN_ROOT/artifacts.tsv"
 cp "$RUNNER_SOURCE" "$RUN_ROOT/method/wasm-ablation-report.sh"
+cp "$METHOD_ROOT/scripts/ci/verify-file-checksum.sh" "$RUN_ROOT/method/verify-file-checksum.sh"
 cp "$BUILD_HARNESS_SOURCE" "$RUN_ROOT/method/wasm-ablation-build-artifact.rs"
 cp "$FUNCTION_COUNTER_SOURCE" "$RUN_ROOT/method/wasm-replica-function-count.rs"
 RUNNER_SOURCE_SHA256="$(file_hash "$RUN_ROOT/method/wasm-ablation-report.sh")"

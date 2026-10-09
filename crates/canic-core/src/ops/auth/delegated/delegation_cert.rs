@@ -112,7 +112,7 @@ pub fn prepare_delegation_cert(
         input.issuer_pid,
         input.issuer_proof_alg,
         input.issuer_proof_binding,
-    );
+    )?;
 
     let cert = DelegationCert {
         root_pid: input.root_pid,
@@ -224,6 +224,7 @@ mod tests {
                     seed_hash: issuer_canister_sig_seed_hash(),
                 },
             )
+            .unwrap()
         );
         assert_eq!(issued.cert_hash, cert_hash(&issued.proof.cert).unwrap());
         assert_eq!(issued.proof.root_proof, expected_root_proof);

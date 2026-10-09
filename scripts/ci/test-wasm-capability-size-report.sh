@@ -9,7 +9,15 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CLASSIFIER="$ROOT/scripts/ci/wasm-capability-size-report.jq"
 require_jq
 FIXTURE="$(mktemp -d "${TMPDIR:-/tmp}/canic-wasm-capability-size-test.XXXXXX")"
-trap 'rm -rf "$FIXTURE"' EXIT
+cleanup() {
+    local status=$?
+    if [[ "$status" == 0 ]]; then
+        rm -rf "$FIXTURE"
+    else
+        echo "Wasm size-report fixtures retained: $FIXTURE" >&2
+    fi
+}
+trap cleanup EXIT
 
 "$JQ_BIN" -n '{
   artifact: {file_name: "diagnostic.wasm", sha256: "fixture", bytes: 425},
@@ -79,5 +87,80 @@ trap 'rm -rf "$FIXTURE"' EXIT
   and .analysis.unattributed_code_bytes == 60
   and (.categories[] | select(.category == "canic_runtime") | .shallow_bytes) == 0
 ' "$FIXTURE/stripped.json" >/dev/null
+
+# Exercise the report writer with controlled analysis output and real digest backends.
+mkdir "$FIXTURE/common-bin"
+for tool in bash dirname mktemp rm wc tr head basename mv; do
+    ln -s "$(command -v "$tool")" "$FIXTURE/common-bin/$tool"
+done
+cat >"$FIXTURE/common-bin/twiggy" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" == --version ]]; then
+    printf 'twiggy test fixture\n'
+else
+    printf '[{"name":"data[0]","shallow_size":3}]\n'
+fi
+EOF
+chmod +x "$FIXTURE/common-bin/twiggy"
+report_args=(--role component --build-profile debug --build-network local --producer-identity fixture)
+expected_sha256=ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
+backend_count=0
+report_backend_path=""
+for backend in sha256sum shasum; do
+    command -v "$backend" >/dev/null || continue
+    backend_count=$((backend_count + 1))
+    mkdir "$FIXTURE/$backend-bin"
+    ln -s "$(command -v "$backend")" "$FIXTURE/$backend-bin/$backend"
+    report_backend_path="$FIXTURE/$backend-bin:$FIXTURE/common-bin"
+    for name in 'file with spaces' '-leading-dash' 'back\slash' $'line\nbreak'; do
+        printf abc >"$FIXTURE/$name"
+        PATH="$report_backend_path" "$BASH" \
+            "$ROOT/scripts/ci/wasm-capability-size-report.sh" \
+            --wasm "$FIXTURE/$name" --output "$FIXTURE/report.json" \
+            "${report_args[@]}" >"$FIXTURE/report.log" 2>&1
+        "$JQ_BIN" -e --arg hash "$expected_sha256" --arg name "$name" '
+            .artifact.sha256 == $hash and .artifact.file_name == $name
+            and .artifact.bytes == 3 and .analysis.artifact_bytes_match == true
+        ' "$FIXTURE/report.json" >/dev/null
+    done
+done
+[[ "$backend_count" -gt 0 ]]
+
+mkdir "$FIXTURE/failing-bin"
+cat >"$FIXTURE/failing-bin/sha256sum" <<'EOF'
+#!/usr/bin/env bash
+exit 9
+EOF
+cat >"$FIXTURE/failing-bin/shasum" <<'EOF'
+#!/usr/bin/env bash
+printf 'fallback must not run\n' >"$REPORT_FALLBACK_MARKER"
+exit 0
+EOF
+chmod +x "$FIXTURE/failing-bin/sha256sum" "$FIXTURE/failing-bin/shasum"
+printf retained >"$FIXTURE/report.json"
+status=0
+PATH="$FIXTURE/failing-bin:$FIXTURE/common-bin" REPORT_FALLBACK_MARKER="$FIXTURE/fallback" \
+    "$BASH" "$ROOT/scripts/ci/wasm-capability-size-report.sh" \
+    --wasm "$FIXTURE/file with spaces" --output "$FIXTURE/report.json" \
+    "${report_args[@]}" >"$FIXTURE/backend-failure.log" 2>&1 || status=$?
+[[ "$status" == 9 && ! -e "$FIXTURE/fallback" ]]
+[[ "$(cat "$FIXTURE/report.json")" == retained ]]
+status=0
+"$BASH" "$ROOT/scripts/ci/wasm-capability-size-report.sh" \
+    --wasm "$FIXTURE/missing" --output "$FIXTURE/report.json" \
+    "${report_args[@]}" >"$FIXTURE/missing-input.log" 2>&1 || status=$?
+[[ "$status" != 0 && "$(cat "$FIXTURE/report.json")" == retained ]]
+printf abc >"$FIXTURE/unreadable"
+chmod 000 "$FIXTURE/unreadable"
+if [[ ! -r "$FIXTURE/unreadable" ]]; then
+    status=0
+    PATH="$report_backend_path" "$BASH" \
+        "$ROOT/scripts/ci/wasm-capability-size-report.sh" \
+        --wasm "$FIXTURE/unreadable" --output "$FIXTURE/report.json" \
+        "${report_args[@]}" >"$FIXTURE/unreadable-input.log" 2>&1 || status=$?
+    [[ "$status" != 0 && "$(cat "$FIXTURE/report.json")" == retained ]]
+fi
+chmod u+r "$FIXTURE/unreadable"
 
 echo "Wasm capability size report tests passed"

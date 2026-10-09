@@ -6,6 +6,21 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.110.55]
+
+Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
+
+- Share authentication, host tooling, bounded checkpoint reads and operator
+  mechanics with their upstream owners; align Blob 0.21 with Memory 0.33 and
+  retain Rust 1.91 support.
+  **Potentially breaking Blob and tooling cut:** rebuild Blob clients for separate
+  capacity headroom fields; managed tests use Testkit's canonical
+  runner and URL, with explicit server setup
+  ([#444](https://github.com/dragginzgame/canic/issues/444),
+  [#458](https://github.com/dragginzgame/canic/issues/458),
+  [#491](https://github.com/dragginzgame/canic/issues/491),
+  [#498](https://github.com/dragginzgame/canic/issues/498)).
+
 ## [0.110.54] - 2026-10-08
 
 Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)

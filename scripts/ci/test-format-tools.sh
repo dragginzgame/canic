@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
+ROOT="$0"
+[[ "$ROOT" == /* ]] || ROOT="$PWD/$ROOT"
+ROOT="$(cd -P "${ROOT%/*}/../.." && printf '%s/.' "$PWD")"
+ROOT="${ROOT%/.}"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/format-tools-test.XXXXXX")"
 trap 'if [[ $? == 0 ]]; then rm -rf "$fixture"; else echo "Formatter fixtures retained: $fixture" >&2; fi' EXIT
 export FORMAT_TOOLS_FIXTURE="$fixture"

@@ -12,9 +12,9 @@ use crate::{
         utils::hash::{decode_hex, hex_bytes},
     },
     config::schema::{ChainKeyDerivationError, ChainKeyPublicKeyDerivation, DelegatedTokenConfig},
-    domain::auth::chain_key_derivation_path_hash,
     ids::BuildNetwork,
 };
+use ic_auth::canonical::chain_key_derivation_path_hash;
 use ic_secp256k1::{MasterPublicKeyId, PocketIcMasterPublicKeyId, PublicKey};
 
 /// Materialize public verification data without changing operator policy fields.
@@ -74,7 +74,8 @@ pub fn resolve(config: &mut DelegatedTokenConfig) -> Result<(), ChainKeyDerivati
         })
         .collect::<Result<Vec<_>, _>>()?;
     let public_key = derive_public_key(derivation, key_id, root, &path)?;
-    let path_hash = chain_key_derivation_path_hash(&path);
+    let path_hash =
+        chain_key_derivation_path_hash(&path).map_err(|_| ChainKeyDerivationError::PathTooLong)?;
     check_existing(
         proof.public_key_hex.as_deref(),
         &public_key,

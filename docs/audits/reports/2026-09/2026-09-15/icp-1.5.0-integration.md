@@ -212,7 +212,7 @@ meaningful fields and typed outcomes, not release-note prose.
 The repository managed launcher is already pinned to
 `v15.0.0-2026-08-13-03-55`, meeting the upstream status-decoding threshold.
 PocketIC tests separately pin 16.0.0. The
-[alignment guard](../../../../../scripts/ci/check-pocketic-version-alignment.sh)
+[alignment guard](https://github.com/dragginzgame/canic/blob/a875c6498721bd89ca98549e38389b8280910d68/scripts/ci/check-pocketic-version-alignment.sh)
 checks the latter against Cargo; it does not qualify arbitrary user-managed
 launcher pins. Add an early actionable diagnosis for incompatible custom local
 networks when those configurations are supported. Do not equate the CLI version,
@@ -303,7 +303,7 @@ Snapshot visibility permits a dedicated reader to list/download snapshots while
 controllers retain create/restore/delete authority. Reading exposes full state;
 it should not inherit a public monitoring policy. Canic has snapshot transport
 primitives, but its
-[CLI backup preflight](../../../../../crates/canic-cli/src/backup/create/executor/mod.rs)
+[CLI backup preflight](https://github.com/dragginzgame/canic/blob/a875c6498721bd89ca98549e38389b8280910d68/crates/canic-cli/src/backup/create/executor/mod.rs)
 explicitly reports unavailable Coordinator-backed Component Registry preflight.
 The new visibility setting does not implement that missing authority chain.
 

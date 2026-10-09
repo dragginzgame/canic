@@ -219,14 +219,13 @@ Ordinary tests
 retain libtest's default parallelism. PocketIC suites remain ordered, with two
 isolated internal workers after the source-bound recovery barrier. Each worker
 executes its own cases serially. Complete and PocketIC-only runs compile every selected serial
-suite before starting the shared server. Preparation and execution use the same
+suite before starting any server. Preparation and execution use the same
 package, feature and target selectors; a compilation failure stops before any
 PocketIC case. The ordinary-test barrier still leads complete runs, and narrow
 targeted, ordinary and fast lanes do not inherit the full serial preparation.
 This moves compilation failures forward; it does not skip cases or claim a
-shorter successful run. After every serial suite the runner reports the shared server's
-current resident memory, resident high-water mark and thread count from the
-release-supported Linux process boundary. `make test-wasm` is the fast lane and
+shorter successful run. Server custody and diagnostics belong to Testkit;
+Canic does not observe a private child PID. `make test-wasm` is the fast lane and
 runs only its classified release-surface integrations; it does not run workspace
 unit/bin tests or PocketIC. The complete and ordinary lanes retain the unit/bin
 coverage. `make test-runtime-fast` selects that same fast integration lane.
@@ -355,24 +354,25 @@ feature matrix. Ordinary tests, PocketIC tests and the release-profile build all
 depend on the completed checks job, so no expensive lane starts while a quick
 compiler or lint failure is still discoverable.
 
-The governed PocketIC runner resolves one repository-pinned server binary,
-verifies its exact checksum even when `POCKET_IC_BIN` was supplied by the
-caller, then starts one shared server in the invocation-owned private scratch
-immediately before the serial PocketIC lane. The runner admits a numeric port
-within 30 seconds, retains bounded stdout/stderr for startup failure and gives
-the process a two-hour idle and hard lifetime. It retains the exact child PID,
-stops and waits for it on every handled exit, and leaves invocation-scratch
-cleanup as a crash-safety fallback bound to the numeric direct-child port path.
-A failed suite prints bounded tails from both server streams next to its own
-retained log. Selected `ic-testkit 0.22` owns a command-scoped managed-server
-primitive and native process-group teardown. Canic retains its runner owner until
-[Testkit #29](https://github.com/dragginzgame/ic-testkit/issues/29) supplies caller-owned
-complete diagnostics independent of server teardown. The current bounded excerpt
-and private-file removal cannot satisfy Canic's failure-evidence contract. Repository fixtures use
-testkit connect mode with their own 30-second instance-construction deadline.
-Direct PocketIC test commands outside the governed runner must supply
-`CANIC_POCKET_IC_SERVER_URL`; they fail immediately when it is absent rather
-than spawning an implicit or unobservable child process.
+The governed PocketIC runner resolves the exact prepared Testkit 0.27.0 CLI
+through Shared Tooling's offline Cargo receipt and executable-byte check.
+`make install-testkit-server` is explicit setup; it installs the published CLI
+and asks that owner to prepare its checksum-admitted PocketIC 16.1.0 bundle.
+`make testkit-server-check` verifies both selections without downloading.
+Testkit owns the 16.x protocol policy, bounded admission/startup, command groups,
+server lifetime and teardown. Each serial command and each worker attempt runs
+under `ic-testkit-server run`, with two-hour idle and hard limits and complete
+stdout/stderr files selected in Canic's private scratch. Failures print bounded
+tails, while the scratch owner retains complete logs after the command owner
+finishes teardown. Canic no longer scans `/proc`, pins server executable bytes,
+or polls port files. It retains ordered cases, compile/ordinary barriers,
+source-bound fixtures, native ICP isolation and successful scratch cleanup.
+The shared IC bundle selects only five generic tools; explicitly prepare it again
+with `make install-ic-tools` without deleting prior bundles or receipts.
+Repository and published managed fixtures connect to `IC_TESTKIT_POCKET_IC_URL`
+with their 30-second instance-construction deadline. Direct callers supply that
+canonical URL or use the published Testkit CLI; missing URLs fail immediately.
+
 
 Local governed tests retain content-addressed Wasm and sealed release-artifact
 sets under `target/test-artifacts` and reuse the shared incremental Wasm target.
@@ -691,6 +691,10 @@ An exact registry version already observed during the current publish invocation
 does not need another lookup. Packages skipped by `PUBLISH_FROM` still require
 observation before the complete set is declared available. These observations
 are invocation-local and do not authorize a later run.
+Registry observations use the reviewed shared present/absent/unavailable helper.
+Only definite absence permits publication or another propagation poll; transport,
+rate-limit and other inconclusive responses stop the current flow. Explicit Cargo
+offline policy refuses the HTTP admission rather than bypassing that selection.
 
 Publication retains individual preflight, registry lookup, package verification/
 upload and propagation logs with elapsed seconds and exit codes under

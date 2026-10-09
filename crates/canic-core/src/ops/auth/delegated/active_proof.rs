@@ -110,7 +110,7 @@ mod tests {
         let issuer_proof_alg = IssuerProofAlgorithm::IcCanisterSignatureV1;
         let issuer_proof_binding = IssuerProofBinding::IcCanisterSignatureV1 { seed_hash: [2; 32] };
         let issuer_proof_binding_hash =
-            issuer_proof_binding_hash(p(2), issuer_proof_alg, issuer_proof_binding);
+            issuer_proof_binding_hash(p(2), issuer_proof_alg, issuer_proof_binding).unwrap();
 
         DelegationCert {
             root_pid: p(1),

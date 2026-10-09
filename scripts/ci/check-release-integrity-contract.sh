@@ -68,5 +68,4 @@ done
 [[ "$version_count" -gt 0 ]] || fail "no exact tool-version pins were found"
 [[ "$sha256_count" -gt 0 ]] || fail "no SHA-256 pins were found"
 
-bash "$ROOT/scripts/ci/check-pocketic-version-alignment.sh"
 echo "release integrity authority records passed"

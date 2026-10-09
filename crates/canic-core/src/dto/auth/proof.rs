@@ -7,6 +7,12 @@
 use super::{DelegatedRoleGrant, DelegationAudience};
 use crate::{dto::prelude::*, ids::BuildNetwork};
 
+pub use ic_auth_protocol_types::{
+    ChainKeyAlgorithm, ChainKeyBatchHeaderV1, ChainKeyBatchWitnessStepV1, ChainKeyBatchWitnessV1,
+    ChainKeyKeyId, ChainKeyRootSignatureV1, IcCanisterSignatureProofV1, IssuerProof,
+    IssuerProofAlgorithm, IssuerProofBinding,
+};
+
 //
 // RootProof
 //
@@ -14,43 +20,6 @@ use crate::{dto::prelude::*, ids::BuildNetwork};
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum RootProof {
     IcChainKeyBatchSignatureV1(IcChainKeyBatchSignatureProofV1),
-}
-
-//
-// IssuerProof
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum IssuerProof {
-    IcCanisterSignatureV1(IcCanisterSignatureProofV1),
-}
-
-//
-// IcCanisterSignatureProofV1
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct IcCanisterSignatureProofV1 {
-    pub signature_cbor: Vec<u8>,
-    pub public_key_der: Vec<u8>,
-}
-
-//
-// ChainKeyAlgorithm
-//
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum ChainKeyAlgorithm {
-    EcdsaSecp256k1,
-}
-
-//
-// ChainKeyKeyId
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct ChainKeyKeyId {
-    pub name: String,
 }
 
 //
@@ -128,27 +97,6 @@ pub struct IcChainKeyBatchSignatureProofV1 {
 }
 
 //
-// ChainKeyBatchHeaderV1
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct ChainKeyBatchHeaderV1 {
-    pub schema_version: u16,
-    pub root_canister_id: Principal,
-    pub batch_id: [u8; 32],
-    pub proof_epoch: u64,
-    pub registry_epoch: u64,
-    pub registry_hash: [u8; 32],
-    pub tree_root: [u8; 32],
-    pub not_before_ns: u64,
-    pub expires_at_ns: u64,
-    pub algorithm: ChainKeyAlgorithm,
-    pub key_id: ChainKeyKeyId,
-    pub derivation_path_hash: [u8; 32],
-    pub key_version: u64,
-}
-
-//
 // ChainKeyDelegationCertV1
 //
 
@@ -167,56 +115,6 @@ pub struct ChainKeyDelegationCertV1 {
     pub expires_at_ns: u64,
     pub registry_epoch: u64,
     pub registry_hash: [u8; 32],
-}
-
-//
-// ChainKeyRootSignatureV1
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct ChainKeyRootSignatureV1 {
-    pub algorithm: ChainKeyAlgorithm,
-    pub key_id: ChainKeyKeyId,
-    pub derivation_path: Vec<Vec<u8>>,
-    pub public_key: Vec<u8>,
-    pub signature: Vec<u8>,
-}
-
-//
-// ChainKeyBatchWitnessV1
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct ChainKeyBatchWitnessV1 {
-    pub steps: Vec<ChainKeyBatchWitnessStepV1>,
-}
-
-//
-// ChainKeyBatchWitnessStepV1
-//
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum ChainKeyBatchWitnessStepV1 {
-    LeftSibling([u8; 32]),
-    RightSibling([u8; 32]),
-}
-
-//
-// IssuerProofAlgorithm
-//
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum IssuerProofAlgorithm {
-    IcCanisterSignatureV1,
-}
-
-//
-// IssuerProofBinding
-//
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum IssuerProofBinding {
-    IcCanisterSignatureV1 { seed_hash: [u8; 32] },
 }
 
 //

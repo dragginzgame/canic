@@ -7,6 +7,8 @@
 use crate::dto::prelude::*;
 use crate::ids::FleetKey;
 
+pub use ic_auth_protocol_types::AuthRequestMetadata;
+
 //
 // DelegationAudience
 //
@@ -24,14 +26,4 @@ pub enum DelegationAudience {
 pub struct DelegatedRoleGrant {
     pub target: CanisterRole,
     pub scopes: Vec<String>,
-}
-
-//
-// AuthRequestMetadata
-//
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct AuthRequestMetadata {
-    pub request_id: [u8; 32],
-    pub ttl_ns: u64,
 }

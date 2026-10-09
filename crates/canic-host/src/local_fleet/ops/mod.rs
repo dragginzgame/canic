@@ -24,8 +24,9 @@ use std::{
 };
 
 use candid::Principal;
-use ic_host_artifacts::artifact::{ArtifactError, hash_reader};
+use ic_host_artifacts::artifact::ArtifactError;
 use ic_host_fs::durable;
+use ic_host_fs::read::hash_file_no_follow;
 use ic_testkit::pocket_ic::{PocketIc, common::rest::Topology};
 
 const MAX_BINARY_BYTES: u64 = 512 * 1024 * 1024;
@@ -347,23 +348,17 @@ pub fn admit_initial_instance(
 
 /// Fingerprint one bounded regular executable without following its final symlink.
 pub fn binary_sha256(path: &Path) -> Result<String, LocalFleetError> {
-    let mut options = OpenOptions::new();
-    options.read(true);
-    #[cfg(unix)]
-    {
-        options.custom_flags(
-            i32::try_from(rustix::fs::OFlags::NOFOLLOW.bits())
-                .map_err(|_| LocalFleetError::Configuration)?,
-        );
-    }
-    let file = options.open(path)?;
-    let metadata = file.metadata()?;
-    if !metadata.is_file() || metadata.len() > MAX_BINARY_BYTES {
+    // Retain early size refusal as UnsafePath; streamed growth remains Capacity.
+    let metadata = fs::symlink_metadata(path)?;
+    let unsafe_entry = !metadata.is_file() && !metadata.file_type().is_symlink();
+    let oversized_file = metadata.is_file() && metadata.len() > MAX_BINARY_BYTES;
+    if unsafe_entry || oversized_file {
         return Err(LocalFleetError::UnsafePath);
     }
-    hash_reader(file, MAX_BINARY_BYTES)
+    hash_file_no_follow(path, MAX_BINARY_BYTES)
         .map(|identity| identity.sha256.to_string())
         .map_err(|source| match source {
+            ArtifactError::NotRegularFile => LocalFleetError::UnsafePath,
             ArtifactError::LimitExceeded { .. } => LocalFleetError::Capacity,
             source => LocalFleetError::Io(source.into()),
         })

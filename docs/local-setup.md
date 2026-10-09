@@ -26,7 +26,7 @@ different support scopes require an explicitly approved exception.
 | --- | --- | --- |
 | System bootstrap | Bash, Git, GNU Make, curl, CA certificates, tar, gzip, xz, Perl, a SHA-256 implementation and standard Unix utilities | Host package manager; see [bootstrap prerequisites](#bootstrap-prerequisites) |
 | Common host tools | `jq`, Mike Farah `yq`, `rg` with PCRE2, `cloc` | `make install-host-tools`; offline `make host-tools-check`; `.tools/host/bin` |
-| Common IC tools | `quill`, `icp`, `didc`, `ic-wasm`, `pocket-ic`, `wasm-opt` | `make install-ic-tools`; offline `make ic-tools-check`; `.tools/ic/bin` |
+| Common IC tools | `quill`, `icp`, `didc`, `ic-wasm`, `wasm-opt` | `make install-ic-tools`; offline `make ic-tools-check`; `.tools/ic/bin` |
 | Rust repositories | Declared Rust/Cargo toolchain, rustfmt, pinned Cargo tools and required compilation targets | Consumer toolchain setup, [Rust tool setup](#rust-development-tools) and the [formatter prerequisite check](verification-helpers.md#formatter-prerequisites) |
 | Workflow-specific tools | ShellCheck, actionlint, Gitleaks, authenticated `gh`, Node/SDKs and other tools used by that repository | Explicit consumer setup; declare the tools required by each workflow |
 
@@ -47,6 +47,11 @@ Those commands are owned by `make/tools.mk`: consumers include the reviewed
 snapshot's file instead of maintaining copied recipes or installer flags. Shared
 Tooling's own Makefile and CI use the same commands. Snapshot adoption brings
 command updates; explicit setup brings newly required executables.
+
+The installed `cloc` executable and local workspace `make cloc` are common setup.
+Fleet reports such as `make cloc-tooling` normally run in Shared Tooling; consumers
+need not vendor those reporters or run their regression suites. See the
+[optional fleet selection](consuming-snapshots.md#local-ic-tool-adoption).
 
 ## Diagnosing a missing command
 
@@ -97,6 +102,10 @@ inspect `.tools/.host-tools.lock/owner` and confirm its process has stopped befo
 removing an abandoned lock. Cleanup remains explicit. The `--versions` option
 selects a reviewed shell file, which is executable code like a Makefile.
 
+Setup and offline checks admit the literal `.tools/host` link target. Malformed
+managed names, including trailing newlines, are refused before tool execution
+or downloads; the existing link and bundles remain intact.
+
 The shared Make include selects the installer's `--with-ripgrep` flag in both
 installation and offline checks. Consumers adopting it add `SHARED_TOOLING_RIPGREP_VERSION`
 and the four `SHARED_TOOLING_RIPGREP_SHA256_*` archive digests to their reviewed
@@ -117,10 +126,13 @@ set. cloc uses the bootstrap Perl interpreter and needs no Cargo build or system
 package installation. LOC reports select the prepared local host path themselves
 and never install tools during counting.
 
-The [IC set](ic-tools.md) supplies Quill, ICP CLI, didc, ic-wasm, PocketIC and
+The [IC set](ic-tools.md) supplies Quill, ICP CLI, didc, ic-wasm and
 wasm-opt. dfx is excluded. Linux ARM64 supports the host set only; the full IC
 set lacks a matching Quill asset. Native CI qualifies both sets on Linux x86-64
 and both macOS architectures; mapping Linux ARM64 is not native qualification.
+PocketIC consumers additionally use their selected IC Testkit CLI's explicit
+`setup` and offline `check`; follow the
+[ownership handoff](ic-tools.md#pocketic-ownership-handoff).
 
 ## Rust development tools
 
@@ -143,7 +155,9 @@ tools-check: rust-tools-check
 
 The common aggregate does not require a Rust toolchain in non-Rust repositories.
 Shared Make commands include `.tools/rust/bin` on PATH; interactive shells use
-the export at the top of this guide. The helper never prepares or upgrades a
+the export at the top of this guide. The standard formatting hook and its
+adoption check preserve the original checkout's host, IC and Rust tool paths
+while formatting isolated index inputs. The helper never prepares or upgrades a
 toolchain implicitly. Installation may fetch registry dependencies and compile;
 build output stays in `.tools/rust/build`, including on failure. Cargo owns
 installation locking and registry checksum verification. Tools install one at
@@ -162,6 +176,96 @@ Offline checks require each local executable to report its selected version
 successfully. They do not authenticate installed bytes or replace product/native
 host qualification. A matching set is reused without invoking Cargo. Formatting
 still requires rustfmt and the [formatter check](verification-helpers.md#formatter-prerequisites).
+
+### Consumer-selected Cargo tools
+
+The same installer also accepts an exact crates.io package, one binary or example
+target, and an explicit `debug` or `release` profile. Prepare the shared host tools
+(including jq and Perl) and the consumer-selected Rust toolchain first:
+
+```bash
+bash scripts/dev/install-rust-tools.sh --consumer "$PWD" \
+  --package ic-blob-storage --version 0.15.1 --example prepare_upload --profile debug
+# Repeat the same selection with --check for an offline, non-building check.
+```
+
+This example is a caller selection, not a new fleet-wide package pin. Consumers
+own package versions, profiles, compiler selection, explicit executable overrides
+and product qualification. Use `--bin NAME` for a published binary. This mode
+does not install the formatter bundle or read its versions catalog; `make
+install-rust-tools` continues to install that existing three-tool bundle.
+
+The command prints the admitted executable path under
+`.tools/rust/<package>-<version>-<kind>-<target>-<profile>/installed/bin/`.
+Use that returned path in the consumer adapter. Each selection is immutable:
+an existing installation must pass physical-path, exact Cargo receipt and local
+byte-digest checks. Changed bytes or receipts fail without repair or execution;
+each receipt must contain exactly one JSON document. Cargo installation failures
+return Cargo's original exit status along with the retained attempt location;
+no invented `--version` probe runs for examples. Checks invoke rustc for the
+selected host but never Cargo or downloads. Digests detect local changes; they
+are not publisher signatures. The consumer still owns compiler compatibility.
+
+Setup compiles through the same locked Cargo installation command into a fresh
+attempt directory under `.tools/rust/build`, the existing CI evidence route.
+Only an admitted candidate is renamed into place. Failed
+attempts retain logs/builds, and earlier version selections remain untouched.
+A directory lock rejects concurrent setup for the same selection; retry after
+its owner finishes. An abruptly killed process may leave a lock: inspect that
+owner and retained attempt before explicitly removing the empty lock. The tool
+never guesses that a lock is stale. Redirected output, receipt and lock paths
+refuse. After Cargo returns, setup rechecks the shared directory ancestors and
+selection slot before admitting or activating the candidate. As with the fixed
+bundle, path admission is not a sandbox against another
+process deliberately replacing paths while setup runs. Installation may fetch
+dependencies; `CARGO_NET_OFFLINE=true` remains authoritative.
+
+Consumers adopt this mode from a reviewed snapshot, qualify their selected
+package/profile on their native hosts, then remove superseded resolver/build
+helpers. Local Canic source snapshots and application evidence remain outside
+this registry installer. The three-host assessment below exercises the shared
+production mode; its earlier Cargo-only results do not qualify this extension.
+
+## Cargo installation assessment
+
+Run `scripts/ci/qualify-cargo-install.sh` in Shared Tooling to exercise Cargo's
+native installation contract in a new disposable evidence directory:
+
+```bash
+mkdir -p .tools
+CARGO_NET_OFFLINE=true bash scripts/ci/qualify-cargo-install.sh "$PWD/.tools/cargo-install-assessment"
+```
+
+The offline command requires the registry packages and their locked dependencies
+to be prepared already. Explicit online qualification may omit
+`CARGO_NET_OFFLINE=true`; it installs only into the new evidence root and retains
+builds and logs on both success and failure. Relative evidence paths resolve from
+the caller's working directory independently of `CDPATH`; existing roots are
+refused before tool probes. It never cleans or changes an existing installation.
+The fixture selects published `ic-blob-storage 0.15.1`'s
+`prepare_upload` example and the existing reviewed cargo-sort version. Those are
+assessment inputs, not defaults for consumer applications. Both use the debug
+profile for the direct Cargo assessment. The production installer is then
+exercised with the debug example and release binary, including offline reuse and
+changed-byte refusal. No product MSRV or Canic CLI selection is qualified by this fixture.
+
+It checks Cargo receipt package/registry/version/target/profile identity, offline
+reuse, missing-target refusal, concurrent offline installation and preservation
+of the executable and receipts after an injected compiler failure. It records
+local executable digests and rejects changed bytes using the shared checksum
+owner. Those digests detect changes to an observed build; they are not publisher
+signatures, and a Cargo receipt alone does not authenticate executable bytes.
+For the selected `--debug` command, receipt admission accepts Cargo's `dev` and
+`debug` spellings and rejects release profiles; original receipts and toolchain
+identity remain in the evidence root.
+
+The manually triggered **Cargo installation qualification** workflow runs this
+assessment on Linux and both macOS architectures with GitHub Actions' default
+duration limits and failure evidence collection. It does not add registry builds
+to the default portable gate. Native results, consumer-specific versions and an actual shared
+installer's path/receipt/lock refusal still need qualification before extraction
+under [#65](https://github.com/dragginzgame/shared-tooling/issues/65). The current
+fixed Rust installer remains the supported setup contract.
 
 ## Bootstrap prerequisites
 
