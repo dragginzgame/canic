@@ -32,11 +32,7 @@ if [[ "$CRYPTO_TEST_CASE" == duplicate-version ]]; then
     printf 'sha2 v0.11.0\n'
 fi
 case "$package/$features" in
-    delegation_root_stub/)
-        printf '%s v0.1.0\n' signature rfc6979 k256 ic-certification \
-            ic-canister-sig-creation hmac elliptic-curve ecdsa crypto-bigint
-        ;;
-    canister_test/|canister_user_shard/)
+    delegation_root_stub/|canister_test/|canister_user_shard/)
         # Deliberately unordered and repeated identities must compare as a set.
         printf '%s v0.1.0\n' signature rfc6979 k256 ic_bls12_381 \
             ic-verify-bls-signature ic-signature-verification ic-certification \

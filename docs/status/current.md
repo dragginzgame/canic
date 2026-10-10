@@ -18,7 +18,8 @@ locked and offline. Preserve the graph during qualification.
 
 Shared Tooling **0.3.8** is adopted through committed revision
 `67285b28a98b7c4211ad32de726709d4e87edea4`; canonical export and independent
-byte/mode checks cover all 107 selected files. The new archive guidance separates
+byte/mode checks cover all 108 selected files, including the required advisory
+README-freshness task. The new archive guidance separates
 archive creation from mandatory independent consumer compilation, retaining
 registry admission during publication. The late lock update selected Host 0.12.8 alongside Auth 0.3.5, Blob 0.22.4
 and Timers 0.17.5. Published Rust sources for all nine affected upstream crates
@@ -167,4 +168,8 @@ Preserve `.canic/local-work/`, `.canic/incident-repairs/canic188/`, old bundles,
 archives, failed scratch and historical evidence. Cross-release deployment is a
 clean reinstall with cycle custody; predecessor state must not be revived.
 Same-release interruption recovery, retry, backup/restore and exact replay remain
-required. No full workspace gate, staging, commit, tag, push or publication ran.
+required. The prepared source is committed as `afc2521ed`; the first governed
+release attempt stopped before compilation on a missing snapshot companion and
+a stale chain-key Root crypto inventory. Both corrections retain the selected
+upstream revision and runtime graph. The normal release flow is continuing;
+no release version, tag, push or registry publication has occurred yet.

@@ -110,3 +110,4 @@ file	36530d995c6ebad1f17b9718030ee168e14d2963dbfe725f9d2c1e9a4d960d5f	x	scripts/
 file	cebc0fa4ee9944550350a492a3bc1084e28820e2c915e20351c336d87ce0359f	-	make/execution.mk
 file	f1a92a42f6e5000b40c8f44a5f89fa8c5b254f204bcc9f2af8d2bbf5f123ec15	-	make/release.mk
 file	4ff0a961d5fb8639edf798d64bbe3abc0fcd83c6f703d7a6875c6f5174e76201	x	scripts/ci/run-formatting.sh
+file	227ce86878264ff60aa24a70bb20140b8ef3c8332be640186e96f93805ed1062	-	tasks/readme-freshness.md
