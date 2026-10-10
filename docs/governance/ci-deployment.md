@@ -179,11 +179,13 @@ invocation first syntax-checks and executes a private immutable copy of itself;
 an unrelated edit to the workspace script during a long test cannot splice new
 shell text into the process after the tests have completed.
 
-CI cancels superseded pull-request runs. Main-branch runs have distinct concurrency
-identities and retain their own results even when another commit arrives. Release
-accounting must name the exact source revision for local validation, CI results
-and package qualification; a later passing branch run is not evidence for an
-earlier package. Publication does not wait for or manufacture CI evidence.
+CI keeps only the newest run per workflow and branch or PR ref, cancelling
+older queued and running checks under
+[the shared policy](https://github.com/dragginzgame/shared-tooling/issues/108).
+All required hosts and gates remain on the retained run. Cancelled checks do not
+qualify their source; release accounting must name the exact revision for local
+validation, CI results and package qualification. A later passing branch run is
+not evidence for an earlier package. Publication retains its separate authority.
 
 The repository owns one `pre-commit` hook, configured by `make install-dev` or
 `make install-hooks`. It runs only `make fmt`; it does not run tests, Clippy,
@@ -354,7 +356,8 @@ feature matrix. Ordinary tests, PocketIC tests and the release-profile build all
 depend on the completed checks job, so no expensive lane starts while a quick
 compiler or lint failure is still discoverable.
 
-The governed PocketIC runner resolves the exact prepared Testkit 0.27.0 CLI
+The governed PocketIC runner selects the single published Testkit version in
+the root `Cargo.lock` and resolves that exact prepared CLI
 through Shared Tooling's offline Cargo receipt and executable-byte check.
 `make install-testkit-server` is explicit setup; it installs the published CLI
 and asks that owner to prepare its checksum-admitted PocketIC 16.1.0 bundle.

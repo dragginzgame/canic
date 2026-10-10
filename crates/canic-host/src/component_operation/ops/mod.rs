@@ -136,7 +136,7 @@ pub fn write(
     if bytes.len() > MAX_RECORD_BYTES {
         return Err(ComponentOperationError::Integrity);
     }
-    Ok(write_bytes(path, &bytes)?)
+    Ok(write_bytes(path, &bytes).map_err(crate::publication::ops::io_error)?)
 }
 
 /// Persist one submission reservation, including attempts whose response is lost.

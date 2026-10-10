@@ -3,17 +3,19 @@ mod render;
 mod transport;
 
 use crate::{
-    cli::clap::{
-        flag_arg, parse_matches, render_usage, required_string, string_option,
-        string_option_or_else, value_arg,
+    cli::{
+        clap::{
+            flag_arg, parse_matches, render_usage, required_string, string_option,
+            string_option_or_else, value_arg,
+        },
+        defaults::default_icp,
+        globals::{internal_environment_arg, internal_icp_arg},
+        help::print_help_or_version,
     },
-    cli::defaults::default_icp,
-    cli::globals::{internal_environment_arg, internal_icp_arg},
-    cli::help::print_help_or_version,
     endpoints::{render::render_plain_endpoints, transport::endpoint_report},
     version_text,
 };
-use canic_core::ids::ReleaseBuildId;
+use canic_contracts::ids::ReleaseBuildId;
 #[cfg(test)]
 use canic_host::candid_endpoints::{
     EndpointCardinality, EndpointEntry, EndpointMode, EndpointType,

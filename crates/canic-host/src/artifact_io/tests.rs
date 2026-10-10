@@ -1,9 +1,8 @@
 use super::*;
-use canic_core::ids::BuildNetwork;
-use std::time::{SystemTime, UNIX_EPOCH};
-
+use canic_contracts::ids::BuildNetwork;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
 fn captured_cargo_input_survives_replacement_and_cleans_up() {

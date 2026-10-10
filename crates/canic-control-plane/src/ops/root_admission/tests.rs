@@ -1,19 +1,23 @@
 //! Focused stable-journal replay proof for one Root and one managed participant.
 
 use super::*;
-use crate::storage::stable::root_admission::{
-    RootAdmissionData, RootAdmissionStateRecord, RootAdmissionStore,
+use crate::{
+    storage::stable::root_admission::{
+        RootAdmissionData, RootAdmissionStateRecord, RootAdmissionStore,
+    },
+    test_support::{fleet_admission_policy, fleet_subnet_root_funding_authority},
 };
-use crate::test_support::{fleet_admission_policy, fleet_subnet_root_funding_authority};
-use canic_core::{
-    cdk::structures::storable::Storable,
-    cdk::types::Cycles,
+use canic_contracts::{
+    cycles::Cycles,
     ids::{
         AppId, CanisterRole, CanonicalNetworkId, ComponentBinding, ComponentInstanceId,
         ComponentSpecId, ComponentTopologyDigest, CyclesFundingBudget, FleetBinding,
         FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority,
         FleetSubnetCanisterPoolConfig, FleetSubnetRootLimits, ManagedCanisterBinding, SubnetId,
     },
+};
+use canic_core::{
+    cdk::structures::storable::Storable,
     shared_support::fleet_admission_policy::{
         compile_installed_fleet_admission_policy, expected_fleet_admission_target_receipt,
         materialize_fleet_admission_projection,

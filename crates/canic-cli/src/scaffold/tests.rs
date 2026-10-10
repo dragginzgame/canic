@@ -1,7 +1,8 @@
+// Ensure scaffold options parse the App name.
+
 use super::*;
 use crate::test_support::TempDir;
 
-// Ensure scaffold options parse the App name.
 #[test]
 fn parses_scaffold_options() {
     let options =
@@ -147,7 +148,7 @@ fn scaffold_app_writes_application_files_with_canonical_root() {
     assert!(config.contains("maximum_instances = 1"));
     let model = canic_core::bootstrap::parse_config_model(&config).expect("valid scaffold config");
     assert!(
-        model.roles[&canic_core::ids::CanisterRole::ROOT]
+        model.roles[&canic_contracts::ids::CanisterRole::ROOT]
             .package
             .is_none()
     );

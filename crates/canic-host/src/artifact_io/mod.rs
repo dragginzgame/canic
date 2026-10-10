@@ -11,7 +11,12 @@ use crate::{
     ic_wasm::IcWasmExecutable,
     output_with_executable_busy_retry,
 };
-
+use canic_contracts::ids::BuildNetwork;
+use ic_host_artifacts::artifact::encode_gzip;
+use ic_host_fs::{
+    durable::{PublicationMode, WriteOptions, write_bytes, write_named_with, write_with},
+    read::read_file_no_follow,
+};
 use std::{
     collections::BTreeSet,
     fs,
@@ -19,14 +24,6 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
     time::Instant,
 };
-
-use ic_host_artifacts::artifact::encode_gzip;
-use ic_host_fs::{
-    durable::{write_bytes, write_named_with, write_with},
-    read::read_file_no_follow,
-};
-
-use canic_core::ids::BuildNetwork;
 
 pub use wasm::enforce_wasm_install_limits;
 pub use wasm::wasm_artifact_metrics;
@@ -61,7 +58,7 @@ struct TransformProducerError(#[from] Box<dyn std::error::Error>);
 
 /// Inputs and final paths for one qualification-before-publication Wasm artifact set.
 pub struct WasmArtifactFinalization<'a> {
-    pub release_build_id: Option<canic_core::ids::ReleaseBuildId>,
+    pub release_build_id: Option<canic_contracts::ids::ReleaseBuildId>,
     pub profile: CanisterBuildProfile,
     pub build_network: BuildNetwork,
     pub embed_candid: bool,
@@ -371,9 +368,14 @@ pub fn write_gzip_artifact(
     wasm_gz_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let wasm_bytes = fs::read(wasm_path)?;
-    write_with(wasm_gz_path, |file| {
-        encode_gzip(&wasm_bytes, file, 9, u64::MAX)
-    })?;
+    write_with(
+        wasm_gz_path,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        |file| encode_gzip(&wasm_bytes, file, 9, u64::MAX),
+    )?;
     Ok(())
 }
 

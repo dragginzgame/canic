@@ -5,11 +5,10 @@ use candid::{CandidType, Deserialize, Principal};
 use canic::{
     Error,
     dto::{
-        cycles::{CycleTopupEvent, CycleTrackerEntry},
         metrics::{MetricEntry, MetricValue, MetricsKind},
-        page::{Page, PageRequest},
+        page::PageRequest,
         public_status::{PublicHistoryRequest, PublicMetricFamily, PublicSnapshotState},
-        role::{CycleBalanceStatusResponse, MetricsStatusRequest},
+        role::MetricsStatusRequest,
         runtime::{
             CanicRuntimeStatus, RuntimeCheckStatus, TimerProcessCondition, TimerRegistrationStatus,
             TimerSchedulingMode,
@@ -17,6 +16,10 @@ use canic::{
     },
     protocol,
 };
+use canic_contracts::dto::wire::projection::fixture_timer_authority::PublicStatusRequest;
+use canic_contracts::dto::wire::projection::fixture_timer_authority::PublicStatusResponse;
+use canic_contracts::dto::wire::projection::fixture_timer_authority::RoleStatusRequest;
+use canic_contracts::dto::wire::projection::fixture_timer_authority::RoleStatusResponse;
 use canic_testing_internal::pic::{CanicPicExt, install_lifecycle_boundary_fixture, upgrade_args};
 use ic_testkit::pic::{CandidCallExt, CanisterInstallExt, PocketIc, RetryPolicy};
 use std::time::Duration;
@@ -28,38 +31,6 @@ const INSTALL_CODE_COOLDOWN: Duration = Duration::from_mins(5);
 // Historical comparison point, not an execution or release limit.
 // See docs/features/runtime/public-observability.md#sampling-cost-qualification.
 const SAMPLING_INSTRUCTION_REFERENCE: u64 = 20_000_000;
-
-#[derive(CandidType, Clone)]
-enum RoleStatusRequest {
-    CycleBalance,
-    CycleHistory(PageRequest),
-    CycleTopups(PageRequest),
-    Metrics(MetricsStatusRequest),
-    Runtime,
-}
-
-#[derive(CandidType, Deserialize)]
-enum RoleStatusResponse {
-    CycleBalance(CycleBalanceStatusResponse),
-    CycleHistory(Page<CycleTrackerEntry>),
-    CycleTopups(Page<CycleTopupEvent>),
-    Metrics(Page<MetricEntry>),
-    Runtime(Box<CanicRuntimeStatus>),
-}
-
-#[derive(CandidType)]
-enum PublicStatusRequest {
-    Health,
-    Metrics(canic::dto::public_status::PublicMetricsRequest),
-    History(canic::dto::public_status::PublicHistoryRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum PublicStatusResponse {
-    Health(canic::dto::public_status::PublicHealth),
-    Metrics(canic::dto::public_status::PublicMetricsSnapshot),
-    History(canic::dto::public_status::PublicHistorySnapshot),
-}
 
 #[test]
 fn public_snapshots_preserve_observer_authority() {

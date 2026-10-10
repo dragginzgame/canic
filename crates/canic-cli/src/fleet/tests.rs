@@ -1,4 +1,18 @@
 use super::*;
+use crate::test_support::temp_dir;
+use canic_host::fleet_ensure::{
+    dto::FleetEnsurePhase,
+    model::{
+        ActualCycleConservation, CanisterDisposition, CanisterPlan, CanisterRuntimeStatus,
+        CycleConservation, DesiredFleet, DesiredFleetArtifacts, EnsureAction,
+        EstateFundingDomainPlan, FleetEnsureCompletion, FleetEnsureJournalRecord, FleetEnsurePlan,
+        FleetEnsurePlanScope, FleetObservation, FundingPauseRecord, FundingReviewRecord,
+        LiveCanister, NativeFundingRequiredRecord,
+    },
+    ops::{EnsurePaths, write_journal, write_plan},
+    policy::compile_plan,
+};
+use std::collections::BTreeMap;
 
 #[test]
 fn unpaid_reinstall_cancellation_requires_exact_digest_and_excludes_effect_commands() {
@@ -23,20 +37,6 @@ fn unpaid_reinstall_cancellation_requires_exact_digest_and_excludes_effect_comma
         .is_err()
     );
 }
-use crate::test_support::temp_dir;
-use canic_host::fleet_ensure::dto::FleetEnsurePhase;
-use canic_host::fleet_ensure::{
-    model::{
-        ActualCycleConservation, CanisterDisposition, CanisterPlan, CanisterRuntimeStatus,
-        CycleConservation, DesiredFleet, DesiredFleetArtifacts, EnsureAction,
-        EstateFundingDomainPlan, FleetEnsureCompletion, FleetEnsureJournalRecord, FleetEnsurePlan,
-        FleetEnsurePlanScope, FleetObservation, FundingPauseRecord, FundingReviewRecord,
-        LiveCanister, NativeFundingRequiredRecord,
-    },
-    ops::{EnsurePaths, write_journal, write_plan},
-    policy::compile_plan,
-};
-use std::collections::BTreeMap;
 
 #[test]
 fn fleet_commands_are_current_generation_and_lexicographically_ordered() {
@@ -700,7 +700,7 @@ fn provisioning_wait_exposes_typed_stage_counts_and_invocation_elapsed() {
             provisioning: Some(canic_host::fleet_ensure::dto::FleetProvisioningProgress {
                 components: Vec::new(),
                 pending_root_failure: None,
-                phase: canic_core::dto::component_provisioning::FleetComponentProvisioningPhase::ActivatingRuntimes,
+                phase: canic_contracts::dto::component_provisioning::FleetComponentProvisioningPhase::ActivatingRuntimes,
                 root_batch_count: 1,
                 accepted_root_count: 1,
                 provisioned_root_count: 1,

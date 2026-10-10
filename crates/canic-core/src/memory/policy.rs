@@ -1,33 +1,16 @@
 //! Module: memory::policy
 //!
-//! Responsibility: enforce Canic memory-manager namespace and ID-range ownership.
+//! Responsibility: compose Canic memory admission and reservation policy.
 //! Does not own: memory-manager storage, stable schemas, or diagnostics rendering.
 //! Boundary: memory bootstrap passes this policy into `ic-memory` validation.
 
-use crate::{
-    memory::{
-        CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, CANIC_CORE_MEMORY_AUTHORITY,
-        admission::MemoryBootstrapAdmission, registry::MemoryRegistryError,
-    },
-    role_contract::allocation::{
-        CANIC_CONTROL_PLANE_MAX_ID, CANIC_CONTROL_PLANE_MIN_ID, CANIC_CORE_AUTH_MAX_ID,
-        CANIC_CORE_AUTH_MIN_ID, CANIC_CORE_LOWER_MAX_ID, CANIC_CORE_MAX_ID, CANIC_CORE_MIN_ID,
-        CANIC_CORE_UPPER_MIN_ID,
-        memory::control_plane::{
-            FIXTURE_STORE_ID, FLEET_COORDINATOR_ADMISSION_ID, FLEET_COORDINATOR_FUNDING_ID,
-            ROOT_ADMISSION_ID, ROOT_FUNDING_ID,
-        },
-    },
-};
+use crate::memory::{admission::MemoryBootstrapAdmission, registry::MemoryRegistryError};
 use ic_memory::{
-    AllocationPolicy, MemoryManagerAuthorityRecord, MemoryManagerIdRange, MemoryManagerRangeMode,
-    MemoryManagerSlot, PolicyIdentity, PolicyIdentityError, RuntimeBootstrapPolicy, StableKey,
+    AllocationPolicy, MemoryManagerSlot, PolicyIdentity, PolicyIdentityError,
+    RuntimeBootstrapPolicy, StableKey,
 };
-
 use sha2::{Digest as _, Sha256};
 
-pub const CANIC_CORE_AUTHORITY_PURPOSE: &str = "Canic core allocation authority";
-pub const CANIC_CONTROL_PLANE_AUTHORITY_PURPOSE: &str = "Canic control-plane allocation authority";
 const CANIC_MEMORY_BOOTSTRAP_POLICY_NAME: &str = "canic.memory-bootstrap-policy";
 const CANIC_MEMORY_BOOTSTRAP_POLICY_VERSION: u32 = 1;
 
@@ -45,13 +28,13 @@ pub struct CanicMemoryManagerPolicy {
 }
 
 impl CanicMemoryManagerPolicy {
-    /// Use Canic's fixed namespace and range policy without a consumer callback.
+    /// Use Canic's reservation policy without a consumer callback.
     #[must_use]
     pub const fn new() -> Self {
         Self { admission: None }
     }
 
-    /// Compose consumer admission while retaining all Canic namespace/range checks.
+    /// Compose consumer admission while retaining Canic reservation checks.
     #[must_use]
     pub fn with_admission(mut self, admission: MemoryBootstrapAdmission) -> Self {
         self.admission = Some(admission);
@@ -66,26 +49,27 @@ impl AllocationPolicy for CanicMemoryManagerPolicy {
         Ok(())
     }
 
-    fn validate_slot(&self, key: &StableKey, slot: &MemoryManagerSlot) -> Result<(), Self::Error> {
-        let id = slot.id();
-        validate_key_id_claim(id, key.as_str())
+    fn validate_slot(
+        &self,
+        _key: &StableKey,
+        _slot: &MemoryManagerSlot,
+    ) -> Result<(), Self::Error> {
+        Ok(())
     }
 
     fn validate_reserved_slot(
         &self,
         key: &StableKey,
-        slot: &MemoryManagerSlot,
+        _slot: &MemoryManagerSlot,
     ) -> Result<(), Self::Error> {
-        let id = slot.id();
         if !ic_memory::is_ic_memory_stable_key(key.as_str()) && !key.as_str().starts_with("canic.")
         {
-            return Err(MemoryRegistryError::RangeAuthorityViolation {
+            return Err(MemoryRegistryError::InvalidDeclaration {
                 stable_key: key.as_str().to_string(),
-                id,
                 reason: "application stable keys may not be pre-reserved by Canic",
             });
         }
-        validate_key_id_claim(id, key.as_str())
+        Ok(())
     }
 }
 
@@ -123,372 +107,37 @@ impl RuntimeBootstrapPolicy for CanicMemoryManagerPolicy {
     }
 }
 
-/// Return the canonical memory-manager authority records for diagnostics.
-#[must_use]
-pub fn canonical_authority_records() -> Vec<MemoryManagerAuthorityRecord> {
-    vec![
-        MemoryManagerAuthorityRecord::new(
-            ic_memory::memory_manager_governance_range(),
-            ic_memory::IC_MEMORY_AUTHORITY_OWNER,
-            MemoryManagerRangeMode::Reserved,
-            Some(ic_memory::IC_MEMORY_AUTHORITY_PURPOSE.to_string()),
-        )
-        .expect("valid ic-memory authority record"),
-        MemoryManagerAuthorityRecord::new(
-            canic_control_plane_range(),
-            CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-            MemoryManagerRangeMode::Reserved,
-            Some(CANIC_CONTROL_PLANE_AUTHORITY_PURPOSE.to_string()),
-        )
-        .expect("valid Canic control-plane authority record"),
-        MemoryManagerAuthorityRecord::new(
-            canic_core_lower_range(),
-            CANIC_CORE_MEMORY_AUTHORITY,
-            MemoryManagerRangeMode::Reserved,
-            Some(CANIC_CORE_AUTHORITY_PURPOSE.to_string()),
-        )
-        .expect("valid Canic core authority record"),
-        MemoryManagerAuthorityRecord::new(
-            control_plane_infrastructure_range(),
-            CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-            MemoryManagerRangeMode::Reserved,
-            Some(CANIC_CONTROL_PLANE_AUTHORITY_PURPOSE.to_string()),
-        )
-        .expect("valid infrastructure control-plane authority record"),
-        MemoryManagerAuthorityRecord::new(
-            canic_core_auth_range(),
-            CANIC_CORE_MEMORY_AUTHORITY,
-            MemoryManagerRangeMode::Reserved,
-            Some(CANIC_CORE_AUTHORITY_PURPOSE.to_string()),
-        )
-        .expect("valid Canic auth authority record"),
-        MemoryManagerAuthorityRecord::new(
-            fixture_store_range(),
-            CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-            MemoryManagerRangeMode::Reserved,
-            Some(CANIC_CONTROL_PLANE_AUTHORITY_PURPOSE.to_string()),
-        )
-        .expect("valid fixture Store authority record"),
-        MemoryManagerAuthorityRecord::new(
-            canic_core_upper_range(),
-            CANIC_CORE_MEMORY_AUTHORITY,
-            MemoryManagerRangeMode::Reserved,
-            Some(CANIC_CORE_AUTHORITY_PURPOSE.to_string()),
-        )
-        .expect("valid Canic core authority record"),
-    ]
-}
-
-fn validate_key_id_claim(id: u8, stable_key: &str) -> Result<(), MemoryRegistryError> {
-    if ic_memory::is_ic_memory_stable_key(stable_key) {
-        return Ok(());
-    }
-
-    if stable_key.starts_with("canic.core.") {
-        return require_core_range(id, stable_key);
-    }
-
-    if stable_key.starts_with("canic.control_plane.") {
-        if stable_key == "canic.control_plane.fleet_coordinator.funding.v1" {
-            return require_range(
-                id,
-                stable_key,
-                MemoryManagerIdRange::new(
-                    FLEET_COORDINATOR_FUNDING_ID,
-                    FLEET_COORDINATOR_FUNDING_ID,
-                )
-                .expect("valid Coordinator funding range"),
-                "the Fleet Coordinator funding key must use reserved id 62",
-            );
-        }
-        if stable_key == "canic.control_plane.root.funding.v1" {
-            return require_range(
-                id,
-                stable_key,
-                MemoryManagerIdRange::new(ROOT_FUNDING_ID, ROOT_FUNDING_ID)
-                    .expect("valid Root funding range"),
-                "the Root funding key must use reserved id 63",
-            );
-        }
-        if stable_key == "canic.control_plane.fleet_admission.v1" {
-            return require_range(
-                id,
-                stable_key,
-                MemoryManagerIdRange::new(
-                    FLEET_COORDINATOR_ADMISSION_ID,
-                    FLEET_COORDINATOR_ADMISSION_ID,
-                )
-                .expect("valid Coordinator admission range"),
-                "the Fleet Coordinator admission key must use reserved id 64",
-            );
-        }
-        if stable_key == "canic.control_plane.root.admission.v1" {
-            return require_range(
-                id,
-                stable_key,
-                MemoryManagerIdRange::new(ROOT_ADMISSION_ID, ROOT_ADMISSION_ID)
-                    .expect("valid Root admission range"),
-                "the Root admission key must use reserved id 65",
-            );
-        }
-        if stable_key == "canic.control_plane.fixture_store.v1" {
-            return require_range(
-                id,
-                stable_key,
-                fixture_store_range(),
-                "fixture Store must use its reserved id",
-            );
-        }
-        return require_range(
-            id,
-            stable_key,
-            canic_control_plane_range(),
-            "canic.control_plane.* keys must use Canic control-plane ids 10-29",
-        );
-    }
-
-    if stable_key.starts_with("canic.") {
-        return Err(MemoryRegistryError::RangeAuthorityViolation {
-            stable_key: stable_key.to_string(),
-            id,
-            reason: "unrecognized canic.* stable key namespace",
-        });
-    }
-
-    validate_application_claim(id, stable_key)
-}
-
-fn validate_application_claim(id: u8, stable_key: &str) -> Result<(), MemoryRegistryError> {
-    if ic_memory::memory_manager_governance_range().contains(id)
-        || canic_core_lower_range().contains(id)
-        || control_plane_infrastructure_range().contains(id)
-        || canic_core_upper_range().contains(id)
-        || canic_core_auth_range().contains(id)
-        || fixture_store_range().contains(id)
-        || canic_control_plane_range().contains(id)
-    {
-        return Err(MemoryRegistryError::RangeAuthorityViolation {
-            stable_key: stable_key.to_string(),
-            id,
-            reason: "application keys may not use reserved MemoryManager IDs",
-        });
-    }
-    Ok(())
-}
-
-fn require_range(
-    id: u8,
-    stable_key: &str,
-    range: MemoryManagerIdRange,
-    reason: &'static str,
-) -> Result<(), MemoryRegistryError> {
-    if range.contains(id) {
-        Ok(())
-    } else {
-        Err(MemoryRegistryError::RangeAuthorityViolation {
-            stable_key: stable_key.to_string(),
-            id,
-            reason,
-        })
-    }
-}
-
-fn require_core_range(id: u8, stable_key: &str) -> Result<(), MemoryRegistryError> {
-    if canic_core_lower_range().contains(id)
-        || canic_core_auth_range().contains(id)
-        || canic_core_upper_range().contains(id)
-    {
-        Ok(())
-    } else {
-        Err(MemoryRegistryError::RangeAuthorityViolation {
-            stable_key: stable_key.to_string(),
-            id,
-            reason: "canic.core.* keys must use Canic core ids 30-61, 66-67 or 69-99",
-        })
-    }
-}
-
-fn canic_core_lower_range() -> MemoryManagerIdRange {
-    MemoryManagerIdRange::new(CANIC_CORE_MIN_ID, CANIC_CORE_LOWER_MAX_ID)
-        .expect("valid lower Canic core range")
-}
-
-fn control_plane_infrastructure_range() -> MemoryManagerIdRange {
-    MemoryManagerIdRange::new(FLEET_COORDINATOR_FUNDING_ID, ROOT_ADMISSION_ID)
-        .expect("valid infrastructure control-plane range")
-}
-
-fn canic_core_upper_range() -> MemoryManagerIdRange {
-    MemoryManagerIdRange::new(CANIC_CORE_UPPER_MIN_ID, CANIC_CORE_MAX_ID)
-        .expect("valid upper Canic core range")
-}
-
-fn canic_core_auth_range() -> MemoryManagerIdRange {
-    MemoryManagerIdRange::new(CANIC_CORE_AUTH_MIN_ID, CANIC_CORE_AUTH_MAX_ID)
-        .expect("valid Canic auth range")
-}
-
-fn fixture_store_range() -> MemoryManagerIdRange {
-    MemoryManagerIdRange::new(FIXTURE_STORE_ID, FIXTURE_STORE_ID)
-        .expect("valid fixture Store range")
-}
-
-fn canic_control_plane_range() -> MemoryManagerIdRange {
-    MemoryManagerIdRange::new(CANIC_CONTROL_PLANE_MIN_ID, CANIC_CONTROL_PLANE_MAX_ID)
-        .expect("valid Canic control-plane range")
-}
-
-// -----------------------------------------------------------------------------
-// Tests
-// -----------------------------------------------------------------------------
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ic_memory::MemoryManagerSlotError;
-
-    fn policy() -> CanicMemoryManagerPolicy {
-        CanicMemoryManagerPolicy::new()
-    }
 
     #[test]
     fn runtime_bootstrap_policy_has_explicit_v1_identity() {
         assert_eq!(
-            policy()
+            CanicMemoryManagerPolicy::new()
                 .runtime_bootstrap_identity()
-                .expect("valid Canic policy identity"),
-            PolicyIdentity::new("canic.memory-bootstrap-policy", 1)
-                .expect("valid expected policy identity")
+                .unwrap(),
+            PolicyIdentity::new("canic.memory-bootstrap-policy", 1).unwrap()
         );
     }
 
-    fn key(value: &str) -> StableKey {
-        StableKey::parse(value).expect("stable key")
-    }
-
-    fn slot(id: u8) -> MemoryManagerSlot {
-        MemoryManagerSlot::new(id).expect("usable MemoryManager id")
-    }
-
     #[test]
-    fn rejects_memory_manager_sentinel_id_through_ic_memory() {
-        let err = MemoryManagerSlot::new(ic_memory::MEMORY_MANAGER_INVALID_ID)
-            .expect_err("ID 255 is the unallocated-bucket sentinel");
-        std::assert_matches!(
-            err,
-            MemoryManagerSlotError::InvalidMemoryManagerId { id }
-                if id == ic_memory::MEMORY_MANAGER_INVALID_ID
-        );
-    }
-
-    fn validate(stable_key: &str, id: u8) -> Result<(), MemoryRegistryError> {
-        policy().validate_slot(&key(stable_key), &slot(id))
-    }
-
-    fn validate_reserved(stable_key: &str, id: u8) -> Result<(), MemoryRegistryError> {
-        policy().validate_reserved_slot(&key(stable_key), &slot(id))
-    }
-
-    #[test]
-    fn accepts_canic_framework_namespaces_in_owned_ranges() {
-        validate("canic.control_plane.fixture_store.v1", FIXTURE_STORE_ID)
-            .expect("dedicated fixture Store slot");
-        validate("canic.core.runtime.canister_children.v1", CANIC_CORE_MIN_ID)
-            .expect("first core slot");
-        validate("canic.core.future.v1", CANIC_CORE_MAX_ID).expect("last core slot");
-        validate(
-            "canic.control_plane.template.manifests.v1",
-            CANIC_CONTROL_PLANE_MIN_ID,
-        )
-        .expect("first control-plane slot");
-        validate("canic.control_plane.future.v1", CANIC_CONTROL_PLANE_MAX_ID)
-            .expect("last control-plane slot");
-        validate(
-            "canic.control_plane.fleet_coordinator.funding.v1",
-            FLEET_COORDINATOR_FUNDING_ID,
-        )
-        .expect("dedicated Fleet Coordinator funding slot");
-        validate("canic.control_plane.root.funding.v1", ROOT_FUNDING_ID)
-            .expect("dedicated Root funding slot");
-        validate(
-            "canic.control_plane.fleet_admission.v1",
-            FLEET_COORDINATOR_ADMISSION_ID,
-        )
-        .expect("dedicated Fleet Coordinator admission slot");
-        validate("canic.control_plane.root.admission.v1", ROOT_ADMISSION_ID)
-            .expect("dedicated Root admission slot");
-    }
-
-    #[test]
-    fn rejects_canic_framework_namespaces_outside_owned_ranges() {
-        for invalid_key in [
-            "canic.core.future.v1",
-            "app.fixture.v1",
-            "canic.control_plane.future.v1",
-        ] {
-            std::assert_matches!(
-                validate(invalid_key, FIXTURE_STORE_ID),
-                Err(MemoryRegistryError::RangeAuthorityViolation { .. })
-            );
+    fn framework_reservations_do_not_partition_the_pool() {
+        let policy = CanicMemoryManagerPolicy::new();
+        for id in [10, 100, 254] {
+            policy
+                .validate_reserved_slot(
+                    &StableKey::parse("canic.core.future.v1").unwrap(),
+                    &MemoryManagerSlot::new(id).unwrap(),
+                )
+                .unwrap();
+            assert!(matches!(
+                policy.validate_reserved_slot(
+                    &StableKey::parse("app.rows.v1").unwrap(),
+                    &MemoryManagerSlot::new(id).unwrap()
+                ),
+                Err(MemoryRegistryError::InvalidDeclaration { .. })
+            ));
         }
-        std::assert_matches!(
-            validate(
-                "canic.control_plane.fixture_store.v1",
-                CANIC_CONTROL_PLANE_MIN_ID
-            ),
-            Err(MemoryRegistryError::RangeAuthorityViolation { .. })
-        );
-        let err = validate("canic.core.fleet.state.v1", CANIC_CONTROL_PLANE_MIN_ID)
-            .expect_err("core key cannot claim control-plane range");
-        std::assert_matches!(err, MemoryRegistryError::RangeAuthorityViolation { .. });
-
-        let err = validate(
-            "canic.control_plane.template.manifests.v1",
-            CANIC_CORE_MIN_ID,
-        )
-        .expect_err("control-plane key cannot claim core range");
-        std::assert_matches!(err, MemoryRegistryError::RangeAuthorityViolation { .. });
-
-        let err = validate("canic.core.future.v1", FLEET_COORDINATOR_FUNDING_ID)
-            .expect_err("core key cannot claim the dedicated funding slot");
-        std::assert_matches!(err, MemoryRegistryError::RangeAuthorityViolation { .. });
-        let err = validate("canic.core.future.v1", ROOT_FUNDING_ID)
-            .expect_err("core key cannot claim the dedicated Root funding slot");
-        std::assert_matches!(err, MemoryRegistryError::RangeAuthorityViolation { .. });
-        let err = validate("canic.core.future.v1", FLEET_COORDINATOR_ADMISSION_ID)
-            .expect_err("core key cannot claim the dedicated Coordinator admission slot");
-        std::assert_matches!(err, MemoryRegistryError::RangeAuthorityViolation { .. });
-        let err = validate("canic.core.future.v1", ROOT_ADMISSION_ID)
-            .expect_err("core key cannot claim the dedicated Root admission slot");
-        std::assert_matches!(err, MemoryRegistryError::RangeAuthorityViolation { .. });
-
-        let err = validate("canic.unknown.state.v1", CANIC_CORE_MAX_ID + 1)
-            .expect_err("unknown canic namespace is reserved");
-        std::assert_matches!(err, MemoryRegistryError::RangeAuthorityViolation { .. });
-    }
-
-    #[test]
-    fn accepts_application_keys_only_outside_reserved_ranges() {
-        validate("app.users.v1", CANIC_CORE_MAX_ID + 1).expect("application slot");
-        validate("app.archive.v1", ic_memory::MEMORY_MANAGER_MAX_ID).expect("last app slot");
-
-        let err = validate("app.users.v1", CANIC_CORE_MIN_ID)
-            .expect_err("application key cannot claim Canic core range");
-        std::assert_matches!(err, MemoryRegistryError::RangeAuthorityViolation { .. });
-
-        let err = validate("app.users.v1", CANIC_CONTROL_PLANE_MAX_ID)
-            .expect_err("application key cannot claim Canic control-plane reserve");
-        std::assert_matches!(err, MemoryRegistryError::RangeAuthorityViolation { .. });
-
-        let err = validate("app.users.v1", ic_memory::MEMORY_MANAGER_LEDGER_ID)
-            .expect_err("application key cannot claim ic-memory governance range");
-        std::assert_matches!(err, MemoryRegistryError::RangeAuthorityViolation { .. });
-    }
-
-    #[test]
-    fn rejects_application_reservations() {
-        let err = validate_reserved("app.users.v1", CANIC_CORE_MAX_ID + 1)
-            .expect_err("Canic does not pre-reserve application keys");
-        std::assert_matches!(err, MemoryRegistryError::RangeAuthorityViolation { .. });
     }
 }

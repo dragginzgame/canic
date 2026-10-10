@@ -17,14 +17,16 @@ use crate::{
     },
     view::root_funding::{RootFundingAcceptanceDisposition, RootFundingAuthorityView},
 };
-use canic_core::{
-    cdk::types::Cycles,
-    control_plane_support::{error::InternalError, ops::icp_refill::IcpRefillStoreOps},
+use canic_contracts::{
+    cycles::Cycles,
     dto::fleet_funding::{
         FleetFundingPolicyRotationRootPrepareRequest, FleetFundingPolicyRotationRootReceipt,
         FleetRootFundingAcceptanceReceipt, FleetRootFundingAcceptanceRequest,
         FleetRootFundingRequest, FleetRootFundingResponse,
     },
+};
+use canic_core::{
+    control_plane_support::{error::InternalError, ops::icp_refill::IcpRefillStoreOps},
     shared_support::fleet_funding_policy::{
         fleet_root_funding_operation_id, fleet_subnet_root_funding_policy_hash,
         validate_fleet_subnet_root_funding_authority,
@@ -32,6 +34,7 @@ use canic_core::{
 };
 
 /// Deterministic Root funding journal operations.
+
 pub struct RootFundingOps;
 
 impl RootFundingOps {
@@ -192,7 +195,7 @@ impl RootFundingOps {
         }
         let policy_hash = fleet_subnet_root_funding_policy_hash(&authority.funding);
         let usage = &request.root.predecessor_usage;
-        let current_usage = canic_core::dto::fleet_funding::FleetFundingPolicyUsage {
+        let current_usage = canic_contracts::dto::fleet_funding::FleetFundingPolicyUsage {
             historical_automatic_grants: current.historical_automatic_grants,
             historical_automatic_cycles: current.historical_automatic_cycles.clone(),
             generation_automatic_grants: current.automatic_grants,
@@ -251,7 +254,7 @@ impl RootFundingOps {
     /// Return an exact completed activation replay before consulting active state.
     pub(crate) fn completed_policy_rotation(
         authority: &RootFundingAuthorityView,
-        request: &canic_core::dto::fleet_funding::FleetFundingPolicyRotationRootActivateRequest,
+        request: &canic_contracts::dto::fleet_funding::FleetFundingPolicyRotationRootActivateRequest,
     ) -> Result<Option<FleetFundingPolicyRotationRootReceipt>, InternalError> {
         let raw = RootFundingStore::export()
             .current

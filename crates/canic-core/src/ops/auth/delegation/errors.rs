@@ -22,7 +22,7 @@ pub(super) fn map_prepare_delegation_cert_error(err: PrepareDelegationCertError)
 }
 
 pub(super) fn map_install_active_delegation_proof_error(
-    err: InstallActiveDelegationProofError<InternalError>,
+    err: InstallActiveDelegationProofError,
 ) -> InternalError {
     match err {
         InstallActiveDelegationProofError::IssuerMismatch => {
@@ -35,7 +35,30 @@ pub(super) fn map_install_active_delegation_proof_error(
             InternalError::public(crate::diagnostics::codes::SECURITY_INVALID_STATE)
         }
         InstallActiveDelegationProofError::CertExpired => InternalError::auth_proof_expired(),
-        InstallActiveDelegationProofError::RootProofInvalid(cause) => cause,
+        #[cfg(any(feature = "auth-chain-key-ecdsa", test))]
+        InstallActiveDelegationProofError::RootProofInvalid(cause) => match cause {
+            ic_auth::token::TokenVerificationError::Expired {
+                target: "root_key_policy",
+            }
+            | ic_auth::token::TokenVerificationError::StaleAuthority { .. }
+            | ic_auth::token::TokenVerificationError::BindingMismatch {
+                field:
+                    "key_id" | "root_public_key" | "key_version" | "derivation_path_hash" | "algorithm",
+            } => InternalError::auth_material_stale(),
+            ic_auth::token::TokenVerificationError::Expired { .. } => {
+                InternalError::auth_proof_expired()
+            }
+            ic_auth::token::TokenVerificationError::NotYetValid { .. } => {
+                InternalError::auth_proof_pending()
+            }
+            _ => InternalError::invalid_input(),
+        },
+        #[cfg(any(feature = "auth-chain-key-ecdsa", test))]
+        InstallActiveDelegationProofError::RootPolicyRejected => InternalError::invalid_input(),
+        #[cfg(not(any(feature = "auth-chain-key-ecdsa", test)))]
+        InstallActiveDelegationProofError::VerificationUnavailable => {
+            InternalError::public(crate::diagnostics::codes::SECURITY_UNAVAILABLE)
+        }
     }
 }
 
@@ -74,7 +97,9 @@ mod tests {
     fn active_proof_install_preserves_typed_root_proof_cause() {
         let mapped = map_install_active_delegation_proof_error(
             InstallActiveDelegationProofError::RootProofInvalid(
-                InternalError::auth_material_stale(),
+                ic_auth::token::TokenVerificationError::StaleAuthority {
+                    field: "proof_epoch",
+                },
             ),
         );
 

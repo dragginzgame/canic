@@ -1,17 +1,11 @@
-use crate::impl_storable_unbounded;
-#[cfg(any(test, feature = "auth-delegated-token-issuer-state"))]
-use crate::role_contract::allocation::memory::auth::DELEGATED_TOKEN_ISSUER_STATE_ID;
-#[cfg(any(test, feature = "auth-local-application-authorization"))]
-use crate::role_contract::allocation::memory::auth::LOCAL_APPLICATION_AUTHORIZATION_STATE_ID;
-#[cfg(any(test, feature = "auth-root-delegation-state"))]
-use crate::role_contract::allocation::memory::auth::ROOT_DELEGATION_STATE_ID;
+mod records;
+
 use crate::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
+    impl_storable_unbounded,
     storage::prelude::*,
 };
 use std::cell::RefCell;
-
-mod records;
 
 pub use records::{
     ActiveDelegationProofRecord, ChainKeyAlgorithmRecord, ChainKeyBatchHeaderRecord,
@@ -50,9 +44,7 @@ fn init_local_application_authorization_state()
         Cell::init(
             crate::ic_memory_key!(
                 authority = CANIC_CORE_MEMORY_AUTHORITY,
-                key = "canic.core.auth.local_application_authorization.state.v1",
-                ty = LocalApplicationAuthorizationState,
-                id = LOCAL_APPLICATION_AUTHORIZATION_STATE_ID
+                key = "canic.core.auth.local_application_authorization.state.v1"
             ),
             LocalApplicationAuthorizationStateRecord::default(),
         )
@@ -69,9 +61,7 @@ fn init_delegated_token_issuer_state()
         Cell::init(
             crate::ic_memory_key!(
                 authority = CANIC_CORE_MEMORY_AUTHORITY,
-                key = "canic.core.auth.delegated_token_issuer.state.v1",
-                ty = DelegatedTokenIssuerState,
-                id = DELEGATED_TOKEN_ISSUER_STATE_ID
+                key = "canic.core.auth.delegated_token_issuer.state.v1"
             ),
             DelegatedTokenIssuerStateRecord::default(),
         )
@@ -88,9 +78,7 @@ fn init_root_delegation_state() -> Cell<RootDelegationStateRecord, RuntimeMemory
         Cell::init(
             crate::ic_memory_key!(
                 authority = CANIC_CORE_MEMORY_AUTHORITY,
-                key = "canic.core.auth.root_delegation.state.v1",
-                ty = RootDelegationState,
-                id = ROOT_DELEGATION_STATE_ID
+                key = "canic.core.auth.root_delegation.state.v1"
             ),
             RootDelegationStateRecord::default(),
         )

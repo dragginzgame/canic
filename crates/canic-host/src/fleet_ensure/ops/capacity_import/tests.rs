@@ -1,8 +1,7 @@
 //! Review digests bind authority, destructive dispositions and debit allowances.
 
 use super::*;
-use crate::fleet_ensure::policy::capacity_import::tests::root_budget;
-use crate::fleet_ensure::policy::capacity_import::tests::{plan, principal};
+use crate::fleet_ensure::policy::capacity_import::tests::{plan, principal, root_budget};
 
 #[test]
 fn review_encoding_preserves_large_cycle_amounts_and_exact_approval() {
@@ -97,7 +96,7 @@ fn capacity_import_does_not_infer_missing_module_authority_or_wrap_versions() {
 
 #[test]
 fn capacity_import_root_reservation_preserves_reviewed_authority_and_budget() {
-    use canic_core::dto::pool_import::{
+    use canic_contracts::dto::pool_import::{
         PoolImportPhase, PoolImportSourceProgress, PoolImportStatus,
     };
     let plan = plan();

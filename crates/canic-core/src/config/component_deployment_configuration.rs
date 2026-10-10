@@ -15,13 +15,12 @@ use crate::{
         canonical::CanonicalEncoder, schema::ConfigModel,
     },
     dto::component_deployment::ProtectedComponentDeployment,
-    ids::{
-        ComponentBinding, ComponentDeploymentConfigurationDigest, ComponentGroupDeploymentId,
-        ComponentGroupMemberPath, ComponentGroupSpecId, ComponentSpecId,
-    },
 };
-
 use candid::CandidType;
+use canic_contracts::ids::{
+    ComponentBinding, ComponentDeploymentConfigurationDigest, ComponentGroupDeploymentId,
+    ComponentGroupMemberPath, ComponentGroupSpecId, ComponentSpecId,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error as ThisError;

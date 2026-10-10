@@ -1,25 +1,18 @@
 //! Reuse the Coordinator's bounded funding status while binding every Root to the reviewed Registry.
 
 use super::{QUERY_DEADLINE, ReleaseFundingError, ReleaseFundingStage, decode_response};
-use candid::{CandidType, Principal};
-use canic_control_plane::dto::fleet_coordinator::CoordinatorFundingStatusResponse;
-use canic_core::{
-    dto::fleet_registry::FleetRegistry, protocol,
-    shared_support::fleet_funding_policy::fleet_subnet_root_funding_policy_hash,
+use candid::Principal;
+use canic_contracts::{
+    dto::{
+        fleet_coordinator::CoordinatorFundingStatusResponse,
+        fleet_registry::FleetRegistry,
+        wire::projection::release_coordinator_funding::{Request, Response},
+    },
+    protocol,
 };
+use canic_core::shared_support::fleet_funding_policy::fleet_subnet_root_funding_policy_hash;
 use ic_agent::Agent;
-use serde::Deserialize;
 use std::collections::BTreeSet;
-
-#[derive(CandidType)]
-enum Request {
-    Funding,
-}
-
-#[derive(CandidType, Deserialize)]
-enum Response {
-    Funding(Box<CoordinatorFundingStatusResponse>),
-}
 
 pub(super) async fn collect(
     agent: &Agent,

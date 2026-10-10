@@ -13,19 +13,18 @@ use crate::release_set::{
     fixture::{FixtureArtifactError, FixtureArtifactManifest},
     valid_package_name, validate_release_artifact_relative_path,
 };
-use std::collections::{BTreeMap, BTreeSet};
-
+use canic_contracts::ids::{
+    CanisterRole, ComponentSpecId, ComponentTopologyDigest, FleetSubnetRootBinding, ReleaseBuildId,
+    ReleaseSetDigest,
+};
 use canic_core::{
     bootstrap::compiled::{ComponentTopology, ComponentTopologyError},
     cdk::utils::hash::decode_hex,
-    ids::{
-        CanisterRole, ComponentSpecId, ComponentTopologyDigest, FleetSubnetRootBinding,
-        ReleaseBuildId, ReleaseSetDigest,
-    },
     role_contract::ProtocolProfileDigest,
 };
 use serde::{Deserialize, Serialize};
 use sha2_host::{Digest, Sha256};
+use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;
 
 pub use persistence::load_retained_application_artifact_union;
@@ -306,14 +305,16 @@ pub struct FleetSubnetRootReleaseSetManifest {
     pub release_build_id: ReleaseBuildId,
     pub component_topology_digest: ComponentTopologyDigest,
     pub entries: Vec<FleetSubnetRootReleaseSetEntry>,
-    pub fixtures: Vec<canic_core::dto::root_store::RootStoreFixture>,
+    pub fixtures: Vec<canic_contracts::dto::root_store::RootStoreFixture>,
 }
 
 impl FleetSubnetRootReleaseSetManifest {
     /// Project this host authority into the passive runtime decoding shape.
     #[must_use]
-    pub fn root_store_manifest(&self) -> canic_core::dto::root_store::RootStoreReleaseSetManifest {
-        use canic_core::dto::root_store::{
+    pub fn root_store_manifest(
+        &self,
+    ) -> canic_contracts::dto::root_store::RootStoreReleaseSetManifest {
+        use canic_contracts::dto::root_store::{
             RootStoreArtifact, RootStoreReleaseSetEntry, RootStoreReleaseSetEntryKind,
             RootStoreReleaseSetManifest,
         };
@@ -372,7 +373,7 @@ impl FleetSubnetRootReleaseSetManifest {
 
     fn project_for_root(
         topology: &ComponentTopology,
-        component_admissions: &[canic_core::ids::ComponentSpecAdmission],
+        component_admissions: &[canic_contracts::ids::ComponentSpecAdmission],
         component_topology_digest: ComponentTopologyDigest,
         maximum_wasm_store_bytes: u64,
         union: &ApplicationArtifactUnion,
@@ -445,7 +446,7 @@ impl FleetSubnetRootReleaseSetManifest {
     fn validate_for_root(
         &self,
         topology: &ComponentTopology,
-        component_admissions: &[canic_core::ids::ComponentSpecAdmission],
+        component_admissions: &[canic_contracts::ids::ComponentSpecAdmission],
         component_topology_digest: ComponentTopologyDigest,
         maximum_wasm_store_bytes: u64,
         union: &ApplicationArtifactUnion,
@@ -924,13 +925,13 @@ fn expected_projection_entries(
 fn project_fixtures(
     topology: &ComponentTopology,
     fixtures: &FixtureArtifactManifest,
-) -> Vec<canic_core::dto::root_store::RootStoreFixture> {
+) -> Vec<canic_contracts::dto::root_store::RootStoreFixture> {
     let roles = topology_roles(topology);
     fixtures
         .entries
         .iter()
         .filter(|entry| roles.contains(&entry.role))
-        .map(|entry| canic_core::dto::root_store::RootStoreFixture {
+        .map(|entry| canic_contracts::dto::root_store::RootStoreFixture {
             role: entry.role.clone(),
             content_id: entry.content_id,
             descriptor: entry.descriptor.clone(),

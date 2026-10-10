@@ -19,7 +19,7 @@ ignored = ["serde_bytes"]
 [features]
 default = []
 sharding = []
-auth-chain-key-ecdsa = ["dep:k256"]
+auth-chain-key-ecdsa = ["dep:k256", "ic-auth/token-verification"]
 auth-chain-key-root-sign = ["auth-chain-key-ecdsa", "auth-root-delegation-state"]
 auth-delegated-token-issuer-state = []
 auth-root-canister-sig-create = ["dep:ic-canister-sig-creation", "dep:ic-certification"]
@@ -35,16 +35,10 @@ auth-local-application-authorization = ["auth-delegated-token-verify"]
 auth-root-delegation-state = []
 internal-test-fixtures = []
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-ic-secp256k1 = { workspace = true }
-proc-macro2 = { workspace = true }
-quote = { workspace = true }
-serde_path_to_error = { workspace = true }
-toml = { workspace = true }
-
 [dependencies]
 async-trait = { workspace = true }
 candid = { workspace = true }
+canic-contracts.workspace = true
 ciborium = { workspace = true }
 ic-auth = { workspace = true }
 ic-auth-protocol-types = { workspace = true }
@@ -62,12 +56,20 @@ serde_bytes = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+ic-secp256k1 = { workspace = true }
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+serde_path_to_error = { workspace = true }
+toml = { workspace = true }
+
 [build-dependencies]
 candid = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
 futures = { workspace = true }
+ic-auth = { workspace = true, features = ["token-verification"] }
 k256 = { workspace = true }
 syn = { workspace = true, features = ["full", "visit"] }
 

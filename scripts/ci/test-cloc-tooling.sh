@@ -1,11 +1,21 @@
 #!/usr/bin/env bash
+# Shared companions: scripts/dev/cloc-tooling.pl scripts/ci/verify-file-checksum.sh
 set -euo pipefail
 ROOT="$0"
 [[ "$ROOT" == /* ]] || ROOT="$PWD/$ROOT"
 ROOT="$(cd -P "${ROOT%/*}/../.." && printf '%s/.' "$PWD")"
 ROOT="${ROOT%/.}"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/cloc-tooling-test.XXXXXX")"
-trap 'if [[ $? == 0 ]]; then rm -rf "$fixture"; else printf "Failed tooling LOC fixture retained: %s\n" "$fixture" >&2; fi' EXIT
+# Bash 3.2 can enter EXIT with status zero after nounset; require completion too.
+fixture_complete=false
+finish() {
+    local status=$?
+    [[ "$fixture_complete" == true || "$status" != 0 ]] || status=1
+    if [[ "$status" == 0 ]]; then rm -rf "$fixture"
+    else printf "Failed tooling LOC fixture retained: %s\n" "$fixture" >&2; fi
+    exit "$status"
+}
+trap finish EXIT
 parent="$fixture/parent projects"
 repo="$parent/a consumer"
 mkdir -p "$parent"
@@ -42,12 +52,49 @@ jq -e '
   .partial == false and (.repositories | length) == 2 and
   .totals == {ci_loc:5,other_loc:4,total_loc:9,shared_loc:1,local_loc:8,data_lines:4} and
   .repositories[0].dirty == true and
+  .repositories[0].snapshot_manifests[0].version == null and
+  .repositories[0].snapshot_manifests[0].integrity == "ok" and
   (.repositories[0].skipped_files | length) == 0 and
   (.repositories[0].files | map(.path) | index("src/build.rs")) == null and
   .repositories[1].totals.total_loc == 0
 ' "$fixture/counts.json" >/dev/null
 perl "$ROOT/scripts/dev/cloc-tooling.pl" "$parent" > "$fixture/counts.txt"
-[[ "$(awk 'END { print $1,$2,$3,$4,$5,$6,$7 }' "$fixture/counts.txt")" == 'TOTAL 5 4 9 1 8 4' ]]
+[[ "$(awk 'END { print $1,$2,$3,$4,$5,$6,$7 }' "$fixture/counts.txt")" == 'TOTAL 5 4 9 1 8 4' ]] || exit 1
+grep -F "unrecorded@${revision:0:12}" "$fixture/counts.txt" >/dev/null
+printf '# version\t0.2.8\n' >> "$repo/.shared-tooling.snapshot"
+perl "$ROOT/scripts/dev/cloc-tooling.pl" --json "$parent" > "$fixture/version.json"
+jq -e '.repositories[0].snapshot_manifests[0].version == "0.2.8"' "$fixture/version.json" >/dev/null
+perl "$ROOT/scripts/dev/cloc-tooling.pl" "$parent" > "$fixture/version.txt"
+grep -F "0.2.8@${revision:0:12}" "$fixture/version.txt" >/dev/null
+cp "$repo/.shared-tooling.snapshot" "$fixture/version-manifest"
+for annotation in $'# version\t0.02.8' $'# version\t' $'# version\t0.2.8\textra' $'# version\t0.2.8\n# version\t0.2.8'; do
+    sed '/^# version/d' "$fixture/version-manifest" > "$repo/.shared-tooling.snapshot"
+    printf '%s\n' "$annotation" >> "$repo/.shared-tooling.snapshot"
+    if perl "$ROOT/scripts/dev/cloc-tooling.pl" --json "$parent" > "$fixture/bad-version.json" 2> "$fixture/bad-version.err"; then exit 1; fi
+    jq -e '.partial and (.repositories[0].error | contains("version annotation"))' "$fixture/bad-version.json" >/dev/null
+done
+cp "$fixture/version-manifest" "$repo/.shared-tooling.snapshot"
+# Integrity includes selected documents and missing/linked files outside LOC.
+mkdir "$repo/docs"
+printf 'Selected documentation.\n' > "$repo/docs/guide.md"
+doc_hash="$(bash "$ROOT/scripts/ci/verify-file-checksum.sh" --print sha256 "$repo/docs/guide.md")"
+printf 'file\t%s\t-\tdocs/guide.md\n' "$doc_hash" >> "$repo/.shared-tooling.snapshot"
+for state in valid changed missing linked mode; do
+    rm -f "$repo/docs/guide.md"
+    printf 'Selected documentation.\n' > "$repo/docs/guide.md"
+    case "$state" in
+        changed) printf 'Changed.\n' >> "$repo/docs/guide.md" ;;
+        missing) rm "$repo/docs/guide.md" ;;
+        linked) rm "$repo/docs/guide.md"; ln -s "$repo/scripts/ci/a.sh" "$repo/docs/guide.md" ;;
+        mode) chmod +x "$repo/docs/guide.md" ;;
+    esac
+    perl "$ROOT/scripts/dev/cloc-tooling.pl" --json "$parent" > "$fixture/integrity-$state.json" 2> "$fixture/integrity-$state.err"
+    jq -e --arg state "$state" '.totals.total_loc == 9 and
+      .repositories[0].snapshot_manifests[0].integrity == (if $state == "valid" then "ok" else "drift" end) and
+      .repositories[0].drifted_files == (if $state == "valid" then [] else ["docs/guide.md"] end)' "$fixture/integrity-$state.json" >/dev/null
+done
+cp "$fixture/version-manifest" "$repo/.shared-tooling.snapshot"
+rm "$repo/docs/guide.md"
 # Custom manifest placement retains checkout-relative records for every source URL
 # admitted by the canonical verifier. It must not relocate records to config/.
 mkdir "$repo/config"
@@ -62,6 +109,12 @@ rm "$repo/config/.shared-tooling-extra.snapshot"
 mv "$repo/config/.shared-tooling.snapshot" "$repo/.shared-tooling.snapshot"
 # Multiple manifests and nested snapshots retain their real shared ownership.
 sed 's|scripts/ci/a.sh|scripts/ci/b.sh|' "$repo/.shared-tooling.snapshot" > "$repo/.shared-tooling-extra.snapshot"
+# Independent bundles can select different versions and commits; keep both.
+sed -e 's/0.2.8/0.1.14/' -e "s/$revision/1111111111111111111111111111111111111111/" \
+    "$repo/.shared-tooling-extra.snapshot" > "$fixture/other-version"
+cp "$fixture/other-version" "$repo/.shared-tooling-extra.snapshot"
+perl "$ROOT/scripts/dev/cloc-tooling.pl" "$parent" > "$fixture/mixed.txt"
+grep -F "0.1.14@111111111111,0.2.8@${revision:0:12}" "$fixture/mixed.txt" >/dev/null
 # Dotted names are part of the advertised .shared-tooling*.snapshot family.
 # Overlapping records count once, and still reject conflicting declarations.
 cat "$repo/.shared-tooling.snapshot" > "$repo/.shared-tooling.archives.snapshot"
@@ -96,7 +149,7 @@ printf 'printf "changed\\n"\n' >> "$repo/scripts/ci/a.sh"
 perl "$ROOT/scripts/dev/cloc-tooling.pl" --json "$parent" > "$fixture/drift.json" 2> "$fixture/drift.err"
 jq -e '.totals.shared_loc == 2 and .totals.local_loc == 10 and
   .repositories[0].drifted_files == ["scripts/ci/a.sh"]' "$fixture/drift.json" >/dev/null
-[[ -s "$fixture/drift.err" ]]
+[[ -s "$fixture/drift.err" ]] || exit 1
 # A mode-only difference must not be labelled an intact snapshot copy.
 cp "$repo/scripts/ci/b.sh" "$repo/scripts/ci/a.sh"
 chmod +x "$repo/scripts/ci/a.sh"
@@ -131,7 +184,7 @@ jq -e '.partial == false and .repositories[0].head == null and
   (.repositories[0].files | map(.path) | sort) == ["bin/local.pl", "bin/runner"]' "$fixture/bootstrap.json" >/dev/null
 perl "$ROOT/scripts/dev/cloc-tooling.pl" "$bootstrap_parent" > "$fixture/bootstrap.txt" 2> "$fixture/bootstrap.err"
 grep -F 'uncommitted bootstrap' "$fixture/bootstrap.err" >/dev/null
-[[ "$(awk 'END { print $1,$4 }' "$fixture/bootstrap.txt")" == 'TOTAL 3' ]]
+[[ "$(awk 'END { print $1,$4 }' "$fixture/bootstrap.txt")" == 'TOTAL 3' ]] || exit 1
 # An existing corrupt branch reference is not a harmless first-commit state.
 git -C "$bootstrap" symbolic-ref HEAD refs/heads/broken
 printf 'not-an-object\n' > "$bootstrap/.git/refs/heads/broken"
@@ -139,3 +192,4 @@ if perl "$ROOT/scripts/dev/cloc-tooling.pl" --json "$bootstrap_parent" \
     > "$fixture/broken.json" 2> "$fixture/broken.err"; then exit 1; fi
 jq -e '.partial == true and .repositories[0].error != null' "$fixture/broken.json" >/dev/null
 echo 'Tooling LOC, source/data separation and snapshot ownership tests passed'
+fixture_complete=true

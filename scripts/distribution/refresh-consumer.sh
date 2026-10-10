@@ -36,6 +36,21 @@ cleanup() {
 
 trap cleanup EXIT
 
+# Check before command substitution can trim a pathname, and again after
+# resolving aliases. Absolute cd inputs avoid CDPATH lookup and output.
+resolve_directory() {
+    local path="$1" resolved
+    [[ "$path" == /* ]] || path="$PWD/$path"
+    [[ "$path" != *$'\n'* && "$path" != *$'\r'* ]] ||
+        fail "directory paths must not contain LF or CR characters"
+    resolved="$(cd -P "$path" 2>/dev/null && printf '%s/.' "$PWD")" ||
+        fail "directory does not exist: $path"
+    resolved="${resolved%/.}"
+    [[ "$resolved" != *$'\n'* && "$resolved" != *$'\r'* ]] ||
+        fail "resolved directory paths must not contain LF or CR characters"
+    printf '%s\n' "$resolved"
+}
+
 validate_relative_path() {
     local path="$1"
 
@@ -44,7 +59,7 @@ validate_relative_path() {
     *'/../'* | *'/./'* | *'//'*) fail "path is not canonical: $path" ;;
     esac
     case "$path" in
-    *$'\n'* | *$'\t'*) fail "path contains a forbidden control character" ;;
+    *$'\n'* | *$'\r'* | *$'\t'*) fail "path contains a forbidden control character" ;;
     esac
 }
 
@@ -150,21 +165,22 @@ done
 [[ -n "$CONSUMER_ROOT" ]] || { usage; exit 2; }
 validate_relative_path "$MANIFEST_PATH"
 
-SOURCE_ROOT="$(cd "$SOURCE_ROOT" 2>/dev/null && pwd -P)" ||
-    fail "source checkout does not exist: $SOURCE_ROOT"
-CONSUMER_ROOT="$(cd "$CONSUMER_ROOT" 2>/dev/null && pwd -P)" ||
-    fail "consumer repository does not exist: $CONSUMER_ROOT"
+SCRIPT_ROOT="$(resolve_directory "$SCRIPT_ROOT")"
+SOURCE_ROOT="$(resolve_directory "$SOURCE_ROOT")"
+CONSUMER_ROOT="$(resolve_directory "$CONSUMER_ROOT")"
 [[ "$CONSUMER_ROOT" != "/" ]] || fail "consumer repository may not be the filesystem root"
 [[ "$SOURCE_ROOT" != "$CONSUMER_ROOT" ]] || fail "source and consumer repositories must differ"
 
-source_top="$(git -C "$SOURCE_ROOT" rev-parse --show-toplevel 2>/dev/null)" ||
+source_top="$(git -C "$SOURCE_ROOT" rev-parse --show-toplevel 2>/dev/null && printf '.')" ||
     fail "source is not a Git checkout"
-source_top="$(cd "$source_top" && pwd -P)"
+source_top="${source_top%.}"
+source_top="$(resolve_directory "${source_top%$'\n'}")"
 [[ "$source_top" == "$SOURCE_ROOT" ]] || fail "--source must name the checkout root"
 
-consumer_top="$(git -C "$CONSUMER_ROOT" rev-parse --show-toplevel 2>/dev/null)" ||
+consumer_top="$(git -C "$CONSUMER_ROOT" rev-parse --show-toplevel 2>/dev/null && printf '.')" ||
     fail "consumer is not a Git checkout"
-consumer_top="$(cd "$consumer_top" && pwd -P)"
+consumer_top="${consumer_top%.}"
+consumer_top="$(resolve_directory "${consumer_top%$'\n'}")"
 [[ "$consumer_top" == "$CONSUMER_ROOT" ]] || fail "--consumer must name the checkout root"
 
 source_status="$(git -C "$SOURCE_ROOT" status --porcelain --untracked-files=all)"
@@ -172,6 +188,15 @@ source_status="$(git -C "$SOURCE_ROOT" status --porcelain --untracked-files=all)
 
 source_revision="$(git -C "$SOURCE_ROOT" rev-parse HEAD)"
 [[ "$source_revision" =~ ^[0-9a-f]{40,64}$ ]] || fail "source revision is malformed"
+# Read the display version from the same immutable source as the payload, never
+# the working tree or the consumer's own VERSION. Preserve invalid extra lines.
+committed_mode "$source_revision" VERSION >/dev/null || fail "source VERSION must be a committed regular file"
+source_version="$(git -C "$SOURCE_ROOT" cat-file blob "$source_revision:VERSION" && printf '.')" ||
+    fail "cannot read committed source VERSION"
+source_version="${source_version%.}"
+source_version="${source_version%$'\n'}"
+[[ "$source_version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] ||
+    fail "source VERSION must contain a canonical stable version"
 source_remote="$(git -C "$SOURCE_ROOT" remote get-url origin)" ||
     fail "source checkout has no origin remote"
 [[ -n "$source_remote" ]] || fail "source origin remote is empty"
@@ -200,9 +225,15 @@ if [[ -e "$manifest" ]]; then
     manifest_format_count=0
     manifest_source_count=0
     manifest_revision_count=0
+    manifest_version_count=0
     manifest_source=""
     while IFS=$'\t' read -r record first second third extra || [[ -n "$record" ]]; do
         case "$record" in
+        '# version')
+            [[ "$first" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ && -z "$second" && -z "$third" && -z "$extra" ]] ||
+                fail "existing manifest has a malformed version annotation"
+            manifest_version_count=$((manifest_version_count + 1))
+            ;;
         '' | \#*) continue ;;
         format)
             [[ "$first" == "1" && -z "$second" && -z "$third" && -z "$extra" ]] ||
@@ -234,6 +265,7 @@ if [[ -e "$manifest" ]]; then
     [[ "$manifest_format_count" -eq 1 ]] || fail "existing manifest must contain one format record"
     [[ "$manifest_source_count" -eq 1 ]] || fail "existing manifest must contain one source record"
     [[ "$manifest_revision_count" -eq 1 ]] || fail "existing manifest must contain one revision record"
+    [[ "$manifest_version_count" -le 1 ]] || fail "existing manifest has duplicate version annotations"
     [[ "$manifest_source" == "$source_remote" ]] ||
         fail "source remote differs from the existing manifest"
 else
@@ -264,7 +296,7 @@ for index in "${!files[@]}"; do
     source_file="$SOURCE_ROOT/$path"
     [[ -f "$source_file" && ! -L "$source_file" ]] ||
         fail "source file is missing or symlinked: $path"
-    source_parent="$(cd "$(dirname "$source_file")" && pwd -P)"
+    source_parent="$(resolve_directory "${source_file%/*}")"
     case "$source_parent/" in
     "$SOURCE_ROOT/"*) ;;
     *) fail "source file escapes the source checkout: $path" ;;
@@ -316,6 +348,7 @@ done
 staged_manifest="$STAGING_DIR/manifest"
 {
     echo "# Shared Tooling snapshot v1"
+    printf '# version\t%s\n' "$source_version"
     printf 'format\t1\n'
     printf 'source\t%s\n' "$source_remote"
     printf 'revision\t%s\n' "$source_revision"
@@ -396,4 +429,4 @@ bash "$staged_files/scripts/ci/verify-shared-tooling-snapshot.sh" \
     --consumer "$CONSUMER_ROOT" \
     --manifest "$MANIFEST_PATH"
 
-echo "shared-tooling snapshot refreshed: ${#files[@]} file(s) from $source_revision"
+echo "shared-tooling snapshot refreshed: ${#files[@]} file(s) from $source_version ($source_revision)"

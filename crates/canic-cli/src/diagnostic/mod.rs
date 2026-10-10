@@ -13,7 +13,7 @@ use crate::{
     cli::clap::{flag_arg, parse_matches, required_string, value_arg},
     support::build_lock::render_inspection,
 };
-use canic_core::diagnostics::DiagnosticCode;
+use canic_contracts::diagnostics::DiagnosticCode;
 use canic_host::diagnostics::{DiagnosticLookup, lookup_diagnostic};
 use clap::Command;
 use std::{ffi::OsString, path::PathBuf};

@@ -2,11 +2,12 @@
 
 use candid::Principal;
 #[cfg(feature = "root-control-plane")]
-use canic_core::dto::fixture_provisioning::FixtureTargetBinding;
+use canic_contracts::dto::fixture_provisioning::FixtureTargetBinding;
 #[cfg(feature = "wasm-store-canister")]
-use canic_core::ids::ComponentBinding;
+use canic_contracts::ids::ComponentBinding;
 
 /// Existing Component authority and the exact Component or child caller.
+
 #[cfg(feature = "wasm-store-canister")]
 pub struct FixtureTargetAuthority<'a> {
     pub component: &'a ComponentBinding,

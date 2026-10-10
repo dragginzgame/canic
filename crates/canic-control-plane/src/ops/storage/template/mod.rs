@@ -4,16 +4,11 @@ mod chunked;
 mod gc;
 
 #[cfg(feature = "wasm-store-canister")]
-pub use chunked::TemplateChunkedOps;
-#[cfg(feature = "wasm-store-canister")]
-pub use gc::WasmStoreGcOps;
-
-#[cfg(feature = "wasm-store-canister")]
 use crate::dto::template::WasmStoreCatalogEntryResponse;
-use crate::schema::WasmStoreConfig;
 use crate::{
     dto::template::{TemplateManifestInput, TemplateManifestResponse},
     ids::{TemplateChunkKey, TemplateId, TemplateReleaseKey},
+    schema::WasmStoreConfig,
     storage::stable::template::{TemplateManifestRecord, TemplateManifestStateStore},
 };
 #[cfg(feature = "root-control-plane")]
@@ -25,15 +20,18 @@ use crate::{
     ids::{CanisterRole, TemplateVersion, WasmStoreBinding, WasmStoreGcStatus},
     storage::stable::template::TemplateManifestEntryRecord,
 };
+use canic_contracts::diagnostics::{RegisteredDiagnosticCode, codes};
+use canic_core::control_plane_support::error::InternalError;
 #[cfg(feature = "root-control-plane")]
 use canic_core::control_plane_support::format::byte_size;
-use canic_core::{
-    control_plane_support::error::InternalError,
-    diagnostics::{RegisteredDiagnosticCode, codes},
-};
 #[cfg(feature = "root-control-plane")]
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;
+
+#[cfg(feature = "wasm-store-canister")]
+pub use chunked::TemplateChunkedOps;
+#[cfg(feature = "wasm-store-canister")]
+pub use gc::WasmStoreGcOps;
 
 ///
 /// TemplateManifestOpsError
@@ -618,7 +616,7 @@ mod tests {
 
         assert_eq!(
             err.public_error().code(),
-            canic_core::diagnostics::codes::DIGEST_CONFLICT.raw_code()
+            canic_contracts::diagnostics::codes::DIGEST_CONFLICT.raw_code()
         );
     }
 
@@ -635,7 +633,7 @@ mod tests {
 
         assert_eq!(
             err.public_error().code(),
-            canic_core::diagnostics::codes::CAPACITY_LIMIT.raw_code()
+            canic_contracts::diagnostics::codes::CAPACITY_LIMIT.raw_code()
         );
     }
 
@@ -666,7 +664,7 @@ mod tests {
 
         assert_eq!(
             err.public_error().code(),
-            canic_core::diagnostics::codes::CAPACITY_LIMIT.raw_code()
+            canic_contracts::diagnostics::codes::CAPACITY_LIMIT.raw_code()
         );
     }
 

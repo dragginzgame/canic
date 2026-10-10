@@ -2,25 +2,24 @@ pub mod nonroot;
 pub mod root;
 
 pub mod metrics {
-    use crate::{
-        ids::CanisterRole,
-        ops::runtime::metrics::{
-            canister_ops::CanisterOpsMetrics, lifecycle::LifecycleMetrics,
-            wasm_store::WasmStoreMetrics,
-        },
+    use crate::ops::runtime::metrics::{
+        canister_ops::CanisterOpsMetrics, lifecycle::LifecycleMetrics, wasm_store::WasmStoreMetrics,
+    };
+    use canic_contracts::ids::CanisterRole;
+
+    pub use crate::{
+        domain::metrics::CanisterOpsMetricOperation, domain::metrics::CanisterOpsMetricOutcome,
+        domain::metrics::CanisterOpsMetricReason,
     };
 
-    pub use crate::domain::metrics::{
-        CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
+    pub use crate::{
+        domain::metrics::LifecycleMetricOutcome, domain::metrics::LifecycleMetricPhase,
+        domain::metrics::LifecycleMetricRole, domain::metrics::LifecycleMetricStage,
     };
 
-    pub use crate::domain::metrics::{
-        LifecycleMetricOutcome, LifecycleMetricPhase, LifecycleMetricRole, LifecycleMetricStage,
-    };
-
-    pub use crate::domain::metrics::{
-        WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason,
-        WasmStoreMetricSource,
+    pub use crate::{
+        domain::metrics::WasmStoreMetricOperation, domain::metrics::WasmStoreMetricOutcome,
+        domain::metrics::WasmStoreMetricReason, domain::metrics::WasmStoreMetricSource,
     };
 
     ///
@@ -123,9 +122,9 @@ pub mod metrics {
             WasmStoreMetricsApi,
         };
         use crate::{
-            domain::metrics::MetricsKind, dto::metrics::MetricValue, ids::CanisterRole,
-            ops::runtime::metrics,
+            domain::metrics::MetricsKind, dto::metrics::MetricValue, ops::runtime::metrics,
         };
+        use canic_contracts::ids::CanisterRole;
 
         // Verify the facade records canister operation metrics with public labels.
         #[test]

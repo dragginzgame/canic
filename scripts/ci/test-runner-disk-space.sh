@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Shared companions: scripts/ci/check-runner-disk-space.sh
 set -euo pipefail
 
 ROOT="$0"
@@ -6,7 +7,16 @@ ROOT="$0"
 ROOT="$(cd -P "${ROOT%/*}/../.." && printf '%s/.' "$PWD")"
 ROOT="${ROOT%/.}"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/runner-disk-test.XXXXXX")"
-trap 'if [[ $? == 0 ]]; then rm -rf "$fixture"; else printf "Disk fixtures retained: %s\n" "$fixture" >&2; fi' EXIT
+# Bash 3.2 can enter EXIT with status zero after nounset; require completion too.
+fixture_complete=false
+finish() {
+    local status=$?
+    [[ "$fixture_complete" == true || "$status" != 0 ]] || status=1
+    if [[ "$status" == 0 ]]; then rm -rf "$fixture"
+    else printf "Disk fixtures retained: %s\n" "$fixture" >&2; fi
+    exit "$status"
+}
+trap finish EXIT
 checker="$ROOT/scripts/ci/check-runner-disk-space.sh"
 mkdir -p "$fixture/bin" "$fixture/workspace [one]" "$fixture/-selected"
 printf 'retained build/evidence input\n' > "$fixture/workspace [one]/artifact"
@@ -20,7 +30,7 @@ export DISK_FIXTURE="$fixture"
 cat > "$fixture/bin/df" <<'SCRIPT'
 #!/usr/bin/env bash
 set -euo pipefail
-[[ "$LC_ALL" == C && $# == 2 && "$1" == -Pk ]]
+[[ "$LC_ALL" == C && $# == 2 && "$1" == -Pk ]] || exit 1
 printf '%s\n' "$2" > "$DISK_FIXTURE/df-path"
 cat "$DISK_FIXTURE/df-output"
 exit "${DISK_DF_STATUS:-0}"
@@ -28,7 +38,7 @@ SCRIPT
 cat > "$fixture/bin/du" <<'SCRIPT'
 #!/usr/bin/env bash
 set -euo pipefail
-[[ "$LC_ALL" == C && $# == 2 && "$1" == -sk ]]
+[[ "$LC_ALL" == C && $# == 2 && "$1" == -sk ]] || exit 1
 printf '%s\n' "$2" >> "$DISK_FIXTURE/du-paths"
 printf '4\t%s\n' "$2"
 exit "${DISK_DU_STATUS:-0}"
@@ -54,7 +64,7 @@ capacity() {
 
 capacity 4096
 expect_status 0 --path 'workspace [one]' --min-free-mib 4 --label 'before build'
-[[ "$(< "$fixture/df-path")" == './workspace [one]' && ! -e "$fixture/du-paths" ]]
+[[ "$(< "$fixture/df-path")" == './workspace [one]' && ! -e "$fixture/du-paths" ]] || exit 1
 grep -F 'before build: 4 MiB available; 4 MiB required' "$fixture/output.log" > /dev/null
 capacity 4095
 expect_status 1 --path 'workspace [one]' --min-free-mib 4
@@ -70,10 +80,10 @@ capacity 4096
 # du warnings never mask insufficient capacity or reject a valid capacity gate.
 export DISK_DU_STATUS=7
 expect_status 1 --path -selected --min-free-mib 5 --diagnostic-path -selected
-[[ "$(< "$fixture/df-path")" == './-selected' ]]
+[[ "$(< "$fixture/df-path")" == './-selected' ]] || exit 1
 grep -F 'warning: disk usage unavailable' "$fixture/output.log" > /dev/null
 expect_status 0 --path . --min-free-mib 4 --diagnostic-path 'workspace [one]' --diagnostic-path missing
-[[ "$(wc -l < "$fixture/du-paths" | tr -d ' ')" == 3 ]]
+[[ "$(wc -l < "$fixture/du-paths" | tr -d ' ')" == 3 ]] || exit 1
 grep -Fx './workspace [one]' "$fixture/du-paths" > /dev/null
 grep -Fx './missing' "$fixture/du-paths" > /dev/null
 unset DISK_DU_STATUS
@@ -104,5 +114,6 @@ expect_status 2 --path missing --min-free-mib 0
 expect_status 2 --path . --min-free-mib 0 --label $'two\nlines'
 expect_status 2 --path . --min-free-mib 0 --diagnostic-path $'tab\tpath'
 expect_status 2 --path . --min-free-mib 0 --unknown
-[[ "$(< "$fixture/workspace [one]/artifact")" == 'retained build/evidence input' ]]
+[[ "$(< "$fixture/workspace [one]/artifact")" == 'retained build/evidence input' ]] || exit 1
 echo 'Runner disk capacity checks passed'
+fixture_complete=true

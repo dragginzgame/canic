@@ -2,7 +2,8 @@
 
 use crate::observatory::view::ObservationFailure;
 use ic_host_process::tool::{
-    ExecutionFailure, InvalidInvocation, OutputLimits, ToolError, capture_command,
+    ExecutionEvidence, ExecutionFailure, InvalidInvocation, OutputLimit, OutputLimits, ToolError,
+    capture_command,
 };
 use std::{process::Command, time::Duration};
 
@@ -14,11 +15,12 @@ pub fn query_output(
     let output = capture_command(
         command,
         OutputLimits {
-            stdout_bytes: maximum,
-            stderr_bytes: maximum,
-            timeout,
+            stdout: OutputLimit::Terminate(maximum),
+            stderr: OutputLimit::Terminate(maximum),
+            timeout: Some(timeout),
         },
     )
+    .and_then(ExecutionEvidence::require_complete)
     .map_err(|error| observation_failure(&error))?;
     String::from_utf8(output.stdout).map_err(|_| ObservationFailure::InvalidResponse)
 }
@@ -69,10 +71,7 @@ mod tests {
                     stderr: b"private diagnostics".to_vec(),
                     ..ExecutionEvidence::default()
                 },
-                term_error: None,
-                group_error: None,
-                kill_error: None,
-                wait_error: None,
+                cleanup: None,
             }));
             assert_eq!(observation_failure(&error), expected);
         }

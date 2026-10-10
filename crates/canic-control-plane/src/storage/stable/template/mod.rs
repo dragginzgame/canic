@@ -1,5 +1,6 @@
 pub mod chunked;
 pub mod gc;
+pub(in crate::storage) mod key;
 pub mod manifest;
 
 #[cfg(feature = "wasm-store-canister")]

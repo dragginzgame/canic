@@ -11,10 +11,12 @@ use crate::{
         storage::template::{TemplateChunkedOps, WasmStoreGcOps},
     },
 };
-use canic_core::{api::timer::TimerApi, control_plane_support::ops::ic::IcOps, dto::error::Error};
+use canic_contracts::dto::error::Error;
+use canic_core::{api::timer::TimerApi, control_plane_support::ops::ic::IcOps};
 use std::time::Duration;
 
 /// Authenticated Root commands select one outcome without interpreting replay as escalation.
+
 pub fn request(request: WasmStoreGcRequest) -> Result<(), Error> {
     match request.target {
         WasmStoreGcTarget::Prepared => {

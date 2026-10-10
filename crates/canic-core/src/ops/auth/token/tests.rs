@@ -4,11 +4,11 @@ use super::*;
 use crate::{
     config::schema::{CanisterAuthConfig, CanisterKind, ChainKeyRootProofConfig},
     domain::auth::MAINNET_IC_ROOT_PUBLIC_KEY_RAW,
-    ids::ComponentSpecId,
     ops::auth::delegated::chain_key::ChainKeySignatureVerificationInput,
     storage::stable::env::{Env, EnvData, EnvRecord},
     test::config::{ConfigTestBuilder, install_model_for_role},
 };
+use canic_contracts::ids::ComponentSpecId;
 use k256::ecdsa::{
     Signature as K256TestSignature, SigningKey as K256SigningKey, signature::hazmat::PrehashSigner,
 };

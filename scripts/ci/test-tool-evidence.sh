@@ -8,7 +8,16 @@ ROOT="$(cd -P "${ROOT%/*}/../.." && printf '%s/.' "$PWD")"
 ROOT="${ROOT%/.}"
 consumer="$1"; kind="$2"; pins="$3"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/tool-evidence-test.XXXXXX")"
-trap 'if [[ $? == 0 ]]; then rm -rf "$fixture"; else printf "Tool evidence fixture retained: %s\n" "$fixture" >&2; fi' EXIT
+# Bash 3.2 can enter EXIT with status zero after nounset; require completion too.
+fixture_complete=false
+finish() {
+    local status=$?
+    [[ "$fixture_complete" == true || "$status" != 0 ]] || status=1
+    if [[ "$status" == 0 ]]; then rm -rf "$fixture"
+    else printf "Tool evidence fixture retained: %s\n" "$fixture" >&2; fi
+    exit "$status"
+}
+trap finish EXIT
 active="$(readlink "$consumer/.tools/$kind")"
 candidate="$consumer/.tools/$kind-set.evidenceCandidate"
 mkdir "$candidate"
@@ -35,16 +44,16 @@ choose_evidence full "$fixture/full"
 archive "$fixture/full" "$fixture/full.tar.gz"
 mkdir "$fixture/full-unpacked"
 tar -xzf "$fixture/full.tar.gz" -C "$fixture/full-unpacked"
-[[ -d "$fixture/full-unpacked/.tools/$active" ]]
+[[ -d "$fixture/full-unpacked/.tools/$active" ]] || exit 1
 choose_evidence compact "$fixture/compact"
 archive "$fixture/compact" "$fixture/compact.tar.gz"
 mkdir "$fixture/compact-unpacked"
 tar -xzf "$fixture/compact.tar.gz" -C "$fixture/compact-unpacked"
-[[ ! -e "$fixture/compact-unpacked/.tools/$active" && -s "$fixture/compact/$kind/check.log" ]]
+[[ ! -e "$fixture/compact-unpacked/.tools/$active" && -s "$fixture/compact/$kind/check.log" ]] || exit 1
 cmp "$pins" "$fixture/compact-unpacked/compact/$kind/caller-pins"
 cmp "$candidate/payload" "$fixture/compact-unpacked/.tools/$kind-set.evidenceCandidate/payload"
-[[ -L "$fixture/compact-unpacked/.tools/$kind-set.evidenceCandidate/link" ]]
-[[ "$(perl -e 'printf "%o", (stat($ARGV[0]))[2]&0777' "$fixture/compact-unpacked/.tools/$kind-set.evidenceCandidate/payload")" == 640 ]]
+[[ -L "$fixture/compact-unpacked/.tools/$kind-set.evidenceCandidate/link" ]] || exit 1
+[[ "$(perl -e 'printf "%o", (stat($ARGV[0]))[2]&0777' "$fixture/compact-unpacked/.tools/$kind-set.evidenceCandidate/payload")" == 640 ]] || exit 1
 if [[ "$kind" == ic ]]; then
     for receipt in pins.tsv host files.sha256; do cmp "$consumer/.tools/$active/$receipt" "$fixture/compact/ic/$receipt"; done
 fi
@@ -73,7 +82,7 @@ for target in absent missing "$consumer/.tools/$active" "$active"$'\n'; do
     archive "$selection" "$selection.tar.gz"
     mkdir "$selection-unpacked"
     tar -xzf "$selection.tar.gz" -C "$selection-unpacked"
-    [[ -d "$selection-unpacked/.tools/$active" ]]
+    [[ -d "$selection-unpacked/.tools/$active" ]] || exit 1
 done
 rm -f "$consumer/.tools/$kind"
 ln -s "$active" "$consumer/.tools/$kind"
@@ -102,7 +111,7 @@ EVIDENCE_REAL_BASH="$BASH" EVIDENCE_RACE_KIND="$kind" \
 archive "$fixture/race" "$fixture/race.tar.gz"
 mkdir "$fixture/race-unpacked"
 tar -xzf "$fixture/race.tar.gz" -C "$fixture/race-unpacked"
-[[ -d "$fixture/race-unpacked/.tools/$active" && ! -e "$fixture/race/$kind/selection.txt" ]]
+[[ -d "$fixture/race-unpacked/.tools/$active" && ! -e "$fixture/race/$kind/selection.txt" ]] || exit 1
 rm "$consumer/.tools/$kind"
 ln -s "$active" "$consumer/.tools/$kind"
 rmdir "$consumer/.tools/$kind-set.evidenceRace"
@@ -121,7 +130,8 @@ output="$(sed -n 's/^path=//p' "$fixture/action-output")"
 mkdir "$fixture/action-unpacked"
 tar -xzf "$output" -C "$fixture/action-unpacked"
 cmp "$fixture/action-temp/portable-regression.log" "$fixture/action-unpacked/portable-regression.log"
-[[ ! -e "$fixture/action-unpacked/.tools/$active" ]]
+[[ ! -e "$fixture/action-unpacked/.tools/$active" ]] || exit 1
 cmp "$candidate/payload" "$fixture/action-unpacked/.tools/$kind-set.evidenceCandidate/payload"
 rm -rf "$candidate"
 echo 'Successful tool compaction, failed verification, unknown selections and actual collector passed'
+fixture_complete=true

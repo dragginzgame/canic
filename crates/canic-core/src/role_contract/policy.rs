@@ -6,7 +6,6 @@
 
 use crate::{
     config::schema::{ConfigModel, RoleDeclarationKind, RoleObservabilityConfig},
-    ids::CanisterRole,
     role_contract::{
         allocation::allocation_definition,
         catalog::{
@@ -20,6 +19,7 @@ use crate::{
         },
     },
 };
+use canic_contracts::ids::CanisterRole;
 use std::collections::{BTreeMap, BTreeSet};
 
 #[must_use]
@@ -348,10 +348,10 @@ fn materialize_allocations(
                 reason: format!("selected allocation has no definition: {key:?}"),
             });
         };
-        for memory_id in definition.memory_ids {
-            if let Some(first) = memory_owners.insert(*memory_id, key) {
-                return Err(RoleContractFinding::MemoryIdCollision {
-                    memory_id: *memory_id,
+        for stable_key in definition.memory_keys {
+            if let Some(first) = memory_owners.insert(*stable_key, key) {
+                return Err(RoleContractFinding::MemoryKeyCollision {
+                    stable_key: stable_key.to_string(),
                     first,
                     second: key,
                 });
@@ -360,7 +360,11 @@ fn materialize_allocations(
         allocations.push(ResolvedStateAllocation {
             key,
             owner: definition.owner,
-            memory_ids: definition.memory_ids.to_vec(),
+            memory_keys: definition
+                .memory_keys
+                .iter()
+                .map(ToString::to_string)
+                .collect(),
             selected_by,
         });
     }

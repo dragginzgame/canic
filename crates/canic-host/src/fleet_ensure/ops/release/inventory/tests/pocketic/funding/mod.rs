@@ -4,16 +4,16 @@ mod assessment;
 
 use super::*;
 use crate::fleet_ensure::ops::release::{funding, observation::ReleaseObservationError};
-use canic_control_plane::dto::fleet_coordinator::CoordinatorFundingStatusResponse;
-use canic_control_plane::dto::root::RootFundingReleaseResponse;
+use canic_contracts::dto::{
+    fleet_coordinator::CoordinatorFundingStatusResponse,
+    root::RootFundingReleaseResponse,
+    wire::projection::{
+        release_coordinator_funding::Response as CoordinatorReply,
+        release_funding::Response as RootReply,
+    },
+};
 use canic_core::shared_support::fleet_funding_policy::fleet_subnet_root_funding_policy_hash;
 use ic_testkit::pocket_ic::PocketIc;
-
-#[derive(CandidType)]
-enum Reply {
-    Funding(Box<CoordinatorFundingStatusResponse>),
-    FundingRelease(Box<RootFundingReleaseResponse>),
-}
 
 pub(super) fn assert_census(
     pic: &PocketIc,
@@ -37,8 +37,7 @@ pub(super) fn assert_census(
         icp_refills: vec![],
         next_after: None,
     };
-    let encode =
-        |page| candid::encode_one(Ok::<_, Error>(Reply::FundingRelease(Box::new(page)))).unwrap();
+    let encode = root_funding_reply;
     let replace = |bytes| {
         pic.update_call(root, review.authority.operator, "replace", bytes)
             .unwrap();
@@ -127,6 +126,10 @@ pub(super) fn assert_census(
     ));
 }
 
+fn root_funding_reply(page: RootFundingReleaseResponse) -> Vec<u8> {
+    candid::encode_one(Ok::<_, Error>(RootReply::FundingRelease(Box::new(page)))).unwrap()
+}
+
 fn assert_coordinator_refusals(
     pic: &PocketIc,
     agent: &Agent,
@@ -168,8 +171,10 @@ fn replace_coordinator(
     review: &FleetReleaseReviewRecord,
     status: &CoordinatorFundingStatusResponse,
 ) {
-    let bytes =
-        candid::encode_one(Ok::<_, Error>(Reply::Funding(Box::new(status.clone())))).unwrap();
+    let bytes = candid::encode_one(Ok::<_, Error>(CoordinatorReply::Funding(Box::new(
+        status.clone(),
+    ))))
+    .unwrap();
     pic.update_call(
         review.authority.coordinator,
         review.authority.operator,

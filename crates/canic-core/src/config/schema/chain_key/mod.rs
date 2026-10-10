@@ -2,11 +2,12 @@
 //!
 //! This schema contains no cryptographic implementation or runtime key discovery.
 
-use crate::ids::BuildNetwork;
+use canic_contracts::ids::BuildNetwork;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// Public master-key environment selected explicitly by the App configuration.
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ChainKeyPublicKeyDerivation {

@@ -9,15 +9,14 @@ use crate::{
         CanisterPoolStateRecord, CanisterPoolStore, capacity_import::PoolImportBootstrapRecord,
     },
 };
-use canic_core::{
-    cdk::types::Principal,
-    control_plane_support::error::InternalError,
+use canic_contracts::{
     dto::{
         fleet_subnet_root::FleetSubnetRootInitArgs,
         pool_import::{PoolImportBootstrap, PoolImportReservation},
     },
     ids::MAX_FLEET_CAPACITY_IMPORT_SOURCES,
 };
+use canic_core::{cdk::types::Principal, control_plane_support::error::InternalError};
 use std::collections::BTreeSet;
 
 /// Validate the exact initialization declaration without mutation or platform effects.

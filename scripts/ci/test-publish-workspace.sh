@@ -64,7 +64,7 @@ export PUBLICATION_TEST_EVENTS="$FIXTURE/events"
 export PUBLICATION_TEST_REGISTRY="$FIXTURE/registry"
 export CANIC_PUBLICATION_LOG_DIR="$FIXTURE/logs"
 export PUBLISH_FROM='' PUBLISH_DRY_RUN=0
-expected_packages=(canic-backup canic-core canic-control-plane canic-macros canic canic-host canic-cli)
+expected_packages=(canic-backup canic-contracts canic-core canic-control-plane canic-macros canic canic-blob-service canic-host canic-cli)
 
 run_case() {
     local expected="$1" status=0

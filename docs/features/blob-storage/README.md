@@ -4,10 +4,9 @@ Application blob storage belongs to [ic-blob-storage](https://github.com/draggin
 It owns content, tenant authority, provider access, references and accounting.
 Canic owns Fleet lifecycle and deployment of ordinary application Components.
 
-The Canic-owned adapter lives in a separate Cargo workspace at
-`integrations/blob-service`. Its service dependency and qualification are outside
-the main Canic workspace and ordinary release test lane. The upstream library has
-no Canic dependency. See the [extraction design](../../design/0.111-standalone-blob-service-extraction/0.111-design.md)
+The Canic-owned adapter lives at `integrations/blob-service` in the main Canic
+workspace, sharing its dependency catalog, lockfile and release version. The upstream library has
+no Canic dependency. See the [extraction design](../../design/0.112-standalone-blob-service-extraction/0.112-design.md)
 and [current handoff](../../status/current.md) for implementation evidence.
 The shared [package-adapter boundary](../../architecture/independent-package-adapters.md)
 also covers backup.
@@ -17,7 +16,7 @@ endpoints, bounded decoders and synchronous lifecycle participants. It registers
 its service memory grants before Canic bootstraps the sole memory runtime. Its
 managed lifecycle retains Fleet admission.
 
-Blob unit/protocol/provider tests live upstream. The isolated adapter qualifies
+Blob unit/protocol/provider tests live upstream. The adapter qualifies
 its dedicated and embedded managed composition through Canic's public fixtures
 and a caller-owned PocketIC server. It adds no separate server owner or standalone
 service mode to the framework workspace. Canic retains its generic endpoint,
@@ -25,36 +24,34 @@ Fleet, lifecycle and memory tests. The upstream service suite owns blob authorit
 certificate replies, restoration, provider behavior and accounting; those results
 do not establish deployment qualification for an arbitrary wrapper.
 
-The composition selects published Blob Storage 0.21.0, Memory 0.33.0,
-Timers 0.16.0 and arithmetic-only Metrics 0.3.1 in the isolated lockfiles.
+The root catalog selects published Blob Storage 0.22 and Memory 0.35.
+Timers and arithmetic-only Metrics follow the selected Canic runtime in the root
+and independent consumer lockfiles.
 Each complete managed artifact must share one Memory and Timers runtime.
 See [Canic#444](https://github.com/dragginzgame/canic/issues/444) and the
 [current handoff](../../status/current.md) for scoped qualification. Building
 the shell does not establish live provider behavior. Upload capacity replies expose
 tenant logical, global physical and global billing-liability byte headroom
 separately; `remaining_bytes` is their minimum. Consumers must rebuild against
-Blob 0.21 contracts. This is a pre-1.0 hard cut with cross-release reinstall, while
+Blob 0.22 contracts. This is a pre-1.0 hard cut with cross-release reinstall, while
 same-release restoration and the upstream mutation fence remain required.
 
 ## Dependency version ownership
 
-The service pin has one source:
-[`integrations/blob-service/Cargo.toml`](../../../integrations/blob-service/Cargo.toml),
+The service requirement has one source:
+[`Cargo.toml`](../../../Cargo.toml),
 under `[workspace.dependencies]`. Its package inherits that declaration with
 `ic-blob-storage.workspace = true`; passive wire contracts come directly from
-`ic-blob-storage-contracts` at the matching 0.21.0 release. The two consumer examples depend on the
-adapter and resolve that same pin through their own lockfiles.
+`ic-blob-storage-contracts` on the same 0.22 release line. The two consumer examples depend on the
+adapter and resolve those requirements through their own lockfiles.
 
-The exact requirement retains the qualified service protocol and lifecycle
-composition with the single Memory runtime. Adopting another service release
-requires renewed managed composition qualification and updating the matching
-dependency-pinning exception.
+Locked builds select the exact service protocol and lifecycle composition with
+the single Memory runtime. Adopting another service release requires renewed
+managed composition qualification.
 
 `canic.toml` configures Apps, roles, topology and runtime policy; it does not select
-Rust crate versions. The adapter is deliberately outside Canic's main Cargo
-workspace, so it cannot inherit that workspace's dependencies. Adding an unused
-second pin to the root manifest would not control this adapter. Keep the pin here
-and refresh the adapter and consumer lockfiles when adopting a published release.
+Rust crate versions. The adapter inherits the main workspace declaration; refresh
+the root and both consumer lockfiles when adopting a published release.
 
 ## Rust toolchain
 
@@ -84,12 +81,26 @@ terabyte capacity or provider qualification.
 
 ## Embed in an application
 
-Invoke `canic_blob_service::mount!(memory = 150..=166);` once at the application's
-crate root. This mounts the service endpoints and seventeen memory requests,
-with a host-selected inclusive range. Keep that range disjoint from all other
-owners and large enough for the requests. Canic's normal bootstrap rejects
-conflicting or insufficient grants. The stable service keys and authority remain
-owned by the adapter. One blob service instance is supported per canister.
+Invoke `canic_blob_service::mount!();` once at the application's crate root.
+It mounts endpoints and registers seventeen permanent memory requests. The
+artifact owns one pool with the service namespace and every other application's
+namespace explicitly granted, for example:
+
+```rust
+canic::memory::memory_allocation_pool!(
+    authorities = [
+        ("embedded-app", "embedded_app."),
+        (canic_blob_service::MEMORY_AUTHORITY, canic_blob_service::MEMORY_KEY_PREFIX),
+    ],
+    exclusions = [],
+);
+canic_blob_service::mount!();
+```
+
+Core and Control Plane grants are included by Canic. All owners share eligible
+physical IDs; there are no numeric component partitions. Exclusions protect
+actual unmanaged physical memories only. The adapter owns service keys and
+authority; one service instance is supported per canister.
 
 The application keeps its existing `canic::start!` and `canic::finish!` and its
 exact App/role metadata. Compose these synchronous functions in its lifecycle
@@ -131,8 +142,12 @@ separate workspace and can be built explicitly with:
 
 ```sh
 cd integrations/blob-service/embedded-consumer
-../../../target/debug/canic build embedded-app backend --workspace . --config canic.toml --icp-root . --profile fast --json
+../../../target/debug/canic build embedded-app --workspace . --config canic.toml --icp-root . --profile fast --json
 ```
+
+Build the complete App for managed installation: selecting only `backend` emits
+a compile-only artifact without a release-build identity or manifest. Retain the
+complete App manifest for the managed qualification cases.
 
 ## Dedicated consumer-owned canister
 
@@ -147,10 +162,10 @@ canic_blob_service::canister!();
 ```
 
 The shell depends on `canic-blob-service`, `canic`, `candid` and `ic-cdk`.
-The adapter is prepared as `canic-blob-service 0.1.0` with a registry Canic
-`0.110.53` requirement and published Blob `0.21.0`. Cargo's package manifest
+The adapter inherits Canic's package version and registry requirement from the
+main workspace, with published Blob `0.22`. Cargo's package manifest
 removes the development Canic path and excludes these private consumer fixtures.
-The local facade already uses Memory 0.33. Registry Canic
+The local facade already uses Memory 0.35. Registry Canic
 0.110.54 uses Memory 0.31, so an aligned framework publication and selected
 registry requirement remain necessary under [Canic #33](https://github.com/dragginzgame/canic/issues/33).
 A compilable package archive cannot substitute for exact managed runtime admission.
@@ -164,7 +179,8 @@ See the [consumer manifest](../../../integrations/blob-service/consumer/Cargo.to
 and [canister shell](../../../integrations/blob-service/consumer/src/lib.rs).
 It does not declare an `ic-blob-storage` dependency. The adapter selects that
 upstream library transitively and re-exports its typed boundary contracts as
-`canic_blob_service::dto`; no duplicate DTO schema is introduced. This convenience macro calls `mount!` with memory 120–136 and owns
+`canic_blob_service::dto`; no duplicate DTO schema is introduced. This convenience macro grants the service namespace in one host pool, calls
+`mount!()`, and owns
 Canic start/finish, bounded endpoints, lifecycle participation and a blob-only
 metrics sampler. Do not add a
 second lifecycle or copy service dispatch into the consumer. Service memory
@@ -222,9 +238,9 @@ arguments to Root. `app.init_mode` controls Fleet operating mode.
 [Canic#444](https://github.com/dragginzgame/canic/issues/444) records qualified
 execution and downstream acceptance separately.
 
-The maintained adapter selects published Blob Storage 0.21.0 with Memory 0.33.0,
-Timers 0.16.0 and arithmetic-only Metrics 0.3.1 in its independent locks. Each complete managed Wasm graph
-must contain one Memory and Timers identity. Canic owns the runtime and lifecycle;
+The maintained adapter selects published Blob Storage 0.22.1 and Memory 0.35.
+Each complete managed Wasm graph must contain one Memory and Timers identity.
+Canic owns the runtime and lifecycle;
 the service participant restores synchronously before deferred work. These
 configuration, wire and persisted record changes are a pre-1.0 hard cut requiring
 clean reinstall across releases, with same-release retry and recovery retained.
@@ -265,7 +281,7 @@ provider deletion. [Blob #32](https://github.com/dragginzgame/ic-blob-storage/is
 owns that gateway contract. Upload completion also requires the configured
 external `completion_verifier`; the adapter supplies no verifier deployment
 ([Blob #33](https://github.com/dragginzgame/ic-blob-storage/issues/33)). The service
-includes an [application-operated private native worker recipe](https://github.com/dragginzgame/ic-blob-storage/blob/v0.21.0/docs/completion-verifier.md)
+includes an [application-operated private native worker recipe](https://github.com/dragginzgame/ic-blob-storage/blob/v0.22.1/docs/completion-verifier.md)
 using its existing observation, attestation and exact-reconciliation commands.
 Its two-browser reference uses a local provider substitute. Application signer
 operation, worker availability and real provider acceptance remain required.

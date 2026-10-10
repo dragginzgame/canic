@@ -216,7 +216,7 @@ checksum = "82f6aeea286b8eb4dd3431a1be1b59d290ace00f5bfd8e2a159bc2a05e2c1667"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.6",
+ "syn 3.0.7",
 ]
 
 [[package]]
@@ -485,6 +485,7 @@ version = "0.110.54"
 dependencies = [
  "candid",
  "candid_parser",
+ "canic-contracts",
  "canic-control-plane",
  "canic-core",
  "canic-macros",
@@ -492,7 +493,7 @@ dependencies = [
  "ic-testkit",
  "ic0",
  "serde",
- "syn 3.0.6",
+ "syn 3.0.7",
  "toml 1.1.8+spec-1.1.0",
 ]
 
@@ -511,11 +512,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "canic-blob-service"
+version = "0.110.54"
+dependencies = [
+ "candid",
+ "canic",
+ "ic-blob-storage",
+ "ic-blob-storage-contracts",
+ "ic-cdk",
+ "ic-memory",
+]
+
+[[package]]
 name = "canic-cli"
 version = "0.110.54"
 dependencies = [
  "candid",
  "canic-backup",
+ "canic-contracts",
  "canic-core",
  "canic-host",
  "clap",
@@ -529,11 +543,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "canic-contracts"
+version = "0.110.54"
+dependencies = [
+ "candid",
+ "ciborium",
+ "ic-auth-protocol-types",
+ "remain",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.18",
+ "toml 1.1.8+spec-1.1.0",
+]
+
+[[package]]
 name = "canic-control-plane"
 version = "0.110.54"
 dependencies = [
  "async-trait",
  "candid",
+ "canic-contracts",
  "canic-core",
  "ic-cdk",
  "ic-timers",
@@ -550,6 +581,7 @@ version = "0.110.54"
 dependencies = [
  "async-trait",
  "candid",
+ "canic-contracts",
  "ciborium",
  "criterion",
  "futures",
@@ -571,7 +603,7 @@ dependencies = [
  "serde_bytes",
  "serde_path_to_error",
  "sha2 0.10.9",
- "syn 3.0.6",
+ "syn 3.0.7",
  "thiserror 2.0.18",
  "toml 1.1.8+spec-1.1.0",
 ]
@@ -582,6 +614,7 @@ version = "0.110.54"
 dependencies = [
  "candid",
  "candid_parser",
+ "canic-contracts",
  "canic-control-plane",
  "canic-core",
  "ciborium",
@@ -607,7 +640,7 @@ dependencies = [
  "serde_bytes",
  "serde_json",
  "sha2 0.11.0",
- "syn 3.0.6",
+ "syn 3.0.7",
  "thiserror 2.0.18",
  "tokio",
  "toml 1.1.8+spec-1.1.0",
@@ -620,7 +653,7 @@ version = "0.110.54"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.6",
+ "syn 3.0.7",
 ]
 
 [[package]]
@@ -631,6 +664,7 @@ dependencies = [
  "candid_parser",
  "canic",
  "canic-cli",
+ "canic-contracts",
  "canic-control-plane",
  "canic-core",
  "canic-host",
@@ -642,7 +676,7 @@ dependencies = [
  "proc-macro2",
  "serde",
  "serde_json",
- "syn 3.0.6",
+ "syn 3.0.7",
  "tokio",
  "toml 1.1.8+spec-1.1.0",
 ]
@@ -653,6 +687,7 @@ version = "0.110.54"
 dependencies = [
  "candid",
  "canic",
+ "canic-contracts",
  "canic-control-plane",
  "canic-core",
  "canic-host",
@@ -820,9 +855,9 @@ checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
 
 [[package]]
 name = "cc"
-version = "1.6.0"
+version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f74872d07caf508b30a21f6836e7d7016a2eaf7d9ff4f48deaa58cd8a0407630"
+checksum = "50a649af8a827553c29fb0cb4bd4a6f1a0dd695bd3232b9bc98bd9c8a3ffbb8b"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -911,7 +946,7 @@ dependencies = [
  "heck",
  "proc-macro2",
  "quote",
- "syn 3.0.6",
+ "syn 3.0.7",
 ]
 
 [[package]]
@@ -1306,6 +1341,7 @@ version = "0.110.54"
 dependencies = [
  "candid",
  "canic",
+ "canic-contracts",
  "ic-cdk",
  "serde",
 ]
@@ -1456,7 +1492,7 @@ checksum = "c6232dd377dcc64799954cbd3a9bb882e9cdc1308ccd87b1c098f1fb2eaf82a8"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.6",
+ "syn 3.0.7",
 ]
 
 [[package]]
@@ -1795,7 +1831,7 @@ checksum = "9fb9654ba8355388abeb8dcb4fc62f511300867002afc858860463bdd9fe0c44"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.6",
+ "syn 3.0.7",
 ]
 
 [[package]]
@@ -2163,20 +2199,28 @@ dependencies = [
 
 [[package]]
 name = "ic-auth"
-version = "0.2.2"
+version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a999ec7c978769478c6515a47ccce80ce753ce34218cb8a4d66bb080ea10af40"
+checksum = "131bcfd312937934bf392781bc9d97116d87193092dabac0196d68016966d2f9"
 dependencies = [
  "ic-auth-protocol-types",
+ "ic-canister-sig-creation",
+ "ic-certification",
+ "ic-signature-verification",
+ "k256",
+ "leb128",
+ "serde",
+ "serde_bytes",
+ "serde_cbor",
  "sha2 0.10.9",
  "thiserror 2.0.18",
 ]
 
 [[package]]
 name = "ic-auth-protocol-types"
-version = "0.2.2"
+version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86cac27bba6cfab66ddec70a2a4f77c9edd22ec5929b862d75dc6aba022d5f6f"
+checksum = "275bbfcc2c3ece4c6237d744bd656d319ba57ad053fb5a9ebf8c42f669bd5082"
 dependencies = [
  "candid",
  "serde",
@@ -2185,9 +2229,9 @@ dependencies = [
 
 [[package]]
 name = "ic-backup"
-version = "0.11.2"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1154365df8869f8c0ec374a72a85db23f03d7efb2c18752a5cfc1f29fac2f4b5"
+checksum = "f42ee2feb98507e98bce74a201a09c49af34a3d24a182e5c5ab75d5cb9a1d2c9"
 dependencies = [
  "candid",
  "command-fds",
@@ -2200,6 +2244,35 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "ic-blob-storage"
+version = "0.22.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f4283f6b41065a01dd7c7be35f92c4dd5cb1d6f806d435a7f6f37f65afdbcef"
+dependencies = [
+ "candid",
+ "ic-blob-storage-contracts",
+ "ic-cdk",
+ "ic-management-canister-types 0.11.0",
+ "ic-memory",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "ic-blob-storage-contracts"
+version = "0.22.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c0d7ea12c9c034db53ea9b6d8d21605f1c9553edc04d3bdc8c58ae7d35c0e7e"
+dependencies = [
+ "candid",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
  "thiserror 2.0.18",
 ]
 
@@ -2315,9 +2388,9 @@ dependencies = [
 
 [[package]]
 name = "ic-host-artifacts"
-version = "0.9.2"
+version = "0.12.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc4f8956657ca3c95d11828bd340eb568bb06f93f964247333124598168eb469"
+checksum = "a2ef59a520243a3b377e1d8cd53d0164cab3f6cb4e582be1e190c9c8d986fff6"
 dependencies = [
  "flate2",
  "sha2 0.10.9",
@@ -2327,9 +2400,9 @@ dependencies = [
 
 [[package]]
 name = "ic-host-fs"
-version = "0.9.2"
+version = "0.12.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "793e8e2a20ab2765f048c6197304faa799ac8ee69795552549da174c4d368d77"
+checksum = "f8b9cfa175f6261d50ce9cdd0d72fc154fb8acd2cafe5df80e21e6006e6f46d6"
 dependencies = [
  "ic-host-artifacts",
  "rustix",
@@ -2337,9 +2410,9 @@ dependencies = [
 
 [[package]]
 name = "ic-host-process"
-version = "0.9.2"
+version = "0.12.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38cb48546013e0e5bc6b46357cde09b244984067e2886be51dd41a29ecc2c556"
+checksum = "0aed84d90bc9c56d4262b36de29d5c090f5393ca33274ebe0d909912399ed836"
 dependencies = [
  "ic-host-artifacts",
  "ic-host-fs",
@@ -2349,9 +2422,9 @@ dependencies = [
 
 [[package]]
 name = "ic-host-tools"
-version = "0.9.2"
+version = "0.12.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b01dcf160bceb8180fa25e2f2980bc7ef4b3f87dfcf36cbe8ccedc2e712b5ff"
+checksum = "36502b61387dc137862a7d9cb63fe446608dc5f3f96b08b39dc60437352b881a"
 dependencies = [
  "ic-host-artifacts",
  "ic-host-fs",
@@ -2384,9 +2457,9 @@ dependencies = [
 
 [[package]]
 name = "ic-memory"
-version = "0.33.1"
+version = "0.35.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e4f796a4fbe2ccb9a0082a0bf61841682285071259d59ef999e99af3e8283ab"
+checksum = "e265c1bf4dcea7ce251e21f5e26d47c6ccc3ce20f52a3b6ee19e87a753393b27"
 dependencies = [
  "ciborium",
  "ctor",
@@ -2397,15 +2470,15 @@ dependencies = [
 
 [[package]]
 name = "ic-metrics"
-version = "0.3.2"
+version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c02088befd3a964640ed81463022876ed6c03ce8c29fd78a9115c77abf15941"
+checksum = "13cb67fc18e59e30f328cf86d6d5c579742bc8d37e0f62a7d62160349212e7b3"
 
 [[package]]
 name = "ic-query"
-version = "0.52.2"
+version = "0.54.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3228351095c2ff8b1ac7496663ef3ab93b39ef8e5c7c60e66389cd2a87a31ae9"
+checksum = "9eb52d467f697fcd3fee0c50b280e1d83cc014a955ba9c39361000df1294cda8"
 dependencies = [
  "candid",
  "cap-fs-ext",
@@ -2480,9 +2553,9 @@ dependencies = [
 
 [[package]]
 name = "ic-testkit"
-version = "0.27.0"
+version = "0.33.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c51c06931938c3de3ff4466ef4e7495aca6e70b0f9ebf65465ab0b69344a394"
+checksum = "c537d12ef459c140252ec0b3f817b9d9e7a7ee10dbf641934697b51cb1a588d1"
 dependencies = [
  "candid",
  "fs2",
@@ -2501,9 +2574,9 @@ dependencies = [
 
 [[package]]
 name = "ic-timers"
-version = "0.16.0"
+version = "0.17.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "965d118b0a71eea4b436d0a0608aac2f1c576e73936408e5a1b786d3c43a32a8"
+checksum = "2476bd5ecaa6db4e790c4ce6ae47612046311165e8e2004cff3982a069cd02d1"
 dependencies = [
  "ic-cdk-timers",
  "ic-metrics",
@@ -3851,7 +3924,7 @@ checksum = "2b297d1baead74bf76361e49ed016060bd829633361b68500d2e7ea3e66ab6a4"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.6",
+ "syn 3.0.7",
 ]
 
 [[package]]
@@ -4234,7 +4307,7 @@ checksum = "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.6",
+ "syn 3.0.7",
 ]
 
 [[package]]
@@ -4250,9 +4323,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.151"
+version = "1.0.152"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c841b55ecdae098c80dcae9cf767f6f8a0c2cdb3416bbef72181df4d0fe73f14"
+checksum = "1741ab7a6cc54a03a89b5d563ed60075c277d9e3cfa73ad0c1f23f23974703c6"
 dependencies = [
  "itoa",
  "memchr",
@@ -4280,7 +4353,7 @@ checksum = "8d3b1629de253c70a0508c3899572da79ca359fdab27c7920ff00406df418906"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.6",
+ "syn 3.0.7",
 ]
 
 [[package]]
@@ -4351,6 +4424,7 @@ version = "0.110.54"
 dependencies = [
  "candid",
  "canic",
+ "canic-contracts",
  "ic-cdk",
  "serde",
 ]
@@ -4460,9 +4534,9 @@ dependencies = [
 
 [[package]]
 name = "smallvec"
-version = "1.16.2"
+version = "1.16.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9395f0f0eee849a9b707b2f06bb92a6a422090e2123bb2ef8e87a0e61892a8e"
+checksum = "5b3dc8af474f516a851ff4bd12db780f948b9250ad37211e4eec0bccea54e01b"
 
 [[package]]
 name = "socket2"
@@ -4597,9 +4671,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "3.0.6"
+version = "3.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8593e8e72159ed2257d083c7a454a85cbf854f37a0966d8d483aff8c8a3ebcee"
+checksum = "d62a2e0561533f2ca2561d0cf27fd9fedb640a1bf2616ff5d5c80d99017faadc"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4623,7 +4697,7 @@ checksum = "901704edd0dfe137f1987838ee4f259e4e063c31371bdb423f7ae38ec6f77f02"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.6",
+ "syn 3.0.7",
 ]
 
 [[package]]
@@ -4808,7 +4882,7 @@ checksum = "78773a2a397f451582ce068015985c33193cf6dea8b74d2a639fe457b2f07b0e"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.6",
+ "syn 3.0.7",
 ]
 
 [[package]]
@@ -5211,7 +5285,7 @@ dependencies = [
  "bumpalo",
  "proc-macro2",
  "quote",
- "syn 3.0.6",
+ "syn 3.0.7",
  "wasm-bindgen-shared",
 ]
 
@@ -5528,7 +5602,7 @@ checksum = "ec8ebde2db3681e8c9980cc27822030e68752690ddfa9473e739aeb4dbde6d71"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.6",
+ "syn 3.0.7",
  "synstructure",
 ]
 
@@ -5569,7 +5643,7 @@ checksum = "f75b4683f6c7f45248d4d64056a24298c6281e0993356d7d1b4a1a962ef10d4a"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.6",
+ "syn 3.0.7",
  "synstructure",
 ]
 
@@ -5623,7 +5697,7 @@ checksum = "34df6fc39dbd26ddc9c10e6a2984476e13acce22e64e4487636ef494369225da"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.6",
+ "syn 3.0.7",
 ]
 
 [[package]]

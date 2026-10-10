@@ -2,20 +2,14 @@
 
 /// Mount blob endpoints and memory declarations inside an application canister.
 ///
-/// Invoke once at crate root, selecting a disjoint inclusive memory range with
-/// room for seventeen grants. The application retains its sole `canic::start!`
+/// Invoke once at crate root after selecting the service namespace in the host
+/// allocation pool. The application retains its sole `canic::start!`
 /// and `canic::finish!`, composes synchronous [`crate::lifecycle`] functions and
 /// includes [`crate::metrics::sample`] in its application sampler. This macro
 /// neither installs the service nor registers a lifecycle or sampler.
 #[macro_export]
 macro_rules! mount {
-    (memory = $start:literal ..= $end:literal $(,)?) => {
-        $crate::__private::ic_memory::ic_memory_range!(
-            authority = $crate::__private::memory::AUTHORITY,
-            start = $start,
-            end = $end,
-            mode = Allowed
-        );
+    () => {
         $crate::__private::ic_memory::eager_init!({
             $crate::__private::memory::register();
         });
@@ -345,13 +339,17 @@ macro_rules! mount {
 /// Compose a dedicated managed blob canister using the same embeddable parts.
 ///
 /// The consumer owns build configuration and exact App/role metadata. This
-/// convenience macro selects memory IDs 120–136, installs the blob-only sampler,
+/// convenience macro grants the service namespace, installs the blob-only sampler,
 /// and supplies the sole lifecycle and Candid export. Use [`crate::mount!`] when
 /// an application already owns those surfaces.
 #[macro_export]
 macro_rules! canister {
     () => {
-        $crate::mount!(memory = 120..=136);
+        canic::memory::memory_allocation_pool!(
+            authorities = [($crate::MEMORY_AUTHORITY, $crate::MEMORY_KEY_PREFIX)],
+            exclusions = [],
+        );
+        $crate::mount!();
         canic::start!(
             argument_limits = $crate::lifecycle::ENVELOPE_LIMITS,
             lifecycle_participant(

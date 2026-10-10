@@ -28,16 +28,17 @@ use crate::{
         runtime::template::WasmStoreInternalClient,
     },
 };
-use canic_core::{
-    control_plane_support::error::InternalError,
+use canic_contracts::{
     dto::{
         abi::v1::CanisterInitPayload, fixture_provisioning::FixtureGrant,
         root_store::RootStoreBootstrapResponse,
     },
     ids::ManagedCanisterBinding,
 };
+use canic_core::control_plane_support::error::InternalError;
 
 /// Freeze source access before installation; retries read the existing install intent.
+
 pub(super) async fn select(
     store: &RootStoreBootstrapResponse,
     payload: &mut CanisterInitPayload,

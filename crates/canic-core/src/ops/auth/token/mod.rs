@@ -13,10 +13,6 @@ use super::{
     AuthChainKeyRootVerifierConfig, AuthOps, AuthProofVerifierConfig,
     PrepareDelegatedTokenIssuerProofInput, PreparedDelegatedTokenIssuerProof,
     VerifyDelegatedTokenRuntimeInput,
-    delegated::prepare::{
-        PrepareDelegatedTokenError, PrepareDelegatedTokenInput, finish_delegated_token,
-        prepare_delegated_token,
-    },
     delegated::{
         cache::{
             CachedDelegatedTokenProofValidity, delegated_token_cache_key, positive_cache_get,
@@ -28,6 +24,10 @@ use super::{
             ChainKeyRootProofError, ChainKeyRootVerifierPolicy, VerifyChainKeyBatchRootProofInput,
             verify_chain_key_batch_root_proof, verify_chain_key_ecdsa_public_key_shape,
             verify_chain_key_ecdsa_signature,
+        },
+        prepare::{
+            PrepareDelegatedTokenError, PrepareDelegatedTokenInput, finish_delegated_token,
+            prepare_delegated_token,
         },
         verify::{
             VerifyDelegatedTokenError, VerifyDelegatedTokenInput, verify_delegated_token,
@@ -44,7 +44,6 @@ use crate::{
         ActiveDelegationProofStatus, ChainKeyAlgorithm, ChainKeyKeyId, DelegatedToken,
         DelegationCert, RootKeyPolicyV1, RootProof,
     },
-    ids::{BuildNetwork, CanisterRole, FleetKey},
     model::auth::application_authorization::VerifiedApplicationAuthority,
     ops::{
         auth::{AuthScopeError, AuthValidationError},
@@ -57,6 +56,7 @@ use crate::{
         storage::{StorageOpsError, fleet_activation::FleetActivationOps},
     },
 };
+use canic_contracts::ids::{BuildNetwork, CanisterRole, FleetKey};
 use error::{
     active_delegation_proof_unavailable_error, delegated_auth_reason_from_verify_error,
     map_prepare_delegated_token_error, map_verify_delegated_token_error,
@@ -69,7 +69,6 @@ use verification::{
     require_current_canister_delegated_token_verifier, verify_from_positive_cache,
     verify_with_embedded_proofs,
 };
-
 use verifier_config::{
     configured_chain_key_root_verifier, configured_ic_root_public_key_raw,
     configured_root_canister_id,
@@ -135,6 +134,7 @@ impl AuthOps {
 
         let prepared = prepare_delegated_token(PrepareDelegatedTokenInput {
             proof: &active_proof.proof,
+            authority_expires_at_ns: active_proof.expires_at_ns,
             operation_id,
             prepared_by,
             audience: input.audience,

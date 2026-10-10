@@ -7,7 +7,7 @@ use crate::fleet_ensure::view::release::{
         ReleaseProvisioningState as State, ReleaseRootProvisioningFacts,
     },
 };
-use canic_control_plane::dto::root::{
+use canic_contracts::dto::root::{
     RootProvisioningReleaseKey as Key, RootProvisioningReleasePhase as Phase,
 };
 use std::collections::BTreeSet;

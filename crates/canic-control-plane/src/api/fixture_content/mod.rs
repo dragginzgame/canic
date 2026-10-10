@@ -4,13 +4,14 @@
 //! Does not own: storage, caller admission or network effects.
 //! Boundary: delegates deterministic conversion and validation to ops.
 
-use canic_core::dto::fixture_provisioning::{FixtureDescriptor, FixtureStoreError};
+use canic_contracts::dto::fixture_provisioning::{FixtureDescriptor, FixtureStoreError};
 
 ///
 /// FixtureContentApi
 ///
 /// Control-plane content compiler shared by host builds and Store admission.
 ///
+
 pub struct FixtureContentApi;
 
 impl FixtureContentApi {

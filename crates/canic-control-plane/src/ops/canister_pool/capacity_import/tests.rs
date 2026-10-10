@@ -1,8 +1,8 @@
 use super::*;
 use crate::ops::canister_pool::CanisterPoolClaimKey;
-use canic_core::ids::ComponentInstanceId;
-use std::borrow::Cow;
+use canic_contracts::ids::ComponentInstanceId;
 use std::{
+    borrow::Cow,
     future::Future,
     task::{Context, Poll, Waker},
 };

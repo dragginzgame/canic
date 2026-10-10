@@ -92,47 +92,42 @@ mod tests {
     use crate::ops::runtime::metrics::sharding::{
         ShardingMetricOperation, ShardingMetricOutcome, ShardingMetricReason, ShardingMetrics,
     };
-    use crate::{
-        ids::{AccessMetricKind, CanisterRole},
-        ops::runtime::metrics::{
-            self,
-            access::AccessMetrics,
-            auth::{
-                AuthMetricOperation, AuthMetricOutcome, AuthMetricReason, AuthMetricSurface,
-                AuthMetrics,
-            },
-            canister_ops::{
-                CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
-                CanisterOpsMetrics,
-            },
-            cascade::{
-                CascadeMetricOperation, CascadeMetricOutcome, CascadeMetricReason,
-                CascadeMetricSnapshot, CascadeMetrics,
-            },
-            intent::{
-                IntentMetricOperation, IntentMetricOutcome, IntentMetricReason,
-                IntentMetricSurface, IntentMetrics,
-            },
-            placement_index::{
-                PlacementIndexMetricOperation, PlacementIndexMetricOutcome,
-                PlacementIndexMetricReason, PlacementIndexMetrics,
-            },
-            platform_call::{
-                PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
-                PlatformCallMetricSurface, PlatformCallMetrics,
-            },
-            replay::{
-                ReplayMetricOperation, ReplayMetricOutcome, ReplayMetricReason, ReplayMetrics,
-            },
-            scaling::{
-                ScalingMetricOperation, ScalingMetricOutcome, ScalingMetricReason, ScalingMetrics,
-            },
-            wasm_store::{
-                WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason,
-                WasmStoreMetricSource, WasmStoreMetrics,
-            },
+    use crate::ops::runtime::metrics::{
+        access::AccessMetrics,
+        auth::{
+            AuthMetricOperation, AuthMetricOutcome, AuthMetricReason, AuthMetricSurface,
+            AuthMetrics,
+        },
+        canister_ops::{
+            CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
+            CanisterOpsMetrics,
+        },
+        cascade::{
+            CascadeMetricOperation, CascadeMetricOutcome, CascadeMetricReason,
+            CascadeMetricSnapshot, CascadeMetrics,
+        },
+        intent::{
+            IntentMetricOperation, IntentMetricOutcome, IntentMetricReason, IntentMetricSurface,
+            IntentMetrics,
+        },
+        placement_index::{
+            PlacementIndexMetricOperation, PlacementIndexMetricOutcome, PlacementIndexMetricReason,
+            PlacementIndexMetrics,
+        },
+        platform_call::{
+            PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
+            PlatformCallMetricSurface, PlatformCallMetrics,
+        },
+        replay::{ReplayMetricOperation, ReplayMetricOutcome, ReplayMetricReason, ReplayMetrics},
+        scaling::{
+            ScalingMetricOperation, ScalingMetricOutcome, ScalingMetricReason, ScalingMetrics,
+        },
+        wasm_store::{
+            WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason,
+            WasmStoreMetricSource, WasmStoreMetrics,
         },
     };
+    use canic_contracts::ids::{AccessMetricKind, CanisterRole};
 
     #[test]
     fn page_sorts_metric_rows_before_paginating() {

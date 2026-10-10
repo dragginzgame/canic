@@ -6,20 +6,19 @@
 
 mod ordinary;
 
-use crate::MAX_DOCUMENT_READ_BYTES;
-use crate::fleet_ensure::ops::bounded_observations;
-use ic_host_artifacts::artifact::ArtifactError;
-use ic_host_fs::read::read_optional_file_no_follow;
-
-use super::TerminalFleetInventory;
-use super::current_protocol::{
-    CurrentProtocolError, operation_bytes, query_current_root_authorities, query_operation,
-    query_registry,
+use super::{
+    TerminalFleetInventory,
+    current_protocol::{
+        CurrentProtocolError, operation_bytes, query_current_root_authorities, query_operation,
+        query_registry,
+    },
 };
 use crate::{
+    MAX_DOCUMENT_READ_BYTES,
     canister_protocol::{call_with_candid, query_with_candid},
-    fleet_ensure::model::{
-        DesiredCanisterKind, DesiredFleet, DesiredPresence, FleetEnsureStateRecord,
+    fleet_ensure::{
+        model::{DesiredCanisterKind, DesiredFleet, DesiredPresence, FleetEnsureStateRecord},
+        ops::bounded_observations,
     },
     icp::IcpCli,
     protocol_binding::RegistryProtocolBinding,
@@ -33,44 +32,51 @@ use crate::{
     },
     role_contract::{PackageValidationMode, resolve_declared_role_contracts},
 };
-
-use candid::{CandidType, Principal};
+use candid::Principal;
+use canic_contracts::dto::canister::CanisterInfo;
+use canic_contracts::dto::canister::CanisterInspectionRequest;
+use canic_contracts::dto::canister::CanisterStatusResponse;
+use canic_contracts::dto::canister::CanisterStatusType;
+use canic_contracts::dto::component_provisioning::FleetComponentProvisioningPhase;
+use canic_contracts::dto::component_provisioning::FleetComponentProvisioningStatusResponse;
+use canic_contracts::dto::component_provisioning::RootComponentProvisioningPhase;
+use canic_contracts::dto::component_provisioning::RootComponentProvisioningResult;
+use canic_contracts::dto::component_provisioning::RootComponentProvisioningStatusResponse;
+use canic_contracts::dto::component_registry::ComponentLifecycleStatus;
+use canic_contracts::dto::component_registry::ComponentProvisioningOrigin;
+use canic_contracts::dto::component_registry::ComponentRegistryActivePartitionRequest;
+use canic_contracts::dto::component_registry::ComponentRegistryActivePartitionResponse;
+use canic_contracts::dto::component_registry::ComponentRegistryPartitionResponse;
+use canic_contracts::dto::component_registry::RootComponentAllocationPhase;
+use canic_contracts::dto::component_registry::RootComponentChildAllocationResponse;
+use canic_contracts::dto::fleet_registry::FleetRegistry;
+use canic_contracts::dto::fleet_registry::FleetRegistryVersion;
+use canic_contracts::dto::fleet_registry::FleetSubnetRootEntry;
+use canic_contracts::dto::fleet_registry::FleetSubnetRootStatus;
+use canic_contracts::dto::page::PageRequest;
+use canic_contracts::dto::pool::CanisterPoolAssetStatus;
+use canic_contracts::dto::pool::CanisterPoolClaim;
+use canic_contracts::dto::pool::CanisterPoolStatusRequest;
+use canic_contracts::dto::role::OperationStatusRequest;
+use canic_contracts::dto::wire::projection::capacity_management::RootRequest as RootInventoryCommand;
+use canic_contracts::dto::wire::projection::capacity_management::RootResponse as RootInventoryCommandResponse;
+use canic_contracts::dto::wire::projection::current_inventory::ChildrenStatusRequest;
+use canic_contracts::dto::wire::projection::current_inventory::ChildrenStatusResponse;
+use canic_contracts::dto::wire::projection::current_inventory::RootInventoryStatusRequest;
+use canic_contracts::dto::wire::projection::current_inventory::RootInventoryStatusResponse;
+use canic_contracts::ids::CanisterRole;
+use canic_contracts::ids::ComponentBinding;
+use canic_contracts::ids::ComponentDeploymentConfigurationDigest;
+use canic_contracts::ids::ComponentInstanceId;
+use canic_contracts::ids::FleetSubnetRootReleaseSet;
+use canic_contracts::protocol;
 use canic_core::{
     cdk::utils::hash::hex_bytes,
     control_plane_support::{config::ComponentTopology, ops::fleet_registry::FleetRegistryOps},
-    dto::{
-        canister::{
-            CanisterInfo, CanisterInspectionRequest, CanisterStatusResponse, CanisterStatusType,
-        },
-        component_provisioning::{
-            FleetComponentProvisioningPhase, FleetComponentProvisioningStatusResponse,
-            RootComponentProvisioningPhase, RootComponentProvisioningResult,
-            RootComponentProvisioningStatusResponse,
-        },
-        component_registry::{
-            ComponentLifecycleStatus, ComponentProvisioningOrigin,
-            ComponentRegistryActivePartitionRequest, ComponentRegistryActivePartitionResponse,
-            ComponentRegistryPartitionResponse, RootComponentAllocationPhase,
-            RootComponentChildAllocationResponse,
-        },
-        fleet_registry::{
-            FleetRegistry, FleetRegistryVersion, FleetSubnetRootEntry, FleetSubnetRootStatus,
-        },
-        page::{Page, PageRequest},
-        pool::{
-            CanisterPoolAssetStatus, CanisterPoolClaim, CanisterPoolResponse,
-            CanisterPoolStatusRequest,
-        },
-        role::OperationStatusRequest,
-    },
-    ids::{
-        CanisterRole, ComponentBinding, ComponentDeploymentConfigurationDigest,
-        ComponentInstanceId, FleetSubnetRootReleaseSet,
-    },
-    protocol,
     role_contract::{RoleCapabilityKey, RoleContractResolution, derive_protocol_profile_hashes},
 };
-use serde::Deserialize;
+use ic_host_artifacts::artifact::ArtifactError;
+use ic_host_fs::read::read_optional_file_no_follow;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     fs,
@@ -78,43 +84,6 @@ use std::{
 };
 
 const CHILD_PAGE_LIMIT: u64 = 1_000;
-
-#[derive(CandidType)]
-enum ChildrenStatusRequest {
-    Children(PageRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum ChildrenStatusResponse {
-    Children(Page<CanisterInfo>),
-}
-
-#[derive(CandidType)]
-enum RootInventoryCommand {
-    InspectCanister(CanisterInspectionRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum RootInventoryCommandResponse {
-    InspectCanister(Box<CanisterStatusResponse>),
-    InspectionReserveRequired(canic_core::dto::canister::CanisterInspectionReserveResponse),
-}
-
-#[derive(CandidType)]
-enum RootInventoryStatusRequest {
-    ComponentChildProvisioning(OperationStatusRequest),
-    ComponentRegistryActivePartition(ComponentRegistryActivePartitionRequest),
-    ComponentProvisioning(OperationStatusRequest),
-    Pool(CanisterPoolStatusRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum RootInventoryStatusResponse {
-    ComponentChildProvisioning(Box<RootComponentChildAllocationResponse>),
-    ComponentRegistryActivePartition(Box<ComponentRegistryActivePartitionResponse>),
-    ComponentProvisioning(Box<RootComponentProvisioningStatusResponse>),
-    Pool(Box<CanisterPoolResponse>),
-}
 
 pub(super) struct ProtocolCatalog {
     by_role: BTreeMap<CanisterRole, ProtocolEntry>,
@@ -131,7 +100,7 @@ pub(super) struct ProtocolEntry {
 
 struct ComponentPartitionAuthority<'a> {
     active_release_set: &'a FleetSubnetRootReleaseSet,
-    group_placement: &'a canic_core::ids::ComponentGroupPlacementId,
+    group_placement: &'a canic_contracts::ids::ComponentGroupPlacementId,
     operation_id: [u8; 32],
     plan_hash: [u8; 32],
 }
@@ -253,7 +222,7 @@ impl ProtocolCatalog {
         root: &Path,
         config_path: &Path,
         config: &AppConfigSnapshot,
-        release_build_id: canic_core::ids::ReleaseBuildId,
+        release_build_id: canic_contracts::ids::ReleaseBuildId,
         coordinator_candid: &Path,
         root_candid: &Path,
         store_candid: &Path,
@@ -381,7 +350,7 @@ fn query_entries(
     registry_version: &FleetRegistryVersion,
     component_operation: &FleetComponentProvisioningStatusResponse,
     config: &AppConfigSnapshot,
-    authorities: &[canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority],
+    authorities: &[canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority],
     protocols: &ProtocolCatalog,
 ) -> Result<(Vec<RegistryEntry>, BTreeMap<String, u128>), CurrentProtocolError> {
     let operation_id = component_operation.operation_id;
@@ -1080,7 +1049,7 @@ fn validate_component_partition(
     icp: &IcpCli,
     root: Principal,
     authority: &ComponentPartitionAuthority<'_>,
-    member: &canic_core::dto::component_provisioning::RootProvisionedGroupMember,
+    member: &canic_contracts::dto::component_provisioning::RootProvisionedGroupMember,
     protocol_entry: &ProtocolEntry,
 ) -> Result<(), CurrentProtocolError> {
     let response: RootInventoryStatusResponse = terminal_observation(
@@ -1108,7 +1077,7 @@ fn validate_component_partition(
 
 fn validate_component_partition_response(
     authority: &ComponentPartitionAuthority<'_>,
-    member: &canic_core::dto::component_provisioning::RootProvisionedGroupMember,
+    member: &canic_contracts::dto::component_provisioning::RootProvisionedGroupMember,
     protocol_entry: &ProtocolEntry,
     partition: &ComponentRegistryActivePartitionResponse,
 ) -> Result<(), CurrentProtocolError> {
@@ -1229,7 +1198,7 @@ fn validate_component_partition_authority(
     fields: ComponentPartitionFieldNames,
     partition: &ComponentRegistryPartitionResponse,
     expected_status: ComponentLifecycleStatus,
-    member: &canic_core::dto::component_provisioning::RootProvisionedGroupMember,
+    member: &canic_contracts::dto::component_provisioning::RootProvisionedGroupMember,
     protocol_entry: &ProtocolEntry,
     expected_origin: &ComponentProvisioningOrigin,
     active_release_set: &FleetSubnetRootReleaseSet,
@@ -1789,7 +1758,7 @@ fn require_current_module(
 
 fn validate_root_authority(
     registry: &FleetRegistry,
-    authorities: &[canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority],
+    authorities: &[canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority],
 ) -> Result<(), CurrentProtocolError> {
     let registered = registry
         .fleet_subnet_roots
@@ -1822,7 +1791,7 @@ fn validate_root_authority(
 fn root_authority_matches_registry(
     registry: &FleetRegistry,
     root: &FleetSubnetRootEntry,
-    authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
+    authority: &canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority,
 ) -> bool {
     let binding = &authority.binding;
     let registry_binding_matches = binding.authority == registry.authority
@@ -1842,7 +1811,7 @@ fn root_authority_matches_registry(
 }
 
 fn common_release_set(
-    authorities: &[canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority],
+    authorities: &[canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority],
 ) -> Result<FleetSubnetRootReleaseSet, CurrentProtocolError> {
     let [first, rest @ ..] = authorities else {
         return Err(inventory_error(
@@ -2043,14 +2012,16 @@ mod tests {
     mod descendant_reads;
 
     use super::*;
-    use canic_core::{
-        cdk::types::Cycles,
-        dto::component_deployment::{ComponentDeploymentLimits, ComponentDeploymentPurpose},
-        dto::component_provisioning::{
-            FleetComponentProvisioningOperation, RootComponentActivationEvidence,
-            RootComponentPublicationEvidence, RootProvisionedGroupMember,
+    use canic_contracts::{
+        cycles::Cycles,
+        dto::{
+            component_deployment::{ComponentDeploymentLimits, ComponentDeploymentPurpose},
+            component_provisioning::{
+                FleetComponentProvisioningOperation, RootComponentActivationEvidence,
+                RootComponentPublicationEvidence, RootProvisionedGroupMember,
+            },
+            component_registry::ComponentRegistryHead,
         },
-        dto::component_registry::ComponentRegistryHead,
         ids::{
             AppId, CanonicalNetworkId, ComponentBinding, ComponentGroupDeploymentId,
             ComponentGroupMemberId, ComponentGroupMemberPath, ComponentGroupPlacementId,
@@ -2059,8 +2030,8 @@ mod tests {
             FleetRegistryAuthority, FleetSubnetCanisterPoolConfig, FleetSubnetRootLimits,
             ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
         },
-        role_contract::ProtocolProfileDigest,
     };
+    use canic_core::role_contract::ProtocolProfileDigest;
 
     fn protocol_entry(module_hash: &str) -> ProtocolEntry {
         protocol_entry_with_hashes(module_hash, module_hash)
@@ -2312,7 +2283,7 @@ mod tests {
         let expected_maximum = 1 + u64::from(member.limits.maximum_descendants);
         let result = RootComponentProvisioningResult {
             placements: vec![
-                canic_core::dto::component_provisioning::RootProvisionedGroupPlacement {
+                canic_contracts::dto::component_provisioning::RootProvisionedGroupPlacement {
                     group_placement: ComponentGroupPlacementId {
                         deployment: "pool_workload_bound"
                             .parse::<ComponentGroupDeploymentId>()
@@ -2357,7 +2328,7 @@ mod tests {
             release_set: *partition_authority.active_release_set,
             phase: RootComponentAllocationPhase::Committed,
             creation: Some(
-                canic_core::dto::component_registry::RootComponentCreationEvidence {
+                canic_contracts::dto::component_registry::RootComponentCreationEvidence {
                     wasm_store: Principal::from_slice(&[34; 29]),
                     payload_hash: [35; 32],
                     payload_size_bytes: 128,
@@ -2367,10 +2338,10 @@ mod tests {
                 },
             ),
             installation: Some(
-                canic_core::dto::component_registry::RootComponentChildInstallEvidence {
+                canic_contracts::dto::component_registry::RootComponentChildInstallEvidence {
                     raw_module_hash: [0x11; 32],
                     chunk_hashes: vec![vec![36; 32]],
-                    binding: canic_core::ids::ComponentChildBinding {
+                    binding: canic_contracts::ids::ComponentChildBinding {
                         component: member.binding.clone(),
                         parent_canister_id: member.binding.canister_id,
                         role: child.role.clone(),
@@ -2590,8 +2561,8 @@ mod tests {
 
     #[test]
     fn ordinary_inventory_requires_exact_pool_partition_and_completed_allocation() {
-        use canic_control_plane::dto::root::RootComponentOperationStatus;
-        use canic_core::{
+        use canic_contracts::dto::root::RootComponentOperationStatus;
+        use canic_contracts::{
             dto::{
                 component_registry::{
                     RootComponentAllocationResponse, RootComponentInstallEvidence,
@@ -2667,7 +2638,7 @@ mod tests {
                 caller: Principal::anonymous(),
             };
         variants[7].0.release_set.manifest_digest =
-            canic_core::ids::ReleaseSetDigest::from_bytes([99; 32]);
+            canic_contracts::ids::ReleaseSetDigest::from_bytes([99; 32]);
         for (partition, operation) in variants {
             assert!(matches!(
                 ordinary::validate(

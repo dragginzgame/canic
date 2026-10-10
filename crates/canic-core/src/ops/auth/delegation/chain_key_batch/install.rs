@@ -4,8 +4,10 @@
 //! Does not own: issuer inter-canister calls, batch preparation, or signing.
 //! Boundary: deterministic install planning and result recording for auth workflows.
 
-use super::super::root_issuer_renewal::renewal_template_fingerprint;
-use super::{ChainKeyRootDelegationBatchInstallPlan, oldest_chain_key_batch_order};
+use super::{
+    super::root_issuer_renewal::renewal_template_fingerprint,
+    ChainKeyRootDelegationBatchInstallPlan, oldest_chain_key_batch_order,
+};
 use crate::{
     InternalError,
     cdk::types::Principal,

@@ -1,5 +1,7 @@
 //! Host-side App build and desired-state Fleet reconciliation for Canic workspaces.
 
+// Bound host document/artifact allocation independently of semantic format limits.
+
 use std::{
     io,
     process::{Command, Output},
@@ -7,7 +9,6 @@ use std::{
     time::Duration,
 };
 
-// Bound host document/artifact allocation independently of semantic format limits.
 const MAX_DOCUMENT_READ_BYTES: usize = 16 * 1024 * 1024;
 const MAX_ARTIFACT_READ_BYTES: usize = 128 * 1024 * 1024;
 
@@ -55,6 +56,7 @@ pub mod observability;
 pub mod observatory;
 pub mod policy_gate;
 pub mod protocol_binding;
+pub mod publication;
 pub mod registry;
 pub mod release_build;
 pub mod release_set;
@@ -99,8 +101,10 @@ pub(crate) fn output_with_executable_busy_retry(command: &mut Command) -> io::Re
     with_executable_busy_retry(|| command.output())
 }
 
-pub(crate) fn should_embed_candid_metadata(build_network: canic_core::ids::BuildNetwork) -> bool {
-    build_network == canic_core::ids::BuildNetwork::Local
+pub(crate) fn should_embed_candid_metadata(
+    build_network: canic_contracts::ids::BuildNetwork,
+) -> bool {
+    build_network == canic_contracts::ids::BuildNetwork::Local
 }
 
 #[cfg(test)]

@@ -28,11 +28,13 @@ use crate::{
     icp::IcpCli,
 };
 use candid::Principal;
-use canic_core::{cdk::utils::hash::hex_bytes, ids::CanonicalNetworkId};
+use canic_contracts::ids::CanonicalNetworkId;
+use canic_core::cdk::utils::hash::hex_bytes;
 use sha2_host::{Digest, Sha256};
 use std::collections::BTreeMap;
 
 /// Bind the exact current target before any status attempt can be charged.
+
 pub(in crate::fleet_ensure) fn bind(
     paths: &EnsurePaths,
     desired: &DesiredFleet,

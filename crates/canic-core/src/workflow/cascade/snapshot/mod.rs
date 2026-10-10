@@ -13,9 +13,9 @@ use crate::{
     InternalError,
     cdk::types::Principal,
     dto::{cascade::StateSnapshotInput, state::FleetStateInput},
-    ids::CanisterRole,
     ops::{runtime::env::EnvOps, storage::state::fleet::FleetStateOps},
 };
+use canic_contracts::ids::CanisterRole;
 use std::collections::HashMap;
 
 ///
@@ -172,7 +172,7 @@ pub const fn state_snapshot_is_empty(snapshot: &StateSnapshot) -> bool {
 mod tests {
     use super::TopologySnapshotBuilder;
     use crate::cdk::types::Principal;
-    use crate::ids::CanisterRole;
+    use canic_contracts::ids::CanisterRole;
 
     #[test]
     fn direct_leaf_topology_has_one_root_child_and_no_descendants() {

@@ -16,7 +16,7 @@ use crate::{
     protocol_binding::ResolvedProtocolBinding,
 };
 use candid::{CandidType, Principal};
-use canic_core::diagnostics::RegisteredDiagnosticCode;
+use canic_contracts::diagnostics::RegisteredDiagnosticCode;
 use serde::de::DeserializeOwned;
 use std::io;
 use thiserror::Error as ThisError;
@@ -43,10 +43,12 @@ pub enum CanisterProtocolError {
     InspectionContract { caller: Principal, detail: String },
 
     #[error("Root {} inspection preflight for {} observed native={} cycles, liquid={} cycles, required outbound reserve={} cycles. Inspection was not attempted. Review Root funding or freezing reserve and retry with a fresh observation.", .0.caller, .0.canister_id, .0.native_cycles, .0.available_liquid_cycles, .0.required_liquid_cycles)]
-    InspectionPreflightReserve(Box<canic_core::dto::canister::CanisterInspectionReserveResponse>),
+    InspectionPreflightReserve(
+        Box<canic_contracts::dto::canister::CanisterInspectionReserveResponse>,
+    ),
 
-    #[error("{}: Root {} cannot inspect {}: native={} cycles, liquid={} cycles, required outbound reserve={} cycles. Review Root funding or freezing reserve before retrying.", canic_core::diagnostics::codes::PLATFORM_INSUFFICIENT_LIQUID_CYCLES, .0.caller, .0.canister_id, .0.native_cycles, .0.available_liquid_cycles, .0.required_liquid_cycles)]
-    InspectionReserve(Box<canic_core::dto::canister::CanisterInspectionReserveResponse>),
+    #[error("{}: Root {} cannot inspect {}: native={} cycles, liquid={} cycles, required outbound reserve={} cycles. Review Root funding or freezing reserve before retrying.", canic_contracts::diagnostics::codes::PLATFORM_INSUFFICIENT_LIQUID_CYCLES, .0.caller, .0.canister_id, .0.native_cycles, .0.available_liquid_cycles, .0.required_liquid_cycles)]
+    InspectionReserve(Box<canic_contracts::dto::canister::CanisterInspectionReserveResponse>),
 
     #[error("Root {caller} returned invalid reserve evidence for inspection of {target}")]
     InvalidInspectionReserve {
@@ -93,7 +95,7 @@ impl CanisterProtocolError {
     pub(crate) fn inspection_reserve(
         caller: Principal,
         target: Principal,
-        evidence: canic_core::dto::canister::CanisterInspectionReserveResponse,
+        evidence: canic_contracts::dto::canister::CanisterInspectionReserveResponse,
     ) -> Self {
         if evidence.caller != caller
             || evidence.canister_id != target
@@ -107,7 +109,8 @@ impl CanisterProtocolError {
 
     pub(crate) fn is_rejected_with(&self, code: RegisteredDiagnosticCode) -> bool {
         if matches!(self, Self::InspectionReserve(_)) {
-            return code == canic_core::diagnostics::codes::PLATFORM_INSUFFICIENT_LIQUID_CYCLES;
+            return code
+                == canic_contracts::diagnostics::codes::PLATFORM_INSUFFICIENT_LIQUID_CYCLES;
         }
         matches!(
             self,
@@ -214,7 +217,7 @@ pub fn query_authenticated<I: CandidType, O: CandidType + DeserializeOwned>(
     method: &'static str,
     input: &I,
 ) -> Result<O, CanisterProtocolError> {
-    let response: Result<O, canic_core::dto::error::Error> = icp
+    let response: Result<O, canic_contracts::dto::error::Error> = icp
         .query_candid_readonly(canister, method, input)
         .map_err(|source| CanisterProtocolError::ReadOnlyQuery {
             canister,
@@ -348,7 +351,7 @@ exit "$(cat exit-code)"
         .unwrap();
         fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
         let icp = IcpCli::new(executable.to_str().unwrap(), None).with_cwd(&root);
-        let reply: Result<u64, canic_core::dto::error::Error> = Ok(42);
+        let reply: Result<u64, canic_contracts::dto::error::Error> = Ok(42);
         let response = serde_json::json!({
             "response_bytes": hex_bytes(candid::encode_one(reply).unwrap()),
         });
@@ -397,7 +400,9 @@ exit "$(cat exit-code)"
 
     #[test]
     fn inspection_reserve_requires_exact_authority_and_retains_numeric_cause() {
-        use canic_core::{diagnostics::codes, dto::canister::CanisterInspectionReserveResponse};
+        use canic_contracts::{
+            diagnostics::codes, dto::canister::CanisterInspectionReserveResponse,
+        };
         let root = Principal::from_slice(&[1]);
         let target = Principal::from_slice(&[2]);
         let evidence = CanisterInspectionReserveResponse {

@@ -10,13 +10,8 @@ mod scale_out;
 #[cfg(test)]
 mod tests;
 
-pub use scale_out::{
-    ComponentProvisioningPlacementAuthority, ComponentProvisioningScaleOutAuthority,
-};
-
 use crate::{
     InternalError,
-    cdk::types::Cycles,
     config::{
         ComponentDeploymentConfiguration, ComponentDeploymentPurpose, ComponentGroupDeploymentSpec,
         ComponentGroupDeploymentTopology, ComponentTopology, ConfigModel,
@@ -33,17 +28,24 @@ use crate::{
             FleetRegistry, FleetRegistryVersion, FleetSubnetRootEntry, FleetSubnetRootStatus,
         },
     },
+    ops::{OpsError, fleet_registry::FleetRegistryOps},
+};
+use candid::Principal;
+use canic_contracts::{
+    cycles::Cycles,
     ids::{
         CanisterRole, ComponentDeploymentConfigurationDigest, ComponentGroupDeploymentId,
         ComponentSpecAdmission, ComponentSpecId, FleetRegistryAuthority, FleetServiceId,
         FleetSubnetRootBinding,
     },
-    ops::{OpsError, fleet_registry::FleetRegistryOps},
 };
-use candid::Principal;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;
+
+pub use scale_out::{
+    ComponentProvisioningPlacementAuthority, ComponentProvisioningScaleOutAuthority,
+};
 
 /// Maximum canonical bytes retained for one initial or scale-out provisioning plan.
 pub const MAX_FLEET_COMPONENT_PROVISIONING_PLAN_CANONICAL_BYTES: usize = 8_388_608;

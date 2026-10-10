@@ -9,12 +9,9 @@ mod mapper;
 #[cfg(test)]
 mod tests;
 
-use mapper::publication_from_dto;
-
 use crate::{
     cdk::serialize::serialize,
     config::caller_authority::CompiledCallerPolicy,
-    ids::{CallerReceiverAuthority, ComponentInstanceId},
     model::caller_authority::{
         CallerAdmissionError, CallerChangeRecord, CallerPublicationError, CallerPublicationRecord,
         CallerReceiptPhase, CallerReceiptRecord, CallerReceiverRecord, CallerReservation,
@@ -26,6 +23,8 @@ use crate::{
     view::caller_authority::CallerAdmissionView,
 };
 use candid::Principal;
+use canic_contracts::ids::{CallerReceiverAuthority, ComponentInstanceId};
+use mapper::publication_from_dto;
 use sha2::{Digest, Sha256};
 
 /// Deterministic owner of receiver state and exact original-operation receipts.

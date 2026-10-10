@@ -14,11 +14,10 @@ use crate::fleet_ensure::{
         capacity_import::journal::{CapacityImportJournalError, CapacityImportJournalStore},
     },
 };
-use ic_host_fs::durable::write_bytes;
-use ic_host_fs::read::read_optional_file_no_follow;
-
 use candid::Principal;
-use canic_core::{cdk::utils::hash::hex_bytes, ids::MAX_FLEET_CAPACITY_IMPORT_SOURCES};
+use canic_contracts::ids::MAX_FLEET_CAPACITY_IMPORT_SOURCES;
+use canic_core::cdk::utils::hash::hex_bytes;
+use ic_host_fs::{durable::write_bytes, read::read_optional_file_no_follow};
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::PathBuf,
@@ -226,7 +225,7 @@ impl<'a> CapacityImportSurveyStore<'a> {
         if bytes.len() > MAXIMUM_BYTES {
             return Err(CapacityImportJournalError::Integrity);
         }
-        write_bytes(&self.path, &bytes)?;
+        write_bytes(&self.path, &bytes).map_err(crate::publication::ops::io_error)?;
         Ok(())
     }
 }

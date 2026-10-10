@@ -1,5 +1,5 @@
 use super::*;
-use canic_core::ids::CanisterRole;
+use canic_contracts::ids::CanisterRole;
 use toml::Value as TomlValue;
 
 #[test]
@@ -322,7 +322,6 @@ kind = "canister"
 package = "worker"
 
 
-
 [component_specs.hub]
 component_role = "hub"
 maximum_instances = 1
@@ -405,7 +404,6 @@ package = "hub"
 [roles.worker]
 kind = "canister"
 package = "worker"
-
 
 
 [component_specs.hub]

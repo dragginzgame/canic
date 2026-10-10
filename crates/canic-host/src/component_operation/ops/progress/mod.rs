@@ -5,12 +5,13 @@ use crate::component_operation::{
     model::{ComponentPhase, ComponentPlanRecord, ComponentProgressRecord},
     view::ComponentProgressObservation,
 };
-use canic_control_plane::dto::root::RootComponentOperationStatus;
-use canic_core::dto::component_registry::{
-    ComponentProvisioningOrigin, RootComponentAllocationPhase,
+use canic_contracts::dto::{
+    component_registry::{ComponentProvisioningOrigin, RootComponentAllocationPhase},
+    root::RootComponentOperationStatus,
 };
 
 /// Project only a response bound to this exact operation, caller, Spec and release.
+
 pub fn project_progress(
     plan: &ComponentPlanRecord,
     status: RootComponentOperationStatus,

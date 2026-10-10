@@ -33,9 +33,25 @@ printf 'pub fn fixture() {}\n' >"$fixture/base/member/src/lib.rs"
 printf 'CANIC_CLI_VERSION="%s"\n' '${CANIC_CLI_VERSION:-1.2.3}' >"$fixture/base/scripts/dev/install_dev.sh"
 printf '## [1.2.4]\n' >"$fixture/base/docs/changelog/1.2.md"
 cargo generate-lockfile --offline --manifest-path "$fixture/base/Cargo.toml" >"$fixture/output.log" 2>&1
+for consumer in consumer embedded-consumer; do
+    consumer_root="$fixture/base/integrations/blob-service/$consumer"
+    mkdir -p "$consumer_root/src"
+    cat >"$consumer_root/Cargo.toml" <<TOML
+[workspace]
+[package]
+name = "fixture-$consumer"
+version = "0.1.0"
+edition = "2024"
+[dependencies]
+fixture-member = { path = "../../../member" }
+TOML
+    printf 'pub fn consumer() {}\n' >"$consumer_root/src/lib.rs"
+    cargo generate-lockfile --offline --manifest-path "$consumer_root/Cargo.toml" >>"$fixture/output.log" 2>&1
+done
 cp -R "$fixture/base" "$fixture/candidate"
 mkdir -p "$fixture/candidate/scripts/ci" "$fixture/candidate/scripts/release"
 cp "$ROOT/scripts/release/rewrite-owned-lock.sh" "$fixture/candidate/scripts/release/"
+cp "$ROOT/scripts/release/adapter.sh" "$fixture/candidate/scripts/release/"
 for script in check-release-candidate check-release-surface-content read-workspace-version read-cargo-workspace-version require-jq; do
     cp "$ROOT/scripts/ci/$script.sh" "$fixture/candidate/scripts/ci/"
 done
@@ -48,7 +64,8 @@ case "$*" in
     'log -1 --format=%s HEAD') echo source ;;
     'rev-parse HEAD') echo 1111111111111111111111111111111111111111 ;;
     'diff --name-only 1111111111111111111111111111111111111111 --')
-        printf '%s\n' Cargo.toml Cargo.lock scripts/dev/install_dev.sh docs/changelog/1.2.md
+        printf '%s\n' Cargo.toml Cargo.lock scripts/dev/install_dev.sh docs/changelog/1.2.md \
+            integrations/blob-service/consumer/Cargo.lock integrations/blob-service/embedded-consumer/Cargo.lock
         [[ -z "${EXTRA_CHANGE:-}" ]] || echo "$EXTRA_CHANGE" ;;
     'cat-file -e 1111111111111111111111111111111111111111:'*)
         test -f "$BASE/${3#*:}" ;;
@@ -62,6 +79,9 @@ export PATH="$fixture/bin:$PATH" BASE="$fixture/base"
 cd "$fixture/candidate"
 cargo set-version --workspace --offline 1.2.4 >>"$fixture/output.log" 2>&1
 cargo update --workspace --offline >>"$fixture/output.log" 2>&1
+for consumer in consumer embedded-consumer; do
+    cargo update --offline --manifest-path "integrations/blob-service/$consumer/Cargo.toml" >>"$fixture/output.log" 2>&1
+done
 printf 'CANIC_CLI_VERSION="%s"\n' '${CANIC_CLI_VERSION:-1.2.4}' >scripts/dev/install_dev.sh
 printf '## [1.2.4] - 2026-10-01\n' >docs/changelog/1.2.md
 printf '{"schema":1,"version":"1.2.4","source":"1111111111111111111111111111111111111111","date":"2026-10-01","gate":"complete"}\n' >release-validation.json
@@ -74,6 +94,13 @@ run_case() {
     [[ "$status" == "$expected" ]]
 }
 run_case 0
+cp integrations/blob-service/consumer/Cargo.lock "$fixture/accepted-consumer-lock"
+cp "$BASE/integrations/blob-service/consumer/Cargo.lock" integrations/blob-service/consumer/Cargo.lock
+run_case 1
+cp "$fixture/accepted-consumer-lock" integrations/blob-service/consumer/Cargo.lock
+printf '\n[[package]]\nname = "unreviewed"\nversion = "1.0.0"\n' >>integrations/blob-service/consumer/Cargo.lock
+run_case 1
+cp "$fixture/accepted-consumer-lock" integrations/blob-service/consumer/Cargo.lock
 printf '\n[workspace.metadata]\nchanged = true\n' >>Cargo.toml
 run_case 1
 cp "$fixture/accepted-manifest" Cargo.toml

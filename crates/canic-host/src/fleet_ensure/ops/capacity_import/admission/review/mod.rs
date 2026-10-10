@@ -40,14 +40,13 @@ use crate::{
     },
     icp::IcpCli,
 };
-use ic_host_fs::read::read_file_no_follow;
-
 use candid::Principal;
-use canic_core::{
-    cdk::utils::hash::hex_bytes,
+use canic_contracts::{
     dto::{fleet_registry::FleetRegistry, pool_import::PoolImportContext},
     ids::{CanonicalNetworkId, MAX_FLEET_CAPACITY_IMPORT_SOURCES},
 };
+use canic_core::cdk::utils::hash::hex_bytes;
+use ic_host_fs::read::read_file_no_follow;
 use sha2_host::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 

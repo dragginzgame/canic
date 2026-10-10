@@ -2,14 +2,16 @@
 
 use super::*;
 use crate::{
-    cdk::types::Cycles,
-    ids::{
-        ComponentTopologyDigest, CyclesFundingBudget, FleetSubnetCanisterPoolConfig,
-        FleetSubnetRootBinding, FleetSubnetRootLimits, ManagedCanisterBinding,
-    },
     ops::fleet_admission_policy::compile_installed_fleet_admission_policy,
     test::support::{
         fleet_admission_policy, fleet_subnet_root_funding_authority, managed_component_binding,
+    },
+};
+use canic_contracts::{
+    cycles::Cycles,
+    ids::{
+        ComponentTopologyDigest, CyclesFundingBudget, FleetSubnetCanisterPoolConfig,
+        FleetSubnetRootBinding, FleetSubnetRootLimits, ManagedCanisterBinding,
     },
 };
 

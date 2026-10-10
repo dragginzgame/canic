@@ -20,20 +20,22 @@ use crate::{
     },
     view::component_registry::{ComponentRegistryPartitionView, RootComponentAllocationView},
 };
+use canic_contracts::{
+    dto::component_registry::ComponentProvisioningOrigin,
+    ids::{ComponentBinding, ComponentSpecId},
+};
 use canic_core::{
     cdk::types::Principal,
     control_plane_support::{
         error::InternalError, model::replay::ReplayCostGuardSettlement,
         policy::component_allocation::TopLevelComponentAllocationDecision,
     },
-    dto::component_registry::ComponentProvisioningOrigin,
-    ids::{ComponentBinding, ComponentSpecId},
 };
 
 impl ComponentRegistryOps {
     /// Resolve the exact original installation for a registered Component tree.
     pub(crate) fn component_install_id(
-        component: canic_core::ids::ComponentInstanceId,
+        component: canic_contracts::ids::ComponentInstanceId,
     ) -> Result<[u8; 32], InternalError> {
         let partition = RootComponentRegistryStore::partition(component)
             .ok_or_else(InternalError::unavailable)?;

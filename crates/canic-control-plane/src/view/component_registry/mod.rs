@@ -7,10 +7,8 @@
 pub mod caller_authority;
 
 use crate::ids::WasmStoreBinding;
-use canic_core::{
-    cdk::types::{Cycles, Principal},
-    control_plane_support::config::schema::ComponentChildKind,
-    control_plane_support::model::replay::ReplayCostGuardSettlement,
+use canic_contracts::{
+    cycles::Cycles,
     dto::{
         component_registry::{
             ComponentLifecycleStatus, ComponentProvisioningOrigin, ComponentRegistryHead,
@@ -23,6 +21,12 @@ use canic_core::{
         CanisterRole, ComponentBinding, ComponentChildBinding, ComponentInstanceId,
         ComponentSpecId, ComponentTopologyDigest, FleetSubnetRootBinding,
         FleetSubnetRootReleaseSet, ManagedCanisterBinding, SubnetId,
+    },
+};
+use canic_core::{
+    cdk::types::Principal,
+    control_plane_support::{
+        config::schema::ComponentChildKind, model::replay::ReplayCostGuardSettlement,
     },
     role_contract::ProtocolProfileDigest,
 };
@@ -305,8 +309,8 @@ pub struct RootFleetSubnetDeletionPreparationAuthority {
 /// Read-only root-local authority frozen before returning cycles to the Coordinator.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootFleetSubnetDeletionPreparationIntentView {
-    pub ledger_transfer: Option<canic_core::dto::fleet_registry::FleetLedgerTransferIntent>,
-    pub ledger_receipt: Option<canic_core::dto::fleet_registry::FleetLedgerTransferReceipt>,
+    pub ledger_transfer: Option<canic_contracts::dto::fleet_registry::FleetLedgerTransferIntent>,
+    pub ledger_receipt: Option<canic_contracts::dto::fleet_registry::FleetLedgerTransferReceipt>,
     pub operation_id: [u8; 32],
     pub coordinator: Principal,
     pub final_inventory_hash: [u8; 32],
@@ -325,7 +329,7 @@ pub struct RootFleetSubnetDeletionPreparationIntentView {
 /// Read-only local receipt proving the removed root is externally deletable.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootFleetSubnetDeletionPreparationView {
-    pub ledger_receipt: canic_core::dto::fleet_registry::FleetLedgerTransferReceipt,
+    pub ledger_receipt: canic_contracts::dto::fleet_registry::FleetLedgerTransferReceipt,
     pub operation_id: [u8; 32],
     pub fleet_subnet_root: Principal,
     pub coordinator: Principal,
@@ -555,7 +559,7 @@ pub struct RootComponentInitialInventoryView {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootComponentAllocationView {
     pub application_initialization:
-        Option<canic_core::dto::component_registry::ComponentApplicationInitialization>,
+        Option<canic_contracts::dto::component_registry::ComponentApplicationInitialization>,
     pub operation_id: [u8; 32],
     pub allocation_sequence: u64,
     pub component: ComponentInstanceId,

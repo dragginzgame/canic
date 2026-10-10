@@ -22,7 +22,7 @@ use crate::{
     support::candid::registry_entry_candid_path,
     version_text,
 };
-use canic_core::protocol::{CANIC_AUTH_STATUS, CANIC_ROOT_STATUS};
+use canic_contracts::protocol::{CANIC_AUTH_STATUS, CANIC_ROOT_STATUS};
 use canic_host::{
     candid_endpoints::{CandidEndpointError, EndpointMode, parse_candid_service_endpoints},
     fleet_ensure::{CurrentFleetInventoryError, resolve_current_fleet},
@@ -32,6 +32,11 @@ use canic_host::{
     registry::RegistryEntry,
 };
 use clap::Command as ClapCommand;
+use codec::{
+    issuer_active_proof_status_arg, parse_issuer_observed_status, parse_issuer_principal,
+    parse_renewal_status_summary, root_issuer_renewal_status_arg,
+};
+use render::{render_issuer_observation, write_renewal_status_result};
 use serde::Serialize;
 use std::{
     ffi::OsString,
@@ -39,12 +44,6 @@ use std::{
     path::{Path, PathBuf},
 };
 use thiserror::Error as ThisError;
-
-use codec::{
-    issuer_active_proof_status_arg, parse_issuer_observed_status, parse_issuer_principal,
-    parse_renewal_status_summary, root_issuer_renewal_status_arg,
-};
-use render::{render_issuer_observation, write_renewal_status_result};
 
 const COMMAND_NAME: &str = "auth";
 const RENEWAL_COMMAND: &str = "renewal";
@@ -785,7 +784,7 @@ fn issuer_observation_with_runtime(
     let Ok(output) = runtime.query_issuer_output(
         options,
         &target,
-        canic_core::protocol::CANIC_AUTH_STATUS,
+        canic_contracts::protocol::CANIC_AUTH_STATUS,
         Some(issuer_active_proof_status_arg()),
         Some("json"),
     ) else {

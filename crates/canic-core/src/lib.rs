@@ -29,10 +29,10 @@ pub mod bootstrap;
 pub mod cdk;
 #[doc(hidden)]
 pub mod control_plane_support;
-pub mod diagnostics;
+
 #[doc(hidden)]
 pub mod dispatch;
-pub mod dto;
+
 #[doc(hidden)]
 mod error;
 mod format;
@@ -43,7 +43,7 @@ pub mod log;
 pub mod memory;
 mod memory_macros;
 pub mod perf;
-pub mod protocol;
+
 pub mod replay_policy;
 #[doc(hidden)]
 pub mod role_contract;
@@ -63,6 +63,8 @@ pub(crate) mod ops;
 pub(crate) mod storage;
 pub(crate) mod view;
 pub(crate) mod workflow;
+
+use canic_contracts::{diagnostics, dto, protocol};
 
 pub(crate) use error::InternalError;
 
@@ -84,22 +86,6 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const CANIC_WASM_CHUNK_BYTES: usize = 1_048_576;
 /// Existing byte-lane envelope, including bounded publication metadata.
 pub const CANIC_WASM_CHUNK_REQUEST_MAX_BYTES: usize = CANIC_WASM_CHUNK_BYTES + 64 * 1024;
-
-crate::ic_memory_range!(
-    authority = CANIC_CORE_MEMORY_AUTHORITY,
-    start = role_contract::allocation::CANIC_CORE_MIN_ID,
-    end = role_contract::allocation::CANIC_CORE_LOWER_MAX_ID,
-);
-crate::ic_memory_range!(
-    authority = CANIC_CORE_MEMORY_AUTHORITY,
-    start = role_contract::allocation::CANIC_CORE_UPPER_MIN_ID,
-    end = role_contract::allocation::CANIC_CORE_MAX_ID,
-);
-ic_memory_range!(
-    authority = CANIC_CORE_MEMORY_AUTHORITY,
-    start = role_contract::allocation::CANIC_CORE_AUTH_MIN_ID,
-    end = role_contract::allocation::CANIC_CORE_AUTH_MAX_ID,
-);
 
 #[cfg(test)]
 const _: () = {

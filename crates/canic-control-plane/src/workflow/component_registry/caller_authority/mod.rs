@@ -13,46 +13,41 @@ use crate::{
         CallerJournalPhase, CallerLifecycleScope, CallerRecipientKind,
     },
 };
-use candid::{CandidType, Principal};
-use canic_core::{
-    control_plane_support::{
-        model::caller_authority::CallerReceiptPhase,
-        ops::{caller_authority::CallerAuthorityOps, ic::call::CallOps},
-        policy::caller_authority::matches_permission,
-    },
+use candid::Principal;
+use canic_contracts::{
     dto::{
-        caller_authority::{
-            CallerAuthorityChange, CallerAuthorityCommand, CallerAuthorityPublication,
-            CallerAuthorityReceipt, CallerAuthorityStatus,
-        },
+        caller_authority::{CallerAuthorityChange, CallerAuthorityCommand, CallerAuthorityStatus},
         error::Error,
-        role::{OperationReceipt, OperationStatusRequest},
+        role::OperationStatusRequest,
+        wire::projection::caller_authority::{
+            Command, CommandResponse, StatusRequest, StatusResponse,
+        },
     },
     ids::{
         CallerInstallation, CallerReceiverAuthority, CallerRootAuthority, ManagedCanisterBinding,
     },
     protocol,
 };
-use serde::Deserialize;
+use canic_core::control_plane_support::{
+    model::caller_authority::CallerReceiptPhase,
+    ops::{caller_authority::CallerAuthorityOps, ic::call::CallOps},
+    policy::caller_authority::matches_permission,
+};
 use std::collections::BTreeMap;
 
-#[derive(CandidType)]
-enum Command {
-    CallerAuthority(CallerAuthorityCommand),
-    ReleaseApplicationStartup(CallerAuthorityPublication),
-}
-#[derive(CandidType, Deserialize)]
-enum CommandResponse {
-    CallerAuthority(Box<CallerAuthorityReceipt>),
-    OperationAccepted(OperationReceipt),
-}
-#[derive(CandidType)]
-enum StatusRequest {
-    CallerAuthority(OperationStatusRequest),
-}
-#[derive(CandidType, Deserialize)]
-enum StatusResponse {
-    CallerAuthority(CallerAuthorityStatus),
+const MAX_READINESS_ATTEMPTS: usize = 60;
+
+///
+/// ApplicationStartupProgress
+///
+/// Workflow outcome after an exact caller publication and bounded startup observation.
+/// Used by membership activation to schedule only known pending startup.
+///
+
+#[derive(Debug, Eq, PartialEq)]
+pub(super) enum ApplicationStartupProgress {
+    Ready,
+    Pending,
 }
 
 pub fn restore() -> Result<(), InternalError> {
@@ -80,16 +75,18 @@ pub(super) async fn framework_ready(
         component_install_id,
     };
     let expected = receiver_authority(receiver, issuer()?)?;
-    let observed = status(expected.receiver.canister(), [0; 32]).await?;
-    if observed.authority != expected {
-        return Err(InternalError::conflict());
+    for _ in 0..MAX_READINESS_ATTEMPTS {
+        let observed = status(expected.receiver.canister(), [0; 32]).await?;
+        if observed.authority != expected {
+            return Err(InternalError::conflict());
+        }
+        if observed.readiness
+            != canic_contracts::dto::caller_authority::CallerAuthorityReadiness::FrameworkPending
+        {
+            return Ok(());
+        }
     }
-    if observed.readiness
-        == canic_core::dto::caller_authority::CallerAuthorityReadiness::FrameworkPending
-    {
-        return Err(InternalError::unavailable());
-    }
-    Ok(())
+    Err(InternalError::unavailable())
 }
 
 /// Freeze all initial descendants together; a child of a Prepared Component waits for this release.
@@ -217,20 +214,28 @@ pub(super) async fn publish_activation(operation: [u8; 32]) -> Result<(), Intern
 }
 
 /// Release every original enrollment only after the entire immutable census is published.
-pub(super) async fn release_startup(operation: [u8; 32]) -> Result<(), InternalError> {
+pub(super) async fn release_startup(
+    operation: [u8; 32],
+) -> Result<ApplicationStartupProgress, InternalError> {
     let current = RootCallerOps::operation_view(operation).ok_or_else(InternalError::invariant)?;
     if current.phase == CallerJournalPhase::Compacted {
-        return Ok(());
+        return Ok(ApplicationStartupProgress::Ready);
     }
     if current.phase == CallerJournalPhase::Compacting {
-        return compact(operation);
+        return compact(operation).map(|()| ApplicationStartupProgress::Ready);
     }
     if current.phase == CallerJournalPhase::Complete {
-        require_applications_ready(operation).await?;
-        return compact(operation);
+        if require_applications_ready(operation).await? == ApplicationStartupProgress::Pending {
+            return Ok(ApplicationStartupProgress::Pending);
+        }
+        return compact(operation).map(|()| ApplicationStartupProgress::Ready);
     }
     if current.phase != CallerJournalPhase::Published {
-        return Err(InternalError::unavailable());
+        return Err(startup_failure(
+            "phase",
+            operation,
+            InternalError::unavailable(),
+        ));
     }
     for ordinal in 0..current.recipient_count {
         let recipient = RootCallerOps::recipient_view(operation, ordinal)?;
@@ -245,32 +250,49 @@ pub(super) async fn release_startup(operation: [u8; 32]) -> Result<(), InternalE
             target,
             Command::ReleaseApplicationStartup(CallerAuthorityOps::publication_to_dto(release)),
         )
-        .await?
+        .await
+        .map_err(|error| startup_failure("release_command", operation, error))?
         {
             CommandResponse::OperationAccepted(receipt) if receipt.operation_id == release_id => {}
             _ => return Err(InternalError::conflict()),
         }
         RootCallerOps::mark_startup_released(operation, ordinal)?;
     }
-    RootCallerOps::complete(operation)?;
-    require_applications_ready(operation).await?;
-    compact(operation)
+    RootCallerOps::complete(operation)
+        .map_err(|error| startup_failure("complete", operation, error))?;
+    if require_applications_ready(operation).await? == ApplicationStartupProgress::Pending {
+        return Ok(ApplicationStartupProgress::Pending);
+    }
+    compact(operation).map(|()| ApplicationStartupProgress::Ready)
 }
 
-async fn require_applications_ready(operation: [u8; 32]) -> Result<(), InternalError> {
+async fn require_applications_ready(
+    operation: [u8; 32],
+) -> Result<ApplicationStartupProgress, InternalError> {
     let current = RootCallerOps::operation_view(operation).ok_or_else(InternalError::invariant)?;
     for ordinal in 0..current.recipient_count {
         let recipient = RootCallerOps::recipient_view(operation, ordinal)?;
         if recipient.kind != CallerRecipientKind::Enrollment {
             continue;
         }
-        let observed = status(recipient.authority.receiver.canister(), operation).await?;
-        if observed.authority != recipient.authority {
-            return Err(InternalError::conflict());
-        }
-        if observed.readiness
-            != canic_core::dto::caller_authority::CallerAuthorityReadiness::ApplicationReady
-        {
+        // Pace observations independently of message throughput; retain the original release.
+        for remaining in (0..MAX_READINESS_ATTEMPTS).rev() {
+            let observed = status(recipient.authority.receiver.canister(), operation)
+                .await
+                .map_err(|error| startup_failure("readiness_status", operation, error))?;
+            if observed.authority != recipient.authority {
+                return Err(InternalError::conflict());
+            }
+            if observed.readiness
+                == canic_contracts::dto::caller_authority::CallerAuthorityReadiness::ApplicationReady
+            {
+                break;
+            }
+            if remaining == 0 {
+                let _ =
+                    startup_failure("readiness_budget", operation, InternalError::unavailable());
+                return Ok(ApplicationStartupProgress::Pending);
+            }
             let release = RootCallerOps::release_receipt(operation, ordinal)?
                 .ok_or_else(InternalError::invariant)?;
             let release_id = release.operation_id;
@@ -278,16 +300,39 @@ async fn require_applications_ready(operation: [u8; 32]) -> Result<(), InternalE
                 recipient.authority.receiver.canister(),
                 Command::ReleaseApplicationStartup(CallerAuthorityOps::publication_to_dto(release)),
             )
-            .await?
+            .await
+            .map_err(|error| startup_failure("repeat_release", operation, error))?
             {
                 CommandResponse::OperationAccepted(receipt)
                     if receipt.operation_id == release_id => {}
                 _ => return Err(InternalError::conflict()),
             }
-            return Err(InternalError::unavailable());
+            // Query and release callbacks can share one round. Consensus yields
+            // the original IC call context while the child's timer progresses.
+            CallOps::bounded_wait(Principal::management_canister(), "raw_rand")
+                .with_args(())?
+                .execute()
+                .await
+                .map_err(|error| startup_failure("consensus_wait", operation, error))?
+                .candid::<Vec<u8>>()?;
         }
     }
-    Ok(())
+    Ok(ApplicationStartupProgress::Ready)
+}
+
+fn startup_failure(
+    stage: &'static str,
+    operation: [u8; 32],
+    error: InternalError,
+) -> InternalError {
+    canic_core::log!(
+        canic_core::log::Topic::Rpc,
+        Error,
+        "Application startup failed stage={stage} operation_id={operation:?} phase={:?} diagnostic={}",
+        RootCallerOps::operation_view(operation).map(|current| current.phase),
+        error.code()
+    );
+    error
 }
 
 async fn drive(operation: [u8; 32], publish: bool) -> Result<(), InternalError> {
@@ -375,7 +420,16 @@ async fn command(target: Principal, command: Command) -> Result<CommandResponse,
         .with_arg(command)?
         .execute()
         .await
-        .map_err(|_| InternalError::unavailable())?;
+        .map_err(|error| {
+            canic_core::log!(
+                canic_core::log::Topic::Rpc,
+                Error,
+                "Caller command transport failed target={target} diagnostic={} platform_rejection={:?}",
+                error.code(),
+                error.platform_rejection()
+            );
+            InternalError::unavailable()
+        })?;
     let result: Result<CommandResponse, Error> =
         response.candid().map_err(|_| InternalError::invariant())?;
     result.map_err(InternalError::observed_public)
@@ -484,7 +538,7 @@ fn denial_plans(
     for plan in plans.values_mut() {
         if whole {
             plan.before.push(CallerAuthorityChange::DenyComponent(
-                canic_core::ids::CallerComponentInstallation {
+                canic_contracts::ids::CallerComponentInstallation {
                     binding: root_source.component().clone(),
                     install_id: root_source.component_install_id,
                 },
@@ -514,7 +568,7 @@ pub(super) async fn finish_denial(operation: [u8; 32]) -> Result<(), InternalErr
 
 /// Derived subtree work retains the exact enclosing Component denial instead of issuing a second fence.
 pub(super) async fn finish_removal(
-    component: canic_core::ids::ComponentInstanceId,
+    component: canic_contracts::ids::ComponentInstanceId,
     operation: [u8; 32],
 ) -> Result<(), InternalError> {
     if let Some(journal) = RootCallerOps::operation_view(operation) {

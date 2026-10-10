@@ -7,11 +7,13 @@ use crate::{
     ops::{
         cost_guard::CostGuardOps,
         replay::receipt::{record_cost_guard_settlement, stage_receipt_response},
-        storage::icp_refill::{
-            IcpRefillRecordCreateInput, IcpRefillRecordOps, IcpRefillRecordOpsError,
-            IcpRefillStoreOps,
+        storage::{
+            icp_refill::{
+                IcpRefillRecordCreateInput, IcpRefillRecordOps, IcpRefillRecordOpsError,
+                IcpRefillStoreOps,
+            },
+            replay::ReplayReceiptOps,
         },
-        storage::replay::ReplayReceiptOps,
     },
     replay_policy::CostClass,
     storage::stable::icp_refill::{IcpRefillRecord, IcpRefillTriggerRecord},

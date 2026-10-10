@@ -16,7 +16,7 @@ use crate::{
     release_set::{AppConfigError, AppConfigSnapshot, WorkspaceDiscoveryError, icp_root},
     workspace_discovery::discover_icp_root_from,
 };
-use canic_core::ids::BuildNetwork;
+use canic_contracts::ids::BuildNetwork;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,

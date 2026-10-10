@@ -211,7 +211,7 @@ fn retain_source(input: &ReinstallJourney<'_>) -> FleetEnsurePlan {
             assert!(!status.root_runtime_active);
             assert_eq!(
                 status.phase,
-                canic_core::dto::component_provisioning::RootComponentProvisioningPhase::Published
+                canic_contracts::dto::component_provisioning::RootComponentProvisioningPhase::Published
             );
             let journal = read_journal(&paths).unwrap().unwrap();
             assert_eq!(journal.effects.last().unwrap().state, EffectState::Issued);

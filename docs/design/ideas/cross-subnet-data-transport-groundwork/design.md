@@ -23,7 +23,7 @@ idempotency, database consistency or application retry decisions.
 
 Protected Fleet Directory rows already associate published service members
 with their Root and placement. The
-[Fleet Registry DTO owner](../../../../crates/canic-core/src/dto/fleet_registry.rs)
+[Fleet Registry DTO owner](../../../../crates/canic-contracts/src/dto/fleet_registry/mod.rs)
 defines those projections. Public discovery or a host cache alone cannot
 authorize a runtime route.
 

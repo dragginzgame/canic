@@ -5,22 +5,20 @@
 //! Boundary: delegates immediately to the root provisioning workflow.
 
 use crate::workflow::component_provisioning;
-use canic_core::{
-    control_plane_support::ops::ic::IcOps,
-    dto::{
-        component_provisioning::{
-            RootComponentActivationRequest, RootComponentDirectorySynchronizationRequest,
-            RootComponentDirectorySynchronizationResponse,
-            RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningAdvanceRequest,
-            RootComponentProvisioningStatusRequest, RootComponentProvisioningStatusResponse,
-            RootComponentPublicationRequest,
-        },
-        error::Error,
-        role::OperationReceipt,
+use canic_contracts::dto::{
+    component_provisioning::{
+        RootComponentActivationRequest, RootComponentDirectorySynchronizationRequest,
+        RootComponentDirectorySynchronizationResponse, RootComponentProvisioningAcceptanceRequest,
+        RootComponentProvisioningAdvanceRequest, RootComponentProvisioningStatusRequest,
+        RootComponentProvisioningStatusResponse, RootComponentPublicationRequest,
     },
+    error::Error,
+    role::OperationReceipt,
 };
+use canic_core::control_plane_support::ops::ic::IcOps;
 
 /// Root Component Group provisioning endpoint facade.
+
 pub struct RootComponentProvisioningApi;
 
 impl RootComponentProvisioningApi {

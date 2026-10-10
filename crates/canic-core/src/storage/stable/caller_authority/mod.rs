@@ -9,18 +9,16 @@ use crate::{
         bounded_cell::BoundedCell,
         structures::{DefaultMemoryImpl, btreemap::BTreeMap, memory::RuntimeMemory},
     },
-    ids::CallerComponentInstallation,
     model::caller_authority::{
         CallerReceiptRecord, CallerReceiverRecord, CallerRowKey, CallerSourceRecord,
     },
-    role_contract::allocation::memory::caller_authority::{
-        CALLER_AUTHORITY_HEADER_ID, CALLER_AUTHORITY_ROWS_ID,
-    },
     storage::prelude::*,
 };
+use canic_contracts::ids::CallerComponentInstallation;
 use std::cell::RefCell;
 
 /// Bound for one receipt or source, independent of receiver census size.
+
 pub const MAX_CALLER_ROW_BYTES: u32 = 8_192;
 
 ///
@@ -71,15 +69,11 @@ thread_local! {
         RefCell::new(BoundedCell::init(crate::ic_memory_key!(
             authority = CANIC_CORE_MEMORY_AUTHORITY,
             key = "canic.core.caller_authority.header.v1",
-            ty = CallerReceiverStore,
-            id = CALLER_AUTHORITY_HEADER_ID,
         ), None));
     static ROWS: RefCell<BTreeMap<CallerRowKey, CallerRowRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(BTreeMap::init(crate::ic_memory_key!(
             authority = CANIC_CORE_MEMORY_AUTHORITY,
             key = "canic.core.caller_authority.rows.v1",
-            ty = CallerRowStore,
-            id = CALLER_AUTHORITY_ROWS_ID,
         )));
 }
 

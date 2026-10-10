@@ -4,7 +4,7 @@
 //! Does not own: Registry validation, grant policy, persistence, or lifecycle effects.
 //! Boundary: Fleet-service peer ops construct this read-only authority for workflow use.
 
-use canic_core::{
+use canic_contracts::{
     dto::component_registry::FleetServiceComponentRequester, ids::FleetSubnetRootBinding,
 };
 

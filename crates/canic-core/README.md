@@ -46,11 +46,11 @@ ops.
 
 - `canic_core::access` – common auth and routing checks used by the facade macros.
 - `canic_core::api` – runtime APIs surfaced through `canic::api::*`.
-- `canic_core::dto` – candid-friendly DTOs for paging, auth, topology, metrics, and RPC.
-- `canic_core::ids` – typed identifiers (`CanisterRole`, `ComponentSpecId`,
-  `ComponentInstanceId`, etc.).
+- `canic-contracts` owns passive DTOs, shared IDs, diagnostics and wire names.
+  Core depends on these declarations for its runtime behavior.
+- `canic_core::ids` owns runtime intent identities.
 - `canic_core::log` / `canic_core::perf` – logging and perf instrumentation helpers.
-- `canic_core::protocol` – protocol constants and runtime service identifiers.
+- `canic_contracts::protocol` – canonical endpoint names and protocol identities.
 
 ## Quick Start (Typical Canister)
 

@@ -18,14 +18,14 @@ use crate::{
     },
     view::component_registry::{ComponentRegistryPartitionView, RootComponentChildAllocationView},
 };
-use canic_core::{
-    control_plane_support::error::InternalError,
+use canic_contracts::{
     dto::{
         component_provisioning::ComponentGroupDirectory,
         component_registry::ComponentLifecycleStatus, fleet_registry::FleetDirectorySnapshot,
     },
     ids::ComponentInstanceId,
 };
+use canic_core::control_plane_support::error::InternalError;
 
 impl ComponentRegistryOps {
     pub(crate) fn commit_verified_child(

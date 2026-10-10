@@ -10,7 +10,7 @@ use ic_blob_storage::ops::{
     caffeine::gateway::GatewayReplyLimits,
     service::gateways::{StableGatewayRegistry, access::GatewayRegistryAccess},
 };
-pub(crate) struct GatewayHost;
+pub struct GatewayHost;
 impl GatewayRegistryAccess for GatewayHost {
     type Memory = ops::memory::Memory;
     fn with_gateway_registry<R>(
@@ -20,7 +20,7 @@ impl GatewayRegistryAccess for GatewayHost {
         ops::mutate(|stores| operation(&mut stores.gateways))
     }
 }
-pub(crate) fn limits() -> GatewayReplyLimits {
+pub fn limits() -> GatewayReplyLimits {
     GatewayReplyLimits {
         max_bytes: 65_536.try_into().unwrap(),
         decoding_quota: 500_000.try_into().unwrap(),

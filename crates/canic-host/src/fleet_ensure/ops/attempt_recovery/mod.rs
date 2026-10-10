@@ -47,7 +47,7 @@ pub(in crate::fleet_ensure) fn review(
             return Err(CapacityImportJournalError::Integrity);
         }
         Some(_) => {}
-        None => write_bytes(&path, &bytes)?,
+        None => write_bytes(&path, &bytes).map_err(crate::publication::ops::io_error)?,
     }
     Ok(review)
 }
@@ -85,7 +85,7 @@ pub(in crate::fleet_ensure) fn apply(
         .map(|target| owner::prepare(paths, target))
         .collect::<Result<Vec<_>, _>>()?;
     for update in updates.into_iter().flatten() {
-        write_bytes(&update.0, &update.1)?;
+        write_bytes(&update.0, &update.1).map_err(crate::publication::ops::io_error)?;
     }
     Ok(review)
 }

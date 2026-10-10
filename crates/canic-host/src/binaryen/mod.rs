@@ -23,8 +23,8 @@ use std::{
 use thiserror::Error as ThisError;
 
 pub const BINARYEN_REPAIR_COMMAND: &str = "canic toolchain install";
-pub const BINARYEN_VERSION: &str = "132";
-pub const BINARYEN_VERSION_IDENTITY: &str = "wasm-opt version 132 (version_132)";
+pub const BINARYEN_VERSION: &str = "133";
+pub const BINARYEN_VERSION_IDENTITY: &str = "wasm-opt version 133 (version_133)";
 pub const WASM_OPT_TOOL: &str = "wasm-opt";
 
 ///
@@ -85,10 +85,10 @@ const SUPPORTED_BINARYEN_AUTHORITIES: [BinaryenPlatformAuthority; 3] = [
         arch: "aarch64",
         authority: BinaryenAuthority {
             archive_platform: "arm64-macos",
-            archive_sha256: "98aad827847af7ef990ed7098d885725c8e5b5aae75073403635617ae4e259aa",
-            executable_sha256: "a9c8d09d84186e4c8efe937f3de19b887404d24a96e2638f3bd3b476e17b7218",
+            archive_sha256: "ad66da82ac13f163e424b1643f16c6dfcccc98b5966296b43e52d3cab04f84a8",
+            executable_sha256: "81041e09f332df94db1c2009a64d8f3b85f0431a2c920ccd014d3ceebb343402",
             runtime_library_sha256: Some(
-                "6627f4f3f3655bfc14b3cd4816b0e7b0cb62ce6a530bab00cdd26855d5f6359b",
+                "61055e190d84d5db6d1dec63456e0c24dad324ecfd4d2e23740dca217ed89e5a",
             ),
         },
     },
@@ -97,10 +97,10 @@ const SUPPORTED_BINARYEN_AUTHORITIES: [BinaryenPlatformAuthority; 3] = [
         arch: "x86_64",
         authority: BinaryenAuthority {
             archive_platform: "x86_64-macos",
-            archive_sha256: "40c3de90bb3766bd0282a895e139a6f50253dba49b4f5bb89e66faca162d832e",
-            executable_sha256: "c3cbd288eef3402119d8183df1739887ff0e6430caba2e1c801406df725a2bd3",
+            archive_sha256: "13a9b90be775c6389ce3d1f879cb8627bea56708ba8c122983941d53a8199b95",
+            executable_sha256: "e26344b1d0d0986ac4a1090f58e478470eb2a52ba0625ae9a0f880511bb31d51",
             runtime_library_sha256: Some(
-                "f6d540a50c12af1769c10e30775625f70b65327ff8ee438c7059bc076147000a",
+                "26388343133e968f58c18807552b83c43944d11cf512e3920798890adc554f38",
             ),
         },
     },
@@ -109,8 +109,8 @@ const SUPPORTED_BINARYEN_AUTHORITIES: [BinaryenPlatformAuthority; 3] = [
         arch: "x86_64",
         authority: BinaryenAuthority {
             archive_platform: "x86_64-linux",
-            archive_sha256: "195ddc94f9bc89f45abdabb0b9eea86023d727ba90eac8b35b80f2544fc30572",
-            executable_sha256: "1014958e6f20d412f1542320b43970214b0fb1ed780595e8f7c0d8761ed53725",
+            archive_sha256: "2dc9c7813f5375db93d96ead4b78222fcc3e2677bbb832297af4797782a37489",
+            executable_sha256: "8f25e9fd5db0fc5f210003aaa432922feb2e52d309e430def2f929e34da9466b",
             runtime_library_sha256: None,
         },
     },

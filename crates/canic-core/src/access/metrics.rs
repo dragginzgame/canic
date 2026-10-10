@@ -9,11 +9,8 @@
 //! metric kinds, and authority attribution are normalized here so internal
 //! metric schemas can evolve without touching callers.
 
-use crate::{
-    cdk::types::Principal,
-    ids::{AccessMetricKind, EndpointCall},
-    ops,
-};
+use crate::{cdk::types::Principal, ops};
+use canic_contracts::ids::{AccessMetricKind, EndpointCall};
 
 ///
 /// AccessMetrics

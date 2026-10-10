@@ -4,10 +4,13 @@
 //! Does not own: transport DTOs, hashing, stable encoding, caller authorization, or distribution.
 //! Boundary: pure policy returns complete replacement state; ops validates hashes and persists it.
 
-use crate::ids::{FleetAdmissionPolicy, FleetAdmissionSelector, FleetCoordinatorBinding, SubnetId};
 use candid::Principal;
+use canic_contracts::ids::{
+    FleetAdmissionPolicy, FleetAdmissionSelector, FleetCoordinatorBinding, SubnetId,
+};
 
 /// Current product schema for the sole Coordinator admission authority.
+
 pub const FLEET_ADMISSION_AUTHORITY_SCHEMA_VERSION: u16 = 1;
 /// Maximum encoded authority record admitted to memory ID 64.
 pub const MAX_FLEET_ADMISSION_AUTHORITY_RECORD_BYTES: u32 = 8 * 1024 * 1024;

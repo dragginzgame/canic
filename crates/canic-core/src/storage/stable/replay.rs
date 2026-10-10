@@ -4,17 +4,20 @@
 //! Does not own: replay decisions, receipt lifecycle, or command execution.
 //! Boundary: storage ops convert between these records and replay model types.
 
-use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
+// Keep small B-tree overflow pages while bounding each encoded product record.
+
 #[cfg(test)]
 use crate::cdk::types::Principal;
 use crate::{
-    cdk::structures::{DefaultMemoryImpl, Storable, memory::RuntimeMemory, storable::Bound},
+    cdk::structures::{
+        DefaultMemoryImpl, Storable, btreemap::BTreeMap as StableBtreeMap, memory::RuntimeMemory,
+        storable::Bound,
+    },
     model::replay::{
         CommandKind, ExternalEffectDescriptor, OperationId, REPLAY_RECEIPT_SCHEMA_VERSION,
         ReplayActor, ReplayCostGuardSettlement, ReplayReceipt, ReplayReceiptStatus,
         placement_receipt_requires_acknowledgement,
     },
-    role_contract::allocation::memory::replay::REPLAY_RECEIPTS_ID,
     storage::prelude::*,
     view::replay_release::ReplayReleasePageView,
 };
@@ -24,14 +27,13 @@ use std::{
     ops::Bound::{Excluded, Unbounded},
 };
 
-// Keep small B-tree overflow pages while bounding each encoded product record.
 const REPLAY_RECEIPT_MAX_BYTES: usize = 32 * 1024 * 1024;
 
 std::thread_local! {
     static REPLAY_RECEIPTS: RefCell<
         StableBtreeMap<ReplayReceiptSlotKey, ReplayReceiptRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.replay.receipts.v1", ty = ReplayReceiptStore, id = REPLAY_RECEIPTS_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.replay.receipts.v1")),
     );
 }
 

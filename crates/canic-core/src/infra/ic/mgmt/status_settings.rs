@@ -4,19 +4,18 @@
 //! Does not own: status policy, deployment orchestration, or public DTO shaping.
 //! Boundary: extends `MgmtInfra` with status and settings effects.
 
-use crate::{
-    cdk::candid::Principal,
-    infra::ic::{
-        IcInfraError,
-        call::{Call, CallBuilder, CallResult},
-    },
-};
-
 use super::{
     MgmtInfra,
     types::{
         InfraCanisterIdRecord, InfraCanisterInfoArgs, InfraCanisterInfoResult,
         InfraCanisterStatusResult, InfraUpdateSettingsArgs,
+    },
+};
+use crate::{
+    cdk::candid::Principal,
+    infra::ic::{
+        IcInfraError,
+        call::{Call, CallBuilder, CallResult},
     },
 };
 

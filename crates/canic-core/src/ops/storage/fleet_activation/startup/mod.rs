@@ -6,8 +6,9 @@
 
 use super::{FleetActivation, FleetActivationOps, FleetActivationOpsError, replace_record};
 use crate::{
-    model::caller_authority::CallerAdmissionError,
-    model::caller_authority::{CallerChangeRecord, CallerPublicationRecord, CallerReceiptPhase},
+    model::caller_authority::{
+        CallerAdmissionError, CallerChangeRecord, CallerPublicationRecord, CallerReceiptPhase,
+    },
     ops::caller_authority::CallerAuthorityOps,
     storage::stable::fleet_activation::{ApplicationStartupRecord, FleetActivationStateRecord},
     view::fleet_activation::{ApplicationStartupWork, FleetActivationView},
@@ -212,9 +213,9 @@ pub(super) mod tests {
     use super::*;
     use crate::{
         config::caller_authority::CompiledCallerPolicy,
-        ids::{CallerInstallation, CallerReceiverAuthority, CallerRootAuthority},
         storage::stable::caller_authority::CallerReceiverStore,
     };
+    use canic_contracts::ids::{CallerInstallation, CallerReceiverAuthority, CallerRootAuthority};
 
     pub(in crate::ops::storage::fleet_activation) fn assert_startup_release() {
         CallerReceiverStore::reset();

@@ -79,7 +79,7 @@ pub(in crate::fleet_ensure) fn qualify(
     top.component.component_spec = spec.component_spec.clone();
     top.component.spec_hash = spec.spec_hash;
     let bootstrap = desired.bootstrap.as_mut().unwrap();
-    bootstrap.roots[0].component_admissions = vec![canic_core::ids::ComponentSpecAdmission {
+    bootstrap.roots[0].component_admissions = vec![canic_contracts::ids::ComponentSpecAdmission {
         component_spec: spec.component_spec.clone(),
         spec_hash: spec.spec_hash,
         maximum_root_instances: 1,

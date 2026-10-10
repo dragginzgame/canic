@@ -6,12 +6,13 @@
 
 use crate::{
     cdk::types::Principal,
-    ids::{CanisterRole, FleetKey},
     model::auth::application_authorization::{ApplicationScopeError, CanonicalApplicationScopes},
 };
+use canic_contracts::ids::{CanisterRole, FleetKey};
 use thiserror::Error;
 
 /// Verified proof authority projected into the one application-authorization model.
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VerifiedApplicationAuthority {
     presenter: Principal,

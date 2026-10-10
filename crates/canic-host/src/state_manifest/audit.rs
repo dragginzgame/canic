@@ -21,7 +21,7 @@ use std::collections::BTreeMap;
 const SOURCE_STATE_MANIFEST: super::StateAuditSource = super::StateAuditSource::StateManifest;
 const CATEGORY_MANIFEST: StateAuditCategory = StateAuditCategory::Manifest;
 const CATEGORY_SCHEMA_VERSION: StateAuditCategory = StateAuditCategory::SchemaVersion;
-const CATEGORY_MEMORY_ID: StateAuditCategory = StateAuditCategory::MemoryId;
+const CATEGORY_MEMORY_KEY: StateAuditCategory = StateAuditCategory::MemoryKey;
 const CATEGORY_SNAPSHOT: StateAuditCategory = StateAuditCategory::Snapshot;
 const CATEGORY_NAMING: StateAuditCategory = StateAuditCategory::Naming;
 const CATEGORY_LIFECYCLE: StateAuditCategory = StateAuditCategory::Lifecycle;
@@ -64,7 +64,7 @@ pub(super) fn audit_checks(
             ),
         ));
         checks.extend(domain_identity_checks(&role.canister_role, &role.state));
-        checks.extend(memory_id_checks(&role.canister_role, &role.state));
+        checks.extend(memory_key_checks(&role.canister_role, &role.state));
         checks.extend(role_state_checks(&role.canister_role, &role.state));
         checks.extend(reserved_memory_checks(
             &role.canister_role,
@@ -152,14 +152,14 @@ fn domain_identity_checks(role: &str, domains: &[StateDomainManifest]) -> Vec<St
         .collect()
 }
 
-fn memory_id_checks(role: &str, domains: &[StateDomainManifest]) -> Vec<StateAuditCheck> {
-    let mut by_id = BTreeMap::<u8, Vec<&str>>::new();
+fn memory_key_checks(role: &str, domains: &[StateDomainManifest]) -> Vec<StateAuditCheck> {
+    let mut by_id = BTreeMap::<&str, Vec<&str>>::new();
     for domain in domains
         .iter()
         .filter(|domain| domain.storage == StateStorage::StableMemory)
     {
-        if let Some(memory_id) = domain.memory_id {
-            by_id.entry(memory_id).or_default().push(&domain.domain);
+        if let Some(memory_key) = domain.memory_key.as_deref() {
+            by_id.entry(memory_key).or_default().push(&domain.domain);
         }
     }
 
@@ -170,19 +170,19 @@ fn memory_id_checks(role: &str, domains: &[StateDomainManifest]) -> Vec<StateAud
         .collect::<Vec<_>>();
     if duplicates.is_empty() {
         checks.push(pass(
-            CATEGORY_MEMORY_ID,
-            "memory_id_unique",
+            CATEGORY_MEMORY_KEY,
+            "memory_key_unique",
             role,
-            format!("all stable-memory domains for {role} use unique memory IDs"),
+            format!("all stable-memory domains for {role} use unique memory keys"),
         ));
     } else {
-        checks.extend(duplicates.into_iter().map(|(memory_id, domains)| {
+        checks.extend(duplicates.into_iter().map(|(memory_key, domains)| {
             fail(
-                CATEGORY_MEMORY_ID,
-                "memory_id_duplicate",
-                &format!("{role}/memory_id/{memory_id}"),
-                format!("memory id {memory_id} is used by {}", domains.join(", ")),
-                "assign one unique owner to each memory id",
+                CATEGORY_MEMORY_KEY,
+                "memory_key_duplicate",
+                &format!("{role}/memory_key/{memory_key}"),
+                format!("memory key {memory_key} is used by {}", domains.join(", ")),
+                "assign one unique owner to each memory key",
             )
         }));
     }
@@ -224,45 +224,45 @@ fn schema_checks(role: &str, domain: &StateDomainManifest) -> Vec<StateAuditChec
 
 fn storage_checks(role: &str, domain: &StateDomainManifest) -> Vec<StateAuditCheck> {
     let subject = domain_subject(role, domain);
-    match (domain.storage, domain.memory_id) {
-        (StateStorage::StableMemory, Some(memory_id)) => vec![pass(
-            CATEGORY_MEMORY_ID,
-            "memory_id_unique",
+    match (domain.storage, domain.memory_key.clone()) {
+        (StateStorage::StableMemory, Some(memory_key)) => vec![pass(
+            CATEGORY_MEMORY_KEY,
+            "memory_key_unique",
             &subject,
-            format!("stable-memory domain declares memory id {memory_id}"),
+            format!("stable-memory domain declares memory key {memory_key}"),
         )],
         (StateStorage::StableMemory, None) => vec![fail(
-            CATEGORY_MEMORY_ID,
-            "state_domain_missing_memory_id",
+            CATEGORY_MEMORY_KEY,
+            "state_domain_missing_memory_key",
             &subject,
-            "stable-memory domain does not declare a memory id".to_string(),
-            "declare the stable-memory id owned by this domain",
+            "stable-memory domain does not declare a memory key".to_string(),
+            "declare the stable-memory key owned by this domain",
         )],
         (StateStorage::HeapOnly, None) => vec![pass(
-            CATEGORY_MEMORY_ID,
+            CATEGORY_MEMORY_KEY,
             "state_domain_declares_no_stable_memory",
             &subject,
             "heap-only domain explicitly declares no stable memory".to_string(),
         )],
-        (StateStorage::HeapOnly, Some(memory_id)) => vec![warn(
-            CATEGORY_MEMORY_ID,
+        (StateStorage::HeapOnly, Some(memory_key)) => vec![warn(
+            CATEGORY_MEMORY_KEY,
             "state_domain_declares_no_stable_memory",
             &subject,
-            format!("heap-only domain also declares memory id {memory_id}"),
-            "remove the memory id or change storage to stable_memory",
+            format!("heap-only domain also declares memory key {memory_key}"),
+            "remove the memory key or change storage to stable_memory",
         )],
         (StateStorage::NotApplicable, None) => vec![pass(
-            CATEGORY_MEMORY_ID,
+            CATEGORY_MEMORY_KEY,
             "state_domain_storage_not_applicable",
             &subject,
             "domain explicitly declares storage is not applicable".to_string(),
         )],
-        (StateStorage::NotApplicable, Some(memory_id)) => vec![warn(
-            CATEGORY_MEMORY_ID,
+        (StateStorage::NotApplicable, Some(memory_key)) => vec![warn(
+            CATEGORY_MEMORY_KEY,
             "state_domain_storage_not_applicable",
             &subject,
-            format!("storage-not-applicable domain also declares memory id {memory_id}"),
-            "remove the memory id or choose a concrete storage substrate",
+            format!("storage-not-applicable domain also declares memory key {memory_key}"),
+            "remove the memory key or choose a concrete storage substrate",
         )],
     }
 }
@@ -380,57 +380,57 @@ fn reserved_memory_checks(
     domains: &[StateDomainManifest],
     reserved: &[ReservedMemoryManifest],
 ) -> Vec<StateAuditCheck> {
-    let active_by_id = active_memory_ids(domains);
-    let mut reserved_by_id = BTreeMap::<u8, Vec<&str>>::new();
+    let active_by_id = active_memory_keys(domains);
+    let mut reserved_by_id = BTreeMap::<&str, Vec<&str>>::new();
     for entry in reserved {
         reserved_by_id
-            .entry(entry.memory_id)
+            .entry(entry.memory_key.as_str())
             .or_default()
             .push(&entry.label);
     }
 
     let mut checks = Vec::new();
     for entry in reserved {
-        let subject = format!("{role}/memory_id/{}", entry.memory_id);
-        if let Some(active_domains) = active_by_id.get(&entry.memory_id) {
+        let subject = format!("{role}/memory_key/{}", entry.memory_key.clone());
+        if let Some(active_domains) = active_by_id.get(entry.memory_key.as_str()) {
             checks.push(fail(
-                CATEGORY_MEMORY_ID,
-                "reserved_memory_id_collision",
+                CATEGORY_MEMORY_KEY,
+                "reserved_memory_key_collision",
                 &subject,
                 format!(
-                    "reserved memory id {} for {} is used by active domain(s) {}",
-                    entry.memory_id,
+                    "reserved memory key {} for {} is used by active domain(s) {}",
+                    entry.memory_key,
                     entry.label,
                     active_domains.join(", ")
                 ),
-                "declare one owner for the memory id",
+                "declare one owner for the memory key",
             ));
         } else if reserved_by_id
-            .get(&entry.memory_id)
+            .get(entry.memory_key.as_str())
             .is_some_and(|labels| labels.len() > 1)
         {
             checks.push(fail(
-                CATEGORY_MEMORY_ID,
-                "reserved_memory_id_duplicate",
+                CATEGORY_MEMORY_KEY,
+                "reserved_memory_key_duplicate",
                 &subject,
                 format!(
-                    "reserved memory id {} is listed for {}",
-                    entry.memory_id,
+                    "reserved memory key {} is listed for {}",
+                    entry.memory_key,
                     reserved_by_id
-                        .get(&entry.memory_id)
+                        .get(entry.memory_key.as_str())
                         .map(|labels| labels.join(", "))
                         .unwrap_or_default()
                 ),
-                "reserve each memory id once",
+                "reserve each memory key once",
             ));
         } else {
             checks.push(warn(
-                CATEGORY_MEMORY_ID,
-                "reserved_memory_id_declared",
+                CATEGORY_MEMORY_KEY,
+                "reserved_memory_key_declared",
                 &subject,
                 format!(
-                    "memory id {} is reserved for {} but is not yet modeled as an active state domain",
-                    entry.memory_id, entry.label
+                    "memory key {} is reserved for {} but is not yet modeled as an active state domain",
+                    entry.memory_key, entry.label
                 ),
                 "model this reservation as a precise state domain when the state shape is known",
             ));
@@ -439,14 +439,14 @@ fn reserved_memory_checks(
     checks
 }
 
-fn active_memory_ids(domains: &[StateDomainManifest]) -> BTreeMap<u8, Vec<&str>> {
-    let mut by_id = BTreeMap::<u8, Vec<&str>>::new();
+fn active_memory_keys(domains: &[StateDomainManifest]) -> BTreeMap<&str, Vec<&str>> {
+    let mut by_id = BTreeMap::<&str, Vec<&str>>::new();
     for domain in domains
         .iter()
         .filter(|domain| domain.storage == StateStorage::StableMemory)
     {
-        if let Some(memory_id) = domain.memory_id {
-            by_id.entry(memory_id).or_default().push(&domain.domain);
+        if let Some(memory_key) = domain.memory_key.as_deref() {
+            by_id.entry(memory_key).or_default().push(&domain.domain);
         }
     }
     by_id

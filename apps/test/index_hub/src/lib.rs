@@ -18,4 +18,20 @@ async fn resolve_item(
     PlacementIndexApi::resolve_or_create(POOL_NAME, key).await
 }
 
+/// Retain one child operation while its bounded application hook remains pending.
+#[canic_update(requires(env::build_local_only(), caller::is_controller()))]
+async fn test_create_startup_child(
+    operation_id: [u8; 32],
+    rounds: u32,
+) -> Result<candid::Principal, Error> {
+    canic::api::rpc::RpcApi::create_canister_request(
+        operation_id,
+        &"index_child".into(),
+        canic::dto::rpc::CreateCanisterParent::ThisCanister,
+        Some(rounds),
+    )
+    .await
+    .map(|response| response.new_canister_pid)
+}
+
 canic::finish!();

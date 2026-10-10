@@ -1,0 +1,2760 @@
+use super::*;
+use candid::{
+    CandidType,
+    types::{Type, TypeEnv, TypeInner, internal::TypeContainer, subtype},
+};
+use std::collections::HashSet;
+
+/// Partial response variants are selected by the wire value, including inside
+/// records/options. Compare every retained label recursively; unused variants
+/// need not be decoded, and `reserved` deliberately skips the complete payload.
+
+fn response_payload_matches(
+    env: &TypeEnv,
+    sent: &Type,
+    received: &Type,
+    seen: &mut HashSet<(Type, Type)>,
+) -> bool {
+    let sent = env.trace_type(sent).unwrap();
+    let received = env.trace_type(received).unwrap();
+    if !seen.insert((sent.clone(), received.clone())) {
+        return true;
+    }
+    match (sent.as_ref(), received.as_ref()) {
+        (_, TypeInner::Reserved) => true,
+        (TypeInner::Record(exact), TypeInner::Record(projected))
+        | (TypeInner::Variant(exact), TypeInner::Variant(projected)) => {
+            projected.iter().all(|field| {
+                exact
+                    .iter()
+                    .find(|candidate| candidate.id == field.id)
+                    .is_some_and(|candidate| {
+                        response_payload_matches(env, &candidate.ty, &field.ty, seen)
+                    })
+            })
+        }
+        (TypeInner::Opt(exact), TypeInner::Opt(projected))
+        | (TypeInner::Vec(exact), TypeInner::Vec(projected)) => {
+            response_payload_matches(env, exact, projected, seen)
+        }
+        _ => subtype::subtype(&mut HashSet::new(), env, &sent, &received).is_ok(),
+    }
+}
+
+/// Compare each used selector's payload, rather than admitting unknown variants
+/// from a wide response union into an intentionally narrow decoder.
+fn projection_matches<P: CandidType>(reply: bool) -> bool {
+    let mut env = TypeEnv::new();
+    let mut owners = Vec::<Type>::new();
+    macro_rules! owner {
+        ($ty:ty) => {{
+            let mut types = TypeContainer::new();
+            let ty = types.add::<$ty>();
+            owners.push(env.merge_type(types.env, ty));
+        }};
+    }
+    owner!(crate::dto::fleet_coordinator::CoordinatorCommand);
+    owner!(crate::dto::fleet_coordinator::CoordinatorCommandResponse);
+    owner!(crate::dto::fleet_coordinator::CoordinatorObservabilityRequest);
+    owner!(crate::dto::fleet_coordinator::CoordinatorObservabilityResponse);
+    owner!(crate::dto::fleet_coordinator::CoordinatorOperationReadRequest);
+    owner!(crate::dto::fleet_coordinator::CoordinatorOperationReadResponse);
+    owner!(crate::dto::fleet_coordinator::CoordinatorOperationStatusResponse);
+    owner!(crate::dto::fleet_coordinator::CoordinatorRegistryRequest);
+    owner!(crate::dto::fleet_coordinator::CoordinatorRegistryResponse);
+    owner!(crate::dto::fleet_coordinator::FleetFundingPolicyRotationStatusPhase);
+    owner!(crate::dto::root::RootOperationStatusResponse);
+    owner!(crate::dto::root::RootProvisioningReleaseKey);
+    owner!(crate::dto::root::RootProvisioningReleasePhase);
+    owner!(crate::dto::template::StoreCatalogRequest);
+    owner!(crate::dto::template::StoreCatalogResponse);
+    owner!(crate::dto::template::StoreCommand);
+    owner!(crate::dto::template::StoreCommandResponse);
+    owner!(crate::dto::template::StoreObservabilityRequest);
+    owner!(crate::dto::template::StoreObservabilityResponse);
+    owner!(crate::dto::template::StoreOperationStatusResponse);
+    owner!(crate::dto::template::StoreStatusRequest);
+    owner!(crate::dto::template::StoreStatusResponse);
+    owner!(crate::dto::template::WasmStoreAdminCommand);
+    owner!(crate::dto::template::WasmStoreAdminResponse);
+    owner!(crate::dto::template::WasmStoreGcTarget);
+    owner!(crate::dto::template::WasmStorePublicationSlotResponse);
+    owner!(crate::dto::wire::coordinator::PublicStatusRequest);
+    owner!(crate::dto::wire::coordinator::PublicStatusResponse);
+    owner!(crate::dto::wire::local::ObservabilityRequest);
+    owner!(crate::dto::wire::local::ObservabilityResponse);
+    owner!(crate::dto::wire::local::PublicStatusRequest);
+    owner!(crate::dto::wire::local::PublicStatusResponse);
+    owner!(crate::dto::wire::managed::AdmissionStatusRequest);
+    owner!(crate::dto::wire::managed::AdmissionStatusResponse);
+    owner!(crate::dto::wire::managed::AuthStatusRequest);
+    owner!(crate::dto::wire::managed::AuthStatusResponse);
+    owner!(crate::dto::wire::managed::CanisterOperationStatusResponse);
+    owner!(crate::dto::wire::managed::ControlStatusRequest);
+    owner!(crate::dto::wire::managed::ControlStatusResponse);
+    owner!(crate::dto::wire::managed::ObservabilityRequest);
+    owner!(crate::dto::wire::managed::ObservabilityResponse);
+    owner!(crate::dto::wire::managed::PublicStatusRequest);
+    owner!(crate::dto::wire::managed::PublicStatusResponse);
+    owner!(crate::dto::wire::managed_command::CanisterCommand);
+    owner!(crate::dto::wire::managed_command::CanisterCommandResponse);
+    owner!(crate::dto::wire::relay::RelayedObservabilityResponse);
+    owner!(crate::dto::wire::root::ObservabilityRequest);
+    owner!(crate::dto::wire::root::ObservabilityResponse);
+    owner!(crate::dto::wire::root::PublicStatusRequest);
+    owner!(crate::dto::wire::root::PublicStatusResponse);
+    owner!(crate::dto::wire::root::RootAuthStatusRequest);
+    owner!(crate::dto::wire::root::RootAuthStatusResponse);
+    owner!(crate::dto::wire::root::RootOperationStatusRequest);
+    owner!(crate::dto::wire::root::RootOperationStatusResponse);
+    owner!(crate::dto::wire::root::RootStatusRequest);
+    owner!(crate::dto::wire::root::RootStatusResponse);
+    owner!(crate::dto::wire::root_command::RootCommand);
+    owner!(crate::dto::wire::root_command::RootCommandResponse);
+    owner!(crate::dto::wire::store::PublicStatusRequest);
+    owner!(crate::dto::wire::store::PublicStatusResponse);
+    projection_matches_scoped::<P>(reply, env, owners, false)
+}
+
+// Some transports dispatch selectors to multiple methods on the same role.
+// Their tests explicitly name those method contracts instead of accepting a
+// matching selector from any unrelated role.
+fn projection_matches_scoped<P: CandidType>(
+    reply: bool,
+    mut env: TypeEnv,
+    owners: Vec<Type>,
+    multiplexed: bool,
+) -> bool {
+    let mut projection = TypeContainer::new();
+    let projected = projection.add::<P>();
+    let projected = env.merge_type(projection.env, projected);
+    let projected = env.trace_type(&projected).expect("projection type");
+    let TypeInner::Variant(fields) = projected.as_ref() else {
+        panic!("transport projection must be a variant");
+    };
+    assert!(
+        !fields.is_empty(),
+        "transport projection must have selectors"
+    );
+    let owner_matches = |owner: &Type, field: &candid::types::Field| {
+        let owner = env.trace_type(owner).expect("canonical type");
+        let TypeInner::Variant(canonical_fields) = owner.as_ref() else {
+            return false;
+        };
+
+        canonical_fields.iter().any(|exact| {
+            if field.id != exact.id {
+                return false;
+            }
+            if reply {
+                response_payload_matches(&env, &exact.ty, &field.ty, &mut HashSet::new())
+            } else {
+                subtype::subtype(&mut HashSet::new(), &env, &field.ty, &exact.ty).is_ok()
+            }
+        })
+    };
+    if multiplexed {
+        fields
+            .iter()
+            .all(|field| owners.iter().any(|owner| owner_matches(owner, field)))
+    } else {
+        owners
+            .iter()
+            .any(|owner| fields.iter().all(|field| owner_matches(owner, field)))
+    }
+}
+
+macro_rules! checked_projection {
+    ($name:ident, $ty:ty, $reply:literal, [$($owner:ty),+ $(,)?]) => {
+        #[test]
+        fn $name() {
+            let mut types = TypeContainer::new();
+            let owners = vec![$(types.add::<$owner>()),+];
+            assert!(projection_matches_scoped::<$ty>($reply, types.env, owners, true));
+        }
+    };
+    ($name:ident, $ty:ty, $reply:literal) => {
+        #[test]
+        fn $name() {
+            assert!(
+                projection_matches::<$ty>($reply),
+                "{} differs from its canonical selector payload",
+                stringify!($ty)
+            );
+        }
+    };
+}
+
+checked_projection!(
+    admission_remotecoordinatorcommand,
+    admission::RemoteCoordinatorCommand,
+    false
+);
+checked_projection!(
+    admission_remotecoordinatorcommandresponse,
+    admission::RemoteCoordinatorCommandResponse,
+    true
+);
+checked_projection!(
+    admission_remotecoordinatorstatusrequest,
+    admission::RemoteCoordinatorStatusRequest,
+    false,
+    [
+        crate::dto::fleet_coordinator::CoordinatorRegistryRequest,
+        crate::dto::fleet_coordinator::CoordinatorObservabilityRequest
+    ]
+);
+checked_projection!(
+    admission_remotecoordinatorstatusresponse,
+    admission::RemoteCoordinatorStatusResponse,
+    true,
+    [
+        crate::dto::fleet_coordinator::CoordinatorRegistryResponse,
+        crate::dto::fleet_coordinator::CoordinatorObservabilityResponse
+    ]
+);
+checked_projection!(
+    admission_remoterootstatusrequest,
+    admission::RemoteRootStatusRequest,
+    false
+);
+checked_projection!(
+    admission_remoterootstatusresponse,
+    admission::RemoteRootStatusResponse,
+    true
+);
+checked_projection!(
+    auth_status_canisterstatusresponse,
+    auth_status::CanisterStatusResponse,
+    true
+);
+checked_projection!(
+    auth_status_rootstatusresponse,
+    auth_status::RootStatusResponse,
+    true
+);
+checked_projection!(caller_authority_command, caller_authority::Command, false);
+checked_projection!(
+    caller_authority_commandresponse,
+    caller_authority::CommandResponse,
+    true
+);
+checked_projection!(
+    caller_authority_statusrequest,
+    caller_authority::StatusRequest,
+    false
+);
+checked_projection!(
+    caller_authority_statusresponse,
+    caller_authority::StatusResponse,
+    true
+);
+checked_projection!(
+    capability_rpc_canistercommandfragment,
+    capability_rpc::CanisterCommandFragment,
+    false
+);
+checked_projection!(
+    capability_rpc_canistercommandresponsefragment,
+    capability_rpc::CanisterCommandResponseFragment,
+    true
+);
+checked_projection!(
+    capability_rpc_rootcommandfragment,
+    capability_rpc::RootCommandFragment,
+    false
+);
+checked_projection!(
+    capability_rpc_rootcommandresponsefragment,
+    capability_rpc::RootCommandResponseFragment,
+    true
+);
+checked_projection!(capacity_import_command, capacity_import::Command, false);
+checked_projection!(
+    capacity_import_coordinatorrequest,
+    crate::dto::wire::projection::capacity_inventory::CoordinatorRequest,
+    false
+);
+checked_projection!(
+    capacity_import_coordinatorresponse,
+    crate::dto::wire::projection::capacity_inventory::CoordinatorResponse,
+    true
+);
+checked_projection!(capacity_import_response, capacity_import::Response, true);
+checked_projection!(
+    capacity_import_statusrequest,
+    capacity_import::StatusRequest,
+    false
+);
+checked_projection!(
+    capacity_import_statusresponse,
+    capacity_import::StatusResponse,
+    true
+);
+checked_projection!(
+    capacity_inventory_coordinatorrequest,
+    capacity_inventory::CoordinatorRequest,
+    false
+);
+checked_projection!(
+    capacity_inventory_coordinatorresponse,
+    capacity_inventory::CoordinatorResponse,
+    true
+);
+checked_projection!(
+    capacity_inventory_rootrequest,
+    capacity_inventory::RootRequest,
+    false
+);
+checked_projection!(
+    capacity_inventory_rootresponse,
+    capacity_inventory::RootResponse,
+    true
+);
+checked_projection!(
+    capacity_management_rootrequest,
+    capacity_management::RootRequest,
+    false
+);
+checked_projection!(
+    capacity_management_rootresponse,
+    capacity_management::RootResponse,
+    true
+);
+checked_projection!(
+    cascade_componentcommandfragment,
+    cascade::ComponentCommandFragment<'static>,
+    false
+);
+checked_projection!(
+    cascade_componentcommandresponsefragment,
+    cascade::ComponentCommandResponseFragment,
+    true
+);
+checked_projection!(
+    cascade_storecommandfragment,
+    cascade::StoreCommandFragment<'static>,
+    false
+);
+checked_projection!(
+    cascade_storecommandresponsefragment,
+    cascade::StoreCommandResponseFragment,
+    true
+);
+checked_projection!(
+    component_initialization_rootcommand,
+    component_initialization::RootCommand<'static>,
+    false
+);
+checked_projection!(
+    component_operation_rootcommand,
+    component_operation::RootCommand,
+    false
+);
+checked_projection!(
+    component_operation_rootcommandresponse,
+    crate::dto::role::OperationAcceptedResponse,
+    true
+);
+checked_projection!(
+    component_operation_rootread,
+    component_operation::RootRead,
+    false,
+    [
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest
+    ]
+);
+checked_projection!(
+    component_operation_rootresponse,
+    component_operation::RootResponse,
+    true,
+    [
+        crate::dto::wire::root::RootStatusResponse,
+        crate::dto::wire::root::RootOperationStatusResponse
+    ]
+);
+checked_projection!(
+    component_provisioning_remotecoordinatoroperationstatusresponse,
+    component_provisioning::RemoteCoordinatorOperationStatusResponse,
+    true
+);
+checked_projection!(
+    component_provisioning_remotecoordinatorstatusrequest,
+    crate::dto::fleet_coordinator::CoordinatorOperationReadRequest,
+    false
+);
+checked_projection!(
+    component_provisioning_remotecoordinatorstatusresponse,
+    component_provisioning::RemoteCoordinatorStatusResponse,
+    true
+);
+checked_projection!(
+    component_registry_canistercommandfragment,
+    component_registry::CanisterCommandFragment,
+    false
+);
+checked_projection!(
+    component_registry_canistercommandresponsefragment,
+    crate::dto::role::OperationAcceptedResponse,
+    true
+);
+checked_projection!(
+    component_registry_canisteroperationstatusfragment,
+    component_registry::CanisterOperationStatusFragment,
+    true
+);
+checked_projection!(
+    component_registry_canisterstatusrequestfragment,
+    component_registry::CanisterStatusRequestFragment,
+    false,
+    [
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::ControlStatusRequest
+    ]
+);
+checked_projection!(
+    component_registry_canisterstatusresponsefragment,
+    component_registry::CanisterStatusResponseFragment,
+    true,
+    [
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::ControlStatusResponse
+    ]
+);
+checked_projection!(
+    coordinator_client_coordinatorcommandfragment,
+    coordinator_client::CoordinatorCommandFragment,
+    false
+);
+checked_projection!(
+    coordinator_client_coordinatorcommandresponsefragment,
+    coordinator_client::CoordinatorCommandResponseFragment,
+    true
+);
+checked_projection!(
+    coordinator_client_coordinatoroperationstatusfragment,
+    coordinator_client::CoordinatorOperationStatusFragment,
+    true
+);
+checked_projection!(
+    coordinator_client_coordinatorstatusrequestfragment,
+    coordinator_client::CoordinatorStatusRequestFragment,
+    false,
+    [
+        crate::dto::fleet_coordinator::CoordinatorRegistryRequest,
+        crate::dto::fleet_coordinator::CoordinatorOperationReadRequest
+    ]
+);
+checked_projection!(
+    coordinator_client_coordinatorstatusresponsefragment,
+    coordinator_client::CoordinatorStatusResponseFragment,
+    true,
+    [
+        crate::dto::fleet_coordinator::CoordinatorRegistryResponse,
+        crate::dto::fleet_coordinator::CoordinatorOperationReadResponse
+    ]
+);
+checked_projection!(
+    coordinator_root_remoterootcommand,
+    coordinator_root::RemoteRootCommand,
+    false
+);
+checked_projection!(
+    coordinator_root_remoterootcommandresponse,
+    coordinator_root::RemoteRootCommandResponse,
+    true
+);
+checked_projection!(
+    coordinator_root_remoterootoperationstatusresponse,
+    coordinator_root::RemoteRootOperationStatusResponse,
+    true
+);
+checked_projection!(
+    coordinator_root_remoterootstatusrequest,
+    crate::dto::fleet_coordinator::CoordinatorOperationReadRequest,
+    false
+);
+checked_projection!(
+    coordinator_root_remoterootstatusresponse,
+    coordinator_root::RemoteRootStatusResponse,
+    true
+);
+checked_projection!(
+    current_inventory_childrenstatusrequest,
+    current_inventory::ChildrenStatusRequest,
+    false
+);
+checked_projection!(
+    current_inventory_childrenstatusresponse,
+    current_inventory::ChildrenStatusResponse,
+    true
+);
+checked_projection!(
+    current_inventory_rootinventorycommand,
+    crate::dto::wire::projection::capacity_management::RootRequest,
+    false
+);
+checked_projection!(
+    current_inventory_rootinventorycommandresponse,
+    crate::dto::wire::projection::capacity_management::RootResponse,
+    true
+);
+checked_projection!(
+    current_inventory_rootinventorystatusrequest,
+    current_inventory::RootInventoryStatusRequest,
+    false,
+    [
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest
+    ]
+);
+checked_projection!(
+    current_inventory_rootinventorystatusresponse,
+    current_inventory::RootInventoryStatusResponse,
+    true,
+    [
+        crate::dto::wire::root::RootStatusResponse,
+        crate::dto::wire::root::RootOperationStatusResponse
+    ]
+);
+checked_projection!(
+    cycle_conversion_rootcommandresponse,
+    crate::dto::role::OperationAcceptedResponse,
+    true
+);
+checked_projection!(
+    cycle_conversion_rootoperationstatusresponse,
+    cycle_conversion::RootOperationStatusResponse,
+    true
+);
+checked_projection!(
+    cycle_conversion_rootstatusresponse,
+    cycle_conversion::RootStatusResponse,
+    true
+);
+checked_projection!(
+    delegation_proof_rootcommand,
+    delegation_proof::RootCommand,
+    false
+);
+checked_projection!(
+    delegation_proof_rootcommandresponse,
+    delegation_proof::RootCommandResponse,
+    true
+);
+checked_projection!(
+    estate_generation_rootestatestatusrequest,
+    estate_generation::RootEstateStatusRequest,
+    false
+);
+checked_projection!(
+    estate_generation_rootestatestatusresponse,
+    estate_generation::RootEstateStatusResponse,
+    true
+);
+checked_projection!(
+    fleet_setup_rootcommandfragment,
+    fleet_setup::RootCommandFragment,
+    false
+);
+checked_projection!(
+    fleet_setup_rootcommandresponsefragment,
+    fleet_setup::RootCommandResponseFragment,
+    true
+);
+checked_projection!(
+    fleet_setup_rootstatusrequestfragment,
+    fleet_setup::RootStatusRequestFragment,
+    false,
+    [
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest
+    ]
+);
+checked_projection!(
+    fleet_setup_rootstatusresponsefragment,
+    fleet_setup::RootStatusResponseFragment,
+    true,
+    [
+        crate::dto::wire::root::RootStatusResponse,
+        crate::dto::wire::root::RootOperationStatusResponse
+    ]
+);
+checked_projection!(
+    funding_observation_command,
+    funding_observation::Command,
+    false
+);
+checked_projection!(
+    funding_observation_response,
+    funding_observation::Response,
+    true
+);
+checked_projection!(
+    funding_status_remotecoordinatorstatusrequest,
+    crate::dto::wire::projection::capacity_inventory::CoordinatorRequest,
+    false
+);
+checked_projection!(
+    funding_status_remotecoordinatorstatusresponse,
+    funding_status::RemoteCoordinatorStatusResponse,
+    true,
+    [
+        crate::dto::fleet_coordinator::CoordinatorObservabilityResponse,
+        crate::dto::fleet_coordinator::CoordinatorRegistryResponse
+    ]
+);
+checked_projection!(
+    funding_status_remoterootstatusresponse,
+    funding_status::RemoteRootStatusResponse,
+    true
+);
+checked_projection!(install_history_command, install_history::Command, false);
+checked_projection!(install_history_response, install_history::Response, true);
+checked_projection!(
+    observability_relay_canistercommandfragment,
+    observability_relay::CanisterCommandFragment,
+    false
+);
+checked_projection!(
+    observability_relay_canistercommandresponsefragment,
+    observability_relay::CanisterCommandResponseFragment,
+    true
+);
+checked_projection!(
+    observatory_coordinatorresponse,
+    crate::dto::wire::projection::release_coordinator_funding::Response,
+    true
+);
+checked_projection!(
+    observatory_estaterequest,
+    crate::dto::wire::projection::capacity_inventory::RootRequest,
+    false
+);
+checked_projection!(
+    observatory_estateresponse,
+    crate::dto::wire::projection::capacity_inventory::RootResponse,
+    true
+);
+checked_projection!(
+    observatory_fundingrequest,
+    crate::dto::wire::projection::release_coordinator_funding::Request,
+    false
+);
+checked_projection!(observatory_metricrequest, observatory::MetricRequest, false);
+checked_projection!(
+    observatory_metricresponse,
+    observatory::MetricResponse,
+    true
+);
+checked_projection!(
+    observatory_overviewrequest,
+    crate::dto::wire::projection::overview::RoleStatusRequest,
+    false
+);
+checked_projection!(
+    observatory_overviewresponse,
+    crate::dto::wire::projection::overview::RoleStatusResponse,
+    true
+);
+checked_projection!(
+    observatory_rootfundingresponse,
+    observatory::RootFundingResponse,
+    true
+);
+checked_projection!(observatory_storerequest, observatory::StoreRequest, false);
+checked_projection!(observatory_storeresponse, observatory::StoreResponse, true);
+checked_projection!(
+    ordinary_inventory_request,
+    ordinary_inventory::Request,
+    false,
+    [
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest
+    ]
+);
+checked_projection!(
+    ordinary_inventory_response,
+    ordinary_inventory::Response,
+    true,
+    [
+        crate::dto::wire::root::RootStatusResponse,
+        crate::dto::wire::root::RootOperationStatusResponse
+    ]
+);
+checked_projection!(
+    overview_rolestatusrequest,
+    overview::RoleStatusRequest,
+    false
+);
+checked_projection!(
+    overview_rolestatusresponse,
+    overview::RoleStatusResponse,
+    true
+);
+checked_projection!(
+    pool_observation_managedcanisterstatusrequest,
+    pool_observation::ManagedCanisterStatusRequest,
+    false
+);
+checked_projection!(
+    pool_observation_managedcanisterstatusresponse,
+    pool_observation::ManagedCanisterStatusResponse,
+    true
+);
+checked_projection!(
+    pool_observation_rootpoolstatusrequest,
+    crate::dto::wire::projection::capacity_inventory::RootRequest,
+    false
+);
+checked_projection!(
+    pool_observation_rootpoolstatusresponse,
+    crate::dto::wire::projection::capacity_inventory::RootResponse,
+    true
+);
+checked_projection!(
+    protected_observability_rootcommandfragment,
+    crate::dto::wire::projection::funding_observation::Command,
+    false
+);
+checked_projection!(
+    protected_observability_rootcommandresponsefragment,
+    crate::dto::wire::projection::funding_observation::Response,
+    true
+);
+checked_projection!(
+    protected_observability_rootstatusrequestfragment,
+    protected_observability::RootStatusRequestFragment,
+    false
+);
+checked_projection!(
+    protected_observability_rootstatusresponsefragment,
+    protected_observability::RootStatusResponseFragment,
+    true
+);
+checked_projection!(
+    protected_observability_storestatusrequestfragment,
+    protected_observability::StoreStatusRequestFragment,
+    false
+);
+checked_projection!(
+    protected_observability_storestatusresponsefragment,
+    protected_observability::StoreStatusResponseFragment,
+    true
+);
+checked_projection!(
+    release_coordinator_funding_request,
+    release_coordinator_funding::Request,
+    false
+);
+checked_projection!(
+    release_coordinator_funding_response,
+    release_coordinator_funding::Response,
+    true
+);
+checked_projection!(release_funding_request, release_funding::Request, false);
+checked_projection!(release_funding_response, release_funding::Response, true);
+checked_projection!(release_intents_request, release_intents::Request, false);
+checked_projection!(release_intents_response, release_intents::Response, true);
+checked_projection!(release_pool_request, release_pool::Request, false);
+checked_projection!(release_pool_response, release_pool::Response, true);
+checked_projection!(
+    release_provisioning_request,
+    release_provisioning::Request,
+    false
+);
+checked_projection!(
+    release_provisioning_response,
+    release_provisioning::Response,
+    true
+);
+checked_projection!(release_receipts_request, release_receipts::Request, false);
+checked_projection!(release_receipts_response, release_receipts::Response, true);
+checked_projection!(
+    role_attestation_issuercommandfragment,
+    role_attestation::IssuerCommandFragment,
+    false
+);
+checked_projection!(
+    role_attestation_issuercommandresponsefragment,
+    role_attestation::IssuerCommandResponseFragment,
+    true
+);
+checked_projection!(
+    root_admission_remotemanagedcommand,
+    root_admission::RemoteManagedCommand,
+    false
+);
+checked_projection!(
+    root_admission_remotemanagedcommandresponse,
+    root_admission::RemoteManagedCommandResponse,
+    true
+);
+checked_projection!(
+    runtime_inspection_rolestatusresponse,
+    runtime_inspection::RoleStatusResponse,
+    true
+);
+checked_projection!(
+    startup_binding_request,
+    crate::dto::fleet_coordinator::CoordinatorOperationReadRequest,
+    false
+);
+checked_projection!(startup_binding_response, startup_binding::Response, true);
+checked_projection!(startup_inventory_request, startup_inventory::Request, false);
+checked_projection!(
+    startup_inventory_response,
+    startup_inventory::Response,
+    true
+);
+checked_projection!(startup_pages_request, startup_pages::Request, false);
+checked_projection!(startup_pages_response, startup_pages::Response, true);
+checked_projection!(
+    startup_registry_rootrequest,
+    crate::dto::wire::projection::subnet_information::RootStatusRequestFragment,
+    false
+);
+checked_projection!(
+    startup_registry_rootresponse,
+    crate::dto::wire::projection::subnet_information::RootStatusResponseFragment,
+    true
+);
+checked_projection!(
+    store_activation_storecommandfragment,
+    store_activation::StoreCommandFragment,
+    false
+);
+checked_projection!(
+    store_activation_storecommandresponsefragment,
+    crate::dto::role::OperationAcceptedResponse,
+    true
+);
+checked_projection!(
+    store_activation_storeoperationstatusfragment,
+    store_activation::StoreOperationStatusFragment,
+    true
+);
+checked_projection!(
+    store_activation_storestatusrequestfragment,
+    crate::dto::fleet_coordinator::CoordinatorOperationReadRequest,
+    false
+);
+checked_projection!(
+    store_activation_storestatusresponsefragment,
+    store_activation::StoreStatusResponseFragment,
+    true
+);
+checked_projection!(
+    subnet_information_coordinatorstatusrequestfragment,
+    subnet_information::CoordinatorStatusRequestFragment,
+    false,
+    [
+        crate::dto::fleet_coordinator::CoordinatorRegistryRequest,
+        crate::dto::fleet_coordinator::CoordinatorObservabilityRequest
+    ]
+);
+checked_projection!(
+    subnet_information_coordinatorstatusresponsefragment,
+    subnet_information::CoordinatorStatusResponseFragment,
+    true,
+    [
+        crate::dto::fleet_coordinator::CoordinatorRegistryResponse,
+        crate::dto::fleet_coordinator::CoordinatorObservabilityResponse
+    ]
+);
+checked_projection!(
+    subnet_information_rootstatusrequestfragment,
+    subnet_information::RootStatusRequestFragment,
+    false
+);
+checked_projection!(
+    subnet_information_rootstatusresponsefragment,
+    subnet_information::RootStatusResponseFragment,
+    true
+);
+
+#[test]
+fn compatibility_rejects_renamed_selectors_and_changed_payloads() {
+    #[derive(CandidType)]
+    enum Renamed {
+        RenamedMaintainPool,
+    }
+    #[derive(CandidType)]
+    enum Changed {
+        GetChainKeyPublicKey(u32),
+    }
+    let renamed = candid::encode_one(Renamed::RenamedMaintainPool).unwrap();
+    let changed = candid::encode_one(Changed::GetChainKeyPublicKey(0)).unwrap();
+    assert!(candid::decode_one::<crate::dto::wire::root_command::RootCommand>(&renamed).is_err());
+    assert!(
+        candid::decode_one::<crate::dto::wire::root_command::RootCommandResponse>(&changed)
+            .is_err()
+    );
+    assert!(!projection_matches::<Renamed>(false));
+    assert!(!projection_matches::<Changed>(true));
+}
+
+#[test]
+fn canonical_command_and_reply_roundtrip_into_bounded_projections() {
+    use crate::dto::wire::root_command::{RootCommand, RootCommandResponse};
+    let bytes = candid::encode_one(RootCommand::GetOrCreateDelegationProof).unwrap();
+    let projected: delegation_proof::RootCommand = candid::decode_one(&bytes).unwrap();
+    assert!(matches!(
+        projected,
+        delegation_proof::RootCommand::GetOrCreateDelegationProof
+    ));
+    let bytes = candid::encode_one(&projected).unwrap();
+    let canonical: RootCommand = candid::decode_one(&bytes).unwrap();
+    assert!(matches!(canonical, RootCommand::GetOrCreateDelegationProof));
+    let bytes = candid::encode_one(RootCommandResponse::OperationAccepted(
+        crate::dto::role::OperationReceipt {
+            operation_id: [1; 32],
+        },
+    ))
+    .unwrap();
+    let projected: crate::dto::role::OperationAcceptedResponse =
+        candid::decode_one(&bytes).unwrap();
+    let crate::dto::role::OperationAcceptedResponse::OperationAccepted(receipt) = projected;
+    assert_eq!(receipt.operation_id, [1; 32]);
+}
+
+checked_projection!(
+    inspection_reserve_request,
+    inspection_reserve::InspectionReserveRequest,
+    false
+);
+checked_projection!(
+    inspection_reserve_response,
+    inspection_reserve::InspectionReserveResponse,
+    true
+);
+
+checked_projection!(peer_allocation_command, peer_allocation::RootCommand, false);
+checked_projection!(
+    peer_allocation_response,
+    crate::dto::role::OperationAcceptedResponse,
+    true
+);
+
+checked_projection!(
+    fixture_delegation_canistercommand,
+    fixture_delegation::CanisterCommand,
+    false,
+    [
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_delegation_canistercommandresponse,
+    fixture_delegation::CanisterCommandResponse,
+    true,
+    [
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_delegation_canisterstatusrequest,
+    fixture_delegation::CanisterStatusRequest,
+    false,
+    [
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_delegation_canisterstatusresponse,
+    fixture_delegation::CanisterStatusResponse,
+    true,
+    [
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_lifecycle_managedcommand,
+    fixture_lifecycle::ManagedCommand,
+    false,
+    [
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_lifecycle_managedcommandresponse,
+    fixture_lifecycle::ManagedCommandResponse,
+    true,
+    [
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_lifecycle_managedstatusrequest,
+    crate::dto::wire::projection::admission::RemoteRootStatusRequest,
+    false,
+    [
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_lifecycle_managedstatusresponse,
+    crate::dto::wire::projection::fixture_baseline::ManagedAdmissionStatusResponseFragment,
+    true,
+    [
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_lifecycle_managedcontrolstatusrequest,
+    crate::dto::wire::projection::caller_authority::StatusRequest,
+    false,
+    [
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_lifecycle_managedcontrolstatusresponse,
+    crate::dto::wire::projection::caller_authority::StatusResponse,
+    true,
+    [
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_canic_rootcommandfragment,
+    fixture_canic::RootCommandFragment,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_canic_rootcommandresponsefragment,
+    crate::dto::role::OperationAcceptedResponse,
+    true,
+    [
+        crate::dto::wire::root_command::RootCommandResponse,
+        crate::dto::wire::root::RootStatusResponse,
+        crate::dto::wire::root::RootOperationStatusResponse,
+        crate::dto::wire::root::RootAuthStatusResponse,
+        crate::dto::wire::root::ObservabilityResponse,
+        crate::dto::wire::root::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_canic_rootstatusrequestfragment,
+    fixture_canic::RootStatusRequestFragment,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_canic_rootstatusresponsefragment,
+    fixture_canic::RootStatusResponseFragment,
+    true,
+    [
+        crate::dto::wire::root_command::RootCommandResponse,
+        crate::dto::wire::root::RootStatusResponse,
+        crate::dto::wire::root::RootOperationStatusResponse,
+        crate::dto::wire::root::RootAuthStatusResponse,
+        crate::dto::wire::root::ObservabilityResponse,
+        crate::dto::wire::root::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_canic_canisterstatusrequestfragment,
+    fixture_canic::CanisterStatusRequestFragment,
+    false,
+    [
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_canic_canisterstatusresponsefragment,
+    fixture_canic::CanisterStatusResponseFragment,
+    true,
+    [
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_canic_storestatusrequestfragment,
+    crate::dto::fleet_coordinator::CoordinatorOperationReadRequest,
+    false,
+    [
+        crate::dto::template::StoreCommand,
+        crate::dto::template::StoreStatusRequest,
+        crate::dto::template::StoreObservabilityRequest,
+        crate::dto::template::WasmStoreAdminCommand
+    ]
+);
+
+checked_projection!(
+    fixture_canic_storestatusresponsefragment,
+    crate::dto::wire::projection::store_activation::StoreStatusResponseFragment,
+    true,
+    [
+        crate::dto::template::StoreCommandResponse,
+        crate::dto::template::StoreStatusResponse,
+        crate::dto::template::StoreOperationStatusResponse,
+        crate::dto::template::StoreObservabilityResponse,
+        crate::dto::template::WasmStoreAdminResponse
+    ]
+);
+
+checked_projection!(
+    fixture_canic_storeoperationstatusfragment,
+    crate::dto::wire::projection::store_activation::StoreOperationStatusFragment,
+    true,
+    [
+        crate::dto::template::StoreCommandResponse,
+        crate::dto::template::StoreStatusResponse,
+        crate::dto::template::StoreOperationStatusResponse,
+        crate::dto::template::StoreObservabilityResponse,
+        crate::dto::template::WasmStoreAdminResponse
+    ]
+);
+
+checked_projection!(
+    fixture_caller_authority_command,
+    fixture_caller_authority::Command,
+    false,
+    [
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_caller_authority_response,
+    fixture_caller_authority::Response,
+    true,
+    [
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_caller_authority_statusrequest,
+    crate::dto::wire::projection::caller_authority::StatusRequest,
+    false,
+    [
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_caller_authority_statusresponse,
+    crate::dto::wire::projection::caller_authority::StatusResponse,
+    true,
+    [
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_root_topology_rootstatusrequest,
+    fixture_root_topology::RootStatusRequest,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_root_topology_rootstatusresponse,
+    fixture_root_topology::RootStatusResponse,
+    true,
+    [
+        crate::dto::wire::root_command::RootCommandResponse,
+        crate::dto::wire::root::RootStatusResponse,
+        crate::dto::wire::root::RootOperationStatusResponse,
+        crate::dto::wire::root::RootAuthStatusResponse,
+        crate::dto::wire::root::ObservabilityResponse,
+        crate::dto::wire::root::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_rootcommandfragment,
+    fixture_baseline::RootCommandFragment,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_hostrootcommandfragment,
+    crate::dto::wire::projection::fleet_setup::RootCommandFragment,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest,
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest,
+        crate::dto::template::StoreCommand,
+        crate::dto::template::StoreStatusRequest,
+        crate::dto::template::StoreObservabilityRequest,
+        crate::dto::template::WasmStoreAdminCommand
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_rootcommandresponsefragment,
+    fixture_baseline::RootCommandResponseFragment,
+    true,
+    [
+        crate::dto::wire::root_command::RootCommandResponse,
+        crate::dto::wire::root::RootStatusResponse,
+        crate::dto::wire::root::RootOperationStatusResponse,
+        crate::dto::wire::root::RootAuthStatusResponse,
+        crate::dto::wire::root::ObservabilityResponse,
+        crate::dto::wire::root::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_rootstatusrequestfragment,
+    fixture_baseline::RootStatusRequestFragment,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_rootstatusresponsefragment,
+    fixture_baseline::RootStatusResponseFragment,
+    true,
+    [
+        crate::dto::wire::root_command::RootCommandResponse,
+        crate::dto::wire::root::RootStatusResponse,
+        crate::dto::wire::root::RootOperationStatusResponse,
+        crate::dto::wire::root::RootAuthStatusResponse,
+        crate::dto::wire::root::ObservabilityResponse,
+        crate::dto::wire::root::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_managedstatusrequestfragment,
+    fixture_baseline::ManagedStatusRequestFragment,
+    false,
+    [
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_managedstatusresponsefragment,
+    fixture_baseline::ManagedStatusResponseFragment,
+    true,
+    [
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_managedadmissionstatusrequestfragment,
+    crate::dto::wire::projection::admission::RemoteRootStatusRequest,
+    false,
+    [
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_managedadmissionstatusresponsefragment,
+    fixture_baseline::ManagedAdmissionStatusResponseFragment,
+    true,
+    [
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_managedoperationstatusresponsefragment,
+    crate::dto::wire::projection::component_registry::CanisterOperationStatusFragment,
+    true,
+    [
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_roleoverviewstatusrequestfragment,
+    crate::dto::wire::projection::overview::RoleStatusRequest,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest,
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest,
+        crate::dto::template::StoreCommand,
+        crate::dto::template::StoreStatusRequest,
+        crate::dto::template::StoreObservabilityRequest,
+        crate::dto::template::WasmStoreAdminCommand
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_roleoverviewstatusresponsefragment,
+    crate::dto::wire::projection::overview::RoleStatusResponse,
+    true,
+    [
+        crate::dto::wire::root_command::RootCommandResponse,
+        crate::dto::wire::root::RootStatusResponse,
+        crate::dto::wire::root::RootOperationStatusResponse,
+        crate::dto::wire::root::RootAuthStatusResponse,
+        crate::dto::wire::root::ObservabilityResponse,
+        crate::dto::wire::root::PublicStatusResponse,
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse,
+        crate::dto::template::StoreCommandResponse,
+        crate::dto::template::StoreStatusResponse,
+        crate::dto::template::StoreOperationStatusResponse,
+        crate::dto::template::StoreObservabilityResponse,
+        crate::dto::template::WasmStoreAdminResponse
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_fixturereadinessrequest,
+    crate::dto::wire::projection::fixture_canic::CanisterStatusRequestFragment,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest,
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest,
+        crate::dto::template::StoreCommand,
+        crate::dto::template::StoreStatusRequest,
+        crate::dto::template::StoreObservabilityRequest,
+        crate::dto::template::WasmStoreAdminCommand
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_fixturereadinessresponse,
+    crate::dto::wire::projection::fixture_canic::CanisterStatusResponseFragment,
+    true,
+    [
+        crate::dto::wire::root_command::RootCommandResponse,
+        crate::dto::wire::root::RootStatusResponse,
+        crate::dto::wire::root::RootOperationStatusResponse,
+        crate::dto::wire::root::RootAuthStatusResponse,
+        crate::dto::wire::root::ObservabilityResponse,
+        crate::dto::wire::root::PublicStatusResponse,
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse,
+        crate::dto::template::StoreCommandResponse,
+        crate::dto::template::StoreStatusResponse,
+        crate::dto::template::StoreOperationStatusResponse,
+        crate::dto::template::StoreObservabilityResponse,
+        crate::dto::template::WasmStoreAdminResponse
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_publicmemoryrequest,
+    fixture_baseline::PublicMemoryRequest,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest,
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest,
+        crate::dto::template::StoreCommand,
+        crate::dto::template::StoreStatusRequest,
+        crate::dto::template::StoreObservabilityRequest,
+        crate::dto::template::WasmStoreAdminCommand
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_publicmemoryresponse,
+    fixture_baseline::PublicMemoryResponse,
+    true,
+    [
+        crate::dto::wire::root_command::RootCommandResponse,
+        crate::dto::wire::root::RootStatusResponse,
+        crate::dto::wire::root::RootOperationStatusResponse,
+        crate::dto::wire::root::RootAuthStatusResponse,
+        crate::dto::wire::root::ObservabilityResponse,
+        crate::dto::wire::root::PublicStatusResponse,
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse,
+        crate::dto::template::StoreCommandResponse,
+        crate::dto::template::StoreStatusResponse,
+        crate::dto::template::StoreOperationStatusResponse,
+        crate::dto::template::StoreObservabilityResponse,
+        crate::dto::template::WasmStoreAdminResponse
+    ]
+);
+
+checked_projection!(
+    fixture_role_attestation_rootcommand,
+    fixture_role_attestation::RootCommand,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_role_attestation_rootcommandresponse,
+    fixture_role_attestation::RootCommandResponse,
+    true,
+    [
+        crate::dto::wire::root_command::RootCommandResponse,
+        crate::dto::wire::root::RootStatusResponse,
+        crate::dto::wire::root::RootOperationStatusResponse,
+        crate::dto::wire::root::RootAuthStatusResponse,
+        crate::dto::wire::root::ObservabilityResponse,
+        crate::dto::wire::root::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_role_attestation_rootstatusrequest,
+    fixture_role_attestation::RootStatusRequest,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_role_attestation_rootstatusresponse,
+    fixture_role_attestation::RootStatusResponse,
+    true,
+    [
+        crate::dto::wire::root_command::RootCommandResponse,
+        crate::dto::wire::root::RootStatusResponse,
+        crate::dto::wire::root::RootOperationStatusResponse,
+        crate::dto::wire::root::RootAuthStatusResponse,
+        crate::dto::wire::root::ObservabilityResponse,
+        crate::dto::wire::root::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_role_attestation_managedstatusrequest,
+    fixture_role_attestation::ManagedStatusRequest,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_role_attestation_managedstatusresponse,
+    fixture_role_attestation::ManagedStatusResponse,
+    true,
+    [
+        crate::dto::wire::root_command::RootCommandResponse,
+        crate::dto::wire::root::RootStatusResponse,
+        crate::dto::wire::root::RootOperationStatusResponse,
+        crate::dto::wire::root::RootAuthStatusResponse,
+        crate::dto::wire::root::ObservabilityResponse,
+        crate::dto::wire::root::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_funding_deadline_command,
+    fixture_baseline_funding_deadline::Command,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest,
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest,
+        crate::dto::template::StoreCommand,
+        crate::dto::template::StoreStatusRequest,
+        crate::dto::template::StoreObservabilityRequest,
+        crate::dto::template::WasmStoreAdminCommand
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_funding_deadline_response,
+    fixture_baseline_funding_deadline::Response,
+    true,
+    [
+        crate::dto::wire::root_command::RootCommandResponse,
+        crate::dto::wire::root::RootStatusResponse,
+        crate::dto::wire::root::RootOperationStatusResponse,
+        crate::dto::wire::root::RootAuthStatusResponse,
+        crate::dto::wire::root::ObservabilityResponse,
+        crate::dto::wire::root::PublicStatusResponse,
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse,
+        crate::dto::template::StoreCommandResponse,
+        crate::dto::template::StoreStatusResponse,
+        crate::dto::template::StoreOperationStatusResponse,
+        crate::dto::template::StoreObservabilityResponse,
+        crate::dto::template::WasmStoreAdminResponse
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_application_initialization_command,
+    fixture_baseline_application_initialization::Command,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest,
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest,
+        crate::dto::template::StoreCommand,
+        crate::dto::template::StoreStatusRequest,
+        crate::dto::template::StoreObservabilityRequest,
+        crate::dto::template::WasmStoreAdminCommand
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_root_public_key_command,
+    fixture_baseline_root_public_key::Command,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest,
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest,
+        crate::dto::template::StoreCommand,
+        crate::dto::template::StoreStatusRequest,
+        crate::dto::template::StoreObservabilityRequest,
+        crate::dto::template::WasmStoreAdminCommand
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_root_public_key_response,
+    fixture_baseline_root_public_key::Response,
+    true,
+    [
+        crate::dto::wire::root_command::RootCommandResponse,
+        crate::dto::wire::root::RootStatusResponse,
+        crate::dto::wire::root::RootOperationStatusResponse,
+        crate::dto::wire::root::RootAuthStatusResponse,
+        crate::dto::wire::root::ObservabilityResponse,
+        crate::dto::wire::root::PublicStatusResponse,
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse,
+        crate::dto::template::StoreCommandResponse,
+        crate::dto::template::StoreStatusResponse,
+        crate::dto::template::StoreOperationStatusResponse,
+        crate::dto::template::StoreObservabilityResponse,
+        crate::dto::template::WasmStoreAdminResponse
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_provisioning_release_request,
+    crate::dto::wire::projection::release_provisioning::Request,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest,
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest,
+        crate::dto::template::StoreCommand,
+        crate::dto::template::StoreStatusRequest,
+        crate::dto::template::StoreObservabilityRequest,
+        crate::dto::template::WasmStoreAdminCommand
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_replay_release_request,
+    crate::dto::wire::projection::release_receipts::Request,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest,
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest,
+        crate::dto::template::StoreCommand,
+        crate::dto::template::StoreStatusRequest,
+        crate::dto::template::StoreObservabilityRequest,
+        crate::dto::template::WasmStoreAdminCommand
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_replay_release_intentrequest,
+    crate::dto::wire::projection::release_intents::Request,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest,
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest,
+        crate::dto::template::StoreCommand,
+        crate::dto::template::StoreStatusRequest,
+        crate::dto::template::StoreObservabilityRequest,
+        crate::dto::template::WasmStoreAdminCommand
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_child_reserve_command,
+    fixture_baseline_child_reserve::Command,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest,
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest,
+        crate::dto::template::StoreCommand,
+        crate::dto::template::StoreStatusRequest,
+        crate::dto::template::StoreObservabilityRequest,
+        crate::dto::template::WasmStoreAdminCommand
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_child_reserve_response,
+    fixture_baseline_child_reserve::Response,
+    true,
+    [
+        crate::dto::wire::root_command::RootCommandResponse,
+        crate::dto::wire::root::RootStatusResponse,
+        crate::dto::wire::root::RootOperationStatusResponse,
+        crate::dto::wire::root::RootAuthStatusResponse,
+        crate::dto::wire::root::ObservabilityResponse,
+        crate::dto::wire::root::PublicStatusResponse,
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse,
+        crate::dto::template::StoreCommandResponse,
+        crate::dto::template::StoreStatusResponse,
+        crate::dto::template::StoreOperationStatusResponse,
+        crate::dto::template::StoreObservabilityResponse,
+        crate::dto::template::WasmStoreAdminResponse
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_capacity_import_command,
+    crate::dto::wire::projection::capacity_import::Command,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest,
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest,
+        crate::dto::template::StoreCommand,
+        crate::dto::template::StoreStatusRequest,
+        crate::dto::template::StoreObservabilityRequest,
+        crate::dto::template::WasmStoreAdminCommand
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_capacity_import_response,
+    crate::dto::wire::projection::capacity_import::Response,
+    true,
+    [
+        crate::dto::wire::root_command::RootCommandResponse,
+        crate::dto::wire::root::RootStatusResponse,
+        crate::dto::wire::root::RootOperationStatusResponse,
+        crate::dto::wire::root::RootAuthStatusResponse,
+        crate::dto::wire::root::ObservabilityResponse,
+        crate::dto::wire::root::PublicStatusResponse,
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse,
+        crate::dto::template::StoreCommandResponse,
+        crate::dto::template::StoreStatusResponse,
+        crate::dto::template::StoreOperationStatusResponse,
+        crate::dto::template::StoreObservabilityResponse,
+        crate::dto::template::WasmStoreAdminResponse
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_capacity_import_statusrequest,
+    fixture_baseline_capacity_import::StatusRequest,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest,
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest,
+        crate::dto::template::StoreCommand,
+        crate::dto::template::StoreStatusRequest,
+        crate::dto::template::StoreObservabilityRequest,
+        crate::dto::template::WasmStoreAdminCommand
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_capacity_import_statusresponse,
+    fixture_baseline_capacity_import::StatusResponse,
+    true,
+    [
+        crate::dto::wire::root_command::RootCommandResponse,
+        crate::dto::wire::root::RootStatusResponse,
+        crate::dto::wire::root::RootOperationStatusResponse,
+        crate::dto::wire::root::RootAuthStatusResponse,
+        crate::dto::wire::root::ObservabilityResponse,
+        crate::dto::wire::root::PublicStatusResponse,
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse,
+        crate::dto::template::StoreCommandResponse,
+        crate::dto::template::StoreStatusResponse,
+        crate::dto::template::StoreOperationStatusResponse,
+        crate::dto::template::StoreObservabilityResponse,
+        crate::dto::template::WasmStoreAdminResponse
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_state_cascade_statecommand,
+    fixture_baseline_state_cascade::StateCommand,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest,
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest,
+        crate::dto::template::StoreCommand,
+        crate::dto::template::StoreStatusRequest,
+        crate::dto::template::StoreObservabilityRequest,
+        crate::dto::template::WasmStoreAdminCommand
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_state_cascade_stateresponse,
+    fixture_baseline_state_cascade::StateResponse,
+    true,
+    [
+        crate::dto::wire::root_command::RootCommandResponse,
+        crate::dto::wire::root::RootStatusResponse,
+        crate::dto::wire::root::RootOperationStatusResponse,
+        crate::dto::wire::root::RootAuthStatusResponse,
+        crate::dto::wire::root::ObservabilityResponse,
+        crate::dto::wire::root::PublicStatusResponse,
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse,
+        crate::dto::template::StoreCommandResponse,
+        crate::dto::template::StoreStatusResponse,
+        crate::dto::template::StoreOperationStatusResponse,
+        crate::dto::template::StoreObservabilityResponse,
+        crate::dto::template::WasmStoreAdminResponse
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_state_cascade_statequery,
+    fixture_baseline_state_cascade::StateQuery,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest,
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest,
+        crate::dto::template::StoreCommand,
+        crate::dto::template::StoreStatusRequest,
+        crate::dto::template::StoreObservabilityRequest,
+        crate::dto::template::WasmStoreAdminCommand
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_state_cascade_statequeryresponse,
+    fixture_baseline_state_cascade::StateQueryResponse,
+    true,
+    [
+        crate::dto::wire::root_command::RootCommandResponse,
+        crate::dto::wire::root::RootStatusResponse,
+        crate::dto::wire::root::RootOperationStatusResponse,
+        crate::dto::wire::root::RootAuthStatusResponse,
+        crate::dto::wire::root::ObservabilityResponse,
+        crate::dto::wire::root::PublicStatusResponse,
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse,
+        crate::dto::template::StoreCommandResponse,
+        crate::dto::template::StoreStatusResponse,
+        crate::dto::template::StoreOperationStatusResponse,
+        crate::dto::template::StoreObservabilityResponse,
+        crate::dto::template::WasmStoreAdminResponse
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_state_cascade_snapshotcommand,
+    fixture_baseline_state_cascade::SnapshotCommand,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest,
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest,
+        crate::dto::template::StoreCommand,
+        crate::dto::template::StoreStatusRequest,
+        crate::dto::template::StoreObservabilityRequest,
+        crate::dto::template::WasmStoreAdminCommand
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_state_cascade_snapshotresponse,
+    crate::dto::wire::projection::cascade::ComponentCommandResponseFragment,
+    true,
+    [
+        crate::dto::wire::root_command::RootCommandResponse,
+        crate::dto::wire::root::RootStatusResponse,
+        crate::dto::wire::root::RootOperationStatusResponse,
+        crate::dto::wire::root::RootAuthStatusResponse,
+        crate::dto::wire::root::ObservabilityResponse,
+        crate::dto::wire::root::PublicStatusResponse,
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse,
+        crate::dto::template::StoreCommandResponse,
+        crate::dto::template::StoreStatusResponse,
+        crate::dto::template::StoreOperationStatusResponse,
+        crate::dto::template::StoreObservabilityResponse,
+        crate::dto::template::WasmStoreAdminResponse
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_state_cascade_managedadmincommand,
+    fixture_baseline_state_cascade::ManagedAdminCommand,
+    false,
+    [
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_state_cascade_storeadmincommand,
+    fixture_baseline_state_cascade::StoreAdminCommand,
+    false,
+    [
+        crate::dto::template::StoreCommand,
+        crate::dto::template::StoreStatusRequest,
+        crate::dto::template::StoreObservabilityRequest,
+        crate::dto::template::WasmStoreAdminCommand
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_funding_inventory_request,
+    fixture_baseline_funding_inventory::Request,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest,
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest,
+        crate::dto::template::StoreCommand,
+        crate::dto::template::StoreStatusRequest,
+        crate::dto::template::StoreObservabilityRequest,
+        crate::dto::template::WasmStoreAdminCommand
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_funding_inventory_response,
+    fixture_baseline_funding_inventory::Response,
+    true,
+    [
+        crate::dto::wire::root_command::RootCommandResponse,
+        crate::dto::wire::root::RootStatusResponse,
+        crate::dto::wire::root::RootOperationStatusResponse,
+        crate::dto::wire::root::RootAuthStatusResponse,
+        crate::dto::wire::root::ObservabilityResponse,
+        crate::dto::wire::root::PublicStatusResponse,
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse,
+        crate::dto::template::StoreCommandResponse,
+        crate::dto::template::StoreStatusResponse,
+        crate::dto::template::StoreOperationStatusResponse,
+        crate::dto::template::StoreObservabilityResponse,
+        crate::dto::template::WasmStoreAdminResponse
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_funding_inventory_command,
+    crate::dto::wire::projection::funding_observation::Command,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest,
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest,
+        crate::dto::template::StoreCommand,
+        crate::dto::template::StoreStatusRequest,
+        crate::dto::template::StoreObservabilityRequest,
+        crate::dto::template::WasmStoreAdminCommand
+    ]
+);
+
+checked_projection!(
+    fixture_baseline_funding_inventory_commandresponse,
+    fixture_baseline_funding_inventory::CommandResponse,
+    true,
+    [
+        crate::dto::wire::root_command::RootCommandResponse,
+        crate::dto::wire::root::RootStatusResponse,
+        crate::dto::wire::root::RootOperationStatusResponse,
+        crate::dto::wire::root::RootAuthStatusResponse,
+        crate::dto::wire::root::ObservabilityResponse,
+        crate::dto::wire::root::PublicStatusResponse,
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse,
+        crate::dto::template::StoreCommandResponse,
+        crate::dto::template::StoreStatusResponse,
+        crate::dto::template::StoreOperationStatusResponse,
+        crate::dto::template::StoreObservabilityResponse,
+        crate::dto::template::WasmStoreAdminResponse
+    ]
+);
+
+checked_projection!(local_authority_request, local_authority::Request, false);
+checked_projection!(local_authority_response, local_authority::Response, true);
+
+#[test]
+fn nested_operation_reply_decodes_the_selected_canonical_variant() {
+    use crate::{
+        dto::{
+            fleet_activation::{
+                FleetActivationIdentity, FleetActivationPhase, FleetActivationStatusResponse,
+            },
+            template::{StoreOperationStatusResponse, StoreStatusResponse},
+        },
+        ids::{AppId, FleetBinding, ReleaseBuildId, ReleaseBuildNonce},
+    };
+    let expected = FleetActivationStatusResponse {
+        phase: FleetActivationPhase::Prepared,
+        identity: FleetActivationIdentity {
+            fleet: FleetBinding {
+                fleet: crate::test::support::fleet_key(1),
+                app: AppId::from("fixture"),
+            },
+            operation_id: [7; 32],
+            release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes(
+                [8; 32],
+            )),
+        },
+        cascade: None,
+        cascade_manifest: None,
+        credential: None,
+        credential_manifest: None,
+        activated_at_ns: None,
+    };
+    let bytes = candid::encode_one(StoreStatusResponse::Operation(
+        StoreOperationStatusResponse::FleetActivation(expected.clone()),
+    ))
+    .unwrap();
+    let projected: store_activation::StoreStatusResponseFragment =
+        candid::decode_one(&bytes).unwrap();
+    let store_activation::StoreStatusResponseFragment::Operation(
+        store_activation::StoreOperationStatusFragment::FleetActivation(actual),
+    ) = projected;
+    assert_eq!(actual, expected);
+}
+
+checked_projection!(
+    fixture_host_inspection_reply,
+    fixture_host_inspection::FixturePoolInspectionResponse,
+    true
+);
+
+checked_projection!(
+    fixture_managed_app_managedcommand,
+    fixture_managed_app::ManagedCommand,
+    false,
+    [
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_managed_app_managedcommandresponse,
+    crate::dto::wire::projection::fixture_managed_component_group::ManagedCommandResponse,
+    true,
+    [
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_managed_app_managedstatusrequest,
+    fixture_managed_app::ManagedStatusRequest,
+    false,
+    [
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_managed_app_managedstatusresponse,
+    fixture_managed_app::ManagedStatusResponse,
+    true,
+    [
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_managed_component_group_managedcommand,
+    crate::dto::wire::projection::fixture_managed_app::ManagedCommand,
+    false,
+    [
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_managed_component_group_managedcommandresponse,
+    fixture_managed_component_group::ManagedCommandResponse,
+    true,
+    [
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_managed_component_group_managedstatusrequest,
+    fixture_managed_component_group::ManagedStatusRequest,
+    false,
+    [
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_managed_component_group_managedstatusresponse,
+    fixture_managed_component_group::ManagedStatusResponse,
+    true,
+    [
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_issuer_bootstrap_rootcommand,
+    fixture_issuer_bootstrap::RootCommand,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_issuer_bootstrap_rootcommandresponse,
+    fixture_issuer_bootstrap::RootCommandResponse,
+    true,
+    [
+        crate::dto::wire::root_command::RootCommandResponse,
+        crate::dto::wire::root::RootStatusResponse,
+        crate::dto::wire::root::RootOperationStatusResponse,
+        crate::dto::wire::root::RootAuthStatusResponse,
+        crate::dto::wire::root::ObservabilityResponse,
+        crate::dto::wire::root::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_issuer_bootstrap_rootstatusrequest,
+    fixture_issuer_bootstrap::RootStatusRequest,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_issuer_bootstrap_issuerstatusrequest,
+    fixture_issuer_bootstrap::IssuerStatusRequest,
+    false,
+    [
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_issuer_bootstrap_issuerstatusresponse,
+    fixture_issuer_bootstrap::IssuerStatusResponse,
+    true,
+    [
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_native_delegation_canistercommand,
+    fixture_native_delegation::CanisterCommand,
+    false,
+    [
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_native_delegation_canistercommandresponse,
+    fixture_native_delegation::CanisterCommandResponse,
+    true,
+    [
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_native_delegation_canisterstatusrequest,
+    fixture_native_delegation::CanisterStatusRequest,
+    false,
+    [
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_native_delegation_canisterstatusresponse,
+    fixture_native_delegation::CanisterStatusResponse,
+    true,
+    [
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_native_delegation_fleetadmissionmanagedstatusrequest,
+    crate::dto::wire::projection::admission::RemoteRootStatusRequest,
+    false,
+    [
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_timer_authority_rolestatusrequest,
+    fixture_timer_authority::RoleStatusRequest,
+    false,
+    [
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_timer_authority_rolestatusresponse,
+    fixture_timer_authority::RoleStatusResponse,
+    true,
+    [
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_timer_authority_publicstatusrequest,
+    fixture_timer_authority::PublicStatusRequest,
+    false,
+    [
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_timer_authority_publicstatusresponse,
+    fixture_timer_authority::PublicStatusResponse,
+    true,
+    [
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_instruction_audit_rootcommand,
+    fixture_instruction_audit::RootCommand,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_instruction_audit_rootcommandresponse,
+    fixture_instruction_audit::RootCommandResponse,
+    true,
+    [
+        crate::dto::wire::root_command::RootCommandResponse,
+        crate::dto::wire::root::RootStatusResponse,
+        crate::dto::wire::root::RootOperationStatusResponse,
+        crate::dto::wire::root::RootAuthStatusResponse,
+        crate::dto::wire::root::ObservabilityResponse,
+        crate::dto::wire::root::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_lifecycle_boundary_canisterstatusrequest,
+    crate::dto::wire::projection::fixture_canic::RootStatusRequestFragment,
+    false,
+    [
+        crate::dto::wire::managed_command::CanisterCommand,
+        crate::dto::wire::managed::AuthStatusRequest,
+        crate::dto::wire::managed::ControlStatusRequest,
+        crate::dto::wire::managed::AdmissionStatusRequest,
+        crate::dto::wire::managed::ObservabilityRequest,
+        crate::dto::wire::managed::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    fixture_lifecycle_boundary_canisterstatusresponse,
+    fixture_lifecycle_boundary::CanisterStatusResponse,
+    true,
+    [
+        crate::dto::wire::managed_command::CanisterCommandResponse,
+        crate::dto::wire::managed::AuthStatusResponse,
+        crate::dto::wire::managed::ControlStatusResponse,
+        crate::dto::wire::managed::AdmissionStatusResponse,
+        crate::dto::wire::managed::CanisterOperationStatusResponse,
+        crate::dto::wire::managed::ObservabilityResponse,
+        crate::dto::wire::managed::PublicStatusResponse
+    ]
+);
+
+checked_projection!(
+    fixture_root_inspection_reserve_reserverequest,
+    fixture_root_inspection_reserve::ReserveRequest,
+    false,
+    [
+        crate::dto::wire::root_command::RootCommand,
+        crate::dto::wire::root::RootStatusRequest,
+        crate::dto::wire::root::RootOperationStatusRequest,
+        crate::dto::wire::root::RootAuthStatusRequest,
+        crate::dto::wire::root::ObservabilityRequest,
+        crate::dto::wire::root::PublicStatusRequest
+    ]
+);
+
+checked_projection!(
+    operation_accepted_root,
+    crate::dto::role::OperationAcceptedResponse,
+    true,
+    [crate::dto::wire::root_command::RootCommandResponse]
+);
+
+checked_projection!(
+    operation_accepted_managed,
+    crate::dto::role::OperationAcceptedResponse,
+    true,
+    [crate::dto::wire::managed_command::CanisterCommandResponse]
+);
+
+checked_projection!(
+    operation_accepted_store,
+    crate::dto::role::OperationAcceptedResponse,
+    true,
+    [crate::dto::template::StoreCommandResponse]
+);

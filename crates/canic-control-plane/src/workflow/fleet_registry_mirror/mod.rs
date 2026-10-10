@@ -14,28 +14,28 @@ use crate::{
         bootstrap::root_store, fleet_coordinator_client, root_authority::validated_root_authority,
     },
 };
+use canic_contracts::dto::{
+    fleet_registry::{
+        FleetDirectorySnapshot, FleetRegistryManifest, FleetRegistrySnapshotResponse,
+        FleetRegistryVersion, FleetSubnetRootEntry, FleetSubnetRootRegistryMirrorActivationRequest,
+        FleetSubnetRootRegistryMirrorActivationResponse, FleetSubnetRootRegistrySyncRequest,
+        FleetSubnetRootRegistrySyncResponse, FleetSubnetRootSnapshotAcknowledgement,
+        FleetSubnetRootSnapshotAcknowledgementRequest, FleetSubnetRootStatus,
+    },
+    role::OperationReceipt,
+};
 use canic_core::{
     api::timer::TimerApi,
     control_plane_support::{
         error::InternalError,
         ops::{config::ConfigOps, fleet_registry::FleetRegistryOps},
     },
-    dto::{
-        fleet_registry::{
-            FleetDirectorySnapshot, FleetRegistryManifest, FleetRegistrySnapshotResponse,
-            FleetRegistryVersion, FleetSubnetRootEntry,
-            FleetSubnetRootRegistryMirrorActivationRequest,
-            FleetSubnetRootRegistryMirrorActivationResponse, FleetSubnetRootRegistrySyncRequest,
-            FleetSubnetRootRegistrySyncResponse, FleetSubnetRootSnapshotAcknowledgement,
-            FleetSubnetRootSnapshotAcknowledgementRequest, FleetSubnetRootStatus,
-        },
-        role::OperationReceipt,
-    },
     shared_support::fleet_funding_policy::fleet_subnet_root_funding_policy_hash,
 };
 use std::time::Duration;
 
 /// Validated source and target authority retained before one mirror commit.
+
 pub(super) struct PreparedComponentPublicationTransition {
     pub source: FleetRegistrySnapshotResponse,
     pub target: FleetRegistrySnapshotResponse,
@@ -273,7 +273,7 @@ pub async fn activate(
 pub async fn advance_for_component_publication(
     previous_registry: FleetRegistryVersion,
     expected_registry: FleetRegistryVersion,
-    store_bootstrap: canic_core::dto::root_store::RootStoreBootstrapRequest,
+    store_bootstrap: canic_contracts::dto::root_store::RootStoreBootstrapRequest,
 ) -> Result<FleetSubnetRootRegistryMirrorActivationResponse, InternalError> {
     let (authority, root) = validated_root_authority()?;
     root_store::status(store_bootstrap.clone()).await?;
@@ -370,7 +370,7 @@ pub(super) async fn advance_for_funding_policy_rotation(
 /// Root removal owns this refresh privately after the high-level removal intent
 /// is accepted. It does not expose another phase-selecting endpoint.
 pub(super) async fn advance_to_draining_for_root_removal(
-    store_bootstrap: canic_core::dto::root_store::RootStoreBootstrapRequest,
+    store_bootstrap: canic_contracts::dto::root_store::RootStoreBootstrapRequest,
 ) -> Result<FleetSubnetRootRegistryMirrorActivationResponse, InternalError> {
     let (authority, root) = validated_root_authority()?;
     root_store::status(store_bootstrap.clone()).await?;
@@ -385,7 +385,7 @@ pub(super) async fn advance_to_draining_for_root_removal(
 pub(super) async fn prepare_component_publication_transition(
     previous_registry: FleetRegistryVersion,
     expected_registry: FleetRegistryVersion,
-    store_bootstrap: canic_core::dto::root_store::RootStoreBootstrapRequest,
+    store_bootstrap: canic_contracts::dto::root_store::RootStoreBootstrapRequest,
 ) -> Result<PreparedComponentPublicationTransition, InternalError> {
     let (authority, root) = validated_root_authority()?;
     root_store::status(store_bootstrap.clone()).await?;
@@ -445,7 +445,7 @@ pub(super) fn commit_component_publication_transition(
 }
 
 async fn fetch_snapshot(
-    authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
+    authority: &canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority,
 ) -> Result<FleetRegistrySnapshotResponse, InternalError> {
     let registry =
         fleet_coordinator_client::registry(authority.binding.authority.binding.coordinator).await?;
@@ -465,7 +465,7 @@ async fn fetch_snapshot(
 
 async fn acknowledge_snapshot(
     coordinator: candid::Principal,
-    version: canic_core::dto::fleet_registry::FleetRegistryVersion,
+    version: canic_contracts::dto::fleet_registry::FleetRegistryVersion,
 ) -> Result<FleetSubnetRootSnapshotAcknowledgement, InternalError> {
     fleet_coordinator_client::acknowledge_root_snapshot(
         coordinator,
@@ -475,7 +475,7 @@ async fn acknowledge_snapshot(
 }
 
 fn validate_snapshot(
-    authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
+    authority: &canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority,
     snapshot: &FleetRegistrySnapshotResponse,
     expected_status: FleetSubnetRootStatus,
 ) -> Result<(), InternalError> {
@@ -493,7 +493,7 @@ struct CanonicalSnapshotEvidence<'a> {
 }
 
 fn validated_snapshot_root(
-    authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
+    authority: &canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority,
     snapshot: &FleetRegistrySnapshotResponse,
 ) -> Result<FleetSubnetRootEntry, InternalError> {
     let topology = ConfigOps::component_topology()?;
@@ -534,7 +534,7 @@ fn validated_snapshot_root(
 }
 
 fn validate_target(
-    authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
+    authority: &canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority,
     root: candid::Principal,
     request: &FleetSubnetRootRegistryMirrorActivationRequest,
     snapshot: &FleetRegistrySnapshotResponse,
@@ -560,7 +560,7 @@ fn validate_target(
 }
 
 fn validate_transition_request(
-    authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
+    authority: &canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority,
     request: &FleetSubnetRootRegistryMirrorActivationRequest,
 ) -> Result<(), InternalError> {
     let expected_authority = &authority.binding.authority;
@@ -633,7 +633,7 @@ fn classify_active_transition(
 }
 
 fn validated_active_if_present(
-    authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
+    authority: &canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority,
     root: candid::Principal,
 ) -> Result<Option<RootFleetRegistryActiveView>, InternalError> {
     if FleetRegistryMirrorOps::current().active.is_none() {
@@ -643,7 +643,7 @@ fn validated_active_if_present(
 }
 
 fn validated_active(
-    authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
+    authority: &canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority,
     root: candid::Principal,
 ) -> Result<RootFleetRegistryActiveView, InternalError> {
     let mirror = FleetRegistryMirrorOps::validated_current(authority, root)?;
@@ -683,7 +683,7 @@ fn response(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use canic_core::{
+    use canic_contracts::{
         dto::{
             fleet_registry::{FleetDirectoryProvenance, FleetRegistry},
             root_store::RootStoreBootstrapRequest,

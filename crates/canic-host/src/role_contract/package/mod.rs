@@ -14,9 +14,9 @@ use crate::cargo_metadata::{
     CargoMetadataNodeDependency, CargoMetadataPackage, cargo_metadata,
     cargo_metadata_catalog_for_manifest, cargo_metadata_for_manifest, cargo_tree_for_package,
 };
+use canic_contracts::ids::CanisterRole;
 use canic_core::{
     bootstrap::parse_config_model,
-    ids::CanisterRole,
     role_contract::{
         BuiltInRoleKind, CanicFeatureKey, RoleContractFinding,
         catalog::{

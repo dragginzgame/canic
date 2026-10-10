@@ -20,7 +20,7 @@ use crate::fleet_ensure::{
     view::release::FleetReleaseObservation,
 };
 use candid::Principal;
-use canic_core::ids::SubnetId;
+use canic_contracts::ids::SubnetId;
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error;
 

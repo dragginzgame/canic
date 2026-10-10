@@ -8,22 +8,19 @@ mod canonical;
 #[cfg(test)]
 mod tests;
 
-use crate::{
-    config::{
-        ComponentDeploymentPurpose, ComponentGroupDeploymentTopology,
-        ComponentGroupDeploymentTopologyError, ComponentTopology, ComponentTopologyError,
-        FleetServiceMemberPurpose,
-        schema::{ConfigModel, FleetServicePlacementPolicyConfig, FleetServiceTargetConfig},
-    },
-    ids::{
-        CanisterRole, ComponentGroupDeploymentId, ComponentGroupMemberPath, ComponentSpecId,
-        FleetServiceId,
-    },
+use crate::config::{
+    ComponentDeploymentPurpose, ComponentGroupDeploymentTopology,
+    ComponentGroupDeploymentTopologyError, ComponentTopology, ComponentTopologyError,
+    FleetServiceMemberPurpose,
+    schema::{ConfigModel, FleetServicePlacementPolicyConfig, FleetServiceTargetConfig},
 };
-use std::collections::BTreeMap;
-
 use candid::CandidType;
+use canic_contracts::ids::{
+    CanisterRole, ComponentGroupDeploymentId, ComponentGroupMemberPath, ComponentSpecId,
+    FleetServiceId,
+};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use thiserror::Error as ThisError;
 
 pub use canonical::MAX_FLEET_SERVICE_TOPOLOGY_CANONICAL_BYTES;
@@ -172,12 +169,6 @@ pub enum FleetServiceTargetMode {
 }
 
 /// Service-wide density and spread envelope independent of deployment placement.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct FleetServicePlacementPolicy {
-    pub maximum_members_per_root: u32,
-    pub minimum_distinct_roots: u32,
-}
 
 /// Typed rejection for an invalid Fleet-service target topology.
 #[derive(Debug, ThisError)]
@@ -655,3 +646,5 @@ fn validate_active_pool(
     }
     Ok(())
 }
+
+pub use canic_contracts::deployment::FleetServicePlacementPolicy;

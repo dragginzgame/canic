@@ -37,11 +37,10 @@ use crate::{
     icp::IcpCli,
 };
 use candid::{CandidType, Nat, Principal};
+use canic_contracts::{dto::fleet_registry::FleetRegistry, ids::CanonicalNetworkId};
 use canic_core::{
     cdk::utils::hash::{decode_hex, hex_bytes},
     control_plane_support::ops::fleet_registry::FleetRegistryOps,
-    dto::fleet_registry::FleetRegistry,
-    ids::CanonicalNetworkId,
     shared_support::fleet_admission_policy::bind_initial_fleet_admission_policy,
 };
 use sha2_host::{Digest, Sha256};
@@ -683,7 +682,7 @@ pub(in crate::fleet_ensure) fn verify_initial(
         .desired();
     let allowance = desired
         .maximum_observation_burn_cycles
-        .parse::<canic_core::cdk::types::Cycles>()
+        .parse::<canic_contracts::cycles::Cycles>()
         .map_err(|_| InfrastructureBootstrapError::Integrity)?
         .to_u128();
     let held = source
@@ -824,7 +823,7 @@ pub(in crate::fleet_ensure) fn terminal_observation(
         controllers.dedup();
         let minimum = configured
             .minimum_cycles
-            .parse::<canic_core::cdk::types::Cycles>()
+            .parse::<canic_contracts::cycles::Cycles>()
             .map_err(|_| InfrastructureBootstrapError::Integrity)?
             .to_u128();
         if principals.get(&target.name) != Some(&actual.binding.canister_id.to_text())

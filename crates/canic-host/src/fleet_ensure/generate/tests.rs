@@ -1,5 +1,4 @@
 use super::*;
-use crate::fleet_ensure::view::startup_funding::StartupNativeBalance;
 use crate::{
     fleet_ensure::{
         model::{
@@ -14,6 +13,7 @@ use crate::{
             IcpEnsurePlatform, IcpEnsurePlatformError, action_sha256, read_journal,
             read_root_start_authority, read_state, write_journal, write_plan, write_state,
         },
+        view::startup_funding::StartupNativeBalance,
         workflow,
     },
     network::{NetworkEnrollmentOptions, enroll_network},
@@ -24,27 +24,34 @@ use crate::{
     },
     test_support::temp_dir,
 };
-use canic_control_plane::{
-    dto::template::TemplateChunkInput,
-    ids::{TemplateId, TemplateVersion},
+use canic_contracts::dto::wire::projection::fixture_host_inspection::{
+    FixturePoolControllers, FixturePoolInspection, FixturePoolInspectionResponse,
 };
-use canic_core::{
-    cdk::{
-        types::Cycles,
-        utils::hash::{hex_bytes, sha256_hex},
-    },
-    dto::pool::{CanisterPoolAsset, CanisterPoolAssetOrigin, CanisterPoolAssetStatus},
+use canic_contracts::{
+    cycles::Cycles,
     dto::{
         component_provisioning::{
             FleetComponentProvisioningOperation, FleetComponentProvisioningPlan,
             FleetComponentProvisioningPrepareRequest,
         },
         fleet_registry::FleetRegistryVersion,
+        pool::{
+            CanisterPoolAsset, CanisterPoolAssetOrigin, CanisterPoolAssetStatus,
+            CanisterPoolResponse,
+        },
+        template::TemplateChunkInput,
+        wire::projection::inspection_reserve::{
+            InspectionReserveRequest, InspectionReserveResponse,
+        },
     },
     ids::{
         CanisterRole, ComponentDeploymentConfigurationDigest, FleetCoordinatorBinding, FleetKey,
         FleetRegistryAuthority, FleetSubnetRootReleaseSet, ReleaseBuildNonce, ReleaseSetDigest,
+        TemplateId, TemplateVersion,
     },
+};
+use canic_core::{
+    cdk::utils::hash::{hex_bytes, sha256_hex},
     role_contract::{ProtocolProfileDigest, RoleCapabilityKey},
 };
 use flate2::{Compression, GzBuilder};
@@ -385,7 +392,9 @@ fn retained_root_policy_must_match_current_configuration() {
     let root = source.fleet_subnet_roots.first().expect("Root policy");
     let expected = RootDesiredPolicy {
         component_admissions: Vec::new(),
-        component_topology_digest: canic_core::ids::ComponentTopologyDigest::from_bytes([14; 32]),
+        component_topology_digest: canic_contracts::ids::ComponentTopologyDigest::from_bytes(
+            [14; 32],
+        ),
         funding: root_funding(source.funding_profile, &root.root_funding),
         installation_controller: operator,
         limits: root_limits(root),
@@ -437,7 +446,7 @@ fn multi_root_generation_joins_topology_by_typed_subnet_identity() {
             placement_subnet: parse_subnet("test Root", &source.placement_subnet)
                 .expect("typed test Subnet"),
             component_admissions: Vec::new(),
-            component_topology_digest: canic_core::ids::ComponentTopologyDigest::from_bytes(
+            component_topology_digest: canic_contracts::ids::ComponentTopologyDigest::from_bytes(
                 [u8::try_from(index + 1).expect("bounded test index"); 32],
             ),
             limits: root_limits(source),
@@ -4470,7 +4479,7 @@ cycles = "10T"
 }
 
 fn retained_estate_seed_toml(
-    fleet_id: canic_core::ids::FleetId,
+    fleet_id: canic_contracts::ids::FleetId,
     coordinator: &str,
     placement: &str,
     root: &str,
@@ -4497,7 +4506,7 @@ pool_imports = ["{}", "{}"]
     )
 }
 
-fn enroll_test_network(root: &Path) -> canic_core::ids::CanonicalNetworkId {
+fn enroll_test_network(root: &Path) -> canic_contracts::ids::CanonicalNetworkId {
     let mut root_key = vec![
         0x30, 0x81, 0x82, 0x30, 0x1d, 0x06, 0x0d, 0x2b, 0x06, 0x01, 0x04, 0x01, 0x82, 0xdc, 0x7c,
         0x05, 0x03, 0x01, 0x02, 0x01, 0x06, 0x0c, 0x2b, 0x06, 0x01, 0x04, 0x01, 0x82, 0xdc, 0x7c,
@@ -4585,7 +4594,7 @@ fn persist_test_release_authority(
         application_artifact_union_sha256: application
             .digest(config.component_topology())
             .expect("application union digest"),
-        build_network: canic_core::ids::BuildNetwork::Local,
+        build_network: canic_contracts::ids::BuildNetwork::Local,
         fixture_artifact_manifest_sha256: fixtures.digest,
         infrastructure_artifact_manifest_sha256: infrastructure
             .digest()
@@ -4636,9 +4645,9 @@ fn copy_test_tree(source: &Path, destination: &Path) -> io::Result<()> {
     reason = "the retained observation fixture binds every independent Fleet authority identity"
 )]
 fn retained_root_authority(
-    canonical_network_id: canic_core::ids::CanonicalNetworkId,
-    app: canic_core::ids::AppId,
-    fleet_id: canic_core::ids::FleetId,
+    canonical_network_id: canic_contracts::ids::CanonicalNetworkId,
+    app: canic_contracts::ids::AppId,
+    fleet_id: canic_contracts::ids::FleetId,
     source: &FleetSource,
     planned: &crate::component_topology::PlannedFleetSubnetRootTopology,
     operator: &str,
@@ -4703,8 +4712,8 @@ fn retained_pool_response(
     workload: &str,
     idle: &str,
 ) -> CanisterPoolResponse {
-    let claim = canic_core::dto::pool::CanisterPoolClaim {
-        component: canic_core::ids::ComponentInstanceId::from_generated_bytes([81; 32]),
+    let claim = canic_contracts::dto::pool::CanisterPoolClaim {
+        component: canic_contracts::ids::ComponentInstanceId::from_generated_bytes([81; 32]),
         operation_id: [82; 32],
     };
     CanisterPoolResponse {
@@ -4767,7 +4776,7 @@ struct FakeIcpFixture<'a> {
     controller_cycle_balance: Option<(&'a str, u128)>,
     root_module_hash: &'a str,
     root_runtime_status: &'a str,
-    root_status_error: Option<canic_core::diagnostics::RegisteredDiagnosticCode>,
+    root_status_error: Option<canic_contracts::diagnostics::RegisteredDiagnosticCode>,
     store: &'a str,
     store_has_root_controller: bool,
     store_module_hash: &'a str,
@@ -4874,15 +4883,15 @@ fn write_fake_icp_with_status_projection(
     } else {
         format!("printf '%s\\n' '{store_status}'\n    exit 0")
     };
-    let authority_response = candid_response_json(&Ok::<_, canic_core::dto::error::Error>(
+    let authority_response = candid_response_json(&Ok::<_, canic_contracts::dto::error::Error>(
         RootEstateStatusResponse::FleetAuthority(Box::new(authority.clone())),
     ));
-    let pool_response = candid_response_json(&Ok::<_, canic_core::dto::error::Error>(
+    let pool_response = candid_response_json(&Ok::<_, canic_contracts::dto::error::Error>(
         RootEstateStatusResponse::Pool(Box::new(pool.clone())),
     ));
     let root_error_case = root_status_error.map_or_else(String::new, |code| {
         let response = candid_response_json(&Err::<RootEstateStatusResponse, _>(
-            canic_core::dto::error::Error::from_registered(code),
+            canic_contracts::dto::error::Error::from_registered(code),
         ));
         format!(
             r#"if [ -f "{}" ] && [ "$count" -ge 4 ]; then
@@ -4896,9 +4905,9 @@ fn write_fake_icp_with_status_projection(
     let ledger_balance_response = candid_response_json(&Nat::from(1_000_000_000_000_000_u64));
     let controller_cycle_case =
         controller_cycle_balance.map_or_else(String::new, |(canister, cycles)| {
-        let response = candid_response_json(&Ok::<_, canic_core::dto::error::Error>(
-            FixtureManagedStatusResponse::CycleBalance(
-                canic_core::dto::role::CycleBalanceStatusResponse { cycles },
+        let response = candid_response_json(&Ok::<_, canic_contracts::dto::error::Error>(
+            canic_contracts::dto::wire::projection::pool_observation::ManagedCanisterStatusResponse::CycleBalance(
+                canic_contracts::dto::role::CycleBalanceStatusResponse { cycles },
             ),
         ));
         format!(
@@ -4909,9 +4918,9 @@ fi
 "#
         )
     });
-    let inspection = candid_response_json(&Ok::<_, canic_core::dto::error::Error>(
+    let inspection = candid_response_json(&Ok::<_, canic_contracts::dto::error::Error>(
         FixturePoolInspectionResponse::InspectCanister(FixturePoolInspection {
-            status: canic_core::dto::canister::CanisterStatusType::Running,
+            status: canic_contracts::dto::canister::CanisterStatusType::Running,
             cycles: Nat::from(6_000_000_000_000_u128),
             module_hash: None,
             settings: FixturePoolControllers {
@@ -5025,9 +5034,6 @@ fn write_inspection_reserve_responses(
     store: &str,
     pool: &CanisterPoolResponse,
 ) {
-    use crate::canister_protocol::inspection::{
-        InspectionReserveRequest, InspectionReserveResponse,
-    };
     let caller = Principal::from_text(caller).unwrap();
     for canister_id in pool
         .entries
@@ -5039,44 +5045,24 @@ fn write_inspection_reserve_responses(
         fs::write(
             base.with_extension("bin"),
             candid::encode_one(InspectionReserveRequest::InspectionReserve(
-                canic_core::dto::canister::CanisterInspectionRequest { canister_id },
+                canic_contracts::dto::canister::CanisterInspectionRequest { canister_id },
             ))
             .unwrap(),
         )
         .unwrap();
-        let response =
-            Ok::<_, canic_core::dto::error::Error>(InspectionReserveResponse::InspectionReserve(
-                canic_core::dto::canister::CanisterInspectionReserveResponse {
+        let response = Ok::<_, canic_contracts::dto::error::Error>(
+            InspectionReserveResponse::InspectionReserve(
+                canic_contracts::dto::canister::CanisterInspectionReserveResponse {
                     caller,
                     canister_id,
                     native_cycles: 30_000_000_000_000,
                     available_liquid_cycles: 20_000_000_000_000,
                     required_liquid_cycles: 50_000_000_000,
                 },
-            ));
+            ),
+        );
         fs::write(base.with_extension("json"), candid_response_json(&response)).unwrap();
     }
-}
-
-#[derive(candid::CandidType)]
-enum FixturePoolInspectionResponse {
-    InspectCanister(FixturePoolInspection),
-}
-#[derive(candid::CandidType)]
-struct FixturePoolInspection {
-    status: canic_core::dto::canister::CanisterStatusType,
-    cycles: Nat,
-    module_hash: Option<Vec<u8>>,
-    settings: FixturePoolControllers,
-}
-#[derive(candid::CandidType)]
-struct FixturePoolControllers {
-    controllers: Vec<Principal>,
-}
-
-#[derive(candid::CandidType)]
-enum FixtureManagedStatusResponse {
-    CycleBalance(canic_core::dto::role::CycleBalanceStatusResponse),
 }
 
 #[cfg(not(unix))]

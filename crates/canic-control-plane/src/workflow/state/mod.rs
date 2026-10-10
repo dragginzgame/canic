@@ -8,6 +8,10 @@ use crate::ops::{
     component_registry::ComponentRegistryOps,
     storage::state::root_wasm_store::RootWasmStoreStateOps,
 };
+use canic_contracts::dto::{
+    fleet_activation::FleetActivationPhase,
+    state::{FleetCommand, FleetCommandExecutionResponse},
+};
 use canic_core::{
     api::fleet_activation::FleetActivationApi,
     cdk::types::Principal,
@@ -16,10 +20,6 @@ use canic_core::{
         ops::ic::IcOps,
         view::state_cascade::{StateCascadeEndpoint, StateCascadeTarget},
         workflow::state::execute_fleet_command_to,
-    },
-    dto::{
-        fleet_activation::FleetActivationPhase,
-        state::{FleetCommand, FleetCommandExecutionResponse},
     },
 };
 use std::collections::BTreeMap;
@@ -155,7 +155,7 @@ mod tests {
 
         assert_eq!(
             duplicate.code(),
-            canic_core::diagnostics::codes::STATE_INVALID
+            canic_contracts::diagnostics::codes::STATE_INVALID
         );
         assert_eq!(
             targets.into_vec(),
@@ -184,9 +184,12 @@ mod tests {
 
         assert_eq!(
             anonymous.code(),
-            canic_core::diagnostics::codes::STATE_INVALID
+            canic_contracts::diagnostics::codes::STATE_INVALID
         );
-        assert_eq!(root.code(), canic_core::diagnostics::codes::STATE_INVALID);
+        assert_eq!(
+            root.code(),
+            canic_contracts::diagnostics::codes::STATE_INVALID
+        );
     }
 
     #[test]
@@ -200,7 +203,7 @@ mod tests {
             FleetActivationPhase::Prepared,
         ));
         assert!(!should_reconcile_root_funding(
-            FleetCommand::SetStatus(canic_core::dto::state::FleetStatus::Active),
+            FleetCommand::SetStatus(canic_contracts::dto::state::FleetStatus::Active),
             FleetActivationPhase::Active,
         ));
     }

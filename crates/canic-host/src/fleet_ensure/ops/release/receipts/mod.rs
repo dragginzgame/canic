@@ -20,16 +20,17 @@ use crate::{
     },
     icp::IcpCli,
 };
-use candid::{CandidType, Principal};
-use canic_core::{
+use candid::Principal;
+use canic_contracts::{
     dto::{
-        error::Error as CanicError, fleet_registry::FleetRegistry,
+        error::Error as CanicError,
+        fleet_registry::FleetRegistry,
         release_receipts::ReplayReleaseResponse,
+        wire::projection::release_receipts::{Request, Response},
     },
     protocol,
 };
 use ic_agent::Agent;
-use serde::Deserialize;
 use std::{collections::BTreeMap, time::Duration};
 use thiserror::Error;
 
@@ -70,16 +71,6 @@ pub enum ReleaseReceiptsStage {
     Decode,
     Pagination,
     Query,
-}
-
-#[derive(CandidType)]
-enum Request {
-    ReplayRelease(Option<[u8; 32]>),
-}
-
-#[derive(CandidType, Deserialize)]
-enum Response {
-    ReplayRelease(ReplayReleaseResponse),
 }
 
 /// Retain original shared replay evidence without interpreting expiry or completion as settlement.

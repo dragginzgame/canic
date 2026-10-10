@@ -4,16 +4,17 @@
 //! Does not own: snapshot validation, Coordinator calls, or lifecycle policy.
 //! Boundary: mirror ops commit only fully validated exact evidence supplied by workflow.
 
-use canic_core::dto::fleet_registry::{
-    FleetDirectorySnapshot, FleetRegistrySnapshotResponse, FleetRegistryVersion,
-    FleetSubnetRootSnapshotAcknowledgement,
+use canic_contracts::dto::{
+    fleet_registry::{
+        FleetDirectorySnapshot, FleetRegistrySnapshotResponse, FleetRegistryVersion,
+        FleetSubnetRootSnapshotAcknowledgement,
+    },
+    root_store::RootStoreBootstrapRequest,
 };
-use canic_core::dto::root_store::RootStoreBootstrapRequest;
 #[cfg(feature = "root-control-plane")]
 use canic_core::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
     impl_storable_bounded,
-    role_contract::allocation::memory::control_plane::ROOT_FLEET_REGISTRY_MIRROR_ID,
 };
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "root-control-plane")]
@@ -23,19 +24,13 @@ use std::cell::RefCell;
 const ROOT_FLEET_REGISTRY_MIRROR_MAX_BYTES: u32 = 4_194_304;
 
 #[cfg(feature = "root-control-plane")]
-struct RootFleetRegistryMirrorState;
-
-#[cfg(feature = "root-control-plane")]
 std::thread_local! {
     static ROOT_FLEET_REGISTRY_MIRROR:
         RefCell<Cell<RootFleetRegistryMirrorStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
             canic_core::ic_memory_key!(
                 authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-                key = "canic.control_plane.root.fleet_registry_mirror.v1",
-                ty = RootFleetRegistryMirrorState,
-                id = ROOT_FLEET_REGISTRY_MIRROR_ID
-            ),
+                key = "canic.control_plane.root.fleet_registry_mirror.v1"),
             RootFleetRegistryMirrorStateRecord::default(),
         ));
 }

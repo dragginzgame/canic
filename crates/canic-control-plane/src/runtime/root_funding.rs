@@ -5,12 +5,12 @@
 //! Boundary: lifecycle registers this zero-state driver before core runtime restoration.
 
 use async_trait::async_trait;
+use canic_contracts::dto::fleet_funding::{FleetRootFundingRequest, FleetRootFundingResponse};
 use canic_core::{
     api::runtime::root_funding::{
         RootFundingRuntime, RootFundingRuntimeApi, RootFundingRuntimeConfig,
     },
     control_plane_support::error::InternalError,
-    dto::fleet_funding::{FleetRootFundingRequest, FleetRootFundingResponse},
 };
 
 struct ControlPlaneRootFundingRuntime;

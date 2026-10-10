@@ -10,9 +10,19 @@ use crate::ops::{
     component_registry::ComponentRegistryOps,
     storage::state::root_wasm_store::RootWasmStoreStateOps,
 };
+use canic_contracts::{
+    cycles::Cycles,
+    dto::{
+        fleet_activation::FleetActivationPhase,
+        pool::{
+            CanisterPoolResponse, CanisterPoolStatusRequest, PoolAdminCommand, PoolAdminResponse,
+        },
+    },
+    ids::{BuildNetwork, FleetSubnetCanisterPoolConfig, SubnetId},
+};
 use canic_core::{
     api::timer::{TimerApi, TimerError as AuthorityTimerError},
-    cdk::types::{Cycles, Principal},
+    cdk::types::Principal,
     control_plane_support::{
         error::InternalError,
         ops::{
@@ -31,13 +41,6 @@ use canic_core::{
         },
         workflow::runtime::fleet_activation::FleetActivationWorkflow,
     },
-    dto::{
-        fleet_activation::FleetActivationPhase,
-        pool::{
-            CanisterPoolResponse, CanisterPoolStatusRequest, PoolAdminCommand, PoolAdminResponse,
-        },
-    },
-    ids::{BuildNetwork, FleetSubnetCanisterPoolConfig, SubnetId},
 };
 use ic_timers::{
     AfterCompletionDecision, AfterCompletionRegistration, AfterCompletionRunResult, OnceDecision,
@@ -497,19 +500,19 @@ fn maintenance_timer_result(result: Result<PoolAdminResponse, InternalError>) ->
 
 const fn is_retryable_maintenance_error(error: &InternalError) -> bool {
     let code = error.code().raw_code().raw();
-    code == canic_core::diagnostics::codes::PLATFORM_FAILED
+    code == canic_contracts::diagnostics::codes::PLATFORM_FAILED
         .raw_code()
         .raw()
         || code
-            == canic_core::diagnostics::codes::PLATFORM_UNAVAILABLE
+            == canic_contracts::diagnostics::codes::PLATFORM_UNAVAILABLE
                 .raw_code()
                 .raw()
         || code
-            == canic_core::diagnostics::codes::STATE_FAILED
+            == canic_contracts::diagnostics::codes::STATE_FAILED
                 .raw_code()
                 .raw()
         || code
-            == canic_core::diagnostics::codes::STATE_UNAVAILABLE
+            == canic_contracts::diagnostics::codes::STATE_UNAVAILABLE
                 .raw_code()
                 .raw()
 }
@@ -912,7 +915,7 @@ mod tests {
         );
 
         let retryable = maintenance_timer_result(Err(InternalError::public(
-            canic_core::diagnostics::codes::PLATFORM_UNAVAILABLE,
+            canic_contracts::diagnostics::codes::PLATFORM_UNAVAILABLE,
         )));
         assert_eq!(
             retryable.completion().outcome(),
@@ -920,7 +923,7 @@ mod tests {
         );
         assert_eq!(
             maintenance_result_completion(&Err(InternalError::public(
-                canic_core::diagnostics::codes::PLATFORM_UNAVAILABLE
+                canic_contracts::diagnostics::codes::PLATFORM_UNAVAILABLE
             ))),
             AsyncJobCompletion::RetryableFailure
         );

@@ -1800,7 +1800,7 @@ Downstream launcher/live-timing acceptance remains separately owned.
 ## Roadmap: finish .42, then blob extraction — accepted 2026-09-25
 
 The maintainer accepts `.42` as the final planned 0.110 feature release and
-selects [standalone blob extraction for 0.111](../../design/0.111-standalone-blob-service-extraction/status.md).
+selects [standalone blob extraction for 0.111](../../design/0.112-standalone-blob-service-extraction/status.md).
 The [0.110 scope amendment](../../design/0.110-fleet-runtime-contraction/0.110-design.md#final-feature-boundary--accepted-2026-09-25)
 retains accepted B1 and complete B2, stops further B3 record/codec work and
 defers remaining B4 pruning. Deferred work is not claimed complete or absent.
@@ -7831,7 +7831,7 @@ runtime or repository dependency.
 | --- | --- | --- |
 | [0.109](../../design/0.109-fleet-wide-ingress-admission/status.md) | admission, Ensure and managed-App support | accepted and closed at `v0.109.35` |
 | [0.110](../../design/0.110-fleet-runtime-contraction/status.md) | zero-capability runtime contraction | `v0.110.7` published; bounded authorization-persistence split active without accepting B1 or the remaining B2/B3 families |
-| [0.111](../../design/0.111-standalone-blob-service-extraction/status.md) | standalone blob service extraction | planned next; implementation follows accepted 0.110 closeout and explicit external-owner/provider dependencies |
+| [0.111](../../design/0.112-standalone-blob-service-extraction/status.md) | standalone blob service extraction | planned next; implementation follows accepted 0.110 closeout and explicit external-owner/provider dependencies |
 
 The cancelled stateful-adoption proposal remains archived. Pre-1.0 release
 transitions are reinstall-only; cycle conservation is the sole cross-release

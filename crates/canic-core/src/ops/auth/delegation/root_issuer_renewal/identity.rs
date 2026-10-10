@@ -5,9 +5,9 @@
 
 use crate::{
     cdk::types::Principal,
-    ids::FleetKey,
     model::auth::{RootDelegatedRoleGrantPolicy, RootIssuerRenewalTemplate},
 };
+use canic_contracts::ids::FleetKey;
 use sha2::{Digest, Sha256};
 
 const ROOT_ISSUER_RENEWAL_TEMPLATE_FINGERPRINT_DOMAIN: &[u8] =

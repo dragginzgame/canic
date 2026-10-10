@@ -87,11 +87,17 @@ release-batch plan and explicit maintainer acceptance.
    B5's `.42` evidence remains a qualified checkpoint; the
    [closeout audit](../audits/release-lines/0.110-closeout-audit.md) must cover
    the final FI1 scope and receive human acceptance before the next minor.
-9. [Standalone blob service extraction](0.111-standalone-blob-service-extraction/status.md)
+9. **0.111 is reserved for the current hard cut**, selected by the maintainer on
+   2026-10-10. Its open release notes live in
+   [the 0.111 changelog](../changelog/0.111.md). This planning decision does not
+   accept the previous minor's closeout audit or execute a version transaction.
+10. [0.112 standalone blob service extraction](0.112-standalone-blob-service-extraction/status.md)
    was explicitly selected for implementation after 0.110.52. The independent
    service owns blob semantics; Canic owns an isolated application adapter and
    removes its embedded implementation. This reprioritization does not declare
    FR1 complete, accept minor closeout, or assign the extraction's release.
+   Its pending roadmap position moved from 0.111 to 0.112 on 2026-10-10;
+   implemented adapter delivery remains part of the current coordinated batch.
 
 [Bounded multi-Fleet estates](ideas/bounded-multi-fleet-estates/design.md)
 is deferred and unnumbered. Its unproved Q0 capsule and indexed-estate work
@@ -113,7 +119,7 @@ It grants no compatibility exception or implementation authority.
 The former runtime-heavy generic Fleet Observatory is now an
 [promoted 0.110 host-first batch](0.110-fleet-runtime-contraction/0.110-design.md#op3-host-first-fleet-observatory-canic-002).
 
-Deferred ideas do not gate this nine-line path unless a later explicit
+Deferred ideas do not gate this scheduled path unless a later explicit
 amendment moves one into a numbered design.
 
 ## Release-Batch Plan Template

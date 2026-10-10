@@ -3,32 +3,23 @@
 //! Responsibility: qualify controller directory and funding census reads against live fixtures.
 //! Boundary: query-only coverage retains member authorization and exact current-head checks.
 
-use candid::{CandidType, Deserialize, Principal, decode_one, encode_one};
+use candid::{Principal, decode_one, encode_one};
 use canic::{
     Error,
     dto::component_registry::{
-        ComponentDirectoryHead, ComponentDirectoryHeadRequest, ComponentDirectoryPageRequest,
-        ComponentDirectoryPageResponse, ComponentLifecycleStatus,
+        ComponentDirectoryHeadRequest, ComponentDirectoryPageRequest, ComponentLifecycleStatus,
     },
     ids::{ComponentBinding, ComponentChildBinding},
     protocol,
 };
-use canic_control_plane::dto::root::{RootFundingReleaseResponse, RootFundingStatusResponse};
+use canic_contracts::dto::{
+    root::RootFundingStatusResponse,
+    wire::projection::{
+        fixture_baseline_funding_inventory::{CommandResponse, Request, Response},
+        funding_observation::Command,
+    },
+};
 use ic_testkit::pic::PocketIc;
-
-#[derive(CandidType)]
-enum Request {
-    ComponentDirectoryHead(ComponentDirectoryHeadRequest),
-    ComponentDirectoryPage(Box<ComponentDirectoryPageRequest>),
-    FundingRelease(Option<u64>),
-}
-
-#[derive(CandidType, Deserialize)]
-enum Response {
-    ComponentDirectoryHead(ComponentDirectoryHead),
-    ComponentDirectoryPage(ComponentDirectoryPageResponse),
-    FundingRelease(Box<RootFundingReleaseResponse>),
-}
 
 /// Observe the real Ledger/CMC completion through the controller-only release census.
 pub(super) fn assert_release_funding(
@@ -206,18 +197,6 @@ fn query(
             .unwrap(),
     )
     .unwrap()
-}
-
-#[derive(CandidType)]
-enum Command {
-    InspectCanister(canic::dto::canister::CanisterInspectionRequest),
-    ObserveCanister(canic::dto::observability::FleetCanisterObservabilityRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum CommandResponse {
-    InspectCanister(Box<canic::dto::canister::CanisterStatusResponse>),
-    ObserveCanister(canic::dto::observability::CanisterObservabilityResponse),
 }
 
 /// Exercise the two production observation commands against installed parent and child code.

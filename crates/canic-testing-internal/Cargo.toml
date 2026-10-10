@@ -23,6 +23,7 @@ pocketic-fixtures = []
 [dependencies]
 candid = { workspace = true }
 canic = { workspace = true, features = ["testing"] }
+canic-contracts.workspace = true
 canic-control-plane = { workspace = true, features = [
     "root-control-plane",
     "wasm-store-canister",

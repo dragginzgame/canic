@@ -145,7 +145,9 @@ pub(in crate::fleet_ensure) fn recover(paths: &EnsurePaths) -> Result<(), Ensure
         documents.push((path, exact_bytes(&object_path(paths, after), after)?));
     }
     for (path, bytes) in documents {
-        write_bytes(path, &bytes).map_err(|source| io_error(path, source))?;
+        write_bytes(path, &bytes)
+            .map_err(crate::publication::ops::io_error)
+            .map_err(|source| io_error(path, source))?;
     }
     intent.complete = true;
     write_current(&marker_path(paths), &intent)
@@ -267,7 +269,7 @@ fn retain(paths: &EnsurePaths, digest: &str, bytes: &[u8]) -> Result<(), EnsureS
         return Err(conflict());
     }
     let path = object_path(paths, digest);
-    match create_new_bytes_with_parents(&path, bytes) {
+    match create_new_bytes_with_parents(&path, bytes).map_err(crate::publication::ops::io_error) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
             exact_bytes(&path, digest).map(|_| ())

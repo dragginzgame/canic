@@ -4,11 +4,12 @@
 //! Does not own: workflow decisions, persisted records, or endpoint DTOs.
 //! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
-use crate::ids::CanisterRole;
+use canic_contracts::ids::CanisterRole;
 use std::{cell::RefCell, collections::BTreeMap};
 
-pub use crate::domain::metrics::{
-    CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
+pub use crate::{
+    domain::metrics::CanisterOpsMetricOperation, domain::metrics::CanisterOpsMetricOutcome,
+    domain::metrics::CanisterOpsMetricReason,
 };
 
 const UNSCOPED_ROLE_LABEL: &str = "unscoped";

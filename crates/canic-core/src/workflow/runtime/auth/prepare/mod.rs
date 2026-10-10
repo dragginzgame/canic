@@ -45,7 +45,7 @@ use crate::{
     workflow::{replay::abort_reserved_receipt_after_failure, runtime::auth::RuntimeAuthWorkflow},
 };
 use admission::{validate_role_attestation_request, validate_token_prepare_public_request};
-use candid::CandidType;
+use canic_contracts::dto::wire::projection::delegation_proof::{RootCommand, RootCommandResponse};
 use replay::{
     encode_role_attestation_prepare_response, encode_token_prepare_response,
     map_role_attestation_replay_decision, map_token_prepare_replay_decision, replay_reserve_input,
@@ -54,16 +54,6 @@ use replay::{
     token_prepare_replay_payload_hash, token_replay_metadata,
 };
 use std::future::Future;
-
-#[derive(CandidType)]
-enum RootCommand {
-    GetOrCreateDelegationProof,
-}
-
-#[derive(CandidType, serde::Deserialize)]
-enum RootCommandResponse {
-    GetOrCreateDelegationProof(RootDelegationProofBatchProof),
-}
 
 impl RuntimeAuthWorkflow {
     /// Prepare a delegated token from issuer-local root-certified delegation material.
@@ -354,10 +344,8 @@ fn chain_key_delegation_proof_from_root_call(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        dto::auth::{AuthRequestMetadata, DelegatedRoleGrant, DelegationAudience},
-        ids::{CanisterRole, cap},
-    };
+    use crate::dto::auth::{AuthRequestMetadata, DelegatedRoleGrant, DelegationAudience};
+    use canic_contracts::ids::{CanisterRole, cap};
     use futures::executor::block_on;
     use std::cell::Cell;
 

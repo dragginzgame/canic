@@ -1,12 +1,12 @@
 use crate::{
     cdk::types::Principal,
     dto::auth::RoleAttestation,
-    ids::CanisterRole,
     ops::auth::{
         AUTH_TIME_SKEW_ALLOWANCE_NS, AuthExpiryError, AuthOpsError, AuthScopeError,
         AuthValidationError,
     },
 };
+use canic_contracts::ids::CanisterRole;
 
 fn p(id: u8) -> Principal {
     Principal::from_slice(&[id; 29])

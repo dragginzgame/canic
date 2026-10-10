@@ -102,8 +102,8 @@ formatter/Candid set lives under `.tools/rust/bin`. Use explicit setup and
 then offline verification:
 
 ```bash
-make install-tools install-testkit-server
-make tools-check testkit-server-check
+make install-tools
+make tools-check
 export PATH="$PWD/.tools/host/bin:$PWD/.tools/ic/bin:$PWD/.tools/rust/bin:$PATH"
 ```
 
@@ -112,6 +112,9 @@ Ordinary validation never installs tools. Existing complete toolsets and failed
 installation candidates are retained. The reviewed matrix is `ci/ic-tools.tsv`;
 refresh its Shared Tooling snapshot to adopt changed pins. `make update-dev`
 synchronizes reviewed tools and reports Binaryen drift without rewriting pins.
+The common aggregate runs host, IC and Cargo-tool setup in order, then
+Canic’s `install-testkit-server` extension. Offline checks follow the same order
+through `testkit-server-check`; no extra aggregate prerequisites are needed.
 Testkit owns PocketIC setup, offline admission and test-command lifetime under
 `.tools/ic-testkit-server`; the generic IC bundle contains five tools.
 Product Cargo tools and system bootstrap packages remain separate; see

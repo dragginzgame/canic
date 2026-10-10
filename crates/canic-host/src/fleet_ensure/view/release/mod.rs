@@ -9,14 +9,13 @@ pub mod receipts;
 
 use crate::fleet_ensure::{
     model::{
-        capacity_import::CapacityImportSourceBinding,
-        capacity_import::survey::CapacityImportSampleRecord,
+        capacity_import::{CapacityImportSourceBinding, survey::CapacityImportSampleRecord},
         release::{FleetReleaseAccountRecord, FleetReleaseAuthority},
     },
     view::capacity_import::CapacityImportDestinationView,
 };
 use candid::Principal;
-use canic_control_plane::dto::{
+use canic_contracts::dto::{
     fleet_coordinator::CoordinatorFundingStatusResponse,
     root::{RootFundingReleaseResponse, RootPoolReleaseResponse, RootProvisioningReleaseResponse},
 };
@@ -25,7 +24,8 @@ use std::collections::{BTreeMap, BTreeSet};
 /// Original shared replay pages from every selected Root and Coordinator; not settlement proof.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FleetReleaseReceiptsView {
-    pub owners: BTreeMap<Principal, Vec<canic_core::dto::release_receipts::ReplayReleaseResponse>>,
+    pub owners:
+        BTreeMap<Principal, Vec<canic_contracts::dto::release_receipts::ReplayReleaseResponse>>,
 }
 
 /// Complete bounded provisioning discovery for the selected Roots, without settlement authority.
@@ -110,5 +110,6 @@ pub struct FleetReleaseObservation {
 /// Complete original canonical accounting pages for each selected Root and Coordinator.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FleetReleaseIntentsView {
-    pub owners: BTreeMap<Principal, Vec<canic_core::dto::release_intents::IntentReleaseResponse>>,
+    pub owners:
+        BTreeMap<Principal, Vec<canic_contracts::dto::release_intents::IntentReleaseResponse>>,
 }

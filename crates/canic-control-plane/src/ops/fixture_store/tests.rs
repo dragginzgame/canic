@@ -1,13 +1,13 @@
 use super::*;
 use crate::storage::stable::fixture_store::FixtureStoreData;
-use canic_core::{
-    CANIC_WASM_CHUNK_BYTES,
+use canic_contracts::{
     dto::fixture_provisioning::{FixtureChunkDescriptor, FixtureTargetBinding},
     ids::{
         CanisterRole, ComponentBinding, ComponentInstanceId, ReleaseBuildId, ReleaseBuildNonce,
         SubnetId,
     },
 };
+use canic_core::CANIC_WASM_CHUNK_BYTES;
 use sha2::{Digest, Sha256};
 
 struct FixtureScope;
@@ -284,7 +284,7 @@ fn fixture_capacity_includes_metadata_payload_grants_and_template_bytes() {
         .unwrap_err();
     assert_eq!(
         error.public_error().code(),
-        canic_core::diagnostics::codes::CAPACITY_LIMIT.raw_code()
+        canic_contracts::diagnostics::codes::CAPACITY_LIMIT.raw_code()
     );
     assert_eq!(template_bytes(), template_before);
     assert_eq!(FixtureStore::export(), before);
@@ -321,7 +321,7 @@ fn child_grant_preserves_component_identity_and_authenticates_only_the_child() {
     let parent = component.canister_id;
     let child = Principal::from_slice(&[22; 29]);
     request.binding.target =
-        ManagedCanisterBinding::ComponentChild(canic_core::ids::ComponentChildBinding {
+        ManagedCanisterBinding::ComponentChild(canic_contracts::ids::ComponentChildBinding {
             component,
             parent_canister_id: parent,
             role: CanisterRole::from("shard"),

@@ -76,9 +76,9 @@ mod tests {
 
     #[test]
     fn public_perf_paths_record_formatted_checkpoints() {
-        let call = crate::__internal::core::ids::EndpointCall {
-            endpoint: crate::__internal::core::ids::EndpointId::new("perf_macro_probe"),
-            kind: crate::__internal::core::ids::EndpointCallKind::Query,
+        let call = crate::__internal::contracts::ids::EndpointCall {
+            endpoint: crate::__internal::contracts::ids::EndpointId::new("perf_macro_probe"),
+            kind: crate::__internal::contracts::ids::EndpointCallKind::Query,
         };
         crate::__internal::core::dispatch::measure_endpoint(call, || {
             crate::perf!("loaded {} rows", 3);

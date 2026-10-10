@@ -4,21 +4,16 @@
 //! Does not own: Cargo execution, root projection, Store publication, or installation.
 //! Boundary: exercises exact build, topology, artifact-file, and durable-path admission.
 
-use std::{fs, io::Write, path::Path};
-
-use canic_core::{
-    bootstrap::{compiled::ComponentTopology, parse_config_model},
-    ids::{CanisterRole, ReleaseBuildId},
-};
-use flate2::{Compression, GzBuilder};
-
+use super::*;
 use crate::{
     release_build::{finalize_release_build_from_manifest, plan_release_build},
     release_set::WASM_MAGIC,
     test_support::temp_dir,
 };
-
-use super::*;
+use canic_contracts::ids::{CanisterRole, ReleaseBuildId};
+use canic_core::bootstrap::{compiled::ComponentTopology, parse_config_model};
+use flate2::{Compression, GzBuilder};
+use std::{fs, io::Write, path::Path};
 
 const CONFIG: &str = r#"
 [app]

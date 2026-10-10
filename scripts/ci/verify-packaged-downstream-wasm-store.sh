@@ -37,21 +37,25 @@ ensure_packaged_crate() {
     case "$crate_name" in
         canic-control-plane)
             cargo package --locked -p "$crate_name" --allow-dirty --no-verify \
+                --config "patch.crates-io.canic-contracts.path=\"$ROOT/crates/canic-contracts\"" \
                 --config "patch.crates-io.canic-core.path=\"$ROOT/crates/canic-core\"" >/dev/null
             ;;
         canic)
             cargo package --locked -p "$crate_name" --allow-dirty --no-verify \
+                --config "patch.crates-io.canic-contracts.path=\"$ROOT/crates/canic-contracts\"" \
                 --config "patch.crates-io.canic-control-plane.path=\"$ROOT/crates/canic-control-plane\"" \
                 --config "patch.crates-io.canic-core.path=\"$ROOT/crates/canic-core\"" \
                 --config "patch.crates-io.canic-macros.path=\"$ROOT/crates/canic-macros\"" >/dev/null
             ;;
         canic-host)
             cargo package --locked -p "$crate_name" --allow-dirty --no-verify \
+                --config "patch.crates-io.canic-contracts.path=\"$ROOT/crates/canic-contracts\"" \
                 --config "patch.crates-io.canic-control-plane.path=\"$ROOT/crates/canic-control-plane\"" \
                 --config "patch.crates-io.canic-core.path=\"$ROOT/crates/canic-core\"" >/dev/null
             ;;
         *)
-            cargo package --locked -p "$crate_name" --allow-dirty --no-verify >/dev/null
+            cargo package --locked -p "$crate_name" --allow-dirty --no-verify \
+                --config "patch.crates-io.canic-contracts.path=\"$ROOT/crates/canic-contracts\"" >/dev/null
             ;;
     esac
 }
@@ -87,6 +91,7 @@ populate_isolated_package_root() {
     local crate_archive=""
     for crate_archive in \
         "$PACKAGE_STAGING_ROOT/canic-backup-$VERSION.crate" \
+        "$PACKAGE_STAGING_ROOT/canic-contracts-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-control-plane-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-core-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-macros-$VERSION.crate" \
@@ -117,6 +122,7 @@ resolver = "3"
 canic = { path = "package-root/canic-$VERSION" }
 canic-backup = { path = "package-root/canic-backup-$VERSION" }
 canic-control-plane = { path = "package-root/canic-control-plane-$VERSION" }
+canic-contracts = { path = "package-root/canic-contracts-$VERSION" }
 canic-core = { path = "package-root/canic-core-$VERSION" }
 canic-host = { path = "package-root/canic-host-$VERSION" }
 canic-macros = { path = "package-root/canic-macros-$VERSION" }
@@ -133,6 +139,7 @@ prepare_packaged_canic_patch_config() {
 [patch.crates-io]
 canic = { path = "$package_root/canic-$VERSION" }
 canic-control-plane = { path = "$package_root/canic-control-plane-$VERSION" }
+canic-contracts = { path = "$package_root/canic-contracts-$VERSION" }
 canic-core = { path = "$package_root/canic-core-$VERSION" }
 canic-macros = { path = "$package_root/canic-macros-$VERSION" }
 EOF
@@ -449,6 +456,7 @@ main() {
         *) echo "usage: $0 [all|fleet|root]" >&2; exit 2 ;;
     esac
     ensure_packaged_crate canic-backup
+    ensure_packaged_crate canic-contracts
     ensure_packaged_crate canic-control-plane
     ensure_packaged_crate canic-core
     ensure_packaged_crate canic-macros

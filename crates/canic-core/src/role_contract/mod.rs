@@ -21,9 +21,9 @@ mod tests;
 
 pub use model::{
     AllocationDefinition, AllocationOwner, BuiltInRoleKind, CanicFeatureEffect, CanicFeatureKey,
-    MemoryId, ResolvedRoleContract, ResolvedStateAllocation, RoleCapabilityKey,
-    RoleContractFinding, RoleContractInput, RoleContractResolution, RoleContractSource,
-    RoleFeatureRequirement, SelectionProvenance, StateAllocationKey,
+    ResolvedRoleContract, ResolvedStateAllocation, RoleCapabilityKey, RoleContractFinding,
+    RoleContractInput, RoleContractResolution, RoleContractSource, RoleFeatureRequirement,
+    SelectionProvenance, StateAllocationKey,
 };
 pub use policy::{
     built_in_role_capabilities, derive_role_capabilities, required_features_for_role,

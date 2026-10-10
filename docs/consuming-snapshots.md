@@ -4,6 +4,14 @@ CI and release behavior must not depend on a sibling checkout, a moving Git
 branch, or network availability. Consumers vendor a reviewed file set and
 record its exact Shared Tooling source revision.
 
+Directory paths must not contain LF or CR characters. Snapshot refresh and
+verification reject them in both supplied and resolved physical paths, including
+ancestor directories and symlink destinations. They never trim a forbidden name
+into another checkout. Rename an affected operational directory explicitly before
+using these commands; existing artifacts are not renamed or deleted automatically.
+Spaces and ordinary physical aliases remain supported. Snapshot-relative file
+and manifest paths also reject LF, CR and tab characters.
+
 ## Initial snapshot
 
 Run the refresh helper from a clean Shared Tooling checkout:
@@ -24,6 +32,22 @@ uncommitted files cannot enter the snapshot, and concurrent working-tree edits
 cannot change the exported bytes. The manifest
 records format version `1`, source remote, source commit, and the SHA-256 digest
 and executable state of every vendored file.
+
+Refresh also writes a `# version<TAB>X.Y.Z` annotation from `VERSION` at that
+exact source commit. The committed file must contain a canonical stable version;
+the exporter never reads its display version from mutable working-tree bytes or
+changes the consumer's own `VERSION`. This descriptive annotation keeps the
+existing v1 integrity records intact and is understood by the current verifier
+and fleet report. A snapshot without it displays `unrecorded`; its next refresh
+records the selected source version. Malformed or duplicate version annotations
+are rejected by the current verifier and refresh helper.
+
+The commit remains the exact source identity: several commits can carry the same
+version, and an annotation does not prove a release tag or publication. Local
+verification checks files against the reviewed manifest, not the truth of its
+source claims against GitHub. The annotation is not a second version selection
+to edit independently. Review the manifest with its snapshot refresh; no Cargo
+dependency or duplicate Cargo metadata is needed.
 
 Use `--manifest <relative-path>` to choose a different manifest location. Its
 parent directories are created before consumer files are replaced. Pass the
@@ -105,6 +129,32 @@ Add the named companions explicitly; refresh never silently expands the selectio
 These declarations belong to the selected source revision. Older files without
 them retain integrity checks but provide no dependency-completeness guarantee.
 Conditional features and consumer configuration still need adoption review.
+
+The optional `scripts/ci/test-installers.sh` fixture exercises all five CI
+installer wrappers: actionlint, gitleaks, ShellCheck, yq and sccache. Selecting
+that fixture requires all five wrappers, their shared `install-ci-tool.sh` engine
+and the checksum verifier, even if production CI uses only some of them. Add
+that complete set explicitly or omit the optional fixture and its callers;
+selecting an individual production installer does not require the whole suite.
+
+Reusable Cargo, formatter, evidence, registry, release-PR and tool-command tests
+also declare their required helpers. Review fixture dependencies when selecting
+tests, not only production entrypoints. The PR fixture requires the PR helper
+even though direct release delivery does not. Caller-owned pin files and optional
+production modes stay explicit inputs rather than unconditional companions.
+
+Run `test-snapshot-distribution.sh` from Shared Tooling for upstream exporter and
+governance qualification. Consumers should normally omit that integration fixture
+and its invocation, retaining actual snapshot verification and local adoption
+checks rather than importing its growing upstream test roster.
+
+The validation-runner fixture is different: `test-validation-target-runner.sh`
+invokes `scripts/ci/test-release-metadata.sh` in nested Make/release contexts.
+Consumers retaining this fixture own that metadata-test entrypoint. Keep an
+existing qualified adapter to the consumer's own release tests, as IC Backup
+does. Do not import Shared Tooling's release metadata adapter or root Makefile
+to satisfy it; without a local metadata-test adapter, run this integration check
+upstream and retain focused local validation-runner checks.
 
 The release runner requires `scripts/ci/next-release-version.sh`. The runner,
 validation logger and formatting hook also require
@@ -314,8 +364,10 @@ After the new files are committed and reviewed, add `ci/ic-tools.tsv`,
 `scripts/dev/install-ic-tools.sh`, `scripts/ci/ic-tool-pins.awk`,
 `scripts/ci/verify-evidence-checksums.sh` and
 `scripts/ci/verify-file-checksum.sh` to the snapshot, with `docs/ic-tools.md`.
-Also include `make/tools.mk`, `scripts/dev/install-host-tools.sh`,
-`scripts/dev/cloc.sh`, `ci/tool-versions.env` and `docs/local-setup.md` for the
+Also include `make/tools.mk`, `make/execution.mk`,
+`scripts/ci/check-make-execution.sh`, `scripts/dev/install-host-tools.sh`,
+`scripts/dev/install-rust-tools.sh`, `scripts/dev/cloc.sh`, `ci/tool-versions.env`
+and `docs/local-setup.md` for the
 common commands and pinned host setup. Adopt the complete
 [required tool inventory](local-setup.md#required-tool-inventory), including
 ripgrep and cloc pins, and add `/.tools/` to the consumer's ignore rules. Remove
@@ -327,25 +379,74 @@ include make/tools.mk
 ```
 
 That include supplies `install-tools`, `tools-check`, `install-host-tools`,
-`host-tools-check`, `install-ic-tools`, `ic-tools-check` and `cloc`, plus the
+`host-tools-check`, `install-ic-tools`, `ic-tools-check`, `install-rust-tools`,
+`rust-tools-check` and `cloc`, plus the
 checkout-local PATH. It preserves the consumer's default Make goal; including it
 does not trigger installation. Future changes to these recipes and tool
 selections arrive with the reviewed snapshot rather than another copied recipe.
 Existing checkouts need an explicit snapshot refresh and installation to receive
 new files and executables; they never execute a mutable sibling checkout.
 
-For the shared Cargo-installed set, also vendor `scripts/dev/install-rust-tools.sh`
-and the three `SHARED_TOOLING_CARGO_SORT_VERSION`, `SHARED_TOOLING_CARGO_SORT_DERIVES_VERSION`
+For the required shared Cargo-installed set, include the three
+`SHARED_TOOLING_CARGO_SORT_VERSION`, `SHARED_TOOLING_CARGO_SORT_DERIVES_VERSION`
 and `SHARED_TOOLING_CANDID_EXTRACTOR_VERSION` pins in the selected versions file.
-The include provides `install-rust-tools` and `rust-tools-check`; Rust consumers
-attach these to their aggregate commands as shown in
-[Rust setup](local-setup.md#rust-development-tools). Retire their duplicate
+The aggregates always include Rust tools, even in non-Rust repositories;
+prepare a declared Rust/Cargo toolchain first as described in
+[Rust setup](local-setup.md#rust-development-tools). Retire duplicate
 Cargo-tool install recipes and version constants after qualified adoption.
 Consumer-selected registry binaries/examples use this same installer and its
 `scripts/ci/verify-file-checksum.sh` companion, with prepared host tools and an
 explicit local selection; see [Cargo tool setup](local-setup.md#consumer-selected-cargo-tools).
 Retire synthetic Cargo resolvers only after qualifying the selected package and
 profile. Source-checkout builds and application executable overrides stay local.
+
+### Complete toolset adoption in 0.3.0
+
+Refresh the host installer, `make/tools.mk`, Cargo installer/checksum companion,
+complete pin catalogs, baseline and setup guidance together from a reviewed
+committed revision. Include updated selected fixtures and evidence-collector
+companions when adopted; the selector calls the complete host check too.
+The current contract has no parser-only host mode or optional ripgrep/cloc flags.
+Remove `--with-ripgrep`/`--with-cloc` from direct callers, including custom CI and
+evidence checks. Retain historical documents as historical evidence.
+
+Every aggregate now includes the three Cargo tools after host and IC setup,
+including in non-Rust repositories. Remove redundant Rust aggregate prerequisites.
+Move additional product setup/check prerequisites into `LOCAL_TOOL_INSTALL_TARGETS`
+and `LOCAL_TOOL_CHECK_TARGETS` in matching order, as shown in
+[local setup](local-setup.md#required-tool-inventory). Keep existing owner targets,
+version/profile selections, overrides and admitted release-preflight boundaries.
+Do not make a product extension call the aggregate that invokes it. Ordinary
+offline checks must not invoke setup.
+
+Prepare the declared Rust toolchain first, then explicitly run `make install-tools`
+and `make tools-check` as separate commands. A complete matching host set can be
+reused; an incomplete set needs explicit setup. Preserve every earlier bundle,
+receipt and failed artifact. This cut changes the common roster and invocation
+contract, not the retained Cargo installation layout. Qualify setup reuse,
+missing-tool refusal, failure retention and product extensions under parallel
+Make on supported native hosts before claiming consumer adoption.
+
+The compatible 0.3.1 setup improvement adds read-only `--preflight` calls to the
+existing IC and Rust installers before the aggregate starts any installation.
+Refresh `make/tools.mk`, both installers and the improved host installer together.
+Consumer setup fixtures that substitute installer commands must admit these
+non-mutating calls separately from simulated installation failures. Ordinary
+`tools-check` and narrow setup commands keep their existing offline/setup roles.
+
+The compatible 0.3.2 correction preserves Cargo's jobserver descriptors through
+shared Rust setup/check, LOC metadata and formatting recipes. Refresh
+`make/tools.mk` and `make/rust-format.mk` with `make/execution.mk` and its
+`scripts/ci/check-make-execution.sh` companion, including in isolated Makefile
+exports. The execution guard now applies even when only `make/tools.mk` is
+included: unsafe Make modes must fail before any installer runs. Consumer-owned
+Cargo recipes still need their own descriptor handoff and execution admission;
+this shared correction does not change those recipes automatically.
+
+Refresh selected shared fixtures too. Their cleanup now requires explicit
+completion as well as a successful exit, preserving evidence and failing on
+early exits, including Bash 3.2 nounset errors. Native consumer qualification
+remains separate from upstream source acceptance.
 
 Defaults use scripts and pins at the checkout root. For a snapshot stored below
 that root, set `SHARED_TOOLING_ROOT` to its reviewed local directory before the
@@ -354,6 +455,31 @@ select consumer-owned pin exceptions; their defaults remain the checkout's
 `ci/tool-versions.env` and `ci/ic-tools.tsv`. Installations always target the
 consumer checkout. Include `make/tools.mk` in any isolated Makefile export,
 including the extra inputs to `check-release-commands.sh`.
+
+Two optional includes centralize further command wiring without owning product
+policy:
+
+- `make/release.mk` supplies the standard release entrypoints
+  and conflicting-goal rejection. Select its declared runner companions and
+  retain the consumer's delivery admission, cache preparation, metadata and
+  validation adapters. See the [release example](releases.md#makefile-example).
+- `make/rust-format.mk`, included after `make/tools.mk`,
+  supplies the simple root-workspace formatting commands. Select both includes,
+  `scripts/ci/check-format-tools.sh`, `scripts/ci/run-formatting.sh` and the
+  reviewed pin file. The wrapper reports one success line and retains failure
+  diagnostics behind a two-line summary. Include it in isolated hook fixtures.
+  Refresh the failure collector to retain `formatting.*` logs in CI. Keep richer
+  workspace/frontend recipes local under the [formatting rules](../rules/git-hooks.md).
+
+Both includes require the adjacent `make/execution.mk` and its execution-probe
+companion. Export these explicitly so unsupported Make modes cannot turn a
+failed command into success.
+
+Replace equivalent local recipes only after testing the actual caller and hook.
+These files must come from the recorded snapshot, never a live sibling include.
+The optional `test-make-format.sh` fixture declares its own companions; the
+complete `test-git-hooks.sh` fixture also requires the new formatting include.
+Explicitly extend a consumer's file selection before refreshing that fixture.
 
 `make cloc` reports the consumer's root Cargo workspace and requires its prepared
 Rust toolchain. Shared Tooling itself selects `CLOC_REPORT` and `CLOC_ROOT` before
@@ -366,6 +492,13 @@ Shared Tooling by default. A consumer that intentionally needs its own command
 can explicitly select `scripts/dev/cloc-tooling.pl`; existing selections continue
 to work. Without that file the target explains where to run or adopt the report,
 and never invokes another checkout implicitly.
+
+The report includes each recorded `version@revision` and complete declared-file
+integrity, with separate identities for multiple bundles. Missing versions remain
+`unrecorded`; missing, modified or symlinked files and mode differences show
+`DRIFT`, including declared documents outside the LOC scope. `OK` means declared
+hashes and modes match, not that provenance or consumer behavior was qualified.
+The JSON output retains full revisions and each manifest's drifted paths.
 
 To retire unnecessary fleet copies, review their local callers first, then remove
 the report/test files and their snapshot records together with Make/CI/help
@@ -426,6 +559,12 @@ document and each selected helper in the snapshot, and move callers before
 deleting duplicated code. Keep product-specific checks and publication policy
 local. Adoption must wait for a reviewed committed source revision; local
 upstream tests do not establish that consumers have refreshed their snapshots.
+
+Exact registry metadata uses the existing `check-crates-io-version.sh` selection
+with `--metadata NEW-DIRECTORY`; no additional shared script is required. Prepare
+jq and curl 8.4.0+ for that mode. Retain each attempt's directory and handle all
+three statuses before removing local transport/parsing. The consumer still owns
+payload verification, yanked-version acceptance and publication reconciliation.
 
 File-digest generation uses the checksum verifier's additive `--print` interface,
 so its existing snapshot file set is sufficient. Refresh that verifier before

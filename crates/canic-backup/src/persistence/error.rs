@@ -31,32 +31,9 @@ pub enum PersistenceError {
     #[error("invalid restore reference record: {path}")]
     InvalidRestoreReferences { path: String },
 
-    #[error(
-        "artifact commit paths must be distinct siblings: temporary={temporary}, canonical={canonical}"
-    )]
-    ArtifactCommitPathMismatch {
-        temporary: String,
-        canonical: String,
-    },
-
-    #[error(
-        "artifact commit found both temporary and canonical directories: temporary={temporary}, canonical={canonical}"
-    )]
-    ArtifactCommitPathConflict {
-        temporary: String,
-        canonical: String,
-    },
-
-    #[error(
-        "artifact commit found neither temporary nor canonical directory: temporary={temporary}, canonical={canonical}"
-    )]
-    ArtifactCommitPathMissing {
-        temporary: String,
-        canonical: String,
-    },
-
-    #[error("durable artifact directory publication is unsupported on platform {platform}")]
-    ArtifactCommitUnsupportedPlatform { platform: &'static str },
+    /// Canonical IC Backup directory-publication and integrity refusal.
+    #[error(transparent)]
+    ArtifactCommit(#[from] ic_backup::ops::persistence::PersistenceError),
 
     #[error("artifact path escapes backup root: {artifact_path}")]
     ArtifactPathEscapesBackup { artifact_path: String },
@@ -171,7 +148,4 @@ pub enum PersistenceError {
         canister_id: String,
         snapshot_id: String,
     },
-
-    #[error("unsupported artifact filesystem entry at {path}: {kind}")]
-    UnsupportedArtifactEntry { path: String, kind: String },
 }

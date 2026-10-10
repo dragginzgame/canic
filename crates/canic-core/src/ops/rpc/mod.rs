@@ -11,8 +11,7 @@ use crate::{
     dto::{
         capability::{
             CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,
-            NonrootCyclesCapabilityEnvelopeV1, NonrootCyclesCapabilityResponseV1,
-            RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
+            NonrootCyclesCapabilityEnvelopeV1, RootCapabilityEnvelopeV1,
         },
         error::Error,
         rpc::{CreateCanisterParent, Request, Response},
@@ -28,7 +27,11 @@ use crate::{
     },
     protocol,
 };
-use serde::{Deserialize, de::DeserializeOwned};
+use canic_contracts::dto::wire::projection::capability_rpc::{
+    CanisterCommandFragment, CanisterCommandResponseFragment, RootCommandFragment,
+    RootCommandResponseFragment,
+};
+use serde::de::DeserializeOwned;
 use thiserror::Error as ThisError;
 
 ///
@@ -71,26 +74,6 @@ pub trait Rpc {
 }
 
 const DEFAULT_CAPABILITY_METADATA_TTL_NS: u64 = 300_000_000_000;
-
-#[derive(CandidType)]
-enum RootCommandFragment {
-    RespondCapability(RootCapabilityEnvelopeV1),
-}
-
-#[derive(CandidType, Deserialize)]
-enum RootCommandResponseFragment {
-    RespondCapability(RootCapabilityResponseV1),
-}
-
-#[derive(CandidType)]
-enum CanisterCommandFragment {
-    RespondCapability(NonrootCyclesCapabilityEnvelopeV1),
-}
-
-#[derive(CandidType, Deserialize)]
-enum CanisterCommandResponseFragment {
-    RespondCapability(NonrootCyclesCapabilityResponseV1),
-}
 
 ///
 /// RpcOps

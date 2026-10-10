@@ -9,10 +9,9 @@ use crate::{
     dto::auth::{
         DelegatedRoleGrant, DelegatedToken, DelegationAudience, RoleAttestation, RootKeyPolicyV1,
     },
-    ids::BuildNetwork,
-    ids::CanisterRole,
     ops::auth::delegated::prepare::PreparedDelegatedToken,
 };
+use canic_contracts::ids::{BuildNetwork, CanisterRole};
 
 ///
 /// PrepareDelegatedTokenIssuerProofInput

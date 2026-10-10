@@ -1,7 +1,7 @@
 //! Focused checks for canister artifact artifact behavior.
 
 use super::*;
-use canic_core::ids::BuildNetwork;
+use canic_contracts::ids::BuildNetwork;
 
 #[test]
 fn generated_infrastructure_inputs_are_stable_before_compilation() {
@@ -18,7 +18,7 @@ fn generated_infrastructure_inputs_are_stable_before_compilation() {
         role: "root".into(),
         profile: CanisterBuildProfile::Fast,
         environment: "local".into(),
-        build_network: canic_core::ids::BuildNetwork::Local,
+        build_network: canic_contracts::ids::BuildNetwork::Local,
         workspace_root: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."),
         icp_root: directory.clone(),
         config_path: package.join("canic.toml"),

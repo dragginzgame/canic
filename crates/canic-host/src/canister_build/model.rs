@@ -1,9 +1,6 @@
+use canic_contracts::ids::CanisterRole;
+use canic_core::role_contract::{ProtocolProfileDigest, RoleCapabilityKey};
 use std::{collections::BTreeSet, path::PathBuf, time::Duration};
-
-use canic_core::{
-    ids::CanisterRole,
-    role_contract::{ProtocolProfileDigest, RoleCapabilityKey},
-};
 
 pub(super) const FLEET_COORDINATOR_ROLE: &str = "fleet_coordinator";
 pub(super) const WASM_STORE_ROLE: &str = "wasm_store";

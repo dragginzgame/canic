@@ -5,29 +5,15 @@
 //! Boundary: ops commit only exact authority and records already validated by workflow.
 
 pub mod caller_authority;
-use caller_authority::{CallerJournalKey, CallerJournalRowRecord};
 
+use caller_authority::{CallerJournalKey, CallerJournalRowRecord};
 #[cfg(feature = "root-control-plane")]
-use canic_core::dto::fleet_registry::{FleetSubnetRootEntry, FleetSubnetRootStatus};
-#[cfg(feature = "root-control-plane")]
-use canic_core::impl_storable_bounded;
-#[cfg(feature = "root-control-plane")]
-use canic_core::{
-    cdk::structures::{
-        DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, cell::Cell, memory::RuntimeMemory,
-        storable::Storable,
-    },
-    dto::fleet_subnet_root::FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
-    role_contract::allocation::memory::control_plane::{
-        ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_DRAINING_ID,
-        ROOT_COMPONENT_PRINCIPAL_INDEX_ID, ROOT_COMPONENT_REGISTRY_ENTRIES_ID,
-        ROOT_COMPONENT_REGISTRY_STATE_ID, ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID,
-    },
+use canic_contracts::dto::{
+    fleet_registry::{FleetSubnetRootEntry, FleetSubnetRootStatus},
+    fleet_subnet_root::FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
 };
-use canic_core::{
-    cdk::types::{Cycles, Principal},
-    control_plane_support::config::schema::ComponentChildKind,
-    control_plane_support::model::replay::ReplayCostGuardSettlement,
+use canic_contracts::{
+    cycles::Cycles,
     dto::{
         component_registry::{
             ComponentLifecycleStatus, ComponentProvisioningOrigin, ComponentRegistryHead,
@@ -40,6 +26,20 @@ use canic_core::{
         CanisterRole, ComponentBinding, ComponentChildBinding, ComponentInstanceId,
         ComponentSpecId, ComponentTopologyDigest, FleetSubnetRootBinding,
         FleetSubnetRootReleaseSet, SubnetId,
+    },
+};
+#[cfg(feature = "root-control-plane")]
+use canic_core::{
+    cdk::structures::{
+        DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, cell::Cell, memory::RuntimeMemory,
+        storable::Storable,
+    },
+    impl_storable_bounded,
+};
+use canic_core::{
+    cdk::types::Principal,
+    control_plane_support::{
+        config::schema::ComponentChildKind, model::replay::ReplayCostGuardSettlement,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -75,29 +75,13 @@ fn root_deletion_retained_cycles_target(
 }
 
 #[cfg(feature = "root-control-plane")]
-struct RootComponentRegistryState;
-#[cfg(feature = "root-control-plane")]
-struct RootComponentAllocations;
-#[cfg(feature = "root-control-plane")]
-struct ComponentRegistryEntries;
-#[cfg(feature = "root-control-plane")]
-struct ComponentRegistryPrincipalIndex;
-#[cfg(feature = "root-control-plane")]
-struct RootComponentSubtreeRemovalHistory;
-#[cfg(feature = "root-control-plane")]
-struct RootComponentDraining;
-
-#[cfg(feature = "root-control-plane")]
 std::thread_local! {
     static ROOT_COMPONENT_REGISTRY:
         RefCell<Cell<RootComponentRegistryStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
             canic_core::ic_memory_key!(
                 authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-                key = "canic.control_plane.root.component.registry_state.v1",
-                ty = RootComponentRegistryState,
-                id = ROOT_COMPONENT_REGISTRY_STATE_ID
-            ),
+                key = "canic.control_plane.root.component.registry_state.v1"),
             RootComponentRegistryStateRecord::default(),
         ));
 }
@@ -113,10 +97,7 @@ std::thread_local! {
     > = RefCell::new(StableBtreeMap::init(
         canic_core::ic_memory_key!(
             authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-            key = "canic.control_plane.root.component.draining.v1",
-            ty = RootComponentDraining,
-            id = ROOT_COMPONENT_DRAINING_ID
-        ),
+            key = "canic.control_plane.root.component.draining.v1"),
     ));
 }
 
@@ -131,10 +112,7 @@ std::thread_local! {
     > = RefCell::new(StableBtreeMap::init(
         canic_core::ic_memory_key!(
             authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-            key = "canic.control_plane.root.component.subtree_removal_history.v1",
-            ty = RootComponentSubtreeRemovalHistory,
-            id = ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID
-        ),
+            key = "canic.control_plane.root.component.subtree_removal_history.v1"),
     ));
 }
 
@@ -149,10 +127,7 @@ std::thread_local! {
     > = RefCell::new(StableBtreeMap::init(
         canic_core::ic_memory_key!(
             authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-            key = "canic.control_plane.root.component.registry_entries.v1",
-            ty = ComponentRegistryEntries,
-            id = ROOT_COMPONENT_REGISTRY_ENTRIES_ID
-        ),
+            key = "canic.control_plane.root.component.registry_entries.v1"),
     ));
 }
 
@@ -167,10 +142,7 @@ std::thread_local! {
     > = RefCell::new(StableBtreeMap::init(
         canic_core::ic_memory_key!(
             authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-            key = "canic.control_plane.root.component.principal_index.v1",
-            ty = ComponentRegistryPrincipalIndex,
-            id = ROOT_COMPONENT_PRINCIPAL_INDEX_ID
-        ),
+            key = "canic.control_plane.root.component.principal_index.v1"),
     ));
 }
 
@@ -185,10 +157,7 @@ std::thread_local! {
     > = RefCell::new(StableBtreeMap::init(
         canic_core::ic_memory_key!(
             authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-            key = "canic.control_plane.root.component.allocations.v1",
-            ty = RootComponentAllocations,
-            id = ROOT_COMPONENT_ALLOCATIONS_ID
-        ),
+            key = "canic.control_plane.root.component.allocations.v1"),
     ));
 }
 
@@ -422,8 +391,8 @@ pub struct RootFleetSubnetStoreDeletionRecord {
 /// Durable authority frozen before a removed root returns cycles to its Coordinator.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootFleetSubnetDeletionPreparationIntentRecord {
-    pub ledger_transfer: Option<canic_core::dto::fleet_registry::FleetLedgerTransferIntent>,
-    pub ledger_receipt: Option<canic_core::dto::fleet_registry::FleetLedgerTransferReceipt>,
+    pub ledger_transfer: Option<canic_contracts::dto::fleet_registry::FleetLedgerTransferIntent>,
+    pub ledger_receipt: Option<canic_contracts::dto::fleet_registry::FleetLedgerTransferReceipt>,
     pub operation_id: [u8; 32],
     pub coordinator: Principal,
     pub final_inventory_hash: [u8; 32],
@@ -442,7 +411,7 @@ pub struct RootFleetSubnetDeletionPreparationIntentRecord {
 /// Durable local proof that a removed root is ready for its external deletion executor.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootFleetSubnetDeletionPreparationRecord {
-    pub ledger_receipt: canic_core::dto::fleet_registry::FleetLedgerTransferReceipt,
+    pub ledger_receipt: canic_contracts::dto::fleet_registry::FleetLedgerTransferReceipt,
     pub operation_id: [u8; 32],
     pub fleet_subnet_root: Principal,
     pub coordinator: Principal,
@@ -1094,7 +1063,7 @@ impl RootFleetSubnetDrainingInventoryAuthority {
 pub struct RootComponentAllocationRecord {
     #[serde(deserialize_with = "Option::deserialize")]
     pub application_initialization:
-        Option<canic_core::dto::component_registry::ComponentApplicationInitialization>,
+        Option<canic_contracts::dto::component_registry::ComponentApplicationInitialization>,
     pub operation_id: [u8; 32],
     pub allocation_sequence: u64,
     pub component: ComponentInstanceId,

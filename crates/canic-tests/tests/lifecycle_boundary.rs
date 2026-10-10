@@ -1,16 +1,17 @@
 // Category C - Artifact / deployment test (embedded config).
 // This test relies on embedded production config by design.
 
-use candid::{CandidType, Deserialize, Principal, decode_args, encode_args};
+use candid::{Principal, decode_args, encode_args};
 use canic::{
     Error,
     dto::{
-        abi::v1::CanisterInitPayload,
-        fleet_activation::FleetActivationPhase,
-        role::{ComponentRuntimeOperationStatus, OperationStatusRequest},
-        runtime::{CanicReadinessStatus, ReadinessStatus},
+        abi::v1::CanisterInitPayload, fleet_activation::FleetActivationPhase,
+        role::OperationStatusRequest, runtime::ReadinessStatus,
     },
 };
+use canic_contracts::dto::wire::projection::component_registry::CanisterOperationStatusFragment as CanisterOperationStatusResponse;
+use canic_contracts::dto::wire::projection::fixture_canic::RootStatusRequestFragment as CanisterStatusRequest;
+use canic_contracts::dto::wire::projection::fixture_lifecycle_boundary::CanisterStatusResponse;
 use canic_testing_internal::pic::{
     install_lifecycle_boundary_fixture, invalid_init_args, lifecycle_participant_init_trap_wasm,
     lifecycle_participant_trap_wasm, managed_test_init_identity, upgrade_args,
@@ -20,23 +21,6 @@ use std::{any::Any, time::Duration};
 
 const INSTALL_CODE_RETRY_LIMIT: usize = 4;
 const INSTALL_CODE_COOLDOWN: Duration = Duration::from_mins(5);
-
-#[derive(CandidType)]
-enum CanisterStatusRequest {
-    Operation(OperationStatusRequest),
-    Readiness,
-}
-
-#[derive(CandidType, Deserialize)]
-enum CanisterStatusResponse {
-    Operation(Box<CanisterOperationStatusResponse>),
-    Readiness(CanicReadinessStatus),
-}
-
-#[derive(CandidType, Deserialize)]
-enum CanisterOperationStatusResponse {
-    ConfigureRuntime(ComponentRuntimeOperationStatus),
-}
 
 #[test]
 fn invalid_reinstall_arguments_report_init_phase_error() {
@@ -298,7 +282,7 @@ fn assert_prepared_and_not_ready(pic: &PocketIc, canister_id: Principal, root: P
         .query_candid_as(
             canister_id,
             root,
-            canic_core::protocol::CANIC_CONTROL_STATUS,
+            canic_contracts::protocol::CANIC_CONTROL_STATUS,
             (CanisterStatusRequest::Operation(OperationStatusRequest {
                 operation_id: [0x43; 32],
             }),),
@@ -316,7 +300,7 @@ fn assert_prepared_and_not_ready(pic: &PocketIc, canister_id: Principal, root: P
     let readiness: Result<CanisterStatusResponse, Error> = pic
         .query_candid(
             canister_id,
-            canic_core::protocol::CANIC_OBSERVABILITY,
+            canic_contracts::protocol::CANIC_OBSERVABILITY,
             (CanisterStatusRequest::Readiness,),
         )
         .expect("query managed Canister readiness");

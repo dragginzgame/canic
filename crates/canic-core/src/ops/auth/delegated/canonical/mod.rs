@@ -12,9 +12,9 @@ use crate::{
         DelegationAudience, DelegationCert, DelegationProof, IssuerProof, IssuerProofAlgorithm,
         IssuerProofBinding, RootKeyPolicyV1,
     },
-    ids::{BuildNetwork, CanisterRole, FleetKey},
     ops::auth::delegated::protocol,
 };
+use canic_contracts::ids::{BuildNetwork, CanisterRole, FleetKey};
 use ic_auth::canonical::CanonicalAuthError as ProtocolError;
 use sha2::{Digest, Sha256};
 use thiserror::Error;

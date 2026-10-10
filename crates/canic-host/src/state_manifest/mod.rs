@@ -11,10 +11,10 @@ mod aggregation;
 mod audit;
 mod resolution;
 
-pub use resolution::{StateManifestResolution, resolve_workspace_state_manifest};
-
 use canic_core::state_contract::{STATE_MANIFEST_SCHEMA_VERSION, StateManifest};
 use serde::Serialize;
+
+pub use resolution::{StateManifestResolution, resolve_workspace_state_manifest};
 
 pub const STATE_AUDIT_COMMAND: &str = "canic state audit";
 pub const STATE_MANIFEST_COMMAND: &str = "canic state manifest";
@@ -94,7 +94,7 @@ pub enum StateAuditCategory {
     Invariant,
     Lifecycle,
     Manifest,
-    MemoryId,
+    MemoryKey,
     Naming,
     SchemaVersion,
     Snapshot,
@@ -107,7 +107,7 @@ impl StateAuditCategory {
             Self::Invariant => "invariant",
             Self::Lifecycle => "lifecycle",
             Self::Manifest => "manifest",
-            Self::MemoryId => "memory_id",
+            Self::MemoryKey => "memory_key",
             Self::Naming => "naming",
             Self::SchemaVersion => "schema_version",
             Self::Snapshot => "snapshot",
@@ -229,8 +229,8 @@ pub fn build_state_audit_report(
 mod tests {
     use super::*;
     use crate::role_contract::materialize_state_manifest;
+    use canic_contracts::ids::CanisterRole;
     use canic_core::{
-        ids::CanisterRole,
         role_contract::{
             AllocationOwner, BuiltInRoleKind, CanicFeatureKey, ResolvedRoleContract,
             ResolvedStateAllocation, RoleContractFinding, SelectionProvenance, StateAllocationKey,
@@ -305,7 +305,11 @@ mod tests {
                 ResolvedStateAllocation {
                     key: *key,
                     owner: definition.owner,
-                    memory_ids: definition.memory_ids.to_vec(),
+                    memory_keys: definition
+                        .memory_keys
+                        .iter()
+                        .map(|key| key.to_string())
+                        .collect(),
                     selected_by: BTreeSet::from([if let Some(built_in) = built_in {
                         SelectionProvenance::BuiltInRole(built_in)
                     } else if definition.owner == AllocationOwner::CanicControlPlane {
@@ -353,7 +357,7 @@ mod tests {
     }
 
     #[test]
-    fn builtin_report_passes_when_every_active_memory_id_is_modeled() {
+    fn builtin_report_passes_when_every_active_memory_key_is_modeled() {
         let report = build_state_audit_report(Some("root"));
 
         assert_eq!(report.status, StateAuditStatus::Pass);
@@ -365,7 +369,7 @@ mod tests {
             report
                 .checks
                 .iter()
-                .all(|check| check.code != "reserved_memory_id_declared")
+                .all(|check| check.code != "reserved_memory_key_declared")
         );
         assert!(
             report
@@ -395,7 +399,8 @@ mod tests {
         assert!(role.state.iter().any(|domain| {
             domain.domain == "template_manifests"
                 && domain.owner == "canic-control-plane"
-                && domain.memory_id == Some(10)
+                && domain.memory_key
+                    == Some("canic.control_plane.template.manifests.v1".to_string())
         }));
         assert!(
             role.state.iter().any(|domain| {
@@ -447,12 +452,21 @@ mod tests {
         assert_eq!(
             role.state
                 .iter()
-                .map(|domain| (domain.domain.as_str(), domain.memory_id))
+                .map(|domain| (domain.domain.as_str(), domain.memory_key.clone()))
                 .collect::<Vec<_>>(),
             vec![
-                ("authority_restore_fence", Some(59)),
-                ("fleet_coordinator_funding", Some(62)),
-                ("fleet_coordinator_registry", Some(15)),
+                (
+                    "authority_restore_fence",
+                    Some("canic.core.authority_restore.fence.v1".to_string())
+                ),
+                (
+                    "fleet_coordinator_funding",
+                    Some("canic.control_plane.fleet_coordinator.funding.v1".to_string())
+                ),
+                (
+                    "fleet_coordinator_registry",
+                    Some("canic.control_plane.fleet_coordinator.registry.v1".to_string())
+                ),
             ]
         );
     }
@@ -490,12 +504,19 @@ mod tests {
     fn placement_roles_materialize_exact_placement_state() {
         let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
 
-        for (config_path, role, expected_ids) in [
-            ("apps/test/canic.toml", "user_hub", vec![52, 53]),
+        for (config_path, role, expected_keys) in [
+            (
+                "apps/test/canic.toml",
+                "user_hub",
+                vec![
+                    "canic.core.sharding.registry.v1".to_string(),
+                    "canic.core.sharding.assignments.v1".to_string(),
+                ],
+            ),
             (
                 "canisters/audit/scaling_probe/canic.toml",
                 "scale_hub",
-                vec![50],
+                vec!["canic.core.placement.scaling_registry.v1".to_string()],
             ),
         ] {
             let config = workspace.join(config_path);
@@ -503,7 +524,7 @@ mod tests {
             let StateManifestResolution::Resolved { manifest, .. } = resolution else {
                 panic!("{role} role contract should resolve");
             };
-            let mut actual_ids = manifest.roles[0]
+            let mut actual_keys = manifest.roles[0]
                 .state
                 .iter()
                 .filter(|domain| {
@@ -515,11 +536,15 @@ mod tests {
                             | "sharding_assignments"
                     )
                 })
-                .filter_map(|domain| domain.memory_id)
+                .filter_map(|domain| domain.memory_key.clone())
                 .collect::<Vec<_>>();
-            actual_ids.sort_unstable();
+            actual_keys.sort_unstable();
 
-            assert_eq!(actual_ids, expected_ids, "unexpected state for {role}");
+            assert_eq!(
+                actual_keys,
+                sorted_keys(expected_keys),
+                "unexpected state for {role}"
+            );
         }
     }
 
@@ -541,30 +566,55 @@ mod tests {
         let mut ids = manifest.roles[0]
             .state
             .iter()
-            .filter_map(|domain| domain.memory_id)
+            .filter_map(|domain| domain.memory_key.clone())
             .collect::<Vec<_>>();
         ids.sort_unstable();
         assert_eq!(
             ids,
-            vec![
-                10, 11, 12, 13, 14, 30, 31, 32, 33, 35, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 48,
-                49, 60, 68,
-            ]
+            sorted_keys(vec![
+                "canic.control_plane.template.manifests.v1".to_string(),
+                "canic.control_plane.template.chunk_sets.v1".to_string(),
+                "canic.control_plane.template.chunk_refs.v1".to_string(),
+                "canic.control_plane.template.chunk_payloads.v1".to_string(),
+                "canic.control_plane.wasm_store.gc_state.v1".to_string(),
+                "canic.core.runtime.canister_children.v1".to_string(),
+                "canic.core.runtime.bindings.v1".to_string(),
+                "canic.core.fleet.state.v1".to_string(),
+                "canic.core.fleet.activation.v1".to_string(),
+                "canic.core.replay.receipts.v1".to_string(),
+                "canic.core.cycles.tracker.v1".to_string(),
+                "canic.core.cycles.topup_events.v1".to_string(),
+                "canic.core.cycles.funding_ledger.v1".to_string(),
+                "canic.core.log.entries.v1".to_string(),
+                "canic.core.intent.meta.v1".to_string(),
+                "canic.core.intent.records.v1".to_string(),
+                "canic.core.intent.totals.v1".to_string(),
+                "canic.core.intent.pending.v1".to_string(),
+                "canic.core.intent.receipt_backed_records.v1".to_string(),
+                "canic.core.intent.expiry_index.v1".to_string(),
+                "canic.core.application_receipt.eligibility.v1".to_string(),
+                "canic.core.placement.acknowledgement_index.v1".to_string(),
+                "canic.core.async_job_recovery.v1".to_string(),
+                "canic.control_plane.fixture_store.v1".to_string()
+            ])
         );
         let fixture = manifest.roles[0]
             .state
             .iter()
             .find(|domain| domain.domain == "fixture_store")
             .expect("Store fixture domain");
-        assert_eq!(fixture.memory_id, Some(68));
+        assert_eq!(
+            fixture.memory_key,
+            Some("canic.control_plane.fixture_store.v1".to_string())
+        );
         assert_eq!(fixture.owner, "canic-control-plane");
         assert_eq!(
             manifest.roles[0]
                 .reserved_memory
                 .iter()
-                .map(|entry| entry.memory_id)
+                .map(|entry| entry.memory_key.clone())
                 .collect::<Vec<_>>(),
-            Vec::<u8>::new()
+            Vec::<String>::new()
         );
     }
 
@@ -587,13 +637,25 @@ mod tests {
             manifest.roles[0]
                 .state
                 .iter()
-                .map(|domain| (domain.domain.as_str(), domain.memory_id))
+                .map(|domain| (domain.domain.as_str(), domain.memory_key.clone()))
                 .collect::<Vec<_>>(),
             vec![
-                ("authority_restore_fence", Some(59)),
-                ("fleet_coordinator_admission", Some(64)),
-                ("fleet_coordinator_funding", Some(62)),
-                ("fleet_coordinator_registry", Some(15)),
+                (
+                    "authority_restore_fence",
+                    Some("canic.core.authority_restore.fence.v1".to_string())
+                ),
+                (
+                    "fleet_coordinator_admission",
+                    Some("canic.control_plane.fleet_admission.v1".to_string())
+                ),
+                (
+                    "fleet_coordinator_funding",
+                    Some("canic.control_plane.fleet_coordinator.funding.v1".to_string())
+                ),
+                (
+                    "fleet_coordinator_registry",
+                    Some("canic.control_plane.fleet_coordinator.registry.v1".to_string())
+                ),
             ]
         );
     }
@@ -638,16 +700,16 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_memory_id_fails_within_role() {
+    fn duplicate_memory_key_fails_within_role() {
         let mut manifest = test_state_manifest(Some("root"));
         let role = manifest.roles.first_mut().expect("root role");
-        role.state[1].memory_id = role.state[0].memory_id;
+        role.state[1].memory_key = role.state[0].memory_key.clone();
 
         let checks = audit_checks(&manifest, Some("root"));
         assert!(
             checks
                 .iter()
-                .any(|check| check.code == "memory_id_duplicate"
+                .any(|check| check.code == "memory_key_duplicate"
                     && check.status == StateAuditStatus::Fail)
         );
     }
@@ -657,7 +719,7 @@ mod tests {
         let mut manifest = test_state_manifest(Some("root"));
         let role = manifest.roles.first_mut().expect("root role");
         let mut duplicate = role.state[0].clone();
-        duplicate.memory_id = Some(250);
+        duplicate.memory_key = Some("app.extra.v1".to_string());
         role.state.push(duplicate);
 
         let checks = audit_checks(&manifest, Some("root"));
@@ -678,29 +740,29 @@ mod tests {
             report
                 .checks
                 .iter()
-                .all(|check| check.code != "reserved_memory_id_declared")
+                .all(|check| check.code != "reserved_memory_key_declared")
         );
     }
 
     #[test]
-    fn active_domain_reclaiming_reserved_memory_id_fails() {
+    fn active_domain_reclaiming_reserved_memory_key_fails() {
         let mut manifest = test_state_manifest(Some("root"));
         let role = manifest.roles.first_mut().expect("root role");
-        let reserved_id = 250;
+        let reserved_id = "canic.core.reserved.v1".to_string();
         role.reserved_memory.push(ReservedMemoryManifest {
             label: "future_state".to_string(),
-            memory_id: reserved_id,
+            memory_key: reserved_id.clone(),
             owner: "canic-core".to_string(),
             reason: "synthetic collision fixture".to_string(),
         });
-        role.state[0].memory_id = Some(reserved_id);
+        role.state[0].memory_key = Some(reserved_id.clone());
 
         let checks = audit_checks(&manifest, Some("root"));
 
         assert!(
             checks
                 .iter()
-                .any(|check| check.code == "reserved_memory_id_collision"
+                .any(|check| check.code == "reserved_memory_key_collision"
                     && check.status == StateAuditStatus::Fail)
         );
     }
@@ -715,7 +777,7 @@ mod tests {
                     domain: "external_authority".to_string(),
                     version: 1,
                     storage: StateStorage::NotApplicable,
-                    memory_id: None,
+                    memory_key: None,
                     owner: "canic-core".to_string(),
                     record: "ExternalAuthorityRecord".to_string(),
                     snapshot: "ExternalAuthorityData".to_string(),
@@ -735,7 +797,7 @@ mod tests {
         assert!(
             checks
                 .iter()
-                .all(|check| check.code != "state_domain_missing_memory_id")
+                .all(|check| check.code != "state_domain_missing_memory_key")
         );
     }
 
@@ -746,4 +808,10 @@ mod tests {
         assert_eq!(report.status, StateAuditStatus::Fail);
         assert_eq!(report.checks[0].code, "state_role_missing");
     }
+}
+
+#[cfg(test)]
+fn sorted_keys(mut keys: Vec<String>) -> Vec<String> {
+    keys.sort_unstable();
+    keys
 }

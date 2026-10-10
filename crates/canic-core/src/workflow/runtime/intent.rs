@@ -23,11 +23,13 @@ use crate::{
     },
     ops::{
         ic::IcOps,
-        runtime::metrics::intent::{
-            IntentMetricOperation, IntentMetricOutcome, IntentMetricReason, IntentMetricSurface,
-            IntentMetrics,
+        runtime::{
+            metrics::intent::{
+                IntentMetricOperation, IntentMetricOutcome, IntentMetricReason,
+                IntentMetricSurface, IntentMetrics,
+            },
+            recent_failure::{RecentFailureInput, RecentFailureOps},
         },
-        runtime::recent_failure::{RecentFailureInput, RecentFailureOps},
         storage::intent::{IntentStoreOps, ReceiptBackedIntentOps},
     },
     workflow::runtime::timer::{TimerError, require_active, retain_owned_once, with_owned_once},

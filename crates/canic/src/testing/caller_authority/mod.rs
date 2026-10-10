@@ -5,39 +5,21 @@
 //! Production membership uses Root's journal; fixtures retain exact receipts in their receivers.
 
 use super::managed_app::ManagedAppQualificationError as FixtureError;
-use candid::{CandidType, Deserialize, Principal};
-use canic_core::{
-    api::caller_authority::CallerAuthorityApi,
-    bootstrap::compiled::CompiledCallerPolicy,
-    control_plane_support::policy::caller_authority::matches_permission,
-    dto::{
-        caller_authority::*,
-        error::Error,
-        role::{OperationReceipt, OperationStatusRequest},
-    },
+use candid::Principal;
+use canic_contracts::dto::wire::projection::caller_authority::Command;
+use canic_contracts::dto::wire::projection::caller_authority::CommandResponse as Response;
+use canic_contracts::dto::wire::projection::caller_authority::StatusRequest;
+use canic_contracts::dto::wire::projection::caller_authority::StatusResponse;
+use canic_contracts::{
+    dto::{caller_authority::*, error::Error, role::OperationStatusRequest},
     ids::CallerReceiverAuthority,
     protocol::{CANIC_COMMAND, CANIC_CONTROL_STATUS},
 };
+use canic_core::{
+    api::caller_authority::CallerAuthorityApi, bootstrap::compiled::CompiledCallerPolicy,
+    control_plane_support::policy::caller_authority::matches_permission,
+};
 use ic_testkit::pic::{CandidCallExt, PocketIc};
-
-#[derive(CandidType)]
-enum Command {
-    CallerAuthority(CallerAuthorityCommand),
-    ReleaseApplicationStartup(CallerAuthorityPublication),
-}
-#[derive(CandidType, Deserialize)]
-enum Response {
-    CallerAuthority(Box<CallerAuthorityReceipt>),
-    OperationAccepted(OperationReceipt),
-}
-#[derive(CandidType)]
-enum StatusRequest {
-    CallerAuthority(OperationStatusRequest),
-}
-#[derive(CandidType, Deserialize)]
-enum StatusResponse {
-    CallerAuthority(CallerAuthorityStatus),
-}
 
 pub(super) fn publish(
     pic: &PocketIc,

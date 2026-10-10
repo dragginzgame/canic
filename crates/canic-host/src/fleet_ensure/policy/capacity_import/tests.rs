@@ -5,7 +5,7 @@ use crate::fleet_ensure::{
     model::capacity_import::{CapacityImportSourceBinding, CapacityImportSourceRecord},
     ops::capacity_import::prepare_review,
 };
-use canic_core::ids::{AppId, CanonicalNetworkId, FleetBinding, FleetId, FleetKey};
+use canic_contracts::ids::{AppId, CanonicalNetworkId, FleetBinding, FleetId, FleetKey};
 
 pub fn principal(byte: u8) -> Principal {
     Principal::from_slice(&[byte; 29])

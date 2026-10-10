@@ -9,8 +9,7 @@ use crate::{
         RootComponentProvisioningStore,
     },
 };
-use canic_core::{
-    cdk::structures::{BTreeMap, Memory, VectorMemory},
+use canic_contracts::{
     dto::{
         component_provisioning::RootComponentDirectorySynchronizationRequest,
         component_registry::ComponentRegistryHead, fleet_registry::FleetRegistryVersion,
@@ -20,6 +19,7 @@ use canic_core::{
         FleetId, FleetKey, FleetRegistryAuthority, SubnetId,
     },
 };
+use canic_core::cdk::structures::{BTreeMap, Memory, VectorMemory};
 
 fn principal(byte: u8) -> Principal {
     Principal::from_slice(&[byte; 29])
@@ -120,7 +120,7 @@ fn synchronization_journals_intent_reconciles_and_replays_terminal_receipt() {
     .expect_err("a second synchronization cannot overlap");
     assert_eq!(
         other.code(),
-        canic_core::diagnostics::codes::REQUEST_UNEXPECTED_STATE
+        canic_contracts::diagnostics::codes::REQUEST_UNEXPECTED_STATE
     );
 
     let intent = intent();
@@ -201,7 +201,10 @@ fn synchronization_exact_retry_rejects_changed_authority() {
     conflicting.plan_hash = [22; 32];
     let error = RootComponentDirectorySynchronizationOps::status(&conflicting)
         .expect_err("changed plan hash must reject");
-    assert_eq!(error.code(), canic_core::diagnostics::codes::STATE_CONFLICT);
+    assert_eq!(
+        error.code(),
+        canic_contracts::diagnostics::codes::STATE_CONFLICT
+    );
 }
 
 #[test]

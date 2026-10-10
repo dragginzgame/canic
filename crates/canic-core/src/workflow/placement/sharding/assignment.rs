@@ -12,7 +12,6 @@ use crate::{
         ShardingPolicy, ShardingState, compute_pool_metrics,
     },
     dto::placement::sharding::ShardingPlanStateResponse,
-    ids::CanisterRole,
     log::Topic,
     model::placement::sharding::ShardingPlanState,
     ops::{
@@ -27,6 +26,7 @@ use crate::{
     },
     workflow::placement::sharding::{ShardingWorkflow, ShardingWorkflowError},
 };
+use canic_contracts::ids::CanisterRole;
 use std::collections::BTreeSet;
 
 impl ShardingWorkflow {

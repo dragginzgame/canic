@@ -1,12 +1,7 @@
 //! One bounded management observation bracketed by certified physical custody reads.
 
 use crate::{
-    canister_protocol::{
-        CanisterProtocolError,
-        inspection::{
-            InspectionReserveRequest, InspectionReserveResponse, validate_inspection_reserve,
-        },
-    },
+    canister_protocol::{CanisterProtocolError, inspection::validate_inspection_reserve},
     fleet_ensure::{
         model::capacity_import::{CapacityImportSourceBinding, survey::CapacityImportSampleRecord},
         ops::{
@@ -17,10 +12,14 @@ use crate::{
     },
 };
 use candid::{CandidType, Nat, Principal};
-use canic_core::{
+use canic_contracts::{
     dto::{
-        canister::{CanisterInspectionRequest, CanisterStatusResponse, CanisterStatusType},
+        canister::{CanisterInspectionRequest, CanisterStatusType},
         error::Error,
+        wire::projection::{
+            capacity_management::{RootRequest, RootResponse},
+            inspection_reserve::{InspectionReserveRequest, InspectionReserveResponse},
+        },
     },
     protocol,
 };
@@ -62,17 +61,6 @@ struct Settings {
 #[derive(CandidType, Deserialize)]
 struct Memory {
     snapshots_size: Nat,
-}
-
-#[derive(CandidType)]
-enum RootRequest {
-    InspectCanister(CanisterInspectionRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum RootResponse {
-    InspectCanister(Box<CanisterStatusResponse>),
-    InspectionReserveRequired(canic_core::dto::canister::CanisterInspectionReserveResponse),
 }
 
 /// Free custody checks and encoded arguments retained until the allowance is durable.

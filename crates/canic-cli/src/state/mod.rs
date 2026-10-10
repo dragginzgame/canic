@@ -42,7 +42,7 @@ Examples:
   canic state manifest
 
 State commands are diagnostic-only metadata reports. They do not read stable
-memory values, repair memory IDs, write generated files, modify config, create
+memory values, repair memory keys, write generated files, modify config, create
 a reviewed Fleet plan, or mutate canisters.";
 
 const AUDIT_HELP_AFTER: &str = "\
@@ -394,10 +394,8 @@ fn render_manifest_text(manifest: &StateManifest) -> String {
             lines.push(format!("  {} [{}]", domain.domain, domain.storage.as_str()));
             lines.push(format!("    version: {}", domain.version));
             lines.push(format!(
-                "    memory_id: {}",
-                domain
-                    .memory_id
-                    .map_or_else(|| "none".to_string(), |id| id.to_string())
+                "    memory_key: {}",
+                domain.memory_key.as_deref().unwrap_or("none")
             ));
             lines.push(format!("    owner: {}", domain.owner));
             lines.push(format!("    record: {}", domain.record));
@@ -407,7 +405,7 @@ fn render_manifest_text(manifest: &StateManifest) -> String {
             lines.push("reserved_memory".to_string());
             for entry in &role.reserved_memory {
                 lines.push(format!("  {}", entry.label));
-                lines.push(format!("    memory_id: {}", entry.memory_id));
+                lines.push(format!("    memory_key: {}", entry.memory_key.clone()));
                 lines.push(format!("    owner: {}", entry.owner));
                 lines.push(format!("    reason: {}", entry.reason));
             }

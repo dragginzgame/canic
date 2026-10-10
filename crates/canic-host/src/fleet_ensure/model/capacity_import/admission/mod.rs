@@ -1,10 +1,11 @@
 //! Retained infrastructure provenance and explicit operator disposition evidence.
 
 use candid::Principal;
-use canic_core::ids::SubnetId;
+use canic_contracts::ids::SubnetId;
 use serde::{Deserialize, Serialize};
 
 /// Exact installed infrastructure custody verified before a capacity operation.
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CapacityImportInfrastructureRecord {

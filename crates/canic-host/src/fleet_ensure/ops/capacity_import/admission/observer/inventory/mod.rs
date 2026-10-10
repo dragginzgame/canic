@@ -10,11 +10,14 @@ use crate::fleet_ensure::{
     ops::capacity_import::journal::{CapacityImportInventoryStage, CapacityImportJournalError},
 };
 use candid::{CandidType, Principal};
-use canic_core::{
+use canic_contracts::{
     dto::{
         error::Error,
         fleet_registry::FleetRegistry,
         pool::{CanisterPoolAssetStatus, CanisterPoolResponse, CanisterPoolStatusRequest},
+        wire::projection::capacity_inventory::{
+            CoordinatorRequest, CoordinatorResponse, RootRequest, RootResponse,
+        },
     },
     protocol,
 };
@@ -27,23 +30,6 @@ const PAGE_SIZE: u16 = 256;
 
 /// Shared bound for Registry and paginated Root query responses.
 pub(in crate::fleet_ensure::ops) const RESPONSE_BYTES: usize = 2 * 1024 * 1024;
-
-#[derive(CandidType)]
-enum CoordinatorRequest {
-    Registry,
-}
-#[derive(CandidType, Deserialize)]
-enum CoordinatorResponse {
-    Registry(Box<FleetRegistry>),
-}
-#[derive(CandidType)]
-enum RootRequest {
-    Pool(CanisterPoolStatusRequest),
-}
-#[derive(CandidType, Deserialize)]
-enum RootResponse {
-    Pool(Box<CanisterPoolResponse>),
-}
 
 #[derive(Eq, PartialEq)]
 pub(in crate::fleet_ensure::ops::capacity_import) struct Inventory {
@@ -138,7 +124,7 @@ pub(in crate::fleet_ensure::ops) struct RootInventory {
 /// Enumerate a Root once, bounding each reply and requiring exact page continuity.
 pub(in crate::fleet_ensure::ops) async fn root_inventory(
     agent: &Agent,
-    root: &canic_core::dto::fleet_registry::FleetSubnetRootEntry,
+    root: &canic_contracts::dto::fleet_registry::FleetSubnetRootEntry,
     store: Principal,
     scope: PoolScope,
 ) -> Result<RootInventory, CapacityImportJournalError> {

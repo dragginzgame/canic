@@ -5,16 +5,16 @@
 //! Boundary: endpoint admission delegates immediately to control-plane workflow.
 
 use async_trait::async_trait;
+use canic_contracts::dto::{
+    capability::{RootCapabilityEnvelopeV1, RootCapabilityResponseV1},
+    error::Error,
+};
 use canic_core::{
     access::{
         AccessError,
         expr::{AccessContext, AsyncAccessPredicate},
     },
     control_plane_support::ops::ic::IcOps,
-    dto::{
-        capability::{RootCapabilityEnvelopeV1, RootCapabilityResponseV1},
-        error::Error,
-    },
 };
 
 ///

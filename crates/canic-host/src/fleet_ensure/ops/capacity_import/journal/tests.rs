@@ -1,10 +1,9 @@
 //! Same-operation recovery preserves exact handoff intent and source cycle baselines.
 
 use super::*;
-use crate::fleet_ensure::policy::capacity_import::tests::root_budget;
 use crate::fleet_ensure::{
     ops::capacity_import::prepare_review,
-    policy::capacity_import::tests::{destination, plan, principal, sources},
+    policy::capacity_import::tests::{destination, plan, principal, root_budget, sources},
     view::capacity_import::CapacityImportOwnershipView,
 };
 
@@ -386,7 +385,7 @@ fn capacity_import_approval_fences_other_fleet_operations_across_restart() {
 #[test]
 fn capacity_import_reserves_journal_space_before_approving_any_handoff() {
     use crate::fleet_ensure::ops::EnsurePaths;
-    use canic_core::ids::AppId;
+    use canic_contracts::ids::AppId;
     let root = crate::test_support::temp_dir("capacity-import-size");
     let paths = EnsurePaths::under(&root, "local", "staging");
     let store = CapacityImportJournalStore::open(&paths).unwrap();

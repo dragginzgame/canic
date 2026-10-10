@@ -20,8 +20,9 @@ use crate::{
     },
     cargo_command,
     cargo_metadata::cargo_metadata,
+    fleet_package,
     fleet_package::{
-        self, FleetPackageSpec, append_infrastructure_profile_args, resolved_canic_package,
+        FleetPackageSpec, append_infrastructure_profile_args, resolved_canic_package,
         resolved_wrapper_dependencies,
     },
     role_contract::{
@@ -80,7 +81,7 @@ pub fn compile_bootstrap_fleet_coordinator_artifact(
     );
     let profile = canic_core::role_contract::derive_protocol_profile_hashes(
         &source.package_version,
-        &canic_core::ids::CanisterRole::new(FLEET_COORDINATOR_ROLE),
+        &canic_contracts::ids::CanisterRole::new(FLEET_COORDINATOR_ROLE),
         &capabilities,
         &candid,
     );
@@ -100,7 +101,7 @@ pub fn compile_bootstrap_fleet_coordinator_artifact(
         package_name: source.package_name,
         package_version: source.package_version.clone(),
         protocol_release_identity: source.package_version,
-        protocol_role: canic_core::ids::CanisterRole::new(FLEET_COORDINATOR_ROLE),
+        protocol_role: canic_contracts::ids::CanisterRole::new(FLEET_COORDINATOR_ROLE),
         protocol_capabilities: capabilities,
         artifact_root,
         wasm_path,

@@ -8,7 +8,7 @@
 mod tests;
 
 use candid::CandidType;
-use canic_core::dto::error::Error as CanicError;
+use canic_contracts::dto::error::Error as CanicError;
 use ic_host_tools::response::{ResponseError, ResponseFormat, ResponseLimits, decode};
 use serde::de::DeserializeOwned;
 use thiserror::Error as ThisError;
@@ -43,7 +43,7 @@ where
     candid::decode_one(&bytes).map_err(IcpJsonResponseError::Candid)
 }
 
-/// Decode a `Result<T, canic_core::dto::error::Error>` from the canonical envelope.
+/// Decode a `Result<T, canic_contracts::dto::error::Error>` from the canonical envelope.
 pub fn decode_json_result_response<T>(output: &str) -> Result<T, IcpJsonResponseError>
 where
     T: CandidType + DeserializeOwned,

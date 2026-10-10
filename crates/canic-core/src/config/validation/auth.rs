@@ -4,14 +4,14 @@
 //! Does not own: auth runtime state, token verification, or schema definitions.
 //! Boundary: config validation calls this before runtime installation.
 
-use crate::config::schema::{
-    AuthConfig, ConfigSchemaError, DelegatedTokenConfig, RoleAttestationConfig, Validate,
-};
 use crate::{
     cdk::{types::Principal, utils::hash::decode_hex},
+    config::schema::{
+        AuthConfig, ConfigSchemaError, DelegatedTokenConfig, RoleAttestationConfig, Validate,
+    },
     domain::auth::{IC_ROOT_PUBLIC_KEY_RAW_LENGTH, is_mainnet_ic_root_public_key_raw},
-    ids::BuildNetwork,
 };
+use canic_contracts::ids::BuildNetwork;
 use ic_auth::canonical::chain_key_derivation_path_hash;
 #[cfg(any(feature = "auth-chain-key-ecdsa", test))]
 use k256::ecdsa::VerifyingKey as K256VerifyingKey;

@@ -12,6 +12,7 @@
 //! The use of `*Ops` types does **not** imply ownership of state or additional
 //! abstraction; they are zero-cost namespaces over free functions.
 
+mod access;
 pub mod auth;
 pub mod caller_authority;
 pub mod cascade;
@@ -36,6 +37,9 @@ pub mod rpc;
 pub mod runtime;
 pub mod storage;
 
+use crate::InternalError;
+use thiserror::Error as ThisError;
+
 ///
 /// Prelude
 ///
@@ -43,19 +47,9 @@ pub mod storage;
 ///
 
 pub mod prelude {
-    pub use crate::{
-        cdk::{
-            candid::CandidType,
-            types::{Cycles, Principal},
-        },
-        ids::CanisterRole,
-        log,
-        log::Topic,
-    };
+    pub use crate::{cdk::candid::CandidType, cdk::types::Principal, log, log::Topic};
+    pub use canic_contracts::{cycles::Cycles, ids::CanisterRole};
 }
-
-use crate::InternalError;
-use thiserror::Error as ThisError;
 
 ///
 /// OpsError

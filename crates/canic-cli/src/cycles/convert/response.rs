@@ -5,29 +5,19 @@
 //! Boundary: accepts raw Candid hex from `icp` and returns one verified refill outcome.
 
 use crate::cycles::CyclesCommandError;
-use candid::{CandidType, Deserialize, decode_one};
+use candid::decode_one;
+use canic_contracts::dto::error::Error;
+use canic_contracts::dto::icp_refill::IcpRefillResponse;
+use canic_contracts::dto::role::OperationAcceptedResponse as RootCommandResponse;
+use canic_contracts::dto::wire::projection::cycle_conversion::RootOperationStatusResponse;
+use canic_contracts::dto::wire::projection::cycle_conversion::RootStatusResponse;
 use canic_core::{
     cdk::utils::hash::{decode_hex, hex_bytes},
-    dto::{error::Error, icp_refill::IcpRefillResponse, role::OperationReceipt},
     shared_support::icp_refill::icp_refill_outcome_is_resumable,
 };
 
-#[derive(CandidType, Deserialize)]
-enum RootCommandResponse {
-    OperationAccepted(OperationReceipt),
-}
-
-#[derive(CandidType, Deserialize)]
-enum RootOperationStatusResponse {
-    RefillCycles(IcpRefillResponse),
-}
-
-#[derive(CandidType, Deserialize)]
-enum RootStatusResponse {
-    Operation(RootOperationStatusResponse),
-}
-
 /// One decoded, operation-bound live refill response.
+
 #[derive(Debug)]
 pub(super) struct DecodedIcpRefillResponse {
     response: IcpRefillResponse,
@@ -138,9 +128,12 @@ fn optional_debug<T: std::fmt::Debug>(value: Option<T>) -> String {
 mod tests {
     use super::*;
     use candid::{Nat, encode_one};
-    use canic_core::{
+    use canic_contracts::{
         diagnostics::codes,
-        dto::icp_refill::{IcpRefillErrorCode, IcpRefillStatus},
+        dto::{
+            icp_refill::{IcpRefillErrorCode, IcpRefillStatus},
+            role::OperationReceipt,
+        },
     };
 
     #[test]
@@ -191,7 +184,7 @@ mod tests {
     #[test]
     fn endpoint_error_preserves_typed_code() {
         let output = encoded_command_response(Err(Error::from_registered(
-            canic_core::diagnostics::codes::STATE_CONFLICT,
+            canic_contracts::diagnostics::codes::STATE_CONFLICT,
         )));
         let error =
             decode_icp_refill_command_response(&output, [7; 32]).expect_err("reject response");

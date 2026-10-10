@@ -1,37 +1,25 @@
 use super::{
     InitializedRootTopology, RootBaselineMetadata, RootBaselineSpec, progress, progress_elapsed,
 };
-use candid::{CandidType, Deserialize, Principal};
-use canic::{
-    Error,
-    dto::{
-        canister::CanisterInfo,
-        page::{Page, PageRequest},
-    },
-    ids::CanisterRole,
-    protocol,
-};
-use canic_control_plane::dto::template::WasmStoreOverviewResponse;
-use ic_testkit::pic::{PocketIc, PocketIcBuilder, PocketIcStartupError, prelude::*};
-use std::{collections::HashMap, fs, time::Instant};
-
 use crate::pic::{
     CanicPicExt,
     canic::{adopt_sibling_wasm_store, create_and_install_pre_adoption_root},
     startup::try_start_pocket_ic,
 };
+use candid::Principal;
 
-#[derive(CandidType)]
-enum RootStatusRequest {
-    Children(PageRequest),
-    StoreOverview,
-}
+use canic::Error;
+use canic::dto::canister::CanisterInfo;
+use canic::dto::page::PageRequest;
+use canic::ids::CanisterRole;
+use canic::protocol;
 
-#[derive(CandidType, Deserialize)]
-enum RootStatusResponse {
-    Children(Page<CanisterInfo>),
-    StoreOverview(WasmStoreOverviewResponse),
-}
+use ic_testkit::pic::{PocketIc, PocketIcBuilder, PocketIcStartupError, prelude::*};
+use std::{collections::HashMap, fs, time::Instant};
+
+use canic_contracts::dto::wire::projection::fixture_root_topology::RootStatusRequest;
+
+use canic_contracts::dto::wire::projection::fixture_root_topology::RootStatusResponse;
 
 /// Install root, stage one ordinary release profile, resume bootstrap, and fetch root children.
 ///

@@ -48,7 +48,7 @@ use crate::fleet_ensure::{
         validate_path_identity, validate_path_labels,
     },
 };
-use canic_core::cdk::types::Cycles;
+use canic_contracts::cycles::Cycles;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
@@ -252,7 +252,7 @@ where
     #[error("Root {root} provisioning has made no progress for {observations} observations: stage={stage:?}, target={target}, operation={operation}, diagnostic={diagnostic_code}, retry=Backoff, failed_at_ns={failed_at_ns}; the issued operation remains retained; resume the same reviewed apply after the dependency recovers", operation = canic_core::cdk::utils::hash::hex_bytes(.operation_id))]
     ProvisioningRetryPending {
         root: candid::Principal,
-        stage: canic_core::dto::component_provisioning::ProvisioningFailureStage,
+        stage: canic_contracts::dto::component_provisioning::ProvisioningFailureStage,
         target: candid::Principal,
         operation_id: [u8; 32],
         diagnostic_code: u16,
@@ -2865,7 +2865,7 @@ where
 fn protocol_estate_funding_requirement<E>(
     plan: &FleetEnsurePlan,
     state: &FleetEnsureStateRecord,
-    funding: &canic_core::dto::component_provisioning::RootEstateFundingRequired,
+    funding: &canic_contracts::dto::component_provisioning::RootEstateFundingRequired,
 ) -> Result<EstateFundingRequiredRecord, EnsureWorkflowError<E>>
 where
     E: std::error::Error + 'static,
@@ -4955,7 +4955,7 @@ mod tests {
             module_hash: Some("11".repeat(32)),
             protocol_binding: Some(crate::protocol_binding::RegistryProtocolBinding {
                 release_identity: "0.110.test".to_string(),
-                role: canic_core::ids::CanisterRole::from("managed_component"),
+                role: canic_contracts::ids::CanisterRole::from("managed_component"),
                 capabilities: BTreeSet::new(),
                 candid_sha256: [1; 32],
                 protocol_profile_digest:
@@ -5284,7 +5284,7 @@ mod tests {
         let mut plan = estate_funding_plan();
         plan.conservation.estate_funding_domains[0].cycles_ledger = "aaaaa-aa".to_string();
         let (state, mut journal) = retained_evidence();
-        let funding = canic_core::dto::component_provisioning::RootEstateFundingRequired {
+        let funding = canic_contracts::dto::component_provisioning::RootEstateFundingRequired {
             available: Cycles::new(40),
             attempt_count: 2,
             creation_amount: Cycles::new(45),
@@ -5404,10 +5404,10 @@ mod tests {
         let action = EnsureAction::FleetProtocol {
             action: Box::new(
                 crate::fleet_ensure::model::CurrentFleetProtocolAction::PublishStoreChunk {
-                    request: canic_control_plane::dto::template::TemplateChunkInput {
+                    request: canic_contracts::dto::template::TemplateChunkInput {
                         preparation: None,
-                        template_id: canic_control_plane::ids::TemplateId::from("root"),
-                        version: canic_control_plane::ids::TemplateVersion::from("current"),
+                        template_id: canic_contracts::ids::TemplateId::from("root"),
+                        version: canic_contracts::ids::TemplateVersion::from("current"),
                         chunk_index: 0,
                         bytes: vec![2],
                     },
@@ -5558,10 +5558,10 @@ mod tests {
         let protocol_action = || EnsureAction::FleetProtocol {
             action: Box::new(
                 crate::fleet_ensure::model::CurrentFleetProtocolAction::PublishStoreChunk {
-                    request: canic_control_plane::dto::template::TemplateChunkInput {
+                    request: canic_contracts::dto::template::TemplateChunkInput {
                         preparation: None,
-                        template_id: canic_control_plane::ids::TemplateId::from("root"),
-                        version: canic_control_plane::ids::TemplateVersion::from("current"),
+                        template_id: canic_contracts::ids::TemplateId::from("root"),
+                        version: canic_contracts::ids::TemplateVersion::from("current"),
                         chunk_index: 0,
                         bytes: vec![2],
                     },

@@ -1,12 +1,12 @@
 //! Placement-index registry stable state.
 
-use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
     cdk::{
-        structures::{DefaultMemoryImpl, memory::RuntimeMemory},
+        structures::{
+            DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, memory::RuntimeMemory,
+        },
         types::{BoundedString64, BoundedString128},
     },
-    role_contract::allocation::memory::placement::PLACEMENT_INDEX_REGISTRY_ID,
     storage::prelude::*,
 };
 use std::cell::RefCell;
@@ -15,7 +15,7 @@ std::thread_local! {
     static PLACEMENT_INDEX_REGISTRY: RefCell<
         StableBtreeMap<PlacementIndexKey, PlacementIndexEntryRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.placement.index_registry.v1", ty = PlacementIndexRegistry, id = PLACEMENT_INDEX_REGISTRY_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.placement.index_registry.v1")),
     );
 }
 

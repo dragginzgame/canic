@@ -14,30 +14,22 @@ use crate::{
     },
     icp::IcpCli,
 };
-use candid::{CandidType, Deserialize, Principal};
-use canic_control_plane::dto::fleet_coordinator::{
-    CoordinatorObservabilityRequest, CoordinatorObservabilityResponse, CoordinatorRegistryRequest,
-    CoordinatorRegistryResponse,
-};
-use canic_core::{
-    control_plane_support::{config::ComponentTopology, ops::fleet_registry::FleetRegistryOps},
-    dto::{
-        fleet_registry::{FleetRegistry, FleetRegistryVersion, FleetSubnetRootStatus},
-        fleet_subnet_root::FleetSubnetRootCanisterSummary,
-    },
-    protocol,
+use candid::Principal;
+use canic_contracts::dto::fleet_coordinator::CoordinatorObservabilityRequest;
+use canic_contracts::dto::fleet_coordinator::CoordinatorObservabilityResponse;
+use canic_contracts::dto::fleet_coordinator::CoordinatorRegistryRequest;
+use canic_contracts::dto::fleet_coordinator::CoordinatorRegistryResponse;
+use canic_contracts::dto::fleet_registry::FleetRegistry;
+use canic_contracts::dto::fleet_registry::FleetRegistryVersion;
+use canic_contracts::dto::fleet_registry::FleetSubnetRootStatus;
+use canic_contracts::dto::fleet_subnet_root::FleetSubnetRootCanisterSummary;
+use canic_contracts::dto::wire::projection::subnet_information::RootStatusRequestFragment as RootRequest;
+use canic_contracts::dto::wire::projection::subnet_information::RootStatusResponseFragment as RootResponse;
+use canic_contracts::protocol;
+use canic_core::control_plane_support::{
+    config::ComponentTopology, ops::fleet_registry::FleetRegistryOps,
 };
 use std::path::Path;
-
-#[derive(CandidType)]
-enum RootRequest {
-    Inventory,
-}
-
-#[derive(CandidType, Deserialize)]
-enum RootResponse {
-    Inventory(FleetSubnetRootCanisterSummary),
-}
 
 /// Require the selected Root's active mirror to match the independently read Coordinator head.
 pub fn observe_root(

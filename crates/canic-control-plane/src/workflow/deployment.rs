@@ -70,9 +70,9 @@ fn reserve_control_plane_deployment_cost_guard(
         min_cycles_after_reservation: MINIMUM_DEPLOYMENT_RESERVE_CYCLES,
     })
     .map_err(|error| match error {
-        CostGuardReserveError::CycleReserveRejected { .. } => {
-            InternalError::public(canic_core::diagnostics::codes::DEPLOYMENT_CYCLE_RESERVE_REQUIRED)
-        }
+        CostGuardReserveError::CycleReserveRejected { .. } => InternalError::public(
+            canic_contracts::diagnostics::codes::DEPLOYMENT_CYCLE_RESERVE_REQUIRED,
+        ),
         other => map_cost_guard_reserve_error(other),
     })
 }

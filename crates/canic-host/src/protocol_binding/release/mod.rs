@@ -20,7 +20,7 @@ use crate::{
         load_persisted_current_release_set_manifest,
     },
 };
-use canic_core::ids::ReleaseBuildId;
+use canic_contracts::ids::ReleaseBuildId;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 

@@ -8,13 +8,13 @@ use crate::{
     InternalError,
     cdk::types::Principal,
     config::schema::IndexConfig,
-    ids::CanisterRole,
     ops::{
         ic::IcOps,
         runtime::metrics::placement_index::PlacementIndexMetricReason as MetricReason,
         storage::{children::CanisterChildrenOps, placement::index::PlacementIndexRegistryOps},
     },
 };
+use canic_contracts::ids::CanisterRole;
 use std::sync::atomic::{AtomicU64, Ordering};
 use thiserror::Error as ThisError;
 

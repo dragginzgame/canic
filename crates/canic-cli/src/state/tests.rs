@@ -1,12 +1,9 @@
 use super::*;
 use crate::{CliError, cli_error_exit_code};
-use canic_core::{
-    ids::CanisterRole,
-    role_contract::{
-        AllocationOwner, CanicFeatureKey, ResolvedRoleContract, ResolvedStateAllocation,
-        RoleCapabilityKey, SelectionProvenance, StateAllocationKey,
-        allocation::allocation_definition,
-    },
+use canic_contracts::ids::CanisterRole;
+use canic_core::role_contract::{
+    AllocationOwner, CanicFeatureKey, ResolvedRoleContract, ResolvedStateAllocation,
+    RoleCapabilityKey, SelectionProvenance, StateAllocationKey, allocation::allocation_definition,
 };
 use canic_host::role_contract::materialize_state_manifest;
 use std::{collections::BTreeSet, path::PathBuf};
@@ -53,7 +50,11 @@ fn root_contract() -> ResolvedRoleContract {
             ResolvedStateAllocation {
                 key,
                 owner: definition.owner,
-                memory_ids: definition.memory_ids.to_vec(),
+                memory_keys: definition
+                    .memory_keys
+                    .iter()
+                    .map(|key| key.to_string())
+                    .collect(),
                 selected_by: BTreeSet::from([
                     if definition.owner == AllocationOwner::CanicControlPlane {
                         SelectionProvenance::EffectiveFeature(CanicFeatureKey::ControlPlane)
@@ -150,7 +151,7 @@ fn audit_json_uses_schema_version_one() {
             .as_array()
             .expect("checks")
             .iter()
-            .all(|check| check["code"] != "reserved_memory_id_declared")
+            .all(|check| check["code"] != "reserved_memory_key_declared")
     );
     assert!(
         json["checks"]
@@ -186,7 +187,7 @@ fn text_renderers_include_stable_fields() {
 
     assert!(audit.contains("schema_version: 1"));
     assert!(audit.contains("scope: role"));
-    assert!(audit.contains("memory_id [pass] memory_id_unique"));
+    assert!(audit.contains("memory_key [pass] memory_key_unique"));
     assert!(audit.contains("source: state_manifest"));
     assert!(manifest.contains("canic state manifest"));
     assert!(manifest.contains("template_manifests"));

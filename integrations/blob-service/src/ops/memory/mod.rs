@@ -11,15 +11,14 @@ use ic_blob_storage::ops::service::{
 use ic_memory::{RuntimeMemory, ic_stable_structures::DefaultMemoryImpl};
 
 pub(super) type Memory = RuntimeMemory<DefaultMemoryImpl>;
-/// Allocation authority selected by the owning canister macro.
-pub const AUTHORITY: &str = "blob-service";
 
 /// Register only in the artifact that explicitly mounts the service.
 ///
 /// # Panics
 /// Panics if static service requests are invalid or registration is already sealed.
 pub fn register() {
-    for request in installation::requests(AUTHORITY).expect("service memory requests") {
+    for request in installation::requests(crate::MEMORY_AUTHORITY).expect("service memory requests")
+    {
         ic_memory::register_memory_request(request).expect("register service request");
     }
 }
@@ -29,7 +28,7 @@ pub(super) struct Grants {
     pub(super) stores: ServiceMemories<Memory>,
 }
 pub(super) fn open() -> Grants {
-    let lookup = ic_memory::open_default_memory_manager_memory_by_key;
+    let lookup = ic_memory::open_default_memory_manager_memory;
     Grants {
         configuration: lookup(INSTALLATION_MEMORY_KEY).expect("configuration grant"),
         stores: grants::open(lookup).expect("service grants"),

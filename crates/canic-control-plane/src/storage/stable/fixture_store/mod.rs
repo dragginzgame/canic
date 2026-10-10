@@ -3,15 +3,13 @@
 //! This namespace is disjoint from executable templates. Operations validate
 //! content and capacity before committing these synchronous local mutations.
 
+// Tag, content/principal digest, and chunk ordinal form a fixed namespace key.
+
 use candid::{CandidType, Deserialize, Principal};
-use canic_core::{
-    cdk::structures::{DefaultMemoryImpl, btreemap::BTreeMap, memory::RuntimeMemory},
-    dto::fixture_provisioning::{FixtureDescriptor, FixtureGrant},
-    role_contract::allocation::memory::control_plane::FIXTURE_STORE_ID,
-};
+use canic_contracts::dto::fixture_provisioning::{FixtureDescriptor, FixtureGrant};
+use canic_core::cdk::structures::{DefaultMemoryImpl, btreemap::BTreeMap, memory::RuntimeMemory};
 use std::cell::RefCell;
 
-// Tag, content/principal digest, and chunk ordinal form a fixed namespace key.
 const KEY_BYTES: usize = 37;
 const ACCOUNTING_KEY: [u8; KEY_BYTES] = [0; KEY_BYTES];
 
@@ -19,10 +17,7 @@ std::thread_local! {
     static FIXTURES: RefCell<BTreeMap<[u8; KEY_BYTES], Vec<u8>, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(BTreeMap::init(canic_core::ic_memory_key!(
             authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-            key = "canic.control_plane.fixture_store.v1",
-            ty = FixtureStore,
-            id = FIXTURE_STORE_ID
-        )));
+            key = "canic.control_plane.fixture_store.v1")));
 }
 
 /// Exact descriptor and monotonic ingestion progress, committed with each chunk.

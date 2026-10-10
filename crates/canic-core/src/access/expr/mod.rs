@@ -7,12 +7,13 @@
 mod evaluators;
 
 use crate::{
-    access::{self, AccessError, metrics::AccessMetrics},
+    access,
+    access::{AccessError, metrics::AccessMetrics},
     cdk::types::Principal,
-    ids::{AccessMetricKind, EndpointCall},
     log,
     log::Topic,
 };
+use canic_contracts::ids::{AccessMetricKind, EndpointCall};
 use std::{future::Future, pin::Pin, sync::Arc};
 
 pub use async_trait::async_trait;
@@ -583,12 +584,14 @@ mod tests {
     use super::*;
     use crate::{
         access,
-        ids::{EndpointCall, EndpointCallKind, EndpointId},
         ops::runtime::metrics::access::AccessMetrics as MetricStore,
-        storage::stable::env::{Env, EnvData, EnvRecord},
-        storage::stable::state::fleet::{FleetMode, FleetState, FleetStateData, FleetStateRecord},
+        storage::stable::{
+            env::{Env, EnvData, EnvRecord},
+            state::fleet::{FleetMode, FleetState, FleetStateData, FleetStateRecord},
+        },
         test::seams,
     };
+    use canic_contracts::ids::{EndpointCall, EndpointCallKind, EndpointId};
     use std::sync::Mutex;
 
     ///

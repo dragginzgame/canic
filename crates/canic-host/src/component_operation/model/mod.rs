@@ -2,13 +2,14 @@
 //! Root storage remains the authoritative allocation and activation owner.
 
 use candid::Principal;
-use canic_core::ids::{
+use canic_contracts::ids::{
     CanisterRole, ComponentBinding, ComponentInstanceId, ComponentSpecId, FleetSubnetRootBinding,
     FleetSubnetRootReleaseSet,
 };
 use serde::{Deserialize, Serialize};
 
 /// Exact reviewed local, installation and placement authority.
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ComponentAuthorityRecord {

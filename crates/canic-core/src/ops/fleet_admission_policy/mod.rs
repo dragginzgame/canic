@@ -8,37 +8,41 @@
 mod tests;
 
 use crate::{
-    dto::fleet_admission::{
-        FleetAdmissionActivateRootRequest, FleetAdmissionActivateTargetRequest,
-        FleetAdmissionOpenRootRequest, FleetAdmissionOpenTargetRequest,
-        FleetAdmissionPrepareRootRequest, FleetAdmissionPrepareRootStage,
-        FleetAdmissionPrepareTargetRequest, FleetAdmissionRootTransitionPhase,
-        FleetAdmissionTargetReceipt, FleetAdmissionTargetTransitionPhase,
+    dto::{
+        fleet_admission::{
+            FleetAdmissionActivateRootRequest, FleetAdmissionActivateTargetRequest,
+            FleetAdmissionOpenRootRequest, FleetAdmissionOpenTargetRequest,
+            FleetAdmissionPrepareRootRequest, FleetAdmissionPrepareRootStage,
+            FleetAdmissionPrepareTargetRequest, FleetAdmissionRootTransitionPhase,
+            FleetAdmissionTargetReceipt, FleetAdmissionTargetTransitionPhase,
+        },
+        fleet_registry::FleetRegistryVersion,
     },
-    dto::fleet_registry::FleetRegistryVersion,
-    ids::{
-        FLEET_ADMISSION_INITIAL_GENERATION, FLEET_ADMISSION_SCHEMA_VERSION, FleetAdmissionPolicy,
-        FleetAdmissionPolicyTemplate, FleetAdmissionProjection, FleetAdmissionRule,
-        FleetAdmissionSelector, FleetAdmissionTarget, FleetBinding, FleetCoordinatorBinding,
-        ManagedCanisterBinding, SubnetId,
+    model::{
+        fleet_admission_authority::{
+            FleetAdmissionMutationOperationInput, FleetAdmissionMutationRequestModel,
+            FleetAdmissionRootCatalogAuthorityModel,
+        },
+        fleet_admission_policy::{
+            FleetAdmissionPolicyValidationError, FleetAdmissionPolicyValidationInput,
+            validate_fleet_admission_policy, validate_initial_fleet_admission_generation,
+        },
+        fleet_admission_projection::{
+            FleetAdmissionProjectionReceiptModel, FleetAdmissionProjectionState,
+            FleetAdmissionProjectionValidationError, FleetAdmissionProjectionValidationInput,
+            FleetAdmissionTargetTransitionPhaseModel, FleetAdmissionTargetTransitionRequestModel,
+            validate_fleet_admission_projection,
+        },
+        fleet_admission_root::FleetAdmissionRootPrepareRequestModel,
     },
-    model::fleet_admission_authority::{
-        FleetAdmissionMutationOperationInput, FleetAdmissionMutationRequestModel,
-        FleetAdmissionRootCatalogAuthorityModel,
-    },
-    model::fleet_admission_policy::{
-        FleetAdmissionPolicyValidationError, FleetAdmissionPolicyValidationInput,
-        validate_fleet_admission_policy, validate_initial_fleet_admission_generation,
-    },
-    model::fleet_admission_projection::{
-        FleetAdmissionProjectionReceiptModel, FleetAdmissionProjectionState,
-        FleetAdmissionProjectionValidationError, FleetAdmissionProjectionValidationInput,
-        FleetAdmissionTargetTransitionPhaseModel, FleetAdmissionTargetTransitionRequestModel,
-        validate_fleet_admission_projection,
-    },
-    model::fleet_admission_root::FleetAdmissionRootPrepareRequestModel,
 };
 use candid::Principal;
+use canic_contracts::ids::{
+    FLEET_ADMISSION_INITIAL_GENERATION, FLEET_ADMISSION_SCHEMA_VERSION, FleetAdmissionPolicy,
+    FleetAdmissionPolicyTemplate, FleetAdmissionProjection, FleetAdmissionRule,
+    FleetAdmissionSelector, FleetAdmissionTarget, FleetBinding, FleetCoordinatorBinding,
+    ManagedCanisterBinding, SubnetId,
+};
 use sha2::{Digest, Sha256};
 
 const TEMPLATE_DIGEST_DOMAIN: &[u8] = b"canic/fleet-admission-template/v1";

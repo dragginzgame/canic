@@ -465,9 +465,10 @@ struct RootRuntimeActivationAuthority<'a> {
     configuration_digest: ComponentDeploymentConfigurationDigest,
     fleet_subnet_root: Principal,
     counts: RootRuntimeActivationCounts,
-    result: &'a Option<canic_core::dto::component_provisioning::RootComponentProvisioningResult>,
+    result:
+        &'a Option<canic_contracts::dto::component_provisioning::RootComponentProvisioningResult>,
     publication:
-        &'a Option<canic_core::dto::component_provisioning::RootComponentPublicationEvidence>,
+        &'a Option<canic_contracts::dto::component_provisioning::RootComponentPublicationEvidence>,
     accepted_at_ns: u64,
     provisioned_at_ns: Option<u64>,
     published_at_ns: Option<u64>,
@@ -721,7 +722,8 @@ struct RootDirectoryConfirmationAuthority<'a> {
     fleet_registry: &'a FleetRegistryVersion,
     fleet_subnet_root: Principal,
     counts: RootDirectoryConfirmationCounts,
-    result: &'a Option<canic_core::dto::component_provisioning::RootComponentProvisioningResult>,
+    result:
+        &'a Option<canic_contracts::dto::component_provisioning::RootComponentProvisioningResult>,
     accepted_at_ns: u64,
     provisioned_at_ns: Option<u64>,
 }
@@ -777,7 +779,7 @@ fn validate_root_publication_evidence(
     record: &FleetComponentProvisioningRecord,
     batch: &FleetSubnetRootProvisioningBatch,
     response: &RootComponentProvisioningStatusResponse,
-    publication: &canic_core::dto::component_provisioning::RootComponentPublicationEvidence,
+    publication: &canic_contracts::dto::component_provisioning::RootComponentPublicationEvidence,
 ) -> Result<(), InternalError> {
     let result = response
         .result
@@ -824,9 +826,9 @@ fn validate_root_publication_evidence(
 fn component_group_directory_from_receipt(
     record: &FleetComponentProvisioningRecord,
     batch: &FleetSubnetRootProvisioningBatch,
-    planned: &canic_core::dto::component_provisioning::ComponentGroupPlacementPlan,
-    provisioned: &canic_core::dto::component_provisioning::RootProvisionedGroupPlacement,
-) -> Result<canic_core::dto::component_provisioning::ComponentGroupDirectory, InternalError> {
+    planned: &canic_contracts::dto::component_provisioning::ComponentGroupPlacementPlan,
+    provisioned: &canic_contracts::dto::component_provisioning::RootProvisionedGroupPlacement,
+) -> Result<canic_contracts::dto::component_provisioning::ComponentGroupDirectory, InternalError> {
     let placement_matches = [
         planned.group_placement == provisioned.group_placement,
         planned.component_group == provisioned.component_group,
@@ -853,7 +855,7 @@ fn component_group_directory_from_receipt(
                 ));
             }
             Ok(
-                canic_core::dto::component_provisioning::ComponentGroupDirectoryMember {
+                canic_contracts::dto::component_provisioning::ComponentGroupDirectoryMember {
                     member_path: member.member_path.clone(),
                     component_spec: member.component_spec.clone(),
                     purpose: member.purpose.clone(),
@@ -864,9 +866,9 @@ fn component_group_directory_from_receipt(
         })
         .collect::<Result<Vec<_>, _>>()?;
     Ok(
-        canic_core::dto::component_provisioning::ComponentGroupDirectory {
+        canic_contracts::dto::component_provisioning::ComponentGroupDirectory {
             provenance:
-                canic_core::dto::component_provisioning::ComponentGroupDirectoryProvenance {
+                canic_contracts::dto::component_provisioning::ComponentGroupDirectoryProvenance {
                     authority: batch.root.authority.clone(),
                     fleet_subnet_root: batch.root.fleet_subnet_root,
                     group_placement: provisioned.group_placement.clone(),

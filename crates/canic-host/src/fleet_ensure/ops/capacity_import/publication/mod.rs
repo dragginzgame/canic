@@ -24,13 +24,9 @@ use crate::fleet_ensure::{
         },
     },
 };
-use ic_host_fs::durable::write_bytes;
-use ic_host_fs::read::read_file_no_follow;
-
-use canic_core::{
-    cdk::utils::hash::{decode_hex, hex_bytes},
-    dto::pool_import::{PoolImportPhase, PoolImportStatus},
-};
+use canic_contracts::dto::pool_import::{PoolImportPhase, PoolImportStatus};
+use canic_core::cdk::utils::hash::{decode_hex, hex_bytes};
+use ic_host_fs::{durable::write_bytes, read::read_file_no_follow};
 use sha2_host::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
@@ -416,7 +412,8 @@ pub fn publish(
         if current != document.original.as_bytes() {
             return Err(conflict());
         }
-        write_bytes(&path, document.replacement.as_bytes())?;
+        write_bytes(&path, document.replacement.as_bytes())
+            .map_err(crate::publication::ops::io_error)?;
     }
     journal
         .operation

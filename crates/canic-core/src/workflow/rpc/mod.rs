@@ -9,7 +9,8 @@ pub mod capability;
 mod lifecycle;
 pub mod request;
 
-use crate::{InternalError, cdk::types::Principal, diagnostics::codes, ids::CanisterRole};
+use crate::{InternalError, cdk::types::Principal, diagnostics::codes};
+use canic_contracts::ids::CanisterRole;
 use thiserror::Error as ThisError;
 
 pub use authority::{

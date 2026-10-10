@@ -1,5 +1,24 @@
 # Canic 0.110 Implementation Status
 
+## Current closeout scope — 2026-10-10
+
+The maintainer deferred unfinished FR1/CS1 and requested an exact audit of the
+implemented Canic/Blob release batch
+([#459](https://github.com/dragginzgame/canic/issues/459#issuecomment-6099958187)).
+Earlier FR1/CS1 sequencing below is historical and no longer gates this closeout.
+Retained discovery/assessment and completed owner adoptions remain implemented;
+whole-Fleet release execution and the remaining simplifications are not claimed
+complete. Their next implementation batch is unscheduled. The maintainer selected
+current focused proofs for B5
+([decision](https://github.com/dragginzgame/canic/issues/459#issuecomment-6100198166));
+the older two-clean-build full capability matrix
+remains historical evidence and no longer gates this closeout. The maintainer
+accepted the exact PASS WITH LIMITATIONS verdict on 2026-10-10 and requested
+0.111.0 publication ([#459](https://github.com/dragginzgame/canic/issues/459)).
+This closes the agreed 0.110 scope; unfinished FR1/CS1 remain deferred. The
+[current handoff](../../status/current.md) records the settled graph and direct
+qualification; the old `.42` closeout report does not qualify today's source.
+
 ## Maintainer-requested .52 checkpoint — 2026-10-03
 
 The maintainer needs an earlier push after dependency edits finish. Include the
@@ -37,7 +56,7 @@ timings are implemented and qualified against published .50 in the independent
 source/target bundle `.canic/local-work/toko-feedback-20261002/`.
 The maintainer requested integration; the patch is applied to the primary worktree
 after its active build finished, preserving the other session's edits.
-The [current handoff](../../status/current.md#earlier-integration-evidence)
+The [current handoff](../../status/current.md)
 owns the exact source, evidence and integration boundary.
 
 Root/Coordinator queries, signed handoff, certified request-status reconciliation
@@ -158,7 +177,7 @@ accepted scope; B3/B4 remain stopped/deferred and the human closeout gate remain
 | FI1 | Bootstrap and capacity-import implementation/qualification shipped in .43; subsequent reinstall/recovery corrections shipped through .47. |
 | RD1 | CANIC-191 admission correction is locally qualified: current artifacts, explicit physical custody and existing archive/reset owners replace predecessor-completion gates. 135 focused native tests, targeted lint and the partial-bootstrap/activation/import public-CLI PocketIC proof pass (249.78s). In-flight provisioning reconciliation remains; remove its preparation machinery only when those uncertain-effect obligations are covered. No live Toko recovery. FR1 continues as a separate batch after .50. |
 | FR1 | Active after .50: reservation, inventory and release-fence foundations are restored and requalified against the released corrections. Read-budget bookkeeping no longer blocks explicit reset. Complete paid-obligation/account collection, role quiescence wiring, execution/recovery, CLI, whole-Fleet qualification and retirement contraction remain. |
-| CS1 | Accepted and pending after FR1: all seven audited simplifications, including direct qualification, propagation and cleanup, must complete before B5/human closeout and 0.111 blob removal/extraction. |
+| CS1 | Accepted and pending after FR1: all seven audited simplifications, including direct qualification, propagation and cleanup, must complete before B5/human closeout and 0.112 blob removal/extraction. |
 | B5 | The .42 checkpoint is qualified; final closeout must cover FI1, subsequent corrections, FR1 and CS1 and receive human acceptance. |
 | Cleanup | Complete and ready for maintainer review: unused runtime/Host paths, obsolete helpers/tests and status-owned release flows removed, duplicate evidence consolidated, focused checks passed. |
 | Reinstall review corrections | Shipped in .48: typed unavailable funding diagnostics and exact-digest unpaid-review cancellation. Toko confirms live cancellation and infrastructure completion. |
@@ -306,7 +325,7 @@ batch. The advisory line estimate is not a release gate or deletion quota.
 The maintainer accepts all seven read-only audit candidates into
 [CS1](0.110-design.md#cs1-pre-blob-code-simplification--accepted-2026-10-01).
 RD1 now takes priority. CS1 follows FR1, coordinating with remaining R2–R8 owner
-corrections, and must complete before final B5/human 0.110 closeout and 0.111
+corrections, and must complete before final B5/human 0.110 closeout and 0.112
 blob-storage removal/extraction. The audit traced `34751fc09`; implementation
 rechecks current source and retains final qualification. These are planned
 simplifications, not implemented cuts or a new patch allocation.

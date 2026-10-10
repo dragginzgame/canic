@@ -10,11 +10,13 @@ use crate::fleet_ensure::{
     },
 };
 use candid::Principal;
-use canic_core::{cdk::utils::hash::decode_hex, ids::SubnetId};
+use canic_contracts::ids::SubnetId;
+use canic_core::cdk::utils::hash::decode_hex;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
 /// Operator-owned TOML document retained byte for byte in the import review.
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CapacityImportDeclarations {

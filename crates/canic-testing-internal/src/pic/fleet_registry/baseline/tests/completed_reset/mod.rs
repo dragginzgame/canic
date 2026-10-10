@@ -891,7 +891,7 @@ esac
 pub(super) fn generate(
     input: &ReinstallJourney<'_>,
     executable: &Path,
-    release: canic_core::ids::ReleaseBuildId,
+    release: canic_contracts::ids::ReleaseBuildId,
 ) -> DesiredFleet {
     let root = input.adapter_root;
     let config = retain_generated_journey_source(root, input.config);

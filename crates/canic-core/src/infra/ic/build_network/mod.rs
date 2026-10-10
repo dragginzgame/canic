@@ -4,7 +4,7 @@
 //! Does not own: build-network configuration, config validation, or endpoint policy.
 //! Boundary: ops and access predicates call this for baked-in build-network state.
 
-use crate::ids::BuildNetwork;
+use canic_contracts::ids::BuildNetwork;
 
 ///
 /// BuildNetworkInfra

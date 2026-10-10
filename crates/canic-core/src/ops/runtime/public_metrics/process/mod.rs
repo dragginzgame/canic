@@ -4,6 +4,8 @@
 //! Does not own: protected diagnostic payloads, timer scheduling, or history.
 //! Boundary: fixed labels and bounded source visits; no caller, target, intent, or row identities.
 
+// Each owner has enum-only keys. Reject oversized inputs before scanning or allocating.
+
 use crate::{
     InternalError,
     domain::public_metrics::PublicMetricKind,
@@ -15,7 +17,6 @@ use crate::{
 };
 use std::collections::BTreeMap;
 
-// Each owner has enum-only keys. Reject oversized inputs before scanning or allocating.
 const MAX_PROCESS_SOURCE_ROWS: usize = 256;
 
 pub(super) fn operations() -> Result<Vec<PublicMetricSample>, InternalError> {

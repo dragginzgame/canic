@@ -2,9 +2,10 @@
 //! Production Root generation and release artifacts are unaffected.
 
 use super::literal_zero_role_artifact_path;
-use crate::pic::CanicWasmBuildProfile;
-use crate::pic::artifacts::build_internal_test_wasm_canisters_with_features;
-use canic_core::ids::{BuildNetwork, CanisterRole};
+use crate::pic::{
+    CanicWasmBuildProfile, artifacts::build_internal_test_wasm_canisters_with_features,
+};
+use canic_contracts::ids::{BuildNetwork, CanisterRole};
 use canic_host::{
     canister_build::{CanisterArtifactBuildOutput, CanisterBuildProfile, WorkspaceBuildContext},
     release_set::AppConfigSnapshot,
@@ -50,7 +51,7 @@ pub fn build_audit_root(context: &WorkspaceBuildContext) -> CanisterArtifactBuil
             canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
             config,
         ),
-        (canic_core::ids::RELEASE_BUILD_ID_ENV, release.as_str()),
+        (canic_contracts::ids::RELEASE_BUILD_ID_ENV, release.as_str()),
     ];
     let mut declaration = base_env.to_vec();
     declaration.push((canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV, "1"));

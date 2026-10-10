@@ -5,21 +5,16 @@
 //! Boundary: exercises topology completeness, build qualification, and admission-scoped output.
 
 use super::*;
-use crate::release_set::WASM_MAGIC;
 use crate::{
     component_topology::{
         PlannedFleetSubnetRootTopologyInput, RootComponentAdmissionInput,
         plan_initial_fleet_topology,
     },
-    release_set::fixture::FixtureArtifactEntry,
+    release_set::{WASM_MAGIC, fixture::FixtureArtifactEntry},
 };
-use std::io::Write;
-
 use candid::Principal;
-use canic_control_plane::api::fixture_content::FixtureContentApi;
-use canic_core::{
-    bootstrap::{compiled::ConfigModel, parse_config_model},
-    cdk::{types::Cycles, utils::hash::hex_bytes},
+use canic_contracts::{
+    cycles::Cycles,
     dto::fixture_provisioning::{FixtureChunkDescriptor, FixtureDescriptor},
     ids::{
         AppId, CanonicalNetworkId, CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding,
@@ -27,7 +22,13 @@ use canic_core::{
         ReleaseBuildNonce, SubnetId,
     },
 };
+use canic_control_plane::api::fixture_content::FixtureContentApi;
+use canic_core::{
+    bootstrap::{compiled::ConfigModel, parse_config_model},
+    cdk::utils::hash::hex_bytes,
+};
 use flate2::{Compression, GzBuilder};
+use std::io::Write;
 
 const CONFIG: &str = r#"
 [app]
@@ -115,7 +116,7 @@ fn limits(maximum_wasm_store_bytes: u64) -> FleetSubnetRootLimits {
         maximum_registry_bytes: 4_194_304,
         maximum_wasm_store_bytes,
         maximum_group_placements: 16,
-        canister_pool: canic_core::ids::FleetSubnetCanisterPoolConfig {
+        canister_pool: canic_contracts::ids::FleetSubnetCanisterPoolConfig {
             minimum_size: 1,
             maximum_size: 10,
             canister_cycles: Cycles::new(5_000_000_000_000),
@@ -628,7 +629,7 @@ fn projection_rejects_cross_build_topology_and_manifest_tampering() {
 
     let mut wrong_topology_union = union.clone();
     wrong_topology_union.fleet_component_topology_digest =
-        canic_core::ids::ComponentTopologyDigest::from_bytes([16; 32]);
+        canic_contracts::ids::ComponentTopologyDigest::from_bytes([16; 32]);
     std::assert_matches!(
         FleetSubnetRootReleaseSetManifest::project(
             &plan.component_topology,
@@ -660,7 +661,7 @@ fn projection_rejects_cross_build_topology_and_manifest_tampering() {
 
     let mut wrong_digest = manifest.clone();
     wrong_digest.component_topology_digest =
-        canic_core::ids::ComponentTopologyDigest::from_bytes([18; 32]);
+        canic_contracts::ids::ComponentTopologyDigest::from_bytes([18; 32]);
     std::assert_matches!(
         wrong_digest.validate_against(
             &plan.component_topology,
@@ -817,12 +818,12 @@ struct RootBindingFixture {
     fleet_subnet_root: Principal,
     component_admissions: Vec<RootComponentAdmissionInput>,
     limits: FleetSubnetRootLimits,
-    funding: canic_core::ids::FleetSubnetRootFundingAuthority,
+    funding: canic_contracts::ids::FleetSubnetRootFundingAuthority,
 }
 
 struct BoundTopologyFixture {
     component_topology: ComponentTopology,
-    fleet_subnet_roots: Vec<canic_core::ids::FleetSubnetRootBinding>,
+    fleet_subnet_roots: Vec<canic_contracts::ids::FleetSubnetRootBinding>,
 }
 
 // Qualify through the production planner before attaching test installation identities.
@@ -850,7 +851,7 @@ fn bind_topology_fixture(
                 .iter()
                 .find(|input| input.placement_subnet == root.placement_subnet)
                 .expect("planned input");
-            canic_core::ids::FleetSubnetRootBinding {
+            canic_contracts::ids::FleetSubnetRootBinding {
                 authority: authority.clone(),
                 placement_subnet: root.placement_subnet,
                 fleet_subnet_root: input.fleet_subnet_root,

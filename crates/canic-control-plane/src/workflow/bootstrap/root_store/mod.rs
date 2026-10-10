@@ -25,11 +25,7 @@ use crate::{
         runtime::template::{WasmStorePublicationWorkflow, exact_store_payload_bytes},
     },
 };
-use canic_core::{
-    cdk::utils::hash::wasm_hash,
-    control_plane_support::{
-        error::InternalError, ops::config::ConfigOps, workflow::topology::guard::TopologyGuard,
-    },
+use canic_contracts::{
     dto::root_store::{
         ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX, ROOT_STORE_RELEASE_SET_MANIFEST_MAX_BYTES,
         ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX, RootStoreBootstrapRequest,
@@ -37,6 +33,12 @@ use canic_core::{
         RootStoreReleaseSetEntryKind, RootStoreReleaseSetManifest,
     },
     ids::{ComponentSpecId, ReleaseBuildId},
+};
+use canic_core::{
+    cdk::utils::hash::wasm_hash,
+    control_plane_support::{
+        error::InternalError, ops::config::ConfigOps, workflow::topology::guard::TopologyGuard,
+    },
     role_contract::ProtocolProfileDigest,
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -137,7 +139,7 @@ pub async fn status(
 }
 
 async fn load_and_validate_manifest(
-    authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
+    authority: &canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority,
     request: RootStoreBootstrapRequest,
 ) -> Result<RootStoreReleaseSetManifest, InternalError> {
     if request.manifest_payload_size_bytes == 0
@@ -173,7 +175,7 @@ async fn load_and_validate_manifest(
 }
 
 fn validate_manifest_projection(
-    authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
+    authority: &canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority,
     manifest: &RootStoreReleaseSetManifest,
 ) -> Result<(), InternalError> {
     if manifest.release_build_id != authority.initial_release_set.release_build_id {
@@ -252,7 +254,7 @@ fn validate_manifest_projection(
 }
 
 fn validate_artifact_shape(
-    entry: &canic_core::dto::root_store::RootStoreReleaseSetEntry,
+    entry: &canic_contracts::dto::root_store::RootStoreReleaseSetEntry,
 ) -> Result<(), InternalError> {
     let artifact = &entry.artifact;
     let paths_are_complete = [
@@ -395,7 +397,7 @@ fn verify_live_catalog(
         .collect()
 }
 
-fn release_set_template_id(digest: canic_core::ids::ReleaseSetDigest) -> TemplateId {
+fn release_set_template_id(digest: canic_contracts::ids::ReleaseSetDigest) -> TemplateId {
     TemplateId::owned(format!("{ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX}{digest}"))
 }
 

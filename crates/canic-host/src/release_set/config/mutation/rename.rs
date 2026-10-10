@@ -9,7 +9,8 @@ use crate::{
     },
     role_contract::package_manifest_path,
 };
-use canic_core::{bootstrap::parse_config_model, ids::CanisterRole};
+use canic_contracts::ids::CanisterRole;
+use canic_core::bootstrap::parse_config_model;
 use std::{fs, path::Path};
 use toml::Value as TomlValue;
 

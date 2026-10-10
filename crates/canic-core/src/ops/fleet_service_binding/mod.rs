@@ -24,7 +24,6 @@ use crate::{
             FleetRegistry, FleetServiceBinding, FleetServiceComponentBinding, FleetServiceMode,
         },
     },
-    ids::{ComponentGroupPlacementId, ComponentInstanceId, FleetServiceId},
     ops::{
         OpsError,
         component_provisioning_plan::ComponentProvisioningPlanOps,
@@ -35,12 +34,12 @@ use crate::{
         fleet_registry::FleetRegistryOps,
     },
 };
+use candid::Principal;
+use canic_contracts::ids::{ComponentGroupPlacementId, ComponentInstanceId, FleetServiceId};
 use std::{
     cmp::Ordering,
     collections::{BTreeMap, BTreeSet},
 };
-
-use candid::Principal;
 use thiserror::Error as ThisError;
 
 /// Typed rejection while deriving exact configured Fleet-service bindings.

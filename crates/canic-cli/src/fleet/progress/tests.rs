@@ -1,5 +1,5 @@
 use super::*;
-use canic_core::dto::component_provisioning::FleetComponentProvisioningPhase;
+use canic_contracts::dto::component_provisioning::FleetComponentProvisioningPhase;
 use canic_host::fleet_ensure::dto::{FleetEnsurePhase, FleetProvisioningProgress};
 
 fn waiting(elapsed_seconds: u64) -> FleetEnsureProgress {
@@ -304,10 +304,10 @@ fn successor_denominator_and_operator_boundaries_are_immediate() {
 #[test]
 fn reported_retry_is_distinct_from_waiting_and_keeps_root_evidence_in_json() {
     let mut event = activating();
-    let failure = canic_core::dto::component_provisioning::FleetComponentProvisioningRootFailure {
+    let failure = canic_contracts::dto::component_provisioning::FleetComponentProvisioningRootFailure {
         origin: None,
         fleet_subnet_root: candid::Principal::anonymous(),
-        stage: canic_core::dto::component_provisioning::FleetComponentProvisioningRetryStage::RuntimeActivation,
+        stage: canic_contracts::dto::component_provisioning::FleetComponentProvisioningRetryStage::RuntimeActivation,
         diagnostic_code: 42,
         failed_at_ns: 123,
     };
@@ -328,7 +328,7 @@ fn reported_retry_is_distinct_from_waiting_and_keeps_root_evidence_in_json() {
 
 #[test]
 fn observed_retry_deadlines_reach_human_and_json_output_without_advancement() {
-    use canic_core::dto::component_provisioning::{
+    use canic_contracts::dto::component_provisioning::{
         FleetComponentProvisioningRetryStage, FleetComponentProvisioningRootFailure,
         ProvisioningFailureOrigin, ProvisioningFailureStage, ProvisioningRetryCategory,
     };
@@ -639,9 +639,9 @@ fn retry_timestamps_do_not_reset_the_last_real_transition() {
         ..
     } = &mut repeated.state
     {
-        detail.pending_root_failure = Some(canic_core::dto::component_provisioning::FleetComponentProvisioningRootFailure {
+        detail.pending_root_failure = Some(canic_contracts::dto::component_provisioning::FleetComponentProvisioningRootFailure {
             origin: None, fleet_subnet_root: candid::Principal::anonymous(),
-            stage: canic_core::dto::component_provisioning::FleetComponentProvisioningRetryStage::RuntimeActivation,
+            stage: canic_contracts::dto::component_provisioning::FleetComponentProvisioningRetryStage::RuntimeActivation,
             diagnostic_code: 42, failed_at_ns: 123,
         });
     }

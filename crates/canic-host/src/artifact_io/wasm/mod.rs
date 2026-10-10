@@ -5,11 +5,10 @@
 //! Boundary: parses top-level sections around artifact transforms and before publication.
 
 use crate::canister_build::WasmArtifactMetrics;
-use std::{collections::BTreeMap, fs, path::Path};
-
-use canic_core::ids::BuildNetwork;
+use canic_contracts::ids::BuildNetwork;
 use ic_host_artifacts::wasm::{ExportKind, InspectionError, InspectionLimits};
 use ic_host_tools::install_limits::{InstallReport, REFERENCE_LIMITS};
+use std::{collections::BTreeMap, fs, path::Path};
 
 const IC_WASM_CODE_SECTION_WARNING_HEADROOM_BYTES: i128 = 768 * 1024;
 #[cfg(test)]

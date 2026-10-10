@@ -9,80 +9,107 @@ pub mod release_binding;
 #[cfg(any(not(target_arch = "wasm32"), test))]
 mod render;
 
-#[cfg(any(target_arch = "wasm32", test))]
-use crate::cdk::utils::hash::hex_bytes;
 use crate::config::{Config, RoleRuntimeAuthority, RoleRuntimeConfig, schema::ConfigModel};
 #[cfg(any(target_arch = "wasm32", test))]
-use crate::domain::auth::{
-    ic_root_public_key_raw_from_der_or_raw, is_mainnet_ic_root_public_key_raw,
+use crate::{
+    cdk::utils::hash::hex_bytes,
+    domain::auth::{ic_root_public_key_raw_from_der_or_raw, is_mainnet_ic_root_public_key_raw},
 };
 #[cfg(any(target_arch = "wasm32", test))]
-use crate::ids::BuildNetwork;
+use canic_contracts::ids::BuildNetwork;
 use std::sync::Arc;
 
 #[doc(hidden)]
-pub use crate::config::{ConfigError, ConfigTomlIssue};
+pub use crate::{config::ConfigError, config::ConfigTomlIssue};
 
 #[doc(hidden)]
 pub mod compiled {
-    pub use crate::config::caller_authority::{
-        CallerAuthorityConfig, CallerPermission, CallerPermissionDirection, CallerScope,
-        CallerSourceSelector, CompiledCallerPolicy, permission_is_declared,
-    };
-    pub use crate::config::{
-        ComponentChildFundingPolicy, ComponentChildSpec, ComponentDeploymentConfiguration,
-        ComponentDeploymentConfigurationDigestError, ComponentDeploymentLabel,
-        ComponentDeploymentLabelKey, ComponentDeploymentLabelParseError,
-        ComponentDeploymentLabelValue, ComponentDeploymentLimits, ComponentDeploymentMemberLimit,
-        ComponentDeploymentMemberLimitError, ComponentDeploymentPurpose,
-        ComponentDeploymentSpawnGrantLimit, ComponentGroupDeploymentSpec,
-        ComponentGroupDeploymentTopology, ComponentGroupDeploymentTopologyError,
-        ComponentGroupLeafKind, ComponentGroupMember, ComponentGroupPlacementPolicy,
-        ComponentGroupSpec, ComponentGroupTopology, ComponentGroupTopologyError, ComponentLimits,
-        ComponentProvisioningGrant, ComponentSpawnGrant, ComponentSpec, ComponentTopology,
-        ComponentTopologyError, FlattenedComponentGroup, FlattenedComponentGroupDeploymentMember,
-        FlattenedComponentGroupMember, FleetServiceMemberPurpose, FleetServicePlacementPolicy,
-        FleetServiceTarget, FleetServiceTargetMode, FleetServiceTopology,
-        FleetServiceTopologyError, MAX_COMPONENT_DEPLOYMENT_CONFIGURATION_CANONICAL_BYTES,
-        MAX_COMPONENT_DEPLOYMENT_LABEL_KEY_BYTES, MAX_COMPONENT_DEPLOYMENT_LABEL_VALUE_BYTES,
-        MAX_COMPONENT_DEPLOYMENT_LABELS, MAX_COMPONENT_DEPLOYMENT_MEMBER_LIMITS,
-        MAX_COMPONENT_DEPLOYMENT_SPAWN_GRANT_REDUCTIONS, MAX_COMPONENT_GROUP_DECLARED_MEMBERS,
-        MAX_COMPONENT_GROUP_DEPLOYMENT_MEMBERS,
-        MAX_COMPONENT_GROUP_DEPLOYMENT_TOPOLOGY_CANONICAL_BYTES, MAX_COMPONENT_GROUP_DEPLOYMENTS,
-        MAX_COMPONENT_GROUP_FLATTENED_MEMBERS, MAX_COMPONENT_GROUP_GRAPH_CANONICAL_BYTES,
-        MAX_COMPONENT_GROUP_INCLUSIONS, MAX_COMPONENT_GROUP_MEMBERS, MAX_COMPONENT_GROUP_SPECS,
-        MAX_COMPONENT_TOPOLOGY_CANONICAL_BYTES, MAX_FLEET_SERVICE_TARGETS,
-        MAX_FLEET_SERVICE_TOPOLOGY_CANONICAL_BYTES, RoleRuntimeAuthority,
-        RuntimeApplicationAuthorization, RuntimeCanisterAuthority, RuntimeCanisterConfig,
-        RuntimeChildCanisterAuthority, RuntimeDeploymentMemberAuthority,
+    pub use crate::{
+        cdk::candid::Principal, config::schema::AppConfig, config::schema::AuthConfig,
+        config::schema::CanisterAuthConfig, config::schema::CanisterConfig,
+        config::schema::CanisterKind, config::schema::CanisterRoleNameIssue,
+        config::schema::ChainKeyPublicKeyDerivation, config::schema::ChainKeyRootProofConfig,
+        config::schema::ComponentChildConfig, config::schema::ComponentChildKind,
+        config::schema::ComponentDeploymentMemberLimitConfig,
+        config::schema::ComponentDeploymentSpawnGrantLimitConfig,
+        config::schema::ComponentGroupComponentConfig,
+        config::schema::ComponentGroupDeploymentConfig,
+        config::schema::ComponentGroupIncludeConfig,
+        config::schema::ComponentGroupPlacementPolicyConfig,
+        config::schema::ComponentGroupSpecConfig, config::schema::ComponentLimitsConfig,
+        config::schema::ComponentProvisioningGrantConfig,
+        config::schema::ComponentSpawnGrantConfig, config::schema::ComponentSpecConfig,
+        config::schema::ConfigModel, config::schema::CyclesFundingBudgetConfig,
+        config::schema::CyclesFundingPolicyConfig, config::schema::DelegatedTokenConfig,
+        config::schema::DiagnosticsCanisterConfig, config::schema::FleetInitMode,
+        config::schema::FleetServicePlacementPolicyConfig,
+        config::schema::FleetServiceTargetConfig, config::schema::FleetServicesConfig,
+        config::schema::IndexConfig, config::schema::IndexPool,
+        config::schema::LocalApplicationAuthorizationConfig, config::schema::LogConfig,
+        config::schema::MAX_COMPONENT_CHILD_ROLES,
+        config::schema::MAX_COMPONENT_PROVISIONING_GRANTS,
+        config::schema::MAX_COMPONENT_SPAWN_GRANTS, config::schema::MAX_FLEET_COMPONENT_INSTANCES,
+        config::schema::MetricsCanisterConfig, config::schema::MetricsProfile,
+        config::schema::NAME_MAX_BYTES, config::schema::RoleAttestationConfig,
+        config::schema::RoleDeclaration, config::schema::RoleDeclarationKind,
+        config::schema::RoleObservabilityConfig, config::schema::ScalePool,
+        config::schema::ScalePoolPolicy, config::schema::ScalingConfig,
+        config::schema::ServicesConfig, config::schema::ShardPool, config::schema::ShardPoolPolicy,
+        config::schema::ShardingConfig, config::schema::Standards,
+        config::schema::StandardsCanisterConfig, config::schema::TopupPolicy,
+        config::schema::implicit_root_canister_config,
+        config::schema::implicit_wasm_store_canister_config, config::schema::validate_app_name,
+        config::schema::validate_canister_role_name,
     };
     pub use crate::{
-        cdk::{candid::Principal, types::Cycles},
-        config::schema::{
-            AppConfig, AuthConfig, CanisterAuthConfig, CanisterConfig, CanisterKind,
-            CanisterRoleNameIssue, ChainKeyPublicKeyDerivation, ChainKeyRootProofConfig,
-            ComponentChildConfig, ComponentChildKind, ComponentDeploymentMemberLimitConfig,
-            ComponentDeploymentSpawnGrantLimitConfig, ComponentGroupComponentConfig,
-            ComponentGroupDeploymentConfig, ComponentGroupIncludeConfig,
-            ComponentGroupPlacementPolicyConfig, ComponentGroupSpecConfig, ComponentLimitsConfig,
-            ComponentProvisioningGrantConfig, ComponentSpawnGrantConfig, ComponentSpecConfig,
-            ConfigModel, CyclesFundingBudgetConfig, CyclesFundingPolicyConfig,
-            DelegatedTokenConfig, DiagnosticsCanisterConfig, FleetInitMode,
-            FleetServicePlacementPolicyConfig, FleetServiceTargetConfig, FleetServicesConfig,
-            IndexConfig, IndexPool, LocalApplicationAuthorizationConfig, LogConfig,
-            MAX_COMPONENT_CHILD_ROLES, MAX_COMPONENT_PROVISIONING_GRANTS,
-            MAX_COMPONENT_SPAWN_GRANTS, MAX_FLEET_COMPONENT_INSTANCES, MetricsCanisterConfig,
-            MetricsProfile, NAME_MAX_BYTES, RoleAttestationConfig, RoleDeclaration,
-            RoleDeclarationKind, RoleObservabilityConfig, ScalePool, ScalePoolPolicy,
-            ScalingConfig, ServicesConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
-            StandardsCanisterConfig, TopupPolicy, implicit_root_canister_config,
-            implicit_wasm_store_canister_config, validate_app_name, validate_canister_role_name,
-        },
-        ids::{
-            AppId, BuildNetwork, CanisterRole, ComponentDeploymentConfigurationDigest,
-            ComponentGroupDeploymentId, ComponentGroupMemberId, ComponentGroupMemberPath,
-            ComponentGroupSpecId, ComponentSpecId, CyclesFundingBudget, FleetServiceId,
-        },
+        config::ComponentChildFundingPolicy, config::ComponentChildSpec,
+        config::ComponentDeploymentConfiguration,
+        config::ComponentDeploymentConfigurationDigestError, config::ComponentDeploymentLabel,
+        config::ComponentDeploymentLabelKey, config::ComponentDeploymentLabelParseError,
+        config::ComponentDeploymentLabelValue, config::ComponentDeploymentLimits,
+        config::ComponentDeploymentMemberLimit, config::ComponentDeploymentMemberLimitError,
+        config::ComponentDeploymentPurpose, config::ComponentDeploymentSpawnGrantLimit,
+        config::ComponentGroupDeploymentSpec, config::ComponentGroupDeploymentTopology,
+        config::ComponentGroupDeploymentTopologyError, config::ComponentGroupLeafKind,
+        config::ComponentGroupMember, config::ComponentGroupPlacementPolicy,
+        config::ComponentGroupSpec, config::ComponentGroupTopology,
+        config::ComponentGroupTopologyError, config::ComponentLimits,
+        config::ComponentProvisioningGrant, config::ComponentSpawnGrant, config::ComponentSpec,
+        config::ComponentTopology, config::ComponentTopologyError, config::FlattenedComponentGroup,
+        config::FlattenedComponentGroupDeploymentMember, config::FlattenedComponentGroupMember,
+        config::FleetServiceMemberPurpose, config::FleetServicePlacementPolicy,
+        config::FleetServiceTarget, config::FleetServiceTargetMode, config::FleetServiceTopology,
+        config::FleetServiceTopologyError,
+        config::MAX_COMPONENT_DEPLOYMENT_CONFIGURATION_CANONICAL_BYTES,
+        config::MAX_COMPONENT_DEPLOYMENT_LABEL_KEY_BYTES,
+        config::MAX_COMPONENT_DEPLOYMENT_LABEL_VALUE_BYTES,
+        config::MAX_COMPONENT_DEPLOYMENT_LABELS, config::MAX_COMPONENT_DEPLOYMENT_MEMBER_LIMITS,
+        config::MAX_COMPONENT_DEPLOYMENT_SPAWN_GRANT_REDUCTIONS,
+        config::MAX_COMPONENT_GROUP_DECLARED_MEMBERS,
+        config::MAX_COMPONENT_GROUP_DEPLOYMENT_MEMBERS,
+        config::MAX_COMPONENT_GROUP_DEPLOYMENT_TOPOLOGY_CANONICAL_BYTES,
+        config::MAX_COMPONENT_GROUP_DEPLOYMENTS, config::MAX_COMPONENT_GROUP_FLATTENED_MEMBERS,
+        config::MAX_COMPONENT_GROUP_GRAPH_CANONICAL_BYTES, config::MAX_COMPONENT_GROUP_INCLUSIONS,
+        config::MAX_COMPONENT_GROUP_MEMBERS, config::MAX_COMPONENT_GROUP_SPECS,
+        config::MAX_COMPONENT_TOPOLOGY_CANONICAL_BYTES, config::MAX_FLEET_SERVICE_TARGETS,
+        config::MAX_FLEET_SERVICE_TOPOLOGY_CANONICAL_BYTES, config::RoleRuntimeAuthority,
+        config::RuntimeApplicationAuthorization, config::RuntimeCanisterAuthority,
+        config::RuntimeCanisterConfig, config::RuntimeChildCanisterAuthority,
+        config::RuntimeDeploymentMemberAuthority,
+    };
+    pub use crate::{
+        config::caller_authority::CallerAuthorityConfig,
+        config::caller_authority::CallerPermission,
+        config::caller_authority::CallerPermissionDirection, config::caller_authority::CallerScope,
+        config::caller_authority::CallerSourceSelector,
+        config::caller_authority::CompiledCallerPolicy,
+        config::caller_authority::permission_is_declared,
+    };
+    pub use canic_contracts::{
+        cycles::Cycles, ids::AppId, ids::BuildNetwork, ids::CanisterRole,
+        ids::ComponentDeploymentConfigurationDigest, ids::ComponentGroupDeploymentId,
+        ids::ComponentGroupMemberId, ids::ComponentGroupMemberPath, ids::ComponentGroupSpecId,
+        ids::ComponentSpecId, ids::CyclesFundingBudget, ids::FleetServiceId,
     };
 }
 

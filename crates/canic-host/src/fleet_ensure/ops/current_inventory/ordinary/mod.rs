@@ -13,30 +13,20 @@ use super::{
     require_terminal_component_authority, terminal_field_exact, terminal_nonzero_hash,
     terminal_observation,
 };
-use candid::CandidType;
-use canic_control_plane::dto::root::{RootComponentOperationStatus, RootOperationStatusResponse};
-use canic_core::{
-    cdk::utils::hash::hex_bytes,
-    dto::{component_registry::ComponentRegistryPartitionRequest, role::OperationStatusRequest},
+use canic_contracts::{
+    dto::{
+        component_registry::ComponentRegistryPartitionRequest,
+        role::OperationStatusRequest,
+        root::{RootComponentOperationStatus, RootOperationStatusResponse},
+        wire::projection::ordinary_inventory::{Request, Response},
+    },
     protocol,
 };
-use serde::Deserialize;
+use canic_core::cdk::utils::hash::hex_bytes;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
 };
-
-#[derive(CandidType)]
-enum Request {
-    ComponentRegistryPartition(ComponentRegistryPartitionRequest),
-    Operation(OperationStatusRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum Response {
-    ComponentRegistryPartition(Box<ComponentRegistryPartitionResponse>),
-    Operation(Box<RootOperationStatusResponse>),
-}
 
 ///
 /// OrdinaryComponentObservation

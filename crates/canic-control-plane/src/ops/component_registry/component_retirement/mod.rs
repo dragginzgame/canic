@@ -38,8 +38,7 @@ use crate::{
         RootComponentFinalInventoryView,
     },
 };
-use canic_core::{
-    control_plane_support::error::InternalError,
+use canic_contracts::{
     dto::{
         component_registry::{
             ComponentLifecycleStatus, ComponentRegistryHead,
@@ -49,6 +48,7 @@ use canic_core::{
     },
     ids::{ComponentInstanceId, ManagedCanisterBinding},
 };
+use canic_core::control_plane_support::error::InternalError;
 
 impl ComponentRegistryOps {
     /// Retain the allocation owner across top-level membership removal and exact replay.

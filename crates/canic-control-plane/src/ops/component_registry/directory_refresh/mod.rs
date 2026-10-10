@@ -24,8 +24,7 @@ use crate::{
         },
     },
 };
-use canic_core::{
-    control_plane_support::{error::InternalError, ops::component_runtime::ComponentRuntimeOps},
+use canic_contracts::{
     dto::{
         component_provisioning::ComponentGroupDirectory,
         component_registry::{
@@ -35,6 +34,9 @@ use canic_core::{
         fleet_registry::FleetDirectorySnapshot,
     },
     ids::ComponentInstanceId,
+};
+use canic_core::control_plane_support::{
+    error::InternalError, ops::component_runtime::ComponentRuntimeOps,
 };
 use std::collections::{BTreeMap, BTreeSet};
 

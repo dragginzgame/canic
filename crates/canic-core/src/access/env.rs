@@ -4,19 +4,20 @@
 //! Does not own: caller identity, app mode, or endpoint response mapping.
 //! Boundary: access expressions call this for self/environment predicates.
 
-use crate::{
-    access::AccessError,
-    ids::BuildNetwork,
-    ops::{ic::build_network::BuildNetworkOps, runtime::env::EnvOps},
-};
-
 // -----------------------------------------------------------------------------
 // Env Checks
 // -----------------------------------------------------------------------------
 
+use crate::{
+    access::AccessError,
+    ops::{ic::build_network::BuildNetworkOps, runtime::env::EnvOps},
+};
+use canic_contracts::ids::BuildNetwork;
+
 /// is_fleet_subnet_root
 ///
 /// Permit access only from the configured Fleet Subnet Root canister.
+
 pub fn is_fleet_subnet_root() -> Result<(), AccessError> {
     if EnvOps::is_fleet_subnet_root() {
         Ok(())

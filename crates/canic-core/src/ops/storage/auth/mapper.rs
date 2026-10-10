@@ -16,7 +16,6 @@ use crate::{
         DelegationCert, DelegationProof, IcChainKeyBatchSignatureProofV1, IssuerProofAlgorithm,
         IssuerProofBinding, RootProof,
     },
-    ids::FleetKey,
     model::auth::{
         RootDelegatedRoleGrantPolicy, RootIssuerPolicy, RootIssuerRenewalState,
         RootIssuerRenewalTemplate,
@@ -32,6 +31,7 @@ use crate::{
         RootIssuerRenewalTemplateRecord, RootProofRecord,
     },
 };
+use canic_contracts::ids::FleetKey;
 
 ///
 /// ActiveDelegationProofRecordMapper

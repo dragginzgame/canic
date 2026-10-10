@@ -451,7 +451,7 @@ fn isolated_role_workspace_accepts_a_multiline_build_macro_invocation() {
 }
 
 #[test]
-fn repository_canic_runtime_closure_matches_the_protected_catalog() {
+fn repository_canic_runtime_closure_separates_contracts_from_protected_catalog() {
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let metadata = crate::cargo_metadata::cargo_metadata_catalog_for_manifest(
         &workspace.join("crates/canic/Cargo.toml"),
@@ -495,7 +495,7 @@ fn repository_canic_runtime_closure_matches_the_protected_catalog() {
         }
     }
     let crates_root = normalized_manifest_path(&workspace.join("crates"));
-    let actual = reachable
+    let mut actual = reachable
         .iter()
         .filter_map(|package_id| packages.get(package_id.as_str()))
         .filter(|package| {
@@ -504,6 +504,35 @@ fn repository_canic_runtime_closure_matches_the_protected_catalog() {
         })
         .map(|package| package.name.as_str())
         .collect::<BTreeSet<_>>();
+    // The passive wire owner is reachable, but is not a protected runtime entrypoint.
+    assert!(actual.remove("canic-contracts"));
+    let contracts = metadata
+        .packages
+        .iter()
+        .find(|package| {
+            package.name == "canic-contracts"
+                && normalized_manifest_path(&package.manifest_path)
+                    == normalized_manifest_path(
+                        &workspace.join("crates/canic-contracts/Cargo.toml"),
+                    )
+        })
+        .expect("canonical wire owner");
+    let mut contract_closure = BTreeSet::new();
+    let mut frontier = vec![contracts.id.as_str()];
+    while let Some(id) = frontier.pop() {
+        if !contract_closure.insert(id) {
+            continue;
+        }
+        let package = packages[id];
+        assert!(protected_canic_package(&package.name).is_none());
+        assert!(!matches!(
+            package.name.as_str(),
+            "ic-cdk" | "ic-memory" | "ic-timers"
+        ));
+        for dependency in normal_dependencies(nodes[id]) {
+            frontier.push(dependency.pkg.as_str());
+        }
+    }
     let expected = PROTECTED_CANIC_PACKAGES
         .iter()
         .map(|package| package.name)

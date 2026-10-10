@@ -7,6 +7,7 @@
 pub mod capacity_import;
 pub mod continuation_forecast;
 mod creation_fee;
+
 pub(in crate::fleet_ensure) mod independent_effects;
 pub(in crate::fleet_ensure) mod infrastructure_bootstrap;
 pub mod operator_mint;
@@ -35,13 +36,13 @@ use crate::{
     },
 };
 use candid::Principal;
-use canic_core::{
-    cdk::types::Cycles,
-    control_plane_support::model::fleet_funding_policy::{
-        FleetFundingPolicyValidationError, validate_coordinator_root_funding_policy,
-        validate_fleet_root_funding_capacity, validate_fleet_subnet_root_funding_authority,
-    },
+use canic_contracts::{
+    cycles::Cycles,
     ids::{FleetName, FleetSubnetCanisterPoolConfig},
+};
+use canic_core::control_plane_support::model::fleet_funding_policy::{
+    FleetFundingPolicyValidationError, validate_coordinator_root_funding_policy,
+    validate_fleet_root_funding_capacity, validate_fleet_subnet_root_funding_authority,
 };
 use sha2_host::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -808,8 +809,8 @@ fn pool_readiness_authority_matches(
     maximum_updates: Option<u32>,
 ) -> bool {
     let network_matches = desired.bootstrap.as_ref().is_some_and(|bootstrap| {
-        let mainnet =
-            bootstrap.canonical_network_id == canic_core::ids::CanonicalNetworkId::ic_mainnet();
+        let mainnet = bootstrap.canonical_network_id
+            == canic_contracts::ids::CanonicalNetworkId::ic_mainnet();
         (mainnet && !bootstrap.fresh_estate) == maximum_updates.is_some()
     });
     network_matches
@@ -2150,7 +2151,7 @@ pub fn validate_funding_policy(desired: &DesiredFleet) -> Result<(), EnsurePolic
         return Ok(());
     };
     let ic_mainnet =
-        bootstrap.canonical_network_id == canic_core::ids::CanonicalNetworkId::ic_mainnet();
+        bootstrap.canonical_network_id == canic_contracts::ids::CanonicalNetworkId::ic_mainnet();
     for root in &bootstrap.roots {
         validate_fleet_subnet_root_funding_authority(&root.funding, ic_mainnet)?;
     }
@@ -3094,11 +3095,11 @@ fn initial_role_tree_size(
 
 fn initial_role_instances(
     spec: &canic_core::control_plane_support::config::ComponentSpec,
-) -> Result<BTreeMap<canic_core::ids::CanisterRole, u32>, EnsurePolicyError> {
-    let mut instances = BTreeMap::<canic_core::ids::CanisterRole, u32>::new();
+) -> Result<BTreeMap<canic_contracts::ids::CanisterRole, u32>, EnsurePolicyError> {
+    let mut instances = BTreeMap::<canic_contracts::ids::CanisterRole, u32>::new();
     let mut frontier = BTreeMap::from([(spec.component_role.clone(), 1_u32)]);
     for _ in 0..=spec.spawn_grants.len() {
-        let mut next = BTreeMap::<canic_core::ids::CanisterRole, u32>::new();
+        let mut next = BTreeMap::<canic_contracts::ids::CanisterRole, u32>::new();
         for (role, count) in frontier {
             let total = instances.entry(role.clone()).or_default();
             *total = total
@@ -3480,7 +3481,7 @@ fn paced_protocol_stall_limit(configured: u32, topology_bound: u128) -> u32 {
 
 fn component_provisioning_stall_bound(
     desired: &DesiredFleet,
-    batches: &[canic_core::dto::component_provisioning::FleetSubnetRootProvisioningBatch],
+    batches: &[canic_contracts::dto::component_provisioning::FleetSubnetRootProvisioningBatch],
 ) -> Result<u128, EnsurePolicyError> {
     let base = component_provisioning_observation_bound(batches)?;
     if batches.iter().all(|batch| {
@@ -3517,7 +3518,7 @@ fn component_provisioning_stall_bound(
 
 fn initial_child_observation_bound<'a>(
     specs: &[canic_core::control_plane_support::config::ComponentSpec],
-    entries: impl IntoIterator<Item = (&'a canic_core::ids::ComponentSpecId, &'a [u8; 32])>,
+    entries: impl IntoIterator<Item = (&'a canic_contracts::ids::ComponentSpecId, &'a [u8; 32])>,
 ) -> Result<u128, EnsurePolicyError> {
     entries.into_iter().try_fold(0, |bound, (id, hash)| {
         let spec = specs
@@ -3536,7 +3537,7 @@ fn initial_child_observation_bound<'a>(
 }
 
 fn component_provisioning_observation_bound(
-    batches: &[canic_core::dto::component_provisioning::FleetSubnetRootProvisioningBatch],
+    batches: &[canic_contracts::dto::component_provisioning::FleetSubnetRootProvisioningBatch],
 ) -> Result<u128, EnsurePolicyError> {
     let root_count =
         u128::try_from(batches.len()).map_err(|_| EnsurePolicyError::ArithmeticOverflow {

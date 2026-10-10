@@ -17,7 +17,7 @@ use crate::{
     version_text,
 };
 use candid::Principal;
-use canic_core::cdk::types::Cycles;
+use canic_contracts::cycles::Cycles;
 use canic_host::{
     fleet_ensure::{
         view::readiness::InfrastructureFundingUnavailable,

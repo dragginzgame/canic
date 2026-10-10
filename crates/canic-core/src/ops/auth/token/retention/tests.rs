@@ -6,13 +6,13 @@ use crate::{
         DelegatedRoleGrant, DelegationAudience, DelegationCert, DelegationProof,
         IssuerProofAlgorithm, IssuerProofBinding,
     },
-    ids::CanisterRole,
     ops::auth::{
         delegated::prepare::{PrepareDelegatedTokenInput, prepare_delegated_token},
         issuer_canister_sig::issuer_canister_sig_seed_hash,
         test_fixtures::chain_key_root_proof,
     },
 };
+use canic_contracts::ids::CanisterRole;
 
 fn p(byte: u8) -> Principal {
     Principal::from_slice(&[byte; 29])
@@ -43,6 +43,7 @@ fn prepared_token(prepared_by: Principal, operation: u8) -> PreparedDelegatedTok
     };
 
     prepare_delegated_token(PrepareDelegatedTokenInput {
+        authority_expires_at_ns: proof.cert.expires_at_ns,
         proof: &proof,
         operation_id: [operation; 32],
         prepared_by,

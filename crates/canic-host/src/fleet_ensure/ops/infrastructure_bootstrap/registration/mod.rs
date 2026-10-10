@@ -8,11 +8,12 @@ use crate::fleet_ensure::{
     ops::{current_protocol, infrastructure_bootstrap::InfrastructureBootstrapError},
     policy::{expected_plan_sha256, successor_phase_burn},
 };
-use canic_core::dto::fleet_registry::FleetRegistry;
+use canic_contracts::dto::fleet_registry::FleetRegistry;
 use std::{collections::BTreeMap, path::Path};
 
 /// Expand the same registration compiler before initialization, using supplied identities.
 /// Coordinator creation uses the artifact-bound finite count until its ID exists.
+
 pub(in crate::fleet_ensure) fn quote(
     root: &Path,
     original: &FleetEnsurePlan,

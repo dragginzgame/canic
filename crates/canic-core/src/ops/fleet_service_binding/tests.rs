@@ -14,13 +14,6 @@ use crate::{
         cycles::Cycles,
         fleet_registry::{FleetRegistry, FleetSubnetRootEntry, FleetSubnetRootStatus},
     },
-    ids::{
-        AppId, CanonicalNetworkId, ComponentBinding, ComponentGroupPlacementId,
-        ComponentInstanceId, ComponentSpecAdmission, CyclesFundingBudget, FleetBinding,
-        FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority,
-        FleetSubnetCanisterPoolConfig, FleetSubnetRootBinding, FleetSubnetRootLimits,
-        FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
-    },
     ops::{
         component_provisioning_plan::{
             ComponentProvisioningPlacementAuthority, ComponentProvisioningPlanOps,
@@ -32,6 +25,13 @@ use crate::{
         },
         fleet_registry::FleetRegistryOps,
     },
+};
+use canic_contracts::ids::{
+    AppId, CanonicalNetworkId, ComponentBinding, ComponentGroupPlacementId, ComponentInstanceId,
+    ComponentSpecAdmission, CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding, FleetId,
+    FleetKey, FleetRegistryAuthority, FleetSubnetCanisterPoolConfig, FleetSubnetRootBinding,
+    FleetSubnetRootLimits, FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseBuildNonce,
+    ReleaseSetDigest, SubnetId,
 };
 
 const CONFIG: &str = r#"

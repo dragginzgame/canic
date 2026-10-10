@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Shared companions: scripts/dev/cloc.sh
 set -euo pipefail
 
 ROOT="$0"

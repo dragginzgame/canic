@@ -7,13 +7,13 @@ use crate::{
         ChainKeyKeyId, ChainKeyRootSignatureV1, DelegatedRoleGrant, DelegationAudience,
         IcChainKeyBatchSignatureProofV1, IssuerProofAlgorithm, IssuerProofBinding, RootProof,
     },
-    ids::CanisterRole,
     ops::auth::{
         delegated::canonical::chain_key_delegation_cert_hash,
         issuer_canister_sig::issuer_canister_sig_seed_hash,
     },
     test::support::fleet_key,
 };
+use canic_contracts::ids::CanisterRole;
 
 pub fn chain_key_root_proof(byte: u8) -> RootProof {
     let root_canister_id = principal(byte);

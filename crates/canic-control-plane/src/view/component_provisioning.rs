@@ -4,17 +4,16 @@
 //! Does not own: persistence, validation, effects, or boundary serialization.
 //! Boundary: ops constructs this view only from a validated durable aggregate record.
 
-use canic_core::{
+use canic_contracts::{
     dto::{
         component_deployment::{
             ComponentDeploymentLabel, ComponentDeploymentLimits, ComponentDeploymentPurpose,
             ProtectedComponentDeployment,
         },
-        component_provisioning::FleetSubnetRootProvisioningBatch,
         component_provisioning::{
-            ComponentGroupDirectory, RootComponentActivationEvidence,
-            RootComponentProvisioningPhase, RootComponentProvisioningResult,
-            RootComponentPublicationEvidence,
+            ComponentGroupDirectory, FleetSubnetRootProvisioningBatch,
+            RootComponentActivationEvidence, RootComponentProvisioningPhase,
+            RootComponentProvisioningResult, RootComponentPublicationEvidence,
         },
         fleet_registry::FleetRegistryVersion,
     },
@@ -25,6 +24,7 @@ use canic_core::{
 };
 
 /// Read-only canonical reservation cursor for one accepted root batch.
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct RootComponentProvisioningReservationCursorView {
     pub placement_index: u32,

@@ -9,7 +9,6 @@ use crate::{
     cdk::types::Principal,
     config::schema::{ShardPool, ShardPoolPolicy},
     domain::policy::pure::placement::sharding::HrwSelector,
-    ids::CanisterRole,
     log::Topic,
     ops::{
         config::ConfigOps,
@@ -23,6 +22,7 @@ use crate::{
     },
     workflow::placement::sharding::ShardingWorkflow,
 };
+use canic_contracts::ids::CanisterRole;
 
 impl ShardingWorkflow {
     /// Create configured startup shards for every pool on the current canister.

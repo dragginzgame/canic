@@ -7,7 +7,7 @@
 #[cfg(test)]
 mod tests;
 
-use crate::ids::{CanisterRole, ComponentSpecId};
+use canic_contracts::ids::{CanisterRole, ComponentSpecId};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;

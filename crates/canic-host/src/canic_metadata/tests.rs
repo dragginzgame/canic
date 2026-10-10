@@ -4,8 +4,7 @@ use super::{
 };
 use crate::protocol_binding::{RegistryProtocolBinding, ResolvedProtocolBinding};
 use candid::{CandidType, Encode};
-use canic_core::{
-    cdk::utils::hash::hex_bytes,
+use canic_contracts::{
     dto::{
         error::Error,
         metadata::CanicMetadataResponse,
@@ -13,6 +12,9 @@ use canic_core::{
         state::BootstrapStatusResponse,
     },
     ids::CanisterRole,
+};
+use canic_core::{
+    cdk::utils::hash::hex_bytes,
     role_contract::{ProtocolProfileDigest, RoleCapabilityKey},
 };
 use std::{collections::BTreeSet, path::PathBuf};

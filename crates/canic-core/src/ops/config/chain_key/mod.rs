@@ -12,8 +12,8 @@ use crate::{
         utils::hash::{decode_hex, hex_bytes},
     },
     config::schema::{ChainKeyDerivationError, ChainKeyPublicKeyDerivation, DelegatedTokenConfig},
-    ids::BuildNetwork,
 };
+use canic_contracts::ids::BuildNetwork;
 use ic_auth::canonical::chain_key_derivation_path_hash;
 use ic_secp256k1::{MasterPublicKeyId, PocketIcMasterPublicKeyId, PublicKey};
 

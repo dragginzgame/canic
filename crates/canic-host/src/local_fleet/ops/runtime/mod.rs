@@ -1,15 +1,17 @@
 //! Single-step PocketIC platform effects with exact process ownership.
 
-use crate::icp::cycles_ledger::{
-    CanisterSettings, CmcCreateCanisterArgs, CreateCanisterArgs, CreateCanisterError,
-    CreateCanisterSuccess, SubnetSelection,
+use crate::{
+    icp::cycles_ledger::{
+        CanisterSettings, CmcCreateCanisterArgs, CreateCanisterArgs, CreateCanisterError,
+        CreateCanisterSuccess, SubnetSelection,
+    },
+    local_fleet::{
+        LocalFleetError,
+        model::{LocalAllocationIntentRecord, LocalFleetConfig},
+    },
 };
-use crate::local_fleet::{
-    LocalFleetError,
-    model::{LocalAllocationIntentRecord, LocalFleetConfig},
-};
-use candid::{CandidType, Deserialize, Nat, Principal};
-use canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority;
+use candid::{Nat, Principal};
+use canic_contracts::dto::wire::projection::local_authority::{Request, Response};
 use ic_testkit::{
     pic::{PocketIcBuilderExt, PocketIcManagedServer, PocketIcStartupConfig},
     pocket_ic::{
@@ -20,6 +22,7 @@ use ic_testkit::{
 use std::{path::Path, time::Duration};
 
 /// Spawn one managed server whose drop waits for that exact child.
+
 pub fn server(config: &LocalFleetConfig) -> Result<PocketIcManagedServer, LocalFleetError> {
     Ok(PocketIcStartupConfig::spawn(
         &config.server_binary,
@@ -194,27 +197,20 @@ pub fn verify_root_authority(
     pic: &PocketIc,
     target: &crate::local_fleet::view::LocalRootInstallationView,
 ) -> Result<(), LocalFleetError> {
-    #[derive(CandidType)]
-    enum Request {
-        FleetAuthority,
-    }
-    #[derive(CandidType, Deserialize)]
-    enum Response {
-        FleetAuthority(Box<FleetSubnetRootAuthority>),
-    }
     let request = candid::encode_one(Request::FleetAuthority)
         .map_err(|error| LocalFleetError::Platform(error.to_string()))?;
     let bytes = guarded(|| {
         pic.query_call(
             target.canister_id,
             target.operator,
-            canic_core::protocol::CANIC_ROOT_STATUS,
+            canic_contracts::protocol::CANIC_ROOT_STATUS,
             request,
         )
     })?
     .map_err(|error| LocalFleetError::Platform(format!("{error:?}")))?;
-    let response = candid::decode_one::<Result<Response, canic_core::dto::error::Error>>(&bytes)
-        .map_err(|error| LocalFleetError::Platform(error.to_string()))?;
+    let response =
+        candid::decode_one::<Result<Response, canic_contracts::dto::error::Error>>(&bytes)
+            .map_err(|error| LocalFleetError::Platform(error.to_string()))?;
     let Response::FleetAuthority(actual) = response.map_err(LocalFleetError::Root)?;
     if *actual != target.authority {
         return Err(LocalFleetError::Identity);

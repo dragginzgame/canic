@@ -20,11 +20,11 @@ use crate::{
         },
     },
     dto::component_deployment::ProtectedComponentDeployment,
-    ids::{CanisterRole, ComponentBinding, ComponentSpecId},
     model::cycles_funding::FundingLimits,
     ops::runtime::env::EnvOps,
     storage::stable::state::fleet::FleetMode,
 };
+use canic_contracts::ids::{CanisterRole, ComponentBinding, ComponentSpecId};
 use std::sync::Arc;
 use thiserror::Error as ThisError;
 
@@ -395,11 +395,11 @@ const fn funding_limits(policy: &CyclesFundingPolicyConfig) -> FundingLimits {
 mod tests {
     use super::*;
     use crate::{
-        cdk::types::Cycles,
         config::schema::{CanisterKind, CyclesFundingPolicyConfig},
         storage::stable::env::{Env, EnvData, EnvRecord},
         test::config::ConfigTestBuilder,
     };
+    use canic_contracts::cycles::Cycles;
 
     #[test]
     fn role_lookup_resolves_implicit_infrastructure_outside_component_topology() {

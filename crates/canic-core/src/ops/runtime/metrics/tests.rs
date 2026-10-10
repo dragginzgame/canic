@@ -11,7 +11,6 @@ use crate::ops::runtime::metrics::sharding::{
 };
 use crate::{
     cdk::types::Principal,
-    ids::{AccessMetricKind, CanisterRole, EndpointCall, EndpointCallKind, EndpointId},
     ops::{
         runtime::metrics::{
             auth::{AuthMetricOperation, AuthMetricOutcome, AuthMetricReason, AuthMetricSurface},
@@ -55,6 +54,9 @@ use crate::{
         },
     },
     storage::stable::icp_refill::{IcpRefillRecordErrorCode, IcpRefillRecordStatus},
+};
+use canic_contracts::ids::{
+    AccessMetricKind, CanisterRole, EndpointCall, EndpointCallKind, EndpointId,
 };
 
 fn endpoint_call(name: &'static str, kind: EndpointCallKind) -> EndpointCall {

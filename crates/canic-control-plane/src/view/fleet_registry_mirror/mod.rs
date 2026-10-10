@@ -4,11 +4,13 @@
 //! Does not own: persisted records, validation, or state transitions.
 //! Boundary: mirror ops construct these values for workflow consumption.
 
-use canic_core::dto::fleet_registry::{
-    FleetDirectorySnapshot, FleetRegistrySnapshotResponse, FleetRegistryVersion,
-    FleetSubnetRootEntry, FleetSubnetRootSnapshotAcknowledgement,
+use canic_contracts::dto::{
+    fleet_registry::{
+        FleetDirectorySnapshot, FleetRegistrySnapshotResponse, FleetRegistryVersion,
+        FleetSubnetRootEntry, FleetSubnetRootSnapshotAcknowledgement,
+    },
+    root_store::RootStoreBootstrapRequest,
 };
-use canic_core::dto::root_store::RootStoreBootstrapRequest;
 
 ///
 /// RootFleetRegistryCandidateView

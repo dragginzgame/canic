@@ -7,7 +7,7 @@ use crate::fleet_ensure::{
     ops::{read_journal, read_state},
     tests::{MockError, MockPlatform},
 };
-use canic_core::cdk::types::Cycles;
+use canic_contracts::cycles::Cycles;
 use std::collections::BTreeMap;
 
 const ROOT: &str = "rrkah-fqaaa-aaaaa-aaaaq-cai";

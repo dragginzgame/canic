@@ -7,35 +7,28 @@
 #[cfg(test)]
 mod tests;
 
-use crate::MAX_DOCUMENT_READ_BYTES;
+use super::{
+    ApplicationArtifactBuildOutput, ApplicationArtifactBuildTarget, ApplicationArtifactUnion,
+    ApplicationReleaseSetError,
+};
 use crate::{
+    MAX_DOCUMENT_READ_BYTES,
     release_build::{ReleaseBuildPlanError, ReleaseBuildPlanState, load_release_build_plan},
     release_set::artifact::{
         ReleaseArtifactMaterializationError, contains_release_build_identity,
         materialize_qualified_release_artifact,
     },
 };
+use canic_contracts::ids::{CanisterRole, ReleaseBuildId};
+use canic_core::{bootstrap::compiled::ComponentTopology, role_contract::ProtocolProfileDigest};
 use ic_host_artifacts::artifact::ArtifactError;
-use ic_host_fs::durable::create_new_bytes_with_parents;
-use ic_host_fs::read::read_optional_file_no_follow;
-
+use ic_host_fs::{durable::create_new_bytes_with_parents, read::read_optional_file_no_follow};
+use sha2_host::{Digest, Sha256};
 use std::{
     io,
     path::{Path, PathBuf},
 };
-
-use canic_core::{
-    bootstrap::compiled::ComponentTopology,
-    ids::{CanisterRole, ReleaseBuildId},
-    role_contract::ProtocolProfileDigest,
-};
-use sha2_host::{Digest, Sha256};
 use thiserror::Error as ThisError;
-
-use super::{
-    ApplicationArtifactBuildOutput, ApplicationArtifactBuildTarget, ApplicationArtifactUnion,
-    ApplicationReleaseSetError,
-};
 
 pub const APPLICATION_ARTIFACT_UNION_FILE: &str = "application-artifact-union.json";
 
@@ -198,7 +191,9 @@ pub fn compile_and_persist_application_artifact_union(
     }
 
     let canonical_bytes = expected.union.canonical_bytes(topology)?;
-    if let Err(source) = create_new_bytes_with_parents(&expected.path, &canonical_bytes) {
+    if let Err(source) = create_new_bytes_with_parents(&expected.path, &canonical_bytes)
+        .map_err(crate::publication::ops::io_error)
+    {
         match load_optional_persisted_union(&expected.path, topology, release_build_id) {
             Ok(Some(observed)) if observed.union == expected.union => return Ok(observed),
             Ok(Some(_)) if source.kind() == io::ErrorKind::AlreadyExists => {

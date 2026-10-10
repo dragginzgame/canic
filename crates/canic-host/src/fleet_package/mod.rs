@@ -23,7 +23,12 @@ use std::{
 
 use ic_host_fs::durable::write_bytes;
 
-const CANIC_FAMILY_CRATES: &[&str] = &["canic-control-plane", "canic-core", "canic-macros"];
+const CANIC_FAMILY_CRATES: &[&str] = &[
+    "canic-contracts",
+    "canic-control-plane",
+    "canic-core",
+    "canic-macros",
+];
 const RELEASE_PROFILE: &[(&str, &str)] = &[
     ("opt-level", "\"z\""),
     ("lto", "true"),

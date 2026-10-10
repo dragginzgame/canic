@@ -195,7 +195,7 @@ Expected:
 ### 5. Capability Envelope And Attestation Cache
 
 ```bash
-rg -n 'RootCapabilityAuthority|root_capability_authority|RootCapabilityEnvelope|NonrootCyclesCapabilityEnvelope|attestation|cache|cached_root_response_attestation|CapabilityProof::' crates/canic-control-plane/src/workflow/component_rpc crates/canic-core/src/ops/rpc crates/canic-core/src/workflow/rpc crates/canic-core/src/dto/capability -g '*.rs'
+rg -n 'RootCapabilityAuthority|root_capability_authority|RootCapabilityEnvelope|NonrootCyclesCapabilityEnvelope|attestation|cache|cached_root_response_attestation|CapabilityProof::' crates/canic-control-plane/src/workflow/component_rpc crates/canic-core/src/ops/rpc crates/canic-core/src/workflow/rpc crates/canic-contracts/src/dto/capability -g '*.rs'
 ```
 
 Expected:

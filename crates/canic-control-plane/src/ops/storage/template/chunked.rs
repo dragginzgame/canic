@@ -1,47 +1,26 @@
-use super::TemplateManifestOps;
-use super::TemplateManifestOpsError;
-
-use super::{WasmStoreGcExecutionStats, WasmStoreLimits, input_to_record};
-
-use crate::dto::template::TemplateManifestInput;
-
-use crate::dto::template::TemplateStagingStatusResponse;
-
-use crate::storage::stable::template::TemplateManifestStateStore;
-
-use crate::{
-    dto::template::{TemplateChunkInput, TemplateChunkSetPrepareInput},
-    storage::stable::template::TemplateChunkRecord,
+use super::{
+    TemplateManifestOps, TemplateManifestOpsError, WasmStoreGcExecutionStats, WasmStoreLimits,
+    input_to_record,
 };
-use crate::{
-    dto::template::{TemplateChunkResponse, TemplateChunkSetInfoResponse},
-    ids::{TemplateChunkKey, TemplateId, TemplateReleaseKey, TemplateVersion},
-    storage::stable::template::{
-        TemplateChunkSetRecord, TemplateChunkSetStateStore, TemplateChunkStore,
-    },
-};
-
 use crate::{
     dto::template::{
+        TemplateChunkInput, TemplateChunkResponse, TemplateChunkSetInfoResponse,
+        TemplateChunkSetPrepareInput, TemplateManifestInput, TemplateStagingStatusResponse,
         WasmStoreGcStatusResponse, WasmStoreStatusResponse, WasmStoreTemplateStatusResponse,
     },
-    ids::WasmStoreGcStatus,
-    storage::stable::template::{TemplateChunkSetEntryRecord, TemplateManifestEntryRecord},
+    ids::{TemplateChunkKey, TemplateId, TemplateReleaseKey, TemplateVersion, WasmStoreGcStatus},
+    storage::stable::template::{
+        TemplateChunkRecord, TemplateChunkSetEntryRecord, TemplateChunkSetRecord,
+        TemplateChunkSetStateStore, TemplateChunkStore, TemplateManifestEntryRecord,
+        TemplateManifestStateStore,
+    },
 };
-
-use canic_core::cdk::structures::storable::Storable;
-use canic_core::cdk::utils::hash::wasm_hash;
-use canic_core::control_plane_support::error::InternalError;
-
-use canic_core::control_plane_support::format::byte_size;
-
-use canic_core::control_plane_support::ops::ic::mgmt::MgmtOps;
-
+use canic_core::{
+    cdk::{structures::storable::Storable, utils::hash::wasm_hash},
+    control_plane_support::{error::InternalError, format::byte_size, ops::ic::mgmt::MgmtOps},
+};
 use ic_cdk::api::canister_self;
-
-use std::collections::BTreeMap;
-
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 ///
 /// TemplateChunkedOps
@@ -496,14 +475,24 @@ fn chunk_set_record_to_response(record: TemplateChunkSetRecord) -> TemplateChunk
 fn manifest_store_bytes(manifests: &[TemplateManifestEntryRecord]) -> u64 {
     manifests
         .iter()
-        .map(|entry| (entry.release.to_bytes().len() + entry.record.to_bytes().len()) as u64)
+        .map(|entry| {
+            (canic_contracts::serialization::serialize(&entry.release)
+                .expect("encode current template release key")
+                .len()
+                + entry.record.to_bytes().len()) as u64
+        })
         .sum::<u64>()
 }
 
 fn chunk_set_store_bytes(chunk_sets: &[TemplateChunkSetEntryRecord]) -> u64 {
     chunk_sets
         .iter()
-        .map(|entry| (entry.release.to_bytes().len() + entry.record.to_bytes().len()) as u64)
+        .map(|entry| {
+            (canic_contracts::serialization::serialize(&entry.release)
+                .expect("encode current template release key")
+                .len()
+                + entry.record.to_bytes().len()) as u64
+        })
         .sum::<u64>()
 }
 
@@ -606,7 +595,11 @@ fn replace_chunk_set_entry(
 }
 
 fn chunk_entry_store_bytes(chunk_key: &TemplateChunkKey, record: &TemplateChunkRecord) -> u64 {
-    (chunk_key.to_bytes().len() + 12 + record.bytes.len()) as u64
+    (canic_contracts::serialization::serialize(chunk_key)
+        .expect("encode current template chunk key")
+        .len()
+        + 12
+        + record.bytes.len()) as u64
 }
 
 #[cfg(test)]
@@ -950,7 +943,7 @@ mod tests {
 
         assert_eq!(
             err.public_error().code(),
-            canic_core::diagnostics::codes::CAPACITY_LIMIT.raw_code()
+            canic_contracts::diagnostics::codes::CAPACITY_LIMIT.raw_code()
         );
     }
 
@@ -969,7 +962,7 @@ mod tests {
             .unwrap_err();
         assert_eq!(
             error.code(),
-            canic_core::diagnostics::codes::DIGEST_CONFLICT
+            canic_contracts::diagnostics::codes::DIGEST_CONFLICT
         );
         assert!(
             !TemplateChunkedOps::staging_status_response(&release.template_id, &release.version)
@@ -979,7 +972,7 @@ mod tests {
             .unwrap_err();
         assert_eq!(
             error.code(),
-            canic_core::diagnostics::codes::POSITION_CAPACITY
+            canic_contracts::diagnostics::codes::POSITION_CAPACITY
         );
         TemplateChunkedOps::publish_chunk_in_store_from_input(
             TemplateChunkInput {

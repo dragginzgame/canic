@@ -5,14 +5,19 @@ use crate::{
     storage::stable::root_funding::{RootFundingData, RootFundingStore},
     view::root_funding::RootFundingAcceptanceDisposition,
 };
-use canic_core::dto::fleet_funding::{
-    FleetFundingPolicyRotationPlacementEvidence, FleetFundingPolicyRotationRootActivateRequest,
-    FleetFundingPolicyRotationRootPlan, FleetFundingPolicyRotationRootPrepareRequest,
-    FleetFundingPolicyUsage, FleetRootFundingAcceptanceRequest, FleetRootFundingNoGrantReason,
-    FleetRootFundingNoGrantReceipt,
+use canic_contracts::{
+    dto::{
+        fleet_funding::{
+            FleetFundingPolicyRotationPlacementEvidence,
+            FleetFundingPolicyRotationRootActivateRequest, FleetFundingPolicyRotationRootPlan,
+            FleetFundingPolicyRotationRootPrepareRequest, FleetFundingPolicyUsage,
+            FleetRootFundingAcceptanceRequest, FleetRootFundingNoGrantReason,
+            FleetRootFundingNoGrantReceipt,
+        },
+        fleet_registry::FleetSubnetRootStatus,
+    },
+    ids::SubnetId,
 };
-use canic_core::dto::fleet_registry::FleetSubnetRootStatus;
-use canic_core::ids::SubnetId;
 
 #[test]
 fn release_census_binds_both_refill_participants_and_preserves_refund_evidence() {
@@ -21,7 +26,7 @@ fn release_census_binds_both_refill_participants_and_preserves_refund_evidence()
         transfer_uncertain: false,
         id: 1,
         operation_id: [2; 32],
-        trigger: canic_core::dto::icp_refill::IcpRefillTrigger::Manual,
+        trigger: canic_contracts::dto::icp_refill::IcpRefillTrigger::Manual,
         policy_hash: [3; 32],
         source_canister: root,
         source_subaccount: Some([4; 32]),
@@ -39,8 +44,8 @@ fn release_census_binds_both_refill_participants_and_preserves_refund_evidence()
         ledger_block_index: Some(10),
         notify_attempts: 1,
         cycles_sent: None,
-        status: canic_core::dto::icp_refill::IcpRefillStatus::Refunded,
-        error_code: Some(canic_core::dto::icp_refill::IcpRefillErrorCode::Refunded),
+        status: canic_contracts::dto::icp_refill::IcpRefillStatus::Refunded,
+        error_code: Some(canic_contracts::dto::icp_refill::IcpRefillErrorCode::Refunded),
         error_message: None,
         refund_block_index: Some(11),
         transaction_too_old_min_block_index: None,
@@ -59,7 +64,7 @@ fn release_census_binds_both_refill_participants_and_preserves_refund_evidence()
             refill_release_evidence(root, wrong)
                 .expect_err("wrong participant")
                 .code(),
-            canic_core::diagnostics::codes::STATE_CONFLICT
+            canic_contracts::diagnostics::codes::STATE_CONFLICT
         );
     }
 }

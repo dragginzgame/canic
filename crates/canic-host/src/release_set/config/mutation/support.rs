@@ -1,6 +1,6 @@
 use crate::release_set::config::{AppConfigError, AppConfigNameField, AppConfigNameIssue};
+use canic_contracts::ids::{ComponentSpecId, ComponentSpecIdParseError};
 use canic_core::bootstrap::compiled::{CanisterRoleNameIssue, validate_canister_role_name};
-use canic_core::ids::{ComponentSpecId, ComponentSpecIdParseError};
 
 pub(super) fn admit_canister_role_name(role: &str) -> Result<(), AppConfigError> {
     validate_canister_role_name(role).map_err(|issue| AppConfigError::InvalidName {

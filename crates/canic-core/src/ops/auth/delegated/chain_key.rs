@@ -14,9 +14,9 @@ use crate::{
         ChainKeyAlgorithm, ChainKeyBatchWitnessStepV1, ChainKeyBatchWitnessV1, ChainKeyKeyId,
         ChainKeyRootSignatureV1, DelegationCert, RootProof,
     },
-    ids::BuildNetwork,
     ops::auth::AUTH_TIME_SKEW_ALLOWANCE_NS,
 };
+use canic_contracts::ids::BuildNetwork;
 #[cfg(any(feature = "auth-chain-key-ecdsa", test))]
 use k256::ecdsa::{
     Signature as K256EcdsaSignature, VerifyingKey as K256VerifyingKey,
@@ -542,9 +542,9 @@ mod tests {
             DelegationAudience, IcChainKeyBatchSignatureProofV1, IssuerProofAlgorithm,
             IssuerProofBinding,
         },
-        ids::CanisterRole,
         ops::auth::delegated::canonical::issuer_proof_binding_hash,
     };
+    use canic_contracts::ids::CanisterRole;
     use std::cell::Cell;
 
     fn p(id: u8) -> Principal {

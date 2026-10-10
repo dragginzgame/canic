@@ -34,7 +34,7 @@ struct EmbeddedInput {
     blob: ServiceInstallationInput,
 }
 
-fn principal(byte: u8) -> Principal {
+const fn principal(byte: u8) -> Principal {
     Principal::from_slice(&[byte; 29])
 }
 
@@ -109,6 +109,10 @@ struct ConsumerInput {
     encode: fn(Principal) -> Vec<u8>,
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one managed composition journey retains installation, fencing and exact restoration observations"
+)]
 fn qualify(embedded: bool) {
     let ConsumerInput {
         role,
@@ -256,7 +260,7 @@ fn qualify(embedded: bool) {
                 object: index as u128 + 1,
                 incarnation: 1,
                 first_reference: 1,
-                root: [index as u8 + 1; 32],
+                root: [u8::try_from(index).expect("fixture object index fits u8") + 1; 32],
                 bytes: 1,
             },
             uploader,

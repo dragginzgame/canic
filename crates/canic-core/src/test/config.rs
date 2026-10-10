@@ -1,14 +1,16 @@
 // Category A - Internal runtime-configured tests (ConfigTestBuilder when needed).
 
-use crate::{
-    cdk::types::Cycles,
-    config::schema::{
+use crate::config::{
+    Config, ConfigModel, RoleRuntimeAuthority, RoleRuntimeConfig,
+    schema::{
         CanisterAuthConfig, CanisterConfig, CanisterKind, ComponentChildConfig, ComponentChildKind,
         ComponentLimitsConfig, ComponentSpawnGrantConfig, ComponentSpecConfig,
         CyclesFundingPolicyConfig, DiagnosticsCanisterConfig, MetricsCanisterConfig,
         RoleDeclaration, RoleDeclarationKind, RoleObservabilityConfig, StandardsCanisterConfig,
     },
-    config::{Config, ConfigModel, RoleRuntimeAuthority, RoleRuntimeConfig},
+};
+use canic_contracts::{
+    cycles::Cycles,
     ids::{CanisterRole, ComponentSpecId},
 };
 use std::{collections::BTreeMap, sync::Arc};

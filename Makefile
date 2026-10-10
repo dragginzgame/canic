@@ -23,12 +23,12 @@ include tool-versions.env
 include ci/tool-versions.env
 IC_TOOL_PINS ?= ci/ic-tools.tsv
 HOST_TOOL_VERSIONS ?= ci/tool-versions.env
+override SHARED_TOOLING_ROOT := $(CURDIR)
 CLOC_REPORT := $(CURDIR)/scripts/dev/report-cloc.sh
+LOCAL_TOOL_INSTALL_TARGETS += install-testkit-server
+LOCAL_TOOL_CHECK_TARGETS += testkit-server-check
 include make/tools.mk
-
-# Rust setup shares the reviewed formatter/Candid tool selection.
-install-tools: install-rust-tools
-tools-check: rust-tools-check
+include make/execution.mk
 
 .PHONY: install-testkit-server testkit-server-check
 install-testkit-server:
@@ -44,8 +44,7 @@ SHELLCHECK_BIN ?= $(SHELLCHECK_INSTALL_DIR)/shellcheck
 ICP_ENVIRONMENT ?= local
 export ICP_ENVIRONMENT
 CARGO_ENV := ICP_ENVIRONMENT=$(ICP_ENVIRONMENT)
-CANIC_BLOB_WORKSPACES := integrations/blob-service \
-                         integrations/blob-service/consumer \
+CANIC_BLOB_WORKSPACES := integrations/blob-service/consumer \
                          integrations/blob-service/embedded-consumer
 CANIC_CARGO_TARGET_DIR ?= $(CURDIR)/target
 CARGO_TARGET_DIR ?= $(CANIC_CARGO_TARGET_DIR)
@@ -279,6 +278,7 @@ test-wasm: test-unit-fast
 # graph starts only after the feature matrix passes.
 # Primitive development targets retain only the operation named by that target.
 validate:
+	+@$(MAKE) --no-print-directory tools-check
 	+@$(VALIDATION_RUNNER) \
 		fmt-check \
 		check-invariants \
@@ -367,6 +367,7 @@ release-integrity-contract-gate:
 	bash scripts/ci/test-shared-release-adoption.sh
 	perl scripts/ci/test-local-lock-versions.pl
 	bash scripts/ci/test-format-tools.sh
+	bash scripts/ci/test-canic-formatters.sh
 	bash scripts/ci/test-cargo-metadata.sh
 	bash scripts/ci/test-file-digests.sh
 	bash scripts/ci/test-rustsec-db.sh
@@ -472,24 +473,10 @@ clippy:
 	$(CARGO_ENV) bash scripts/ci/run-workspace-cargo.sh clippy -D warnings
 
 fmt:
-	bash scripts/ci/check-format-tools.sh "$(SHARED_TOOLING_CARGO_SORT_VERSION)"
-	cargo sort --workspace
-	cargo sort-derives
-	cargo fmt --all
-	@set -eu; for workspace in $(CANIC_BLOB_WORKSPACES); do \
-		cargo sort --workspace --order workspace,package,lib,dependencies,dev-dependencies,build-dependencies,profile "$$workspace"; \
-		(cd "$$workspace" && cargo fmt --all); \
-	done
+	@bash scripts/ci/run-formatting.sh --write bash scripts/ci/run-canic-formatters.sh --write $(CANIC_BLOB_WORKSPACES)
 
 fmt-check:
-	bash scripts/ci/check-format-tools.sh "$(SHARED_TOOLING_CARGO_SORT_VERSION)"
-	cargo sort --workspace --check
-	cargo sort-derives --check
-	cargo fmt --all -- --check
-	@set -eu; for workspace in $(CANIC_BLOB_WORKSPACES); do \
-		cargo sort --workspace --check --order workspace,package,lib,dependencies,dev-dependencies,build-dependencies,profile "$$workspace"; \
-		(cd "$$workspace" && cargo fmt --all -- --check); \
-	done
+	@bash scripts/ci/run-formatting.sh --check bash scripts/ci/run-canic-formatters.sh --check $(CANIC_BLOB_WORKSPACES)
 
 clean:
 	@bash scripts/ci/cleanup-release-artifacts.sh
@@ -516,11 +503,7 @@ $(error Select exactly one release target)
 endif
 .PHONY: release-resume release-version release-preflight release-prepare-version release-prepared-check release-files release-commit-check release-committed-check release-tagged-check release-push-check
 
-release-patch release-minor release-major:
-	+@bash scripts/ci/run-release.sh "$(@:release-%=%)" "$(RELEASE_REMOTE)" "$(RELEASE_BRANCH)"
-
-release-resume:
-	+@bash scripts/ci/run-release.sh resume "$(VERSION)" "$(RELEASE_REMOTE)" "$(RELEASE_BRANCH)"
+include make/release.mk
 
 .PHONY: release-verify
 release-version:

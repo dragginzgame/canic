@@ -64,6 +64,10 @@ exact constraints, immutable Git revisions, lockfiles and external path inputs.
   request does not authorize dependency upgrades; when updating dependencies is
   expressly part of the request, finish that bounded update before qualifying
   and freezing the deployment inputs.
+  Fetching sources does not install executable tools. Prepare each required
+  consumer-selected CLI through its existing setup target, then run its offline
+  admission before dependent validation or builds. The documented preparation
+  includes those selected installations, never an unrelated tool upgrade.
 - Keep `--locked` on validation and artifact builds; it preserves dependency
   selection without prohibiting downloads. Add `--offline` or `--frozen` only
   where the workflow deliberately validates against an already prepared cache.
@@ -105,11 +109,59 @@ operations according to their purpose rather than applying one flag everywhere.
   report any unavailable evidence. Metadata checks establish graph consistency,
   not build, test or native-host qualification; a full gate is not required just
   to prepare a dependency change.
+- When that change selects a different executable CLI, run its existing explicit
+  setup target and offline check before declaring preparation complete. Preserve
+  independent consumer selections; a library update does not automatically
+  change a separately selected CLI. Keep the selected lockfiles, earlier tool
+  installations and server bytes intact. Recheck the selection after preparation;
+  changed inputs or invalid receipts stop the workflow rather than selecting a
+  fallback or repairing an existing immutable installation.
 - Keep ordinary release cache fetching locked. Reconcile manifest/lockfile
   mismatches during the authorized dependency change, before the pre-bump
   validation gate. Never silently unlock, upgrade or automatically repair
   dependencies during release. Preserve the complete consumer gate and its
   existing phase order.
+
+## Qualifying coordinated package archives before a version bump
+
+Ordinary contributions leave package versions unchanged. When coordinated crates
+change together, registry verification can select an older published dependency
+with the same version instead of the newly packaged workspace crate. Inspect the
+resolved graph before treating that failure as a source defect or changing
+versions. Cargo's [packaging procedure](https://doc.rust-lang.org/cargo/commands/cargo-package.html)
+normalizes manifests and removes dependency paths; creating both archives alone
+does not prove that verification built both current packages.
+
+For this demonstrated same-version case, a consumer may qualify the coordinated
+archives locally through its existing packaging check:
+
+1. Preserve the selected source, manifests, lockfiles and failed verification
+   evidence. Let Cargo perform normal archive/manifest admission. `--no-verify`
+   may separate archive creation from the mandatory build below; archive creation
+   alone must never report a successful package check.
+2. Unpack the exact new archives into an isolated fixture. Build an independent
+   consumer of those packages, using a fixture-only
+   [registry override](https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html)
+   where needed to select the unpacked dependency. Do not patch product manifests,
+   use live workspace/sibling source paths, or rewrite the packaged manifests.
+3. Admit the resolved graph before compilation: every coordinated package must
+   resolve to its exact unpacked manifest and expected name/version. Retain the
+   original name/version/source selections for external dependencies and the
+   consumer's feature/target and forbidden-dependency checks. A fixture lock may
+   project the selected graph and add its own root, without dependency upgrades.
+   Build that admitted graph with `--offline --locked` using prepared caches;
+   missing inputs or mismatched selections fail without an online fallback.
+4. Require the build and final integrity checks to finish successfully. Verify
+   unchanged archive and unpacked-source hashes and original manifests/lockfiles;
+   retain logs, selected identities and failed artifacts. Keep the existing full
+   gate and native-host qualification requirements.
+
+This establishes local archive interoperability, not registry publication
+readiness. Authorized release preparation still qualifies changed metadata;
+publication keeps normal Cargo registry admission with the final versions.
+Do not propagate the fixture override or `--no-verify` into publication. Keep
+this scoped check with its consumer; it does not require a new shared packager,
+release transaction or duplicate check in every repository.
 
 ## Minimum supported Rust version (MSRV)
 

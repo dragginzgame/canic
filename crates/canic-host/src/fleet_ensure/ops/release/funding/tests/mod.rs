@@ -8,10 +8,10 @@ use crate::fleet_ensure::{
     },
     workflow::release::assess_funding,
 };
-use canic_control_plane::dto::fleet_coordinator::CoordinatorFundingStatusResponse;
-use canic_control_plane::dto::root::RootIcpRefillReleaseEvidence;
-use canic_core::dto::icp_refill::{
-    IcpRefillErrorCode, IcpRefillResponse, IcpRefillStatus, IcpRefillTrigger,
+use canic_contracts::dto::{
+    fleet_coordinator::CoordinatorFundingStatusResponse,
+    icp_refill::{IcpRefillErrorCode, IcpRefillResponse, IcpRefillStatus, IcpRefillTrigger},
+    root::RootIcpRefillReleaseEvidence,
 };
 
 fn root() -> Principal {
@@ -279,7 +279,7 @@ fn registry() -> FleetRegistry {
 pub(in crate::fleet_ensure::ops::release) fn coordinator_status(
     registry: &FleetRegistry,
 ) -> CoordinatorFundingStatusResponse {
-    use canic_control_plane::dto::fleet_coordinator::{
+    use canic_contracts::dto::fleet_coordinator::{
         CoordinatorFundingStatusResponse, CoordinatorFundingWindowStatusResponse,
         CoordinatorRootFundingStatusResponse,
     };
@@ -342,7 +342,7 @@ fn coordinator_census_requires_complete_unique_registry_bound_roots() {
         },
         |s: &mut CoordinatorFundingStatusResponse| {
             s.roots[0].lifecycle_status =
-                canic_core::dto::fleet_registry::FleetSubnetRootStatus::Draining;
+                canic_contracts::dto::fleet_registry::FleetSubnetRootStatus::Draining;
         },
     ] {
         let mut wrong = status.clone();
@@ -368,10 +368,10 @@ fn coordinator_census_requires_complete_unique_registry_bound_roots() {
 
 #[test]
 fn assessment_keeps_coordinator_pending_work_and_completed_history_distinct() {
-    use canic_control_plane::dto::fleet_coordinator::{
+    use canic_contracts::dto::fleet_coordinator::{
         FleetFundingPolicyRotationStatusPhase, FleetFundingPolicyRotationStatusResponse,
     };
-    use canic_core::dto::fleet_funding::{
+    use canic_contracts::dto::fleet_funding::{
         FleetRootFundingNoGrantReason, FleetRootFundingNoGrantReceipt, FleetRootFundingRequest,
         FleetRootFundingResponse,
     };
@@ -379,7 +379,7 @@ fn assessment_keeps_coordinator_pending_work_and_completed_history_distinct() {
     let request = FleetRootFundingRequest {
         operation_id: [9; 32],
         operation_sequence: 1,
-        expected_registry: canic_core::dto::fleet_registry::FleetRegistryVersion {
+        expected_registry: canic_contracts::dto::fleet_registry::FleetRegistryVersion {
             authority: registry.authority.clone(),
             revision: registry.revision,
             content_hash: [8; 32],

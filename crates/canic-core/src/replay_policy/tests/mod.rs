@@ -118,7 +118,7 @@ fn enum_variant_name_from_line(line: &'static str) -> Option<&'static str> {
 
 fn root_command_variant_names() -> BTreeSet<&'static str> {
     enum_variant_names_from_source_until(
-        include_str!("../../../../canic/src/macros/endpoints/root.rs"),
+        include_str!("../../../../canic-contracts/src/dto/wire/root_command/mod.rs"),
         "pub enum RootCommand",
         "\n        }",
     )
@@ -126,14 +126,14 @@ fn root_command_variant_names() -> BTreeSet<&'static str> {
 
 fn coordinator_command_variant_names() -> BTreeSet<&'static str> {
     enum_variant_names_from_source(
-        include_str!("../../../../canic-control-plane/src/dto/fleet_coordinator.rs"),
+        include_str!("../../../../canic-contracts/src/dto/fleet_coordinator/mod.rs"),
         "pub enum CoordinatorCommand",
     )
 }
 
 fn managed_command_variant_names() -> BTreeSet<&'static str> {
     enum_variant_names_from_source_until(
-        include_str!("../../../../canic/src/macros/endpoints/role.rs"),
+        include_str!("../../../../canic-contracts/src/dto/wire/managed_command/mod.rs"),
         "pub enum CanisterCommand",
         "\n        }",
     )
@@ -141,7 +141,7 @@ fn managed_command_variant_names() -> BTreeSet<&'static str> {
 
 fn store_command_variant_names() -> BTreeSet<&'static str> {
     enum_variant_names_from_source(
-        include_str!("../../../../canic-control-plane/src/dto/template/mod.rs"),
+        include_str!("../../../../canic-contracts/src/dto/template/mod.rs"),
         "pub enum StoreCommand",
     )
 }

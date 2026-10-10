@@ -10,7 +10,7 @@ use crate::{
     },
     registry::RegistryEntry,
 };
-use canic_core::dto::public_status::PublicMetricFamily;
+use canic_contracts::dto::public_status::PublicMetricFamily;
 
 pub(super) fn collect(
     entry: &RegistryEntry,

@@ -10,14 +10,10 @@ mod mapper;
 mod startup;
 
 use self::codec::FleetActivation;
-
 #[cfg(test)]
 use self::codec::FleetActivationData;
 use crate::{
     config::ComponentTopology,
-    dto::fleet_subnet_root::{
-        FleetSubnetRootAuthority, FleetSubnetRootInitArgs, FleetSubnetWasmStoreInitArgs,
-    },
     dto::{
         component_deployment::ProtectedComponentDeployment,
         component_provisioning::{
@@ -43,9 +39,9 @@ use crate::{
             FleetDirectorySnapshot, FleetRegistryVersion, FleetServiceMode,
             FleetSubnetRootDirectoryEntry, FleetSubnetRootStatus,
         },
-    },
-    ids::{
-        AppId, FleetBinding, FleetSubnetWasmStoreAuthority, ManagedCanisterBinding, ReleaseBuildId,
+        fleet_subnet_root::{
+            FleetSubnetRootAuthority, FleetSubnetRootInitArgs, FleetSubnetWasmStoreInitArgs,
+        },
     },
     model::fleet_activation::{
         NonrootInstallIdentity, PrepareFleetActivationError, PreparedFleetActivation,
@@ -72,6 +68,9 @@ use crate::{
         ComponentRuntimeActivationTransition, FleetActivationTransition, FleetActivationView,
         FleetActivationWasmStoreAuthorityView,
     },
+};
+use canic_contracts::ids::{
+    AppId, FleetBinding, FleetSubnetWasmStoreAuthority, ManagedCanisterBinding, ReleaseBuildId,
 };
 use thiserror::Error as ThisError;
 
@@ -1604,7 +1603,6 @@ const fn cascade_record_to_dto(
 mod tests {
     use super::*;
     use crate::{
-        cdk::types::Cycles,
         config::{ComponentLimits, ComponentSpec},
         dto::{
             component_registry::{
@@ -1620,6 +1618,15 @@ mod tests {
                 FleetSubnetRootAuthority, FleetSubnetRootInitArgs, FleetSubnetWasmStoreInitArgs,
             },
         },
+        storage::stable::fleet_activation::{
+            FleetActivationEvidenceRecord, FleetActivationStateRecord,
+            FleetCascadeActivationEvidenceRecord, FleetCredentialGenerationRefRecord,
+            FleetCredentialManifestRecord,
+        },
+    };
+    use candid::Principal;
+    use canic_contracts::{
+        cycles::Cycles,
         ids::{
             AppId, CanisterRole, CanonicalNetworkId, ComponentBinding, ComponentInstanceId,
             ComponentSpecAdmission, CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding,
@@ -1628,13 +1635,7 @@ mod tests {
             FleetSubnetWasmStoreActivationAuthority, FleetSubnetWasmStoreAuthority,
             ManagedCanisterBinding, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
         },
-        storage::stable::fleet_activation::{
-            FleetActivationEvidenceRecord, FleetActivationStateRecord,
-            FleetCascadeActivationEvidenceRecord, FleetCredentialGenerationRefRecord,
-            FleetCredentialManifestRecord,
-        },
     };
-    use candid::Principal;
 
     #[test]
     fn fleet_service_modes_round_trip_through_internal_storage_records() {

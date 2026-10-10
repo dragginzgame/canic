@@ -4,14 +4,15 @@
 //! Does not own: projection compilation, phase policy, endpoint authorization, or distribution.
 //! Boundary: ops converts complete model state to and from this memory-ID-61 record.
 
-use crate::cdk::bounded_cell::BoundedCell;
-use crate::model::fleet_admission_projection::FleetAdmissionTargetTransitionPhaseModel;
 use crate::{
-    cdk::structures::{DefaultMemoryImpl, memory::RuntimeMemory},
-    ids::{FleetAdmissionProjection, MAX_FLEET_ADMISSION_PROJECTION_RECORD_BYTES},
-    role_contract::allocation::memory::fleet_admission_projection::FLEET_ADMISSION_PROJECTION_ID,
+    cdk::{
+        bounded_cell::BoundedCell,
+        structures::{DefaultMemoryImpl, memory::RuntimeMemory},
+    },
+    model::fleet_admission_projection::FleetAdmissionTargetTransitionPhaseModel,
     storage::prelude::*,
 };
+use canic_contracts::ids::{FleetAdmissionProjection, MAX_FLEET_ADMISSION_PROJECTION_RECORD_BYTES};
 use std::cell::RefCell;
 
 std::thread_local! {
@@ -20,8 +21,6 @@ std::thread_local! {
     > = RefCell::new(BoundedCell::init(crate::ic_memory_key!(
         authority = CANIC_CORE_MEMORY_AUTHORITY,
         key = "canic.core.fleet_admission.projection.v1",
-        ty = FleetAdmissionProjectionStore,
-        id = FLEET_ADMISSION_PROJECTION_ID,
     ), None));
 }
 

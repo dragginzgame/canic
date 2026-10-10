@@ -1,6 +1,6 @@
-use crate::ops::storage::state::root_wasm_store::RootWasmStoreStateOps;
 use crate::{
     dto::template::{TemplateManifestResponse, WasmStoreCatalogEntryResponse},
+    ops::storage::state::root_wasm_store::RootWasmStoreStateOps,
     workflow::runtime::template::{
         exact_store_payload_bytes,
         publication::{
@@ -13,12 +13,16 @@ use crate::{
         record_wasm_store_metric,
     },
 };
-use canic_core::api::lifecycle::metrics::{
-    WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason, WasmStoreMetricSource,
+use canic_core::{
+    api::lifecycle::metrics::{
+        WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason,
+        WasmStoreMetricSource,
+    },
+    cdk::types::Principal,
+    control_plane_support::{error::InternalError, ops::cost_guard::CostGuardPermit},
+    log,
+    log::Topic,
 };
-use canic_core::cdk::types::Principal;
-use canic_core::control_plane_support::{error::InternalError, ops::cost_guard::CostGuardPermit};
-use canic_core::{log, log::Topic};
 
 impl WasmStorePublicationWorkflow {
     /// Read the live catalog from the one root-local Store without mutating publication state.

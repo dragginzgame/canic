@@ -4,15 +4,15 @@
 //! Does not own: policy compilation, validation, persistence, or caller acquisition.
 
 use super::*;
-use crate::ids::{
-    AppId, CanonicalNetworkId, ComponentInstanceId, ComponentSpecId, FleetAdmissionRule,
-    FleetAdmissionSelector, FleetBinding, FleetId, FleetKey, SubnetId,
-};
-use crate::model::fleet_admission_authority::FleetAdmissionMutationActionModel;
 use crate::model::fleet_admission_authority::{
     FLEET_ADMISSION_AUTHORITY_SCHEMA_VERSION, FleetAdmissionAuthorityState,
     FleetAdmissionCoordinatorRootPhaseModel, FleetAdmissionCoordinatorRootProgressModel,
-    FleetAdmissionMutationOutcomeModel, FleetAdmissionMutationRequestModel,
+    FleetAdmissionMutationActionModel, FleetAdmissionMutationOutcomeModel,
+    FleetAdmissionMutationRequestModel,
+};
+use canic_contracts::ids::{
+    AppId, CanonicalNetworkId, ComponentInstanceId, ComponentSpecId, FleetAdmissionRule,
+    FleetAdmissionSelector, FleetBinding, FleetId, FleetKey, SubnetId,
 };
 
 fn principal(index: u8) -> Principal {

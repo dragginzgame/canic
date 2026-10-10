@@ -3,14 +3,12 @@
 //! Responsibility: define pure shared replay receipt identifiers and state.
 //! Does not own: storage mutation, replay reservation, or command execution.
 //! Boundary: consumed by replay ops and stable replay storage records.
-use crate::{
-    cdk::types::Principal,
-    ids::{CanisterRole, IntentId},
-};
-use std::{fmt, str::FromStr};
 
+use crate::{cdk::types::Principal, ids::IntentId};
+use canic_contracts::ids::CanisterRole;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::{fmt, str::FromStr};
 
 pub const REPLAY_RECEIPT_SCHEMA_VERSION: u32 = 1;
 pub const REPLAY_PAYLOAD_HASH_SCHEMA_VERSION: u32 = 1;

@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    cdk::types::{Cycles, Principal, TC},
+    cdk::types::Principal,
     config::schema::{CanisterKind, CyclesFundingPolicyConfig},
     dto::{
         component_registry::ComponentRegistryHead,
@@ -8,11 +8,6 @@ use crate::{
             AcknowledgePlacementReceiptRequest, CreateCanisterParent, CreateCanisterRequest,
             CyclesRequest, CyclesResponse, RecycleCanisterRequest, Request, RootRequestMetadata,
         },
-    },
-    ids::{
-        AppId, CanisterRole, CanonicalNetworkId, ComponentBinding, ComponentChildBinding,
-        ComponentInstanceId, FleetBinding, FleetCoordinatorBinding, FleetId, FleetKey,
-        FleetRegistryAuthority, ManagedCanisterBinding, SubnetId,
     },
     model::replay::{
         CommandKind, ExternalEffectDescriptor, OperationId, REPLAY_PAYLOAD_HASH_SCHEMA_VERSION,
@@ -33,15 +28,25 @@ use crate::{
         storage::{intent::IntentStoreOps, replay::ReplayReceiptOps, state::fleet::FleetStateOps},
     },
     replay_policy::CostClass,
-    storage::stable::env::{Env, EnvData, EnvRecord},
-    storage::stable::replay::ReplayReceiptRecord,
-    storage::stable::state::fleet::{FleetMode, FleetStateData, FleetStateRecord},
+    storage::stable::{
+        env::{Env, EnvData, EnvRecord},
+        replay::ReplayReceiptRecord,
+        state::fleet::{FleetMode, FleetStateData, FleetStateRecord},
+    },
     test::config::ConfigTestBuilder,
     workflow::rpc::{
         RootCapabilityCallerAuthority, RootCapabilityMemberAuthority, RootCapabilityParentAuthority,
     },
 };
 use candid::encode_one;
+use canic_contracts::{
+    cycles::{Cycles, TC},
+    ids::{
+        AppId, CanisterRole, CanonicalNetworkId, ComponentBinding, ComponentChildBinding,
+        ComponentInstanceId, FleetBinding, FleetCoordinatorBinding, FleetId, FleetKey,
+        FleetRegistryAuthority, ManagedCanisterBinding, SubnetId,
+    },
+};
 use std::collections::HashMap;
 
 fn p(id: u8) -> Principal {

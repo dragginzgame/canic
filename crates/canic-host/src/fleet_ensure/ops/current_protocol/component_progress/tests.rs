@@ -1,7 +1,7 @@
 //! Names and observed member progress remain distinct from Root aggregate counts.
 
 use super::*;
-use canic_core::dto::component_provisioning::{
+use canic_contracts::dto::component_provisioning::{
     FleetComponentActivationRootProgress, FleetComponentProvisioningRootProgress,
 };
 
@@ -52,7 +52,7 @@ pub(in crate::fleet_ensure::ops::current_protocol) fn qualify(
     );
     status.current_root = None;
     status.current_publication = Some(
-        canic_core::dto::component_provisioning::FleetComponentPublicationRootProgress {
+        canic_contracts::dto::component_provisioning::FleetComponentPublicationRootProgress {
             fleet_subnet_root: root,
             component_count: 2,
             published_component_count: 1,

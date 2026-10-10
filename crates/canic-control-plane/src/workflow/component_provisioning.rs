@@ -25,7 +25,36 @@ use crate::{
         runtime::fleet_activation as root_fleet_activation,
     },
 };
-use candid::{CandidType, Principal};
+use candid::Principal;
+use canic_contracts::dto::component_provisioning::RootComponentActivationEvidence;
+use canic_contracts::dto::component_provisioning::RootComponentActivationRequest;
+use canic_contracts::dto::component_provisioning::RootComponentProvisioningAcceptanceRequest;
+use canic_contracts::dto::component_provisioning::RootComponentProvisioningAdvanceRequest;
+use canic_contracts::dto::component_provisioning::RootComponentProvisioningPhase;
+use canic_contracts::dto::component_provisioning::RootComponentProvisioningStatusRequest;
+use canic_contracts::dto::component_provisioning::RootComponentProvisioningStatusResponse;
+use canic_contracts::dto::component_provisioning::RootComponentPublicationRequest;
+use canic_contracts::dto::component_registry::ComponentLifecycleStatus;
+use canic_contracts::dto::component_registry::ComponentProvisioningOrigin;
+use canic_contracts::dto::component_registry::ComponentRuntimeDirectoryAuthority;
+use canic_contracts::dto::component_registry::ComponentRuntimeDirectoryPreparationRequest;
+use canic_contracts::dto::component_registry::RootComponentAllocationRequest;
+use canic_contracts::dto::component_registry::RootComponentMembershipActivationRequest;
+use canic_contracts::dto::component_registry::RootComponentRuntimeActivationRequest;
+use canic_contracts::dto::error::Error;
+use canic_contracts::dto::fleet_activation::FleetActivationPhase;
+use canic_contracts::dto::fleet_activation::FleetActivationResumeRequest;
+use canic_contracts::dto::fleet_activation::FleetActivationStatusResponse;
+use canic_contracts::dto::fleet_coordinator::CoordinatorOperationReadRequest as RemoteCoordinatorStatusRequest;
+use canic_contracts::dto::fleet_registry::FleetSubnetRootStatus;
+use canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority;
+use canic_contracts::dto::role::OperationReceipt;
+use canic_contracts::dto::role::OperationStatusRequest;
+use canic_contracts::dto::wire::projection::component_provisioning::RemoteCoordinatorOperationStatusResponse;
+use canic_contracts::dto::wire::projection::component_provisioning::RemoteCoordinatorStatusResponse;
+use canic_contracts::ids::ComponentInstanceId;
+use canic_contracts::ids::ManagedCanisterBinding;
+use canic_contracts::protocol;
 use canic_core::{
     api::timer::TimerApi,
     control_plane_support::{
@@ -40,52 +69,12 @@ use canic_core::{
         },
         workflow::runtime::fleet_activation::FleetActivationWorkflow,
     },
-    dto::{
-        component_provisioning::{
-            RootComponentActivationEvidence, RootComponentActivationRequest,
-            RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningAdvanceRequest,
-            RootComponentProvisioningPhase, RootComponentProvisioningStatusRequest,
-            RootComponentProvisioningStatusResponse, RootComponentPublicationRequest,
-        },
-        component_registry::{
-            ComponentLifecycleStatus, ComponentProvisioningOrigin,
-            ComponentRuntimeDirectoryAuthority, ComponentRuntimeDirectoryPreparationRequest,
-            RootComponentAllocationRequest, RootComponentMembershipActivationRequest,
-            RootComponentRuntimeActivationRequest,
-        },
-        error::Error,
-        fleet_activation::{
-            FleetActivationPhase, FleetActivationResumeRequest, FleetActivationStatusResponse,
-        },
-        fleet_registry::FleetSubnetRootStatus,
-        fleet_subnet_root::FleetSubnetRootAuthority,
-        role::{OperationReceipt, OperationStatusRequest},
-    },
-    ids::{ComponentInstanceId, ManagedCanisterBinding},
     log::Topic,
-    protocol,
 };
-use serde::Deserialize;
 use std::time::Duration;
 
-#[derive(CandidType)]
-enum RemoteCoordinatorStatusRequest {
-    Operation(OperationStatusRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum RemoteCoordinatorStatusResponse {
-    Operation(RemoteCoordinatorOperationStatusResponse),
-}
-
-#[derive(CandidType, Deserialize)]
-enum RemoteCoordinatorOperationStatusResponse {
-    ComponentProvisioning(
-        canic_core::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
-    ),
-}
-
 /// Discover retained operations under protected Root identity without admitting new work.
+
 pub fn release_status(
     start_after: Option<crate::dto::root::RootProvisioningReleaseKey>,
 ) -> Result<crate::dto::root::RootProvisioningReleaseResponse, InternalError> {
@@ -290,9 +279,9 @@ async fn advance_scheduled_provisioning(operation_id: [u8; 32], plan_hash: [u8; 
                 Ok(status)
                     if matches!(
                         status.phase,
-                        canic_core::dto::component_provisioning::FleetComponentProvisioningPhase::DirectoriesConfirmed
-                            | canic_core::dto::component_provisioning::FleetComponentProvisioningPhase::ActivatingRuntimes
-                            | canic_core::dto::component_provisioning::FleetComponentProvisioningPhase::RuntimesActivated
+                        canic_contracts::dto::component_provisioning::FleetComponentProvisioningPhase::DirectoriesConfirmed
+                            | canic_contracts::dto::component_provisioning::FleetComponentProvisioningPhase::ActivatingRuntimes
+                            | canic_contracts::dto::component_provisioning::FleetComponentProvisioningPhase::RuntimesActivated
                     ) =>
                 {
                     activate(
@@ -382,7 +371,7 @@ async fn query_coordinator_provisioning(
     operation_id: [u8; 32],
     plan_hash: [u8; 32],
 ) -> Result<
-    canic_core::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
+    canic_contracts::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
     InternalError,
 > {
     let call = CallOps::unbounded_wait(coordinator, protocol::CANIC_COORDINATOR_OPERATION_STATUS)
@@ -493,7 +482,7 @@ pub async fn publish(
     )?;
     if request.expected_published_component_count < current.published_component_count
         || current.phase
-            == canic_core::dto::component_provisioning::RootComponentProvisioningPhase::Published
+            == canic_contracts::dto::component_provisioning::RootComponentProvisioningPhase::Published
     {
         return Ok(crate::ops::component_provisioning::status_response(current));
     }
@@ -634,7 +623,7 @@ fn activation_member_origin(
     request: &RootComponentActivationRequest,
     member: &crate::view::component_provisioning::RootComponentPublicationMemberView,
 ) -> Result<ComponentProvisioningOrigin, InternalError> {
-    let canic_core::dto::component_deployment::ProtectedComponentDeployment::GroupMember {
+    let canic_contracts::dto::component_deployment::ProtectedComponentDeployment::GroupMember {
         group_placement,
         member_path,
         ..
@@ -791,7 +780,7 @@ fn activate_active_root_batch(
 async fn publish_component_directory(
     request: &RootComponentPublicationRequest,
     member: crate::view::component_provisioning::RootComponentPublicationMemberView,
-    fleet_directory: canic_core::dto::fleet_registry::FleetDirectorySnapshot,
+    fleet_directory: canic_contracts::dto::fleet_registry::FleetDirectorySnapshot,
 ) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
     let partition = ComponentRegistryOps::partition(member.binding.component)?
         .ok_or_else(InternalError::invariant)?;
@@ -1221,7 +1210,7 @@ fn current_fleet_directory_for_progress(
     authority: &FleetSubnetRootAuthority,
     root: Principal,
     provisioning: &RootComponentProvisioningView,
-) -> Result<canic_core::dto::fleet_registry::FleetDirectorySnapshot, InternalError> {
+) -> Result<canic_contracts::dto::fleet_registry::FleetDirectorySnapshot, InternalError> {
     let mirror = FleetRegistryMirrorOps::validated_current(authority, root)?;
     if mirror.root_entry.status != FleetSubnetRootStatus::Active
         || mirror.active.snapshot.version != provisioning.fleet_registry
@@ -1274,9 +1263,9 @@ fn validate_registry_commit_progress(
 }
 
 fn validate_group_member_context(
-    context: &canic_core::dto::component_deployment::ProtectedComponentDeployment,
+    context: &canic_contracts::dto::component_deployment::ProtectedComponentDeployment,
 ) -> Result<(), InternalError> {
-    let canic_core::dto::component_deployment::ProtectedComponentDeployment::GroupMember {
+    let canic_contracts::dto::component_deployment::ProtectedComponentDeployment::GroupMember {
         binding,
         ..
     } = context
@@ -1319,9 +1308,9 @@ fn reserve_group_member(
 
 fn validate_component_registry_authority(
     current: &RootComponentRegistryView,
-    root: &canic_core::ids::FleetSubnetRootBinding,
-    release_set: canic_core::ids::FleetSubnetRootReleaseSet,
-    fleet_registry: &canic_core::dto::fleet_registry::FleetRegistryVersion,
+    root: &canic_contracts::ids::FleetSubnetRootBinding,
+    release_set: canic_contracts::ids::FleetSubnetRootReleaseSet,
+    fleet_registry: &canic_contracts::dto::fleet_registry::FleetRegistryVersion,
     runtime_phase: FleetActivationPhase,
     runtime_operation_id: [u8; 32],
 ) -> Result<RootComponentProvisioningRuntimeMode, InternalError> {
@@ -1344,9 +1333,9 @@ fn validate_component_registry_authority(
 
 fn component_registry_authority_is_exact(
     current: &RootComponentRegistryView,
-    root: &canic_core::ids::FleetSubnetRootBinding,
-    release_set: canic_core::ids::FleetSubnetRootReleaseSet,
-    fleet_registry: &canic_core::dto::fleet_registry::FleetRegistryVersion,
+    root: &canic_contracts::ids::FleetSubnetRootBinding,
+    release_set: canic_contracts::ids::FleetSubnetRootReleaseSet,
+    fleet_registry: &canic_contracts::dto::fleet_registry::FleetRegistryVersion,
 ) -> bool {
     [
         &current.root == root,
@@ -1517,8 +1506,8 @@ fn validate_group_placement_capacity(
 }
 
 async fn require_ready_pool_capacity(
-    pool: &canic_core::ids::FleetSubnetCanisterPoolConfig,
-    cycle_demands: &[canic_core::cdk::types::Cycles],
+    pool: &canic_contracts::ids::FleetSubnetCanisterPoolConfig,
+    cycle_demands: &[canic_contracts::cycles::Cycles],
 ) -> Result<(), InternalError> {
     if CanisterPoolOps::ready_assets_cover(cycle_demands) {
         return Ok(());
@@ -1528,7 +1517,7 @@ async fn require_ready_pool_capacity(
         .any(|required| required > &pool.canister_cycles)
     {
         return Err(InternalError::public(
-            canic_core::diagnostics::codes::CAPACITY_INSUFFICIENT,
+            canic_contracts::diagnostics::codes::CAPACITY_INSUFFICIENT,
         ));
     }
     let ready_target =
@@ -1543,7 +1532,7 @@ async fn require_ready_pool_capacity(
     }
     if CanisterPoolOps::asset_capacity_is_exhausted(pool) {
         return Err(InternalError::public(
-            canic_core::diagnostics::codes::CAPACITY_INSUFFICIENT,
+            canic_contracts::diagnostics::codes::CAPACITY_INSUFFICIENT,
         ));
     }
     Err(InternalError::unavailable())
@@ -1564,7 +1553,7 @@ async fn ensure_remaining_claim_capacity(
 }
 
 fn require_next_claim_capacity(
-    authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
+    authority: &canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority,
     current: &RootComponentProvisioningView,
 ) -> Result<(), InternalError> {
     if current.phase != RootComponentProvisioningPhase::Accepted
@@ -1588,7 +1577,7 @@ fn require_next_claim_capacity(
     }
     if CanisterPoolOps::asset_capacity_is_exhausted(&authority.binding.limits.canister_pool) {
         return Err(InternalError::public(
-            canic_core::diagnostics::codes::CAPACITY_INSUFFICIENT,
+            canic_contracts::diagnostics::codes::CAPACITY_INSUFFICIENT,
         ));
     }
     Ok(())
@@ -1603,8 +1592,8 @@ pub(super) fn require_current_claim_capacity(
 }
 
 fn validate_store_artifacts(
-    store: &canic_core::dto::root_store::RootStoreBootstrapResponse,
-    roles: &std::collections::BTreeSet<canic_core::ids::CanisterRole>,
+    store: &canic_contracts::dto::root_store::RootStoreBootstrapResponse,
+    roles: &std::collections::BTreeSet<canic_contracts::ids::CanisterRole>,
 ) -> Result<(), InternalError> {
     for role in roles {
         let count = store

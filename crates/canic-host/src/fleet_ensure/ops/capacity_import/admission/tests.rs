@@ -176,7 +176,7 @@ fn incomplete_or_conflicting_infrastructure_rejects() {
         |record| record.infrastructure[1].controllers.clear(),
         |record| {
             record.infrastructure[2].subnet =
-                canic_core::ids::SubnetId::from_principal(principal(99));
+                canic_contracts::ids::SubnetId::from_principal(principal(99));
         },
         |record| record.infrastructure[2].principal = principal(9),
     ];

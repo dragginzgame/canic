@@ -7,25 +7,13 @@ use super::{
     AuthCommandError, AuthIssuerObservedStatus, AuthRenewalBatchStatus, AuthRenewalStateStatus,
     AuthRenewalStatusSummary, AuthRenewalTemplateStatus,
 };
-use candid::{CandidType, Deserialize, Principal};
-use canic_core::{
-    cdk::utils::hash::hex_bytes as encode_hex,
-    dto::auth::{
-        ActiveDelegationProofStatus, ActiveDelegationProofStatusResponse,
-        RootIssuerRenewalBatchStatus, RootIssuerRenewalStatusResponse,
-    },
+use candid::Principal;
+use canic_contracts::dto::{
+    auth::{ActiveDelegationProofStatus, RootIssuerRenewalBatchStatus},
+    wire::projection::auth_status::{CanisterStatusResponse, RootStatusResponse},
 };
+use canic_core::cdk::utils::hash::hex_bytes as encode_hex;
 use canic_host::icp::{IcpJsonResponseError, decode_json_result_response};
-
-#[derive(CandidType, Deserialize)]
-pub(super) enum RootStatusResponse {
-    IssuerRenewal(RootIssuerRenewalStatusResponse),
-}
-
-#[derive(CandidType, Deserialize)]
-pub(super) enum CanisterStatusResponse {
-    ActiveDelegationProof(ActiveDelegationProofStatusResponse),
-}
 
 pub(super) fn parse_issuer_principal(issuer: &str) -> Result<String, AuthCommandError> {
     Principal::from_text(issuer)

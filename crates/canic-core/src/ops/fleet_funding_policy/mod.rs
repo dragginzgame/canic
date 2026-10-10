@@ -4,24 +4,26 @@
 //! Does not own: storage, treasury accounting, orchestration, or external effects.
 //! Boundary: boundary plans become DTO-free model input before one shared invariant decision.
 
-use crate::dto::{
-    fleet_funding::{
-        FleetFundingPolicyRotationFundingSource, FleetFundingPolicyRotationPlacementEvidence,
-        FleetFundingPolicyRotationPlan, FleetFundingPolicyRotationPlanHeader,
-        FleetFundingPolicyRotationRootPlan, FleetFundingPolicyUsage,
+use crate::{
+    dto::{
+        fleet_funding::{
+            FleetFundingPolicyRotationFundingSource, FleetFundingPolicyRotationPlacementEvidence,
+            FleetFundingPolicyRotationPlan, FleetFundingPolicyRotationPlanHeader,
+            FleetFundingPolicyRotationRootPlan, FleetFundingPolicyUsage,
+        },
+        fleet_registry::FleetRegistryVersion,
     },
-    fleet_registry::FleetRegistryVersion,
+    model::fleet_funding_policy::{
+        FleetFundingPolicyRotationPlacementInput, FleetFundingPolicyRotationPlanInput,
+        FleetFundingPolicyRotationRootInput, FleetFundingPolicyRotationUsageInput,
+        FleetFundingPolicyRotationValidationError, validate_fleet_funding_policy_rotation,
+    },
 };
-use crate::ids::{
+use candid::Principal;
+use canic_contracts::ids::{
     FleetCoordinatorRootFundingPolicy, FleetFundingProfile, FleetSubnetRootFundingAuthority,
     FleetSubnetRootFundingPolicy, FleetSubnetRootIcpRefillPolicy,
 };
-use crate::model::fleet_funding_policy::{
-    FleetFundingPolicyRotationPlacementInput, FleetFundingPolicyRotationPlanInput,
-    FleetFundingPolicyRotationRootInput, FleetFundingPolicyRotationUsageInput,
-    FleetFundingPolicyRotationValidationError, validate_fleet_funding_policy_rotation,
-};
-use candid::Principal;
 use sha2::{Digest, Sha256};
 
 const COORDINATOR_POLICY_DOMAIN: &[u8] = b"canic/coordinator-root-funding-policy/v1";
@@ -417,8 +419,8 @@ impl CanonicalPolicyEncoder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        cdk::types::Cycles,
+    use canic_contracts::{
+        cycles::Cycles,
         ids::{
             AppId, CanonicalNetworkId, CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding,
             FleetFundingProfile, FleetId, FleetKey, FleetRegistryAuthority,

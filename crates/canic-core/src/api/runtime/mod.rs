@@ -34,6 +34,7 @@ use crate::{
     state_contract::{STATE_MANIFEST_SCHEMA_VERSION, canic_state_descriptors},
     workflow::runtime::timer::TimerAuthorityWorkflow,
 };
+
 const RUNTIME_FEATURE_SOURCE: &str = "compile_feature";
 const RUNTIME_FEATURE_FLAGS: &[(&str, bool)] = &[
     (
@@ -610,29 +611,38 @@ const fn timer_execution_outcome(
 }
 
 fn state_summary(role: Option<&str>) -> Option<RuntimeStateSummary> {
-    let memory_ids = MemoryRegistryOps::ledger_snapshot()
+    let memories = MemoryRegistryOps::ledger_snapshot()
         .ok()?
         .memories
         .into_iter()
-        .map(|memory| memory.memory_manager_id)
-        .collect::<std::collections::BTreeSet<_>>();
-    state_summary_for_memory_ids(role, &memory_ids)
+        .map(|memory| (memory.stable_key, memory.memory_manager_id))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    state_summary_for_memories(role, &memories)
 }
 
-fn state_summary_for_memory_ids(
+fn state_summary_for_memories(
     role: Option<&str>,
-    memory_ids: &std::collections::BTreeSet<u8>,
+    memories: &std::collections::BTreeMap<String, u8>,
 ) -> Option<RuntimeStateSummary> {
     role?;
     let mut domains = canic_state_descriptors()
         .into_iter()
         .flat_map(|descriptor| descriptor.state)
-        .filter(|domain| domain.memory_id.is_some_and(|id| memory_ids.contains(&id)))
+        .filter(|domain| {
+            domain
+                .memory_key
+                .as_ref()
+                .is_some_and(|key| memories.contains_key(key))
+        })
         .map(|domain| RuntimeStateDomainSummary {
             domain: domain.domain,
             version: domain.version,
             storage: domain.storage.as_str().to_string(),
-            memory_id: domain.memory_id,
+            memory_id: domain
+                .memory_key
+                .as_ref()
+                .and_then(|key| memories.get(key))
+                .copied(),
             status: RuntimeStateDomainStatus::Ok,
         })
         .collect::<Vec<_>>();
@@ -982,11 +992,12 @@ mod tests {
 
     #[test]
     fn state_summary_joins_runtime_memory_ids_to_owner_metadata() {
-        let summary = state_summary_for_memory_ids(
+        let summary = state_summary_for_memories(
             Some("root"),
-            &std::collections::BTreeSet::from([
-                crate::role_contract::allocation::memory::runtime::RUNTIME_BINDINGS_ID,
-            ]),
+            &std::collections::BTreeMap::from([(
+                crate::role_contract::allocation::memory::runtime::RUNTIME_BINDINGS_KEY.to_string(),
+                73,
+            )]),
         )
         .expect("runtime state declarations");
 
@@ -999,8 +1010,9 @@ mod tests {
             domain.domain == "runtime_bindings"
                 && domain.storage == "stable_memory"
                 && domain.status == RuntimeStateDomainStatus::Ok
+                && domain.memory_id == Some(73)
         }));
-        assert!(state_summary_for_memory_ids(None, &std::collections::BTreeSet::new()).is_none());
+        assert!(state_summary_for_memories(None, &std::collections::BTreeMap::new()).is_none());
     }
 
     #[test]

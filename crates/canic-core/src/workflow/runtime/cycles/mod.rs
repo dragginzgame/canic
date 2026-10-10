@@ -10,7 +10,6 @@ pub mod query;
 
 use crate::{
     InternalError,
-    cdk::types::Cycles,
     config::schema::TopupPolicy,
     diagnostics::codes,
     domain::{
@@ -18,12 +17,14 @@ use crate::{
         icp_refill::{IcpRefillStatus, IcpRefillTrigger, icp_refill_outcome_is_resumable},
         policy::pure as policy,
     },
-    dto::fleet_funding::{
-        FleetRootFundingNoGrantReason, FleetRootFundingNoGrantReceipt, FleetRootFundingRequest,
-        FleetRootFundingResponse,
+    dto::{
+        fleet_funding::{
+            FleetRootFundingNoGrantReason, FleetRootFundingNoGrantReceipt, FleetRootFundingRequest,
+            FleetRootFundingResponse,
+        },
+        icp_refill::IcpRefillResponse,
+        rpc::{CyclesFundingPreflightResponse, CyclesResponse},
     },
-    dto::icp_refill::IcpRefillResponse,
-    dto::rpc::{CyclesFundingPreflightResponse, CyclesResponse},
     log,
     log::Topic,
     model::replay::OperationId,
@@ -36,20 +37,24 @@ use crate::{
             metrics::cycles_topup::CyclesTopupMetrics,
             root_funding::{RootFundingRuntimeApi, RootFundingRuntimeConfig},
         },
-        storage::async_job_recovery::AsyncJobOwner,
         storage::{
+            async_job_recovery::AsyncJobOwner,
             cycles::{CycleTopupEventOps, CycleTrackerOps},
             state::fleet::FleetStateOps,
         },
     },
-    workflow::ic::icp_refill::IcpRefillWorkflow,
-    workflow::runtime::{
-        async_job::AsyncJobWorkflow,
-        timer::{
-            TimerAuthorityWorkflow, TimerError, require_active, retain_owned_once, with_owned_once,
+    workflow::{
+        ic::icp_refill::IcpRefillWorkflow,
+        runtime::{
+            async_job::AsyncJobWorkflow,
+            timer::{
+                TimerAuthorityWorkflow, TimerError, require_active, retain_owned_once,
+                with_owned_once,
+            },
         },
     },
 };
+use canic_contracts::cycles::Cycles;
 use ic_timers::{
     DeclarationLifetime, OnceContext, OnceDecision, OnceRegistration, OnceRunResult,
     TimerCompletion, TimerIdentity, TimerSchedule, register_once,

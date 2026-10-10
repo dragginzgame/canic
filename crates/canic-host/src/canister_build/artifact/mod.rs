@@ -4,34 +4,6 @@ mod output;
 #[cfg(test)]
 mod tests;
 
-use std::{
-    collections::BTreeMap,
-    env,
-    fmt::{self, Display, Formatter},
-    fs,
-    path::{Path, PathBuf},
-    process::Command,
-    time::Instant,
-};
-
-use crate::{
-    artifact_io::{CapturedWasmArtifact, WasmArtifactFinalization, finalize_wasm_artifact},
-    bootstrap_coordinator::{
-        build_bootstrap_fleet_coordinator_artifact, compile_bootstrap_fleet_coordinator_artifact,
-    },
-    bootstrap_store::{build_bootstrap_wasm_store_artifact, compile_bootstrap_wasm_store_artifact},
-    build_toolchain::BuildToolchain,
-    cargo_command,
-    cargo_metadata::CargoFeatureSelection,
-    release_set::AppConfigSnapshot,
-    role_contract::{
-        PackageValidationMode, RoleCargoGraphEvidence, RolePackageValidation, finding_detail,
-        resolve_declared_role_package_contract, validate_declared_role_package,
-        validate_declared_role_packages,
-    },
-    should_embed_candid_metadata,
-};
-
 use super::{
     AppCanisterArtifactBuildOutput, CanisterBuildProfile, TimedCanisterArtifactBuildOutput,
     WorkspaceBuildContext,
@@ -49,6 +21,32 @@ use super::{
         CanisterArtifactSource, ConfiguredCanisterArtifactBuildOutput, FLEET_COORDINATOR_ROLE,
         WASM_STORE_ROLE, WASM_TARGET,
     },
+};
+use crate::{
+    artifact_io::{CapturedWasmArtifact, WasmArtifactFinalization, finalize_wasm_artifact},
+    bootstrap_coordinator::{
+        build_bootstrap_fleet_coordinator_artifact, compile_bootstrap_fleet_coordinator_artifact,
+    },
+    bootstrap_store::{build_bootstrap_wasm_store_artifact, compile_bootstrap_wasm_store_artifact},
+    build_toolchain::BuildToolchain,
+    cargo_command,
+    cargo_metadata::CargoFeatureSelection,
+    release_set::AppConfigSnapshot,
+    role_contract::{
+        PackageValidationMode, RoleCargoGraphEvidence, RolePackageValidation, finding_detail,
+        resolve_declared_role_package_contract, validate_declared_role_package,
+        validate_declared_role_packages,
+    },
+    should_embed_candid_metadata,
+};
+use std::{
+    collections::BTreeMap,
+    env, fmt,
+    fmt::{Display, Formatter},
+    fs,
+    path::{Path, PathBuf},
+    process::Command,
+    time::Instant,
 };
 
 ///
@@ -322,7 +320,7 @@ fn build_workspace_canister_artifact_from_spec(
     let candid = extract_configured_candid(cache.as_ref(), &spec.role, &release_wasm_path)?;
     let profile = canic_core::role_contract::derive_protocol_profile_hashes(
         &spec.canic_version,
-        &canic_core::ids::CanisterRole::owned(spec.role.clone()),
+        &canic_contracts::ids::CanisterRole::owned(spec.role.clone()),
         &spec.capabilities,
         &candid,
     );
@@ -381,7 +379,7 @@ fn build_workspace_canister_artifacts_from_specs_with_toolchain(
         for (spec, candid) in group.specs.iter().zip(candids) {
             let profile = canic_core::role_contract::derive_protocol_profile_hashes(
                 &spec.canic_version,
-                &canic_core::ids::CanisterRole::owned(spec.role.clone()),
+                &canic_contracts::ids::CanisterRole::owned(spec.role.clone()),
                 &spec.capabilities,
                 &candid,
             );
@@ -578,7 +576,7 @@ fn finish_canister_artifact_output(
         package_name: spec.package_name.clone(),
         package_version: spec.package_version.clone(),
         protocol_release_identity: spec.canic_version.clone(),
-        protocol_role: canic_core::ids::CanisterRole::owned(spec.role.clone()),
+        protocol_role: canic_contracts::ids::CanisterRole::owned(spec.role.clone()),
         protocol_capabilities: spec.capabilities.clone(),
         artifact_root: spec.artifact_root.clone(),
         wasm_path: spec.wasm_path.clone(),
@@ -596,7 +594,7 @@ pub fn resolve_canister_artifact_build_spec(
     options: &CanisterArtifactBuildOptions,
 ) -> Result<CanisterArtifactBuildSpec, Box<dyn std::error::Error>> {
     let canister_name = context.role.as_str();
-    let role = canic_core::ids::CanisterRole::owned(canister_name.to_string());
+    let role = canic_contracts::ids::CanisterRole::owned(canister_name.to_string());
     validate_artifact_role_deployable(config, canister_name)?;
     let validation = validate_declared_role_package(
         &context.config_path,
@@ -620,7 +618,10 @@ pub fn resolve_canister_artifact_build_specs(
     let mut admitted = Vec::with_capacity(roles.len());
     for role in roles {
         match validate_artifact_role_deployable(config, role) {
-            Ok(()) => admitted.push((role, canic_core::ids::CanisterRole::owned(role.clone()))),
+            Ok(()) => admitted.push((
+                role,
+                canic_contracts::ids::CanisterRole::owned(role.clone()),
+            )),
             Err(source) => failures.push(ConfiguredBuildSpecFailure {
                 role: role.clone(),
                 source,
@@ -740,7 +741,7 @@ fn validate_artifact_role_deployable(
     config: &canic_core::bootstrap::compiled::ConfigModel,
     canister_name: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let role = canic_core::ids::CanisterRole::owned(canister_name.to_string());
+    let role = canic_contracts::ids::CanisterRole::owned(canister_name.to_string());
     if !config.roles.contains_key(&role) {
         return Err(format!(
             "role {canister_name} is not declared; declare the role before building an artifact"

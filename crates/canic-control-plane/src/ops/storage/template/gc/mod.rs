@@ -2,7 +2,7 @@ use crate::{
     ids::{WasmStoreGcMode, WasmStoreGcStatus},
     storage::stable::template::{WasmStoreGcStateRecord, WasmStoreGcStateStore},
 };
-use canic_core::dto::error::Error;
+use canic_contracts::dto::error::Error;
 
 ///
 /// WasmStoreGcOps
@@ -39,7 +39,7 @@ impl WasmStoreGcOps {
             Ok(())
         } else {
             Err(Error::from_registered(
-                canic_core::diagnostics::codes::STATE_CONFLICT,
+                canic_contracts::diagnostics::codes::STATE_CONFLICT,
             ))
         }
     }
@@ -48,7 +48,7 @@ impl WasmStoreGcOps {
     pub fn prepare(operation_id: [u8; 32], changed_at: u64) -> Result<(), Error> {
         if operation_id == [0; 32] {
             return Err(Error::from_registered(
-                canic_core::diagnostics::codes::REQUEST_INVALID,
+                canic_contracts::diagnostics::codes::REQUEST_INVALID,
             ));
         }
         let current = Self::status();
@@ -57,7 +57,7 @@ impl WasmStoreGcOps {
             .is_some_and(|current| current != operation_id)
         {
             return Err(Error::from_registered(
-                canic_core::diagnostics::codes::STATE_CONFLICT,
+                canic_contracts::diagnostics::codes::STATE_CONFLICT,
             ));
         }
         // Later-phase replay acknowledges the same intent without moving backwards.
@@ -66,7 +66,7 @@ impl WasmStoreGcOps {
                 Ok(())
             } else {
                 Err(Error::from_registered(
-                    canic_core::diagnostics::codes::STATE_CONFLICT,
+                    canic_contracts::diagnostics::codes::STATE_CONFLICT,
                 ))
             };
         }
@@ -84,7 +84,7 @@ impl WasmStoreGcOps {
             || current.mode == WasmStoreGcMode::Normal
         {
             return Err(Error::from_registered(
-                canic_core::diagnostics::codes::STATE_CONFLICT,
+                canic_contracts::diagnostics::codes::STATE_CONFLICT,
             ));
         }
         Ok(current.mode != WasmStoreGcMode::Complete)
@@ -155,7 +155,7 @@ fn transition_record(
             Ok(updated)
         }
         _ => Err(Error::from_registered(
-            canic_core::diagnostics::codes::STATE_CONFLICT,
+            canic_contracts::diagnostics::codes::STATE_CONFLICT,
         )),
     }
 }
@@ -262,7 +262,7 @@ mod tests {
 
         assert_eq!(
             err.code(),
-            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+            canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
         );
     }
 
@@ -276,7 +276,7 @@ mod tests {
             .expect_err("prepared store must reject publication writes");
         assert_eq!(
             err.code(),
-            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+            canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
         );
 
         WasmStoreGcStateStore::set(WasmStoreGcStateRecord::default());
@@ -300,7 +300,7 @@ mod tests {
             .expect_err("zero operation identity must be rejected");
         assert_eq!(
             zero.code(),
-            canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
+            canic_contracts::diagnostics::codes::REQUEST_INVALID.raw_code()
         );
 
         WasmStoreGcOps::prepare([7; 32], 20).expect("prepare exact GC operation");
@@ -311,7 +311,7 @@ mod tests {
             .expect_err("another operation must not take over the GC fence");
         assert_eq!(
             conflict.code(),
-            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+            canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
         );
 
         WasmStoreGcStateStore::clear_for_test();

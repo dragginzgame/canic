@@ -5,9 +5,11 @@
 //! Rows bind the original lifecycle operation; acknowledgements never rewrite its census.
 
 use candid::Principal;
-use canic_core::{
-    control_plane_support::model::caller_authority::{CallerPublicationRecord, CallerReceiptPhase},
-    ids::{CallerInstallation, CallerReceiverAuthority, CallerRootAuthority, CanisterRole},
+use canic_contracts::ids::{
+    CallerInstallation, CallerReceiverAuthority, CallerRootAuthority, CanisterRole,
+};
+use canic_core::control_plane_support::model::caller_authority::{
+    CallerPublicationRecord, CallerReceiptPhase,
 };
 use serde::{Deserialize, Serialize};
 

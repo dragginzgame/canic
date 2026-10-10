@@ -10,16 +10,17 @@ use crate::{
     canister_build::{CanisterArtifactBuildOutput, CanisterBuildProfile, WorkspaceBuildContext},
     should_embed_candid_metadata,
 };
-use canic_core::ids::BuildNetwork;
+use canic_contracts::ids::BuildNetwork;
 use std::path::{Path, PathBuf};
 
 /// Compiled input and private output metadata awaiting the existing finalization pipeline.
+
 pub struct CompiledCanisterArtifact {
     source: CapturedWasmArtifact,
     output: CanisterArtifactBuildOutput,
     candid: Vec<u8>,
     profile: CanisterBuildProfile,
-    release_build_id: Option<canic_core::ids::ReleaseBuildId>,
+    release_build_id: Option<canic_contracts::ids::ReleaseBuildId>,
     build_network: BuildNetwork,
     profile_marker: Option<PathBuf>,
 }

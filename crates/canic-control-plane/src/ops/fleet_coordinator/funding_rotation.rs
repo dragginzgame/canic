@@ -18,21 +18,20 @@ use crate::{
     },
     view::fleet_coordinator::FleetFundingPolicyRotationStep,
 };
+use canic_contracts::dto::{
+    fleet_funding::{
+        FleetFundingPolicyRotationApplyRequest, FleetFundingPolicyRotationBeginRequest,
+        FleetFundingPolicyRotationPlan, FleetFundingPolicyRotationReceipt,
+        FleetFundingPolicyRotationRootActivateRequest,
+        FleetFundingPolicyRotationRootPrepareRequest, FleetFundingPolicyRotationRootReceipt,
+        FleetFundingPolicyRotationStageRootRequest, FleetFundingPolicyUsage,
+        MAX_FLEET_FUNDING_POLICY_ROTATION_HISTORY_ROOTS, MAX_FLEET_FUNDING_POLICY_ROTATION_ROOTS,
+    },
+    fleet_registry::{FleetRegistryVersion, FleetSubnetRootStatus},
+    role::OperationReceipt,
+};
 use canic_core::{
     control_plane_support::{error::InternalError, ops::fleet_registry::FleetRegistryOps},
-    dto::{
-        fleet_funding::{
-            FleetFundingPolicyRotationApplyRequest, FleetFundingPolicyRotationBeginRequest,
-            FleetFundingPolicyRotationPlan, FleetFundingPolicyRotationReceipt,
-            FleetFundingPolicyRotationRootActivateRequest,
-            FleetFundingPolicyRotationRootPrepareRequest, FleetFundingPolicyRotationRootReceipt,
-            FleetFundingPolicyRotationStageRootRequest, FleetFundingPolicyUsage,
-            MAX_FLEET_FUNDING_POLICY_ROTATION_HISTORY_ROOTS,
-            MAX_FLEET_FUNDING_POLICY_ROTATION_ROOTS,
-        },
-        fleet_registry::{FleetRegistryVersion, FleetSubnetRootStatus},
-        role::OperationReceipt,
-    },
     shared_support::fleet_funding_policy::{
         coordinator_root_funding_policy_hash, fleet_funding_policy_rotation_operation_id,
         fleet_funding_policy_rotation_plan_digest, fleet_funding_policy_rotation_roots_digest,
@@ -856,7 +855,7 @@ const fn map_commit_error(error: FleetCoordinatorCommitError) -> InternalError {
 mod tests {
     use super::retained_window_spend_fits;
     use crate::storage::stable::fleet_coordinator::FleetRootFundingWindowRecord;
-    use canic_core::cdk::types::Cycles;
+    use canic_contracts::cycles::Cycles;
 
     #[test]
     fn policy_rotation_successor_window_must_preserve_the_exact_retained_spend() {

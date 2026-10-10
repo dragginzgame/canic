@@ -15,23 +15,24 @@ use crate::{
         FleetComponentScaleOutReceiptRecord,
     },
 };
-use std::collections::BTreeMap;
-
-use canic_core::{
-    control_plane_support::{
-        config::ComponentDeploymentConfiguration,
-        error::InternalError,
-        ops::component_provisioning_plan::{
-            ComponentProvisioningPlacementAuthority, ComponentProvisioningPlanOps,
-            ComponentProvisioningScaleOutAuthority,
+use canic_contracts::{
+    dto::{
+        component_provisioning::{
+            FleetComponentProvisioningOperation, FleetComponentProvisioningPlan,
         },
+        fleet_registry::FleetRegistry,
     },
-    dto::component_provisioning::{
-        FleetComponentProvisioningOperation, FleetComponentProvisioningPlan,
-    },
-    dto::fleet_registry::FleetRegistry,
     ids::ComponentGroupDeploymentId,
 };
+use canic_core::control_plane_support::{
+    config::ComponentDeploymentConfiguration,
+    error::InternalError,
+    ops::component_provisioning_plan::{
+        ComponentProvisioningPlacementAuthority, ComponentProvisioningPlanOps,
+        ComponentProvisioningScaleOutAuthority,
+    },
+};
+use std::collections::BTreeMap;
 
 pub(super) fn scale_out_plan_hash(
     configuration: &ComponentDeploymentConfiguration,

@@ -14,6 +14,7 @@ for name in bump-version require-jq read-workspace-version read-cargo-workspace-
 done
 cp "$ROOT/scripts/ci/rewrite-local-lock-versions.pl" "$ROOT/scripts/ci/finalize-release-changelog.awk" "$fixture/base/scripts/ci/"
 cp "$ROOT/scripts/release/rewrite-owned-lock.sh" "$fixture/base/scripts/release/"
+cp "$ROOT/scripts/release/adapter.sh" "$fixture/base/scripts/release/"
 cat > "$fixture/base/Cargo.toml" <<'TOML'
 [workspace]
 members = ["member"]
@@ -33,6 +34,21 @@ for notes in CHANGELOG.md docs/changelog/1.2.md; do
     printf '# Fixture\n\n## [1.2.4]\n\n- Current batch.\n\n## [1.2.3]\n\n- Retained undated history.\n' > "$fixture/base/$notes"
 done
 cargo generate-lockfile --offline --manifest-path "$fixture/base/Cargo.toml" > "$fixture/cargo.log" 2>&1
+for consumer in consumer embedded-consumer; do
+    consumer_root="$fixture/base/integrations/blob-service/$consumer"
+    mkdir -p "$consumer_root/src"
+    cat > "$consumer_root/Cargo.toml" <<TOML
+[workspace]
+[package]
+name = "fixture-$consumer"
+version = "0.1.0"
+edition = "2024"
+[dependencies]
+release-adoption-fixture = { path = "../../../member" }
+TOML
+    printf 'pub fn consumer() {}\n' > "$consumer_root/src/lib.rs"
+    cargo generate-lockfile --offline --manifest-path "$consumer_root/Cargo.toml" >> "$fixture/cargo.log" 2>&1
+done
 cat > "$fixture/bin/git" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -63,8 +79,9 @@ for mode in absent replace rollback rollback-absent partial-output; do
     if [[ "$mode" == rollback || "$mode" == rollback-absent || "$mode" == partial-output ]]; then
         expected=23; [[ "$mode" != partial-output ]] || expected=19
         [[ "$status" == "$expected" ]] || { cat "$fixture/$mode.log" >&2; exit 1; }
-        for path in Cargo.toml member/Cargo.toml Cargo.lock CHANGELOG.md docs/changelog/1.2.md scripts/dev/install_dev.sh; do
-            cmp "$fixture/base/$path" "$RELEASE_TEST_ROOT/$path"
+        for path in Cargo.toml member/Cargo.toml Cargo.lock CHANGELOG.md docs/changelog/1.2.md scripts/dev/install_dev.sh \
+            integrations/blob-service/consumer/Cargo.lock integrations/blob-service/embedded-consumer/Cargo.lock; do
+            cmp "$fixture/base/$path" "$RELEASE_TEST_ROOT/$path" || exit 1
         done
         if [[ "$mode" == rollback-absent ]]; then [[ ! -e "$RELEASE_TEST_ROOT/release-validation.json" ]]
         else [[ "$(cat "$RELEASE_TEST_ROOT/release-validation.json")" == '{"previous":"receipt"}' ]]; fi
@@ -75,6 +92,10 @@ for mode in absent replace rollback rollback-absent partial-output; do
             .date == "2026-10-06" and .gate == "complete"' "$RELEASE_TEST_ROOT/release-validation.json" >/dev/null
         cargo metadata --locked --offline --no-deps --format-version 1 --manifest-path "$RELEASE_TEST_ROOT/Cargo.toml" \
             | jq -e 'all(.packages[]; .version == "1.2.4")' >/dev/null
+        for consumer in consumer embedded-consumer; do
+            cargo metadata --locked --offline --format-version 1 --manifest-path "$RELEASE_TEST_ROOT/integrations/blob-service/$consumer/Cargo.toml" \
+                | jq -e 'all(.packages[]; if .name == "release-adoption-fixture" then .version == "1.2.4" else .version == "0.1.0" end)' >/dev/null || exit 1
+        done
         for notes in CHANGELOG.md docs/changelog/1.2.md; do
             grep -Fx '## [1.2.4] - 2026-10-06' "$RELEASE_TEST_ROOT/$notes" >/dev/null
             grep -Fx '## [1.2.3]' "$RELEASE_TEST_ROOT/$notes" >/dev/null

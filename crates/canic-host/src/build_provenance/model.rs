@@ -1,14 +1,12 @@
-use std::path::PathBuf;
-
-use canic_core::ids::BuildNetwork;
-use serde::{Deserialize, Serialize};
-
 use crate::{
     canister_build::{CanisterArtifactBuildOutput, CanisterBuildProfile},
     evidence_envelope::{
         CommandProvenanceV1, EvidenceMessageV1, InputFingerprintV1, InputPathDisplayV1,
     },
 };
+use canic_contracts::ids::BuildNetwork;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 pub const BUILD_PROVENANCE_SCHEMA_ID: &str = "canic.build_provenance.v1";
 pub(super) const WASM_TARGET: &str = "wasm32-unknown-unknown";

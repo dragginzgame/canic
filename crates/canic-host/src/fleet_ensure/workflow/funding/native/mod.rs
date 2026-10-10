@@ -17,7 +17,7 @@ use crate::fleet_ensure::{
     policy::startup_funding::recovery_minimum_cycles,
     workflow::{EnsureWorkflowError, continuation, funding, reviewed_estate_root_principal},
 };
-use canic_core::cdk::types::Cycles;
+use canic_contracts::cycles::Cycles;
 use std::collections::BTreeSet;
 
 pub(super) fn applicable(plan: &FleetEnsurePlan, journal: &FleetEnsureJournalRecord) -> bool {

@@ -818,7 +818,7 @@ DTO modules must remain passive transport shapes.
 Scan:
 
 ```bash
-rg -n 'impl .*fn|async fn' crates/canic-core/src/dto -g '*.rs'
+rg -n 'impl .*fn|async fn' crates/canic-contracts/src/dto -g '*.rs'
 ```
 
 | File | Signal | Risk |

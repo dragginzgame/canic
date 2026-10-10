@@ -25,6 +25,10 @@ use crate::{
     ops::{OpsError, prelude::*, runtime::metrics::platform_call::PlatformCallMetrics},
 };
 use std::future::Future;
+use types::{
+    canister_status_from_infra, ecdsa_public_key_args_to_infra, ecdsa_public_key_from_infra,
+    sign_with_ecdsa_args_to_infra, sign_with_ecdsa_from_infra, update_settings_to_infra,
+};
 
 #[expect(
     unused_imports,
@@ -35,11 +39,6 @@ pub use types::{
     CanisterSettingsSnapshot, CanisterStatus, CanisterStatusObservation, EcdsaKeyId,
     EcdsaPublicKeyArgs, EcdsaPublicKeyResult, EnvironmentVariable, MemoryMetricsSnapshot,
     QueryStatsSnapshot, SignWithEcdsaArgs, SignWithEcdsaResult, UpdateSettingsArgs,
-};
-
-use types::{
-    canister_status_from_infra, ecdsa_public_key_args_to_infra, ecdsa_public_key_from_infra,
-    sign_with_ecdsa_args_to_infra, sign_with_ecdsa_from_infra, update_settings_to_infra,
 };
 
 ///

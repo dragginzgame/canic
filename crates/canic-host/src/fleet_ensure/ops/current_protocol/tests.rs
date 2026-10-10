@@ -10,12 +10,12 @@ use crate::fleet_ensure::{
     ops::read_plan,
     workflow,
 };
-use canic_core::{
-    bootstrap::parse_config_model,
-    cdk::types::Cycles,
-    control_plane_support::ops::fleet_registry::FleetRegistryOps,
-    dto::fleet_registry::{FleetRegistry, FleetSubnetRootEntry, FleetSubnetRootStatus},
-    dto::fleet_subnet_root::FleetSubnetRootAuthority,
+use canic_contracts::{
+    cycles::Cycles,
+    dto::{
+        fleet_registry::{FleetRegistry, FleetSubnetRootEntry, FleetSubnetRootStatus},
+        fleet_subnet_root::FleetSubnetRootAuthority,
+    },
     ids::{
         AppId, CanonicalNetworkId, ComponentSpecAdmission, CyclesFundingBudget, FleetBinding,
         FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority,
@@ -23,6 +23,10 @@ use canic_core::{
         FleetSubnetWasmStoreAuthority, ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest,
         SubnetId,
     },
+};
+use canic_core::{
+    bootstrap::parse_config_model,
+    control_plane_support::ops::fleet_registry::FleetRegistryOps,
     shared_support::fleet_admission_policy::{
         bind_initial_fleet_admission_policy, compile_fleet_admission_policy_template,
     },
@@ -254,7 +258,7 @@ cat "$id.json"
     }
 
     fn respond(root: &Path, id: Principal, response: impl CandidType) {
-        let response = Ok::<_, canic_core::dto::error::Error>(response);
+        let response = Ok::<_, canic_contracts::dto::error::Error>(response);
         fs::write(root.join(format!("{id}.json")), serde_json::json!({
             "response_bytes": canic_core::cdk::utils::hash::hex_bytes(candid::encode_one(response).unwrap()),
         }).to_string()).unwrap();
@@ -488,7 +492,7 @@ esac
     }
 
     fn respond(&self) {
-        let response = Ok::<_, canic_core::dto::error::Error>(StoreCatalogResponse::Template(
+        let response = Ok::<_, canic_contracts::dto::error::Error>(StoreCatalogResponse::Template(
             self.status.clone(),
         ));
         fs::write(self.root.join("response.json"), serde_json::json!({
@@ -848,7 +852,7 @@ fn assert_activation_source_review(
     completed_bootstrap: bool,
 ) {
     use crate::fleet_ensure::ops::{EnsurePaths, EnsureStateError, reinstall::source};
-    use canic_core::dto::component_registry::RootComponentRegistryPreparationRequest;
+    use canic_contracts::dto::component_registry::RootComponentRegistryPreparationRequest;
 
     let config = parse_config_model(CONFIG).expect("config");
     let registry = active_registry(&config);
@@ -913,7 +917,7 @@ fn assert_activation_source_review(
             unreachable!("protocol fixture");
         };
         **action = CurrentFleetProtocolAction::BootstrapStore {
-            expected: canic_core::dto::root_store::RootStoreBootstrapResponse {
+            expected: canic_contracts::dto::root_store::RootStoreBootstrapResponse {
                 fleet_subnet_root: root.fleet_subnet_root,
                 wasm_store: candid::Principal::anonymous(),
                 release_set: root.active_release_set,
@@ -1168,8 +1172,8 @@ fn fresh_fleet_registry_prepare_classifies_typed_unavailable_status() {
         canister: Principal::anonymous(),
         method: protocol::CANIC_ROOT_STATUS,
         source: crate::icp::IcpJsonResponseError::Rejected(
-            canic_core::dto::error::Error::from_registered(
-                canic_core::diagnostics::codes::STATE_UNAVAILABLE,
+            canic_contracts::dto::error::Error::from_registered(
+                canic_contracts::diagnostics::codes::STATE_UNAVAILABLE,
             ),
         ),
     };
@@ -1433,7 +1437,7 @@ fn provisioned_registry_requires_its_exact_component_operation_receipt() {
     published.revision = published.revision.checked_add(1).expect("next revision");
     let published_version = registry_version(&topology, &published).expect("published version");
     let status =
-        canic_core::dto::component_provisioning::FleetComponentProvisioningStatusResponse {
+        canic_contracts::dto::component_provisioning::FleetComponentProvisioningStatusResponse {
             operation_id: compiled.request.operation_id,
             plan_hash: compiled.plan_hash,
             fleet_registry: compiled.request.plan.fleet_registry.clone(),
@@ -1510,7 +1514,7 @@ fn provisioned_registry_requires_its_exact_component_operation_receipt() {
 }
 
 fn assert_provisioning_progress_is_bounded(
-    status: &canic_core::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
+    status: &canic_contracts::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
 ) {
     let mut status = status.clone();
     status.phase = FleetComponentProvisioningPhase::ActivatingRuntimes;
@@ -1543,24 +1547,24 @@ fn assert_provisioning_progress_is_bounded(
 }
 
 fn assert_retry_timestamp_is_not_durable_progress(
-    status: &canic_core::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
+    status: &canic_contracts::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
 ) {
     let mut first_failure = status.clone();
     first_failure.phase = FleetComponentProvisioningPhase::ActivatingRuntimes;
     first_failure.pending_root_failure = Some(
-        canic_core::dto::component_provisioning::FleetComponentProvisioningRootFailure {
-            origin: Some(canic_core::dto::component_provisioning::ProvisioningFailureOrigin {
+        canic_contracts::dto::component_provisioning::FleetComponentProvisioningRootFailure {
+            origin: Some(canic_contracts::dto::component_provisioning::ProvisioningFailureOrigin {
                 failed_at_ns: 9,
                 retry_at_ns: Some(1_000_000_009),
-                stage: canic_core::dto::component_provisioning::ProvisioningFailureStage::StoreCatalog,
+                stage: canic_contracts::dto::component_provisioning::ProvisioningFailureStage::StoreCatalog,
                 target: principal(11),
                 operation_id: [9; 32],
                 diagnostic_code: 61,
-                retry_category: canic_core::dto::component_provisioning::ProvisioningRetryCategory::Backoff,
+                retry_category: canic_contracts::dto::component_provisioning::ProvisioningRetryCategory::Backoff,
             }),
             fleet_subnet_root: principal(10),
-            stage: canic_core::dto::component_provisioning::FleetComponentProvisioningRetryStage::RuntimeActivation,
-            diagnostic_code: canic_core::diagnostics::codes::STATE_CONFLICT
+            stage: canic_contracts::dto::component_provisioning::FleetComponentProvisioningRetryStage::RuntimeActivation,
+            diagnostic_code: canic_contracts::diagnostics::codes::STATE_CONFLICT
                 .raw_code()
                 .raw(),
             failed_at_ns: 10,
@@ -1613,15 +1617,15 @@ fn assert_retry_timestamp_is_not_durable_progress(
 
     let mut permanent = repeated_failure.clone();
     permanent.pending_root_failure.as_mut().unwrap().origin = Some(
-        canic_core::dto::component_provisioning::ProvisioningFailureOrigin {
+        canic_contracts::dto::component_provisioning::ProvisioningFailureOrigin {
             failed_at_ns: 10,
             retry_at_ns: None,
-            stage: canic_core::dto::component_provisioning::ProvisioningFailureStage::StoreStatus,
+            stage: canic_contracts::dto::component_provisioning::ProvisioningFailureStage::StoreStatus,
             target: principal(11),
             operation_id: [9; 32],
             diagnostic_code: 132,
             retry_category:
-                canic_core::dto::component_provisioning::ProvisioningRetryCategory::ReviewRequired,
+                canic_contracts::dto::component_provisioning::ProvisioningRetryCategory::ReviewRequired,
         },
     );
     assert!(
@@ -1643,9 +1647,9 @@ fn assert_retry_timestamp_is_not_durable_progress(
 }
 
 fn assert_pool_funding_pause_preserves_exact_observation(
-    status: &canic_core::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
+    status: &canic_contracts::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
 ) {
-    let funding = canic_core::dto::component_provisioning::RootEstateFundingRequired {
+    let funding = canic_contracts::dto::component_provisioning::RootEstateFundingRequired {
         available: Cycles::new(900),
         attempt_count: 1,
         creation_amount: Cycles::new(1_000),
@@ -1662,7 +1666,7 @@ fn assert_pool_funding_pause_preserves_exact_observation(
         shortfall: Cycles::new(110),
     };
     let mut funding_pause = status.clone();
-    let mut pending = canic_core::dto::pool::CanisterPoolCreation {
+    let mut pending = canic_contracts::dto::pool::CanisterPoolCreation {
         attempt_count: funding.attempt_count,
         operation_id: funding.operation_id,
         cycles_ledger: funding.cycles_ledger,
@@ -1675,7 +1679,7 @@ fn assert_pool_funding_pause_preserves_exact_observation(
         management_creation_fee: funding.management_creation_fee.clone(),
         created_at_time_ns: 1,
         last_attempt_at_ns: funding.last_attempt_at_ns,
-        progress: canic_core::dto::pool::CanisterPoolCreationProgress::WaitingForFunding {
+        progress: canic_contracts::dto::pool::CanisterPoolCreationProgress::WaitingForFunding {
             available: funding.available.clone(),
             attempt_count: funding.attempt_count,
             last_attempt_at_ns: funding.last_attempt_at_ns,
@@ -1686,7 +1690,7 @@ fn assert_pool_funding_pause_preserves_exact_observation(
         },
     };
     assert_eq!(pool_funding_required(&pending), Some(funding.clone()));
-    pending.progress = canic_core::dto::pool::CanisterPoolCreationProgress::Intent {
+    pending.progress = canic_contracts::dto::pool::CanisterPoolCreationProgress::Intent {
         uncertain_result: true,
     };
     assert!(pool_funding_required(&pending).is_none());
@@ -1713,7 +1717,7 @@ fn store_authority_without_operation_receipt_does_not_complete_adoption() {
     };
 
     assert!(!store_adoption_applied(&request, None));
-    let exact = canic_core::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionResponse {
+    let exact = canic_contracts::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionResponse {
         operation_id: request.operation_id,
         authority: authority.clone(),
         controllers: expected_store_controllers(&authority),
@@ -2269,7 +2273,7 @@ fn subnet(byte: u8) -> SubnetId {
 
 #[test]
 fn fixture_publication_binding_reserves_reviewed_attempts_and_rejects_overflow() {
-    use canic_core::dto::fixture_provisioning::{FixtureChunkUpload, FixtureSourceStatus};
+    use canic_contracts::dto::fixture_provisioning::{FixtureChunkUpload, FixtureSourceStatus};
     let root = crate::test_support::temp_dir("fixture-publication-budget");
     fs::create_dir_all(&root).unwrap();
     fs::write(root.join("store.did"), "service : {};").unwrap();

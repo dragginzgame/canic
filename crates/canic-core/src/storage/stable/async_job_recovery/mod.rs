@@ -6,7 +6,6 @@
 
 use crate::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
-    role_contract::allocation::memory::async_job_recovery::ASYNC_JOB_RECOVERY_ID,
     storage::prelude::*,
 };
 use std::cell::RefCell;
@@ -21,8 +20,6 @@ std::thread_local! {
         crate::ic_memory_key!(
             authority = CANIC_CORE_MEMORY_AUTHORITY,
             key = "canic.core.async_job_recovery.v1",
-            ty = AsyncJobRecoveryRecord,
-            id = ASYNC_JOB_RECOVERY_ID,
         ),
         AsyncJobRecoveryRecord::default(),
     ));

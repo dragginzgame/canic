@@ -461,11 +461,10 @@ fn map_state_error(error: ApplicationSessionStateError) -> Error {
 mod tests {
     use super::*;
     use crate::{
-        cdk::types::Principal,
-        ids::{CanisterRole, FleetKey},
-        model::auth::application_authorization::ApplicationScope,
+        cdk::types::Principal, model::auth::application_authorization::ApplicationScope,
         test::support::fleet_key,
     };
+    use canic_contracts::ids::{CanisterRole, FleetKey};
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])

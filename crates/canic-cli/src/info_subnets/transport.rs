@@ -12,12 +12,14 @@ use crate::{
     },
     support::candid::registry_entry_candid_path,
 };
-
-use candid::{CandidType, Principal};
-use canic_core::{
+use candid::Principal;
+use canic_contracts::{
     dto::{
-        fleet_registry::{FleetRegistry, FleetRegistryManifest, FleetRegistryVersion},
         fleet_subnet_root::FleetSubnetRootCanisterSummary,
+        wire::projection::subnet_information::{
+            CoordinatorStatusRequestFragment, CoordinatorStatusResponseFragment,
+            RootStatusRequestFragment, RootStatusResponseFragment,
+        },
     },
     protocol,
 };
@@ -25,30 +27,6 @@ use canic_host::{
     fleet_ensure::resolve_current_fleet, icp::IcpCli, icp_config::resolve_current_canic_icp_root,
     query_canister_with_arg, registry::RegistryEntry,
 };
-
-#[derive(CandidType)]
-enum CoordinatorStatusRequestFragment {
-    Registry,
-    RegistryManifest,
-    RegistryVersion,
-}
-
-#[derive(CandidType, serde::Deserialize)]
-enum CoordinatorStatusResponseFragment {
-    Registry(Box<FleetRegistry>),
-    RegistryManifest(FleetRegistryManifest),
-    RegistryVersion(FleetRegistryVersion),
-}
-
-#[derive(CandidType)]
-enum RootStatusRequestFragment {
-    Inventory,
-}
-
-#[derive(CandidType, serde::Deserialize)]
-enum RootStatusResponseFragment {
-    Inventory(FleetSubnetRootCanisterSummary),
-}
 
 pub(super) fn load_report(
     options: &InfoSubnetsOptions,

@@ -1,9 +1,7 @@
 use super::*;
 use crate::fleet_ensure::policy::startup_funding::tests::{funding_binding, hub_config};
-use canic_core::{
-    control_plane_support::config::ComponentDeploymentConfiguration,
-    ids::{ComponentInstanceId, ReleaseSetDigest},
-};
+use canic_contracts::ids::{ComponentInstanceId, ReleaseSetDigest};
+use canic_core::control_plane_support::config::ComponentDeploymentConfiguration;
 
 fn fixture() -> (
     ComponentTopology,

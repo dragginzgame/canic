@@ -12,20 +12,21 @@ mod inactive_activation;
 mod tests;
 
 use super::{
-    EffectObservation, EffectOutcome, EffectRetry,
-    canic_init::{self, CanicInitError},
+    EffectObservation, EffectOutcome, EffectRetry, canic_init, canic_init::CanicInitError,
 };
-use crate::MAX_ARTIFACT_READ_BYTES;
 use crate::{
+    MAX_ARTIFACT_READ_BYTES,
     canister_protocol::{CanisterProtocolError, call_with_candid, query_with_candid},
     component_topology::{
         RootPoolCapacityError, RootPoolCapacityInput, validate_root_pool_capacity,
     },
-    fleet_ensure::model::{
-        CurrentFleetProtocolAction, DesiredCanisterKind, DesiredFleet, DesiredFleetProtocol,
-        DesiredPresence, EnsureAction, EstatePoolAssetLifecycle, FleetEnsureStateRecord,
+    fleet_ensure::{
+        model::{
+            CurrentFleetProtocolAction, DesiredCanisterKind, DesiredFleet, DesiredFleetProtocol,
+            DesiredPresence, EnsureAction, EstatePoolAssetLifecycle, FleetEnsureStateRecord,
+        },
+        policy::pool_maintenance_update_bound,
     },
-    fleet_ensure::policy::pool_maintenance_update_bound,
     icp::IcpCli,
     release_set::{
         AppConfigSnapshot, ApplicationArtifactEntry, ApplicationArtifactUnion,
@@ -34,28 +35,8 @@ use crate::{
     },
 };
 use candid::{CandidType, Principal};
-use canic_control_plane::dto::fleet_coordinator::{
-    CoordinatorCommand, CoordinatorCommandResponse, CoordinatorOperationReadRequest,
-    CoordinatorOperationReadResponse, CoordinatorOperationStatusResponse,
-    CoordinatorRegistryRequest, CoordinatorRegistryResponse,
-};
-use canic_control_plane::dto::{
-    root::RootOperationStatusResponse,
-    template::{
-        StoreCatalogRequest, StoreCatalogResponse, StoreStatusRequest, StoreStatusResponse,
-        TemplateChunkInput, TemplateChunkSetPrepareInput, TemplateLookupRequest,
-        TemplateManifestInput, TemplateManifestResponse, TemplateStagingStatusResponse,
-    },
-};
-use canic_control_plane::ids::{
-    TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion, WasmStoreBinding,
-};
-use canic_core::{
-    cdk::types::Cycles,
-    control_plane_support::config::{ComponentDeploymentConfiguration, ComponentTopology},
-    control_plane_support::ops::{
-        component_provisioning_plan::ComponentProvisioningPlanOps, fleet_registry::FleetRegistryOps,
-    },
+use canic_contracts::{
+    cycles::Cycles,
     dto::{
         canister::CanisterStatusType,
         component_provisioning::{
@@ -67,27 +48,48 @@ use canic_core::{
         component_registry::{
             RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
         },
+        fleet_coordinator::{
+            CoordinatorCommand, CoordinatorCommandResponse, CoordinatorOperationReadRequest,
+            CoordinatorOperationReadResponse, CoordinatorOperationStatusResponse,
+            CoordinatorRegistryRequest, CoordinatorRegistryResponse,
+        },
         fleet_registry::{
             FleetRegistry, FleetSubnetRootEntry, FleetSubnetRootRegistryMirrorActivationResponse,
             FleetSubnetRootRegistrySyncRequest, FleetSubnetRootRegistrySyncResponse,
             FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootStatus,
         },
         fleet_subnet_root::{FleetSubnetRootAuthority, FleetSubnetWasmStoreAdoptionRequest},
-        role::{OperationReceipt, OperationStatusRequest},
+        role::OperationStatusRequest,
+        root::RootOperationStatusResponse,
         root_store::{
             ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX, ROOT_STORE_RELEASE_SET_MANIFEST_MAX_BYTES,
             ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX, RootStoreBootstrapRequest,
             RootStoreBootstrapResponse, RootStoreCatalogEntry,
         },
+        template::{
+            StoreCatalogRequest, StoreCatalogResponse, StoreStatusRequest, StoreStatusResponse,
+            TemplateChunkInput, TemplateChunkSetPrepareInput, TemplateLookupRequest,
+            TemplateManifestInput, TemplateManifestResponse, TemplateStagingStatusResponse,
+        },
+        wire::projection::fleet_setup::{
+            RootCommandFragment, RootCommandResponseFragment, RootStatusRequestFragment,
+            RootStatusResponseFragment,
+        },
     },
     ids::{
         CanisterRole, ComponentGroupDeploymentId, ComponentGroupPlacementId,
-        FleetSubnetRootBinding, FleetSubnetWasmStoreAuthority,
+        FleetSubnetRootBinding, FleetSubnetWasmStoreAuthority, TemplateChunkingMode, TemplateId,
+        TemplateManifestState, TemplateVersion, WasmStoreBinding,
     },
     protocol,
 };
+use canic_core::control_plane_support::{
+    config::{ComponentDeploymentConfiguration, ComponentTopology},
+    ops::{
+        component_provisioning_plan::ComponentProvisioningPlanOps, fleet_registry::FleetRegistryOps,
+    },
+};
 use ic_host_artifacts::artifact::chunk_digests;
-use serde::Deserialize;
 use sha2_host::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -106,7 +108,7 @@ pub(in crate::fleet_ensure::ops) use tests::qualify_supplied_bootstrap_protocol;
 
 const COMPONENT_PROVISIONING_ACTION: &str = "fleet-component-provisioning";
 const CURRENT_PROTOCOL_OPERATION_DOMAIN: &[u8] = b"canic.fleet-ensure.current-protocol.v1\0";
-const WASM_STORE_PUBLISH_CHUNK: &str = "canic_wasm_store_publish_chunk";
+const WASM_STORE_PUBLISH_CHUNK: &str = canic_contracts::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK;
 
 /// One exact initial placement resolved to its protected live Root.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -126,7 +128,7 @@ pub struct CompiledCurrentComponentProvisioning {
 /// One exact Coordinator compare-and-commit in the canonical initial Registry chain.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CompiledCurrentRegistryJoin {
-    pub request: canic_core::dto::fleet_registry::FleetSubnetRootJoinRequest,
+    pub request: canic_contracts::dto::fleet_registry::FleetSubnetRootJoinRequest,
     pub resulting_registry: FleetRegistry,
 }
 
@@ -142,11 +144,12 @@ pub enum CurrentRegistryStage {
 /// Complete current-only Registry chain compiled from live immutable Root authority.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CompiledCurrentRegistrySequence {
-    pub activation_request: canic_core::dto::fleet_registry::FleetRegistryActivationRequest,
+    pub activation_request: canic_contracts::dto::fleet_registry::FleetRegistryActivationRequest,
     pub active_registry: FleetRegistry,
     pub current_stage: CurrentRegistryStage,
-    pub component_status:
-        Option<canic_core::dto::component_provisioning::FleetComponentProvisioningStatusResponse>,
+    pub component_status: Option<
+        canic_contracts::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
+    >,
     pub genesis: FleetRegistry,
     pub joins: Vec<CompiledCurrentRegistryJoin>,
 }
@@ -167,64 +170,11 @@ pub struct CompiledCurrentProtocolStep {
     pub target: Principal,
 }
 
-#[derive(CandidType)]
-enum RootCommandFragment {
-    MaintainPool,
-    ImportPoolCanister(canic_core::dto::pool::PoolCanisterRequest),
-    AdoptStore(FleetSubnetWasmStoreAdoptionRequest),
-    BootstrapStore(RootStoreBootstrapRequest),
-    PrepareStoreFixture(canic_core::dto::root_store::RootStoreFixturePrepareRequest),
-    PrepareComponentRegistry(RootComponentRegistryPreparationRequest),
-    SynchronizeRegistry(FleetSubnetRootRegistrySyncRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "the private decoder mirrors the exact Root command response wire"
-)]
-enum RootCommandResponseFragment {
-    PrepareStoreFixture(
-        Result<
-            canic_core::dto::fixture_provisioning::FixtureSourceStatus,
-            canic_core::dto::fixture_provisioning::FixtureStoreError,
-        >,
-    ),
-    MaintainPool(canic_core::dto::pool::PoolMaintenanceResponse),
-    ImportPoolCanister(canic_core::dto::pool::PoolImportResponse),
-    OperationAccepted(OperationReceipt),
-    PrepareComponentRegistry(RootComponentRegistryStatusResponse),
-}
-
-#[derive(CandidType)]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "the private encoder mirrors the exact Root status request wire"
-)]
-enum RootStatusRequestFragment {
-    Pool(canic_core::dto::pool::CanisterPoolStatusRequest),
-    ComponentRegistry(RootComponentRegistryPreparationRequest),
-    FleetAuthority,
-    Operation(OperationStatusRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "the private decoder mirrors the exact Root status response wire"
-)]
-enum RootStatusResponseFragment {
-    Pool(canic_core::dto::pool::CanisterPoolResponse),
-    ComponentRegistry(RootComponentRegistryStatusResponse),
-    FleetAuthority(FleetSubnetRootAuthority),
-    Operation(RootOperationStatusResponse),
-}
-
 /// Typed current-protocol compilation or transport failure.
 #[derive(Debug, ThisError)]
 pub enum CurrentProtocolError {
     #[error("fixture Store rejected publication: {0:?}")]
-    Fixture(canic_core::dto::fixture_provisioning::FixtureStoreError),
+    Fixture(canic_contracts::dto::fixture_provisioning::FixtureStoreError),
     #[error("current Fleet protocol app config is unavailable: {}", .0.display())]
     AppConfigUnavailable(PathBuf),
 
@@ -263,7 +213,7 @@ pub enum CurrentProtocolError {
     ProvisioningReviewRequired {
         failed_at_ns: u64,
         root: Principal,
-        stage: canic_core::dto::component_provisioning::ProvisioningFailureStage,
+        stage: canic_contracts::dto::component_provisioning::ProvisioningFailureStage,
         target: Principal,
         operation: String,
         diagnostic_code: u16,
@@ -444,7 +394,7 @@ pub(super) fn compile_pool_reconciliation(
                 state,
                 intent,
                 CurrentFleetProtocolAction::ReconcilePoolAsset {
-                    request: canic_core::dto::pool::PoolCanisterRequest { canister_id },
+                    request: canic_contracts::dto::pool::PoolCanisterRequest { canister_id },
                     minimum_cycles: Cycles::new(pool.readiness_floor_cycles),
                 },
                 target,
@@ -650,7 +600,7 @@ pub fn compile_current_protocol_sequence(
                 .fleet
                 .fleet
                 .canonical_network_id
-                == canic_core::ids::CanonicalNetworkId::ic_mainnet()
+                == canic_contracts::ids::CanonicalNetworkId::ic_mainnet()
         {
             CurrentFleetProtocolAction::MaintainPoolReadiness {
                 maximum_updates: pool_maintenance_update_bound(minimum_ready),
@@ -854,7 +804,7 @@ pub fn compile_current_infrastructure_sequence(
 }
 
 fn require_component_status_matches(
-    status: &canic_core::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
+    status: &canic_contracts::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
     request: &FleetComponentProvisioningPrepareRequest,
     plan_hash: [u8; 32],
 ) -> Result<(), CurrentProtocolError> {
@@ -884,8 +834,8 @@ fn require_component_status_matches(
 struct ComponentOperationAuthority<'a> {
     operation_id: [u8; 32],
     plan_hash: [u8; 32],
-    fleet_registry: &'a canic_core::dto::fleet_registry::FleetRegistryVersion,
-    configuration_digest: canic_core::ids::ComponentDeploymentConfigurationDigest,
+    fleet_registry: &'a canic_contracts::dto::fleet_registry::FleetRegistryVersion,
+    configuration_digest: canic_contracts::ids::ComponentDeploymentConfigurationDigest,
     operation: &'a FleetComponentProvisioningOperation,
 }
 
@@ -1096,7 +1046,7 @@ pub(super) fn observe_with_staging(
                         resolved.target,
                         protocol::CANIC_ROOT_STATUS,
                         &RootStatusRequestFragment::Pool(
-                            canic_core::dto::pool::CanisterPoolStatusRequest {
+                            canic_contracts::dto::pool::CanisterPoolStatusRequest {
                                 start_after,
                                 limit: 256,
                             },
@@ -1111,7 +1061,7 @@ pub(super) fn observe_with_staging(
                     .find(|asset| asset.canister_id == request.canister_id)
                 {
                     return observation(
-                        asset.status == canic_core::dto::pool::CanisterPoolAssetStatus::Ready
+                        asset.status == canic_contracts::dto::pool::CanisterPoolAssetStatus::Ready
                             && asset.cycles >= *minimum_cycles,
                         asset,
                     );
@@ -1258,7 +1208,7 @@ pub(super) fn observe_with_staging(
 
 fn store_adoption_applied(
     request: &FleetSubnetWasmStoreAdoptionRequest,
-    status: Option<&canic_core::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionResponse>,
+    status: Option<&canic_contracts::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionResponse>,
 ) -> bool {
     status.is_some_and(|status| {
         status.operation_id == request.operation_id
@@ -1269,11 +1219,11 @@ fn store_adoption_applied(
 
 fn component_provisioning_observation(
     applied: bool,
-    status: &canic_core::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
+    status: &canic_contracts::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
 ) -> Result<EffectObservation, CurrentProtocolError> {
     if let Some((failure, origin)) = status.pending_root_failure.and_then(|failure|
         failure.origin.map(|origin| (failure, origin)))
-        .filter(|(_, origin)| origin.retry_category == canic_core::dto::component_provisioning::ProvisioningRetryCategory::ReviewRequired)
+        .filter(|(_, origin)| origin.retry_category == canic_contracts::dto::component_provisioning::ProvisioningRetryCategory::ReviewRequired)
     {
         return Err(CurrentProtocolError::ProvisioningReviewRequired {
             failed_at_ns: origin.failed_at_ns,
@@ -1356,7 +1306,7 @@ pub(super) fn apply(
                 protocol::CANIC_ROOT_COMMAND,
                 &RootCommandFragment::ImportPoolCanister(*request),
             )?;
-            if !matches!(response, RootCommandResponseFragment::ImportPoolCanister(canic_core::dto::pool::PoolImportResponse::Imported { canister_id }) if canister_id == request.canister_id)
+            if !matches!(response, RootCommandResponseFragment::ImportPoolCanister(canic_contracts::dto::pool::PoolImportResponse::Imported { canister_id }) if canister_id == request.canister_id)
             {
                 return Err(CurrentProtocolError::ResponseMismatch);
             }
@@ -1530,10 +1480,12 @@ fn observe_pool_readiness(
             icp,
             resolved.target,
             protocol::CANIC_ROOT_STATUS,
-            &RootStatusRequestFragment::Pool(canic_core::dto::pool::CanisterPoolStatusRequest {
-                start_after,
-                limit: 256,
-            }),
+            &RootStatusRequestFragment::Pool(
+                canic_contracts::dto::pool::CanisterPoolStatusRequest {
+                    start_after,
+                    limit: 256,
+                },
+            ),
         )?;
         let RootStatusResponseFragment::Pool(page) = response else {
             return Err(CurrentProtocolError::ResponseMismatch);
@@ -1561,7 +1513,7 @@ fn observe_pool_readiness(
         let ready = assets
             .iter()
             .filter(|asset| {
-                asset.status == canic_core::dto::pool::CanisterPoolAssetStatus::Ready
+                asset.status == canic_contracts::dto::pool::CanisterPoolAssetStatus::Ready
                     && asset.cycles >= readiness_floor
             })
             .count();
@@ -1589,9 +1541,9 @@ fn observe_pool_readiness(
 
 /// Project the same Root-owned funding pause during explicit reserve maintenance.
 fn pool_funding_required(
-    creation: &canic_core::dto::pool::CanisterPoolCreation,
-) -> Option<canic_core::dto::component_provisioning::RootEstateFundingRequired> {
-    let canic_core::dto::pool::CanisterPoolCreationProgress::WaitingForFunding {
+    creation: &canic_contracts::dto::pool::CanisterPoolCreation,
+) -> Option<canic_contracts::dto::component_provisioning::RootEstateFundingRequired> {
+    let canic_contracts::dto::pool::CanisterPoolCreationProgress::WaitingForFunding {
         available,
         attempt_count,
         last_attempt_at_ns,
@@ -1604,7 +1556,7 @@ fn pool_funding_required(
         return None;
     };
     Some(
-        canic_core::dto::component_provisioning::RootEstateFundingRequired {
+        canic_contracts::dto::component_provisioning::RootEstateFundingRequired {
             available: available.clone(),
             attempt_count: *attempt_count,
             creation_amount: creation.ledger_amount.clone(),
@@ -1653,7 +1605,7 @@ fn unavailable_observation() -> EffectObservation {
 }
 
 fn component_registry_status_unavailable(error: &CanisterProtocolError) -> bool {
-    error.is_rejected_with(canic_core::diagnostics::codes::STATE_UNAVAILABLE)
+    error.is_rejected_with(canic_contracts::diagnostics::codes::STATE_UNAVAILABLE)
 }
 
 fn component_registry_progresses(
@@ -1675,9 +1627,9 @@ fn component_registry_progresses(
 #[derive(Eq, PartialEq)]
 struct ComponentRegistryAuthority<'a> {
     fleet_subnet_root: Principal,
-    prepared_against_registry: &'a canic_core::dto::fleet_registry::FleetRegistryVersion,
-    release_set: canic_core::ids::FleetSubnetRootReleaseSet,
-    component_topology_digest: canic_core::ids::ComponentTopologyDigest,
+    prepared_against_registry: &'a canic_contracts::dto::fleet_registry::FleetRegistryVersion,
+    release_set: canic_contracts::ids::FleetSubnetRootReleaseSet,
+    component_topology_digest: canic_contracts::ids::ComponentTopologyDigest,
 }
 
 impl<'a> From<&'a RootComponentRegistryStatusResponse> for ComponentRegistryAuthority<'a> {
@@ -1809,7 +1761,9 @@ fn query_root_operation(
     );
     let response = match response {
         Ok(response) => response,
-        Err(error) if error.is_rejected_with(canic_core::diagnostics::codes::STATE_UNAVAILABLE) => {
+        Err(error)
+            if error.is_rejected_with(canic_contracts::diagnostics::codes::STATE_UNAVAILABLE) =>
+        {
             return Ok(None);
         }
         Err(error) => return Err(error.into()),
@@ -1934,7 +1888,7 @@ pub fn compile_current_registry_sequence_with_status(
     current: &FleetRegistry,
     root_authorities: &[FleetSubnetRootAuthority],
     component_status: Option<
-        &canic_core::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
+        &canic_contracts::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
     >,
 ) -> Result<CompiledCurrentRegistrySequence, CurrentProtocolError> {
     let genesis = FleetRegistryOps::compile_genesis(
@@ -1948,7 +1902,7 @@ pub fn compile_current_registry_sequence_with_status(
     let mut previous = genesis.clone();
     let mut joins = Vec::with_capacity(entries.len());
     for entry in entries {
-        let request = canic_core::dto::fleet_registry::FleetSubnetRootJoinRequest {
+        let request = canic_contracts::dto::fleet_registry::FleetSubnetRootJoinRequest {
             expected_registry: registry_version(topology, &previous)?,
             entry: entry.clone(),
         };
@@ -1961,7 +1915,7 @@ pub fn compile_current_registry_sequence_with_status(
         });
         previous = resulting_registry;
     }
-    let activation_request = canic_core::dto::fleet_registry::FleetRegistryActivationRequest {
+    let activation_request = canic_contracts::dto::fleet_registry::FleetRegistryActivationRequest {
         expected_registry: registry_version(topology, &previous)?,
     };
     let active_registry = FleetRegistryOps::compile_active(&current.authority, topology, &previous)
@@ -2155,7 +2109,7 @@ fn identify_registry_stage(
     joins: &[CompiledCurrentRegistryJoin],
     active: &FleetRegistry,
     component_status: Option<
-        &canic_core::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
+        &canic_contracts::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
     >,
 ) -> Result<CurrentRegistryStage, CurrentProtocolError> {
     if let Some(published) = component_status.and_then(|status| {
@@ -2201,7 +2155,7 @@ fn identify_registry_stage(
 fn registry_version(
     topology: &ComponentTopology,
     registry: &FleetRegistry,
-) -> Result<canic_core::dto::fleet_registry::FleetRegistryVersion, CurrentProtocolError> {
+) -> Result<canic_contracts::dto::fleet_registry::FleetRegistryVersion, CurrentProtocolError> {
     FleetRegistryOps::version(&registry.authority, topology, registry)
         .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))
 }
@@ -2669,7 +2623,7 @@ pub(super) fn query_operation(
     coordinator: Principal,
     operation_id: [u8; 32],
 ) -> Result<
-    Option<canic_core::dto::component_provisioning::FleetComponentProvisioningStatusResponse>,
+    Option<canic_contracts::dto::component_provisioning::FleetComponentProvisioningStatusResponse>,
     CurrentProtocolError,
 > {
     let response: Result<CoordinatorOperationReadResponse, CanisterProtocolError> =
@@ -2681,7 +2635,9 @@ pub(super) fn query_operation(
         );
     let response = match response {
         Ok(response) => response,
-        Err(error) if error.is_rejected_with(canic_core::diagnostics::codes::STATE_UNAVAILABLE) => {
+        Err(error)
+            if error.is_rejected_with(canic_contracts::diagnostics::codes::STATE_UNAVAILABLE) =>
+        {
             return Ok(None);
         }
         Err(error) => return Err(error.into()),
@@ -2749,7 +2705,7 @@ pub(super) fn require_store_installation_binding(
     operation_id: &str,
 ) -> Result<(), CurrentProtocolError> {
     let root = authority.binding.fleet_subnet_root;
-    let expected = canic_core::dto::fleet_activation::FleetActivationIdentity {
+    let expected = canic_contracts::dto::fleet_activation::FleetActivationIdentity {
         fleet: authority.binding.authority.binding.fleet.clone(),
         operation_id: canic_init::install_id(operation_id, "root", root_name),
         release_build_id: authority.initial_release_set.release_build_id,

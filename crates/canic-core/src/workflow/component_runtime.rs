@@ -18,7 +18,6 @@ use crate::{
         },
         fleet_registry::{FleetDirectorySnapshot, FleetServiceMode, FleetSubnetRootStatus},
     },
-    ids::{ComponentBinding, FleetRegistryAuthority, FleetServiceId, ManagedCanisterBinding},
     ops::{
         component_runtime::ComponentRuntimeOps,
         ic::IcOps,
@@ -26,6 +25,9 @@ use crate::{
             StorageOpsError, children::CanisterChildrenOps, fleet_activation::FleetActivationOps,
         },
     },
+};
+use canic_contracts::ids::{
+    ComponentBinding, FleetRegistryAuthority, FleetServiceId, ManagedCanisterBinding,
 };
 
 #[derive(Debug, Eq, PartialEq)]
@@ -701,14 +703,14 @@ mod tests {
                 FleetRegistryVersion, FleetServiceMode, FleetSubnetRootDirectoryEntry,
             },
         },
-        ids::{
-            AppId, CanisterRole, CanonicalNetworkId, ComponentDeploymentConfigurationDigest,
-            ComponentGroupMemberPath, ComponentGroupPlacementId, ComponentInstanceId, FleetBinding,
-            FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority, FleetServiceId,
-            SubnetId,
-        },
     };
     use candid::Principal;
+    use canic_contracts::ids::{
+        AppId, CanisterRole, CanonicalNetworkId, ComponentDeploymentConfigurationDigest,
+        ComponentGroupMemberPath, ComponentGroupPlacementId, ComponentInstanceId, FleetBinding,
+        FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority, FleetServiceId,
+        SubnetId,
+    };
 
     #[test]
     fn directory_progression_accepts_exact_replay_and_skipped_revisions() {

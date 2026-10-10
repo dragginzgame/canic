@@ -4,9 +4,10 @@
 //! Does not own: DTOs, caller lookup, clocks, balances, persistence, serialization, or calls.
 //! Boundary: Coordinator ops supplies already-resolved authority and commits the decision.
 
-use crate::ids::{FleetCoordinatorRootFundingPolicy, FleetSubnetRootFundingPolicy};
+use canic_contracts::ids::{FleetCoordinatorRootFundingPolicy, FleetSubnetRootFundingPolicy};
 
 /// Current usage in one exact epoch-anchored accounting window.
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct FleetFundingWindowSnapshot {
     pub window_start_secs: u64,
@@ -246,8 +247,8 @@ fn automatic_usage_admits(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        cdk::types::Cycles,
+    use canic_contracts::{
+        cycles::Cycles,
         ids::{CyclesFundingBudget, FleetFundingProfile, FleetSubnetRootFundingPolicy},
     };
 

@@ -1,12 +1,14 @@
-use crate::workflow::runtime::template::exact_store_payload_bytes;
 use crate::{
     config,
     dto::template::{TemplateManifestInput, TemplateManifestResponse},
     ids::{TemplateChunkingMode, TemplateManifestState, WasmStoreBinding},
     ops::storage::template::TemplateManifestOps,
-    workflow::runtime::template::publication::{
-        WasmStorePublicationWorkflow,
-        cost_guard::{PUBLICATION_RECOVERY_COMMAND_KIND, PublicationCostGuard},
+    workflow::runtime::template::{
+        exact_store_payload_bytes,
+        publication::{
+            WasmStorePublicationWorkflow,
+            cost_guard::{PUBLICATION_RECOVERY_COMMAND_KIND, PublicationCostGuard},
+        },
     },
 };
 use canic_core::control_plane_support::{

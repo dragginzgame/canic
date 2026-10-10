@@ -71,8 +71,8 @@ mod tests {
             IcCanisterSignatureProofV1, RoleAttestation, RoleAttestationRootProof,
             SignedRoleAttestation,
         },
-        ids::CanisterRole,
     };
+    use canic_contracts::ids::CanisterRole;
 
     fn p(byte: u8) -> Principal {
         Principal::from_slice(&[byte; 29])

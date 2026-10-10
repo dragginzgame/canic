@@ -12,7 +12,7 @@ use crate::{
     observatory::{ObservatoryError, model::ObservatoryOptions, view::*},
     registry::RegistryEntry,
 };
-use canic_core::dto::public_status::PublicMetricFamily;
+use canic_contracts::dto::public_status::PublicMetricFamily;
 use std::{
     path::Path,
     time::{Instant, SystemTime, UNIX_EPOCH},

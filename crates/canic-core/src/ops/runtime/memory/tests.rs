@@ -35,7 +35,8 @@ fn bootstrap_retains_declarations_and_opens_only_the_accessed_store() {
         },
     });
     let after = MemoryRegistryOps::allocation_snapshot().unwrap();
-    let bindings_id = crate::role_contract::allocation::memory::runtime::RUNTIME_BINDINGS_ID;
+    let bindings_id =
+        ic_memory::default_memory_manager_memory_id("canic.core.runtime.bindings.v1").unwrap();
     for entry in &after.memories {
         if entry.memory_manager_id == bindings_id {
             assert!(entry.virtual_extent.wasm_pages > 0);
@@ -166,6 +167,7 @@ fn ledger_snapshot_reads_the_bootstrapped_ic_memory_runtime() {
     assert!(snapshot.current_generation > 0);
     assert!(
         snapshot
+            .allocation_pool
             .authorities
             .iter()
             .any(|authority| authority.owner == "canic-core")
@@ -324,14 +326,9 @@ fn early_default_access_preserves_configured_bootstrap_and_authority() {
     std::thread::spawn(|| {
         use ic_memory::{RuntimeAdoptionError, RuntimeDiagnosticError, RuntimeOpenError};
         let key = "canic.core.runtime.bindings.v1";
-        let id = crate::role_contract::allocation::memory::runtime::RUNTIME_BINDINGS_ID;
         let declarations = ic_memory::sealed_declaration_snapshot().unwrap();
         assert!(matches!(
-            ic_memory::open_default_memory_manager_memory(key, id),
-            Err(RuntimeOpenError::NotBootstrapped)
-        ));
-        assert!(matches!(
-            ic_memory::open_default_memory_manager_memory_by_key(key),
+            ic_memory::open_default_memory_manager_memory(key),
             Err(RuntimeOpenError::NotBootstrapped)
         ));
         assert_eq!(
@@ -352,14 +349,17 @@ fn early_default_access_preserves_configured_bootstrap_and_authority() {
             Err(RuntimeDiagnosticError::NotBootstrapped)
         ));
         assert!(!MemoryRegistryOps::is_initialized().unwrap());
+        let pool = memory::pool::framework_pool(Vec::new(), Vec::new()).unwrap();
         ic_memory::bootstrap_default_memory_manager_with_config(
             ic_memory::MemoryManagerConfig::new(1).unwrap(),
+            &pool,
             &memory::CanicMemoryManagerPolicy::new(),
         )
         .unwrap();
         let before = MemoryRegistryOps::allocation_snapshot().unwrap();
         assert_eq!(before.bucket_size_pages, 1);
-        assert_eq!(ic_memory::default_memory_manager_memory_id(key), Ok(id));
+        let id = ic_memory::default_memory_manager_memory_id(key).unwrap();
+        assert!(pool.contains(id));
         ic_memory::verify_default_memory_manager_authority(
             &declarations,
             memory::CANIC_CORE_MEMORY_AUTHORITY,
@@ -381,10 +381,11 @@ fn ledger_growth_refusal_publishes_no_authority_and_retries_canic_bootstrap() {
     .unwrap();
     let declarations = ic_memory::sealed_declaration_snapshot().unwrap();
     let policy = memory::CanicMemoryManagerPolicy::new();
+    let pool = memory::pool::framework_pool(Vec::new(), Vec::new()).unwrap();
     let before = backing.bytes.borrow().clone();
     backing.refuse.set(true);
     assert!(matches!(
-        runtime.bootstrap(&declarations, &policy),
+        runtime.bootstrap(&declarations, &pool, &policy),
         Err(ic_memory::RuntimeBootstrapError::LedgerGrowth(
             ic_memory::RuntimeGrowError::BackingRefused { .. }
         ))
@@ -398,7 +399,7 @@ fn ledger_growth_refusal_publishes_no_authority_and_retries_canic_bootstrap() {
     backing.refuse.set(false);
     assert_eq!(
         runtime
-            .bootstrap(&declarations, &policy)
+            .bootstrap(&declarations, &pool, &policy)
             .unwrap()
             .generation(),
         1
@@ -419,11 +420,12 @@ fn application_growth_refusal_preserves_shared_extents_and_retry() {
     runtime
         .bootstrap(
             &ic_memory::sealed_declaration_snapshot().unwrap(),
+            &memory::pool::framework_pool(Vec::new(), Vec::new()).unwrap(),
             &memory::CanicMemoryManagerPolicy::new(),
         )
         .unwrap();
     let rows = runtime
-        .open_memory_by_key("canic.core.runtime.bindings.v1")
+        .open_memory("canic.core.runtime.bindings.v1")
         .unwrap();
     let clone = rows.clone();
     let before = backing.bytes.borrow().clone();

@@ -4,21 +4,18 @@
 //! Does not own: Registry validation, caller authentication, balance reads, or cycle acceptance.
 //! Boundary: Root funding ops commit only complete validated current or terminal records.
 
+use canic_contracts::dto::fleet_funding::{
+    FleetFundingPolicyRotationRootPrepareRequest, FleetFundingPolicyRotationRootReceipt,
+    FleetRootFundingAcceptanceReceipt, FleetRootFundingRequest, FleetRootFundingResponse,
+};
 use canic_core::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
-    dto::fleet_funding::{
-        FleetFundingPolicyRotationRootPrepareRequest, FleetFundingPolicyRotationRootReceipt,
-        FleetRootFundingAcceptanceReceipt, FleetRootFundingRequest, FleetRootFundingResponse,
-    },
     impl_storable_bounded,
-    role_contract::allocation::memory::control_plane::ROOT_FUNDING_ID,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
 const ROOT_FUNDING_STATE_MAX_BYTES: u32 = 32_768;
-
-struct RootFundingState;
 
 std::thread_local! {
     static ROOT_FUNDING_STATE:
@@ -26,10 +23,7 @@ std::thread_local! {
         RefCell::new(Cell::init(
             canic_core::ic_memory_key!(
                 authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-                key = "canic.control_plane.root.funding.v1",
-                ty = RootFundingState,
-                id = ROOT_FUNDING_ID
-            ),
+                key = "canic.control_plane.root.funding.v1"),
             RootFundingStateRecord::default(),
         ));
 }
@@ -68,9 +62,9 @@ pub struct RootFundingRecord {
     pub schema_version: u16,
     pub policy_generation: u64,
     pub historical_automatic_grants: u64,
-    pub historical_automatic_cycles: canic_core::cdk::types::Cycles,
+    pub historical_automatic_cycles: canic_contracts::cycles::Cycles,
     pub automatic_grants: u32,
-    pub automatic_cycles: canic_core::cdk::types::Cycles,
+    pub automatic_cycles: canic_contracts::cycles::Cycles,
     pub current: Option<RootFundingActiveOperationRecord>,
     pub last: Option<RootFundingTerminalOperationRecord>,
     pub rotation_current: Option<RootFundingPolicyRotationRecord>,
@@ -83,9 +77,9 @@ impl Default for RootFundingRecord {
             schema_version: ROOT_FUNDING_SCHEMA_VERSION,
             policy_generation: 1,
             historical_automatic_grants: 0,
-            historical_automatic_cycles: canic_core::cdk::types::Cycles::new(0),
+            historical_automatic_cycles: canic_contracts::cycles::Cycles::new(0),
             automatic_grants: 0,
-            automatic_cycles: canic_core::cdk::types::Cycles::new(0),
+            automatic_cycles: canic_contracts::cycles::Cycles::new(0),
             current: None,
             last: None,
             rotation_current: None,
@@ -206,14 +200,15 @@ impl RootFundingStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use canic_core::{
-        cdk::{structures::storable::Storable, types::Cycles},
+    use canic_contracts::{
+        cycles::Cycles,
         dto::fleet_funding::{
             FleetFundingPolicyRotationPlacementEvidence, FleetFundingPolicyRotationRootPlan,
             FleetFundingPolicyUsage,
         },
         ids::SubnetId,
     };
+    use canic_core::cdk::structures::storable::Storable;
 
     #[test]
     fn maximum_format_root_journal_fits_its_stable_bound() {
@@ -323,9 +318,9 @@ mod tests {
                 last: Some(RootFundingTerminalOperationRecord {
                     request: crate::test_support::root_funding_request_fixture(1),
                     response: FleetRootFundingResponse::NoGrant(
-                        canic_core::dto::fleet_funding::FleetRootFundingNoGrantReceipt {
+                        canic_contracts::dto::fleet_funding::FleetRootFundingNoGrantReceipt {
                             request: crate::test_support::root_funding_request_fixture(1),
-                            reason: canic_core::dto::fleet_funding::FleetRootFundingNoGrantReason::FundingDisabled,
+                            reason: canic_contracts::dto::fleet_funding::FleetRootFundingNoGrantReason::FundingDisabled,
                             decided_at_ns: 1,
                         },
                     ),

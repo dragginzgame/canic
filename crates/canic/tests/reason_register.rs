@@ -304,7 +304,7 @@ fn fixture_reason(code: u16, name: &str, retired: bool) -> Reason {
 fn generated_runtime_and_host_catalogues_match_the_reason_ledger() {
     let root = workspace_root();
     let reasons = reasons();
-    let runtime = read(&root.join("crates/canic-core/src/diagnostics/codes/mod.rs"));
+    let runtime = read(&root.join("crates/canic-contracts/src/diagnostics/codes/mod.rs"));
     let host = read(&root.join("crates/canic-host/src/diagnostics/generated/mod.rs"));
 
     assert_eq!(

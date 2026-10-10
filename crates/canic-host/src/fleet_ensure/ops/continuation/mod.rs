@@ -18,15 +18,15 @@ use crate::{
         load_persisted_current_release_set_manifest,
     },
 };
-use canic_core::{
-    cdk::utils::hash::sha256_hex, dto::root_store::ROOT_STORE_RELEASE_SET_MANIFEST_MAX_BYTES,
-};
+use canic_contracts::dto::root_store::ROOT_STORE_RELEASE_SET_MANIFEST_MAX_BYTES;
+use canic_core::cdk::utils::hash::sha256_hex;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
 };
 
 /// Reject unsupported current-release policy before any paid platform observation.
+
 pub(in crate::fleet_ensure) fn verify_release_transition(
     root: &Path,
     desired: &DesiredFleet,

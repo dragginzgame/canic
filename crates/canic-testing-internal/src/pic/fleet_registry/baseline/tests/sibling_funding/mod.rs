@@ -97,7 +97,7 @@ pub(super) fn sibling_topups_retain_distinct_receipts_after_both_replies_are_los
         pic.update_candid_as_or_panic(second, root, "test_topup_collision", (GRANT, operations[0]));
     assert_eq!(
         collision.unwrap_err().code(),
-        canic_core::diagnostics::codes::CODEC_CONFLICT.raw_code()
+        canic_contracts::diagnostics::codes::CODEC_CONFLICT.raw_code()
     );
     for child in [first, second] {
         assert_eq!(
@@ -142,7 +142,7 @@ fn qualify_terminal_diagnostic(pic: &PocketIc, root: Principal, hub: Principal, 
         pic.update_candid_as_or_panic(child, root, "test_topup_exhaustion", (1_000_000_u128,));
     assert_eq!(
         exhausted.unwrap_err().code(),
-        canic_core::diagnostics::codes::PLATFORM_INSUFFICIENT_LIQUID_CYCLES.raw_code()
+        canic_contracts::diagnostics::codes::PLATFORM_INSUFFICIENT_LIQUID_CYCLES.raw_code()
     );
     // Fund only this disposable fixture to observe the retained failure above reserve.
     pic.add_cycles(child, GRANT);
@@ -150,7 +150,7 @@ fn qualify_terminal_diagnostic(pic: &PocketIc, root: Principal, hub: Principal, 
     assert_eq!(before.parent, hub);
     assert_eq!(
         before.public_error_code,
-        canic_core::diagnostics::codes::PLATFORM_INSUFFICIENT_LIQUID_CYCLES
+        canic_contracts::diagnostics::codes::PLATFORM_INSUFFICIENT_LIQUID_CYCLES
             .raw_code()
             .raw()
     );

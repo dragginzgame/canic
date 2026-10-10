@@ -15,9 +15,9 @@ use crate::{
         },
         fleet_registry::{FleetDirectorySnapshot, FleetRegistryVersion},
     },
-    ids::{ComponentDeploymentConfigurationDigest, FleetSubnetRootBinding},
 };
 use candid::CandidType;
+use canic_contracts::ids::{ComponentDeploymentConfigurationDigest, FleetSubnetRootBinding};
 use sha2::{Digest, Sha256};
 
 const ACCEPTANCE_RECEIPT_DOMAIN: &[u8] = b"canic/root-component-provisioning-acceptance-receipt/v1";

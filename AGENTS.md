@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Apply [DRAGGINZGAME.md](DRAGGINZGAME.md), recorded at `ee48bb37c98c771e77b92fd891f0757d8c1c8b99` in [.shared-tooling.snapshot](.shared-tooling.snapshot). This file is the local product overlay.
+Apply [DRAGGINZGAME.md](DRAGGINZGAME.md), recorded at `67285b28a98b7c4211ad32de726709d4e87edea4` in [.shared-tooling.snapshot](.shared-tooling.snapshot). This file is the local product overlay.
 
 This file is normative for automated agents and contributors. If code conflicts
 with this file, the code is wrong.
@@ -124,14 +124,17 @@ as explicitly approved by the maintainer for this adoption
   validation/probe artifacts, separate from application-owned `apps/` packages.
   Root formatting and metadata inventory cover them; their owning targeted
   native and PocketIC cases qualify their selected managed graphs.
-- `integrations/blob-service/`, `integrations/blob-service/consumer/` and
+- `integrations/blob-service/` retains its package location and, following the
+  maintainer's 2026-10-10 dependency-centralization request, belongs to the main
+  workspace. It inherits the root catalog, package version and Cargo.lock and
+  joins the coherent publication family after `canic`.
+- `integrations/blob-service/consumer/` and
   `integrations/blob-service/embedded-consumer/` retain their independent
-  root-package workspaces and existing package locations. Each root owns its
-  `Cargo.toml` catalog and `Cargo.lock`. These private adapter, dedicated and
-  embedded consumers independently qualify the published blob dependency graph
-  without merging it into the framework workspace. Formatting explicitly
-  covers all three roots; locked managed Wasm builds, runtime-identity checks,
-  Candid parity and the owning managed installation/recovery cases cover them.
+  root-package workspaces and existing package locations. Each private consumer
+  owns its catalog and Cargo.lock and qualifies the published blob dependency
+  graph. Root formatting covers the adapter; formatting also covers both consumer
+  roots. Locked managed Wasm builds, runtime-identity checks, Candid parity and
+  the owning managed installation/recovery cases cover their selected graphs.
 
 These exceptions preserve existing paths and dependency boundaries; they do not
 authorize additional independent workspaces, package renames or dependency changes.

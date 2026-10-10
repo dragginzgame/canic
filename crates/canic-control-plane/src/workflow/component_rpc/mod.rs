@@ -6,6 +6,15 @@
 
 mod lifecycle;
 
+use canic_contracts::{
+    diagnostics::codes,
+    dto::{
+        capability::{RootCapabilityEnvelopeV1, RootCapabilityResponseV1},
+        error::Error,
+        rpc::{CreateCanisterParent, RecycleCanisterRequest, Request},
+    },
+    ids::ManagedCanisterBinding,
+};
 use canic_core::{
     api::rpc::RpcApi,
     control_plane_support::{
@@ -16,13 +25,6 @@ use canic_core::{
             RootCapabilityParentAuthority,
         },
     },
-    diagnostics::codes,
-    dto::{
-        capability::{RootCapabilityEnvelopeV1, RootCapabilityResponseV1},
-        error::Error,
-        rpc::{CreateCanisterParent, RecycleCanisterRequest, Request},
-    },
-    ids::ManagedCanisterBinding,
 };
 
 /// Resolve protected request authority and dispatch one root capability.
@@ -113,10 +115,10 @@ fn caller_authority(
     // Membership publication can complete while the enclosing Root bootstrap still
     // waits for application initialization. Keep that interval on bounded bootstrap authority.
     let root_prepared = canic_core::control_plane_support::workflow::runtime::fleet_activation::FleetActivationWorkflow::status()?
-        .phase == canic_core::dto::fleet_activation::FleetActivationPhase::Prepared;
+        .phase == canic_contracts::dto::fleet_activation::FleetActivationPhase::Prepared;
     let member = match registered.lifecycle {
-        canic_core::dto::component_registry::ComponentLifecycleStatus::Prepared
-        | canic_core::dto::component_registry::ComponentLifecycleStatus::Active
+        canic_contracts::dto::component_registry::ComponentLifecycleStatus::Prepared
+        | canic_contracts::dto::component_registry::ComponentLifecycleStatus::Active
             if root_prepared
                 && matches!(
                     request,
@@ -129,7 +131,7 @@ fn caller_authority(
                 registered.registry,
             )
         }
-        canic_core::dto::component_registry::ComponentLifecycleStatus::Active => {
+        canic_contracts::dto::component_registry::ComponentLifecycleStatus::Active => {
             super::component_auth::require_active_fleet_subnet_root()?;
             RootCapabilityMemberAuthority::try_from_active_member(
                 registered.binding,
@@ -155,12 +157,12 @@ fn resolve_provision_parent(
 ) -> Result<RootCapabilityParentAuthority, Error> {
     if !matches!(selector, CreateCanisterParent::ThisCanister) {
         return Err(Error::from_registered(
-            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+            canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
         ));
     }
     match caller {
         RootCapabilityCallerAuthority::FleetSubnetRoot { .. } => Err(Error::from_registered(
-            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+            canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
         )),
         RootCapabilityCallerAuthority::ComponentMember(member) => Ok(member.clone().into()),
     }
@@ -173,7 +175,7 @@ fn resolve_provision_parent(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use canic_core::ids::CanisterRole;
+    use canic_contracts::ids::CanisterRole;
 
     fn p(byte: u8) -> candid::Principal {
         candid::Principal::from_slice(&[byte; 29])
@@ -188,7 +190,7 @@ mod tests {
 
         assert_eq!(
             error.code(),
-            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+            canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
         );
     }
 
@@ -207,7 +209,7 @@ mod tests {
                 .expect_err("non-structural parent selector must reject");
             assert_eq!(
                 error.code(),
-                canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+                canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
             );
         }
     }

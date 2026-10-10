@@ -18,21 +18,21 @@ use crate::{
     },
 };
 use candid::Principal;
+use canic_contracts::dto::fleet_funding::{
+    FleetFundingPolicyRotationRootActivateRequest, FleetFundingPolicyRotationRootPrepareRequest,
+    FleetFundingPolicyRotationRootReceipt, FleetRootFundingAcceptanceReceipt,
+    FleetRootFundingAcceptanceRequest, FleetRootFundingRequest, FleetRootFundingResponse,
+};
 use canic_core::{
     control_plane_support::{
         error::InternalError,
         ops::{ic::IcOps, icp_refill::IcpRefillStoreOps},
     },
-    dto::fleet_funding::{
-        FleetFundingPolicyRotationRootActivateRequest,
-        FleetFundingPolicyRotationRootPrepareRequest, FleetFundingPolicyRotationRootReceipt,
-        FleetRootFundingAcceptanceReceipt, FleetRootFundingAcceptanceRequest,
-        FleetRootFundingRequest, FleetRootFundingResponse,
-    },
     shared_support::fleet_funding_policy::fleet_subnet_root_funding_policy_hash,
 };
 
 /// Initialize the independent Root funding journal on fresh install.
+
 pub fn initialize() -> Result<(), InternalError> {
     RootFundingOps::commit_genesis(RootFundingOps::compile_genesis()).map(|_| ())
 }

@@ -4,12 +4,13 @@
 //! Does not own: stable records, endpoint DTOs, or workflow mutation.
 //! Boundary: ops projects storage records here before workflow orchestration.
 
+use canic_contracts::cycles::Cycles;
 use canic_core::{
-    cdk::types::{Cycles, Principal},
-    control_plane_support::model::replay::ReplayCostGuardSettlement,
+    cdk::types::Principal, control_plane_support::model::replay::ReplayCostGuardSettlement,
 };
 
 /// Read-only reason one autonomous refill is blocked without a principal.
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CanisterPoolCreationFailureView {
     UnresolvedAfterLedgerWindow,

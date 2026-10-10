@@ -1,7 +1,7 @@
 use super::*;
-use crate::canister_build::CanisterBuildProfile;
-use crate::test_support::temp_dir;
-use canic_core::{ids::BuildNetwork, role_contract::CanicFeatureKey};
+use crate::{canister_build::CanisterBuildProfile, test_support::temp_dir};
+use canic_contracts::ids::BuildNetwork;
+use canic_core::role_contract::CanicFeatureKey;
 
 #[test]
 fn coordinator_declaration_pass_exports_candid_only_from_the_selected_leaf() {

@@ -1,8 +1,11 @@
 use super::*;
-use canic_control_plane::dto::root::{
-    RootComponentChildOperationStatus, RootComponentOperationStatus,
+use canic_contracts::{
+    dto::{
+        component_registry::*,
+        root::{RootComponentChildOperationStatus, RootComponentOperationStatus},
+    },
+    ids::*,
 };
-use canic_core::{dto::component_registry::*, ids::*};
 
 fn p(value: u8) -> Principal {
     Principal::from_slice(&[value])
@@ -248,9 +251,9 @@ fn allocation_observation_is_query_only_and_skips_non_workloads() {
             operation_id: value.allocation.operation_id,
         },
     };
-    let bytes = candid::encode_one(Ok::<_, canic_core::dto::error::Error>(Response::Operation(
-        Box::new(RootOperationStatusResponse::ProvisionChild(value)),
-    )))
+    let bytes = candid::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
+        Response::Operation(Box::new(RootOperationStatusResponse::ProvisionChild(value))),
+    ))
     .unwrap();
     std::fs::write(
         &response_file,

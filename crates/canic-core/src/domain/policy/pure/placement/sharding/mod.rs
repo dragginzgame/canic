@@ -2,9 +2,6 @@ mod backfill;
 mod hrw;
 mod metrics;
 
-pub use hrw::HrwSelector;
-pub use metrics::{PoolMetrics, compute_pool_metrics};
-
 use crate::{
     InternalError,
     domain::value::Principal,
@@ -13,6 +10,9 @@ use crate::{
     },
 };
 use backfill::plan_slot_backfill;
+
+pub use hrw::HrwSelector;
+pub use metrics::{PoolMetrics, compute_pool_metrics};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ShardingPolicyError {

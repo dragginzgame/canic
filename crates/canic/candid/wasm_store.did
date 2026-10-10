@@ -288,14 +288,6 @@ type NonrootCyclesCapabilityEnvelopeV1 = record {
   capability : CyclesRequest;
 };
 type NonrootCyclesCapabilityResponseV1 = record { response : CyclesResponse };
-type ObservabilityRequest = variant {
-  CycleHistory : PageRequest;
-  CycleBalance;
-};
-type ObservabilityResponse = variant {
-  CycleHistory : Page;
-  CycleBalance : CycleBalanceStatusResponse;
-};
 // Durable identity returned when one role-owned asynchronous command is accepted.
 type OperationReceipt = record { operation_id : blob };
 type Page = record { total : nat64; entries : vec CycleTrackerEntry };
@@ -386,24 +378,26 @@ type PublicMetricsSnapshot = record {
 };
 // Availability is data, independent of caller identity.
 type PublicSnapshotState = variant { Stale; Disabled; Fresh; Unavailable };
+// PublicStatusRequest wire union selected from the role's compiled capabilities.
 type PublicStatusRequest = variant {
   Overview;
   History : PublicHistoryRequest;
   Health;
   Metrics : PublicMetricsRequest;
 };
+// PublicStatusResponse wire union selected from the role's compiled capabilities.
 type PublicStatusResponse = variant {
   Overview : RoleOverviewResponse;
   History : PublicHistorySnapshot;
   Health : PublicHealth;
   Metrics : PublicMetricsSnapshot;
 };
-type Result = variant { Ok : ObservabilityResponse; Err : Error };
+type Result = variant { Ok : StoreObservabilityResponse; Err : Error };
 type Result_1 = variant { Ok : PublicStatusResponse; Err : Error };
 type Result_10 = variant { Ok : Result_2; Err : Error };
 type Result_11 = variant { Ok : StoreStatusResponse; Err : Error };
 type Result_2 = variant { Ok : FixtureSourceStatus; Err : FixtureStoreError };
-type Result_3 = variant { Ok : StoreCatalogReadResponse; Err : Error };
+type Result_3 = variant { Ok : StoreCatalogResponse; Err : Error };
 type Result_4 = variant { Ok : TemplateChunkResponse; Err : Error };
 type Result_5 = variant { Ok : FixtureGrant; Err : FixtureStoreError };
 type Result_6 = variant { Ok : StoreCommandResponse; Err : Error };
@@ -464,14 +458,16 @@ type StateCascadeTargetResult = variant {
   AppliedWithReconciliationFailure : Error;
 };
 type StateSnapshotInput = record { fleet_state : opt FleetStateInput };
-type StoreCatalogReadRequest = variant {
+// Store catalog reads share the existing Store publication-caller authority.
+type StoreCatalogRequest = variant {
   Storage;
   Template : TemplateLookupRequest;
   Catalog;
   Fixture : blob;
   FixtureGrant : principal;
 };
-type StoreCatalogReadResponse = variant {
+// Catalog results under one Store publication-caller rule.
+type StoreCatalogResponse = variant {
   Storage : WasmStoreStatusResponse;
   Template : TemplateStagingStatusResponse;
   Catalog : vec WasmStoreCatalogEntryResponse;
@@ -506,12 +502,24 @@ type StoreCommandResponse = variant {
   FixtureGrant : Result_5;
   SynchronizeTopology;
 };
+// Store diagnostics are uniformly controller-authorized.
+type StoreObservabilityRequest = variant {
+  CycleHistory : PageRequest;
+  CycleBalance;
+};
+// Store diagnostic results under one controller rule.
+type StoreObservabilityResponse = variant {
+  CycleHistory : Page;
+  CycleBalance : CycleBalanceStatusResponse;
+};
 // Store-owned durable operation detail selected by one operation ID.
 type StoreOperationStatusResponse = variant {
   FleetActivation : FleetActivationStatusResponse;
   GarbageCollection : WasmStoreGcOperationStatus;
 };
+// Controller-owned Store authority and operation reads.
 type StoreStatusRequest = variant { Operation : OperationReceipt; Authority };
+// Responses to controller-owned Store authority and operation reads.
 type StoreStatusResponse = variant {
   Operation : StoreOperationStatusResponse;
   Authority : FleetSubnetWasmStoreAuthority;
@@ -687,9 +695,9 @@ type WasmStoreTemplateStatusResponse = record {
   versions : nat16;
 };
 service : (FleetSubnetWasmStoreInitArgs) -> {
-  canic_observability : (ObservabilityRequest) -> (Result) query;
+  canic_observability : (StoreObservabilityRequest) -> (Result) query;
   canic_public_status : (PublicStatusRequest) -> (Result_1) query;
-  canic_wasm_store_catalog : (StoreCatalogReadRequest) -> (Result_3) query;
+  canic_wasm_store_catalog : (StoreCatalogRequest) -> (Result_3) query;
   canic_wasm_store_chunk : (TemplateChunkRequest) -> (Result_4);
   canic_wasm_store_command : (StoreCommand) -> (Result_6);
   canic_wasm_store_fixture_chunk : (FixtureChunkRead) -> (Result_8);
@@ -699,4 +707,3 @@ service : (FleetSubnetWasmStoreInitArgs) -> {
   icrc10_supported_standards : () -> (vec record { text; text }) query;
 }
 // canic:payload-contract a46e736368656d615f76657273696f6e01782064656661756c745f7570646174655f696e67726573735f6d61785f6279746573194000707570646174655f6f766572726964657383a2666d6574686f64781863616e69635f7761736d5f73746f72655f636f6d6d616e64696d61785f6279746573194000a2666d6574686f64781e63616e69635f7761736d5f73746f72655f7075626c6973685f6368756e6b696d61785f62797465731a00110000a2666d6574686f64782063616e69635f7761736d5f73746f72655f7075626c6973685f66697874757265696d61785f62797465731a00110000781976617269616e745f646570656e64656e745f6d6574686f647381781863616e69635f7761736d5f73746f72655f636f6d6d616e64
-

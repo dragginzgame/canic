@@ -5,10 +5,13 @@ use crate::fleet_ensure::{
     view::release::provisioning::{ReleaseProvisioningDisposition, ReleaseProvisioningOwner},
     workflow::release::assess_provisioning_evidence,
 };
+use candid::CandidType;
 use candid::types::{Field, Label, Type, TypeEnv, TypeInner};
-use canic_control_plane::dto::root::RootProvisioningReleaseEntry;
-use canic_core::dto::component_provisioning::{
-    ProvisioningFailureStage, ProvisioningRetryCategory, RootComponentProvisioningFailure,
+use canic_contracts::dto::{
+    component_provisioning::{
+        ProvisioningFailureStage, ProvisioningRetryCategory, RootComponentProvisioningFailure,
+    },
+    root::RootProvisioningReleaseEntry,
 };
 
 pub(in crate::fleet_ensure::ops::release) fn fixture(
@@ -174,7 +177,7 @@ fn empty_census_and_root_refusal_remain_distinct() {
         empty
     );
     let rejection =
-        CanicError::from_registered(canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE);
+        CanicError::from_registered(canic_contracts::diagnostics::codes::AUTHORITY_UNAVAILABLE);
     let bytes = candid::encode_one(Err::<Response, _>(rejection)).unwrap();
     assert!(matches!(decode_with_budget(root, &bytes),
         Err(ReleaseProvisioningError::Rejected { rejection: observed, .. }) if observed == rejection));

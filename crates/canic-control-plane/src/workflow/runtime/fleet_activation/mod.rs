@@ -7,18 +7,17 @@
 
 use super::template::WasmStorePublicationWorkflow;
 use crate::workflow::{bootstrap::root as root_bootstrap, component_registry};
-use canic_core::{
-    control_plane_support::{
-        error::InternalError, ops::runtime::ready::ReadyOps,
-        view::fleet_activation::FleetActivationTransition,
-        workflow::runtime::fleet_activation::FleetActivationWorkflow,
-    },
-    dto::fleet_activation::{
-        FleetActivationPhase, FleetActivationResumeRequest, FleetActivationStatusResponse,
-    },
+use canic_contracts::dto::fleet_activation::{
+    FleetActivationPhase, FleetActivationResumeRequest, FleetActivationStatusResponse,
+};
+use canic_core::control_plane_support::{
+    error::InternalError, ops::runtime::ready::ReadyOps,
+    view::fleet_activation::FleetActivationTransition,
+    workflow::runtime::fleet_activation::FleetActivationWorkflow,
 };
 
 /// Prepare the root and its exact Store infrastructure child for Fleet activation.
+
 pub async fn prepare_root() -> Result<FleetActivationStatusResponse, InternalError> {
     root_bootstrap::bootstrap_init_root_canister().await;
     if !root_bootstrap::activation_preparation_complete() {

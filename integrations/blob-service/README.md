@@ -4,13 +4,29 @@ Endpoint, lifecycle and metrics composition for the independent IC Blob service.
 Applications own their Canic App configuration and canister artifacts. IC Blob
 owns storage, tenant policy, accounting and provider behavior.
 
-This package is prepared for its first registry publication. The registry form
-depends on `canic 0.110.53` and published Blob runtime/contracts `0.21.0`.
-Local paths support qualification in this checkout; Cargo removes them from the
-packaged manifest. Package preparation is not registry publication. The local facade uses
-Memory 0.33; an aligned published Canic graph is still required under
+This package is prepared for its first registry publication. It belongs to the
+main Canic workspace and inherits its package version, Canic dependency and
+published Blob runtime/contracts `0.22` from the root catalog. Local paths
+support qualification in this checkout; Cargo removes them from the packaged
+manifest. Package preparation is not registry publication. The local facade uses
+Memory 0.35; an aligned published Canic graph is still required under
 [#33](https://github.com/dragginzgame/canic/issues/33) before registry-only managed
 qualification or adapter delivery.
+
+The coordinated release is owned by
+[#459](https://github.com/dragginzgame/canic/issues/459) and
+[#444](https://github.com/dragginzgame/canic/issues/444). The adapter shares the
+approved Canic release version. The workspace publisher publishes and observes
+its Canic dependency before publishing the adapter in the same family:
+
+```sh
+make publish
+```
+
+Run this from the Canic repository root after the governed release checks.
+Cargo's normal package verification must remain enabled.
+Observe the adapter version on crates.io before asking consumers to remove their
+Git dependency. Application acceptance follows in the consuming repository.
 
 The minimum supported Rust version is 1.91.0, including the checked-in dedicated
 and embedded managed consumers. Checkout maintenance uses the pinned Rust 1.99
@@ -28,7 +44,8 @@ For a dedicated canister, a consumer-owned `cdylib` shell declares its own
 canic_blob_service::canister!();
 ```
 
-For an embedded service, mount the endpoints in a disjoint memory range and
+For an embedded service, grant `MEMORY_AUTHORITY` / `MEMORY_KEY_PREFIX` in
+the artifact’s `canic::memory::memory_allocation_pool!`, invoke `mount!()`, and
 compose the synchronous lifecycle participant and metrics sampler into the
 application's sole Canic lifecycle. See the
 [composition guide](https://github.com/dragginzgame/canic/blob/main/docs/features/blob-storage/README.md).

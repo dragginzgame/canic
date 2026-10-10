@@ -1,5 +1,4 @@
-use canic_core::{
-    cdk::{candid, types::Principal},
+use canic_contracts::{
     dto::auth::{
         ChainKeyAlgorithm, ChainKeyBatchHeaderV1, ChainKeyBatchWitnessStepV1,
         ChainKeyBatchWitnessV1, ChainKeyDelegationCertV1, ChainKeyKeyId, ChainKeyRootSignatureV1,
@@ -10,6 +9,7 @@ use canic_core::{
     },
     ids::{CanisterRole, CanonicalNetworkId, FleetId, FleetKey},
 };
+use canic_core::cdk::{candid, types::Principal};
 use criterion::Criterion;
 use std::hint::black_box;
 

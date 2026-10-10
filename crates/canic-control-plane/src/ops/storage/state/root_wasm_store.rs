@@ -18,15 +18,14 @@ use crate::{
     },
     view::state::{PublicationStoreStateView, WasmStoreView},
 };
-use canic_core::{
-    cdk::types::Principal,
-    control_plane_support::error::InternalError,
+use canic_contracts::{
     dto::{
         fleet_subnet_root::FleetSubnetWasmStoreAdoptionResponse,
         root_store::{RootStoreBootstrapRequest, RootStoreBootstrapResponse},
     },
     ids::FleetSubnetWasmStoreAuthority,
 };
+use canic_core::{cdk::types::Principal, control_plane_support::error::InternalError};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SiblingWasmStoreAdoptionPlan {

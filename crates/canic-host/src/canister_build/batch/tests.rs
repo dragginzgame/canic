@@ -36,7 +36,7 @@ fn real_cargo_resolution_batches_peers_and_splits_feature_growth() {
         role: "left".into(),
         profile: crate::canister_build::CanisterBuildProfile::Fast,
         environment: "local".into(),
-        build_network: canic_core::ids::BuildNetwork::Local,
+        build_network: canic_contracts::ids::BuildNetwork::Local,
         workspace_root: root.clone(),
         icp_root: root.clone(),
         config_path: root.join("Cargo.toml"),

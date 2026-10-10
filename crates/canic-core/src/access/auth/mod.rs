@@ -11,25 +11,27 @@ mod measurement;
 mod predicates;
 mod token;
 
-use crate::{access::AccessError, cdk::types::Principal};
-use std::fmt;
-
-pub use crate::{
-    domain::policy::pure::auth::application_authorization::{
-        AuthorizedApplicationSubject, LocalApplicationAuthorizationDecision,
-        LocalApplicationAuthorizationDenial,
-    },
-    model::auth::application_authorization::{
-        ApplicationScope, ApplicationScopeError, ApplicationScopeRef, CanonicalApplicationScopes,
-    },
-};
 use crate::{
+    access::AccessError,
+    cdk::types::Principal,
     domain::policy::pure::auth::application_authorization::{
         LocalApplicationAuthorizationPolicyInput,
         authorize_local_application as authorize_local_application_policy,
     },
     ops::{auth::AuthOps, ic::IcOps, storage::auth::LocalApplicationAuthorizationStateOps},
 };
+use std::fmt;
+
+pub use crate::{
+    domain::policy::pure::auth::application_authorization::AuthorizedApplicationSubject,
+    domain::policy::pure::auth::application_authorization::LocalApplicationAuthorizationDecision,
+    domain::policy::pure::auth::application_authorization::LocalApplicationAuthorizationDenial,
+    model::auth::application_authorization::ApplicationScope,
+    model::auth::application_authorization::ApplicationScopeError,
+    model::auth::application_authorization::ApplicationScopeRef,
+    model::auth::application_authorization::CanonicalApplicationScopes,
+};
+
 #[cfg(feature = "internal-test-fixtures")]
 #[doc(hidden)]
 pub use measurement::measure_local_application_authorization_denial;
@@ -232,13 +234,13 @@ const fn dependency_unavailable(error: crate::InternalError) -> AccessError {
 mod tests {
     use super::*;
     use crate::{
-        ids::CanisterRole,
         model::auth::application_authorization::{
             ApplicationScope, CanonicalApplicationScopes, LocalApplicationAuthoritySnapshot,
             LocalApplicationSession,
         },
         test::{seams, support::fleet_key},
     };
+    use canic_contracts::ids::CanisterRole;
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])

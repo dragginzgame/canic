@@ -15,29 +15,20 @@ use crate::{
     },
     icp::IcpCli,
 };
-use candid::{CandidType, Deserialize, Principal};
-use canic_core::{
-    control_plane_support::config::ComponentTopology,
-    dto::component_registry::{
-        ComponentDirectoryHead, ComponentDirectoryHeadRequest, ComponentLifecycleStatus,
-        ComponentRegistryPartitionRequest, ComponentRegistryPartitionResponse,
+use candid::Principal;
+use canic_contracts::{
+    dto::{
+        component_registry::{
+            ComponentDirectoryHead, ComponentDirectoryHeadRequest, ComponentLifecycleStatus,
+            ComponentRegistryPartitionRequest, ComponentRegistryPartitionResponse,
+        },
+        wire::projection::startup_inventory::{Request, Response},
     },
     ids::{ComponentBinding, ComponentInstanceId, ComponentSpecId, FleetSubnetRootReleaseSet},
     protocol,
 };
+use canic_core::control_plane_support::config::ComponentTopology;
 use std::{collections::BTreeMap, path::Path};
-
-#[derive(CandidType)]
-enum Request {
-    ComponentDirectoryHead(ComponentDirectoryHeadRequest),
-    ComponentRegistryPartition(ComponentRegistryPartitionRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum Response {
-    ComponentDirectoryHead(Box<ComponentDirectoryHead>),
-    ComponentRegistryPartition(Box<ComponentRegistryPartitionResponse>),
-}
 
 /// Invocation-local evidence retained across ledger reads, with no durable spending authority.
 pub struct FundingInventoryObservation {

@@ -2,21 +2,17 @@
 
 pub mod capacity_import;
 
+use canic_contracts::{cycles::Cycles, ids::ComponentInstanceId};
 use canic_core::{
     cdk::{
         structures::{
             DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, cell::Cell,
             memory::RuntimeMemory,
         },
-        types::{Cycles, Principal},
+        types::Principal,
     },
     control_plane_support::model::replay::ReplayCostGuardSettlement,
-    ids::ComponentInstanceId,
     impl_storable_bounded, impl_storable_unbounded,
-    role_contract::allocation::memory::control_plane::{
-        ROOT_CANISTER_INVENTORY_ASSETS_ID, ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID,
-        ROOT_CANISTER_POOL_STATE_ID,
-    },
 };
 use capacity_import::PoolImportRecord;
 use serde::{Deserialize, Serialize};
@@ -27,10 +23,7 @@ std::thread_local! {
         StableBtreeMap<Principal, CanisterPoolAssetRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(StableBtreeMap::init(canic_core::ic_memory_key!(
         authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-        key = "canic.control_plane.root.canister_inventory.assets.v1",
-        ty = CanisterPoolAssetRecord,
-        id = ROOT_CANISTER_INVENTORY_ASSETS_ID
-    )));
+        key = "canic.control_plane.root.canister_inventory.assets.v1")));
 }
 
 std::thread_local! {
@@ -38,10 +31,7 @@ std::thread_local! {
         StableBtreeMap<Principal, CanisterPoolHandoffReceiptRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(StableBtreeMap::init(canic_core::ic_memory_key!(
         authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-        key = "canic.control_plane.root.canister_pool.handoff_receipts.v1",
-        ty = CanisterPoolHandoffReceiptRecord,
-        id = ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID
-    )));
+        key = "canic.control_plane.root.canister_pool.handoff_receipts.v1")));
 }
 
 std::thread_local! {
@@ -50,10 +40,7 @@ std::thread_local! {
     > = RefCell::new(Cell::init(
         canic_core::ic_memory_key!(
             authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-            key = "canic.control_plane.root.canister_pool.state.v1",
-            ty = CanisterPoolStateRecord,
-            id = ROOT_CANISTER_POOL_STATE_ID
-        ),
+            key = "canic.control_plane.root.canister_pool.state.v1"),
         CanisterPoolStateRecord::default(),
     ));
 }

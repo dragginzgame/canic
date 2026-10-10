@@ -491,7 +491,8 @@ fn append_workspace_member(
     let source = fs::read_to_string(&manifest_path)?;
     let updated = append_workspace_member_source(&source, member)?;
     if updated != source {
-        write_bytes(&manifest_path, updated.as_bytes())?;
+        write_bytes(&manifest_path, updated.as_bytes())
+            .map_err(canic_host::publication::ops::io_error)?;
     }
     Ok(())
 }
@@ -500,7 +501,7 @@ fn rollback_scaffold(created_dir: &Path, originals: &[(PathBuf, Vec<u8>)]) -> io
     let mut first_error = None;
 
     for (path, bytes) in originals {
-        if let Err(error) = write_bytes(path, bytes)
+        if let Err(error) = write_bytes(path, bytes).map_err(canic_host::publication::ops::io_error)
             && first_error.is_none()
         {
             first_error = Some(error);

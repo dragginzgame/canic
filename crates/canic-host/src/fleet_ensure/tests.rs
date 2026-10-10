@@ -29,12 +29,8 @@ use crate::{
     test_support::{start_pocket_ic, temp_dir},
 };
 use candid::Principal;
-use canic_control_plane::{
-    dto::template::{TemplateChunkInput, TemplateChunkSetPrepareInput},
-    ids::{TemplateId, TemplateVersion},
-};
-use canic_core::{
-    cdk::{types::Cycles, utils::hash::sha256_hex},
+use canic_contracts::{
+    cycles::Cycles,
     dto::{
         component_provisioning::{
             FleetComponentProvisioningOperation, FleetComponentProvisioningPlan,
@@ -45,15 +41,17 @@ use canic_core::{
             FleetSubnetRootEntry, FleetSubnetRootJoinRequest, FleetSubnetRootStatus,
         },
         fleet_subnet_root::FleetSubnetWasmStoreAdoptionRequest,
+        template::{TemplateChunkInput, TemplateChunkSetPrepareInput},
     },
     ids::{
         AppId, CanonicalNetworkId, ComponentDeploymentConfigurationDigest, ComponentTopologyDigest,
         CyclesFundingBudget, FleetAdmissionPolicy, FleetBinding, FleetCoordinatorBinding, FleetId,
         FleetKey, FleetRegistryAuthority, FleetSubnetCanisterPoolConfig, FleetSubnetRootLimits,
         FleetSubnetRootReleaseSet, FleetSubnetWasmStoreAuthority, ReleaseBuildId,
-        ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
+        ReleaseBuildNonce, ReleaseSetDigest, SubnetId, TemplateId, TemplateVersion,
     },
 };
+use canic_core::cdk::utils::hash::sha256_hex;
 use std::{
     collections::{BTreeMap, BTreeSet},
     env, fs,
@@ -2101,7 +2099,7 @@ fn configure_fixture_publication(fixture: &mut Fixture) {
 
 fn fixture_publication_actions(root: Principal, store: Principal) -> Vec<EnsureAction> {
     let chunks = [b"first rows".as_slice(), b"last rows".as_slice()];
-    let descriptor = canic_core::dto::fixture_provisioning::FixtureDescriptor {
+    let descriptor = canic_contracts::dto::fixture_provisioning::FixtureDescriptor {
         schema_version: 1,
         format_hash: [1; 32],
         completion_summary: [2; 32],
@@ -2109,7 +2107,7 @@ fn fixture_publication_actions(root: Principal, store: Principal) -> Vec<EnsureA
         chunks: chunks
             .iter()
             .map(
-                |bytes| canic_core::dto::fixture_provisioning::FixtureChunkDescriptor {
+                |bytes| canic_contracts::dto::fixture_provisioning::FixtureChunkDescriptor {
                     digest: canic_core::cdk::utils::hash::wasm_hash(bytes)
                         .try_into()
                         .unwrap(),
@@ -2121,20 +2119,20 @@ fn fixture_publication_actions(root: Principal, store: Principal) -> Vec<EnsureA
     let content_id =
         canic_control_plane::api::fixture_content::FixtureContentApi::content_id(&descriptor)
             .unwrap();
-    let role = canic_core::ids::CanisterRole::new("app");
+    let role = canic_contracts::ids::CanisterRole::new("app");
     let total = descriptor.encoded_length;
     let mut actions = vec![fleet_protocol_action(
         "prepare-fixture",
         CurrentFleetProtocolAction::PrepareStoreFixture {
             maximum_attempts: 1,
-            request: canic_core::dto::root_store::RootStoreFixturePrepareRequest {
-                bootstrap: canic_core::dto::root_store::RootStoreBootstrapRequest {
+            request: canic_contracts::dto::root_store::RootStoreFixturePrepareRequest {
+                bootstrap: canic_contracts::dto::root_store::RootStoreBootstrapRequest {
                     operation_id: [8; 32],
                     manifest_payload_size_bytes: 100,
                 },
                 role: role.clone(),
             },
-            source: canic_core::dto::root_store::RootStoreFixture {
+            source: canic_contracts::dto::root_store::RootStoreFixture {
                 role,
                 content_id,
                 descriptor,
@@ -2147,12 +2145,12 @@ fn fixture_publication_actions(root: Principal, store: Principal) -> Vec<EnsureA
         received_bytes += bytes.len() as u64;
         let action = CurrentFleetProtocolAction::PublishStoreFixtureChunk {
             maximum_attempts: 1,
-            request: canic_core::dto::fixture_provisioning::FixtureChunkUpload {
+            request: canic_contracts::dto::fixture_provisioning::FixtureChunkUpload {
                 content_id,
                 index: u32::try_from(index).unwrap(),
                 bytes: bytes.to_vec(),
             },
-            expected: canic_core::dto::fixture_provisioning::FixtureSourceStatus {
+            expected: canic_contracts::dto::fixture_provisioning::FixtureSourceStatus {
                 content_id,
                 next_chunk: u32::try_from(index).unwrap() + 1,
                 chunk_count: u32::try_from(chunks.len()).unwrap(),
@@ -5079,7 +5077,7 @@ fn long_running_component_provisioning_is_paced_past_eight_observations_without_
     let summary = FleetProvisioningProgress {
         components: Vec::new(),
         pending_root_failure: None,
-        phase: canic_core::dto::component_provisioning::FleetComponentProvisioningPhase::ActivatingRuntimes,
+        phase: canic_contracts::dto::component_provisioning::FleetComponentProvisioningPhase::ActivatingRuntimes,
         root_batch_count: 1,
         accepted_root_count: 1,
         provisioned_root_count: 1,
@@ -7259,7 +7257,7 @@ fn pool_batch_fixture() -> Fixture {
             let mut action = fleet_protocol_action(
                 &format!("pool-import-{index}"),
                 CurrentFleetProtocolAction::ReconcilePoolAsset {
-                    request: canic_core::dto::pool::PoolCanisterRequest {
+                    request: canic_contracts::dto::pool::PoolCanisterRequest {
                         canister_id: Principal::from_slice(&[100 + index]),
                     },
                     minimum_cycles: Cycles::new(100),

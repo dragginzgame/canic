@@ -11,17 +11,19 @@ use crate::{
         model::release::{FleetReleaseReviewRecord, FleetReleaseRole, FleetReleaseSourceRecord},
         ops::{
             capacity_import::{
-                admission::observer::inventory::{self, PoolScope},
+                admission::observer::{inventory, inventory::PoolScope},
                 journal::CapacityImportJournalError,
             },
-            certified_custody::{self, CertifiedCustodyError},
+            certified_custody,
+            certified_custody::CertifiedCustodyError,
         },
         policy::release::{FleetReleaseError, expected_ownership},
         view::release::FleetReleaseInventoryView,
     },
     icp::IcpCli,
 };
-use canic_core::{cdk::utils::hash::hex_bytes, dto::fleet_registry::FleetRegistry};
+use canic_contracts::dto::fleet_registry::FleetRegistry;
+use canic_core::cdk::utils::hash::hex_bytes;
 use ic_agent::Agent;
 use std::collections::BTreeSet;
 use thiserror::Error;

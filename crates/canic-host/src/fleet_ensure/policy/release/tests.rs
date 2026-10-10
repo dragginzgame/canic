@@ -12,7 +12,7 @@ use crate::fleet_ensure::{
         release::{FleetReleaseOwnerView, FleetReleaseSourceView},
     },
 };
-use canic_core::ids::{AppId, CanonicalNetworkId, FleetBinding, FleetId, FleetKey, SubnetId};
+use canic_contracts::ids::{AppId, CanonicalNetworkId, FleetBinding, FleetId, FleetKey, SubnetId};
 
 fn id(byte: u8) -> Principal {
     Principal::from_slice(&[byte; 29])

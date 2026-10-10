@@ -12,15 +12,16 @@ use crate::model::auth::application_authorization::{
 use crate::{
     InternalError,
     config::schema::LocalApplicationAuthorizationConfig,
-    ids::{CanisterRole, FleetKey, ManagedCanisterBinding},
     model::auth::application_authorization::LocalApplicationAuthoritySnapshot,
     ops::{
         config::ConfigOps, runtime::env::EnvOps,
         storage::auth::LocalApplicationAuthorizationStateOps,
     },
 };
+use canic_contracts::ids::{CanisterRole, FleetKey, ManagedCanisterBinding};
 
 /// Protected configuration and exact current identity for local application authorization.
+
 pub struct LocalApplicationAuthorizationAuthority {
     pub config: LocalApplicationAuthorizationConfig,
     pub snapshot: LocalApplicationAuthoritySnapshot,

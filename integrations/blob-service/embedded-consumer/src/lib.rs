@@ -12,8 +12,18 @@ struct InstallationInput {
     blob: ServiceInstallationInput,
 }
 
-// The application selects placement; blob grants do not overlap its counter.
-canic_blob_service::mount!(memory = 150..=166);
+// The artifact grants both namespaces in one shared physical allocation pool.
+canic::memory::memory_allocation_pool!(
+    authorities = [
+        ("embedded-app", "embedded_app."),
+        (
+            canic_blob_service::MEMORY_AUTHORITY,
+            canic_blob_service::MEMORY_KEY_PREFIX
+        ),
+    ],
+    exclusions = [],
+);
+canic_blob_service::mount!();
 
 canic::start!(
     argument_limits = lifecycle::ENVELOPE_LIMITS,

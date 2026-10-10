@@ -41,6 +41,13 @@ their package-specific matrices within this required support policy.
 ## Portable script baseline
 
 The portable scripts target Bash 3.2 or newer and standard Unix userland.
+Mandatory `[[ ... ]]` assertions must explicitly fail with `|| exit 1`,
+`|| return 1` or a diagnostic failure handler: Bash 3.2 does not apply `set -e`
+to a standalone conditional comparison. Keep intentional status-returning
+predicates and branch conditions distinct. A fixture's completion flag protects
+against premature exits, but cannot detect a failed assertion that continued
+through normal completion and cleanup.
+
 Repository CI exercises the offline regression set on:
 
 | Host | Scope |
@@ -53,11 +60,31 @@ The table describes the intended CI contract. Passing qualification for a
 revision requires its matching workflow run; adding a matrix entry does not
 establish that the run passed.
 
-Push CI groups include the source commit so a later main push preserves both
-running and queued qualification of earlier commits. PR updates share their PR
-group and cancel superseded review revisions. This retains more main-commit
-runs when native runners are busy; it does not add runner capacity. Inspect each
-selected commit's result before treating its snapshot as qualified.
+Routine CI keeps only the newest run for each workflow and branch or PR ref.
+Use workflow-level concurrency so a newer run cancels both queued and running
+checks of an older revision, including its native matrix:
+
+```yaml
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+```
+
+Keep source SHA and run ID out of this group; they prevent revisions from
+superseding each other. Different workflows, branches and PRs remain independent.
+Omit `queue: max`: retaining every pending revision defeats this policy, and
+GitHub disallows combining it with `cancel-in-progress: true`.
+Cancellation is asynchronous and does not certify the interrupted revision.
+Inspect the exact selected commit's result before claiming native qualification;
+a newer commit's success does not qualify an older release. Consumers must update
+their owned workflows when adopting this guidance; snapshot refresh alone does
+not change their concurrency settings.
+
+Use the [CI-health task](../tasks/ci-health.md#queued-native-jobs-and-repeated-validation)
+to diagnose persistent native queues and repeated branch/tag gates. Keep all
+required hosts and checks on the retained run. Release, publication and deployment
+operations with separate effect/recovery obligations keep explicit concurrency
+identities and their own cancellation authorization.
 
 The portable job uses GitHub Actions' default job timeout, allowing long native
 builds to finish without a shorter regression-step deadline. Ordinary failures
@@ -84,6 +111,7 @@ required to run setup. Make targets and CI select this same local tool set.
 | `scripts/dev/cloc.sh` | Git, Cargo, `cloc`, `jq`, `awk`, `find`, `grep`, and `sort` |
 | `scripts/dev/cloc-siblings.sh` | Git and the same prepared tools as `cloc.sh`; read-only root workspace summaries |
 | `scripts/dev/cloc-tooling.pl` | Git, cloc, and core Perl modules including JSON::PP and Digest::SHA; no Cargo or consumer command execution |
+| `scripts/dev/github-siblings.sh` | Git, jq, awk, sort, Perl core POSIX functions, system IANA timezone data (Europe/Paris), and an authenticated GitHub CLI |
 | `scripts/dev/gh-ci.sh` | Git and an authenticated GitHub CLI |
 | Local maintenance coordinator | Bash 3.2+, Git, prepared/authenticated Codex CLI with `exec --approve-for-me`, and a serial scheduler; the supplied user units require Linux systemd. Task tools remain optional consumer-qualified inputs; see [local scheduling](../tasks/local-schedule.md). The offline fixture substitutes Codex and starts no agent. |
 | `scripts/ci/run-validation-targets.sh` | GNU Make plus `awk`, `grep` or `rg`, `sed`, `tail`, and `tee` |
@@ -94,6 +122,7 @@ required to run setup. Make targets and CI select this same local tool set.
 | Local IC tool setup | Bash 3.2+, `curl`, `tar`, xz/gzip, Perl, and a SHA-256 implementation; see [IC tools](ic-tools.md) |
 | Nonempty Cargo test helper | Cargo with normal libtest summaries, `awk`, and `tee` |
 | Exact release-tag checker | Git and the caller's selected exact commit/version |
+| Exact crates.io observation | Bash/curl for presence; metadata mode additionally requires jq and curl 8.4.0+ for bounded downloads |
 | `scripts/ci/run-sccache.sh` | An executable `sccache` binary |
 | Snapshot verification | A SHA-256 implementation |
 | Snapshot refresh | Git, a clean Shared Tooling checkout, and a SHA-256 implementation |
@@ -108,14 +137,22 @@ required to run setup. Make targets and CI select this same local tool set.
 | Local lockfile transformer | Perl core only; the caller separately validates the prepared graph with Cargo |
 | Explicit tag maintenance | Git and Perl core modules; atomic push support for remote deletion; see [tag maintenance](tag-maintenance.md) |
 
-Standard repository setup selects cloc with `--with-cloc`, using one authenticated
+Standard repository setup always includes cloc, using one authenticated
 standalone Perl payload across the supported hosts. Its host substitutions are
 covered by fixtures; native CI qualifies the real script on each declared host.
-Standard setup also selects ripgrep with `--with-ripgrep` in both installation
+Standard setup also always includes ripgrep in both installation
 and offline checks. Its archive verification also requires tar/gzip and
 cmp. The selected native binary must report PCRE2 support. All four Linux/macOS
 architecture mappings have substitute fixtures; only native execution qualifies
 the corresponding official binary. See [local setup](local-setup.md).
+
+The complete setup/check aggregates include the three pinned Cargo tools on
+every repository. A prepared Rust/Cargo toolchain and native build prerequisites
+are therefore required even for non-Rust consumers. The native regression jobs
+run the complete aggregate on Linux x86-64 and both macOS architectures; narrower
+CI jobs may prepare only their own declared prerequisites without claiming a
+complete developer installation. Linux ARM64 remains host-set-only because the
+IC set lacks a matching Quill asset.
 
 The hook regression fixture also requires `jq` and the `cargo-sort` version from
 `ci/tool-versions.env` (`2.1.4`). CI installs it before offline tests; local
@@ -162,8 +199,17 @@ The IC toolset additionally provisions and checks native executables on all
 three CI hosts above. Offline fixtures exercise digest/version refusals, retained
 failed and interrupted setup, and atomic activation using substituted payloads;
 only the separate native installation step qualifies actual upstream binaries.
+After preparing the pinned Node runtime, the native jobs also run
+`scripts/ci/qualify-wasm-opt.sh` against that installed IC set. Its retained
+Wasm inputs/outputs exercise `-O3`, `-Os` and `-Oz` through Node's WebAssembly
+engine, including integer branches and an IC-style reply import. Evidence lives
+under `portable-fixtures/wasm-opt` for ordinary failure collection. This small
+smoke does not qualify consumer canister builds or deployment; those remain
+with the product owner.
 Failure-artifact collection runs after native qualification and includes installer
 logs and retained host/IC candidate directories as well as portable fixtures.
+It also selects the compact formatting runner's `formatting.*` failure logs from
+the selected temporary root; CI callers use `RUNNER_TEMP` for those logs.
 It also selects available `rust-tools-*.log` files and `.tools/rust/build`,
 independently of compact host/IC retention. Rust build evidence is selected only
 through physical parent directories; a final build symlink is retained without
@@ -189,7 +235,14 @@ leave no completed manifest. All evidence is retained. CI observes the failed st
 requires that invocation's completion output (an old manifest cannot qualify it),
 uploads through the common collector, downloads the exact returned artifact ID,
 and extracts the archive to check its payload against the original checksum
-manifest. Separate checks cover a newline/colon filename's bytes and mode,
+manifest. Both full and compact evidence readbacks use the pinned download
+action's authenticated REST path, scoped to the current repository and run.
+Only the portable job grants `actions: read`; download digest mismatches fail
+before the independent payload checks. This transport selection follows
+[the Blob readback report](https://github.com/dragginzgame/shared-tooling/issues/93);
+its original internal lookup failure has no proven cause, and local checks do
+not establish hosted acceptance of the new path.
+Separate checks cover a newline/colon filename's bytes and mode,
 executable state and a symlink whose target stays outside the selection. Missing logs,
 hidden candidate files, failed uploads, early fixture failures and corrupted
 downloads fail the job. Source hashes, commit, host and run identity stay with

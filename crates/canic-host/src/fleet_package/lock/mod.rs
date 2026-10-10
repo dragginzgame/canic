@@ -7,7 +7,7 @@ mod tests;
 
 use canic_core::cdk::utils::hash::sha256_hex;
 use ic_host_artifacts::artifact::BoundedWriter;
-use ic_host_fs::durable::{PublicationMode, WriteOptions, write_bytes, write_typed_with};
+use ic_host_fs::durable::{PublicationMode, WriteOptions, write_bytes, write_with};
 use ic_host_fs::read::{read_file_no_follow, read_optional_file_no_follow};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -54,7 +54,7 @@ pub(super) fn refresh_seed(
     // A crash before the derivation record commits causes an identical reseed on retry.
     // Cargo resolution follows materialization and may legitimately change the lock bytes.
     write_bytes(&lock, &bytes)?;
-    write_typed_with(
+    write_with(
         &record,
         WriteOptions {
             mode: PublicationMode::Replace,

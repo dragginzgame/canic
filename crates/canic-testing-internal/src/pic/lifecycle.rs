@@ -1,3 +1,11 @@
+use super::{
+    artifacts::{
+        CanicWasmBuildProfile, InternalTestWasms, build_internal_test_wasm_canisters,
+        build_internal_test_wasm_canisters_with_env,
+    },
+    canic::managed_test_init_identity,
+    startup::start_pocket_ic,
+};
 use crate::canister::TEST;
 use candid::{Principal, encode_args, encode_one};
 use canic::{
@@ -19,7 +27,7 @@ use canic::{
         FleetSubnetCanisterPoolConfig, FleetSubnetRootBinding, FleetSubnetRootLimits, SubnetId,
     },
 };
-use canic_core::cdk::types::Cycles;
+use canic_contracts::cycles::Cycles;
 use canic_core::shared_support::fleet_admission_policy::{
     compile_fleet_admission_projection, compile_installed_fleet_admission_policy,
 };
@@ -32,15 +40,6 @@ use ic_testkit::{
 use std::{
     path::{Path, PathBuf},
     sync::OnceLock,
-};
-
-use super::{
-    artifacts::{
-        CanicWasmBuildProfile, InternalTestWasms, build_internal_test_wasm_canisters,
-        build_internal_test_wasm_canisters_with_env,
-    },
-    canic::managed_test_init_identity,
-    startup::start_pocket_ic,
 };
 
 const INSTALL_CYCLES: u128 = 1_000_000_000_000;
@@ -714,20 +713,16 @@ mod fast_tests {
 mod tests {
     use super::*;
     use crate::pic::CanicPicExt;
-    use canic::{
-        Error,
-        dto::{
-            fleet_admission::{
-                FleetAdmissionActivateTargetRequest, FleetAdmissionOpenTargetRequest,
-                FleetAdmissionPrepareTargetRequest, FleetAdmissionProjectionPhase,
-                FleetAdmissionProjectionStatusResponse, FleetAdmissionTargetReceipt,
-                FleetAdmissionTargetTransitionPhase,
-            },
-            page::PageRequest,
-            role::OperationReceipt,
-        },
-        protocol::CANIC_COMMAND,
-    };
+    use canic::Error;
+    use canic::dto::fleet_admission::FleetAdmissionActivateTargetRequest;
+    use canic::dto::fleet_admission::FleetAdmissionOpenTargetRequest;
+    use canic::dto::fleet_admission::FleetAdmissionPrepareTargetRequest;
+    use canic::dto::fleet_admission::FleetAdmissionProjectionPhase;
+    use canic::dto::fleet_admission::FleetAdmissionProjectionStatusResponse;
+    use canic::dto::fleet_admission::FleetAdmissionTargetTransitionPhase;
+    use canic::dto::page::PageRequest;
+    use canic::dto::role::OperationReceipt;
+    use canic::protocol::CANIC_COMMAND;
     use ic_testkit::pic::{CandidCallExt, CanisterInstallExt};
     use ic_testkit::pocket_ic::common::rest::{
         CanisterHttpReply, CanisterHttpResponse, MockCanisterHttpResponse,
@@ -928,7 +923,7 @@ mod tests {
                 (
                     memory.memory_manager_id,
                     memory.binding.clone(),
-                    memory.range_claim.clone(),
+                    memory.pool_eligible,
                 )
             })
             .collect();
@@ -985,7 +980,7 @@ mod tests {
                     (
                         memory.memory_manager_id,
                         memory.binding.clone(),
-                        memory.range_claim.clone(),
+                        memory.pool_eligible,
                     )
                 })
                 .collect();
@@ -993,44 +988,17 @@ mod tests {
         }
     }
 
-    #[derive(candid::CandidType)]
-    enum ManagedCommand {
-        ActivateFleetAdmission(FleetAdmissionActivateTargetRequest),
-        CallerAuthority(canic::dto::caller_authority::CallerAuthorityCommand),
-        ConfigureRuntime(Box<ComponentRuntimeDirectoryPreparationRequest>),
-        OpenFleetAdmission(FleetAdmissionOpenTargetRequest),
-        PrepareFleetAdmission(Box<FleetAdmissionPrepareTargetRequest>),
-        ReleaseApplicationStartup(canic::dto::caller_authority::CallerAuthorityPublication),
-    }
+    use canic_contracts::dto::wire::projection::fixture_lifecycle::ManagedCommand;
 
-    #[derive(candid::CandidType, Debug, candid::Deserialize, Eq, PartialEq)]
-    enum ManagedCommandResponse {
-        ActivateFleetAdmission(FleetAdmissionTargetReceipt),
-        CallerAuthority(Box<canic::dto::caller_authority::CallerAuthorityReceipt>),
-        OpenFleetAdmission(FleetAdmissionTargetReceipt),
-        OperationAccepted(OperationReceipt),
-        PrepareFleetAdmission(FleetAdmissionTargetReceipt),
-    }
+    use canic_contracts::dto::wire::projection::fixture_lifecycle::ManagedCommandResponse;
 
-    #[derive(candid::CandidType)]
-    enum ManagedStatusRequest {
-        Admission(PageRequest),
-    }
+    use canic_contracts::dto::wire::projection::admission::RemoteRootStatusRequest as ManagedStatusRequest;
 
-    #[derive(candid::CandidType, candid::Deserialize)]
-    enum ManagedStatusResponse {
-        Admission(FleetAdmissionProjectionStatusResponse),
-    }
+    use canic_contracts::dto::wire::projection::fixture_baseline::ManagedAdmissionStatusResponseFragment as ManagedStatusResponse;
 
-    #[derive(candid::CandidType)]
-    enum ManagedControlStatusRequest {
-        CallerAuthority(canic::dto::role::OperationStatusRequest),
-    }
+    use canic_contracts::dto::wire::projection::caller_authority::StatusRequest as ManagedControlStatusRequest;
 
-    #[derive(candid::CandidType, candid::Deserialize)]
-    enum ManagedControlStatusResponse {
-        CallerAuthority(canic::dto::caller_authority::CallerAuthorityStatus),
-    }
+    use canic_contracts::dto::wire::projection::caller_authority::StatusResponse as ManagedControlStatusResponse;
 
     #[derive(candid::CandidType, Debug, candid::Deserialize, Eq, PartialEq)]
     struct ManagedGuardReceipt {
@@ -1280,7 +1248,7 @@ mod tests {
         assert_unchanged();
 
         let mut wrong_fleet = valid_prepare();
-        wrong_fleet.successor.authority.fleet.app = canic_core::ids::AppId::from("foreign");
+        wrong_fleet.successor.authority.fleet.app = canic_contracts::ids::AppId::from("foreign");
         assert!(
             try_transition_target(
                 &fixture.pic,
@@ -1871,7 +1839,7 @@ mod tests {
         let response: Result<ManagedControlStatusResponse, Error> = pic.query_candid_as_or_panic(
             canister,
             root,
-            canic_core::protocol::CANIC_CONTROL_STATUS,
+            canic_contracts::protocol::CANIC_CONTROL_STATUS,
             (ManagedControlStatusRequest::CallerAuthority(
                 canic::dto::role::OperationStatusRequest {
                     operation_id: [0xa1; 32],
@@ -1958,7 +1926,7 @@ mod tests {
         let response: Result<ManagedStatusResponse, Error> = pic.query_candid_as_or_panic(
             canister,
             root,
-            canic_core::protocol::CANIC_ADMISSION_STATUS,
+            canic_contracts::protocol::CANIC_ADMISSION_STATUS,
             (ManagedStatusRequest::Admission(PageRequest {
                 offset: 0,
                 limit: u64::MAX,

@@ -104,7 +104,7 @@ fn generated_packages_are_resolved_before_complete_build_inputs_are_frozen() {
         role: "root".into(),
         profile: crate::canister_build::CanisterBuildProfile::Fast,
         environment: "local".into(),
-        build_network: canic_core::ids::BuildNetwork::Local,
+        build_network: canic_contracts::ids::BuildNetwork::Local,
         workspace_root: root.clone(),
         icp_root: root.clone(),
         config_path: root.join("canic.toml"),
@@ -233,7 +233,7 @@ fn infrastructure_build_context(app: PathBuf) -> WorkspaceBuildContext {
         role: "root".into(),
         profile: crate::canister_build::CanisterBuildProfile::Fast,
         environment: "local".into(),
-        build_network: canic_core::ids::BuildNetwork::Local,
+        build_network: canic_contracts::ids::BuildNetwork::Local,
         workspace_root: app.clone(),
         icp_root: app.clone(),
         config_path: app.join("canic.toml"),
@@ -646,7 +646,7 @@ fn governed_fixture_inputs_invalidate_reuse() {
         role: "root".into(),
         profile: crate::canister_build::CanisterBuildProfile::Fast,
         environment: "local".into(),
-        build_network: canic_core::ids::BuildNetwork::Local,
+        build_network: canic_contracts::ids::BuildNetwork::Local,
         workspace_root: root.clone(),
         icp_root: root.clone(),
         config_path: root.join("canic.toml"),
@@ -675,7 +675,7 @@ fn governed_fixture_inputs_invalidate_reuse() {
         fs::write(&path, bytes).unwrap();
     }
     let mut changed = context.clone();
-    changed.build_network = canic_core::ids::BuildNetwork::Ic;
+    changed.build_network = canic_contracts::ids::BuildNetwork::Ic;
     assert_ne!(original, input_digest(&changed, &tools).unwrap());
     changed = context.clone();
     changed.profile = crate::canister_build::CanisterBuildProfile::Release;
@@ -813,7 +813,7 @@ fn declared_fixture_payloads_participate_in_cache_inputs_inside_excluded_directo
         role: "root".into(),
         profile: crate::canister_build::CanisterBuildProfile::Fast,
         environment: "local".into(),
-        build_network: canic_core::ids::BuildNetwork::Local,
+        build_network: canic_contracts::ids::BuildNetwork::Local,
         workspace_root: root.clone(),
         icp_root: root.clone(),
         config_path: root.join("canic.toml"),

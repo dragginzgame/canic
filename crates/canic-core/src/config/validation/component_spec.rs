@@ -5,18 +5,20 @@
 //! Boundary: config validation calls this before runtime installation.
 
 use crate::{
-    config::schema::{
-        CanisterAuthConfig, CanisterConfig, ComponentChildKind, ComponentSpecConfig,
-        ConfigSchemaError, CyclesFundingPolicyConfig, MAX_COMPONENT_CHILD_ROLES,
-        MAX_COMPONENT_PROVISIONING_GRANTS, MAX_COMPONENT_SPAWN_GRANTS, NAME_MAX_BYTES, TopupPolicy,
-        Validate,
+    config::{
+        schema::{
+            CanisterAuthConfig, CanisterConfig, ComponentChildKind, ComponentSpecConfig,
+            ConfigSchemaError, CyclesFundingPolicyConfig, MAX_COMPONENT_CHILD_ROLES,
+            MAX_COMPONENT_PROVISIONING_GRANTS, MAX_COMPONENT_SPAWN_GRANTS, NAME_MAX_BYTES,
+            TopupPolicy, Validate,
+        },
+        validation::validate_canister_role,
     },
-    config::validation::validate_canister_role,
-    ids::CanisterRole,
     model::auth::application_authorization::{
         ApplicationScope, MAX_LOCAL_APPLICATION_SESSION_TTL_NS, MAX_VERIFIED_APPLICATION_SCOPES,
     },
 };
+use canic_contracts::ids::CanisterRole;
 use std::collections::BTreeMap;
 
 impl Validate for ComponentSpecConfig {

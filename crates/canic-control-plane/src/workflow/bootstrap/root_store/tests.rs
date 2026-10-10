@@ -1,6 +1,6 @@
 use super::*;
 use crate::ids::{TemplateChunkingMode, TemplateManifestState, WasmStoreBinding};
-use canic_core::{dto::root_store::RootStoreArtifact, ids::ComponentTopologyDigest};
+use canic_contracts::{dto::root_store::RootStoreArtifact, ids::ComponentTopologyDigest};
 
 fn manifest(role: &str, byte: u8) -> TemplateManifestResponse {
     TemplateManifestResponse {

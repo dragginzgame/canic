@@ -25,8 +25,26 @@ printf 'pub fn fixture() {}\n' > "$fixture/source/src/lib.rs"
 printf 'CANIC_CLI_VERSION="${CANIC_CLI_VERSION:-1.2.3}"\n' > "$fixture/source/scripts/dev/install_dev.sh"
 printf '# Fixture\n\n## [1.2.4]\n' > "$fixture/source/docs/changelog/1.2.md"
 cargo generate-lockfile --offline --manifest-path "$fixture/source/Cargo.toml" > "$fixture/cargo.log" 2>&1
+for consumer in consumer embedded-consumer; do
+    consumer_root="$fixture/source/integrations/blob-service/$consumer"
+    mkdir -p "$consumer_root/src"
+    cat >"$consumer_root/Cargo.toml" <<TOML
+[workspace]
+[package]
+name = "fixture-$consumer"
+version = "0.1.0"
+edition = "2024"
+[dependencies]
+release-view-fixture = { path = "../../.." }
+TOML
+    printf 'pub fn consumer() {}\n' >"$consumer_root/src/lib.rs"
+    cargo generate-lockfile --offline --manifest-path "$consumer_root/Cargo.toml" >> "$fixture/cargo.log" 2>&1
+done
 cp -R "$fixture/source" "$fixture/candidate"
 cargo set-version --workspace --offline --manifest-path "$fixture/candidate/Cargo.toml" 1.2.4 >> "$fixture/cargo.log" 2>&1
+for consumer in consumer embedded-consumer; do
+    cargo update --offline --manifest-path "$fixture/candidate/integrations/blob-service/$consumer/Cargo.toml" >> "$fixture/cargo.log" 2>&1
+done
 printf 'CANIC_CLI_VERSION="${CANIC_CLI_VERSION:-1.2.4}"\n' > "$fixture/candidate/scripts/dev/install_dev.sh"
 printf '# Fixture\n\n## [1.2.4] - 2026-10-06\n' > "$fixture/candidate/docs/changelog/1.2.md"
 export VIEW_SOURCE=1111111111111111111111111111111111111111
@@ -47,7 +65,7 @@ case "$*" in
     "rev-parse --verify $VIEW_COMMIT^{commit}") echo "$VIEW_COMMIT" ;;
     "log -1 --format=%s $VIEW_COMMIT") echo 'Release 1.2.4' ;;
     "rev-parse $VIEW_COMMIT^") echo "$VIEW_SOURCE" ;;
-    "diff --name-only $VIEW_SOURCE $VIEW_COMMIT --") printf '%s\n' Cargo.toml Cargo.lock scripts/dev/install_dev.sh release-validation.json docs/changelog/1.2.md ;;
+    "diff --name-only $VIEW_SOURCE $VIEW_COMMIT --") printf '%s\n' Cargo.toml Cargo.lock scripts/dev/install_dev.sh release-validation.json docs/changelog/1.2.md integrations/blob-service/consumer/Cargo.lock integrations/blob-service/embedded-consumer/Cargo.lock ;;
     "cat-file -e $VIEW_SOURCE:"*) exit 0 ;;
     "archive $VIEW_SOURCE") tar -cf - -C "$VIEW_FIXTURE/source" . ;;
     "archive $VIEW_COMMIT") tar -cf - -C "$VIEW_FIXTURE/candidate" . ;;

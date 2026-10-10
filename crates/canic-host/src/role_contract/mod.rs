@@ -9,6 +9,16 @@ mod package;
 #[cfg(test)]
 mod tests;
 
+use canic_core::{
+    bootstrap::compiled::ConfigModel,
+    role_contract::{
+        BuiltInRoleKind, CanicFeatureKey, RoleContractFinding, RoleContractInput,
+        RoleContractResolution, RoleContractSource, required_features_for_role,
+        resolve_role_contract,
+    },
+};
+use std::{collections::BTreeSet, path::Path};
+
 pub use crate::cargo_metadata::CargoFeatureSelection;
 pub(crate) use package::package_manifest_path;
 
@@ -23,22 +33,12 @@ pub use package::{
     validate_declared_role_packages, validate_internal_test_wasm_packages,
 };
 
-use canic_core::{
-    bootstrap::compiled::ConfigModel,
-    role_contract::{
-        BuiltInRoleKind, CanicFeatureKey, RoleContractFinding, RoleContractInput,
-        RoleContractResolution, RoleContractSource, required_features_for_role,
-        resolve_role_contract,
-    },
-};
-use std::{collections::BTreeSet, path::Path};
-
 /// Resolve one role inventory using fresh workspace evidence and isolated role trees.
 #[must_use]
 pub(crate) fn resolve_declared_role_contracts(
     config_path: &Path,
     config: &ConfigModel,
-    roles: &[canic_core::ids::CanisterRole],
+    roles: &[canic_contracts::ids::CanisterRole],
     mode: PackageValidationMode,
 ) -> Vec<RoleContractResolution> {
     // Canonical Root projection must not require a generated Cargo package.
@@ -74,7 +74,7 @@ pub(crate) fn resolve_declared_role_contracts(
 /// Artifact construction separately validates the materialized Cargo package.
 #[must_use]
 pub fn resolve_canonical_root_contract(config: &ConfigModel) -> RoleContractResolution {
-    let role = canic_core::ids::CanisterRole::ROOT;
+    let role = canic_contracts::ids::CanisterRole::ROOT;
     let requirements = match required_features_for_role(config, &role) {
         Ok(requirements) => requirements,
         Err(finding) => {
@@ -156,14 +156,12 @@ pub fn finding_detail(finding: &RoleContractFinding) -> String {
         RoleContractFinding::AllocationDescriptorDuplicate { key } => {
             format!("allocation {key:?} has more than one state descriptor")
         }
-        RoleContractFinding::AllocationDescriptorIdMismatch {
+        RoleContractFinding::AllocationDescriptorKeyMismatch {
             key,
             expected,
             actual,
         } => format!(
-            "allocation {key:?} descriptor IDs {:?} do not match canonical IDs {:?}",
-            actual.iter().map(|id| id.get()).collect::<Vec<_>>(),
-            expected.iter().map(|id| id.get()).collect::<Vec<_>>()
+            "allocation {key:?} descriptor keys {actual:?} do not match canonical keys {expected:?}"
         ),
         RoleContractFinding::AllocationDescriptorMissing { key } => {
             format!("allocation {key:?} has no state descriptor")
@@ -180,14 +178,11 @@ pub fn finding_detail(finding: &RoleContractFinding) -> String {
         RoleContractFinding::CargoEvidenceUnavailable { phase, cause } => {
             format!("Cargo evidence phase {phase} failed: {cause}")
         }
-        RoleContractFinding::MemoryIdCollision {
-            memory_id,
+        RoleContractFinding::MemoryKeyCollision {
+            stable_key,
             first,
             second,
-        } => format!(
-            "memory ID {} is claimed by {first:?} and {second:?}",
-            memory_id.get()
-        ),
+        } => format!("memory key {stable_key} is claimed by {first:?} and {second:?}"),
         RoleContractFinding::MultipleCanicPackages { packages } => format!(
             "the wasm runtime graph reaches multiple Canic packages: {}",
             packages.join(", ")

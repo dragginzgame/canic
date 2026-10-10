@@ -1,36 +1,10 @@
 use super::*;
-
-#[derive(CandidType)]
-enum RootCommand {
-    RespondCapability(RootCapabilityEnvelopeV1),
-    ConfigureIssuer(RootIssuerConfigureRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum RootCommandResponse {
-    RespondCapability(RootCapabilityResponseV1),
-    ConfigureIssuer(RootIssuerConfigureResponse),
-}
-
-#[derive(CandidType)]
-enum CanisterCommand {
-    PrepareDelegatedToken(DelegatedTokenPrepareRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum CanisterCommandResponse {
-    PrepareDelegatedToken(DelegatedTokenPrepareResponse),
-}
-
-#[derive(CandidType)]
-enum RoleStatusRequest {
-    Metrics(MetricsStatusRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum RoleStatusResponse {
-    Metrics(Page<MetricEntry>),
-}
+use canic_contracts::dto::wire::projection::fixture_delegation::CanisterCommand;
+use canic_contracts::dto::wire::projection::fixture_delegation::CanisterCommandResponse;
+use canic_contracts::dto::wire::projection::fixture_instruction_audit::RootCommand;
+use canic_contracts::dto::wire::projection::fixture_instruction_audit::RootCommandResponse;
+use canic_contracts::dto::wire::projection::fixture_role_attestation::ManagedStatusRequest as RoleStatusRequest;
+use canic_contracts::dto::wire::projection::fixture_role_attestation::ManagedStatusResponse as RoleStatusResponse;
 
 fn setup_for_scenario(scenario: &AuditScenario) -> root::harness::RootSetup {
     match scenario.key {

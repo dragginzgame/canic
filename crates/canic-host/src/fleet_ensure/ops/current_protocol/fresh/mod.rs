@@ -14,13 +14,15 @@ use crate::fleet_ensure::model::{
     CurrentFleetProtocolAction, DesiredFleet, EnsureAction, FleetEnsureStateRecord,
 };
 use candid::Principal;
+use canic_contracts::dto::pool::PoolCanisterRequest;
 use canic_core::{
-    control_plane_support::ops::fleet_registry::FleetRegistryOps, dto::pool::PoolCanisterRequest,
+    control_plane_support::ops::fleet_registry::FleetRegistryOps,
     shared_support::fleet_admission_policy::bind_initial_fleet_admission_policy,
 };
 use std::{collections::BTreeMap, path::Path};
 
 /// Expand only the protocol selected by the reviewed fresh installation inputs.
+
 pub(in crate::fleet_ensure::ops) fn compile(
     root: &Path,
     desired: &DesiredFleet,

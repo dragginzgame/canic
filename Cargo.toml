@@ -31,14 +31,19 @@ members = [
     "crates/canic",
     "crates/canic-backup",
     "crates/canic-cli",
+    "crates/canic-contracts",
     "crates/canic-control-plane",
     "crates/canic-core",
     "crates/canic-host",
     "crates/canic-macros",
     "crates/canic-testing-internal",
     "crates/canic-tests",
+    "integrations/blob-service",
 ]
-exclude = ["integrations/blob-service"]
+exclude = [
+    "integrations/blob-service/consumer",
+    "integrations/blob-service/embedded-consumer",
+]
 resolver = "3"
 
 [workspace.package]
@@ -60,7 +65,9 @@ candid = { version = "0.10", default-features = false }
 candid_parser = "0.4.0"
 canic = { version = "0.110.54", path = "crates/canic", default-features = false }
 canic-backup = { version = "0.110.54", path = "crates/canic-backup" }
+canic-blob-service = { version = "0.110.54", path = "integrations/blob-service" }
 canic-cli = { version = "0.110.54", path = "crates/canic-cli" }
+canic-contracts = { version = "0.110.54", path = "crates/canic-contracts" }
 canic-control-plane = { version = "0.110.54", path = "crates/canic-control-plane", default-features = false }
 canic-core = { version = "0.110.54", path = "crates/canic-core" }
 canic-host = { version = "0.110.54", path = "crates/canic-host" }
@@ -77,26 +84,28 @@ futures = "0.3"
 getrandom = "0.4"
 hmac = "0.13.0"
 ic-agent = "=0.49.2"
-ic-auth = { version = "0.2", default-features = false }
-ic-auth-protocol-types = "0.2"
-ic-backup = { version = "0.11", default-features = false }
+ic-auth = { version = "0.3", default-features = false }
+ic-auth-protocol-types = "0.3"
+ic-backup = { version = "0.15", default-features = false }
+ic-blob-storage = "0.22.2"
+ic-blob-storage-contracts = "0.22.2"
 ic-canister-sig-creation = "1.3.1"
 ic-cdk = "0.20.3"
 ic-certification = "3.0"
-ic-host-artifacts = { version = "0.9.1", default-features = false }
-ic-host-fs = { version = "0.9.1", default-features = false }
-ic-host-process = { version = "0.9.1", default-features = false }
-ic-host-tools = "0.9.1"
+ic-host-artifacts = { version = "0.12", default-features = false }
+ic-host-fs = { version = "0.12", default-features = false }
+ic-host-process = { version = "0.12", default-features = false }
+ic-host-tools = "0.12"
 ic-management-canister-types = "0.11"
-ic-memory = "0.33"
-ic-metrics = "0.3"
-ic-query = { version = "0.52", default-features = false, features = [
+ic-memory = "0.35"
+ic-metrics = "0.5"
+ic-query = { version = "0.54", default-features = false, features = [
     "subnet-catalog-host",
 ] }
 ic-secp256k1 = "=0.3.0"
 ic-signature-verification = "0.3.0"
-ic-testkit = "0.27"
-ic-timers = "0.16"
+ic-testkit = "0.33"
+ic-timers = "0.17"
 ic-verify-bls-signature = { version = "0.6.0", default-features = false, features = [
     "alloc",
 ] }
@@ -172,6 +181,7 @@ canic = { path = "crates/canic" }
 canic-backup = { path = "crates/canic-backup" }
 canic-cli = { path = "crates/canic-cli" }
 canic-control-plane = { path = "crates/canic-control-plane" }
+canic-contracts = { path = "crates/canic-contracts" }
 canic-core = { path = "crates/canic-core" }
 canic-macros = { path = "crates/canic-macros" }
 canic-host = { path = "crates/canic-host" }

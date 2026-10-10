@@ -277,8 +277,8 @@ macro_rules! __canic_start_local_lifecycle_core {
 
         #[doc(hidden)]
         fn __canic_local_env(
-            role: $crate::__internal::core::ids::CanisterRole,
-            component_spec: $crate::__internal::core::ids::ComponentSpecId,
+            role: $crate::__internal::contracts::ids::CanisterRole,
+            component_spec: $crate::__internal::contracts::ids::ComponentSpecId,
         ) -> ::canic::dto::env::EnvBootstrapArgs {
             let root_pid = __canic_local_principal(1);
             let subnet_pid = __canic_local_principal(2);
@@ -471,7 +471,7 @@ macro_rules! __canic_start_ingress_payload_inspect {
     (root) => {
         #[doc(hidden)]
         const __CANIC_VARIANT_PAYLOAD_METHODS: &[&str] =
-            &[$crate::__internal::core::protocol::CANIC_ROOT_COMMAND];
+            &[$crate::__internal::contracts::protocol::CANIC_ROOT_COMMAND];
         #[$crate::__internal::cdk::inspect_message]
         fn canic_inspect_message() {
             __canic_inspect_root_update_message();
@@ -480,7 +480,7 @@ macro_rules! __canic_start_ingress_payload_inspect {
     (fleet_coordinator) => {
         #[doc(hidden)]
         const __CANIC_VARIANT_PAYLOAD_METHODS: &[&str] =
-            &[$crate::__internal::core::protocol::CANIC_COORDINATOR_COMMAND];
+            &[$crate::__internal::contracts::protocol::CANIC_COORDINATOR_COMMAND];
         #[$crate::__internal::cdk::inspect_message]
         fn canic_inspect_message() {
             __canic_inspect_fleet_coordinator_update_message();
@@ -497,7 +497,7 @@ macro_rules! __canic_start_ingress_payload_inspect {
     (wasm_store) => {
         #[doc(hidden)]
         const __CANIC_VARIANT_PAYLOAD_METHODS: &[&str] =
-            &[$crate::__internal::core::protocol::CANIC_WASM_STORE_COMMAND];
+            &[$crate::__internal::contracts::protocol::CANIC_WASM_STORE_COMMAND];
         #[$crate::__internal::cdk::inspect_message]
         fn canic_inspect_message() {
             __canic_inspect_wasm_store_update_message();
@@ -627,7 +627,7 @@ macro_rules! start {
 
         #[cfg(not(canic_is_root))]
         $crate::__canic_start_nonroot_lifecycle_core!(
-            $crate::__internal::core::ids::CanisterRole::from(env!("CANIC_CANISTER_ROLE"))
+            $crate::__internal::contracts::ids::CanisterRole::from(env!("CANIC_CANISTER_ROLE"))
             $(, argument_limits = $argument_limits)?
             $(, lifecycle_participant(
                 init = $lifecycle_init,
@@ -681,7 +681,7 @@ macro_rules! start_local {
         #[cfg(canic_is_root)]
         compile_error!("canic::start_local!() cannot be used for root canisters; use canic::start!()");
         $crate::__canic_start_local_lifecycle_core!(
-            $crate::__internal::core::ids::CanisterRole::from(env!("CANIC_CANISTER_ROLE"))
+            $crate::__internal::contracts::ids::CanisterRole::from(env!("CANIC_CANISTER_ROLE"))
             $(, argument_limits = $argument_limits)?
             $(, lifecycle_participant(
                 init = $lifecycle_init,

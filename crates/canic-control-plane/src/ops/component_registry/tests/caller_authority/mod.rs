@@ -9,13 +9,13 @@ use crate::{
         CallerJournalKey, CallerJournalPhase, CallerJournalRowRecord, CallerLifecycleScope,
     },
 };
-use canic_core::{
-    control_plane_support::ops::caller_authority::CallerAuthorityOps,
+use canic_contracts::{
     dto::caller_authority::{
         CallerAuthorityChange, CallerAuthorityPhase, CallerAuthorityReceipt, CallerAuthorityStatus,
     },
     ids::{CallerInstallation, CallerReceiverAuthority, CallerRootAuthority},
 };
+use canic_core::control_plane_support::ops::caller_authority::CallerAuthorityOps;
 
 pub(super) fn assert_current_child_runtime_uses_registered_allocation(
     original: &RootComponentRegistryData,
@@ -89,7 +89,7 @@ fn plan(authority: CallerReceiverAuthority) -> CallerReceiverPlan {
 
 fn status(authority: CallerReceiverAuthority) -> CallerAuthorityStatus {
     CallerAuthorityStatus {
-        readiness: canic_core::dto::caller_authority::CallerAuthorityReadiness::FrameworkReady,
+        readiness: canic_contracts::dto::caller_authority::CallerAuthorityReadiness::FrameworkReady,
         authority,
         generation: 0,
         open: false,
@@ -103,9 +103,9 @@ fn status(authority: CallerReceiverAuthority) -> CallerAuthorityStatus {
 
 fn assert_conflict(error: InternalError) {
     assert_eq!(
-        canic_core::dto::error::Error::from(error),
-        canic_core::dto::error::Error::from_registered(
-            canic_core::diagnostics::codes::STATE_CONFLICT
+        canic_contracts::dto::error::Error::from(error),
+        canic_contracts::dto::error::Error::from_registered(
+            canic_contracts::diagnostics::codes::STATE_CONFLICT
         )
     );
 }

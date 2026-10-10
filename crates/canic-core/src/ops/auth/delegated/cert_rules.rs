@@ -125,12 +125,10 @@ pub fn validate_cert_issuance_rules(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        dto::auth::{
-            DelegatedRoleGrant, DelegationAudience, IssuerProofAlgorithm, IssuerProofBinding,
-        },
-        ids::CanisterRole,
+    use crate::dto::auth::{
+        DelegatedRoleGrant, DelegationAudience, IssuerProofAlgorithm, IssuerProofBinding,
     };
+    use canic_contracts::ids::CanisterRole;
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])

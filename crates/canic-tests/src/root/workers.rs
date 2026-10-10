@@ -1,32 +1,16 @@
 // Category C - Artifact / deployment test (embedded config).
 // This test relies on embedded production config by design.
 
-use std::time::Duration;
-
-use candid::{CandidType, Deserialize, Principal};
-use canic::{
-    Error,
-    dto::{
-        canister::CanisterInfo,
-        page::{Page, PageRequest},
-    },
-    protocol,
-};
+use candid::Principal;
+use canic::{Error, dto::page::PageRequest, protocol};
+use canic_contracts::dto::wire::projection::current_inventory::ChildrenStatusRequest as CanisterStatusRequest;
+use canic_contracts::dto::wire::projection::current_inventory::ChildrenStatusResponse as CanisterStatusResponse;
 use canic_testing_internal::pic::{CanicPicExt, report_canister_diagnostics};
 use ic_testkit::pic::{CandidCallExt, PocketIc};
+use std::time::Duration;
 
 const TC: u128 = 1_000_000_000_000;
 const DEFAULT_FUNDING_COOLDOWN_SECS: u64 = 60;
-
-#[derive(CandidType)]
-enum CanisterStatusRequest {
-    Children(PageRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum CanisterStatusResponse {
-    Children(Page<CanisterInfo>),
-}
 
 /// Create a worker canister via the given hub canister.
 pub fn create_worker(

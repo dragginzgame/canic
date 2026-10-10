@@ -8,11 +8,7 @@ use crate::view::{
     fleet_registry_mirror::ValidatedRootFleetRegistryMirrorView,
     fleet_service_peer::FleetServicePeerRequesterView,
 };
-use canic_core::{
-    control_plane_support::{
-        config::{ComponentProvisioningGrant, ComponentTopology},
-        error::InternalError,
-    },
+use canic_contracts::{
     dto::{
         component_registry::FleetServiceComponentRequester,
         fleet_registry::{
@@ -21,6 +17,10 @@ use canic_core::{
         },
     },
     ids::{ComponentBinding, ComponentSpecId, FleetServiceId, FleetSubnetRootBinding},
+};
+use canic_core::control_plane_support::{
+    config::{ComponentProvisioningGrant, ComponentTopology},
+    error::InternalError,
 };
 
 ///
@@ -42,7 +42,7 @@ impl FleetServicePeerOps {
     ) -> Result<FleetServicePeerRequesterView, InternalError> {
         if mirror.root_entry.status != FleetSubnetRootStatus::Active {
             return Err(InternalError::public(
-                canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+                canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
             ));
         }
         let registry = &mirror.active.snapshot.registry;
@@ -55,7 +55,7 @@ impl FleetServicePeerOps {
         let (service, member) = exact_registry_service_caller(&registry.services, caller)?;
         if &service.service != expected_service {
             return Err(InternalError::public(
-                canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+                canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
             ));
         }
         let owner =
@@ -68,7 +68,7 @@ impl FleetServicePeerOps {
         .all(|valid| valid);
         if !owner_is_remote_and_active {
             return Err(InternalError::public(
-                canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+                canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
             ));
         }
         let admission = owner
@@ -153,7 +153,7 @@ fn exact_registry_service_caller(
             .map(move |member| (service, member))
     });
     let member = candidates.next().ok_or_else(|| {
-        InternalError::public(canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
+        InternalError::public(canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
     })?;
     if candidates.next().is_some() {
         return Err(InternalError::invariant());
@@ -176,7 +176,7 @@ fn exact_service_member_root(
 }
 
 fn root_binding(
-    authority: &canic_core::ids::FleetRegistryAuthority,
+    authority: &canic_contracts::ids::FleetRegistryAuthority,
     root: &FleetSubnetRootEntry,
 ) -> FleetSubnetRootBinding {
     FleetSubnetRootBinding {
@@ -191,11 +191,11 @@ fn root_binding(
 }
 
 fn component_binding(
-    authority: &canic_core::ids::FleetRegistryAuthority,
+    authority: &canic_contracts::ids::FleetRegistryAuthority,
     service: &FleetServiceBinding,
     member: &FleetServiceComponentBinding,
     root: &FleetSubnetRootEntry,
-    admission: &canic_core::ids::ComponentSpecAdmission,
+    admission: &canic_contracts::ids::ComponentSpecAdmission,
 ) -> ComponentBinding {
     ComponentBinding {
         authority: authority.clone(),
@@ -217,11 +217,8 @@ fn component_binding(
 mod tests {
     use super::*;
     use crate::view::fleet_registry_mirror::RootFleetRegistryActiveView;
-    use canic_core::{
-        cdk::types::Cycles,
-        control_plane_support::config::{
-            ConfigModel, FleetServiceMemberPurpose, FleetServicePlacementPolicy,
-        },
+    use canic_contracts::{
+        cycles::Cycles,
         dto::fleet_registry::{
             FleetDirectoryProvenance, FleetDirectoryService, FleetDirectoryServiceComponent,
             FleetDirectorySnapshot, FleetRegistry, FleetRegistryManifest,
@@ -234,6 +231,9 @@ mod tests {
             FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest,
             SubnetId,
         },
+    };
+    use canic_core::control_plane_support::config::{
+        ConfigModel, FleetServiceMemberPurpose, FleetServicePlacementPolicy,
     };
 
     const CONFIG: &str = r#"
@@ -463,11 +463,11 @@ mod tests {
             requester_root.fleet_subnet_root,
             1,
         );
-        let group_placement = canic_core::ids::ComponentGroupPlacementId {
+        let group_placement = canic_contracts::ids::ComponentGroupPlacementId {
             deployment: "project_hubs".parse().expect("deployment ID"),
             ordinal: 0,
         };
-        let member_path = canic_core::ids::ComponentGroupMemberPath::try_from(vec![
+        let member_path = canic_contracts::ids::ComponentGroupMemberPath::try_from(vec![
             "hub".parse().expect("member ID"),
         ])
         .expect("member path");

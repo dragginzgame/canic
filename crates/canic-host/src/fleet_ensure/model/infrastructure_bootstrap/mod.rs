@@ -8,7 +8,7 @@ use crate::fleet_ensure::model::capacity_import::{
     CapacityImportDisposition, survey::CapacityImportSampleRecord,
 };
 use candid::Principal;
-use canic_core::ids::SubnetId;
+use canic_contracts::ids::SubnetId;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 

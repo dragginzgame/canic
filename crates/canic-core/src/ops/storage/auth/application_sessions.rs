@@ -903,11 +903,11 @@ pub fn invalidate_indexes() {
 mod tests {
     use super::*;
     use crate::{
-        ids::CanisterRole,
         model::auth::application_authorization::ApplicationScope,
         storage::stable::auth::LocalApplicationAuthorizationStateData,
         test::{seams, support::fleet_key},
     };
+    use canic_contracts::ids::CanisterRole;
 
     struct StateGuard(LocalApplicationAuthorizationStateData);
 

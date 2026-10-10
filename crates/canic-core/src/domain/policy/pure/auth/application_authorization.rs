@@ -4,6 +4,8 @@
 //! Does not own: caller/time acquisition, storage, proof cryptography, serialization, or mutation.
 //! Boundary: access and workflow supply model values; policy returns value-only decisions.
 
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
+use crate::model::auth::application_authorization::LocalApplicationAuthorityBinding;
 use crate::{
     domain::value::Principal,
     model::auth::application_authorization::{
@@ -15,10 +17,8 @@ use crate::{
     },
 };
 
-#[cfg(any(test, feature = "auth-local-application-authorization"))]
-use crate::model::auth::application_authorization::LocalApplicationAuthorityBinding;
-
 /// Stable-binding action required by one locally activated protected-policy change.
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ApplicationAuthorityBindingTransition {
     #[cfg(any(test, feature = "auth-local-application-authorization"))]
@@ -364,9 +364,9 @@ pub const fn decide_application_session_admission(
 mod tests {
     use super::*;
     use crate::{
-        ids::CanisterRole, model::auth::application_authorization::ApplicationScope,
-        test::support::fleet_key,
+        model::auth::application_authorization::ApplicationScope, test::support::fleet_key,
     };
+    use canic_contracts::ids::CanisterRole;
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])

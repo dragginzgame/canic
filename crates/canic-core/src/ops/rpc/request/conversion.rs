@@ -7,6 +7,7 @@
 use crate::dto::rpc::{Request, RootRequestMetadata};
 
 /// Replay metadata extracted from a boundary request before capability projection.
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::ops::rpc) struct CapabilitySourceMetadata {
     pub(in crate::ops::rpc) request_id: [u8; 32],
@@ -49,8 +50,8 @@ mod tests {
             AcknowledgePlacementReceiptRequest, CreateCanisterRequest, CyclesRequest,
             RecycleCanisterRequest,
         },
-        ids::CanisterRole,
     };
+    use canic_contracts::ids::CanisterRole;
 
     fn metadata(id: u8) -> RootRequestMetadata {
         RootRequestMetadata {

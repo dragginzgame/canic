@@ -12,7 +12,7 @@ use std::{
     path::Path,
 };
 
-use ic_host_fs::durable::{NamedWriteError, PublicationMode, WriteOptions, write_typed_with};
+use ic_host_fs::durable::{NamedWriteError, PublicationMode, WriteOptions, write_with};
 use serde::{Serialize, de::DeserializeOwned};
 
 pub fn write_json_durable<T>(path: &Path, value: &T) -> Result<(), PersistenceError>
@@ -54,7 +54,7 @@ fn publish_bytes_at_barriers(
     mut barrier: impl FnMut(DurableWriteBarrier),
 ) -> io::Result<()> {
     // Preserve the existing umask-governed mode; layout custody remains local.
-    write_typed_with(
+    write_with(
         path,
         WriteOptions {
             mode,

@@ -1,9 +1,9 @@
 use super::*;
-use crate::ids::{
+use candid::Principal;
+use canic_contracts::ids::{
     AppId, CanonicalNetworkId, ComponentInstanceId, FleetBinding, FleetCoordinatorBinding, FleetId,
     FleetKey, FleetRegistryAuthority, SubnetId,
 };
-use candid::Principal;
 
 fn principal(byte: u8) -> Principal {
     Principal::from_slice(&[byte; 29])

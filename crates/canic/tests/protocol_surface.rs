@@ -1,55 +1,61 @@
-use std::collections::{BTreeSet, HashSet};
-
-use std::fmt::Debug;
-use std::fs;
-use std::path::{Path, PathBuf};
-
-use candid::types::internal::TypeContainer;
-use candid::types::{Type, TypeEnv, TypeInner};
-use candid::{Principal, decode_one, encode_one};
+use candid::{
+    Principal, decode_one, encode_one,
+    types::{Type, TypeEnv, TypeInner, internal::TypeContainer},
+};
 use candid_parser::utils::CandidSource;
-use canic::dto::{component_provisioning, fleet_admission, fleet_funding, fleet_registry, role};
-use canic::ids;
 use canic::{
     api::protocol::icrc21::Icrc21Dispatcher,
-    dto::auth::{
-        ActiveDelegationProofStatus, ActiveDelegationProofStatusResponse, ChainKeyAlgorithm,
-        ChainKeyBatchHeaderV1, ChainKeyBatchWitnessStepV1, ChainKeyBatchWitnessV1,
-        ChainKeyDelegationCertV1, ChainKeyKeyId, ChainKeyRootSignatureV1, DelegatedRoleGrant,
-        DelegationAudience, DelegationCert, DelegationProof, IcChainKeyBatchSignatureProofV1,
-        IssuerProofAlgorithm, IssuerProofBinding, RootDelegationProofBatchProof,
-        RootIssuerConfigureRequest, RootIssuerConfigureResponse, RootIssuerPolicyView,
-        RootIssuerRenewalBatchStatus, RootIssuerRenewalBatchView, RootIssuerRenewalStateView,
-        RootIssuerRenewalStatusRequest, RootIssuerRenewalStatusResponse,
-        RootIssuerRenewalTemplateView, RootProof,
+    dto::{
+        auth::{
+            ActiveDelegationProofStatus, ActiveDelegationProofStatusResponse, ChainKeyAlgorithm,
+            ChainKeyBatchHeaderV1, ChainKeyBatchWitnessStepV1, ChainKeyBatchWitnessV1,
+            ChainKeyDelegationCertV1, ChainKeyKeyId, ChainKeyRootSignatureV1, DelegatedRoleGrant,
+            DelegationAudience, DelegationCert, DelegationProof, IcChainKeyBatchSignatureProofV1,
+            IssuerProofAlgorithm, IssuerProofBinding, RootDelegationProofBatchProof,
+            RootIssuerConfigureRequest, RootIssuerConfigureResponse, RootIssuerPolicyView,
+            RootIssuerRenewalBatchStatus, RootIssuerRenewalBatchView, RootIssuerRenewalStateView,
+            RootIssuerRenewalStatusRequest, RootIssuerRenewalStatusResponse,
+            RootIssuerRenewalTemplateView, RootProof,
+        },
+        cascade::StateSnapshotInput,
+        component_provisioning,
+        cycles::Cycles,
+        env::{EnvBootstrapArgs, EnvSnapshotResponse},
+        error::Error as CanicError,
+        fleet_activation::FleetActivationStatusResponse,
+        fleet_admission,
+        fleet_admission::{
+            FleetAdmissionPreparedProjectionStatus, FleetAdmissionProjectionPhase,
+            FleetAdmissionProjectionStatusResponse,
+        },
+        fleet_funding, fleet_registry,
+        icp_refill::{IcpRefillDryRun, IcpRefillRequest},
+        icrc21::{
+            ConsentInfo, ConsentMessage, ConsentMessageMetadata, ConsentMessageRequest,
+            ConsentMessageResponse, ConsentMessageSpec, DisplayMessageType,
+        },
+        memory::MemoryLedgerResponse,
+        page::Page,
+        role,
+        rpc::{CyclesFundingPreflightResponse, CyclesResponse, Response as RootRpcResponse},
+        runtime::{
+            CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, RecentFailure,
+            RuntimeFieldVisibility,
+        },
+        state::{FleetCommand, FleetCommandResponse, FleetMode, FleetStateResponse},
     },
-    dto::cascade::StateSnapshotInput,
-    dto::cycles::Cycles,
-    dto::env::{EnvBootstrapArgs, EnvSnapshotResponse},
-    dto::error::Error as CanicError,
-    dto::fleet_activation::FleetActivationStatusResponse,
-    dto::fleet_admission::{
-        FleetAdmissionPreparedProjectionStatus, FleetAdmissionProjectionPhase,
-        FleetAdmissionProjectionStatusResponse,
-    },
-    dto::icp_refill::{IcpRefillDryRun, IcpRefillRequest},
-    dto::icrc21::{
-        ConsentInfo, ConsentMessage, ConsentMessageMetadata, ConsentMessageRequest,
-        ConsentMessageResponse, ConsentMessageSpec, DisplayMessageType,
-    },
-    dto::memory::MemoryLedgerResponse,
-    dto::page::Page,
-    dto::rpc::{CyclesFundingPreflightResponse, CyclesResponse, Response as RootRpcResponse},
-    dto::runtime::{
-        CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, RecentFailure,
-        RuntimeFieldVisibility,
-    },
-    dto::state::{FleetCommand, FleetCommandResponse, FleetMode, FleetStateResponse},
+    ids,
     ids::{
         CanisterRole, CanonicalNetworkId, ComponentBinding, ComponentInstanceId, ComponentSpecId,
         FleetBinding, FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority,
         ManagedCanisterBinding, SubnetId,
     },
+};
+use std::{
+    collections::{BTreeSet, HashSet},
+    fmt::Debug,
+    fs,
+    path::{Path, PathBuf},
 };
 
 fn test_fleet() -> FleetKey {
@@ -295,7 +301,7 @@ fn public_error_contract_is_the_compact_nat16_hard_cut() {
         .unwrap();
     assert_candid_type::<CanicError>(&env, "Error");
     assert_candid_roundtrip(CanicError::from_registered(
-        canic_core::diagnostics::codes::REQUEST_INVALID,
+        canic_contracts::diagnostics::codes::REQUEST_INVALID,
     ));
 
     for relative_path in [
@@ -428,11 +434,18 @@ fn root_rpc_commands_without_result_data_use_unit_variants() {
 
 #[test]
 fn root_capability_surface_uses_component_registry_authority() {
+    let mut types = TypeContainer::new();
+    types.add::<canic_contracts::dto::wire::root_command::RootCommand>();
+    assert!(candid_type_matches::<
+        canic::dto::capability::RootCapabilityEnvelopeV1,
+    >(
+        &types.env,
+        &candid_field(&types.env, "RootCommand", "RespondCapability"),
+    ));
     let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
     let source = read_text(&macro_path);
     assert!(
-        source.contains("RespondCapability(::canic::dto::capability::RootCapabilityEnvelopeV1)")
-            && source.contains("if matches!(&command, RootCommand::RespondCapability(_))")
+        source.contains("if matches!(&command, RootCommand::RespondCapability(_))")
             && source.contains("RootCapabilityCallerPredicate")
             && source.contains("RootCommand::RespondCapability(envelope)")
             && source.contains("ComponentRpcApi::response_capability_v1_root(envelope)"),
@@ -557,7 +570,7 @@ fn wasm_store_exposes_cycle_history_through_observability() {
     let (env, _) = CandidSource::Text(&did).load().unwrap();
     assert!(candid_type_matches::<canic::dto::page::PageRequest>(
         &env,
-        &candid_field(&env, "ObservabilityRequest", "CycleHistory")
+        &candid_field(&env, "StoreObservabilityRequest", "CycleHistory")
     ));
 }
 
@@ -699,7 +712,7 @@ fn fleet_coordinator_candid_contains_protected_admission_and_funding_protocol_ty
     contracts!(env, role: RoleCapability);
     #[cfg(feature = "fleet-coordinator-canister")]
     assert_candid_type::<
-        canic_control_plane::dto::fleet_coordinator::FleetFundingPolicyRotationStatusResponse,
+        canic_contracts::dto::fleet_coordinator::FleetFundingPolicyRotationStatusResponse,
     >(&env, "FleetFundingPolicyRotationStatusResponse");
 }
 
@@ -950,7 +963,12 @@ fn root_delegation_commands_are_variant_owned() {
             "Root command surface lacks {variant}"
         );
     }
-    assert!(source.contains("IssuerRenewal(::canic::dto::auth::RootIssuerRenewalStatusRequest)"));
+    let mut types = TypeContainer::new();
+    types.add::<canic_contracts::dto::wire::root::RootStatusRequest>();
+    assert!(candid_type_matches::<RootIssuerRenewalStatusRequest>(
+        &types.env,
+        &candid_field(&types.env, "RootStatusRequest", "IssuerRenewal"),
+    ));
     assert!(source.contains("AuthApi::get_or_create_chain_key_delegation_proof_root"));
     assert!(source.contains("AuthApi::configure_issuer_root"));
     assert!(source.contains("AuthApi::root_issuer_renewal_status_root"));
@@ -1417,8 +1435,7 @@ fn fleet_funding_rotation_status_matches_canonical_candid_after_recovery_binding
         .clone();
     let mut rust = TypeContainer::new();
     let ty = rust
-        .add::<canic_control_plane::dto::fleet_coordinator::FleetFundingPolicyRotationStatusPhase>(
-        );
+        .add::<canic_contracts::dto::fleet_coordinator::FleetFundingPolicyRotationStatusPhase>();
     let ty = env.merge_type(rust.env, ty);
     candid::types::subtype::equal(&mut HashSet::default(), &env, &canonical, &ty)
         .expect("funding rotation status retains its canonical Candid shape");
@@ -1445,7 +1462,7 @@ fn state_cascade_store_response_matches_canonical_candid() {
         .expect("canonical Store Candid");
     let canonical = env.find_type("StoreCommandResponse").unwrap().clone();
     let mut rust = TypeContainer::new();
-    let ty = rust.add::<canic_control_plane::dto::template::StoreCommandResponse>();
+    let ty = rust.add::<canic_contracts::dto::template::StoreCommandResponse>();
     let ty = env.merge_type(rust.env, ty);
     candid::types::subtype::equal(&mut HashSet::default(), &env, &canonical, &ty)
         .expect("Store response contract equals current Rust, including cascade outcomes");
@@ -1459,8 +1476,8 @@ fn store_preparation_command_matches_canonical_candid() {
         .load()
         .expect("canonical Store Candid");
     let mut rust = TypeContainer::new();
-    let command = rust.add::<canic_control_plane::dto::template::StoreCommand>();
-    let chunk = rust.add::<canic_control_plane::dto::template::TemplateChunkInput>();
+    let command = rust.add::<canic_contracts::dto::template::StoreCommand>();
+    let chunk = rust.add::<canic_contracts::dto::template::TemplateChunkInput>();
     for (name, ty) in [("StoreCommand", command), ("TemplateChunkInput", chunk)] {
         let canonical = env.find_type(name).unwrap().clone();
         let ty = env.merge_type(rust.env.clone(), ty);

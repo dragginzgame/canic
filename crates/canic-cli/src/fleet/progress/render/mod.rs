@@ -5,7 +5,7 @@
 //! Boundary: Root counts stay distinct from Components and reviewed effects from time.
 
 use crate::support::path_stamp::utc_timestamp_ns;
-use canic_core::dto::component_provisioning::FleetComponentProvisioningPhase;
+use canic_contracts::dto::component_provisioning::FleetComponentProvisioningPhase;
 use canic_host::fleet_ensure::dto::{
     FleetComponentProgress, FleetComponentProgressState, FleetEnsureActionKind, FleetEnsurePhase,
     FleetEnsureProgress, FleetEnsureProgressState, FleetProvisioningProgress,
@@ -324,7 +324,7 @@ fn safe_text(value: &str) -> String {
 }
 
 fn pending_retry(
-    retry: canic_core::dto::component_provisioning::FleetComponentProvisioningRootFailure,
+    retry: canic_contracts::dto::component_provisioning::FleetComponentProvisioningRootFailure,
 ) -> [String; 2] {
     if let Some(origin) = retry.origin {
         let deadline = origin.retry_at_ns.map_or_else(

@@ -17,11 +17,14 @@ use crate::{
     },
     support::registry_tree::{RegistryRow, visible_rows},
 };
-use canic_core::dto::{
-    observability::{CanisterObservabilityRequest, CanisterObservabilityResponse},
-    page::PageRequest,
+use canic_contracts::{
+    dto::{
+        observability::{CanisterObservabilityRequest, CanisterObservabilityResponse},
+        page::PageRequest,
+    },
+    ids::CanisterRole,
 };
-use canic_core::{ids::CanisterRole, role_contract::RoleCapabilityKey};
+use canic_core::role_contract::RoleCapabilityKey;
 use canic_host::{
     fleet_ensure::{CurrentFleetResolution, resolve_current_fleet},
     icp::IcpCli,
@@ -805,7 +808,7 @@ mod tests {
         let error = CycleObservationError::Observability(FleetObservabilityError::Protocol(
             CanisterProtocolError::Response {
                 canister: candid::Principal::management_canister(),
-                method: canic_core::protocol::CANIC_ROOT_COMMAND,
+                method: canic_contracts::protocol::CANIC_ROOT_COMMAND,
                 source: canic_host::icp::decode_json_result_response::<u64>("{}").unwrap_err(),
             },
         ));

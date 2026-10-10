@@ -1,7 +1,7 @@
 //! Read-only projections used while assembling a frontend handoff.
 
 use crate::{frontend::model::FrontendManifestRecord, registry::RegistryEntry};
-use canic_core::ids::CanonicalNetworkId;
+use canic_contracts::ids::CanonicalNetworkId;
 use std::collections::BTreeMap;
 
 ///

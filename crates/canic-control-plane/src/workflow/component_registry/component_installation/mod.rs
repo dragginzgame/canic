@@ -32,12 +32,12 @@ pub(super) fn advance_creation(
         return claim_component_pool_asset(operation_id, plan, pool_claim, canister);
     }
     Err(InternalError::public(
-        canic_core::diagnostics::codes::CAPACITY_INSUFFICIENT,
+        canic_contracts::diagnostics::codes::CAPACITY_INSUFFICIENT,
     ))
 }
 
 pub(super) fn advance_child_creation(
-    component: canic_core::ids::ComponentInstanceId,
+    component: canic_contracts::ids::ComponentInstanceId,
     operation_id: [u8; 32],
     allocation: RootComponentChildAllocationView,
     plan: RootComponentCreationPlan,
@@ -66,7 +66,7 @@ pub(super) fn advance_child_creation(
         );
     }
     Err(InternalError::public(
-        canic_core::diagnostics::codes::CAPACITY_INSUFFICIENT,
+        canic_contracts::diagnostics::codes::CAPACITY_INSUFFICIENT,
     ))
 }
 
@@ -102,7 +102,7 @@ fn claim_component_pool_asset(
 }
 
 fn claim_component_child_pool_asset(
-    component: canic_core::ids::ComponentInstanceId,
+    component: canic_contracts::ids::ComponentInstanceId,
     operation_id: [u8; 32],
     plan: RootComponentCreationPlan,
     claim: CanisterPoolClaimKey,
@@ -161,7 +161,7 @@ fn reconcile_component_pool_claim(
 }
 
 fn reconcile_component_child_pool_claim(
-    component: canic_core::ids::ComponentInstanceId,
+    component: canic_contracts::ids::ComponentInstanceId,
     operation_id: [u8; 32],
     allocation: RootComponentChildAllocationView,
 ) -> Result<RootComponentChildAllocationView, InternalError> {
@@ -332,7 +332,7 @@ pub(super) struct ComponentChildInstallPlan {
 }
 
 pub(super) async fn component_install_plan(
-    root: &canic_core::ids::FleetSubnetRootBinding,
+    root: &canic_contracts::ids::FleetSubnetRootBinding,
     store: &RootStoreBootstrapResponse,
     allocation: &RootComponentAllocationView,
 ) -> Result<ComponentInstallPlan, InternalError> {
@@ -340,7 +340,7 @@ pub(super) async fn component_install_plan(
 }
 
 pub(super) async fn component_install_plan_with_deployment(
-    root: &canic_core::ids::FleetSubnetRootBinding,
+    root: &canic_contracts::ids::FleetSubnetRootBinding,
     store: &RootStoreBootstrapResponse,
     allocation: &RootComponentAllocationView,
     deployment: Option<ProtectedComponentDeployment>,
@@ -437,7 +437,7 @@ pub(super) async fn component_install_plan_with_deployment(
 async fn component_module_source(
     store: &RootStoreBootstrapResponse,
     allocation: &RootComponentAllocationView,
-    artifact: &canic_core::dto::root_store::RootStoreCatalogEntry,
+    artifact: &canic_contracts::dto::root_store::RootStoreCatalogEntry,
 ) -> Result<ApprovedModuleSource, InternalError> {
     let source = resolved_root_store_module_source(
         store.wasm_store,
@@ -459,7 +459,7 @@ async fn component_module_source(
 }
 
 pub(super) async fn child_component_install_plan(
-    root: &canic_core::ids::FleetSubnetRootBinding,
+    root: &canic_contracts::ids::FleetSubnetRootBinding,
     store: &RootStoreBootstrapResponse,
     parent: &ManagedCanisterBinding,
     allocation: &RootComponentChildAllocationView,
@@ -491,7 +491,7 @@ pub(super) async fn child_component_install_plan(
         ManagedCanisterBinding::Component(binding) => binding.clone(),
         ManagedCanisterBinding::ComponentChild(binding) => binding.component.clone(),
     };
-    let binding = canic_core::ids::ComponentChildBinding {
+    let binding = canic_contracts::ids::ComponentChildBinding {
         component,
         parent_canister_id: allocation.parent_canister_id,
         role: allocation.child_role.clone(),
@@ -562,7 +562,7 @@ pub(super) async fn child_component_install_plan(
     reason = "one workflow keeps every durable install and uncertain-outcome phase explicit"
 )]
 pub(super) async fn advance_child_install(
-    component: canic_core::ids::ComponentInstanceId,
+    component: canic_contracts::ids::ComponentInstanceId,
     operation_id: [u8; 32],
     allocation: RootComponentChildAllocationView,
     plan: ComponentChildInstallPlan,
@@ -672,7 +672,7 @@ pub(super) async fn advance_child_install(
 }
 
 async fn perform_child_install(
-    component: canic_core::ids::ComponentInstanceId,
+    component: canic_contracts::ids::ComponentInstanceId,
     operation_id: [u8; 32],
     plan: &ComponentChildInstallPlan,
     permit: &canic_core::control_plane_support::ops::cost_guard::CostGuardPermit,
@@ -708,7 +708,7 @@ async fn perform_child_install(
 }
 
 async fn verify_and_mark_child_installed(
-    component: canic_core::ids::ComponentInstanceId,
+    component: canic_contracts::ids::ComponentInstanceId,
     operation_id: [u8; 32],
     _installed: RootComponentChildAllocationView,
     plan: &ComponentChildInstallPlan,

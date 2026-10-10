@@ -1,4 +1,4 @@
-use candid::{CandidType, Decode, Deserialize, Encode, Principal};
+use candid::{CandidType, Decode, Encode, Principal};
 use canic::{
     Error,
     dto::{
@@ -6,10 +6,9 @@ use canic::{
             ApplicationSessionAuditResponse, ApplicationSessionCommand,
             ApplicationSessionCommandResponse, ApplicationSessionRequest, ApplicationSessionStatus,
             ApplicationSessionView, AuthRequestMetadata, DelegatedToken, DelegatedTokenGetRequest,
-            DelegatedTokenPrepareRequest, DelegatedTokenPrepareResponse, DelegationAudience,
-            InactiveApplicationSession, RootIssuerConfigureRequest, RootIssuerConfigureResponse,
-            RootIssuerRenewalBatchStatus, RootIssuerRenewalStatusRequest,
-            RootIssuerRenewalStatusResponse,
+            DelegatedTokenPrepareRequest, DelegationAudience, InactiveApplicationSession,
+            RootIssuerConfigureRequest, RootIssuerRenewalBatchStatus,
+            RootIssuerRenewalStatusRequest,
         },
         fleet_admission::{FleetAdmissionProjectionPhase, FleetAdmissionProjectionStatusResponse},
         metrics::{MetricEntry, MetricValue, MetricsKind, QueryPerfSample},
@@ -19,6 +18,16 @@ use canic::{
     ids::{CanisterRole, FleetKey, cap},
     protocol,
 };
+use canic_contracts::dto::wire::projection::admission::RemoteRootStatusRequest as FleetAdmissionManagedStatusRequest;
+use canic_contracts::dto::wire::projection::auth_status::RootStatusResponse;
+use canic_contracts::dto::wire::projection::fixture_baseline::ManagedAdmissionStatusResponseFragment as FleetAdmissionManagedStatusResponse;
+use canic_contracts::dto::wire::projection::fixture_issuer_bootstrap::RootCommand;
+use canic_contracts::dto::wire::projection::fixture_issuer_bootstrap::RootCommandResponse;
+use canic_contracts::dto::wire::projection::fixture_issuer_bootstrap::RootStatusRequest;
+use canic_contracts::dto::wire::projection::fixture_native_delegation::CanisterCommand;
+use canic_contracts::dto::wire::projection::fixture_native_delegation::CanisterCommandResponse;
+use canic_contracts::dto::wire::projection::fixture_native_delegation::CanisterStatusRequest;
+use canic_contracts::dto::wire::projection::fixture_native_delegation::CanisterStatusResponse;
 use canic_core::cdk::structures::{
     VectorMemory,
     cell::Cell,
@@ -35,7 +44,6 @@ use ic_testkit::pocket_ic::{PocketIc, common::rest::BlobCompression};
 use serde::Serialize;
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
-const AUTH_STATE_MEMORY_ID: u8 = 34;
 const MAX_ACTIVE_APPLICATION_SESSIONS: usize = 2_048;
 const MAX_APPLICATION_REPLAY_RECORDS: usize = 4_096;
 const MAX_APPLICATION_SESSION_CLEANUP_REMOVALS: u64 = 128;
@@ -62,72 +70,6 @@ fn delegated_grant_scopes() -> Vec<String> {
     let mut scopes = maximum_application_scopes();
     scopes.push(cap::VERIFY.to_string());
     scopes
-}
-
-#[derive(CandidType)]
-enum RootCommand {
-    ConfigureIssuer(RootIssuerConfigureRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum RootCommandResponse {
-    ConfigureIssuer(RootIssuerConfigureResponse),
-}
-
-#[derive(CandidType)]
-enum RootStatusRequest {
-    IssuerRenewal(RootIssuerRenewalStatusRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum RootStatusResponse {
-    IssuerRenewal(RootIssuerRenewalStatusResponse),
-}
-
-#[derive(CandidType)]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "the fixture mirrors the exact generated managed command Candid"
-)]
-enum CanisterCommand {
-    ApplicationSession(ApplicationSessionCommand),
-    PrepareDelegatedToken(DelegatedTokenPrepareRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum CanisterCommandResponse {
-    ApplicationSession(ApplicationSessionCommandResponse),
-    PrepareDelegatedToken(DelegatedTokenPrepareResponse),
-}
-
-#[derive(CandidType)]
-enum CanisterStatusRequest {
-    ApplicationSession,
-    ApplicationSessionAudit(PageRequest),
-    DelegatedToken(DelegatedTokenGetRequest),
-    Metrics(MetricsStatusRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "the fixture mirrors the exact generated managed status Candid"
-)]
-enum CanisterStatusResponse {
-    ApplicationSession(ApplicationSessionStatus),
-    ApplicationSessionAudit(ApplicationSessionAuditResponse),
-    DelegatedToken(DelegatedToken),
-    Metrics(Page<MetricEntry>),
-}
-
-#[derive(CandidType)]
-enum FleetAdmissionManagedStatusRequest {
-    Admission(PageRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum FleetAdmissionManagedStatusResponse {
-    Admission(FleetAdmissionProjectionStatusResponse),
 }
 
 #[derive(CandidType, Clone, Copy)]
@@ -226,7 +168,13 @@ fn selected_issuer_corruption_rejects_same_release_restore() {
     let stable_memory: VectorMemory =
         Rc::new(RefCell::new(fixture.pic().get_stable_memory(issuer)));
     let manager = MemoryManager::init(stable_memory.clone());
-    let mut issuer_cell = Cell::<Vec<u8>, _>::init(manager.get(MemoryId::new(66)), Vec::new());
+    let mut issuer_cell = Cell::<Vec<u8>, _>::init(
+        manager.get(MemoryId::new(allocated_memory_id(
+            &manager,
+            "canic.core.auth.delegated_token_issuer.state.v1",
+        ))),
+        Vec::new(),
+    );
     issuer_cell.set(vec![0xff]);
     drop(issuer_cell);
     drop(manager);
@@ -1373,7 +1321,10 @@ fn inject_application_authorization_state(
 
     let stable_memory: VectorMemory = Rc::new(RefCell::new(pic.get_stable_memory(canister_id)));
     let manager = MemoryManager::init(stable_memory.clone());
-    let auth_memory = manager.get(MemoryId::new(AUTH_STATE_MEMORY_ID));
+    let auth_memory = manager.get(MemoryId::new(allocated_memory_id(
+        &manager,
+        "canic.core.auth.local_application_authorization.state.v1",
+    )));
     let mut auth_cell = Cell::<Vec<u8>, _>::init(auth_memory, Vec::new());
     let mut auth_state: ciborium::Value =
         ciborium::from_reader(auth_cell.get().as_slice()).expect("decode current auth-state CBOR");
@@ -1413,7 +1364,13 @@ fn inject_application_authorization_state(
 fn issuer_stable_authority(pic: &PocketIc, issuer: Principal) -> ciborium::Value {
     let memory: VectorMemory = Rc::new(RefCell::new(pic.get_stable_memory(issuer)));
     let manager = MemoryManager::init(memory);
-    let cell = Cell::<Vec<u8>, _>::init(manager.get(MemoryId::new(66)), Vec::new());
+    let cell = Cell::<Vec<u8>, _>::init(
+        manager.get(MemoryId::new(allocated_memory_id(
+            &manager,
+            "canic.core.auth.delegated_token_issuer.state.v1",
+        ))),
+        Vec::new(),
+    );
     let state: ciborium::Value =
         ciborium::from_reader(cell.get().as_slice()).expect("selected issuer authority");
     let ciborium::Value::Map(fields) = &state else {
@@ -1622,4 +1579,24 @@ fn report_proof_provisioning_diagnostics(
         fixture.root,
         "native-agent issuer proof provisioning",
     );
+}
+
+// Stable editors follow protected current ledger bindings, never assumed IDs.
+fn allocated_memory_id(manager: &MemoryManager<VectorMemory>, key: &str) -> u8 {
+    let record = ic_memory::decode_stable_cell_ledger_record_from_memory(
+        &manager.get(MemoryId::new(ic_memory::MEMORY_MANAGER_LEDGER_ID)),
+    )
+    .expect("current protected ledger envelope");
+    let recovered = record
+        .store()
+        .recover()
+        .expect("current committed allocation authority");
+    recovered
+        .ledger()
+        .records()
+        .iter()
+        .find(|record| record.stable_key().as_str() == key)
+        .expect("fixture allocation exists")
+        .slot()
+        .id()
 }

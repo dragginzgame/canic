@@ -1,6 +1,7 @@
 use super::*;
 use crate::release_set::AppConfigSnapshot;
-use canic_core::{ids::CanisterRole, role_contract::RoleContractFinding};
+use canic_contracts::ids::CanisterRole;
+use canic_core::role_contract::RoleContractFinding;
 use std::time::Instant;
 
 #[test]

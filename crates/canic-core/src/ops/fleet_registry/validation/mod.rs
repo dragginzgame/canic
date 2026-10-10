@@ -10,20 +10,21 @@ use crate::{
         FleetComponentSpecEntry, FleetRegistry, FleetServiceBinding, FleetServiceComponentBinding,
         FleetServiceMode, FleetSubnetRootEntry, FleetSubnetRootStatus,
     },
-    ids::{
-        AppId, CanonicalNetworkId, ComponentInstanceId, FleetAdmissionPolicy,
-        FleetRegistryAuthority, FleetServiceId,
+    model::{
+        fleet_admission_policy::validate_initial_fleet_admission_generation,
+        fleet_funding_policy::validate_fleet_subnet_root_funding_authority,
     },
-    model::fleet_admission_policy::validate_initial_fleet_admission_generation,
-    model::fleet_funding_policy::validate_fleet_subnet_root_funding_authority,
     ops::{
         fleet_admission_policy::validate_installed_fleet_admission_policy,
         fleet_registry::FleetRegistryOpsError,
     },
 };
-use std::collections::{BTreeMap, BTreeSet};
-
 use candid::Principal;
+use canic_contracts::ids::{
+    AppId, CanonicalNetworkId, ComponentInstanceId, FleetAdmissionPolicy, FleetRegistryAuthority,
+    FleetServiceId,
+};
+use std::collections::{BTreeMap, BTreeSet};
 
 pub(super) fn compile_genesis(
     configured_app: &AppId,

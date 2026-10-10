@@ -139,9 +139,9 @@ mod tests {
             DelegationProof, IcCanisterSignatureProofV1, IssuerProof, IssuerProofAlgorithm,
             IssuerProofBinding,
         },
-        ids::CanisterRole,
         ops::auth::delegated::canonical::{cert_hash, issuer_proof_binding_hash},
     };
+    use canic_contracts::ids::CanisterRole;
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])

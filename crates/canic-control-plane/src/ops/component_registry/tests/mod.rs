@@ -17,15 +17,8 @@ use crate::{
         RootFleetSubnetStoreDeletionEvidence, RootFleetSubnetStoreReclamationEvidence,
     },
 };
-use canic_core::{
-    cdk::types::Cycles,
-    control_plane_support::{
-        config::schema::ComponentChildKind,
-        policy::{
-            component_allocation::TopLevelComponentAllocationDecision,
-            component_child_allocation::ComponentChildAllocationDecision,
-        },
-    },
+use canic_contracts::{
+    cycles::Cycles,
     dto::{
         component_registry::{ComponentProvisioningOrigin, ComponentRuntimeActivationEvidence},
         fleet_registry::{
@@ -42,6 +35,13 @@ use canic_core::{
         ComponentSpecAdmission, ComponentTopologyDigest, CyclesFundingBudget, FleetBinding,
         FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority, FleetSubnetRootLimits,
         ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
+    },
+};
+use canic_core::control_plane_support::{
+    config::schema::ComponentChildKind,
+    policy::{
+        component_allocation::TopLevelComponentAllocationDecision,
+        component_child_allocation::ComponentChildAllocationDecision,
     },
 };
 
@@ -594,7 +594,7 @@ fn assert_root_draining_is_durable(
         .expect_err("corrupt retained reservation must fail closed");
     assert_eq!(
         invalid.code(),
-        canic_core::diagnostics::codes::STATE_INVALID
+        canic_contracts::diagnostics::codes::STATE_INVALID
     );
     RootComponentRegistryStore::import(durable);
     ComponentRegistryOps::root_draining([15; 32])
@@ -630,7 +630,7 @@ fn assert_root_draining_allocation_fence(
         .expect_err("draining root must reject a new top-level allocation");
     assert_eq!(
         error.public_error().code(),
-        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     assert_eq!(RootComponentRegistryStore::export(), before_rejection);
 }
@@ -708,7 +708,7 @@ fn empty_root_final_inventory_is_exact_durable_and_response_idempotent() {
         fleet_subnet_root: root.fleet_subnet_root,
         wasm_store: store_pid,
         release_set,
-        catalog: vec![canic_core::dto::root_store::RootStoreCatalogEntry {
+        catalog: vec![canic_contracts::dto::root_store::RootStoreCatalogEntry {
             role: CanisterRole::new("example_component"),
             raw_module_hash: [14; 32],
             candid_sha256: [15; 32],
@@ -1195,8 +1195,8 @@ fn assert_root_deletion_preparation_is_exact(
 
 fn final_inventory_dto(
     inventory: &RootFleetSubnetFinalInventoryView,
-) -> canic_core::dto::fleet_subnet_root::FleetSubnetRootFinalInventoryResponse {
-    canic_core::dto::fleet_subnet_root::FleetSubnetRootFinalInventoryResponse {
+) -> canic_contracts::dto::fleet_subnet_root::FleetSubnetRootFinalInventoryResponse {
+    canic_contracts::dto::fleet_subnet_root::FleetSubnetRootFinalInventoryResponse {
         operation_id: inventory.operation_id,
         fleet_subnet_root: inventory.fleet_subnet_root,
         placement_subnet: inventory.placement_subnet,
@@ -2658,7 +2658,7 @@ fn grouped_component_rejects_ordinary_draining_before_mutation() {
 
     assert_eq!(
         error.public_error().code(),
-        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     assert_eq!(RootComponentRegistryStore::export(), before);
     RootComponentRegistryStore::import(RootComponentRegistryData::default());
@@ -5878,7 +5878,7 @@ fn root_binding() -> FleetSubnetRootBinding {
             maximum_registry_bytes: 16_777_216,
             maximum_wasm_store_bytes: 268_435_456,
             maximum_group_placements: 16,
-            canister_pool: canic_core::ids::FleetSubnetCanisterPoolConfig {
+            canister_pool: canic_contracts::ids::FleetSubnetCanisterPoolConfig {
                 minimum_size: 1,
                 maximum_size: 10,
                 canister_cycles: Cycles::new(5_000_000_000_000),

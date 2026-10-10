@@ -19,8 +19,6 @@ use crate::{
     network::{frontend_root_key, resolve_canonical_network_id_from_root},
     protocol_binding::resolve_registry_protocol_binding,
 };
-use ic_host_fs::read::read_file_no_follow;
-
 use candid::TypeEnv;
 use candid_parser::{
     IDLProg,
@@ -28,6 +26,7 @@ use candid_parser::{
     syntax::{Dec, IDLMergedProg},
 };
 use canic_core::cdk::utils::hash::{hex_bytes, sha256_hex};
+use ic_host_fs::read::read_file_no_follow;
 use std::{collections::BTreeMap, path::Path};
 
 pub use bundle::{manifest_digest, publish_bundle, verify_bundle};
@@ -60,8 +59,8 @@ pub fn authority(
     if registry.fleet_subnet_roots.iter().any(|root| {
         !matches!(
             root.status,
-            canic_core::dto::fleet_registry::FleetSubnetRootStatus::Active
-                | canic_core::dto::fleet_registry::FleetSubnetRootStatus::Removed
+            canic_contracts::dto::fleet_registry::FleetSubnetRootStatus::Active
+                | canic_contracts::dto::fleet_registry::FleetSubnetRootStatus::Removed
         )
     }) {
         return Err(FrontendError::Integrity);
@@ -209,7 +208,7 @@ pub fn prepare_bundle(
     )?;
     let root_key = frontend_root_key(root, &input.environment)?;
     if let Some(bytes) = &root_key {
-        let observed = canic_core::ids::CanonicalNetworkId::from_der_root_trust_anchor(bytes)
+        let observed = canic_contracts::ids::CanonicalNetworkId::from_der_root_trust_anchor(bytes)
             .map_err(|_| FrontendError::Integrity)?;
         if observed != authority.network {
             return Err(FrontendError::Environment);

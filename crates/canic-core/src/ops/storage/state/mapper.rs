@@ -4,14 +4,14 @@
 //! Does not own: stable state mutation, workflow orchestration, or DTO definitions.
 //! Boundary: storage ops conversion layer for state records.
 
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
+
 use crate::{
     dto::state::{FleetStateInput, FleetStateResponse},
     storage::stable::state::fleet::FleetStateRecord,
 };
-
-// -----------------------------------------------------------------------------
-// Helpers
-// -----------------------------------------------------------------------------
 
 ///
 /// FleetStateMapper

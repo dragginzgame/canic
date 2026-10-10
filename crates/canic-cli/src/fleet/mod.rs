@@ -30,13 +30,11 @@ use crate::{
     },
     output, version_text,
 };
-use canic_core::{
-    cdk::{
-        types::{BC, Cycles, QC, TC},
-        utils::hash::sha256_hex,
-    },
+use canic_contracts::{
+    cycles::{BC, Cycles, QC, TC},
     ids::ReleaseBuildId,
 };
+use canic_core::cdk::utils::hash::sha256_hex;
 use canic_host::{
     fleet_ensure::{
         DesiredFleetLoadError, EnsureWorkflowError, FleetEnsureReport, FleetGenerateError,
@@ -851,7 +849,8 @@ fn publish_generated(
             if existing == bytes {
                 return Ok(());
             }
-            ic_host_fs::durable::write_bytes(&resolved, bytes)?;
+            ic_host_fs::durable::write_bytes(&resolved, bytes)
+                .map_err(canic_host::publication::ops::io_error)?;
             return Ok(());
         }
         Err(error) if error.kind() == io::ErrorKind::NotFound && expected_sha256.is_some() => {
@@ -862,7 +861,8 @@ fn publish_generated(
         Err(error) if error.kind() == io::ErrorKind::NotFound => {}
         Err(error) => return Err(error.into()),
     }
-    ic_host_fs::durable::create_new_bytes_with_parents(&resolved, bytes)?;
+    ic_host_fs::durable::create_new_bytes_with_parents(&resolved, bytes)
+        .map_err(canic_host::publication::ops::io_error)?;
     Ok(())
 }
 

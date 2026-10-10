@@ -10,8 +10,7 @@ use crate::fleet_ensure::{
     ops::capacity_import::verify_review,
 };
 use candid::Principal;
-use canic_control_plane::api::canister_pool::CanisterPoolApi;
-use canic_core::{
+use canic_contracts::{
     dto::{
         fleet_registry::{FleetRegistry, FleetSubnetRootStatus},
         pool_import::{PoolImportContext, PoolImportIdentity},
@@ -21,6 +20,7 @@ use canic_core::{
         FleetSubnetRootFundingAuthority, FleetSubnetRootLimits, SubnetId,
     },
 };
+use canic_control_plane::api::canister_pool::CanisterPoolApi;
 use thiserror::Error;
 
 /// A missing or changed infrastructure prerequisite never authorizes implicit setup.

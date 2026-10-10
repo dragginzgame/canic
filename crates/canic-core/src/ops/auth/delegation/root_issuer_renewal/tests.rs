@@ -7,13 +7,13 @@ use crate::{
         IssuerProofAlgorithm, IssuerProofBinding, RootIssuerRenewalBatchStatus,
         RootIssuerRenewalStatusRequest,
     },
-    ids::CanisterRole,
     model::auth::{RootDelegatedRoleGrantPolicy, RootIssuerPolicy, RootIssuerRenewalState},
     ops::storage::auth::{
         ChainKeyRootDelegationBatch, ChainKeyRootDelegationBatchIssuer,
         ChainKeyRootDelegationBatchStatus, RootDelegationStateOps,
     },
 };
+use canic_contracts::ids::CanisterRole;
 
 fn p(id: u8) -> Principal {
     Principal::from_slice(&[id; 29])

@@ -1,34 +1,24 @@
-use candid::{CandidType, Deserialize, Principal};
-use canic::{
-    Error,
-    dto::auth::{
-        AuthRequestMetadata, DelegatedRoleGrant, DelegatedToken, DelegatedTokenGetRequest,
-        DelegatedTokenPrepareRequest, DelegatedTokenPrepareResponse, DelegationAudience,
-    },
-    ids::CanisterRole,
-    protocol,
-};
+use candid::Principal;
+
+use canic::Error;
+use canic::dto::auth::AuthRequestMetadata;
+use canic::dto::auth::DelegatedRoleGrant;
+use canic::dto::auth::DelegatedToken;
+use canic::dto::auth::DelegatedTokenGetRequest;
+use canic::dto::auth::DelegatedTokenPrepareRequest;
+use canic::dto::auth::DelegationAudience;
+use canic::ids::CanisterRole;
+use canic::protocol;
+
 use ic_testkit::pic::{CandidCallExt, PocketIc};
 
-#[derive(CandidType)]
-enum CanisterCommand {
-    PrepareDelegatedToken(DelegatedTokenPrepareRequest),
-}
+use canic_contracts::dto::wire::projection::fixture_delegation::CanisterCommand;
 
-#[derive(CandidType, Deserialize)]
-enum CanisterCommandResponse {
-    PrepareDelegatedToken(DelegatedTokenPrepareResponse),
-}
+use canic_contracts::dto::wire::projection::fixture_delegation::CanisterCommandResponse;
 
-#[derive(CandidType)]
-enum CanisterStatusRequest {
-    DelegatedToken(DelegatedTokenGetRequest),
-}
+use canic_contracts::dto::wire::projection::fixture_delegation::CanisterStatusRequest;
 
-#[derive(CandidType, Deserialize)]
-enum CanisterStatusResponse {
-    DelegatedToken(DelegatedToken),
-}
+use canic_contracts::dto::wire::projection::fixture_delegation::CanisterStatusResponse;
 
 /// Create one user shard through the reference `user_hub` path.
 ///

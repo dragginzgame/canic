@@ -1,9 +1,9 @@
 // Category A - Internal runtime-configured tests (ConfigTestBuilder when needed).
 
 use crate::{
-    cdk::types::Cycles, domain::policy::pure as policy, ops::storage::cycles::CycleTrackerOps,
-    test::seams::lock,
+    domain::policy::pure as policy, ops::storage::cycles::CycleTrackerOps, test::seams::lock,
 };
+use canic_contracts::cycles::Cycles;
 
 #[test]
 fn retention_uses_policy_cutoff_for_cycles() {

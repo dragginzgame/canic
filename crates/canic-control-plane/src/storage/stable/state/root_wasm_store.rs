@@ -5,14 +5,10 @@
 //! Boundary: storage ops wrap this complete root authority before workflow access.
 
 use crate::ids::{WasmStoreBinding, WasmStoreGcMode};
+use canic_contracts::dto::root_store::RootStoreBootstrapResponse;
 #[cfg(feature = "root-control-plane")]
-use canic_core::{
-    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
-    role_contract::allocation::memory::control_plane::ROOT_WASM_STORE_STATE_ID,
-};
-use canic_core::{
-    cdk::types::Principal, dto::root_store::RootStoreBootstrapResponse, impl_storable_bounded,
-};
+use canic_core::cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory};
+use canic_core::{cdk::types::Principal, impl_storable_bounded};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "root-control-plane")]
 use std::cell::RefCell;
@@ -21,7 +17,7 @@ use std::cell::RefCell;
 std::thread_local! {
     static ROOT_WASM_STORE_STATE: RefCell<Cell<RootWasmStoreStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.root.wasm_store.state.v1", ty = RootWasmStoreState, id = ROOT_WASM_STORE_STATE_ID),
+            canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.root.wasm_store.state.v1"),
             RootWasmStoreStateRecord::default(),
         ));
 }

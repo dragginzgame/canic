@@ -5,15 +5,15 @@
 //! Boundary: ops converts complete model state to and from this memory-ID-64 record.
 
 use candid::Principal;
+use canic_contracts::ids::{
+    FleetAdmissionPolicy, FleetAdmissionSelector, FleetCoordinatorBinding, SubnetId,
+};
 #[cfg(feature = "fleet-coordinator-canister")]
-use canic_core::cdk::bounded_cell::BoundedCell;
-#[cfg(feature = "fleet-coordinator-canister")]
-use canic_core::{
-    cdk::structures::{DefaultMemoryImpl, memory::RuntimeMemory},
-    role_contract::allocation::memory::control_plane::FLEET_COORDINATOR_ADMISSION_ID,
+use canic_core::cdk::{
+    bounded_cell::BoundedCell,
+    structures::{DefaultMemoryImpl, memory::RuntimeMemory},
 };
 use canic_core::{
-    ids::{FleetAdmissionPolicy, FleetAdmissionSelector, FleetCoordinatorBinding, SubnetId},
     impl_storable_bounded,
     shared_support::fleet_admission_authority::MAX_FLEET_ADMISSION_AUTHORITY_RECORD_BYTES,
 };
@@ -28,8 +28,6 @@ std::thread_local! {
     > = RefCell::new(BoundedCell::init(canic_core::ic_memory_key!(
         authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
         key = "canic.control_plane.fleet_admission.v1",
-        ty = FleetAdmissionAuthorityStore,
-        id = FLEET_COORDINATOR_ADMISSION_ID,
     ), None));
 }
 

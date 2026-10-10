@@ -1,0 +1,128 @@
+//! Module: ids::canister
+//!
+//! Responsibility: canister role identifiers shared across Canic layers.
+//! Does not own: role authorization policy or canister registry state.
+//! Boundary: provides stable, bounded role names for storage and DTOs.
+
+use candid::CandidType;
+use serde::{Deserialize, Serialize};
+use std::{
+    borrow::{Borrow, Cow},
+    fmt,
+    str::FromStr,
+};
+
+const FLEET_COORDINATOR_ROLE: &str = "fleet_coordinator";
+const ROOT_ROLE: &str = "root";
+const WASM_STORE_ROLE: &str = "wasm_store";
+
+///
+/// CanisterRole
+///
+/// Stable bounded canister role identifier.
+/// Owned by ids and shared across config, storage, DTOs, and workflows.
+///
+
+#[derive(
+    CandidType, Clone, Debug, Eq, Ord, PartialOrd, Deserialize, Serialize, PartialEq, Hash,
+)]
+#[serde(transparent)]
+pub struct CanisterRole(pub Cow<'static, str>);
+
+impl CanisterRole {
+    pub const FLEET_COORDINATOR: Self = Self(Cow::Borrowed(FLEET_COORDINATOR_ROLE));
+    pub const ROOT: Self = Self(Cow::Borrowed(ROOT_ROLE));
+    pub const WASM_STORE: Self = Self(Cow::Borrowed(WASM_STORE_ROLE));
+
+    /// Create a borrowed static canister role.
+    #[must_use]
+    pub const fn new(s: &'static str) -> Self {
+        Self(Cow::Borrowed(s))
+    }
+
+    /// Create an owned canister role.
+    #[must_use]
+    pub const fn owned(s: String) -> Self {
+        Self(Cow::Owned(s))
+    }
+
+    /// Return the canister role as text.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Return whether this role is the built-in root role.
+    #[must_use]
+    pub fn is_root(&self) -> bool {
+        self.0.as_ref() == ROOT_ROLE
+    }
+
+    /// Return whether this role is the built-in Fleet Coordinator role.
+    #[must_use]
+    pub fn is_fleet_coordinator(&self) -> bool {
+        self.0.as_ref() == FLEET_COORDINATOR_ROLE
+    }
+
+    /// Return whether this role is the built-in wasm-store role.
+    #[must_use]
+    pub fn is_wasm_store(&self) -> bool {
+        self.0.as_ref() == WASM_STORE_ROLE
+    }
+
+    /// Convert the role into an owned string.
+    #[must_use]
+    pub fn into_string(self) -> String {
+        self.0.into_owned()
+    }
+}
+
+impl FromStr for CanisterRole {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self::owned(s.to_string()))
+    }
+}
+
+impl From<&'static str> for CanisterRole {
+    fn from(s: &'static str) -> Self {
+        Self(Cow::Borrowed(s))
+    }
+}
+
+impl From<&String> for CanisterRole {
+    fn from(s: &String) -> Self {
+        Self(Cow::Owned(s.clone()))
+    }
+}
+
+impl From<String> for CanisterRole {
+    fn from(s: String) -> Self {
+        Self(Cow::Owned(s))
+    }
+}
+
+impl From<CanisterRole> for String {
+    fn from(role: CanisterRole) -> Self {
+        role.into_string()
+    }
+}
+
+impl AsRef<str> for CanisterRole {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl Borrow<str> for CanisterRole {
+    fn borrow(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl fmt::Display for CanisterRole {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}

@@ -41,6 +41,12 @@ recovery machinery while the missing live preflight remains fail-closed.
 Artifact SHA-256 verification accepts uppercase and lowercase hex as the same
 digest. Malformed hashes and different artifact bytes still reject.
 
+IC Backup owns checksum-verified directory publication and recovery of an exact
+already-published tree. Canic retains the journal binding and only advances its
+receipt after that owner succeeds. Directory publication failures retain the
+upstream typed cause through `PersistenceError::ArtifactCommit`. This local
+artifact support does not enable live backup creation.
+
 The local runner resolves the selected backup directory once before deriving
 download and verification paths. Relative paths and directory links selected by
 the operator are supported; links inside artifact trees remain rejected.

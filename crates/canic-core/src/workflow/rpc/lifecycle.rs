@@ -4,13 +4,9 @@
 //! Does not own: Component Registry persistence, replay storage, or endpoint authentication.
 //! Boundary: core replay orchestration delegates protected child lifecycle to the control plane.
 
-use crate::{
-    InternalError,
-    cdk::types::Principal,
-    dto::component_registry::ComponentRegistryHead,
-    ids::{CanisterRole, ComponentInstanceId},
-};
+use crate::{InternalError, cdk::types::Principal, dto::component_registry::ComponentRegistryHead};
 use async_trait::async_trait;
+use canic_contracts::ids::{CanisterRole, ComponentInstanceId};
 
 ///
 /// RootComponentChildProvisionRequest

@@ -18,16 +18,15 @@ use crate::{
     domain::policy::pure::auth::application_authorization::ApplicationAuthorityBindingTransition,
     dto::auth::SignedRoleAttestation,
     format::display_optional,
-    ids::{CanisterRole, ManagedCanisterBinding},
     log,
     log::Topic,
     ops::{
         auth::{AuthExpiryError, AuthOps, AuthOpsError},
         config::{ConfigOps, RootConfigOps},
         ic::IcOps,
-        runtime::env::EnvOps,
-        runtime::metrics::auth::{
-            record_attestation_epoch_rejected, record_attestation_verify_failed,
+        runtime::{
+            env::EnvOps,
+            metrics::auth::{record_attestation_epoch_rejected, record_attestation_verify_failed},
         },
     },
     workflow::runtime::fleet_activation::FleetActivationWorkflow,
@@ -38,6 +37,7 @@ use crate::{
     model::auth::application_authorization::LocalApplicationAuthorityBinding,
     ops::storage::auth::LocalApplicationAuthorizationStateOps,
 };
+use canic_contracts::ids::{CanisterRole, ManagedCanisterBinding};
 
 ///
 /// RuntimeAuthWorkflow
@@ -396,7 +396,6 @@ mod tests {
         cdk::types::Principal,
         config::schema::{CanisterAuthConfig, CanisterKind},
         domain::policy::pure::auth::application_authorization::ApplicationAuthorityBindingTransition,
-        ids::CanisterRole,
         model::auth::application_authorization::{
             ApplicationScope, CanonicalApplicationScopes, LocalApplicationAuthorityBinding,
         },
@@ -406,6 +405,7 @@ mod tests {
         },
         test::{config::ConfigTestBuilder, seams, support::fleet_key},
     };
+    use canic_contracts::ids::CanisterRole;
 
     #[test]
     fn application_epoch_floor_can_only_tighten_configured_revocation() {

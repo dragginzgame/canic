@@ -4,10 +4,6 @@
 //! Does not own: effect ordering, durable intent, retry policy, or plan approval.
 //! Boundary: the workflow calls one method only after persisting its exact action identity.
 
-use crate::icp::cycles_ledger::{
-    CanisterSettings, CmcCreateCanisterArgs, CreateCanisterArgs, CreateCanisterError,
-    CreateCanisterSuccess, SubnetSelection,
-};
 use crate::{
     canister_protocol::{CanisterProtocolError, call_with_candid, query_authenticated},
     fleet_ensure::{
@@ -27,27 +23,43 @@ use crate::{
             EffectObservation, EffectOutcome, EffectRetry, EnsurePlatform, TerminalFleetInventory,
             canic_init, current_protocol, protocol, root_owned_lifecycle,
         },
-        policy::release::snapshots::{self, SnapshotRemovalError},
+        policy::release::{snapshots, snapshots::SnapshotRemovalError},
     },
     icp::{
         IcpBalanceError, IcpCandidCallError, IcpCanisterStatusReport, IcpCli, IcpCommandError,
-        IcpDiagnostic, IcpManagementCallError, LocalReplicaTarget, run_status,
+        IcpDiagnostic, IcpManagementCallError, LocalReplicaTarget,
+        cycles_ledger::{
+            CanisterSettings, CmcCreateCanisterArgs, CreateCanisterArgs, CreateCanisterError,
+            CreateCanisterSuccess, SubnetSelection,
+        },
+        run_status,
     },
     icp_config::resolve_icp_build_network_from_root,
     subnet_catalog::load_cached_mainnet_subnet_catalog,
 };
 use candid::{CandidType, Nat, Principal};
-use canic_core::{
-    cdk::{types::Cycles, utils::hash::hex_bytes},
-    dto::canister::CanisterInspectionRequest,
-    dto::pool::{
-        CanisterPoolAsset, CanisterPoolAssetOrigin, CanisterPoolAssetStatus,
-        CanisterPoolCreationFailure, CanisterPoolCreationProgress, CanisterPoolHandoff,
-        CanisterPoolResponse, CanisterPoolStatusRequest,
-    },
-    ids::BuildNetwork,
-    protocol as canic_protocol,
+use canic_contracts::cycles::Cycles;
+use canic_contracts::dto::canister::CanisterInspectionRequest;
+use canic_contracts::dto::pool::CanisterPoolAsset;
+use canic_contracts::dto::pool::CanisterPoolAssetOrigin;
+use canic_contracts::dto::pool::CanisterPoolAssetStatus;
+use canic_contracts::dto::pool::CanisterPoolCreationFailure;
+use canic_contracts::dto::pool::CanisterPoolCreationProgress;
+use canic_contracts::dto::pool::CanisterPoolHandoff;
+use canic_contracts::dto::pool::CanisterPoolResponse;
+use canic_contracts::dto::pool::CanisterPoolStatusRequest;
+use canic_contracts::dto::wire::projection::capacity_inventory::RootRequest as RootPoolStatusRequest;
+use canic_contracts::dto::wire::projection::capacity_inventory::RootResponse as RootPoolStatusResponse;
+use canic_contracts::dto::wire::projection::capacity_management::RootRequest as RootInspectionCommand;
+#[cfg(test)]
+use canic_contracts::dto::wire::projection::inspection_reserve::{
+    InspectionReserveRequest, InspectionReserveResponse,
 };
+use canic_contracts::dto::wire::projection::pool_observation::ManagedCanisterStatusRequest;
+use canic_contracts::dto::wire::projection::pool_observation::ManagedCanisterStatusResponse;
+use canic_contracts::ids::BuildNetwork;
+use canic_contracts::protocol as canic_protocol;
+use canic_core::cdk::utils::hash::hex_bytes;
 use serde::Deserialize;
 use std::{
     cell::{Cell, RefCell},
@@ -158,16 +170,6 @@ enum DrainResponse {
     Replayed { transferred_cycles: Nat },
 }
 
-#[derive(CandidType)]
-enum RootPoolStatusRequest {
-    Pool(CanisterPoolStatusRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum RootPoolStatusResponse {
-    Pool(Box<CanisterPoolResponse>),
-}
-
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct EstatePoolLifecycleCounts {
     claimed: u32,
@@ -262,9 +264,9 @@ impl EstatePoolPageAuthority {
 #[derive(Default)]
 struct EstatePoolInventoryAccumulator {
     assets: Vec<EstatePoolAssetObservation>,
-    expected_config: Option<canic_core::ids::FleetSubnetCanisterPoolConfig>,
+    expected_config: Option<canic_contracts::ids::FleetSubnetCanisterPoolConfig>,
     expected_page_authority: Option<EstatePoolPageAuthority>,
-    expected_pending: Option<canic_core::dto::pool::CanisterPoolCreation>,
+    expected_pending: Option<canic_contracts::dto::pool::CanisterPoolCreation>,
     observed_counts: EstatePoolLifecycleCounts,
     seen: BTreeSet<Principal>,
 }
@@ -400,7 +402,7 @@ fn inactive_source_pool_has_full_inventory(
 
 const fn pool_policy_is_current(
     observed: &EstatePoolInventoryObservation,
-    desired: &canic_core::ids::FleetSubnetCanisterPoolConfig,
+    desired: &canic_contracts::ids::FleetSubnetCanisterPoolConfig,
 ) -> bool {
     observed.maximum_size == desired.maximum_size
         && observed.minimum_size == desired.minimum_size
@@ -409,7 +411,7 @@ const fn pool_policy_is_current(
 }
 
 fn estate_pool_pending_creation(
-    creation: canic_core::dto::pool::CanisterPoolCreation,
+    creation: canic_contracts::dto::pool::CanisterPoolCreation,
 ) -> EstatePoolPendingCreationObservation {
     let (
         available_cycles,
@@ -499,16 +501,11 @@ const fn estate_pool_lifecycle(
     }
 }
 
-#[derive(CandidType)]
-enum RootInspectionCommand {
-    InspectCanister(CanisterInspectionRequest),
-}
-
 /// Protected management evidence shared by Root-owned observation and pool funding.
 #[derive(CandidType, Deserialize)]
 enum RootInspectionResponse {
     InspectCanister(RootInspectionStatus),
-    InspectionReserveRequired(canic_core::dto::canister::CanisterInspectionReserveResponse),
+    InspectionReserveRequired(canic_contracts::dto::canister::CanisterInspectionReserveResponse),
 }
 
 impl RootInspectionResponse {
@@ -527,8 +524,10 @@ impl RootInspectionResponse {
 }
 
 #[derive(CandidType, Clone, Deserialize)]
+// Retain only controller/module/balance facts; discard unrelated management metrics.
+// The owning test checks each projected reply payload against RootCommandResponse.
 struct RootInspectionStatus {
-    status: canic_core::dto::canister::CanisterStatusType,
+    status: canic_contracts::dto::canister::CanisterStatusType,
     settings: ManagementCanisterObservationSettings,
     module_hash: Option<Vec<u8>>,
     cycles: Nat,
@@ -545,16 +544,6 @@ struct ReinstallAssetStatus {
     response: RootInspectionStatus,
     controllers: Vec<String>,
     cycles: u128,
-}
-
-#[derive(CandidType)]
-enum ManagedCanisterStatusRequest {
-    CycleBalance,
-}
-
-#[derive(CandidType, Deserialize)]
-enum ManagedCanisterStatusResponse {
-    CycleBalance(canic_core::dto::role::CycleBalanceStatusResponse),
 }
 
 struct CreateCanisterAuthority<'a> {
@@ -1605,13 +1594,13 @@ impl IcpEnsurePlatform {
                                 _ => RootOwnedCanisterLifecycle::Retained,
                             }),
                             status: match response.status {
-                                canic_core::dto::canister::CanisterStatusType::Running => {
+                                canic_contracts::dto::canister::CanisterStatusType::Running => {
                                     CanisterRuntimeStatus::Running
                                 }
-                                canic_core::dto::canister::CanisterStatusType::Stopped => {
+                                canic_contracts::dto::canister::CanisterStatusType::Stopped => {
                                     CanisterRuntimeStatus::Stopped
                                 }
-                                canic_core::dto::canister::CanisterStatusType::Stopping => {
+                                canic_contracts::dto::canister::CanisterStatusType::Stopping => {
                                     CanisterRuntimeStatus::Stopping
                                 }
                             },
@@ -2207,7 +2196,7 @@ impl IcpEnsurePlatform {
             {
                 if matches!(
                     asset.status,
-                    canic_core::dto::pool::CanisterPoolAssetStatus::PendingReset
+                    canic_contracts::dto::pool::CanisterPoolAssetStatus::PendingReset
                 ) && asset.cycles.to_u128() == 0
                 {
                     let inspection =
@@ -2771,15 +2760,15 @@ impl IcpEnsurePlatform {
     }
 
     fn controller_cycle_balance(&self, principal: &str) -> Option<u128> {
-        let response: Result<ManagedCanisterStatusResponse, canic_core::dto::error::Error> = self
-            .icp
-            .canister_query_candid(
-                principal,
-                canic_protocol::CANIC_OBSERVABILITY,
-                &ManagedCanisterStatusRequest::CycleBalance,
-                None,
-            )
-            .ok()?;
+        let response: Result<ManagedCanisterStatusResponse, canic_contracts::dto::error::Error> =
+            self.icp
+                .canister_query_candid(
+                    principal,
+                    canic_protocol::CANIC_OBSERVABILITY,
+                    &ManagedCanisterStatusRequest::CycleBalance,
+                    None,
+                )
+                .ok()?;
         let ManagedCanisterStatusResponse::CycleBalance(balance) = response.ok()?;
         Some(balance.cycles)
     }
@@ -3582,7 +3571,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
 
     fn verify_bootstrap_registry(
         &mut self,
-        expected: &canic_core::dto::fleet_registry::FleetRegistry,
+        expected: &canic_contracts::dto::fleet_registry::FleetRegistry,
     ) -> Result<bool, Self::Error> {
         let source = self
             .infrastructure_bootstrap
@@ -5103,8 +5092,8 @@ fn completed_reinstall_continuity(
 }
 
 fn recoverable_root_status_error(error: &CanisterProtocolError) -> bool {
-    error.is_rejected_with(canic_core::diagnostics::codes::STATE_CONFLICT)
-        || error.is_rejected_with(canic_core::diagnostics::codes::STATE_UNAVAILABLE)
+    error.is_rejected_with(canic_contracts::diagnostics::codes::STATE_CONFLICT)
+        || error.is_rejected_with(canic_contracts::diagnostics::codes::STATE_UNAVAILABLE)
 }
 
 fn recoverable_current_protocol_error(error: &current_protocol::CurrentProtocolError) -> bool {
@@ -5558,7 +5547,9 @@ mod tests {
     mod snapshots;
 
     use super::*;
-    use canic_core::dto::pool::CanisterPoolAssetStatus;
+    use canic_contracts::dto::pool::CanisterPoolAssetStatus;
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
     #[cfg(unix)]
     use std::sync::{Arc, Mutex};
 
@@ -5785,8 +5776,8 @@ echo effect >> effects
     }
 
     fn inactive_source_pool_page() -> CanisterPoolResponse {
-        let claim = canic_core::dto::pool::CanisterPoolClaim {
-            component: canic_core::ids::ComponentInstanceId::from_generated_bytes([4; 32]),
+        let claim = canic_contracts::dto::pool::CanisterPoolClaim {
+            component: canic_contracts::ids::ComponentInstanceId::from_generated_bytes([4; 32]),
             operation_id: [5; 32],
         };
         let entries = (0..5)
@@ -5811,7 +5802,7 @@ echo effect >> effects
             })
             .collect();
         CanisterPoolResponse {
-            config: canic_core::ids::FleetSubnetCanisterPoolConfig {
+            config: canic_contracts::ids::FleetSubnetCanisterPoolConfig {
                 minimum_size: 1,
                 maximum_size: 4,
                 canister_cycles: Cycles::new(100),
@@ -5835,6 +5826,50 @@ echo effect >> effects
             entries,
             next_start_after: None,
         }
+    }
+
+    #[test]
+    fn root_inspection_projection_matches_canonical_payloads() {
+        use candid::types::internal::TypeContainer;
+        use candid::types::{TypeInner, subtype};
+        let mut types = TypeContainer::new();
+        let sent = types.add::<canic_contracts::dto::wire::root_command::RootCommandResponse>();
+        let received = types.add::<RootInspectionResponse>();
+        let sent = types.env.trace_type(&sent).unwrap();
+        let received = types.env.trace_type(&received).unwrap();
+        let (TypeInner::Variant(exact), TypeInner::Variant(projected)) =
+            (sent.as_ref(), received.as_ref())
+        else {
+            panic!("inspection reply variants")
+        };
+        for field in projected {
+            let source = exact
+                .iter()
+                .find(|candidate| candidate.id == field.id)
+                .unwrap();
+            subtype::subtype(
+                &mut std::collections::HashSet::new(),
+                &types.env,
+                &source.ty,
+                &field.ty,
+            )
+            .unwrap();
+        }
+        let target = Principal::from_slice(&[7; 29]);
+        let bytes = candid::encode_one(RootInspectionCommand::InspectCanister(
+            CanisterInspectionRequest {
+                canister_id: target,
+            },
+        ))
+        .unwrap();
+        let command: canic_contracts::dto::wire::root_command::RootCommand =
+            candid::decode_one(&bytes).unwrap();
+        let canic_contracts::dto::wire::root_command::RootCommand::InspectCanister(request) =
+            command
+        else {
+            panic!("exact inspection selector")
+        };
+        assert_eq!(request.canister_id, target);
     }
 
     #[cfg(unix)]
@@ -5941,14 +5976,14 @@ echo effect >> effects
         let root = fixture.root_id;
         let target = fixture.target;
         let path = fixture.owners.root.clone();
-        let evidence = canic_core::dto::canister::CanisterInspectionReserveResponse {
+        let evidence = canic_contracts::dto::canister::CanisterInspectionReserveResponse {
             caller: root,
             canister_id: target,
             native_cycles: 1000,
             available_liquid_cycles: 50,
             required_liquid_cycles: 100,
         };
-        let bytes = candid::encode_one(Ok::<_, canic_core::dto::error::Error>(
+        let bytes = candid::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
             RootInspectionResponse::InspectionReserveRequired(evidence.clone()),
         ))
         .unwrap();
@@ -6053,7 +6088,7 @@ echo effect >> effects
             )),
         )
         .unwrap();
-        let pause = canic_core::dto::component_provisioning::RootEstateFundingRequired {
+        let pause = canic_contracts::dto::component_provisioning::RootEstateFundingRequired {
             available: Cycles::new(0),
             attempt_count: 0,
             creation_amount: Cycles::new(100),
@@ -6183,7 +6218,7 @@ echo effect >> effects
     #[cfg(unix)]
     impl ProtocolOwnersFixture {
         fn new() -> Self {
-            use std::{fs, os::unix::fs::PermissionsExt};
+            use std::fs;
 
             let root = crate::test_support::temp_dir("canic-protocol-owner-observations");
             fs::create_dir_all(&root).unwrap();
@@ -6720,9 +6755,6 @@ if"#,
         }
 
         fn reserve_response(path: &Path, caller: Principal, target: Principal, liquid: u128) {
-            use crate::canister_protocol::inspection::{
-                InspectionReserveRequest, InspectionReserveResponse,
-            };
             let base = path.join(format!("reserve-{caller}-{target}"));
             std::fs::write(
                 base.with_extension("bin"),
@@ -6734,9 +6766,9 @@ if"#,
                 .unwrap(),
             )
             .unwrap();
-            let response = Ok::<_, canic_core::dto::error::Error>(
+            let response = Ok::<_, canic_contracts::dto::error::Error>(
                 InspectionReserveResponse::InspectionReserve(
-                    canic_core::dto::canister::CanisterInspectionReserveResponse {
+                    canic_contracts::dto::canister::CanisterInspectionReserveResponse {
                         caller,
                         canister_id: target,
                         native_cycles: 1000,
@@ -6756,9 +6788,9 @@ if"#,
         }
 
         fn response(path: &Path, controller: Principal, cycles: u128) {
-            let response = Ok::<_, canic_core::dto::error::Error>(
+            let response = Ok::<_, canic_contracts::dto::error::Error>(
                 RootInspectionResponse::InspectCanister(RootInspectionStatus {
-                    status: canic_core::dto::canister::CanisterStatusType::Running,
+                    status: canic_contracts::dto::canister::CanisterStatusType::Running,
                     settings: ManagementCanisterObservationSettings {
                         controllers: vec![controller],
                     },
@@ -6823,14 +6855,14 @@ if"#,
             owners.platform.desired.bootstrap = Some(crate::fleet_ensure::model::DesiredFleetBootstrap {
             admission_identity_origin: None,
                 admission: canic_core::shared_support::fleet_admission_policy::compile_fleet_admission_policy_template(vec![operator], Vec::new()).unwrap(),
-                app: canic_core::ids::AppId::from("inspection"),
-                canonical_network_id: canic_core::ids::CanonicalNetworkId::ic_mainnet(),
+                app: canic_contracts::ids::AppId::from("inspection"),
+                canonical_network_id: canic_contracts::ids::CanonicalNetworkId::ic_mainnet(),
                 component_deployment_configuration: config.compile_component_deployment_configuration().unwrap(),
                 coordinator: "coordinator".into(),
-                coordinator_subnet: canic_core::ids::SubnetId::from_principal(fixture.root_id),
-                fleet_id: canic_core::ids::FleetId::from_generated_bytes([5; 32]),
+                coordinator_subnet: canic_contracts::ids::SubnetId::from_principal(fixture.root_id),
+                fleet_id: canic_contracts::ids::FleetId::from_generated_bytes([5; 32]),
                 fresh_estate: true,
-                release_build_id: canic_core::ids::ReleaseBuildId::from_nonce(canic_core::ids::ReleaseBuildNonce::from_random_bytes([7; 32])),
+                release_build_id: canic_contracts::ids::ReleaseBuildId::from_nonce(canic_contracts::ids::ReleaseBuildNonce::from_random_bytes([7; 32])),
                 root_funding: None,
                 roots: Vec::new(),
                             recovery_controllers: Vec::new(),
@@ -6888,7 +6920,7 @@ if"#,
         fn fresh_pool_page(path: &Path, entries: Vec<CanisterPoolAsset>) {
             let pool_count = u32::try_from(entries.len()).unwrap();
             let page = CanisterPoolResponse {
-                config: canic_core::ids::FleetSubnetCanisterPoolConfig {
+                config: canic_contracts::ids::FleetSubnetCanisterPoolConfig {
                     minimum_size: 1,
                     maximum_size: 128,
                     canister_cycles: Cycles::new(1_000),
@@ -6912,9 +6944,9 @@ if"#,
                 entries,
                 next_start_after: None,
             };
-            let response = Ok::<_, canic_core::dto::error::Error>(RootPoolStatusResponse::Pool(
-                Box::new(page),
-            ));
+            let response = Ok::<_, canic_contracts::dto::error::Error>(
+                RootPoolStatusResponse::Pool(Box::new(page)),
+            );
             std::fs::write(
                 path.join("pool.json"),
                 serde_json::json!({
@@ -6931,9 +6963,9 @@ if"#,
             module_hash: Option<Vec<u8>>,
             cycles: u128,
         ) {
-            let response = Ok::<_, canic_core::dto::error::Error>(
+            let response = Ok::<_, canic_contracts::dto::error::Error>(
                 RootInspectionResponse::InspectCanister(RootInspectionStatus {
-                    status: canic_core::dto::canister::CanisterStatusType::Running,
+                    status: canic_contracts::dto::canister::CanisterStatusType::Running,
                     settings: ManagementCanisterObservationSettings { controllers },
                     module_hash,
                     cycles: Nat::from(cycles),
@@ -7429,7 +7461,7 @@ printf 'finish\n' >> events
                 target: fixture.target,
             },
             RootInspectionStatus {
-                status: canic_core::dto::canister::CanisterStatusType::Running,
+                status: canic_contracts::dto::canister::CanisterStatusType::Running,
                 settings: ManagementCanisterObservationSettings {
                     controllers: vec![fixture.root_id],
                 },
@@ -8450,11 +8482,9 @@ printf 'finish\n' >> events
         reason = "one measured transport fixture keeps equivalent retained inventories and call accounting together"
     )]
     fn configured_observation_benchmark_retains_snapshot_call_bound() {
-        use std::{
-            fs,
-            os::unix::fs::PermissionsExt,
-            sync::{Arc, Mutex},
-        };
+        use std::fs;
+        use std::sync::Arc;
+        use std::sync::Mutex;
         for pool_count in [0_u32, 8, 24, 96] {
             let mut fixture = ProtocolOwnersFixture::new();
             let root_pid = Principal::from_slice(&[2]);
@@ -8497,7 +8527,7 @@ printf 'finish\n' >> events
                 });
             }
             let page = CanisterPoolResponse {
-                config: canic_core::ids::FleetSubnetCanisterPoolConfig {
+                config: canic_contracts::ids::FleetSubnetCanisterPoolConfig {
                     minimum_size: 5,
                     maximum_size: 128,
                     canister_cycles: Cycles::new(1_000_000_000_000),
@@ -8521,9 +8551,9 @@ printf 'finish\n' >> events
                 entries,
                 next_start_after: None,
             };
-            let response = Ok::<_, canic_core::dto::error::Error>(RootPoolStatusResponse::Pool(
-                Box::new(page),
-            ));
+            let response = Ok::<_, canic_contracts::dto::error::Error>(
+                RootPoolStatusResponse::Pool(Box::new(page)),
+            );
             fs::write(fixture.root.join("pool.json"), serde_json::json!({"response_bytes": hex_bytes(candid::encode_one(response).unwrap())}).to_string()).unwrap();
             let executable = fixture.root.join("icp");
             fs::write(&executable, crate::test_support::tool_script(&format!(
@@ -9141,7 +9171,7 @@ esac
         reason = "one transport sequence proves snapshot reuse and expiry across success, failure and effects"
     )]
     fn observation_snapshot_expires_before_effects_and_after_failed_observation() {
-        use std::{fs, os::unix::fs::PermissionsExt};
+        use std::fs;
 
         let root = crate::test_support::temp_dir("canic-observation-snapshot");
         fs::create_dir_all(&root).expect("create observation fixture");
@@ -9302,7 +9332,7 @@ esac
     #[cfg(unix)]
     #[test]
     fn icp_1_5_public_non_controller_status_is_typed_unavailable_evidence() {
-        use std::{fs, os::unix::fs::PermissionsExt};
+        use std::fs;
 
         let canister = "rrkah-fqaaa-aaaaa-aaaaq-cai";
         let root = crate::test_support::temp_dir("canic-public-status-projection");
@@ -9362,7 +9392,7 @@ esac
             module_hash: Option<Vec<u8>>,
         }
 
-        use std::{fs, os::unix::fs::PermissionsExt};
+        use std::fs;
 
         let root = crate::test_support::temp_dir("canic-install-version-fallback");
         fs::create_dir_all(&root).expect("create version fallback fixture");
@@ -9452,8 +9482,8 @@ esac
             root_owned_lifecycle(
                 DesiredCanisterKind::Pool,
                 &CanisterPoolAssetStatus::Claimed {
-                    claim: canic_core::dto::pool::CanisterPoolClaim {
-                        component: canic_core::ids::ComponentInstanceId::from_generated_bytes(
+                    claim: canic_contracts::dto::pool::CanisterPoolClaim {
+                        component: canic_contracts::ids::ComponentInstanceId::from_generated_bytes(
                             [1; 32]
                         ),
                         operation_id: [2; 32],
@@ -9466,8 +9496,8 @@ esac
             root_owned_lifecycle(
                 DesiredCanisterKind::Pool,
                 &CanisterPoolAssetStatus::Workload {
-                    claim: canic_core::dto::pool::CanisterPoolClaim {
-                        component: canic_core::ids::ComponentInstanceId::from_generated_bytes(
+                    claim: canic_contracts::dto::pool::CanisterPoolClaim {
+                        component: canic_contracts::ids::ComponentInstanceId::from_generated_bytes(
                             [1; 32]
                         ),
                         operation_id: [2; 32],
@@ -9546,32 +9576,32 @@ esac
             capacity_import_bootstrap: None,
             canister_pool_imports: vec![target.clone()],
             component_admissions: Vec::new(),
-            component_topology_digest: canic_core::ids::ComponentTopologyDigest::from_bytes(
+            component_topology_digest: canic_contracts::ids::ComponentTopologyDigest::from_bytes(
                 [1; 32],
             ),
             funding: crate::test_support::fleet_subnet_root_funding_authority(),
-            limits: canic_core::ids::FleetSubnetRootLimits {
+            limits: canic_contracts::ids::FleetSubnetRootLimits {
                 maximum_component_instances: 1,
                 maximum_registry_bytes: 1,
                 maximum_wasm_store_bytes: 1,
-                canister_pool: canic_core::ids::FleetSubnetCanisterPoolConfig {
+                canister_pool: canic_contracts::ids::FleetSubnetCanisterPoolConfig {
                     minimum_size: 0,
                     maximum_size: 1,
                     canister_cycles: Cycles::new(1_000),
                     creation_execution_margin: Cycles::new(100),
                 },
-                cycles_funding: canic_core::ids::CyclesFundingBudget {
+                cycles_funding: canic_contracts::ids::CyclesFundingBudget {
                     window_secs: 1,
                     maximum_cycles: Cycles::new(1),
                 },
                 maximum_group_placements: 1,
             },
-            placement_subnet: canic_core::ids::SubnetId::from_principal(fixture.root_id),
+            placement_subnet: canic_contracts::ids::SubnetId::from_principal(fixture.root_id),
             root: "root".into(),
             store: "store".into(),
         }];
-        let claim = canic_core::dto::pool::CanisterPoolClaim {
-            component: canic_core::ids::ComponentInstanceId::from_generated_bytes([1; 32]),
+        let claim = canic_contracts::dto::pool::CanisterPoolClaim {
+            component: canic_contracts::ids::ComponentInstanceId::from_generated_bytes([1; 32]),
             operation_id: [2; 32],
         };
         for status in [
@@ -9737,8 +9767,8 @@ esac
 
     #[test]
     fn estate_pool_inventory_reconciles_every_lifecycle_and_declared_total() {
-        let claim = canic_core::dto::pool::CanisterPoolClaim {
-            component: canic_core::ids::ComponentInstanceId::from_generated_bytes([1; 32]),
+        let claim = canic_contracts::dto::pool::CanisterPoolClaim {
+            component: canic_contracts::ids::ComponentInstanceId::from_generated_bytes([1; 32]),
             operation_id: [2; 32],
         };
         let statuses = [
@@ -9756,7 +9786,7 @@ esac
             },
             CanisterPoolAssetStatus::Recycling {
                 claim,
-                reset: canic_core::dto::pool::CanisterPoolRecycleReset::Pending,
+                reset: canic_contracts::dto::pool::CanisterPoolRecycleReset::Pending,
             },
             CanisterPoolAssetStatus::HandingOff {
                 recipient: Principal::anonymous(),

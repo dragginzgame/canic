@@ -4,15 +4,13 @@
 //! Does not own: refill policy, replay recovery, or endpoint error mapping.
 //! Boundary: ops calls this after policy approves an ICP-to-cycles refill attempt.
 
-use crate::{
-    ids::BuildNetwork,
-    infra::ic::{
-        IcInfraError,
-        call::Call,
-        known::{CYCLES_MINTING_CANISTER, ICP_LEDGER_CANISTER},
-    },
+use crate::infra::ic::{
+    IcInfraError,
+    call::Call,
+    known::{CYCLES_MINTING_CANISTER, ICP_LEDGER_CANISTER},
 };
 use candid::{CandidType, Nat, Principal};
+use canic_contracts::ids::BuildNetwork;
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 use std::fmt;

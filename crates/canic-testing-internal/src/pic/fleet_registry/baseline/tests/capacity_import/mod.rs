@@ -3,44 +3,25 @@
 mod bootstrap;
 mod efficiency;
 mod release;
-pub(super) mod reset;
-mod transport;
 
 use super::*;
 use canic::dto::pool_import::{
     PoolImportCommand, PoolImportContext, PoolImportIdentity, PoolImportPhase,
     PoolImportReservation, PoolImportSource, PoolImportSourceProgress, PoolImportStatus,
 };
+use canic_contracts::dto::wire::projection::capacity_import::Command;
+use canic_contracts::dto::wire::projection::capacity_import::Response;
+use canic_contracts::dto::wire::projection::fixture_baseline_capacity_import::StatusRequest;
+use canic_contracts::dto::wire::projection::fixture_baseline_capacity_import::StatusResponse;
 use canic_core::control_plane_support::error::InternalError;
 use ic_testkit::pocket_ic::common::rest::BlobCompression;
+
+pub(super) mod reset;
+mod transport;
 
 pub(super) use bootstrap::supplied_capacity_fences_bootstrap_until_publication;
 pub(super) use efficiency::mainnet_import_counts_calls_and_refreshes_placement;
 pub(super) use transport::host_import_transport_recovers_signed_handoff_and_root_progress;
-
-#[derive(CandidType)]
-enum Command {
-    ImportPoolCapacity(PoolImportCommand),
-}
-
-#[derive(CandidType, Deserialize)]
-enum Response {
-    ImportPoolCapacity(PoolImportStatus),
-}
-
-#[derive(CandidType)]
-enum StatusRequest {
-    PoolImport(PoolImportIdentity),
-    PoolImportContext,
-    PoolRelease,
-}
-
-#[derive(CandidType, Deserialize)]
-enum StatusResponse {
-    PoolImport(Box<PoolImportStatus>),
-    PoolImportContext(Box<PoolImportContext>),
-    PoolRelease(Box<canic_control_plane::dto::root::RootPoolReleaseResponse>),
-}
 
 #[test]
 pub(super) fn reviewed_capacity_import_retains_exact_ids_and_reset_receipts() {

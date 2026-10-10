@@ -1,7 +1,6 @@
 use super::*;
 use crate::fleet_ensure::policy::startup_funding::{funding_binding, hub_config};
-use canic_core::{
-    control_plane_support::config::ComponentDeploymentConfiguration,
+use canic_contracts::{
     dto::component_registry::{
         ComponentDirectoryChildEntry, ComponentDirectoryPageCursor, ComponentDirectoryPageResponse,
         ComponentDirectoryProvenance, ComponentProvisioningOrigin, ComponentRegistryHead,
@@ -10,6 +9,9 @@ use canic_core::{
         ComponentChildBinding, ComponentSpecAdmission, CyclesFundingBudget,
         FleetSubnetCanisterPoolConfig, FleetSubnetRootLimits,
     },
+};
+use canic_core::{
+    control_plane_support::config::ComponentDeploymentConfiguration,
     role_contract::ProtocolProfileDigest,
 };
 
@@ -19,11 +21,6 @@ struct Fixture {
     members: Vec<StartupChildFundingBinding>,
     partition: ComponentRegistryPartitionResponse,
     directory: ComponentDirectoryHead,
-}
-
-#[derive(CandidType)]
-enum PageResponse {
-    ComponentDirectoryPage(ComponentDirectoryPageResponse),
 }
 
 fn fixture() -> Fixture {
@@ -326,12 +323,12 @@ esac
         std::fs::write(path.join(format!("{index}.json")), serde_json::json!({ "response_bytes": canic_core::cdk::utils::hash::hex_bytes(&bytes) }).to_string()).unwrap();
     };
     let partition_bytes = |partition| {
-        candid::encode_one(Ok::<_, canic_core::dto::error::Error>(
+        candid::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
             Response::ComponentRegistryPartition(Box::new(partition)),
         ))
         .unwrap()
     };
-    let directory_bytes = candid::encode_one(Ok::<_, canic_core::dto::error::Error>(
+    let directory_bytes = candid::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
         Response::ComponentDirectoryHead(Box::new(fixture.directory.clone())),
     ))
     .unwrap();
@@ -339,8 +336,10 @@ esac
     write(2, directory_bytes.clone());
     write(
         3,
-        candid::encode_one(Ok::<_, canic_core::dto::error::Error>(
-            PageResponse::ComponentDirectoryPage(page(&fixture, &[1, 2], None)),
+        candid::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
+            canic_contracts::dto::wire::projection::startup_pages::Response::ComponentDirectoryPage(
+                page(&fixture, &[1, 2], None),
+            ),
         ))
         .unwrap(),
     );

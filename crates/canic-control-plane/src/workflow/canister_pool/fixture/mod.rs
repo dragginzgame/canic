@@ -14,10 +14,8 @@ use crate::{
         root_authority::validated_root_authority, runtime::template::WasmStoreInternalClient,
     },
 };
-use canic_core::{
-    cdk::types::Principal, control_plane_support::error::InternalError,
-    dto::fixture_provisioning::FixtureGrant,
-};
+use canic_contracts::dto::fixture_provisioning::FixtureGrant;
+use canic_core::{cdk::types::Principal, control_plane_support::error::InternalError};
 
 pub(super) async fn revoke_before_reset(canister: Principal) -> Result<(), InternalError> {
     let Some(claim) = CanisterPoolOps::pending_recycling_claim(canister)? else {

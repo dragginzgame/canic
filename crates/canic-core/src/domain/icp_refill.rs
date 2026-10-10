@@ -7,52 +7,9 @@
 //! Boundary: DTOs re-export these values to preserve the public API path while
 //! internal code imports them from the domain owner.
 
-use candid::CandidType;
-use serde::{Deserialize, Serialize};
-
-/// Durable owner that initiated one Root ICP-refill operation.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum IcpRefillTrigger {
-    Automatic { sequence: u64 },
-    Manual,
-}
-
-///
-/// IcpRefillStatus
-///
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[remain::sorted]
-pub enum IcpRefillStatus {
-    Completed,
-    Failed,
-    InvalidTransaction,
-    NotifyProcessing,
-    Refunded,
-    Requested,
-    TransactionTooOld,
-    Transferred,
-}
-
-///
-/// IcpRefillErrorCode
-///
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[remain::sorted]
-pub enum IcpRefillErrorCode {
-    BadFee,
-    CyclesSentOverflow,
-    Duplicate,
-    InvalidLedgerBlockIndex,
-    InvalidTransaction,
-    LedgerTransferFailed,
-    NotifyFailed,
-    NotifyMaxAttempts,
-    Processing,
-    Refunded,
-    TransactionTooOld,
-    TransferWindowStale,
-}
+pub use canic_contracts::values::icp_refill::{
+    IcpRefillErrorCode, IcpRefillStatus, IcpRefillTrigger,
+};
 
 /// Return whether an ICP refill outcome must retain its operation identity for retry.
 #[must_use]

@@ -23,7 +23,9 @@ use crate::{
     },
     icp::IcpCli,
 };
-use canic_core::dto::pool_import::{PoolImportPhase, PoolImportSourceProgress, PoolImportStatus};
+use canic_contracts::dto::pool_import::{
+    PoolImportPhase, PoolImportSourceProgress, PoolImportStatus,
+};
 
 pub use handoff::apply;
 

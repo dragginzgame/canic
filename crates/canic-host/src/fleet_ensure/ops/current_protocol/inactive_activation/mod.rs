@@ -4,21 +4,21 @@
 //! Does not own: reset admission, source supersession, payments or effect execution.
 //! Boundary: only retained, hash-bound protected read contracts are used.
 
-use crate::fleet_ensure::model::{FleetActivationSourceRecord, RootActivationResetRecord};
-use canic_control_plane::dto::template::StoreOperationStatusResponse;
-use canic_core::dto::{
-    component_provisioning::RootComponentProvisioningPhase,
-    fleet_activation::{FleetActivationIdentity, FleetActivationPhase},
-};
-
 use super::{
     ComponentRegistryAuthority, CurrentFleetProtocolAction, CurrentProtocolError, IcpCli,
     OperationStatusRequest, Path, Principal, ResolvedProtocolAction, RootOperationStatusResponse,
     RootStatusRequestFragment, RootStatusResponseFragment, StoreStatusRequest, StoreStatusResponse,
     canic_init, protocol, query_root_operation, query_with_candid, read_sha256,
 };
+use crate::fleet_ensure::model::{FleetActivationSourceRecord, RootActivationResetRecord};
+use canic_contracts::dto::{
+    component_provisioning::RootComponentProvisioningPhase,
+    fleet_activation::{FleetActivationIdentity, FleetActivationPhase},
+    template::StoreOperationStatusResponse,
+};
 
 /// Read the exact Prepared Root and its conflicting source-operation Store binding.
+
 #[expect(
     clippy::too_many_lines,
     reason = "one source observation binds registry, provisioning and both installed activation owners"

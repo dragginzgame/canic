@@ -13,21 +13,19 @@ pub(in crate::fleet_ensure) mod relay_quote;
 #[cfg(test)]
 mod tests;
 
-#[cfg(test)]
-pub(in crate::fleet_ensure) use planning::tests::{qualify, qualify_creation};
-#[cfg(test)]
-pub(in crate::fleet_ensure) use tests::{funding_binding, hub_config, hub_source};
-
 use super::{EnsurePolicyError, initial_role_instances};
 use crate::fleet_ensure::{
     model::{DesiredFleet, DesiredFleetBootstrapRoot},
     view::startup_funding::{StartupComponentFunding, StartupRoleFunding},
 };
-use canic_core::{
-    bootstrap::compiled::ConfigModel, control_plane_support::config::ComponentSpec,
-    ids::CanisterRole,
-};
+use canic_contracts::ids::CanisterRole;
+use canic_core::{bootstrap::compiled::ConfigModel, control_plane_support::config::ComponentSpec};
 use std::collections::BTreeMap;
+
+#[cfg(test)]
+pub(in crate::fleet_ensure) use planning::tests::{qualify, qualify_creation};
+#[cfg(test)]
+pub(in crate::fleet_ensure) use tests::{funding_binding, hub_config, hub_source};
 
 /// Retain both automatic funding headroom and the deployment guard after child grants.
 pub(in crate::fleet_ensure) fn minimum_root_cycles(

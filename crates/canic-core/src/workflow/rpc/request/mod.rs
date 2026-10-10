@@ -10,10 +10,10 @@ use crate::{
     InternalError,
     cdk::candid::CandidType,
     dto::rpc::{CreateCanisterParent, CreateCanisterResponse, CyclesResponse},
-    ids::CanisterRole,
     model::replay::OperationId,
     ops::rpc::request::RequestOps,
 };
+use canic_contracts::ids::CanisterRole;
 
 ///
 /// RpcRequestWorkflow

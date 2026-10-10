@@ -1,9 +1,9 @@
 use super::AuthPolicyError;
 use crate::{
     domain::value::Principal,
-    ids::{CanisterRole, FleetKey},
     model::auth::{RootDelegatedRoleGrantPolicy, RootIssuerPolicy, RootIssuerRenewalTemplate},
 };
+use canic_contracts::ids::{CanisterRole, FleetKey};
 
 ///
 /// RootDelegationProofPreparePolicyInput
@@ -225,7 +225,7 @@ fn root_issuer_refresh_after_ns(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ids::cap;
+    use canic_contracts::ids::cap;
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])

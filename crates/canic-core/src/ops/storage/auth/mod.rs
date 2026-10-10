@@ -252,12 +252,12 @@ mod tests {
             DelegationProof, IcChainKeyBatchSignatureProofV1, IssuerProofAlgorithm,
             IssuerProofBinding, RootProof,
         },
-        ids::CanisterRole,
         model::auth::{
             RootDelegatedRoleGrantPolicy, RootIssuerPolicy, RootIssuerRenewalState,
             RootIssuerRenewalTemplate,
         },
     };
+    use canic_contracts::ids::CanisterRole;
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])

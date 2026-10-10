@@ -13,13 +13,8 @@ use crate::{
     view::component_registry::ComponentDirectoryPageSelection,
     workflow::root_authority::validated_root_authority,
 };
-use candid::{CandidType, Principal};
-use canic_core::{
-    api::timer::TimerApi,
-    control_plane_support::{
-        error::InternalError,
-        ops::{config::ConfigOps, ic::call::CallOps},
-    },
+use candid::Principal;
+use canic_contracts::{
     dto::{
         component_registry::ComponentLifecycleStatus,
         error::Error,
@@ -31,32 +26,26 @@ use canic_core::{
             FleetAdmissionTargetTransitionPhase,
         },
         page::PageRequest,
+        wire::projection::root_admission::{RemoteManagedCommand, RemoteManagedCommandResponse},
     },
     ids::{FleetAdmissionPolicy, FleetAdmissionProjection, ManagedCanisterBinding},
     protocol,
+};
+use canic_core::{
+    api::timer::TimerApi,
+    control_plane_support::{
+        error::InternalError,
+        ops::{config::ConfigOps, ic::call::CallOps},
+    },
     shared_support::fleet_admission_policy::{
         effective_fleet_admission_principals, fleet_admission_target_for_binding,
         materialize_fleet_admission_projection,
     },
 };
-use serde::Deserialize;
 use std::time::Duration;
 
-#[derive(CandidType)]
-enum RemoteManagedCommand {
-    ActivateFleetAdmission(FleetAdmissionActivateTargetRequest),
-    OpenFleetAdmission(FleetAdmissionOpenTargetRequest),
-    PrepareFleetAdmission(Box<FleetAdmissionPrepareTargetRequest>),
-}
-
-#[derive(CandidType, Deserialize)]
-enum RemoteManagedCommandResponse {
-    ActivateFleetAdmission(FleetAdmissionTargetReceipt),
-    OpenFleetAdmission(FleetAdmissionTargetReceipt),
-    PrepareFleetAdmission(FleetAdmissionTargetReceipt),
-}
-
 /// Authenticate one Root admission phase command against the exact installed Coordinator.
+
 pub fn authorize_coordinator(caller: Principal) -> Result<(), InternalError> {
     crate::workflow::root_funding::authorize_coordinator(caller)
 }
@@ -113,7 +102,8 @@ pub fn open(
 /// Return one bounded protected Root distribution view.
 pub fn status(
     request: PageRequest,
-) -> Result<canic_core::dto::fleet_admission::FleetAdmissionRootStatusResponse, InternalError> {
+) -> Result<canic_contracts::dto::fleet_admission::FleetAdmissionRootStatusResponse, InternalError>
+{
     let (protected, _) = validated_root_authority()?;
     let fallback = FleetRegistryMirrorOps::active_admission(&protected.binding)?;
     let projections =
@@ -279,7 +269,7 @@ async fn call_target(
 }
 
 fn compile_participant_projections(
-    root: &canic_core::ids::FleetSubnetRootBinding,
+    root: &canic_contracts::ids::FleetSubnetRootBinding,
     policy: &FleetAdmissionPolicy,
 ) -> Result<Vec<FleetAdmissionProjection>, InternalError> {
     if policy.fleet != root.authority.binding.fleet {
@@ -358,7 +348,7 @@ const fn target_principal(target: &ManagedCanisterBinding) -> Principal {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use canic_core::ids::{
+    use canic_contracts::ids::{
         AppId, CanisterRole, CanonicalNetworkId, ComponentBinding, ComponentChildBinding,
         ComponentInstanceId, ComponentSpecId, FleetBinding, FleetCoordinatorBinding, FleetId,
         FleetKey, FleetRegistryAuthority, SubnetId,

@@ -13,14 +13,14 @@ use crate::{
         FleetServiceComponentBinding, FleetServiceMode, FleetSubnetRootEntry,
         FleetSubnetRootStatus,
     },
-    ids::{
-        AppId, CanonicalNetworkId, ComponentGroupMemberPath, ComponentGroupPlacementId,
-        ComponentInstanceId, ComponentSpecAdmission, CyclesFundingBudget, FleetBinding,
-        FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority, FleetSubnetRootLimits,
-        FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
-    },
 };
 use candid::Principal;
+use canic_contracts::ids::{
+    AppId, CanonicalNetworkId, ComponentGroupMemberPath, ComponentGroupPlacementId,
+    ComponentInstanceId, ComponentSpecAdmission, CyclesFundingBudget, FleetBinding,
+    FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority, FleetSubnetRootLimits,
+    FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
+};
 
 fn topology() -> ComponentTopology {
     parse_config_model(

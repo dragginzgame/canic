@@ -21,37 +21,11 @@ mod root_funding;
 mod root_lifecycle;
 mod service_publication;
 
-use admission::apply_admission_publication_to_registry;
-use component_provisioning_directory::*;
-use component_provisioning_progress::*;
-use component_provisioning_projection::*;
-use component_provisioning_reconciliation::*;
-use component_provisioning_retry::*;
-use component_provisioning_root_progress::*;
-use component_provisioning_validation::*;
-use registry_history::{
-    canonical_registry_lifecycle_history, component_operation_source_registry,
-    initial_active_registry, registry_snapshot_at_version, validate_registry_lifecycle_history,
-    validate_root_join_receipts,
-};
-use root_deletion::validate_root_deletion_history;
-use root_lifecycle::{
-    draining_publication_identity_matches, draining_reservation_for_publication,
-    draining_reservation_identity_matches, draining_reservation_status_matches,
-    removal_publication_identity_matches, require_all_roots_joining,
-    require_complete_snapshot_acknowledgements, require_component_plan_roots_unreserved,
-    require_grouped_root_lifecycle_open, require_joining_root, require_snapshot_root,
-    validate_draining_publication_request, validate_removal_publication_request,
-    validate_root_draining_reservation_request, validate_root_draining_reservations,
-    validate_root_snapshot_acknowledgements,
-};
-use service_publication::*;
-
 use crate::{
     dto::fleet_coordinator::{
         CoordinatorOperationStatusResponse, CoordinatorRootRemovalOperationStatus,
-        FleetCoordinatorInitArgs,
     },
+    installation::FleetCoordinatorInitArgs,
     storage::stable::fleet_coordinator::{
         FleetComponentDirectoryConfirmationIntentRecord, FleetComponentDirectoryConfirmationRecord,
         FleetComponentGroupDeploymentRecord, FleetComponentProvisioningRecord,
@@ -77,32 +51,9 @@ use crate::{
         FleetComponentRuntimeActivationCallView, FleetComponentRuntimeActivationDisposition,
     },
 };
-use std::collections::BTreeSet;
-
+use admission::apply_admission_publication_to_registry;
 use candid::Principal;
-#[cfg(test)]
-use canic_core::control_plane_support::config::ConfigModel;
-use canic_core::{
-    control_plane_support::{
-        error::InternalError,
-        ops::{
-            component_provisioning_plan::{
-                ComponentProvisioningPlanOps, MAX_FLEET_COMPONENT_PROVISIONING_PLAN_BATCHES,
-                MAX_FLEET_COMPONENT_PROVISIONING_PLAN_CONFIRMATION_ROOTS,
-                MAX_FLEET_COMPONENT_PROVISIONING_PLAN_ENTRIES,
-                MAX_FLEET_COMPONENT_PROVISIONING_PLAN_PLACEMENTS,
-            },
-            component_provisioning_receipt::{
-                RootComponentProvisioningAcceptanceReceiptAuthority,
-                RootComponentProvisioningPublishedReceiptAuthority,
-                RootComponentProvisioningReceiptOps,
-                RootComponentProvisioningRuntimesActiveReceiptAuthority,
-            },
-            fleet_registry::FleetRegistryOps,
-            fleet_service_binding::FleetServiceBindingOps,
-            root_draining_reservation::FleetSubnetRootDrainingReservationOps,
-        },
-    },
+use canic_contracts::{
     dto::{
         component_provisioning::{
             FleetComponentActivationRootProgress, FleetComponentProvisioningAdvanceRequest,
@@ -135,14 +86,65 @@ use canic_core::{
         ComponentDeploymentConfigurationDigest, ComponentGroupDeploymentId, FleetRegistryAuthority,
         MAX_FLEET_ROOT_FUNDING_SLOTS,
     },
-    shared_support::fleet_admission_authority::MAX_FLEET_ADMISSION_PUBLICATIONS,
-    shared_support::fleet_funding_policy::{
-        fleet_funding_policy_rotation_successor_policy_set_hash,
-        validate_coordinator_root_funding_policy, validate_fleet_root_funding_admission,
-        validate_fleet_root_funding_capacity,
+};
+#[cfg(test)]
+use canic_core::control_plane_support::config::ConfigModel;
+use canic_core::{
+    control_plane_support::{
+        error::InternalError,
+        ops::{
+            component_provisioning_plan::{
+                ComponentProvisioningPlanOps, MAX_FLEET_COMPONENT_PROVISIONING_PLAN_BATCHES,
+                MAX_FLEET_COMPONENT_PROVISIONING_PLAN_CONFIRMATION_ROOTS,
+                MAX_FLEET_COMPONENT_PROVISIONING_PLAN_ENTRIES,
+                MAX_FLEET_COMPONENT_PROVISIONING_PLAN_PLACEMENTS,
+            },
+            component_provisioning_receipt::{
+                RootComponentProvisioningAcceptanceReceiptAuthority,
+                RootComponentProvisioningPublishedReceiptAuthority,
+                RootComponentProvisioningReceiptOps,
+                RootComponentProvisioningRuntimesActiveReceiptAuthority,
+            },
+            fleet_registry::FleetRegistryOps,
+            fleet_service_binding::FleetServiceBindingOps,
+            root_draining_reservation::FleetSubnetRootDrainingReservationOps,
+        },
+    },
+    shared_support::{
+        fleet_admission_authority::MAX_FLEET_ADMISSION_PUBLICATIONS,
+        fleet_funding_policy::{
+            fleet_funding_policy_rotation_successor_policy_set_hash,
+            validate_coordinator_root_funding_policy, validate_fleet_root_funding_admission,
+            validate_fleet_root_funding_capacity,
+        },
     },
 };
+use component_provisioning_directory::*;
+use component_provisioning_progress::*;
+use component_provisioning_projection::*;
+use component_provisioning_reconciliation::*;
+use component_provisioning_retry::*;
+use component_provisioning_root_progress::*;
+use component_provisioning_validation::*;
+use registry_history::{
+    canonical_registry_lifecycle_history, component_operation_source_registry,
+    initial_active_registry, registry_snapshot_at_version, validate_registry_lifecycle_history,
+    validate_root_join_receipts,
+};
+use root_deletion::validate_root_deletion_history;
+use root_lifecycle::{
+    draining_publication_identity_matches, draining_reservation_for_publication,
+    draining_reservation_identity_matches, draining_reservation_status_matches,
+    removal_publication_identity_matches, require_all_roots_joining,
+    require_complete_snapshot_acknowledgements, require_component_plan_roots_unreserved,
+    require_grouped_root_lifecycle_open, require_joining_root, require_snapshot_root,
+    validate_draining_publication_request, validate_removal_publication_request,
+    validate_root_draining_reservation_request, validate_root_draining_reservations,
+    validate_root_snapshot_acknowledgements,
+};
+use service_publication::*;
 use sha2::{Digest, Sha256};
+use std::collections::BTreeSet;
 
 const COMPONENT_SCALE_OUT_RECEIPT_HASH_DOMAIN: &[u8] =
     b"canic/fleet-component-scale-out-terminal-receipt/v1";
@@ -159,7 +161,9 @@ impl FleetCoordinatorOps {
     /// Preserve failed provisioning while allowing Coordinator-dependent publication waits.
     pub(crate) fn observed_root_failure(
         phase: RootComponentProvisioningPhase,
-        failure: Option<canic_core::dto::component_provisioning::RootComponentProvisioningFailure>,
+        failure: Option<
+            canic_contracts::dto::component_provisioning::RootComponentProvisioningFailure,
+        >,
     ) -> Option<InternalError> {
         failure
             .filter(|failure| match failure.stage {
@@ -174,7 +178,7 @@ impl FleetCoordinatorOps {
 
     /// Convert protected remote evidence without manufacturing a new public diagnostic.
     pub(crate) fn observed_failure_error(
-        failure: canic_core::dto::component_provisioning::RootComponentProvisioningFailure,
+        failure: canic_contracts::dto::component_provisioning::RootComponentProvisioningFailure,
     ) -> InternalError {
         InternalError::unavailable().with_observed_provisioning_failure(
             canic_core::control_plane_support::error::ProvisioningFailureView {
@@ -205,7 +209,7 @@ impl FleetCoordinatorOps {
             Ok(_) => Ok(true),
             Err(error)
                 if error.public_error().code()
-                    == canic_core::diagnostics::codes::STATE_UNAVAILABLE.raw_code() =>
+                    == canic_contracts::diagnostics::codes::STATE_UNAVAILABLE.raw_code() =>
             {
                 Ok(false)
             }
@@ -775,7 +779,7 @@ impl FleetCoordinatorOps {
         }
         let failure = FleetComponentProvisioningRootFailure {
             origin: origin.map(|origin| {
-                canic_core::dto::component_provisioning::ProvisioningFailureOrigin {
+                canic_contracts::dto::component_provisioning::ProvisioningFailureOrigin {
                     failed_at_ns: origin.recorded_at_ns.unwrap_or(failed_at_ns),
                     retry_at_ns: origin.retry_at_ns,
                     stage: origin.stage,

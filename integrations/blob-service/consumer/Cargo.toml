@@ -11,7 +11,7 @@ license = "MIT"
 [workspace.dependencies]
 candid = "0.10.36"
 canic = { path = "../../../crates/canic", default-features = false }
-canic-blob-service = { version = "0.1.0", path = ".." }
+canic-blob-service = { path = ".." }
 ic-cdk = "0.20.3"
 
 [package]

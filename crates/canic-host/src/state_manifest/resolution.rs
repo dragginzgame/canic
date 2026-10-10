@@ -13,9 +13,9 @@ use crate::role_contract::{
     resolve_declared_role_package_contract, resolve_host_generated_fleet_coordinator_contract,
     resolve_host_generated_wasm_store_contract, validate_declared_role_package,
 };
+use canic_contracts::ids::CanisterRole;
 use canic_core::{
     bootstrap::parse_config_model,
-    ids::CanisterRole,
     role_contract::{ResolvedRoleContract, RoleContractFinding, RoleContractResolution},
     state_contract::StateManifest,
 };

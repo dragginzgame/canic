@@ -1,7 +1,6 @@
 use super::*;
 use crate::{
     cdk::types::Principal,
-    ids::CanisterRole,
     model::{
         intent::{
             BeginPlacementReceiptBackedIntentInput, BeginReceiptBackedIntentInput,
@@ -21,6 +20,7 @@ use crate::{
         PlacementAcknowledgementIndexEntryRecord, ReceiptBackedIntentStore,
     },
 };
+use canic_contracts::ids::CanisterRole;
 
 const CREATED_AT: u64 = 10;
 const NOW: u64 = 100;

@@ -1,3 +1,4 @@
+use super::metrics::{WasmStorePublicationError, record_wasm_store_publish_failed};
 use crate::{
     dto::template::{
         TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput, TemplateManifestResponse,
@@ -8,14 +9,16 @@ use crate::{
         record_wasm_store_metric,
     },
 };
-use canic_core::api::lifecycle::metrics::{
-    WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason, WasmStoreMetricSource,
+use canic_core::{
+    api::lifecycle::metrics::{
+        WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason,
+        WasmStoreMetricSource,
+    },
+    cdk::types::Principal,
+    control_plane_support::{error::InternalError, ops::cost_guard::CostGuardPermit},
+    log,
+    log::Topic,
 };
-use canic_core::cdk::types::Principal;
-use canic_core::control_plane_support::{error::InternalError, ops::cost_guard::CostGuardPermit};
-use canic_core::{log, log::Topic};
-
-use super::metrics::{WasmStorePublicationError, record_wasm_store_publish_failed};
 
 impl WasmStorePublicationWorkflow {
     // Publish one approved manifest into the target store from its authoritative source.

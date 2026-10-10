@@ -5,7 +5,7 @@ use crate::component_operation::{
     model::{ComponentAuthorityRecord, ComponentPhase, ComponentProgressRecord},
 };
 use candid::Principal;
-use canic_core::ids::{
+use canic_contracts::ids::{
     CanisterRole, ComponentSpecId, FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
 };
 
@@ -98,7 +98,7 @@ pub fn validate_progress(
     previous: Option<&ComponentProgressRecord>,
     observed: &ComponentProgressRecord,
 ) -> Result<(), ComponentOperationError> {
-    let allocation_id = canic_core::ids::ComponentInstanceId::from_root_allocation(
+    let allocation_id = canic_contracts::ids::ComponentInstanceId::from_root_allocation(
         authority.binding.authority.binding.fleet.fleet,
         authority.binding.authority.epoch,
         authority.binding.fleet_subnet_root,

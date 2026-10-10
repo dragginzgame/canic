@@ -9,7 +9,8 @@ use crate::release_set::config::{
     AppConfigDeclaration, AppConfigError, AppConfigMutationConflict, AppConfigOperation,
     model::AttachedAppRole,
 };
-use canic_core::{bootstrap::parse_config_model, ids::CanisterRole};
+use canic_contracts::ids::CanisterRole;
+use canic_core::bootstrap::parse_config_model;
 
 pub(in crate::release_set) fn attach_app_role_source(
     config_source: &str,

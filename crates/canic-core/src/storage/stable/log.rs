@@ -4,12 +4,12 @@
 //! Does not own: retention configuration, timer scheduling, or DTO projection.
 //! Boundary: one stable map owns append, count eviction, age deletion, and snapshots.
 
-use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
-    cdk::structures::{DefaultMemoryImpl, Memory, memory::RuntimeMemory},
+    cdk::structures::{
+        DefaultMemoryImpl, Memory, btreemap::BTreeMap as StableBtreeMap, memory::RuntimeMemory,
+    },
     impl_storable_unbounded,
     log::{Level, Topic},
-    role_contract::allocation::memory::log::LOG_ENTRIES_ID,
     storage::StorageError,
 };
 use serde::{Deserialize, Serialize};
@@ -19,10 +19,7 @@ std::thread_local! {
     static LOG: RefCell<LogStore<RuntimeMemory<DefaultMemoryImpl>>> = RefCell::new(
         LogStore::new(StableBtreeMap::init(crate::ic_memory_key!(
             authority = CANIC_CORE_MEMORY_AUTHORITY,
-            key = "canic.core.log.entries.v1",
-            ty = LogEntryRecord,
-            id = LOG_ENTRIES_ID
-        )))
+            key = "canic.core.log.entries.v1")))
     );
 }
 

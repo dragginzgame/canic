@@ -4,10 +4,10 @@
 //! Does not own: tenant policy, provider workflows or framework lifecycle.
 //! Boundary: one service installation borrows grants from Canic’s committed runtime.
 
-pub(crate) mod account;
-pub(crate) mod gateways;
+pub mod account;
+pub mod gateways;
 pub mod memory;
-pub(crate) mod metrics;
+pub mod metrics;
 
 use crate::ops::memory::{Grants, Memory};
 
@@ -32,7 +32,7 @@ struct Host {
 thread_local! {
     static HOST: RefCell<Option<Host>> = const { RefCell::new(None) };
 }
-pub(crate) fn install(input: &ServiceInstallationInput) {
+pub fn install(input: &ServiceInstallationInput) {
     // The complete candidate is checked before this host opens the service grants.
     let candidate = ValidatedServiceInstallation::new(
         ic_cdk::api::canister_self(),
@@ -63,7 +63,7 @@ pub(crate) fn install(input: &ServiceInstallationInput) {
         last_platform_version: ic_cdk::api::canister_version(),
     });
 }
-pub(crate) fn restore() {
+pub fn restore() {
     assert_uninitialized();
     let Grants {
         configuration,
@@ -91,7 +91,7 @@ fn publish(host: Host) {
 }
 // Management changes can restore an old heap without a lifecycle hook. A gap
 // enters a one-way fence; only fresh IC history can later prove continuity.
-pub(crate) fn observe_version() {
+pub fn observe_version() {
     let version = ic_cdk::api::canister_version();
     HOST.with_borrow_mut(|state| {
         let host = state.as_mut().expect("initialized host");
@@ -107,10 +107,10 @@ pub(crate) fn observe_version() {
 // can also leave a gap. An active owner gets one independent continuity check
 // before a later mutation. Already-fenced restoration never activates here.
 /// Anchor for proving a running instance after an observed message-version gap.
-pub(crate) struct ActiveContinuityRequest {
-    pub(crate) installation_version: u64,
+pub struct ActiveContinuityRequest {
+    pub installation_version: u64,
 }
-pub(crate) fn begin_update() -> Option<ActiveContinuityRequest> {
+pub fn begin_update() -> Option<ActiveContinuityRequest> {
     let version = ic_cdk::api::canister_version();
     let (needs_check, was_active, anchor) = HOST.with_borrow(|state| {
         let host = state.as_ref().expect("initialized host");
@@ -126,7 +126,7 @@ pub(crate) fn begin_update() -> Option<ActiveContinuityRequest> {
         installation_version: anchor,
     })
 }
-pub(crate) fn resume_continuous_active(
+pub fn resume_continuous_active(
     proof: ic_blob_storage::ops::service::recovery::CurrentInstanceProof,
 ) -> Result<(), ic_blob_storage::ops::service::recovery::CurrentInstanceRecoveryError> {
     HOST.with_borrow_mut(|state| {
@@ -137,7 +137,7 @@ pub(crate) fn resume_continuous_active(
             .resume_current_instance(proof)
     })
 }
-pub(crate) fn read<R>(f: impl FnOnce(&ServiceStores<Memory>) -> R) -> R {
+pub fn read<R>(f: impl FnOnce(&ServiceStores<Memory>) -> R) -> R {
     observe_version();
     HOST.with_borrow(|host| {
         f(host
@@ -147,7 +147,7 @@ pub(crate) fn read<R>(f: impl FnOnce(&ServiceStores<Memory>) -> R) -> R {
             .stores())
     })
 }
-pub(crate) fn mutate<R>(f: impl FnOnce(&mut ServiceStores<Memory>) -> R) -> R {
+pub fn mutate<R>(f: impl FnOnce(&mut ServiceStores<Memory>) -> R) -> R {
     observe_version();
     HOST.with_borrow_mut(|host| {
         f(host
@@ -157,7 +157,7 @@ pub(crate) fn mutate<R>(f: impl FnOnce(&mut ServiceStores<Memory>) -> R) -> R {
             .stores_mut())
     })
 }
-pub(crate) fn with_completion<R>(
+pub fn with_completion<R>(
     f: impl FnOnce(&mut ServiceStores<Memory>, CompletionAuthority) -> R,
 ) -> R {
     observe_version();
@@ -167,7 +167,7 @@ pub(crate) fn with_completion<R>(
         f(installation.stores_mut(), authority)
     })
 }
-pub(crate) fn with_download<R>(
+pub fn with_download<R>(
     f: impl FnOnce(
         &ic_blob_storage::ops::service::uploads::StableUploads<Memory>,
         &CaffeineDownloadScope,
@@ -182,7 +182,7 @@ pub(crate) fn with_download<R>(
         )
     })
 }
-pub(crate) fn with_verification<R>(
+pub fn with_verification<R>(
     f: impl FnOnce(
         &ic_blob_storage::ops::service::uploads::StableUploads<Memory>,
         CompletionAuthority,
@@ -199,19 +199,19 @@ pub(crate) fn with_verification<R>(
         )
     })
 }
-pub(crate) fn with_installation<R>(f: impl FnOnce(&ServiceInstallation<Memory>) -> R) -> R {
+pub fn with_installation<R>(f: impl FnOnce(&ServiceInstallation<Memory>) -> R) -> R {
     observe_version();
     HOST.with_borrow(|host| {
         let installation = &host.as_ref().expect("initialized host").installation;
         f(installation)
     })
 }
-pub(crate) fn with_certificate<R>(f: impl FnOnce(&mut ServiceInstallation<Memory>) -> R) -> R {
+pub fn with_certificate<R>(f: impl FnOnce(&mut ServiceInstallation<Memory>) -> R) -> R {
     observe_version();
     HOST.with_borrow_mut(|host| f(&mut host.as_mut().expect("initialized host").installation))
 }
 /// Mutable installation access used by the shared current-instance workflow.
-pub(crate) struct RecoveryHost;
+pub struct RecoveryHost;
 impl ic_blob_storage::ops::service::recovery::RecoveryInstallationAccess for RecoveryHost {
     type Memory = Memory;
     fn with_installation<R>(

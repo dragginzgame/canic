@@ -4,12 +4,13 @@
 //! Does not own: hashing, stable access, caller acquisition, or distributed convergence.
 //! Boundary: ops supplies exact bindings and independently computed digest evidence.
 
-use crate::ids::{
+use canic_contracts::ids::{
     FLEET_ADMISSION_SCHEMA_VERSION, FleetAdmissionProjection, MAX_FLEET_ADMISSION_PRINCIPALS,
 };
 use thiserror::Error as ThisError;
 
 /// Current local projection record schema.
+
 pub const FLEET_ADMISSION_PROJECTION_STATE_SCHEMA_VERSION: u16 = 1;
 
 /// Whether protected ingress is fenced or serving the active projection.

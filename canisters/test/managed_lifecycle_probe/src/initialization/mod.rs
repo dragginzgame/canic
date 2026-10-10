@@ -17,11 +17,9 @@ pub const LIMITS: ArgumentLimits = ArgumentLimits {
     max_header_len: 16_384,
 };
 
-ic_memory::ic_memory_range!(
-    authority = "managed-probe",
-    start = 125,
-    end = 125,
-    mode = Allowed
+canic::memory::memory_allocation_pool!(
+    authorities = [("managed-probe", "managed_probe.")],
+    exclusions = []
 );
 ic_memory::ic_memory_declaration!(
     authority = "managed-probe",
@@ -35,15 +33,14 @@ thread_local! {
 pub fn install() {
     let (_, args): (CanisterInitPayload, Option<Vec<u8>>) =
         LIMITS.read().expect("bounded init envelope");
-    let memory =
-        ic_memory::open_default_memory_manager_memory_by_key(KEY).expect("application grant");
+    let memory = ic_memory::open_default_memory_manager_memory(KEY).expect("application grant");
     assert_eq!(memory.size(), 0);
     EVIDENCE.with_borrow_mut(|cell| *cell = Some(Cell::init(memory, args.unwrap_or_default())));
 }
 
 pub fn restore() {
-    let memory = ic_memory::open_default_memory_manager_memory_by_key(KEY)
-        .expect("retained application grant");
+    let memory =
+        ic_memory::open_default_memory_manager_memory(KEY).expect("retained application grant");
     assert!(memory.size() > 0);
     EVIDENCE.with_borrow_mut(|cell| *cell = Some(Cell::init(memory, Vec::new())));
 }

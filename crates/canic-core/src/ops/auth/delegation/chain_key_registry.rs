@@ -159,9 +159,9 @@ mod tests {
     use crate::{
         cdk::types::Principal,
         dto::auth::{ChainKeyAlgorithm, ChainKeyKeyId},
-        ids::{BuildNetwork, CanisterRole},
         model::auth::{RootDelegatedRoleGrantPolicy, RootIssuerPolicy, RootIssuerRenewalTemplate},
     };
+    use canic_contracts::ids::{BuildNetwork, CanisterRole};
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])

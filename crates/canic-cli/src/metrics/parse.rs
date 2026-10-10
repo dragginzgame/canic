@@ -5,7 +5,7 @@
 //! Boundary: projects typed pages received by the current observability transport.
 
 use crate::metrics::model::{MetricEntry, MetricValue};
-use canic_core::dto::{
+use canic_contracts::dto::{
     metrics::{MetricEntry as MetricEntryDto, MetricValue as MetricValueDto},
     page::Page,
 };

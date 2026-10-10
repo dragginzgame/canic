@@ -1,6 +1,6 @@
 //! Fresh issuer proof fetching and idempotent issuer setup through canonical wire commands.
 
-use candid::{CandidType, Deserialize, Principal};
+use candid::Principal;
 use canic::{
     Error,
     diagnostics::codes,
@@ -8,57 +8,26 @@ use canic::{
         ActiveDelegationProofStatus, ActiveDelegationProofStatusResponse, AuthRequestMetadata,
         DelegatedRoleGrant, DelegatedToken, DelegatedTokenGetRequest, DelegatedTokenPrepareRequest,
         DelegatedTokenPrepareResponse, DelegationAudience, RootIssuerConfigureRequest,
-        RootIssuerConfigureResponse, RootIssuerRenewalBatchStatus, RootIssuerRenewalStatusRequest,
+        RootIssuerRenewalBatchStatus, RootIssuerRenewalStatusRequest,
         RootIssuerRenewalStatusResponse,
     },
     ids::cap,
     protocol,
 };
+use canic_contracts::dto::wire::projection::auth_status::RootStatusResponse;
+use canic_contracts::dto::wire::projection::fixture_delegation::CanisterCommand as IssuerCommand;
+use canic_contracts::dto::wire::projection::fixture_delegation::CanisterCommandResponse as IssuerCommandResponse;
+use canic_contracts::dto::wire::projection::fixture_issuer_bootstrap::IssuerStatusRequest;
+use canic_contracts::dto::wire::projection::fixture_issuer_bootstrap::IssuerStatusResponse;
+use canic_contracts::dto::wire::projection::fixture_issuer_bootstrap::RootCommand;
+use canic_contracts::dto::wire::projection::fixture_issuer_bootstrap::RootCommandResponse;
+use canic_contracts::dto::wire::projection::fixture_issuer_bootstrap::RootStatusRequest;
 use canic_testing_internal::pic::{
     ActiveComponentRegistryFixture, managed_test_init_identity, role_grant,
     setup_fresh_active_component_registry,
 };
 use ic_testkit::pic::CandidCallExt;
 use std::time::Duration;
-
-#[derive(CandidType)]
-enum RootCommand {
-    ConfigureIssuer(RootIssuerConfigureRequest),
-}
-#[derive(CandidType, Deserialize)]
-enum RootCommandResponse {
-    ConfigureIssuer(RootIssuerConfigureResponse),
-}
-#[derive(CandidType)]
-enum RootStatusRequest {
-    IssuerRenewal(RootIssuerRenewalStatusRequest),
-}
-#[derive(CandidType, Deserialize)]
-enum RootStatusResponse {
-    IssuerRenewal(RootIssuerRenewalStatusResponse),
-}
-#[derive(CandidType)]
-enum IssuerCommand {
-    PrepareDelegatedToken(DelegatedTokenPrepareRequest),
-}
-#[derive(CandidType, Deserialize)]
-enum IssuerCommandResponse {
-    PrepareDelegatedToken(DelegatedTokenPrepareResponse),
-}
-#[derive(CandidType)]
-enum IssuerStatusRequest {
-    ActiveDelegationProof,
-    DelegatedToken(DelegatedTokenGetRequest),
-}
-#[derive(CandidType, Deserialize)]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "mirrors the canonical issuer status wire variants"
-)]
-enum IssuerStatusResponse {
-    ActiveDelegationProof(ActiveDelegationProofStatusResponse),
-    DelegatedToken(DelegatedToken),
-}
 
 #[test]
 fn fresh_issuer_fetches_proof_and_configuration_retries_preserve_it() {

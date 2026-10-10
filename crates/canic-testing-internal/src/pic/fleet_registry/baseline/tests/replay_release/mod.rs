@@ -1,32 +1,26 @@
 //! Controller-only replay discovery against production Root and Coordinator Wasm.
 
-use candid::{CandidType, Principal};
-use canic::{
-    dto::{
-        release_intents::{IntentReleaseEntry, IntentReleaseKey},
-        release_receipts::{
-            ReplayReleaseAuthentication, ReplayReleaseEffect, ReplayReleaseEntry,
-            ReplayReleaseIntentState, ReplayReleasePhase,
-        },
-    },
-    protocol,
-};
+use candid::Principal;
+use canic::dto::release_intents::IntentReleaseEntry;
+use canic::dto::release_receipts::ReplayReleaseAuthentication;
+use canic::dto::release_receipts::ReplayReleaseEffect;
+use canic::dto::release_receipts::ReplayReleaseEntry;
+use canic::dto::release_receipts::ReplayReleaseIntentState;
+use canic::dto::release_receipts::ReplayReleasePhase;
+use canic::protocol;
+use canic_contracts::dto::wire::projection::release_receipts::Request;
 use canic_host::fleet_ensure::ops::release::{
-    intents::{self, ReleaseIntentsError, entry_key},
+    intents,
+    intents::{ReleaseIntentsError, entry_key},
     receipts::{ReleaseReceiptsError, decode_response},
 };
 use ic_testkit::pic::PocketIc;
-
-#[derive(CandidType)]
-enum Request {
-    ReplayRelease(Option<[u8; 32]>),
-}
 
 /// Read the complete small fixture, proving replay, controller denial and unchanged balance.
 pub(super) fn collect(pic: &PocketIc, owner: Principal, method: &str) -> Vec<ReplayReleaseEntry> {
     let read = |caller, cursor| {
         let argument = if method == protocol::CANIC_OBSERVABILITY {
-            candid::encode_one(canic_control_plane::dto::fleet_coordinator::CoordinatorObservabilityRequest::ReplayRelease(cursor))
+            candid::encode_one(canic_contracts::dto::fleet_coordinator::CoordinatorObservabilityRequest::ReplayRelease(cursor))
         } else {
             candid::encode_one(Request::ReplayRelease(cursor))
         }.unwrap();
@@ -59,7 +53,7 @@ pub(super) fn collect(pic: &PocketIc, owner: Principal, method: &str) -> Vec<Rep
     }
     assert!(complete, "small fixture receipt census must terminate");
     assert!(matches!(read(Principal::from_slice(&[99; 29]), None),
-        Err(ReleaseReceiptsError::Rejected { rejection, .. }) if rejection.code() == canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()));
+        Err(ReleaseReceiptsError::Rejected { rejection, .. }) if rejection.code() == canic_contracts::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()));
     assert_eq!(pic.cycle_balance(owner), balance);
     entries
 }
@@ -127,10 +121,7 @@ pub(super) fn collect_intents(
     owner: Principal,
     method: &str,
 ) -> Vec<canic::dto::release_intents::IntentReleaseEntry> {
-    #[derive(CandidType)]
-    enum IntentRequest {
-        IntentRelease(Option<IntentReleaseKey>),
-    }
+    use canic_contracts::dto::wire::projection::release_intents::Request as IntentRequest;
     let read = |caller, cursor| {
         let argument = candid::encode_one(IntentRequest::IntentRelease(cursor)).unwrap();
         let bytes = pic
@@ -160,7 +151,7 @@ pub(super) fn collect_intents(
     }
     assert!(complete, "small canonical accounting census must terminate");
     assert!(
-        matches!(read(Principal::from_slice(&[99; 29]), None), Err(ReleaseIntentsError::Rejected { rejection, .. }) if rejection.code() == canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code())
+        matches!(read(Principal::from_slice(&[99; 29]), None), Err(ReleaseIntentsError::Rejected { rejection, .. }) if rejection.code() == canic_contracts::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code())
     );
     assert_eq!(pic.cycle_balance(owner), balance);
     entries

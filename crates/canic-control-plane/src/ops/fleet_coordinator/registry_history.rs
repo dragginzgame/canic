@@ -4,11 +4,6 @@
 //! Does not own: durable Registry storage, endpoint authorization, or lifecycle effects.
 //! Boundary: consumes the one Coordinator record and validates each retained transition in order.
 
-use super::root_lifecycle::{
-    FleetSubnetRootDrainingIdentity, FleetSubnetRootRemovalPublicationIdentity,
-    draining_reservation_for_publication, validate_draining_publication_request,
-    validate_removal_publication_request,
-};
 use super::{
     FleetComponentProvisioningOperation, FleetComponentProvisioningRecord,
     FleetCoordinatorRegistryRecord, FleetRegistry, FleetRegistryOps, FleetRegistryVersion,
@@ -18,9 +13,14 @@ use super::{
     FleetSubnetRootStatus, InternalError, MAX_FLEET_COMPONENT_PROVISIONING_PLAN_BATCHES,
     apply_admission_publication_to_registry,
     fleet_funding_policy_rotation_successor_policy_set_hash, receipt_invariant,
+    root_lifecycle::{
+        FleetSubnetRootDrainingIdentity, FleetSubnetRootRemovalPublicationIdentity,
+        draining_reservation_for_publication, validate_draining_publication_request,
+        validate_removal_publication_request,
+    },
 };
 use candid::Principal;
-use canic_core::ids::{ComponentTopologyDigest, FleetSubnetRootReleaseSet, SubnetId};
+use canic_contracts::ids::{ComponentTopologyDigest, FleetSubnetRootReleaseSet, SubnetId};
 
 pub(super) fn validate_registry_lifecycle_history(
     current: &FleetCoordinatorRegistryRecord,
@@ -572,9 +572,9 @@ fn apply_service_publication_receipt(
 struct FleetServicePublicationAuthority<'a> {
     operation_id: [u8; 32],
     plan_hash: [u8; 32],
-    configuration_digest: canic_core::ids::ComponentDeploymentConfigurationDigest,
+    configuration_digest: canic_contracts::ids::ComponentDeploymentConfigurationDigest,
     root_receipt_content_hashes: &'a [[u8; 32]],
-    services: &'a [canic_core::dto::fleet_registry::FleetServiceBinding],
+    services: &'a [canic_contracts::dto::fleet_registry::FleetServiceBinding],
 }
 
 impl<'a> FleetServicePublicationAuthority<'a> {
@@ -900,10 +900,10 @@ fn historical_joining_registry(
 struct FleetSubnetRootImmutableAuthority<'a> {
     placement_subnet: SubnetId,
     fleet_subnet_root: Principal,
-    component_admissions: &'a [canic_core::ids::ComponentSpecAdmission],
+    component_admissions: &'a [canic_contracts::ids::ComponentSpecAdmission],
     component_topology_digest: ComponentTopologyDigest,
     active_release_set: FleetSubnetRootReleaseSet,
-    limits: &'a canic_core::ids::FleetSubnetRootLimits,
+    limits: &'a canic_contracts::ids::FleetSubnetRootLimits,
 }
 
 impl<'a> From<&'a FleetSubnetRootEntry> for FleetSubnetRootImmutableAuthority<'a> {

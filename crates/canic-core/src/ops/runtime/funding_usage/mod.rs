@@ -8,7 +8,7 @@ mod tests;
 
 use crate::{
     InternalError,
-    cdk::types::{Cycles, Principal},
+    cdk::types::Principal,
     dto::observability::ChildFundingUsage,
     model::{
         cycles_funding::CHILD_FUNDING_COMMAND_KIND,
@@ -20,6 +20,7 @@ use crate::{
     },
     storage::stable::replay::ReplayReceiptRecord,
 };
+use canic_contracts::cycles::Cycles;
 
 /// Report charged ledger usage separately from unresolved transfer reservations.
 pub fn child(child: Principal) -> Result<ChildFundingUsage, InternalError> {

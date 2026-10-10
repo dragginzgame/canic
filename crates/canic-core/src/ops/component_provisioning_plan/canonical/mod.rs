@@ -9,7 +9,6 @@ use super::{
     MAX_FLEET_SUBNET_ROOT_PROVISIONING_BATCH_CANONICAL_BYTES,
 };
 use crate::{
-    cdk::types::Cycles,
     config::{ComponentDeploymentLimits, ComponentDeploymentPurpose, FleetServiceMemberPurpose},
     dto::{
         component_provisioning::{
@@ -19,6 +18,9 @@ use crate::{
         },
         fleet_registry::FleetRegistryVersion,
     },
+};
+use canic_contracts::{
+    cycles::Cycles,
     ids::{ComponentGroupMemberPath, FleetRegistryAuthority, FleetSubnetRootLimits},
 };
 

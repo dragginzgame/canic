@@ -4,36 +4,33 @@
 //! Does not own: config validation, schema definitions, or runtime config install.
 //! Boundary: host-side bootstrap tooling calls this before embedding generated source.
 
-use crate::{
-    config::{
-        ComponentChildFundingPolicy, ComponentChildSpec, ComponentDeploymentLabel,
-        ComponentDeploymentLabelKey, ComponentDeploymentLabelValue, ComponentDeploymentLimits,
-        ComponentDeploymentPurpose, ComponentDeploymentSpawnGrantLimit, ComponentLimits,
-        ComponentProvisioningGrant, ComponentSpawnGrant, ComponentSpec, ComponentTopology,
-        FlattenedComponentGroupDeploymentMember, FleetServiceMemberPurpose, RoleRuntimeAuthority,
-        RuntimeApplicationAuthorization, RuntimeCanisterAuthority, RuntimeCanisterConfig,
-        RuntimeChildCanisterAuthority, RuntimeDeploymentMemberAuthority,
-        schema::{
-            AppConfig, AuthConfig, CanisterAuthConfig, CanisterKind, ChainKeyRootProofConfig,
-            ComponentChildConfig, ComponentChildKind, ComponentDeploymentMemberLimitConfig,
-            ComponentDeploymentSpawnGrantLimitConfig, ComponentGroupComponentConfig,
-            ComponentGroupDeploymentConfig, ComponentGroupIncludeConfig,
-            ComponentGroupPlacementPolicyConfig, ComponentGroupSpecConfig, ComponentLimitsConfig,
-            ComponentProvisioningGrantConfig, ComponentSpawnGrantConfig, ComponentSpecConfig,
-            ConfigModel, CyclesFundingBudgetConfig, CyclesFundingPolicyConfig,
-            DelegatedTokenConfig, DiagnosticsCanisterConfig, FleetInitMode,
-            FleetServicePlacementPolicyConfig, FleetServiceTargetConfig, FleetServicesConfig,
-            IndexConfig, IndexPool, LocalApplicationAuthorizationConfig, LogConfig,
-            MetricsCanisterConfig, MetricsProfile, RoleAttestationConfig, RoleDeclaration,
-            RoleDeclarationKind, ScalePool, ScalePoolPolicy, ScalingConfig, ServicesConfig,
-            ShardPool, ShardPoolPolicy, ShardingConfig, Standards, StandardsCanisterConfig,
-            TopupPolicy,
-        },
+use crate::config::{
+    ComponentChildFundingPolicy, ComponentChildSpec, ComponentDeploymentLabel,
+    ComponentDeploymentLabelKey, ComponentDeploymentLabelValue, ComponentDeploymentLimits,
+    ComponentDeploymentPurpose, ComponentDeploymentSpawnGrantLimit, ComponentLimits,
+    ComponentProvisioningGrant, ComponentSpawnGrant, ComponentSpec, ComponentTopology,
+    FlattenedComponentGroupDeploymentMember, FleetServiceMemberPurpose, RoleRuntimeAuthority,
+    RuntimeApplicationAuthorization, RuntimeCanisterAuthority, RuntimeCanisterConfig,
+    RuntimeChildCanisterAuthority, RuntimeDeploymentMemberAuthority,
+    schema::{
+        AppConfig, AuthConfig, CanisterAuthConfig, CanisterKind, ChainKeyRootProofConfig,
+        ComponentChildConfig, ComponentChildKind, ComponentDeploymentMemberLimitConfig,
+        ComponentDeploymentSpawnGrantLimitConfig, ComponentGroupComponentConfig,
+        ComponentGroupDeploymentConfig, ComponentGroupIncludeConfig,
+        ComponentGroupPlacementPolicyConfig, ComponentGroupSpecConfig, ComponentLimitsConfig,
+        ComponentProvisioningGrantConfig, ComponentSpawnGrantConfig, ComponentSpecConfig,
+        ConfigModel, CyclesFundingBudgetConfig, CyclesFundingPolicyConfig, DelegatedTokenConfig,
+        DiagnosticsCanisterConfig, FleetInitMode, FleetServicePlacementPolicyConfig,
+        FleetServiceTargetConfig, FleetServicesConfig, IndexConfig, IndexPool,
+        LocalApplicationAuthorizationConfig, LogConfig, MetricsCanisterConfig, MetricsProfile,
+        RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind, ScalePool, ScalePoolPolicy,
+        ScalingConfig, ServicesConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
+        StandardsCanisterConfig, TopupPolicy,
     },
-    ids::{
-        AppId, BuildNetwork, CanisterRole, ComponentGroupDeploymentId, ComponentGroupMemberId,
-        ComponentGroupMemberPath, ComponentGroupSpecId, ComponentSpecId, FleetServiceId,
-    },
+};
+use canic_contracts::ids::{
+    AppId, BuildNetwork, CanisterRole, ComponentGroupDeploymentId, ComponentGroupMemberId,
+    ComponentGroupMemberPath, ComponentGroupSpecId, ComponentSpecId, FleetServiceId,
 };
 use proc_macro2::{Literal, TokenStream};
 use quote::quote;
@@ -41,6 +38,7 @@ use quote::quote;
 /// config_model
 ///
 /// Render the validated config model into a Rust expression string.
+
 pub fn config_model(config: &ConfigModel) -> String {
     let mut source = render_config_model(config).to_string();
     source.push('\n');
@@ -63,7 +61,7 @@ fn render_role_runtime_authority(authority: &RoleRuntimeAuthority) -> TokenStrea
     let public_metrics = authority.public_metrics.iter().map(|family| {
         let variant =
             proc_macro2::Ident::new(&format!("{family:?}"), proc_macro2::Span::call_site());
-        quote! { ::canic::__internal::core::dto::public_status::PublicMetricFamily::#variant }
+        quote! { ::canic::__internal::contracts::dto::public_status::PublicMetricFamily::#variant }
     });
     let fleet_admission = authority.fleet_admission;
     let global_icrc21 = authority.global_icrc21;
@@ -406,7 +404,7 @@ fn render_config_model(config: &ConfigModel) -> TokenStream {
     let public_metrics = config.public_metrics.iter().map(|family| {
         let variant =
             proc_macro2::Ident::new(&format!("{family:?}"), proc_macro2::Span::call_site());
-        quote! { ::canic::__internal::core::dto::public_status::PublicMetricFamily::#variant }
+        quote! { ::canic::__internal::contracts::dto::public_status::PublicMetricFamily::#variant }
     });
     let app = render_app_config(&config.app);
     let roles = render_btree_map(

@@ -11,19 +11,18 @@ use crate::{
     InternalError,
     domain::memory::{
         MemoryAllocationBinding, MemoryAllocationState, MemoryCommitRecoveryErrorResponse,
-        MemoryRangeAuthorityMode,
     },
     dto::memory::{
-        MemoryAllocationEntry, MemoryAllocationRangeClaim, MemoryAllocationRecordEntry,
-        MemoryAllocationSizeEntry, MemoryAllocationsResponse, MemoryCommitRecoveryResponse,
-        MemoryCommitSlotResponse, MemoryLedgerMemoryEntry, MemoryLedgerResponse,
-        MemoryRangeAuthorityEntry,
+        MemoryAllocationEntry, MemoryAllocationPoolEntry, MemoryAllocationRecordEntry,
+        MemoryAllocationSizeEntry, MemoryAllocationsResponse, MemoryAuthorityEntry,
+        MemoryCommitRecoveryResponse, MemoryCommitSlotResponse, MemoryExcludedRangeEntry,
+        MemoryLedgerMemoryEntry, MemoryLedgerResponse,
     },
     memory::{self, ledger, registry::MemoryRegistryError},
 };
 use ic_memory::{
     AllocationState, CommitRecoveryError, CommitSlotDiagnostic, CommitStoreDiagnostic,
-    DiagnosticMemorySize, DiagnosticRecord, MemoryManagerRangeMode,
+    DiagnosticMemorySize, DiagnosticRecord,
 };
 use thiserror::Error as ThisError;
 
@@ -35,6 +34,8 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum MemoryRegistryOpsError {
+    #[error(transparent)]
+    Ledger(#[from] ledger::MemoryLedgerError),
     // this error comes from the Canic memory runtime boundary
     #[error(transparent)]
     Registry(#[from] MemoryRegistryError),
@@ -52,10 +53,14 @@ pub enum MemoryRegistryOpsError {
 impl From<MemoryRegistryOpsError> for InternalError {
     fn from(err: MemoryRegistryOpsError) -> Self {
         let code = match err {
-            MemoryRegistryOpsError::Registry(_) | MemoryRegistryOpsError::Runtime(_) => {
+            MemoryRegistryOpsError::Registry(_)
+            | MemoryRegistryOpsError::Runtime(_)
+            | MemoryRegistryOpsError::Ledger(ledger::MemoryLedgerError::Pool(_)) => {
                 crate::diagnostics::codes::STORAGE_INVALID_STATE
             }
-            MemoryRegistryOpsError::Diagnostic(_) | MemoryRegistryOpsError::State(_) => {
+            MemoryRegistryOpsError::Diagnostic(_)
+            | MemoryRegistryOpsError::State(_)
+            | MemoryRegistryOpsError::Ledger(ledger::MemoryLedgerError::Diagnostic(_)) => {
                 crate::diagnostics::codes::STATE_INVALID
             }
         };
@@ -123,11 +128,7 @@ impl MemoryRegistryOps {
     pub fn ledger_snapshot() -> Result<MemoryLedgerResponse, InternalError> {
         let snapshot = ledger::try_snapshot().map_err(MemoryRegistryOpsError::from)?;
 
-        let authorities = snapshot
-            .authorities
-            .into_iter()
-            .map(memory_range_authority_entry_response)
-            .collect();
+        let allocation_pool = memory_allocation_pool_response(&snapshot.allocation_pool);
 
         let records: Vec<MemoryAllocationRecordEntry> = snapshot
             .export
@@ -142,7 +143,7 @@ impl MemoryRegistryOps {
             current_generation: snapshot.export.current_generation,
             ledger_memory_manager_id: snapshot.export.ledger_anchor.id(),
             commit_recovery: commit_recovery_response(snapshot.export.commit_recovery),
-            authorities,
+            allocation_pool,
             memories,
             records,
         })
@@ -197,22 +198,12 @@ fn memory_allocation_entry_response(entry: ic_memory::MemoryAllocation) -> Memor
     MemoryAllocationEntry {
         memory_manager_id: entry.memory_manager_id,
         binding,
-        range_claim: entry.range_claim.map(|claim| MemoryAllocationRangeClaim {
-            authority: claim.authority,
-            mode: memory_range_authority_mode(claim.mode),
-        }),
+        pool_eligible: entry.pool_eligible,
         virtual_extent: memory_allocation_size_response(entry.virtual_extent),
         allocated_buckets: entry.allocated_buckets,
         allocated_bytes: entry.allocated_bytes,
         bucket_slack_bytes: entry.bucket_slack_bytes,
         payload_bytes: entry.payload_bytes,
-    }
-}
-
-const fn memory_range_authority_mode(mode: MemoryManagerRangeMode) -> MemoryRangeAuthorityMode {
-    match mode {
-        MemoryManagerRangeMode::Reserved => MemoryRangeAuthorityMode::Reserved,
-        MemoryManagerRangeMode::Allowed => MemoryRangeAuthorityMode::Allowed,
     }
 }
 
@@ -269,16 +260,26 @@ fn memory_ledger_memory_entry_response(
     })
 }
 
-fn memory_range_authority_entry_response(
-    authority: ic_memory::MemoryManagerAuthorityRecord,
-) -> MemoryRangeAuthorityEntry {
-    let range = authority.range();
-    MemoryRangeAuthorityEntry {
-        owner: authority.authority().to_string(),
-        start: range.start(),
-        end: range.end(),
-        mode: memory_range_authority_mode(authority.mode()),
-        purpose: authority.purpose().unwrap_or_default().to_string(),
+fn memory_allocation_pool_response(
+    pool: &ic_memory::MemoryAllocationPool,
+) -> MemoryAllocationPoolEntry {
+    MemoryAllocationPoolEntry {
+        authorities: pool
+            .authorities()
+            .iter()
+            .map(|grant| MemoryAuthorityEntry {
+                owner: grant.authority().to_string(),
+                key_prefix: grant.key_prefix().to_string(),
+            })
+            .collect(),
+        excluded_ranges: pool
+            .excluded_ranges()
+            .iter()
+            .map(|range| MemoryExcludedRangeEntry {
+                start: range.start(),
+                end: range.end(),
+            })
+            .collect(),
     }
 }
 

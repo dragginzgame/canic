@@ -8,21 +8,18 @@ mod release;
 #[cfg(test)]
 mod tests;
 
-use crate::MAX_DOCUMENT_READ_BYTES;
 use crate::{
-    icp::existing_local_canister_candid_path, registry::RegistryEntry,
+    MAX_DOCUMENT_READ_BYTES, icp::existing_local_canister_candid_path, registry::RegistryEntry,
     release_set::CanicInfrastructureArtifactEntry,
+};
+use canic_contracts::ids::CanisterRole;
+use canic_core::role_contract::{
+    ProtocolProfileDigest, RoleCapabilityKey, derive_protocol_profile_hashes,
 };
 use ic_host_artifacts::artifact::ArtifactError;
 use ic_host_fs::read::read_optional_file_no_follow;
-
-use canic_core::{
-    ids::CanisterRole,
-    role_contract::{ProtocolProfileDigest, RoleCapabilityKey, derive_protocol_profile_hashes},
-};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, io, path::PathBuf};
-
 use thiserror::Error as ThisError;
 
 pub use release::{ReleaseProtocolBindingError, resolve_release_registry_protocol_binding};

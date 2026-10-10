@@ -4,7 +4,8 @@
 //! Does not own: build-network configuration, deployment selection, or CLI flags.
 //! Boundary: ops facade over infra build-network discovery.
 
-use crate::{ids::BuildNetwork, infra::ic::build_network::BuildNetworkInfra};
+use crate::infra::ic::build_network::BuildNetworkInfra;
+use canic_contracts::ids::BuildNetwork;
 
 ///
 /// BuildNetworkOps

@@ -1,28 +1,5 @@
 //! Repo-only PocketIC fixtures layered on top of `ic-testkit`.
 
-#[cfg(all(
-    feature = "pocketic-fixtures",
-    any(not(test), feature = "governed-pocketic-tests")
-))]
-use canic_core::{
-    cdk::candid::Principal,
-    ids::{FleetAdmissionPolicy, FleetBinding, FleetCoordinatorRootFundingPolicy},
-    shared_support::fleet_admission_policy::{
-        bind_initial_fleet_admission_policy, compile_fleet_admission_policy_template,
-    },
-};
-use canic_core::{
-    cdk::types::Cycles,
-    ids::{
-        CyclesFundingBudget, FleetFundingProfile, FleetSubnetRootFundingAuthority,
-        FleetSubnetRootFundingPolicy,
-    },
-};
-#[cfg(all(test, feature = "governed-pocketic-tests"))]
-use std::sync::{Mutex, MutexGuard, PoisonError};
-#[cfg(all(test, feature = "governed-pocketic-tests"))]
-use std::{collections::BTreeSet, io::Write, panic::AssertUnwindSafe, path::Path, time::Instant};
-
 mod artifacts;
 mod audit;
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
@@ -49,8 +26,39 @@ mod timing;
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
 mod workers;
 
+#[cfg(all(
+    feature = "pocketic-fixtures",
+    any(not(test), feature = "governed-pocketic-tests")
+))]
+use canic_contracts::ids::{FleetAdmissionPolicy, FleetBinding, FleetCoordinatorRootFundingPolicy};
+use canic_contracts::{
+    cycles::Cycles,
+    ids::{
+        CyclesFundingBudget, FleetFundingProfile, FleetSubnetRootFundingAuthority,
+        FleetSubnetRootFundingPolicy,
+    },
+};
+#[cfg(all(
+    feature = "pocketic-fixtures",
+    any(not(test), feature = "governed-pocketic-tests")
+))]
+use canic_core::{
+    cdk::candid::Principal,
+    shared_support::fleet_admission_policy::{
+        bind_initial_fleet_admission_policy, compile_fleet_admission_policy_template,
+    },
+};
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
 use cases::GovernedTestCase;
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+use std::{
+    collections::BTreeSet,
+    io::Write,
+    panic::AssertUnwindSafe,
+    path::Path,
+    sync::{Mutex, MutexGuard, PoisonError},
+    time::Instant,
+};
 
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
 const TARGET_GOVERNED_CASE_ENV: &str = "CANIC_TARGET_GOVERNED_CASE";

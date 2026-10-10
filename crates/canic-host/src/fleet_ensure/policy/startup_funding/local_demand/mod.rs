@@ -14,9 +14,9 @@ use crate::fleet_ensure::{
         StartupDemandUnavailable, StartupUsageUnavailable,
     },
 };
+use canic_contracts::ids::ReleaseBuildId;
 use canic_core::{
     bootstrap::compiled::ConfigModel, control_plane_support::config::ComponentTopology,
-    ids::ReleaseBuildId,
 };
 
 /// Bind policy and charges before using native balance as evidence of local demand.

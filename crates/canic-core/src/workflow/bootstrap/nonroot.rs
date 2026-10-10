@@ -6,13 +6,13 @@
 
 #[cfg(feature = "sharding")]
 use crate::workflow::placement::sharding::ShardingWorkflow;
-use crate::workflow::runtime::auth::RuntimeAuthWorkflow;
 use crate::{
     InternalError, log,
     log::Topic,
     ops::runtime::ready::ReadyOps,
-    workflow::placement::{
-        acknowledgement::PlacementAcknowledgementWorkflow, scaling::ScalingWorkflow,
+    workflow::{
+        placement::{acknowledgement::PlacementAcknowledgementWorkflow, scaling::ScalingWorkflow},
+        runtime::auth::RuntimeAuthWorkflow,
     },
 };
 
@@ -33,6 +33,7 @@ use crate::{
 ///
 /// This function is safe to retry and safe to run multiple times.
 ///
+
 pub async fn bootstrap_init_nonroot_canister() -> Result<(), InternalError> {
     log!(Topic::Init, Info, "bootstrap (nonroot): init start");
 

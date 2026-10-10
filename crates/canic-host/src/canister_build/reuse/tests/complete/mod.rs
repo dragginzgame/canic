@@ -14,7 +14,8 @@ use crate::{
         fixture::compile_and_persist_fixture_artifact_manifest,
     },
 };
-use canic_core::{ids::CanisterRole, role_contract::ProtocolProfileDigest};
+use canic_contracts::ids::CanisterRole;
+use canic_core::role_contract::ProtocolProfileDigest;
 use flate2::{Compression, GzBuilder};
 
 #[test]

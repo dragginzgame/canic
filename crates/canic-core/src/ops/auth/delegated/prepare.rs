@@ -28,6 +28,8 @@ const TOKEN_NONCE_DOMAIN: &[u8] = b"canic-token-nonce-v1";
 
 pub struct PrepareDelegatedTokenInput<'a> {
     pub proof: &'a DelegationProof,
+    /// Exclusive local authority deadline, capped by enrolled root-key policy.
+    pub authority_expires_at_ns: u64,
     pub operation_id: [u8; 32],
     pub prepared_by: Principal,
     pub audience: DelegationAudience,
@@ -102,11 +104,12 @@ pub fn prepare_delegated_token(
     input: PrepareDelegatedTokenInput<'_>,
 ) -> Result<PreparedDelegatedToken, PrepareDelegatedTokenError> {
     let cert = &input.proof.cert;
+    let authority_expires_at_ns = cert.expires_at_ns.min(input.authority_expires_at_ns);
 
     if input.now_ns < cert.not_before_ns {
         return Err(PrepareDelegatedTokenError::CertNotYetValid);
     }
-    if input.now_ns >= cert.expires_at_ns {
+    if input.now_ns >= authority_expires_at_ns {
         return Err(PrepareDelegatedTokenError::CertExpired);
     }
     if input.ttl_ns == 0 {
@@ -123,7 +126,7 @@ pub fn prepare_delegated_token(
         .now_ns
         .checked_add(input.ttl_ns)
         .ok_or(PrepareDelegatedTokenError::TokenExpiresAtOverflow)?;
-    if expires_at > cert.expires_at_ns {
+    if expires_at > authority_expires_at_ns {
         return Err(PrepareDelegatedTokenError::TokenOutlivesCert);
     }
 
@@ -206,12 +209,12 @@ mod tests {
             DelegationCert, IcCanisterSignatureProofV1, IssuerProof, IssuerProofAlgorithm,
             IssuerProofBinding, RootProof,
         },
-        ids::CanisterRole,
         ops::auth::delegated::{
             canonical::issuer_proof_binding_hash,
             verify::{VerifyDelegatedTokenInput, verify_delegated_token},
         },
     };
+    use canic_contracts::ids::CanisterRole;
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -254,6 +257,7 @@ mod tests {
 
     fn input(proof: &DelegationProof) -> PrepareDelegatedTokenInput<'_> {
         PrepareDelegatedTokenInput {
+            authority_expires_at_ns: proof.cert.expires_at_ns,
             proof,
             operation_id: [4; 32],
             prepared_by: p(9),
@@ -551,6 +555,30 @@ mod tests {
 
         assert_eq!(token.claims.issued_at_ns, 120);
         assert_eq!(token.claims.expires_at_ns, 240);
+    }
+
+    #[test]
+    fn prepare_delegated_token_honors_local_authority_deadline_without_rewriting_certificate() {
+        let proof = proof();
+        let mut request = input(&proof);
+        request.authority_expires_at_ns = 180;
+        let prepared = prepare_delegated_token(request).unwrap();
+        assert_eq!(prepared.claims.expires_at_ns, 180);
+        assert_eq!(prepared.proof, proof);
+
+        let mut request = input(&proof);
+        request.authority_expires_at_ns = 179;
+        assert_eq!(
+            prepare_delegated_token(request),
+            Err(PrepareDelegatedTokenError::TokenOutlivesCert)
+        );
+
+        let mut request = input(&proof);
+        request.authority_expires_at_ns = request.now_ns;
+        assert_eq!(
+            prepare_delegated_token(request),
+            Err(PrepareDelegatedTokenError::CertExpired)
+        );
     }
 
     #[test]

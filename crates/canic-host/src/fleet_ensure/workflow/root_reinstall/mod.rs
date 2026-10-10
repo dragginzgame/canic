@@ -23,7 +23,7 @@ use crate::fleet_ensure::{
     },
     policy::{RootStartPlanInput, root_reinstall},
 };
-use canic_core::cdk::types::Cycles;
+use canic_contracts::cycles::Cycles;
 use std::{collections::BTreeSet, path::Path};
 
 pub(super) fn verify_before_apply<P: EnsurePlatform>(

@@ -301,7 +301,7 @@ pub(super) fn compile_component_operation_services(
     source_registry: &FleetRegistry,
     record: &FleetComponentProvisioningRecord,
     root_receipts: &[RootComponentProvisioningStatusResponse],
-) -> Result<Vec<canic_core::dto::fleet_registry::FleetServiceBinding>, InternalError> {
+) -> Result<Vec<canic_contracts::dto::fleet_registry::FleetServiceBinding>, InternalError> {
     match record.plan.operation {
         FleetComponentProvisioningOperation::FreshInstall => {
             FleetServiceBindingOps::compile_initial_compiled(

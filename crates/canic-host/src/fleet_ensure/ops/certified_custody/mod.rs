@@ -8,7 +8,8 @@ mod tests;
 
 use crate::fleet_ensure::view::certified_custody::CertifiedCanisterCustodyView;
 use candid::Principal;
-use canic_core::{cdk::utils::hash::hex_bytes, ids::SubnetId};
+use canic_contracts::ids::SubnetId;
+use canic_core::cdk::utils::hash::hex_bytes;
 use ic_agent::{Agent, AgentError, Certificate};
 use ic_certification::{Label, LookupResult};
 use std::{collections::BTreeSet, time::Duration};

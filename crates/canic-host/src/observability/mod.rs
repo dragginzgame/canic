@@ -12,64 +12,24 @@ use crate::{
     query_canister_with_arg,
     registry::RegistryEntry,
 };
-use candid::{CandidType, Deserialize, Principal, types::principal::PrincipalError};
-use canic_core::{
-    dto::{
-        canister::{CanisterInspectionRequest, CanisterStatusResponse},
-        observability::{
-            CanisterObservabilityRequest, CanisterObservabilityResponse,
-            FleetCanisterObservabilityRequest,
-        },
-        page::Page,
-    },
-    ids::CanisterRole,
-    protocol,
-};
+use candid::{Principal, types::principal::PrincipalError};
+use canic_contracts::dto::canister::CanisterInspectionRequest;
+use canic_contracts::dto::observability::CanisterObservabilityRequest;
+use canic_contracts::dto::observability::CanisterObservabilityResponse;
+use canic_contracts::dto::observability::FleetCanisterObservabilityRequest;
+use canic_contracts::dto::wire::projection::funding_observation::Command as RootCommandFragment;
+use canic_contracts::dto::wire::projection::funding_observation::Response as RootCommandResponseFragment;
+use canic_contracts::dto::wire::projection::protected_observability::RootStatusRequestFragment;
+use canic_contracts::dto::wire::projection::protected_observability::RootStatusResponseFragment;
+use canic_contracts::dto::wire::projection::protected_observability::StoreStatusRequestFragment;
+use canic_contracts::dto::wire::projection::protected_observability::StoreStatusResponseFragment;
+use canic_contracts::ids::CanisterRole;
+use canic_contracts::protocol;
 use std::{collections::BTreeSet, path::Path};
 use thiserror::Error as ThisError;
 
-#[derive(CandidType)]
-enum RootCommandFragment {
-    InspectCanister(CanisterInspectionRequest),
-    ObserveCanister(FleetCanisterObservabilityRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum RootCommandResponseFragment {
-    InspectCanister(Box<CanisterStatusResponse>),
-    InspectionReserveRequired(canic_core::dto::canister::CanisterInspectionReserveResponse),
-    ObserveCanister(CanisterObservabilityResponse),
-}
-
-#[derive(CandidType)]
-enum RootStatusRequestFragment {
-    ChildFunding(Principal),
-    CycleBalance,
-    CycleHistory(canic_core::dto::page::PageRequest),
-    MemoryAllocations,
-    Metrics(canic_core::dto::role::MetricsStatusRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum RootStatusResponseFragment {
-    ChildFunding(canic_core::dto::observability::ChildFundingUsage),
-    CycleBalance(canic_core::dto::role::CycleBalanceStatusResponse),
-    CycleHistory(Page<canic_core::dto::cycles::CycleTrackerEntry>),
-    MemoryAllocations(canic_core::dto::memory::MemoryAllocationsResponse),
-    Metrics(Page<canic_core::dto::metrics::MetricEntry>),
-}
-
-#[derive(CandidType)]
-enum StoreStatusRequestFragment {
-    CycleHistory(canic_core::dto::page::PageRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum StoreStatusResponseFragment {
-    CycleHistory(Page<canic_core::dto::cycles::CycleTrackerEntry>),
-}
-
 /// Failure to route one protected observation through exact current Fleet authority.
+
 #[derive(Debug, ThisError)]
 pub enum FleetObservabilityError {
     #[error("Canister {canister} has no owning Fleet Subnet Root in current topology")]
@@ -168,7 +128,7 @@ pub fn observe_fleet_canister(
                 }
             })?;
             Ok(CanisterObservabilityResponse::CycleBalance(
-                canic_core::dto::role::CycleBalanceStatusResponse { cycles },
+                canic_contracts::dto::role::CycleBalanceStatusResponse { cycles },
             ))
         });
     }
@@ -360,7 +320,7 @@ mod tests {
     fn child_funding_response_binds_parent_and_child_for_direct_and_relayed_reads() {
         let parent = Principal::from_slice(&[1]);
         let child = Principal::from_slice(&[2]);
-        let usage = canic_core::dto::observability::ChildFundingUsage {
+        let usage = canic_contracts::dto::observability::ChildFundingUsage {
             parent,
             child,
             observed_at_ns: 10,

@@ -425,7 +425,8 @@ pub(super) fn execute_finalize_manifest(
                 canister_id: download_journal.artifacts[index].canister_id.clone(),
                 snapshot_id: download_journal.artifacts[index].snapshot_id.clone(),
             })?;
-        commit_artifact_directory(Path::new(&temp_path), &artifact_path, checksum)?;
+        commit_artifact_directory(Path::new(&temp_path), &artifact_path, checksum)
+            .map_err(PersistenceError::from)?;
 
         let mut completed_journal = download_journal.clone();
         completed_journal.artifacts[index].temp_path = None;

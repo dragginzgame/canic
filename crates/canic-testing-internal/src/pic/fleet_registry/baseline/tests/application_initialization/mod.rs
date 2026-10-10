@@ -5,10 +5,7 @@ use canic::dto::component_registry::{
     ComponentApplicationInitialization, RootComponentInitializationRequest,
 };
 
-#[derive(CandidType)]
-enum Command {
-    BindComponentInitialization(RootComponentInitializationRequest),
-}
+use canic_contracts::dto::wire::projection::fixture_baseline_application_initialization::Command;
 
 #[test]
 #[expect(

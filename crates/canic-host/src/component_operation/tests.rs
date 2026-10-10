@@ -3,17 +3,12 @@
 //! These native transport probes do not claim IC lifecycle execution evidence.
 
 use super::{
-    ComponentOperationError,
-    model::*,
-    ops::{self, ComponentTransport},
-    policy,
-    view::*,
-    workflow,
+    ComponentOperationError, model::*, ops, ops::ComponentTransport, policy, view::*, workflow,
 };
 use crate::test_support::{fleet_subnet_root_funding_authority, temp_dir};
 use candid::Principal;
-use canic_core::{
-    cdk::types::Cycles,
+use canic_contracts::{
+    cycles::Cycles,
     ids::{
         AppId, CanonicalNetworkId, ComponentBinding, ComponentInstanceId, ComponentSpecAdmission,
         ComponentTopologyDigest, CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding,
@@ -26,7 +21,7 @@ use std::{io, path::PathBuf};
 
 fn authority() -> ComponentAuthorityRecord {
     let operator = Principal::from_slice(&[1]);
-    let component_spec: canic_core::ids::ComponentSpecId = "core".parse().unwrap();
+    let component_spec: canic_contracts::ids::ComponentSpecId = "core".parse().unwrap();
     ComponentAuthorityRecord {
         environment: "local".into(),
         fleet: "demo".into(),
@@ -76,7 +71,7 @@ fn authority() -> ComponentAuthorityRecord {
         },
         release_set: FleetSubnetRootReleaseSet {
             release_build_id: ReleaseBuildId::from_nonce(
-                canic_core::ids::ReleaseBuildNonce::from_random_bytes([4; 32]),
+                canic_contracts::ids::ReleaseBuildNonce::from_random_bytes([4; 32]),
             ),
             manifest_digest: ReleaseSetDigest::from_bytes([5; 32]),
         },
@@ -371,10 +366,10 @@ fn retained_incomplete_allocation_is_resumed_even_when_the_pool_is_empty() {
 
 #[test]
 fn remote_progress_must_match_the_exact_request_caller_and_release() {
-    use canic_control_plane::dto::root::RootComponentOperationStatus;
-    use canic_core::dto::component_registry::{
+    use canic_contracts::dto::component_registry::{
         ComponentProvisioningOrigin, RootComponentAllocationPhase, RootComponentAllocationResponse,
     };
+    use canic_contracts::dto::root::RootComponentOperationStatus;
     let record = ops::new_record("core", authority()).unwrap();
     let binding = &record.plan.authority;
     let allocation = RootComponentAllocationResponse {

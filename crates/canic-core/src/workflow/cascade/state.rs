@@ -10,7 +10,6 @@ use crate::{
         cascade::{StateCascadeReport, StateSnapshotInput},
         fleet_activation::FleetActivationPhase,
     },
-    ids::CanisterRole,
     log,
     log::Topic,
     ops::{
@@ -40,8 +39,10 @@ use crate::{
         runtime::cycles::CycleWorkflow,
     },
 };
+use canic_contracts::ids::CanisterRole;
 
 /// State application and fanout through each recipient's current command contract.
+
 pub struct StateCascadeWorkflow;
 
 fn prepared_state_snapshot_hash(

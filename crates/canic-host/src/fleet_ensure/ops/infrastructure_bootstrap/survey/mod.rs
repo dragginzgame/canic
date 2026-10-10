@@ -10,8 +10,9 @@ use crate::{
                 InfrastructureBootstrapSourceRecord, InfrastructureBootstrapSurveyRecord,
             },
         },
+        ops,
         ops::{
-            self, EnsurePaths,
+            EnsurePaths,
             capacity_import::admission::observer::{inventory, management},
             infrastructure_bootstrap::{
                 InfrastructureBootstrapError, LedgerAccount, authenticated_agent, declarations,
@@ -21,11 +22,9 @@ use crate::{
     },
     icp::IcpCli,
 };
-use ic_host_fs::durable::write_bytes;
-use ic_host_fs::read::read_optional_file_no_follow;
-
 use candid::{Nat, Principal};
 use canic_core::cdk::utils::hash::{decode_hex, hex_bytes};
+use ic_host_fs::{durable::write_bytes, read::read_optional_file_no_follow};
 use sha2_host::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -214,7 +213,8 @@ impl BootstrapSurvey {
                 .plan
                 .with_file_name("infrastructure-bootstrap-survey.json"),
             &bytes,
-        )?;
+        )
+        .map_err(crate::publication::ops::io_error)?;
         Ok(source)
     }
 
@@ -317,7 +317,8 @@ fn retain_request(
         request_sha256,
         source: None,
     };
-    write_bytes(&path, &serde_json::to_vec_pretty(&record)?)?;
+    write_bytes(&path, &serde_json::to_vec_pretty(&record)?)
+        .map_err(crate::publication::ops::io_error)?;
     Ok(record)
 }
 

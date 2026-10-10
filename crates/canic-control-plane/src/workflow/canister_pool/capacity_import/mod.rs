@@ -10,6 +10,13 @@ use crate::{
     },
     workflow::canister_pool::require_import_candidate,
 };
+use canic_contracts::{
+    dto::pool_import::{
+        PoolImportCommand, PoolImportContext, PoolImportIdentity, PoolImportPhase,
+        PoolImportReservation, PoolImportSourceProgress, PoolImportStatus,
+    },
+    ids::BuildNetwork,
+};
 use canic_core::{
     cdk::types::Principal,
     control_plane_support::{
@@ -22,14 +29,10 @@ use canic_core::{
         },
         workflow::runtime::fleet_activation::FleetActivationWorkflow,
     },
-    dto::pool_import::{
-        PoolImportCommand, PoolImportContext, PoolImportIdentity, PoolImportPhase,
-        PoolImportReservation, PoolImportSourceProgress, PoolImportStatus,
-    },
-    ids::BuildNetwork,
 };
 
 /// Route authenticated current-contract import actions to the durable owner.
+
 pub async fn command(request: PoolImportCommand) -> Result<PoolImportStatus, InternalError> {
     match request {
         PoolImportCommand::Advance {
@@ -54,7 +57,7 @@ pub fn context() -> Result<PoolImportContext, InternalError> {
             IcOps::canister_self(),
         )?;
         if mirror.root_entry.status
-            != canic_core::dto::fleet_registry::FleetSubnetRootStatus::Active
+            != canic_contracts::dto::fleet_registry::FleetSubnetRootStatus::Active
         {
             return Err(InternalError::conflict());
         }

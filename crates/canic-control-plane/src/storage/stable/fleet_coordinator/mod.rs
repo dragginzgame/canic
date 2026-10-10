@@ -4,23 +4,9 @@
 //! Does not own: Registry validation, endpoint authorization, or lifecycle orchestration.
 //! Boundary: Coordinator ops may commit or export one complete validated record.
 
-#[cfg(feature = "fleet-coordinator-canister")]
-use std::cell::RefCell;
-
 use candid::{CandidType, Principal};
-#[cfg(feature = "fleet-coordinator-canister")]
-use canic_core::{
-    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
-    impl_storable_bounded,
-    role_contract::allocation::memory::control_plane::{
-        FLEET_COORDINATOR_FUNDING_ID, FLEET_COORDINATOR_REGISTRY_ID,
-    },
-};
-use canic_core::{
-    cdk::types::Cycles,
-    control_plane_support::config::{
-        ComponentDeploymentConfiguration, ComponentGroupPlacementPolicy,
-    },
+use canic_contracts::{
+    cycles::Cycles,
     dto::{
         component_provisioning::{
             FleetComponentActivationRootProgress, FleetComponentProvisioningOperation,
@@ -55,7 +41,17 @@ use canic_core::{
         FleetSubnetRootFundingAuthority,
     },
 };
+use canic_core::control_plane_support::config::{
+    ComponentDeploymentConfiguration, ComponentGroupPlacementPolicy,
+};
+#[cfg(feature = "fleet-coordinator-canister")]
+use canic_core::{
+    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
+    impl_storable_bounded,
+};
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "fleet-coordinator-canister")]
+use std::cell::RefCell;
 
 #[cfg(feature = "fleet-coordinator-canister")]
 // The record may contain one complete compiled deployment configuration, one
@@ -80,22 +76,13 @@ pub const FLEET_COORDINATOR_STATE_MAX_BYTES: u32 = 33_554_432;
 const FLEET_COORDINATOR_FUNDING_STATE_MAX_BYTES: u32 = 33_554_432;
 
 #[cfg(feature = "fleet-coordinator-canister")]
-struct FleetCoordinatorRegistryState;
-
-#[cfg(feature = "fleet-coordinator-canister")]
-struct FleetCoordinatorFundingState;
-
-#[cfg(feature = "fleet-coordinator-canister")]
 std::thread_local! {
     static FLEET_COORDINATOR_STATE:
         RefCell<Cell<FleetCoordinatorStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
             canic_core::ic_memory_key!(
                 authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-                key = "canic.control_plane.fleet_coordinator.registry.v1",
-                ty = FleetCoordinatorRegistryState,
-                id = FLEET_COORDINATOR_REGISTRY_ID
-            ),
+                key = "canic.control_plane.fleet_coordinator.registry.v1"),
             FleetCoordinatorStateRecord::default(),
         ));
 }
@@ -107,10 +94,7 @@ std::thread_local! {
         RefCell::new(Cell::init(
             canic_core::ic_memory_key!(
                 authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-                key = "canic.control_plane.fleet_coordinator.funding.v1",
-                ty = FleetCoordinatorFundingState,
-                id = FLEET_COORDINATOR_FUNDING_ID
-            ),
+                key = "canic.control_plane.fleet_coordinator.funding.v1"),
             FleetCoordinatorFundingStateRecord::default(),
         ));
 }
@@ -283,14 +267,14 @@ impl FleetCoordinatorRegistryRecord {
 pub enum FleetRetirementRecord {
     NotStarted,
     Transferring {
-        request: canic_core::dto::fleet_registry::FleetRetirementRequest,
+        request: canic_contracts::dto::fleet_registry::FleetRetirementRequest,
         prepared_at_ns: u64,
-        transfer: canic_core::dto::fleet_registry::FleetLedgerTransferIntent,
+        transfer: canic_contracts::dto::fleet_registry::FleetLedgerTransferIntent,
     },
     Complete {
-        request: canic_core::dto::fleet_registry::FleetRetirementRequest,
+        request: canic_contracts::dto::fleet_registry::FleetRetirementRequest,
         prepared_at_ns: u64,
-        receipt: canic_core::dto::fleet_registry::FleetLedgerTransferReceipt,
+        receipt: canic_contracts::dto::fleet_registry::FleetLedgerTransferReceipt,
     },
 }
 
@@ -849,8 +833,7 @@ impl FleetCoordinatorRegistryStore {
 #[cfg(all(test, feature = "fleet-coordinator-canister"))]
 mod funding_capacity_tests {
     use super::*;
-    use canic_core::{
-        cdk::structures::storable::Storable,
+    use canic_contracts::{
         dto::fleet_funding::{
             FleetFundingPolicyRotationFundingSource, FleetFundingPolicyRotationPlacementEvidence,
             FleetFundingPolicyRotationPlanHeader, FleetFundingPolicyRotationReceipt,
@@ -863,6 +846,7 @@ mod funding_capacity_tests {
             FleetRegistryAuthority, MAX_FLEET_ROOT_FUNDING_SLOTS, SubnetId,
         },
     };
+    use canic_core::cdk::structures::storable::Storable;
 
     #[test]
     #[expect(

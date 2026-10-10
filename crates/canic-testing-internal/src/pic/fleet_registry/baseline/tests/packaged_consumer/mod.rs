@@ -448,7 +448,7 @@ fn verify_workload(
         .find(|entry| {
             matches!(
                 entry.status,
-                canic_core::dto::pool::CanisterPoolAssetStatus::Workload { .. }
+                canic_contracts::dto::pool::CanisterPoolAssetStatus::Workload { .. }
             )
         })
         .unwrap();

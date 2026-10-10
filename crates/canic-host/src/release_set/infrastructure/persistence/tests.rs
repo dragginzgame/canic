@@ -1,13 +1,11 @@
+use super::*;
 use crate::{
     release_build::{finalize_release_build_from_manifest, plan_release_build},
+    release_set::WASM_MAGIC,
     test_support::temp_dir,
 };
-use std::{fs, io::Write, path::Path};
-
 use flate2::{Compression, GzBuilder};
-
-use super::*;
-use crate::release_set::WASM_MAGIC;
+use std::{fs, io::Write, path::Path};
 
 #[test]
 fn qualified_complete_build_persists_one_exact_canonical_manifest() {
@@ -347,7 +345,9 @@ fn build_output(
         role,
         package: package.to_string(),
         protocol_release_identity: "0.103.0".to_string(),
-        protocol_role: canic_core::ids::CanisterRole::owned(role.protocol_role_name().to_string()),
+        protocol_role: canic_contracts::ids::CanisterRole::owned(
+            role.protocol_role_name().to_string(),
+        ),
         protocol_capabilities: std::collections::BTreeSet::new(),
         release_build_id,
         wasm_path,

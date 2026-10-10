@@ -1,7 +1,9 @@
 mod access;
 
-use crate::adapter::{EntryKind, RawAdapter};
-use crate::endpoint::{EndpointKind, parse::QueryMode, returns_fallible, validate::ValidatedArgs};
+use crate::{
+    adapter::{EntryKind, RawAdapter},
+    endpoint::{EndpointKind, parse::QueryMode, returns_fallible, validate::ValidatedArgs},
+};
 use access::{AccessPlan, access_stage, build_access_plan, requires_decoded_auth_argument};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
@@ -264,19 +266,19 @@ fn call_decl(
 ) -> TokenStream2 {
     let call_kind = match (kind, query_mode) {
         (EndpointKind::Query, QueryMode::Composite) => {
-            quote!(::canic::__internal::core::ids::EndpointCallKind::QueryComposite)
+            quote!(::canic::__internal::contracts::ids::EndpointCallKind::QueryComposite)
         }
         (EndpointKind::Query, QueryMode::Plain) => {
-            quote!(::canic::__internal::core::ids::EndpointCallKind::Query)
+            quote!(::canic::__internal::contracts::ids::EndpointCallKind::Query)
         }
         (EndpointKind::Update, _) => {
-            quote!(::canic::__internal::core::ids::EndpointCallKind::Update)
+            quote!(::canic::__internal::contracts::ids::EndpointCallKind::Update)
         }
     };
 
     quote! {
-        let #call = ::canic::__internal::core::ids::EndpointCall {
-            endpoint: ::canic::__internal::core::ids::EndpointId::new(#method_name),
+        let #call = ::canic::__internal::contracts::ids::EndpointCall {
+            endpoint: ::canic::__internal::contracts::ids::EndpointId::new(#method_name),
             kind: #call_kind,
         };
     }

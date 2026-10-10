@@ -4,18 +4,20 @@
 //! Does not own: stable conversion, endpoint authorization, or activation mutation.
 //! Boundary: the runtime role selects root-only projection before ops validates the record.
 
-use crate::domain::provisioning_failure::{ProvisioningFailureStage, ProvisioningRetryCategory};
 #[cfg(any(test, feature = "auth-root-delegation-state"))]
 use crate::ops::storage::auth::RootDelegationStateOps;
 use crate::{
     InternalError,
     cdk::types::Principal,
-    domain::policy::pure::{
-        PolicyError,
-        fleet_activation::{
-            require_prepared_nonroot_endpoint, require_prepared_root_endpoint,
-            require_prepared_store_data_endpoint,
+    domain::{
+        policy::pure::{
+            PolicyError,
+            fleet_activation::{
+                require_prepared_nonroot_endpoint, require_prepared_root_endpoint,
+                require_prepared_store_data_endpoint,
+            },
         },
+        provisioning_failure::{ProvisioningFailureStage, ProvisioningRetryCategory},
     },
     dto::{
         fleet_activation::{
@@ -25,9 +27,8 @@ use crate::{
             FleetCredentialGenerationRequest, FleetCredentialManifest,
         },
         fleet_subnet_root::FleetSubnetRootAuthority,
-        role::{OperationReceipt, OperationStatusRequest},
+        role::OperationStatusRequest,
     },
-    ids::{EndpointCall, EndpointCallKind, EndpointId, FleetSubnetWasmStoreAuthority},
     ops::{
         cascade::CascadeOps,
         fleet_activation::FleetActivationEvidenceOps,
@@ -47,34 +48,15 @@ use crate::{
         topology::TopologyCascadeWorkflow,
     },
 };
-use candid::CandidType;
-use serde::Deserialize;
-
-#[derive(CandidType)]
-enum StoreCommandFragment {
-    ActivateFleet(FleetActivationRequest),
-    PrepareFleetCredential(FleetCredentialGenerationRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum StoreCommandResponseFragment {
-    OperationAccepted(OperationReceipt),
-}
-
-#[derive(CandidType)]
-enum StoreStatusRequestFragment {
-    Operation(OperationStatusRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum StoreStatusResponseFragment {
-    Operation(StoreOperationStatusFragment),
-}
-
-#[derive(CandidType, Deserialize)]
-enum StoreOperationStatusFragment {
-    FleetActivation(FleetActivationStatusResponse),
-}
+use canic_contracts::dto::fleet_coordinator::CoordinatorOperationReadRequest as StoreStatusRequestFragment;
+use canic_contracts::dto::role::OperationAcceptedResponse as StoreCommandResponseFragment;
+use canic_contracts::dto::wire::projection::store_activation::StoreCommandFragment;
+use canic_contracts::dto::wire::projection::store_activation::StoreOperationStatusFragment;
+use canic_contracts::dto::wire::projection::store_activation::StoreStatusResponseFragment;
+use canic_contracts::ids::EndpointCall;
+use canic_contracts::ids::EndpointCallKind;
+use canic_contracts::ids::EndpointId;
+use canic_contracts::ids::FleetSubnetWasmStoreAuthority;
 
 ///
 /// FleetActivationWorkflow
@@ -666,7 +648,7 @@ fn require_endpoint_for_phase(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ids::{
+    use canic_contracts::ids::{
         AppId, CanonicalNetworkId, EndpointCallKind, EndpointId, FleetBinding, FleetId, FleetKey,
         ReleaseBuildId, ReleaseBuildNonce,
     };

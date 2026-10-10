@@ -5,13 +5,7 @@
 //! Boundary: resolves protected local Registry authority before workflow delegation.
 
 use async_trait::async_trait;
-use canic_core::{
-    access::{
-        AccessError,
-        expr::{AccessContext, AsyncAccessPredicate},
-    },
-    api::auth::AuthApi,
-    control_plane_support::ops::ic::IcOps,
+use canic_contracts::{
     dto::{
         auth::{
             RoleAttestationGetRequest, RoleAttestationPrepareResponse, RoleAttestationRequest,
@@ -21,6 +15,14 @@ use canic_core::{
         error::Error,
     },
     ids::ManagedCanisterBinding,
+};
+use canic_core::{
+    access::{
+        AccessError,
+        expr::{AccessContext, AsyncAccessPredicate},
+    },
+    api::auth::AuthApi,
+    control_plane_support::ops::ic::IcOps,
 };
 
 ///

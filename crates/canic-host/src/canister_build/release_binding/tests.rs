@@ -1,7 +1,7 @@
 //! Qualification of fixed-width binding, rejected templates and installed runtime reads.
 
 use super::*;
-use canic_core::ids::ReleaseBuildNonce;
+use canic_contracts::ids::ReleaseBuildNonce;
 
 fn identity(byte: u8) -> ReleaseBuildId {
     ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes([byte; 32]))
@@ -111,7 +111,7 @@ fn governed_pocketic_release_binding_retains_runtime_identity() {
         build_toolchain::BuildToolchain,
         canister_build::CanisterBuildProfile,
     };
-    use canic_core::ids::BuildNetwork;
+    use canic_contracts::ids::BuildNetwork;
     use ic_testkit::pic::PocketIcBuilder;
     use std::fs;
 
@@ -265,7 +265,7 @@ fn assert_runtime_identity(
 
 fn compile_probe(root: &std::path::Path, release_build_id: ReleaseBuildId) -> bool {
     use crate::canister_build::{CanisterBuildProfile, WorkspaceBuildContext};
-    use canic_core::ids::BuildNetwork;
+    use canic_contracts::ids::BuildNetwork;
     use std::process::Command;
 
     let context = WorkspaceBuildContext {

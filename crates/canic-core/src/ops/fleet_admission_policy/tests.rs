@@ -4,16 +4,18 @@
 //! Does not own: protected-input parsing, persistence, mutation, or endpoints.
 
 use super::*;
-use crate::ids::{
+use crate::model::{
+    fleet_admission_authority::{
+        FleetAdmissionMutationActionModel, FleetAdmissionMutationRequestModel,
+        FleetAdmissionRootCatalogAuthorityModel,
+    },
+    fleet_admission_projection::{
+        FleetAdmissionProjectionPhaseModel, FleetAdmissionProjectionState,
+    },
+};
+use canic_contracts::ids::{
     AppId, CanonicalNetworkId, FleetAdmissionRule, FleetAdmissionSelector, FleetAdmissionTarget,
     FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority, SubnetId,
-};
-use crate::model::fleet_admission_authority::{
-    FleetAdmissionMutationActionModel, FleetAdmissionMutationRequestModel,
-    FleetAdmissionRootCatalogAuthorityModel,
-};
-use crate::model::fleet_admission_projection::{
-    FleetAdmissionProjectionPhaseModel, FleetAdmissionProjectionState,
 };
 
 fn principal(index: u8) -> Principal {

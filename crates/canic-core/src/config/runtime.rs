@@ -6,9 +6,7 @@
 //! Boundary: build tooling projects one validated App model into this runtime-only authority.
 
 #[cfg(any(not(target_arch = "wasm32"), test))]
-use super::schema::CanisterConfig;
-#[cfg(any(not(target_arch = "wasm32"), test))]
-use super::{ComponentDeploymentConfigurationDigestError, ConfigModel};
+use super::{ComponentDeploymentConfigurationDigestError, ConfigModel, schema::CanisterConfig};
 use super::{
     ComponentDeploymentLimits, ComponentDeploymentPurpose, ComponentTopology,
     FlattenedComponentGroupDeploymentMember,
@@ -18,13 +16,10 @@ use super::{
         StandardsCanisterConfig, TopupPolicy,
     },
 };
-use crate::{
-    InternalError,
-    dto::component_deployment::ProtectedComponentDeployment,
-    ids::{
-        CanisterRole, ComponentBinding, ComponentDeploymentConfigurationDigest,
-        ComponentGroupDeploymentId, ComponentGroupSpecId, ComponentSpecId,
-    },
+use crate::{InternalError, dto::component_deployment::ProtectedComponentDeployment};
+use canic_contracts::ids::{
+    CanisterRole, ComponentBinding, ComponentDeploymentConfigurationDigest,
+    ComponentGroupDeploymentId, ComponentGroupSpecId, ComponentSpecId,
 };
 #[cfg(any(not(target_arch = "wasm32"), test))]
 use std::collections::BTreeSet;
@@ -33,6 +28,7 @@ use std::{cell::RefCell, sync::Arc};
 use thiserror::Error as ThisError;
 
 /// One exact role configuration within a compiled Component Spec.
+
 #[derive(Clone, Debug)]
 pub struct RuntimeCanisterAuthority {
     pub component_spec: Option<ComponentSpecId>,

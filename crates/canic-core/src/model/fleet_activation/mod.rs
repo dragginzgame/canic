@@ -8,15 +8,15 @@ pub mod endpoint_mode;
 
 use crate::{
     config::ComponentTopology,
-    ids::{
-        AppId, CanonicalNetworkId, FleetBinding, FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
-        FleetSubnetWasmStoreActivationAuthority, FleetSubnetWasmStoreAuthority, ReleaseBuildId,
-    },
     model::fleet_funding_policy::{
         FleetFundingPolicyValidationError, validate_fleet_subnet_root_funding_authority,
     },
 };
 use candid::Principal;
+use canic_contracts::ids::{
+    AppId, CanonicalNetworkId, FleetBinding, FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
+    FleetSubnetWasmStoreActivationAuthority, FleetSubnetWasmStoreAuthority, ReleaseBuildId,
+};
 use std::collections::BTreeSet;
 use thiserror::Error as ThisError;
 
@@ -360,9 +360,9 @@ fn require_release_build_match(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        cdk::types::Cycles,
-        config::{ComponentLimits, ComponentSpec},
+    use crate::config::{ComponentLimits, ComponentSpec};
+    use canic_contracts::{
+        cycles::Cycles,
         ids::{
             CanisterRole, CanonicalNetworkId, ComponentSpecAdmission, ComponentSpecId,
             ComponentTopologyDigest, CyclesFundingBudget, FleetCoordinatorBinding, FleetId,

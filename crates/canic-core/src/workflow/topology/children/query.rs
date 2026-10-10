@@ -10,12 +10,12 @@ use crate::{
         canister::CanisterInfo,
         page::{Page, PageRequest},
     },
-    ids::CanisterRole,
     log,
     log::Topic,
     ops::{config::ConfigOps, storage::children::CanisterChildrenOps},
     workflow::view::paginate::paginate_vec,
 };
+use canic_contracts::ids::CanisterRole;
 
 ///
 /// CanisterChildrenQuery

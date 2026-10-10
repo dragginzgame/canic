@@ -9,16 +9,14 @@ use crate::canister_build::{
     cache::{canister_build_target_root, declaration_target_root},
     reuse::{BuildReuseError, snapshot::BuildInputSnapshot},
 };
-
-use canic_core::ids::ReleaseBuildId;
+use canic_contracts::ids::ReleaseBuildId;
+use ic_host_fs::durable::write_bytes;
 use serde::Serialize;
 use std::{
     collections::BTreeMap,
     env,
     path::{Path, PathBuf},
 };
-
-use ic_host_fs::durable::write_bytes;
 
 const LIMIT: usize = 256 * 1024;
 

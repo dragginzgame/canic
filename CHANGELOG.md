@@ -6,20 +6,26 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.110.55]
+## [0.111.0]
 
-Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
+Detailed notes: [docs/changelog/0.111.md](docs/changelog/0.111.md)
 
-- Share authentication, host tooling, bounded checkpoint reads and operator
-  mechanics with their upstream owners; align Blob 0.21 with Memory 0.33 and
-  retain Rust 1.91 support.
-  **Potentially breaking Blob and tooling cut:** rebuild Blob clients for separate
-  capacity headroom fields; managed tests use Testkit's canonical
-  runner and URL, with explicit server setup
-  ([#444](https://github.com/dragginzgame/canic/issues/444),
+- Consolidate contracts, adopt upstream Auth/Backup/Host tooling and deliver Blob
+  with the coherent Canic family. Fix retained child startup retries and
+  release-lock propagation. **Breaking:** adopt key-only Memory pools and current
+  contract paths; rebuild clients, prepare the selected Testkit runner and
+  Binaryen 133, and cleanly reinstall across releases
+  ([#354](https://github.com/dragginzgame/canic/issues/354),
+  [#33](https://github.com/dragginzgame/canic/issues/33),
+  [#459](https://github.com/dragginzgame/canic/issues/459),
+  [#444](https://github.com/dragginzgame/canic/issues/444),
   [#458](https://github.com/dragginzgame/canic/issues/458),
+  [#461](https://github.com/dragginzgame/canic/issues/461),
   [#491](https://github.com/dragginzgame/canic/issues/491),
-  [#498](https://github.com/dragginzgame/canic/issues/498)).
+  [#498](https://github.com/dragginzgame/canic/issues/498),
+  [#505](https://github.com/dragginzgame/canic/issues/505),
+  [#510](https://github.com/dragginzgame/canic/issues/510),
+  [Shared #108](https://github.com/dragginzgame/shared-tooling/issues/108)).
 
 ## [0.110.54] - 2026-10-08
 

@@ -209,9 +209,9 @@ mod tests {
     use super::*;
     use crate::{
         dto::auth::{IcCanisterSignatureProofV1, RoleAttestationRootProof},
-        ids::BuildNetwork,
         test::config::{ConfigTestBuilder, install_model_for_role},
     };
+    use canic_contracts::ids::BuildNetwork;
 
     fn p(byte: u8) -> Principal {
         Principal::from_slice(&[byte; 29])

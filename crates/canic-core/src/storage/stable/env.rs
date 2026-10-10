@@ -1,6 +1,5 @@
 use crate::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
-    role_contract::allocation::memory::runtime::RUNTIME_BINDINGS_ID,
     storage::prelude::*,
 };
 use std::cell::RefCell;
@@ -12,7 +11,7 @@ std::thread_local! {
     //
     static ENV: RefCell<Cell<EnvRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.runtime.bindings.v1", ty = EnvRecord, id = RUNTIME_BINDINGS_ID),
+            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.runtime.bindings.v1"),
             EnvRecord::default(),
         ));
 }

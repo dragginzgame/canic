@@ -9,7 +9,7 @@ Normal operators use the installed `canic` binary. Direct Rust consumers may
 use the build and `fleet_ensure` modules when embedding the same current
 contract.
 
-Generic host mechanics use the published IC Host Tooling 0.8.8 packages:
+Generic host mechanics use the published IC Host Tooling 0.10 packages:
 `ic-host-artifacts` owns Wasm inspection, gzip encoding/decoding and bounded
 stream reads, copying and hashing; `ic-host-fs` owns regular/private reads,
 path observations, durable publication and descriptor locks,
@@ -18,6 +18,12 @@ path observations, durable publication and descriptor locks,
 Direct consumers import reads from `ic_host_fs::read` and publication/locks from
 `ic_host_fs::durable`. Canic retains schemas, authority, byte budgets, tool pins,
 transaction ordering and interruption recovery.
+
+Canic's `publication::ops::io_error` projects the shared typed publication failure
+into existing Host and CLI I/O boundaries, retaining its phase, native cause and
+cleanup evidence. Only a destination conflict before publication retains
+`AlreadyExists`; producer and visible-publication failures cannot masquerade as
+an ordinary create conflict.
 
 Release representation checks compare gzip output directly with raw Wasm without
 allocating another complete decoded payload. Store publication uses shared chunk
@@ -148,3 +154,16 @@ fidelity. Production canisters do not gain a testing dependency.
 - [Review build evidence](../../docs/features/build-and-evidence/README.md)
 - [Browse all documentation](../../docs/README.md)
 - [Back to the main README](../../README.md)
+
+## Contract dependencies
+
+Shared wire unions, bounded transport projections, DTOs, IDs and diagnostic
+codes come directly from `canic-contracts`. The package contains no CDK,
+storage, Memory or Timers dependency.
+
+Host still depends on Core for bootstrap/configuration compilation and source
+generation, role/capability policy, deterministic hashes, Registry compilation
+and provisioning-plan validation. Control Plane retains the deterministic
+fixture-content compiler and `installation::FleetCoordinatorInitArgs`, whose
+configuration is owned by Core. These are deliberate remaining dependencies;
+the contract extraction does not establish complete host/runtime independence.

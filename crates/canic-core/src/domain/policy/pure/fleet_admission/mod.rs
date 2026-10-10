@@ -4,25 +4,24 @@
 //! Does not own: policy validation, hashing, storage, caller acquisition, or orchestration.
 //! Boundary: workflow supplies validated policy plus exact Registry-derived target or mutation.
 
-use crate::{
-    ids::{
-        FleetAdmissionPolicy, FleetAdmissionPolicyTemplate, FleetAdmissionRule,
-        FleetAdmissionSelector, FleetAdmissionTarget, MAX_FLEET_ADMISSION_PRINCIPALS,
-        MAX_FLEET_ADMISSION_RULE_PRINCIPAL_REFERENCES, MAX_FLEET_ADMISSION_RULES,
-    },
-    model::fleet_admission_authority::FleetAdmissionMutationActionModel,
-    model::fleet_admission_authority::{
-        FLEET_ADMISSION_AUTHORITY_SCHEMA_VERSION, FleetAdmissionAuthorityState,
-        FleetAdmissionCoordinatorRootPhaseModel, FleetAdmissionCoordinatorRootProgressModel,
-        FleetAdmissionCoordinatorTransitionPhaseModel, FleetAdmissionMutationOutcomeModel,
-        FleetAdmissionMutationRequestModel, FleetAdmissionMutationResponseModel,
-        FleetAdmissionRetainedResultModel, FleetAdmissionTransitionModel,
-    },
+use crate::model::fleet_admission_authority::{
+    FLEET_ADMISSION_AUTHORITY_SCHEMA_VERSION, FleetAdmissionAuthorityState,
+    FleetAdmissionCoordinatorRootPhaseModel, FleetAdmissionCoordinatorRootProgressModel,
+    FleetAdmissionCoordinatorTransitionPhaseModel, FleetAdmissionMutationActionModel,
+    FleetAdmissionMutationOutcomeModel, FleetAdmissionMutationRequestModel,
+    FleetAdmissionMutationResponseModel, FleetAdmissionRetainedResultModel,
+    FleetAdmissionTransitionModel,
 };
 use candid::Principal;
+use canic_contracts::ids::{
+    FleetAdmissionPolicy, FleetAdmissionPolicyTemplate, FleetAdmissionRule, FleetAdmissionSelector,
+    FleetAdmissionTarget, MAX_FLEET_ADMISSION_PRINCIPALS,
+    MAX_FLEET_ADMISSION_RULE_PRINCIPAL_REFERENCES, MAX_FLEET_ADMISSION_RULES,
+};
 use thiserror::Error as ThisError;
 
 /// Pure mutation rejection before a successor policy is compiled.
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ThisError)]
 pub enum FleetAdmissionMutationPolicyError {
     #[error("Fleet admission mutation must not use the anonymous Principal")]

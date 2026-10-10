@@ -28,7 +28,7 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
         #[doc(hidden)]
         fn __canic_inspect_fleet_coordinator_update_message() {
             if $crate::__internal::core::ingress::payload::current_method_name()
-                != $crate::__internal::core::protocol::CANIC_COORDINATOR_COMMAND
+                != $crate::__internal::contracts::protocol::CANIC_COORDINATOR_COMMAND
             {
                 $crate::__internal::core::ingress::payload::inspect_update_message();
                 return;
@@ -67,7 +67,7 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
                 __canic_fleet_coordinator_payload_max_bytes(&command),
             ) {
                 return Err(::canic::Error::from_registered(
-                    $crate::__internal::core::diagnostics::codes::REQUEST_CAPACITY,
+                    $crate::__internal::contracts::diagnostics::codes::REQUEST_CAPACITY,
                 ));
             }
 
@@ -114,18 +114,11 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
             .await
         }
 
-        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
-        #[serde(crate = "::canic::__internal::serde")]
-        pub enum PublicStatusRequest {
-            Health,
-            Overview,
+        ::canic::__internal::contracts::__canic_coordinator_wire_types! {
+            serde_crate = "::canic::__internal::serde",
+
         }
-        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
-        #[serde(crate = "::canic::__internal::serde")]
-        pub enum PublicStatusResponse {
-            Health(::canic::dto::public_status::PublicHealth),
-            Overview(::canic::dto::role::RoleOverviewResponse),
-        }
+
         #[$crate::canic_query(public)]
         async fn canic_public_status(
             request: PublicStatusRequest,
@@ -140,7 +133,7 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
                     ]);
                     Ok(PublicStatusResponse::Overview(
                         $crate::__internal::core::api::role::RoleOverviewApi::overview(
-                            $crate::__internal::core::ids::CanisterRole::from("fleet_coordinator"),
+                            $crate::__internal::contracts::ids::CanisterRole::from("fleet_coordinator"),
                             &capabilities,
                             $crate::__canic_protocol_profile_digest!(),
                             $crate::__internal::core::api::metadata::CanicMetadataApi::metadata_for(
@@ -156,79 +149,49 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
                 }
             }
         }
-        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
-        #[serde(crate = "::canic::__internal::serde")]
-        pub enum ObservabilityRequest {
-            Admission(::canic::dto::fleet_admission::FleetAdmissionStatusRequest),
-            AuthorityRestore,
-            Funding,
-            RegistryManifest,
-            RegistryVersion,
-            IntentRelease(Option<::canic::dto::release_intents::IntentReleaseKey>),
-            ReplayRelease(Option<[u8; 32]>),
-            RootAcknowledgements,
-        }
-        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
-        #[serde(crate = "::canic::__internal::serde")]
-        pub enum ObservabilityResponse {
-            Admission(::canic::dto::fleet_admission::FleetAdmissionStatusResponse),
-            AuthorityRestore(::canic::dto::authority_restore::AuthorityRestoreFenceStatusResponse),
-            Funding(::canic::dto::fleet_coordinator::CoordinatorFundingStatusResponse),
-            RegistryManifest(::canic::dto::fleet_registry::FleetRegistryManifest),
-            RegistryVersion(::canic::dto::fleet_registry::FleetRegistryVersion),
-            IntentRelease(::canic::dto::release_intents::IntentReleaseResponse),
-            ReplayRelease(::canic::dto::release_receipts::ReplayReleaseResponse),
-            RootAcknowledgements(Vec<::canic::dto::fleet_registry::FleetSubnetRootSnapshotAcknowledgement>),
-        }
+
+
         #[$crate::canic_query(requires(caller::is_controller()))]
         async fn canic_observability(
-            request: ObservabilityRequest,
-        ) -> Result<ObservabilityResponse, ::canic::Error> {
+            request: CoordinatorObservabilityRequest,
+        ) -> Result<CoordinatorObservabilityResponse, ::canic::Error> {
             match request {
-                ObservabilityRequest::Admission(request) => {
+                CoordinatorObservabilityRequest::Admission(request) => {
                     $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::admission_status(request)
-                        .map(ObservabilityResponse::Admission)
+                        .map(CoordinatorObservabilityResponse::Admission)
                 }
-                ObservabilityRequest::AuthorityRestore => {
+                CoordinatorObservabilityRequest::AuthorityRestore => {
                     $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::status()
-                        .map(ObservabilityResponse::AuthorityRestore)
+                        .map(CoordinatorObservabilityResponse::AuthorityRestore)
                 }
-                ObservabilityRequest::Funding => {
+                CoordinatorObservabilityRequest::Funding => {
                     $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::root_funding_status()
-                        .map(ObservabilityResponse::Funding)
+                        .map(CoordinatorObservabilityResponse::Funding)
                 }
-                ObservabilityRequest::RegistryManifest => {
+                CoordinatorObservabilityRequest::RegistryManifest => {
                     $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::manifest()
-                        .map(ObservabilityResponse::RegistryManifest)
+                        .map(CoordinatorObservabilityResponse::RegistryManifest)
                 }
-                ObservabilityRequest::RegistryVersion => {
+                CoordinatorObservabilityRequest::RegistryVersion => {
                     $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::version()
-                        .map(ObservabilityResponse::RegistryVersion)
+                        .map(CoordinatorObservabilityResponse::RegistryVersion)
                 }
-                ObservabilityRequest::IntentRelease(start_after) => {
+                CoordinatorObservabilityRequest::IntentRelease(start_after) => {
                     $crate::__internal::core::api::observability::ObservabilityApi::release_intents(start_after)
-                        .map(ObservabilityResponse::IntentRelease)
+                        .map(CoordinatorObservabilityResponse::IntentRelease)
                 }
-                ObservabilityRequest::ReplayRelease(start_after) => {
+                CoordinatorObservabilityRequest::ReplayRelease(start_after) => {
                     $crate::__internal::core::api::observability::ObservabilityApi::release_receipts(start_after)
-                        .map(ObservabilityResponse::ReplayRelease)
+                        .map(CoordinatorObservabilityResponse::ReplayRelease)
                 }
-                ObservabilityRequest::RootAcknowledgements => {
+                CoordinatorObservabilityRequest::RootAcknowledgements => {
                     $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::root_snapshot_acknowledgements()
-                        .map(ObservabilityResponse::RootAcknowledgements)
+                        .map(CoordinatorObservabilityResponse::RootAcknowledgements)
                 }
                         }
         }
-        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
-        #[serde(crate = "::canic::__internal::serde")]
-        pub enum CoordinatorOperationReadRequest {
-            Operation(::canic::dto::role::OperationStatusRequest),
-        }
-        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
-        #[serde(crate = "::canic::__internal::serde")]
-        pub enum CoordinatorOperationReadResponse {
-            Operation(::canic::dto::fleet_coordinator::CoordinatorOperationStatusResponse),
-        }
+
+
         #[$crate::canic_query(public)]
         async fn canic_coordinator_operation_status(
             request: CoordinatorOperationReadRequest,
@@ -242,24 +205,16 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
                 }
             }
         }
-        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
-        #[serde(crate = "::canic::__internal::serde")]
-        pub enum CoordinatorRegistryReadRequest {
-            Registry,
-        }
-        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
-        #[serde(crate = "::canic::__internal::serde")]
-        pub enum CoordinatorRegistryReadResponse {
-            Registry(::canic::dto::fleet_registry::FleetRegistry),
-        }
+
+
         #[$crate::canic_query(requires(custom(::canic::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorRegistryCallerPredicate)))]
         async fn canic_coordinator_registry(
-            request: CoordinatorRegistryReadRequest,
-        ) -> Result<CoordinatorRegistryReadResponse, ::canic::Error> {
+            request: CoordinatorRegistryRequest,
+        ) -> Result<CoordinatorRegistryResponse, ::canic::Error> {
             match request {
-                CoordinatorRegistryReadRequest::Registry => {
+                CoordinatorRegistryRequest::Registry => {
                     $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::registry_for_calling_status()
-                        .map(CoordinatorRegistryReadResponse::Registry)
+                        .map(CoordinatorRegistryResponse::Registry)
                 }
             }
         }

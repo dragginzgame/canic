@@ -2,18 +2,10 @@
 
 use crate::{
     cdk::candid::Principal,
-    cdk::types::Cycles,
     config::schema::{
         CanisterAuthConfig, CanisterConfig, CanisterKind, CyclesFundingPolicyConfig,
         DiagnosticsCanisterConfig, MetricsCanisterConfig, ShardPool, ShardPoolPolicy,
         ShardingConfig, StandardsCanisterConfig,
-    },
-    ids::{
-        AppId, CanisterRole, CanonicalNetworkId, ComponentBinding, ComponentInstanceId,
-        ComponentSpecId, CyclesFundingBudget, FleetAdmissionPolicy, FleetAdmissionProjection,
-        FleetBinding, FleetCoordinatorBinding, FleetFundingProfile, FleetId, FleetKey,
-        FleetRegistryAuthority, FleetSubnetRootFundingAuthority, FleetSubnetRootFundingPolicy,
-        ManagedCanisterBinding, SubnetId,
     },
     ops::{
         fleet_admission_policy::{
@@ -24,6 +16,16 @@ use crate::{
     storage::stable::env::{EnvData, EnvRecord},
     test::config::ConfigTestBuilder,
     workflow::fleet_admission_projection::compile_fleet_admission_projection,
+};
+use canic_contracts::{
+    cycles::Cycles,
+    ids::{
+        AppId, CanisterRole, CanonicalNetworkId, ComponentBinding, ComponentInstanceId,
+        ComponentSpecId, CyclesFundingBudget, FleetAdmissionPolicy, FleetAdmissionProjection,
+        FleetBinding, FleetCoordinatorBinding, FleetFundingProfile, FleetId, FleetKey,
+        FleetRegistryAuthority, FleetSubnetRootFundingAuthority, FleetSubnetRootFundingPolicy,
+        ManagedCanisterBinding, SubnetId,
+    },
 };
 
 #[must_use]

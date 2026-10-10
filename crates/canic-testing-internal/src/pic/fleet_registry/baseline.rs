@@ -36,6 +36,8 @@ mod tests {
     #[cfg(test)]
     mod child_reserve;
     #[cfg(test)]
+    mod child_startup;
+    #[cfg(test)]
     #[cfg(test)]
     mod completed_reset;
     #[cfg(test)]
@@ -72,158 +74,220 @@ mod tests {
     use super::*;
     use crate::pic::{report_canister_diagnostics, report_canister_diagnostics_batch};
     #[cfg(test)]
+    use candid::CandidType;
+    #[cfg(test)]
+    use candid::Deserialize;
+    #[cfg(test)]
     use candid::Nat;
-    use candid::{CandidType, Deserialize, decode_one, encode_one};
+    use candid::decode_one;
+    use candid::encode_one;
     #[cfg(test)]
-    use canic::dto::authority_restore::{
-        AuthorityRestoreFencePhase, AuthorityRestoreFenceStatusResponse, AuthoritySnapshotRequest,
-    };
+    use canic::dto::authority_restore::AuthorityRestoreFencePhase;
     #[cfg(test)]
-    use canic::dto::canister::CanisterInspectionRequest;
+    use canic::dto::authority_restore::AuthoritySnapshotRequest;
+
     #[cfg(test)]
-    use canic::dto::component_registry::{
-        ComponentLifecycleStatus, ComponentRegistryActivePartitionRequest,
-        ComponentRegistryActivePartitionResponse,
-    };
+    use canic::dto::component_registry::ComponentLifecycleStatus;
     #[cfg(test)]
-    use canic::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionRequest;
+    use canic::dto::component_registry::ComponentRegistryActivePartitionRequest;
+
+    use canic::CANIC_WASM_CHUNK_BYTES;
+    use canic::dto::component_registry::ComponentRuntimePhase;
+    use canic::dto::component_registry::RootComponentAllocationPhase;
+    use canic::dto::component_registry::RootComponentAllocationRequest;
+    use canic::dto::component_registry::RootComponentAllocationResponse;
+    use canic::dto::component_registry::RootComponentRegistryPreparationRequest;
+    #[cfg(test)]
+    use canic::dto::component_registry::RootComponentRegistryStatusResponse;
+    use canic::dto::fixture_provisioning::FixtureChunkUpload;
+    use canic::dto::fixture_provisioning::FixtureSourceStatus;
+    use canic::dto::fixture_provisioning::FixtureStoreError;
+    #[cfg(test)]
+    use canic::dto::fleet_admission::FleetAdmissionProjectionStatusResponse;
+    use canic::dto::fleet_registry::FleetRegistryActivationRequest;
+    use canic::dto::fleet_registry::FleetSubnetRootEntry;
+    use canic::dto::fleet_registry::FleetSubnetRootJoinRequest;
+    use canic::dto::fleet_registry::FleetSubnetRootRegistrySyncRequest;
+    use canic::dto::fleet_registry::FleetSubnetRootStatus;
+    use canic::dto::fleet_subnet_root::FleetSubnetRootInitArgs;
+    use canic::dto::fleet_subnet_root::FleetSubnetWasmStoreInitArgs;
+    #[cfg(test)]
+    use canic::dto::metrics::MetricsKind;
+    #[cfg(test)]
+    use canic::dto::observability::CanisterObservabilityRequest;
+    #[cfg(test)]
+    use canic::dto::observability::CanisterObservabilityResponse;
+    #[cfg(test)]
+    use canic::dto::observability::FleetCanisterObservabilityRequest;
+    #[cfg(test)]
+    use canic::dto::page::PageRequest;
+    use canic::dto::pool::CanisterPoolResponse;
+    use canic::dto::pool::CanisterPoolStatusRequest;
+    #[cfg(test)]
+    use canic::dto::pool::PoolCanisterRequest;
+    #[cfg(test)]
+    use canic::dto::pool::PoolImportResponse;
+    #[cfg(test)]
+    use canic::dto::pool::PoolMaintenanceResponse;
     #[cfg(test)]
     use canic::dto::pool::{CanisterPoolAssetOrigin, CanisterPoolAssetStatus};
-    use canic::dto::pool::{
-        CanisterPoolResponse, CanisterPoolStatusRequest, PoolCanisterRequest, PoolImportResponse,
-        PoolMaintenanceResponse,
-    };
     #[cfg(test)]
-    use canic::dto::runtime::{CanicRuntimeStatus, TimerRegistrationStatus};
+    use canic::dto::role::MetricsStatusRequest;
+    use canic::dto::role::OperationStatusRequest;
+    use canic::dto::root_store::ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX;
+    use canic::dto::root_store::ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX;
+    use canic::dto::root_store::RootStoreArtifact;
+    use canic::dto::root_store::RootStoreBootstrapRequest;
+    use canic::dto::root_store::RootStoreBootstrapResponse;
+    use canic::dto::root_store::RootStoreFixturePrepareRequest;
+    use canic::dto::root_store::RootStoreReleaseSetEntry;
+    use canic::dto::root_store::RootStoreReleaseSetEntryKind;
+    use canic::dto::root_store::RootStoreReleaseSetManifest;
     #[cfg(test)]
-    use canic::dto::{
-        cycles::CycleTrackerEntry,
-        fleet_admission::FleetAdmissionProjectionStatusResponse,
-        metrics::{MetricEntry, MetricsKind},
-        observability::{
-            CanisterObservabilityRequest, CanisterObservabilityResponse,
-            FleetCanisterObservabilityRequest,
-        },
-        page::{Page, PageRequest},
-        role::{CycleBalanceStatusResponse, MetricsStatusRequest},
-    };
+    use canic::dto::runtime::TimerRegistrationStatus;
+    use canic::ids::CanisterRole;
+    use canic::ids::ComponentBinding;
+    use canic::ids::FleetId;
+    #[cfg(test)]
     use canic::ids::ManagedCanisterBinding;
-    use canic::{
-        CANIC_WASM_CHUNK_BYTES,
-        dto::{
-            component_registry::{
-                ComponentRuntimePhase, RootComponentAllocationPhase,
-                RootComponentAllocationRequest, RootComponentAllocationResponse,
-                RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
-            },
-            fixture_provisioning::{FixtureChunkUpload, FixtureSourceStatus, FixtureStoreError},
-            fleet_registry::{
-                FleetRegistryActivationRequest, FleetSubnetRootEntry, FleetSubnetRootJoinRequest,
-                FleetSubnetRootRegistrySyncRequest, FleetSubnetRootStatus,
-            },
-            fleet_subnet_root::{
-                FleetSubnetRootAuthority, FleetSubnetRootCanisterSummary, FleetSubnetRootInitArgs,
-                FleetSubnetWasmStoreInitArgs,
-            },
-            role::{
-                ComponentRuntimeOperationStatus, OperationReceipt, OperationStatusRequest,
-                RoleOverviewResponse,
-            },
-            root_store::{
-                ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX, ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX,
-                RootStoreArtifact, RootStoreBootstrapRequest, RootStoreBootstrapResponse,
-                RootStoreFixturePrepareRequest, RootStoreReleaseSetEntry,
-                RootStoreReleaseSetEntryKind, RootStoreReleaseSetManifest,
-            },
-        },
-        ids::{CanisterRole, ComponentBinding, FleetId, ReleaseSetDigest, SubnetId},
-    };
+    use canic::ids::ReleaseSetDigest;
+    use canic::ids::SubnetId;
+
     use canic::{
         Error,
         dto::fleet_activation::{FleetActivationPhase, FleetActivationResumeRequest},
     };
     #[cfg(test)]
-    use canic_control_plane::dto::fleet_coordinator::{
+    use canic_contracts::cycles::Cycles;
+    #[cfg(test)]
+    use canic_contracts::dto::component_provisioning::FleetComponentProvisioningRetryStage;
+    #[cfg(test)]
+    use canic_contracts::dto::component_provisioning::ProvisioningFailureOrigin;
+    #[cfg(test)]
+    use canic_contracts::dto::component_provisioning::ProvisioningFailureStage;
+    #[cfg(test)]
+    use canic_contracts::dto::component_provisioning::ProvisioningRetryCategory;
+    #[cfg(test)]
+    use canic_contracts::dto::component_provisioning::RootComponentProvisioningPhase;
+    #[cfg(test)]
+    use canic_contracts::dto::fleet_admission::FleetAdmissionMutationAction;
+    #[cfg(test)]
+    use canic_contracts::dto::fleet_admission::FleetAdmissionMutationOutcome;
+    #[cfg(test)]
+    use canic_contracts::dto::fleet_admission::FleetAdmissionMutationRequest;
+    #[cfg(test)]
+    use canic_contracts::dto::fleet_admission::FleetAdmissionMutationResponse;
+    #[cfg(test)]
+    use canic_contracts::dto::fleet_admission::FleetAdmissionOperationPhase;
+    #[cfg(test)]
+    use canic_contracts::dto::fleet_admission::FleetAdmissionProjectionPhase;
+    #[cfg(test)]
+    use canic_contracts::dto::fleet_admission::FleetAdmissionRootTransitionPhase;
+    #[cfg(test)]
+    use canic_contracts::dto::fleet_coordinator::{
         CoordinatorOperationReadRequest, CoordinatorOperationReadResponse,
     };
     #[cfg(test)]
-    use canic_control_plane::dto::root::RootFundingStatusResponse;
+    use canic_contracts::dto::fleet_funding::FleetFundingPolicyRotationApplyRequest;
     #[cfg(test)]
-    use canic_control_plane::dto::template::{
+    use canic_contracts::dto::fleet_funding::FleetFundingPolicyRotationBeginRequest;
+    #[cfg(test)]
+    use canic_contracts::dto::fleet_funding::FleetFundingPolicyRotationFundingSource;
+    #[cfg(test)]
+    use canic_contracts::dto::fleet_funding::FleetFundingPolicyRotationPlacementEvidence;
+    #[cfg(test)]
+    use canic_contracts::dto::fleet_funding::FleetFundingPolicyRotationPlan;
+    #[cfg(test)]
+    use canic_contracts::dto::fleet_funding::FleetFundingPolicyRotationPlanHeader;
+    #[cfg(test)]
+    use canic_contracts::dto::fleet_funding::FleetFundingPolicyRotationReceipt;
+    #[cfg(test)]
+    use canic_contracts::dto::fleet_funding::FleetFundingPolicyRotationRootPlan;
+    #[cfg(test)]
+    use canic_contracts::dto::fleet_funding::FleetFundingPolicyRotationStageRootRequest;
+    #[cfg(test)]
+    use canic_contracts::dto::fleet_funding::FleetFundingPolicyUsage;
+    #[cfg(test)]
+    use canic_contracts::dto::fleet_funding::FleetRootFundingNoGrantReason;
+    #[cfg(test)]
+    use canic_contracts::dto::fleet_funding::FleetRootFundingRequest;
+    #[cfg(test)]
+    use canic_contracts::dto::fleet_funding::FleetRootFundingResponse;
+    #[cfg(test)]
+    use canic_contracts::dto::icp_refill::IcpRefillStatus;
+    #[cfg(test)]
+    use canic_contracts::dto::icp_refill::IcpRefillTrigger;
+    #[cfg(test)]
+    use canic_contracts::dto::root::RootFundingStatusResponse;
+    #[cfg(test)]
+    use canic_contracts::dto::template::{
         StoreCatalogRequest, StoreCatalogResponse, StoreObservabilityRequest,
         StoreObservabilityResponse, TemplateLookupRequest, TemplateManifestResponse,
         TemplateStagingStatusResponse,
     };
-    use canic_control_plane::{
-        dto::template::{
-            StoreCommand, StoreCommandResponse, TemplateChunkInput, TemplateChunkSetInfoResponse,
-            TemplateChunkSetPrepareInput, TemplateManifestInput,
-        },
+    #[cfg(test)]
+    use canic_contracts::ids::BuildNetwork;
+    #[cfg(test)]
+    use canic_contracts::ids::CyclesFundingBudget;
+    #[cfg(test)]
+    use canic_contracts::ids::FleetAdmissionPolicy;
+    #[cfg(test)]
+    use canic_contracts::ids::FleetAdmissionSelector;
+    #[cfg(test)]
+    use canic_contracts::ids::FleetFundingProfile;
+    #[cfg(test)]
+    use canic_contracts::ids::FleetSubnetRootAutomaticIcpRefillPolicy;
+    #[cfg(test)]
+    use canic_contracts::ids::FleetSubnetRootFundingPolicy;
+    #[cfg(test)]
+    use canic_contracts::ids::FleetSubnetRootIcpRefillPolicy;
+    use canic_contracts::ids::{
+        FleetCoordinatorRootFundingPolicy, FleetSubnetRootFundingAuthority, ReleaseBuildId,
+    };
+    use canic_contracts::{
         dto::{
             fleet_coordinator::{
                 CoordinatorCommand, CoordinatorCommandResponse, CoordinatorObservabilityRequest,
                 CoordinatorObservabilityResponse, CoordinatorRegistryRequest,
-                CoordinatorRegistryResponse, FleetCoordinatorInitArgs,
+                CoordinatorRegistryResponse,
             },
             root::RootOperationStatusResponse,
+            template::{
+                StoreCommand, StoreCommandResponse, TemplateChunkInput,
+                TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput, TemplateManifestInput,
+            },
         },
         ids::{
             TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion,
             WasmStoreBinding,
         },
     };
+    use canic_control_plane::installation::FleetCoordinatorInitArgs;
+    use canic_core::cdk::utils::hash::{hex_bytes, wasm_hash};
     #[cfg(test)]
-    use canic_core::{
-        cdk::types::Cycles,
-        dto::{
-            component_provisioning::{
-                FleetComponentProvisioningRetryStage, ProvisioningFailureOrigin,
-                ProvisioningFailureStage, ProvisioningRetryCategory,
-                RootComponentProvisioningPhase,
-            },
-            fleet_admission::{
-                FleetAdmissionMutationAction, FleetAdmissionMutationOutcome,
-                FleetAdmissionMutationRequest, FleetAdmissionMutationResponse,
-                FleetAdmissionOperationPhase, FleetAdmissionProjectionPhase,
-                FleetAdmissionRootStatusResponse, FleetAdmissionRootTransitionPhase,
-            },
-            fleet_funding::{
-                FleetFundingPolicyRotationApplyRequest, FleetFundingPolicyRotationBeginRequest,
-                FleetFundingPolicyRotationFundingSource,
-                FleetFundingPolicyRotationPlacementEvidence, FleetFundingPolicyRotationPlan,
-                FleetFundingPolicyRotationPlanHeader, FleetFundingPolicyRotationReceipt,
-                FleetFundingPolicyRotationRootPlan, FleetFundingPolicyRotationStageRootRequest,
-                FleetFundingPolicyUsage, FleetRootFundingNoGrantReason, FleetRootFundingRequest,
-                FleetRootFundingResponse,
-            },
-            icp_refill::{IcpRefillStatus, IcpRefillTrigger},
-        },
-        ids::{
-            CyclesFundingBudget, FleetAdmissionPolicy, FleetAdmissionSelector, FleetFundingProfile,
-            FleetSubnetRootAutomaticIcpRefillPolicy, FleetSubnetRootFundingPolicy,
-            FleetSubnetRootIcpRefillPolicy,
-        },
-        shared_support::fleet_admission_policy::{
-            compile_installed_fleet_admission_policy, effective_fleet_admission_principals,
-            fleet_admission_participant_catalog_digest,
-            fleet_admission_root_participant_catalog_digest, fleet_admission_target_for_binding,
-            materialize_fleet_admission_projection,
-        },
-        shared_support::fleet_funding_policy::{
-            coordinator_root_funding_policy_hash, fleet_funding_policy_rotation_operation_id,
-            fleet_funding_policy_rotation_plan_digest, fleet_funding_policy_rotation_roots_digest,
-            validate_fleet_funding_policy_rotation_plan,
-        },
-    };
-    use canic_core::{
-        cdk::utils::hash::{hex_bytes, wasm_hash},
-        ids::{FleetCoordinatorRootFundingPolicy, FleetSubnetRootFundingAuthority, ReleaseBuildId},
-    };
+    use canic_core::shared_support::fleet_admission_policy::compile_fleet_admission_policy_template;
     #[cfg(test)]
-    use canic_core::{
-        ids::BuildNetwork,
-        shared_support::fleet_admission_policy::compile_fleet_admission_policy_template,
-    };
+    use canic_core::shared_support::fleet_admission_policy::compile_installed_fleet_admission_policy;
+    #[cfg(test)]
+    use canic_core::shared_support::fleet_admission_policy::effective_fleet_admission_principals;
+    #[cfg(test)]
+    use canic_core::shared_support::fleet_admission_policy::fleet_admission_participant_catalog_digest;
+    #[cfg(test)]
+    use canic_core::shared_support::fleet_admission_policy::fleet_admission_root_participant_catalog_digest;
+    #[cfg(test)]
+    use canic_core::shared_support::fleet_admission_policy::fleet_admission_target_for_binding;
+    #[cfg(test)]
+    use canic_core::shared_support::fleet_admission_policy::materialize_fleet_admission_projection;
+    #[cfg(test)]
+    use canic_core::shared_support::fleet_funding_policy::coordinator_root_funding_policy_hash;
+    #[cfg(test)]
+    use canic_core::shared_support::fleet_funding_policy::fleet_funding_policy_rotation_operation_id;
+    #[cfg(test)]
+    use canic_core::shared_support::fleet_funding_policy::fleet_funding_policy_rotation_plan_digest;
+    #[cfg(test)]
+    use canic_core::shared_support::fleet_funding_policy::fleet_funding_policy_rotation_roots_digest;
+    #[cfg(test)]
+    use canic_core::shared_support::fleet_funding_policy::validate_fleet_funding_policy_rotation_plan;
     #[cfg(test)]
     use canic_host::canister_build::{
         CanisterArtifactBuildOutput, CanisterArtifactBuilder, CanisterBuildProfile,
@@ -313,7 +377,7 @@ mod tests {
     use canic::dto::fleet_registry::FleetSubnetRootDrainingReservationRequest;
     #[cfg(test)]
     #[cfg(test)]
-    use canic_control_plane::dto::fleet_coordinator::{
+    use canic_contracts::dto::fleet_coordinator::{
         CoordinatorFundingStatusResponse, CoordinatorOperationStatusResponse,
         FleetFundingPolicyRotationStatusPhase,
     };
@@ -347,196 +411,33 @@ mod tests {
         }
     }
 
-    #[derive(CandidType)]
-    enum RootCommandFragment {
-        #[cfg(test)]
-        AdoptStore(FleetSubnetWasmStoreAdoptionRequest),
-        BootstrapStore(RootStoreBootstrapRequest),
-        PrepareStoreFixture(canic::dto::root_store::RootStoreFixturePrepareRequest),
-        #[cfg(test)]
-        #[expect(
-            dead_code,
-            reason = "the production adapter uses the replicated history Candid sidecar"
-        )]
-        InspectCanisterHistory(CanisterInspectionRequest),
-        ImportPoolCanister(PoolCanisterRequest),
-        #[cfg(test)]
-        MaintainPool,
-        #[cfg(test)]
-        ObserveCanister(FleetCanisterObservabilityRequest),
-        #[cfg(test)]
-        PrepareAuthoritySnapshot(AuthoritySnapshotRequest),
-        PrepareComponentRegistry(RootComponentRegistryPreparationRequest),
-        PrepareFleetActivation,
-        ProvisionComponent(RootComponentAllocationRequest),
-        #[cfg(test)]
-        RemoveSubtree(canic::dto::component_registry::RootComponentSubtreeRemovalRequest),
-        #[cfg(test)]
-        RespondCapability(canic::dto::capability::RootCapabilityEnvelopeV1),
-        #[cfg(test)]
-        ResumeAuthoritySnapshot(AuthoritySnapshotRequest),
-        ResumeFleetActivation(FleetActivationResumeRequest),
-        SynchronizeRegistry(FleetSubnetRootRegistrySyncRequest),
-    }
+    use canic_contracts::dto::wire::projection::fixture_baseline::RootCommandFragment;
 
     /// Exact host command type table used to inject loss at a binary request boundary.
     #[cfg(test)]
-    #[derive(CandidType)]
-    #[expect(
-        dead_code,
-        reason = "Candid includes every host command variant in its type table"
-    )]
-    enum HostRootCommandFragment {
-        MaintainPool,
-        ImportPoolCanister(PoolCanisterRequest),
-        AdoptStore(FleetSubnetWasmStoreAdoptionRequest),
-        BootstrapStore(RootStoreBootstrapRequest),
-        PrepareStoreFixture(RootStoreFixturePrepareRequest),
-        PrepareComponentRegistry(RootComponentRegistryPreparationRequest),
-        SynchronizeRegistry(FleetSubnetRootRegistrySyncRequest),
-    }
+    use canic_contracts::dto::wire::projection::fleet_setup::RootCommandFragment as HostRootCommandFragment;
 
-    #[derive(CandidType, Deserialize)]
-    #[expect(
-        clippy::large_enum_variant,
-        reason = "the direct Root wire decoder retains its component registry response inline"
-    )]
-    enum RootCommandResponseFragment {
-        PrepareStoreFixture(
-            Result<
-                canic::dto::fixture_provisioning::FixtureSourceStatus,
-                canic::dto::fixture_provisioning::FixtureStoreError,
-            >,
-        ),
-        ImportPoolCanister(PoolImportResponse),
-        #[cfg(test)]
-        InspectCanisterHistory(canic::dto::canister::CanisterHistoryResponse),
-        MaintainPool(PoolMaintenanceResponse),
-        #[cfg(test)]
-        ObserveCanister(CanisterObservabilityResponse),
-        OperationAccepted(OperationReceipt),
-        #[cfg(test)]
-        PrepareAuthoritySnapshot(AuthorityRestoreFenceStatusResponse),
-        PrepareComponentRegistry(RootComponentRegistryStatusResponse),
-        #[cfg(test)]
-        ResumeAuthoritySnapshot(AuthorityRestoreFenceStatusResponse),
-        #[cfg(test)]
-        RespondCapability(canic::dto::capability::RootCapabilityResponseV1),
-    }
+    use canic_contracts::dto::wire::projection::fixture_baseline::RootCommandResponseFragment;
 
-    #[derive(CandidType)]
-    enum RootStatusRequestFragment {
-        #[cfg(test)]
-        Admission(PageRequest),
-        #[cfg(test)]
-        AuthorityRestore,
-        #[cfg(test)]
-        ComponentRegistry(RootComponentRegistryPreparationRequest),
-        #[cfg(test)]
-        ComponentRegistryActivePartition(ComponentRegistryActivePartitionRequest),
-        #[cfg(test)]
-        ComponentRegistryPartition(
-            canic::dto::component_registry::ComponentRegistryPartitionRequest,
-        ),
-        #[cfg(test)]
-        CycleBalance,
-        #[cfg(test)]
-        CycleHistory(PageRequest),
-        FleetAuthority,
-        #[cfg(test)]
-        Funding,
-        Inventory,
-        Operation(OperationStatusRequest),
-        Pool(CanisterPoolStatusRequest),
-        #[cfg(test)]
-        Metrics(MetricsStatusRequest),
-        #[cfg(test)]
-        Runtime,
-    }
+    use canic_contracts::dto::wire::projection::fixture_baseline::RootStatusRequestFragment;
 
-    #[derive(CandidType, Deserialize)]
-    #[expect(
-        clippy::large_enum_variant,
-        reason = "the PocketIC decoder mirrors the direct Root status wire"
-    )]
-    enum RootStatusResponseFragment {
-        #[cfg(test)]
-        Admission(FleetAdmissionRootStatusResponse),
-        #[cfg(test)]
-        AuthorityRestore(AuthorityRestoreFenceStatusResponse),
-        #[cfg(test)]
-        ComponentRegistry(RootComponentRegistryStatusResponse),
-        #[cfg(test)]
-        ComponentRegistryActivePartition(ComponentRegistryActivePartitionResponse),
-        #[cfg(test)]
-        ComponentRegistryPartition(
-            canic::dto::component_registry::ComponentRegistryPartitionResponse,
-        ),
-        #[cfg(test)]
-        CycleBalance(CycleBalanceStatusResponse),
-        #[cfg(test)]
-        CycleHistory(Page<CycleTrackerEntry>),
-        FleetAuthority(FleetSubnetRootAuthority),
-        #[cfg(test)]
-        Funding(RootFundingStatusResponse),
-        Inventory(FleetSubnetRootCanisterSummary),
-        Operation(RootOperationStatusResponse),
-        Pool(CanisterPoolResponse),
-        #[cfg(test)]
-        Metrics(Page<MetricEntry>),
-        #[cfg(test)]
-        Runtime(Box<CanicRuntimeStatus>),
-    }
+    use canic_contracts::dto::wire::projection::fixture_baseline::RootStatusResponseFragment;
 
-    #[derive(CandidType)]
-    enum ManagedStatusRequestFragment {
-        #[cfg_attr(
-            not(test),
-            expect(
-                dead_code,
-                reason = "binding status is exercised by the governed test build"
-            )
-        )]
-        Binding,
-        #[cfg(test)]
-        CycleHistory(PageRequest),
-        Operation(OperationStatusRequest),
-    }
+    use canic_contracts::dto::wire::projection::fixture_baseline::ManagedStatusRequestFragment;
 
-    #[derive(CandidType, Deserialize)]
-    enum ManagedStatusResponseFragment {
-        Binding(Box<ManagedCanisterBinding>),
-        #[cfg(test)]
-        CycleHistory(Page<CycleTrackerEntry>),
-        Operation(Box<ManagedOperationStatusResponseFragment>),
-    }
+    use canic_contracts::dto::wire::projection::fixture_baseline::ManagedStatusResponseFragment;
 
     #[cfg(test)]
-    #[derive(CandidType)]
-    enum ManagedAdmissionStatusRequestFragment {
-        Admission(PageRequest),
-    }
+    use canic_contracts::dto::wire::projection::admission::RemoteRootStatusRequest as ManagedAdmissionStatusRequestFragment;
 
     #[cfg(test)]
-    #[derive(CandidType, Debug, Deserialize)]
-    enum ManagedAdmissionStatusResponseFragment {
-        Admission(FleetAdmissionProjectionStatusResponse),
-    }
+    use canic_contracts::dto::wire::projection::fixture_baseline::ManagedAdmissionStatusResponseFragment;
 
-    #[derive(CandidType, Debug, Deserialize)]
-    enum ManagedOperationStatusResponseFragment {
-        ConfigureRuntime(ComponentRuntimeOperationStatus),
-    }
+    use canic_contracts::dto::wire::projection::component_registry::CanisterOperationStatusFragment as ManagedOperationStatusResponseFragment;
 
-    #[derive(CandidType)]
-    enum RoleOverviewStatusRequestFragment {
-        Overview,
-    }
+    use canic_contracts::dto::wire::projection::overview::RoleStatusRequest as RoleOverviewStatusRequestFragment;
 
-    #[derive(CandidType, Deserialize)]
-    enum RoleOverviewStatusResponseFragment {
-        Overview(RoleOverviewResponse),
-    }
+    use canic_contracts::dto::wire::projection::overview::RoleStatusResponse as RoleOverviewStatusResponseFragment;
 
     #[derive(Debug)]
     enum RoleOverviewReadinessObservation {
@@ -659,7 +560,7 @@ mod tests {
             result,
             Err(error)
                 if error.code()
-                    == canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
+                    == canic_contracts::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
         )
     }
 
@@ -2323,11 +2224,11 @@ exec icp "$@"
                 .canister_call_candid(&source.cycles_ledger, "create_canister", &creation, None)
                 .unwrap();
         let imported = created.unwrap().canister_id;
-        let response: Result<RootCommandResponseFragment, canic_core::dto::error::Error> =
+        let response: Result<RootCommandResponseFragment, canic_contracts::dto::error::Error> =
             ledger_icp
                 .canister_call_candid(
                     &root.to_text(),
-                    canic_core::protocol::CANIC_ROOT_COMMAND,
+                    canic_contracts::protocol::CANIC_ROOT_COMMAND,
                     &HostRootCommandFragment::ImportPoolCanister(PoolCanisterRequest {
                         canister_id: imported,
                     }),
@@ -3360,16 +3261,10 @@ exec icp "$@"
     }
 
     #[cfg(test)]
-    #[derive(CandidType)]
-    enum FixtureReadinessRequest {
-        Readiness,
-    }
+    use canic_contracts::dto::wire::projection::fixture_canic::CanisterStatusRequestFragment as FixtureReadinessRequest;
 
     #[cfg(test)]
-    #[derive(CandidType, Deserialize)]
-    enum FixtureReadinessResponse {
-        Readiness(canic::dto::runtime::CanicReadinessStatus),
-    }
+    use canic_contracts::dto::wire::projection::fixture_canic::CanisterStatusResponseFragment as FixtureReadinessResponse;
 
     #[cfg(test)]
     fn fixture_readiness(
@@ -3842,7 +3737,7 @@ exec icp "$@"
         .unwrap();
         assert_eq!(
             unavailable,
-            Error::from_registered(canic_core::diagnostics::codes::PLATFORM_UNAVAILABLE)
+            Error::from_registered(canic_contracts::diagnostics::codes::PLATFORM_UNAVAILABLE)
         );
         assert_eq!(
             root_pool_status(pic, root)
@@ -4232,7 +4127,7 @@ exec icp "$@"
             .expect("management rejection");
         assert_eq!(
             rejected,
-            Error::from_registered(canic_core::diagnostics::codes::PLATFORM_UNAVAILABLE)
+            Error::from_registered(canic_contracts::diagnostics::codes::PLATFORM_UNAVAILABLE)
         );
         let pending = root_pool_status(pic, root)
             .entries
@@ -4298,7 +4193,7 @@ exec icp "$@"
             .unwrap()
         });
         assert!(replies.iter().any(|reply| matches!(reply, Ok(RootCommandResponseFragment::ImportPoolCanister(PoolImportResponse::Imported { canister_id })) if *canister_id == canister)));
-        let busy = Error::from_registered(canic_core::diagnostics::codes::STATE_UNAVAILABLE);
+        let busy = Error::from_registered(canic_contracts::diagnostics::codes::STATE_UNAVAILABLE);
         assert!(
             replies
                 .iter()
@@ -4879,7 +4774,7 @@ exec icp "$@"
         };
         assert_eq!(
             rejected.code(),
-            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+            canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
         );
         let CoordinatorRegistryResponse::Registry(after) =
             coordinator_status(&pic, coordinator, CoordinatorRegistryRequest::Registry).unwrap();
@@ -5873,7 +5768,7 @@ exec icp "$@"
             .unwrap();
         assert_eq!(
             response.unwrap_err().code(),
-            canic_core::diagnostics::codes::DIGEST_CONFLICT.raw_code()
+            canic_contracts::diagnostics::codes::DIGEST_CONFLICT.raw_code()
         );
         let replay: Result<(), Error> = pic
             .update_candid_as(
@@ -5905,7 +5800,7 @@ exec icp "$@"
         pic: &PocketIc,
         root: Principal,
         operation_id: [u8; 32],
-    ) -> Option<canic_core::dto::component_provisioning::RootComponentProvisioningStatusResponse>
+    ) -> Option<canic_contracts::dto::component_provisioning::RootComponentProvisioningStatusResponse>
     {
         match root_status(
             pic,
@@ -5925,9 +5820,9 @@ exec icp "$@"
         root: Principal,
         operation_id: [u8; 32],
         ready: impl Fn(
-            &canic_core::dto::component_provisioning::RootComponentProvisioningStatusResponse,
+            &canic_contracts::dto::component_provisioning::RootComponentProvisioningStatusResponse,
         ) -> bool,
-    ) -> canic_core::dto::component_provisioning::RootComponentProvisioningStatusResponse {
+    ) -> canic_contracts::dto::component_provisioning::RootComponentProvisioningStatusResponse {
         for _ in 0..240 {
             if let Some(status) = observed_root_provisioning(pic, root, operation_id)
                 && ready(&status)
@@ -5981,7 +5876,7 @@ exec icp "$@"
                 assert_eq!(failure.operation_id, operation_id);
                 assert_eq!(
                     failure.diagnostic_code,
-                    canic_core::diagnostics::codes::PLATFORM_UNAVAILABLE
+                    canic_contracts::diagnostics::codes::PLATFORM_UNAVAILABLE
                         .raw_code()
                         .raw()
                 );
@@ -6226,7 +6121,7 @@ exec icp "$@"
                     .expect("typed pending Root retry failure while Store is stopped");
                 assert_eq!(
                     failure.stage,
-                    canic_core::dto::component_provisioning::FleetComponentProvisioningRetryStage::RootAcceptance
+                    canic_contracts::dto::component_provisioning::FleetComponentProvisioningRetryStage::RootAcceptance
                 );
                 pic.start_canister(wasm_store, Some(installation_controller))
                     .expect("restart the same retained Store");
@@ -6252,7 +6147,7 @@ exec icp "$@"
                         &pic,
                         installed.root_id,
                         request.operation_id,
-                        canic_control_plane::dto::root::RootProvisioningReleasePhase::Accepted,
+                        canic_contracts::dto::root::RootProvisioningReleasePhase::Accepted,
                     );
                     pic.start_canister(wasm_store, Some(installation_controller))
                         .expect("resume the same operation after Accepted-phase Store outage");
@@ -6261,7 +6156,7 @@ exec icp "$@"
                         installed.root_id,
                         request.operation_id,
                         |status| {
-                            status.phase == canic_core::dto::component_provisioning::RootComponentProvisioningPhase::Published
+                            status.phase == canic_contracts::dto::component_provisioning::RootComponentProvisioningPhase::Published
                                 && status.activated_component_count == status.component_count
                         },
                     );
@@ -6270,11 +6165,11 @@ exec icp "$@"
                 }
                 let (expected_stage, expected_operation) = match fault {
                     ActivationFailureFixture::Transient => (
-                        canic_core::dto::component_provisioning::ProvisioningFailureStage::StoreCatalog,
+                        canic_contracts::dto::component_provisioning::ProvisioningFailureStage::StoreCatalog,
                         installed.init_args.install_id,
                     ),
                     ActivationFailureFixture::StoreIdentity => (
-                        canic_core::dto::component_provisioning::ProvisioningFailureStage::StoreStatus,
+                        canic_contracts::dto::component_provisioning::ProvisioningFailureStage::StoreStatus,
                         installed.init_args.wasm_store_activation.operation_id,
                     ),
                 };
@@ -6305,9 +6200,9 @@ exec icp "$@"
                     )
                     .expect("unauthorized protected status transport");
                 assert!(forbidden.is_err_and(|error| error.code()
-                    == canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()));
+                    == canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()));
                 if fault == ActivationFailureFixture::StoreIdentity {
-                    assert_eq!(first.retry_category, canic_core::dto::component_provisioning::ProvisioningRetryCategory::ReviewRequired);
+                    assert_eq!(first.retry_category, canic_contracts::dto::component_provisioning::ProvisioningRetryCategory::ReviewRequired);
                     assert_eq!(first.retry_at_ns, None);
                     issue_current_protocol_step(&pic, step, installation_controller);
                     for _ in 0..20 {
@@ -6344,7 +6239,7 @@ exec icp "$@"
                 }
                 assert_eq!(
                     first.retry_category,
-                    canic_core::dto::component_provisioning::ProvisioningRetryCategory::Backoff
+                    canic_contracts::dto::component_provisioning::ProvisioningRetryCategory::Backoff
                 );
                 let backed_off = await_root_provisioning(
                     &pic,
@@ -6374,7 +6269,7 @@ exec icp "$@"
             &pic,
             installed.root_id,
             operation_id,
-            canic_control_plane::dto::root::RootProvisioningReleasePhase::RuntimesActive,
+            canic_contracts::dto::root::RootProvisioningReleasePhase::RuntimesActive,
         );
         let _coordinator_receipts =
             replay_release::collect(&pic, coordinator, canic::protocol::CANIC_OBSERVABILITY);
@@ -7193,7 +7088,7 @@ exec icp "$@"
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, &candid).unwrap();
         canic_host::canister_build::validate_wasm_candid_endpoints(&wasm_path, &path).unwrap();
-        let role = canic_core::ids::CanisterRole::from(role.to_string());
+        let role = canic_contracts::ids::CanisterRole::from(role.to_string());
         let capabilities = std::collections::BTreeSet::new();
         let release_identity = "operator-cli-runtime-fixture".to_string();
         let hashes = canic_core::role_contract::derive_protocol_profile_hashes(
@@ -7814,7 +7709,7 @@ esac
                         ..
                     },
                 )) if error.code()
-                    == canic_core::diagnostics::codes::STATE_UNAVAILABLE.raw_code() =>
+                    == canic_contracts::diagnostics::codes::STATE_UNAVAILABLE.raw_code() =>
                 {
                     return Ok(ComponentProgressObservation { progress: None });
                 }
@@ -7960,7 +7855,7 @@ esac
             &mut transport,
         );
         assert!(
-            matches!(denied, Err(ComponentOperationError::Protocol(canic_host::CanisterProtocolError::Response { source: canic_host::icp::IcpJsonResponseError::Rejected(error), .. })) if error.code() == canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code())
+            matches!(denied, Err(ComponentOperationError::Protocol(canic_host::CanisterProtocolError::Response { source: canic_host::icp::IcpJsonResponseError::Rejected(error), .. })) if error.code() == canic_contracts::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code())
         );
         transport.caller = Principal::anonymous();
         assert!(matches!(
@@ -8381,7 +8276,7 @@ esac
             desired.management_creation_fee_cycles = management_fee.to_string();
             assert_eq!(
                 desired.bootstrap.as_ref().unwrap().canonical_network_id,
-                canic_core::ids::CanonicalNetworkId::ic_mainnet()
+                canic_contracts::ids::CanonicalNetworkId::ic_mainnet()
             );
         }
         if matches!(funding, FundingJourney::NativeChildFunding) {
@@ -9508,18 +9403,10 @@ esac
     }
 
     #[cfg(test)]
-    #[derive(CandidType)]
-    enum PublicMemoryRequest {
-        Health,
-        Metrics(canic::dto::public_status::PublicMetricsRequest),
-    }
+    use canic_contracts::dto::wire::projection::fixture_baseline::PublicMemoryRequest;
 
     #[cfg(test)]
-    #[derive(CandidType, Deserialize)]
-    enum PublicMemoryResponse {
-        Health(canic::dto::public_status::PublicHealth),
-        Metrics(canic::dto::public_status::PublicMetricsSnapshot),
-    }
+    use canic_contracts::dto::wire::projection::fixture_baseline::PublicMemoryResponse;
 
     #[cfg(test)]
     fn public_memory_snapshot(
@@ -11986,22 +11873,19 @@ cycles = "80T"
                     && status.chunk_count as usize == source.descriptor.chunks.len())
             }
             CurrentFleetProtocolAction::PublishStoreFixtureChunk { expected, .. } => {
-                let response: Result<
-                    canic_control_plane::dto::template::StoreCatalogResponse,
-                    Error,
-                > = pic
-                    .query_candid_as(
+                let response: Result<canic_contracts::dto::template::StoreCatalogResponse, Error> =
+                    pic.query_candid_as(
                         step.target,
                         store_controller,
                         canic::protocol::CANIC_WASM_STORE_CATALOG,
                         (
-                            canic_control_plane::dto::template::StoreCatalogRequest::Fixture(
+                            canic_contracts::dto::template::StoreCatalogRequest::Fixture(
                                 expected.content_id,
                             ),
                         ),
                     )
                     .unwrap();
-                matches!(response, Ok(canic_control_plane::dto::template::StoreCatalogResponse::Fixture(Ok(status)))
+                matches!(response, Ok(canic_contracts::dto::template::StoreCatalogResponse::Fixture(Ok(status)))
                     if status.content_id == expected.content_id && status.next_chunk >= expected.next_chunk)
             }
             CurrentFleetProtocolAction::PrepareComponentRegistry { expected, request } => {
@@ -12137,7 +12021,7 @@ cycles = "80T"
 
     #[cfg(test)]
     fn current_store_controllers(
-        authority: &canic_core::ids::FleetSubnetWasmStoreAuthority,
+        authority: &canic_contracts::ids::FleetSubnetWasmStoreAuthority,
     ) -> Vec<Principal> {
         let mut controllers = vec![
             authority.fleet_subnet_root,
@@ -13980,7 +13864,7 @@ cycles = "80T"
             denied
                 .expect_err("anonymous Store prepare must fail")
                 .code(),
-            canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
+            canic_contracts::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
         );
 
         let retained_installation_controller = fixture
@@ -14125,7 +14009,7 @@ cycles = "80T"
                 "another Fleet's Registry must not enter the co-located root",
             )
             .code(),
-            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+            canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
         );
         let _ = join_and_synchronize_root(&pic, second_coordinator, &second);
         assert_isolated_coordinator_registry(
@@ -14204,7 +14088,7 @@ cycles = "80T"
             rejected
                 .expect_err("another Fleet's co-located root must not write this Store")
                 .code(),
-            canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
+            canic_contracts::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
         );
         let accepted = store_prepare_as(pic, owner.response.wasm_store, owner.root_id, request);
         accepted.expect("owning root retains Store update authority");
@@ -14529,7 +14413,7 @@ cycles = "80T"
         );
         assert_eq!(
             rejected.code(),
-            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+            canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
         );
 
         pic.start_canister(fixture.verifier.canister_id, Some(fixture.root))
@@ -14890,7 +14774,7 @@ cycles = "80T"
                 "restored root authority must remain mutation-fenced",
             )
             .code(),
-            canic_core::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
+            canic_contracts::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
         );
         let fresh_allocation = root_command(
             fixture.pic(),
@@ -14996,7 +14880,7 @@ cycles = "80T"
         );
         assert_eq!(
             application_rejection(response, "sealed Root must reject child funding").code(),
-            canic_core::diagnostics::codes::AUTHORITY_INACTIVE.raw_code(),
+            canic_contracts::diagnostics::codes::AUTHORITY_INACTIVE.raw_code(),
         );
         assert!(fixture.pic().cycle_balance(fixture.issuer.canister_id) <= child_before);
         assert!(
@@ -15349,9 +15233,9 @@ cycles = "80T"
         fixture: &RootRetirementFixture<'_>,
         ledger: Principal,
         operator: Principal,
-        readiness: canic_core::dto::fleet_registry::FleetSubnetRootDeletionReadinessResponse,
+        readiness: canic_contracts::dto::fleet_registry::FleetSubnetRootDeletionReadinessResponse,
     ) {
-        use canic_core::dto::fleet_registry::FleetRetirementRequest;
+        use canic_contracts::dto::fleet_registry::FleetRetirementRequest;
         let pic = fixture.pic;
         let CoordinatorObservabilityResponse::RegistryVersion(version) = coordinator_status(
             pic,
@@ -15381,7 +15265,7 @@ cycles = "80T"
         };
         assert_eq!(
             premature.code(),
-            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+            canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
         );
         delete_prepared_root(fixture, readiness);
         let mut insufficient_fee = request.clone();
@@ -15391,7 +15275,7 @@ cycles = "80T"
         };
         assert_eq!(
             rejected.code(),
-            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+            canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
         );
         assert_eq!(
             ledger_account_balance(pic, ledger, fixture.coordinator),
@@ -15444,9 +15328,9 @@ cycles = "80T"
     #[cfg(test)]
     fn delete_prepared_root(
         fixture: &RootRetirementFixture<'_>,
-        readiness: canic_core::dto::fleet_registry::FleetSubnetRootDeletionReadinessResponse,
+        readiness: canic_contracts::dto::fleet_registry::FleetSubnetRootDeletionReadinessResponse,
     ) {
-        use canic_core::dto::fleet_registry::{
+        use canic_contracts::dto::fleet_registry::{
             FleetSubnetRootDeletionCompletionRequest, FleetSubnetRootDeletionExecutionRequest,
         };
         let pic = fixture.pic;
@@ -16717,7 +16601,7 @@ cycles = "80T"
     struct BootstrappedRootPlacement {
         canister_pool_maximum_size: Option<u32>,
         canister_pool_minimum_size: Option<u32>,
-        canister_pool_cycles: Option<canic_core::cdk::types::Cycles>,
+        canister_pool_cycles: Option<canic_contracts::cycles::Cycles>,
         coordinator_subnet: Option<Principal>,
         existing_root: Option<Principal>,
         existing_wasm_store: Option<Principal>,
@@ -17500,10 +17384,10 @@ cycles = "80T"
 
     fn root_store_entry(
         config: &canic_core::bootstrap::compiled::ConfigModel,
-        component_spec: &canic_core::ids::ComponentSpecId,
+        component_spec: &canic_contracts::ids::ComponentSpecId,
         kind: RootStoreReleaseSetEntryKind,
         role: &CanisterRole,
-        release_build_id: canic_core::ids::ReleaseBuildId,
+        release_build_id: canic_contracts::ids::ReleaseBuildId,
         real_modules: &BTreeMap<CanisterRole, Vec<u8>>,
         artifacts: &mut BTreeMap<CanisterRole, Vec<u8>>,
     ) -> RootStoreReleaseSetEntry {
@@ -17761,6 +17645,10 @@ cycles = "80T"
             (
                 "low native reserve retains child failure and recovers same claim",
                 child_reserve::low_native_reserve_retains_child_failure_and_recovers_same_claim,
+            ),
+            (
+                "runtime index child waits for startup and preserves bounded retry",
+                child_startup::runtime_index_child_waits_for_startup_and_preserves_bounded_retry,
             ),
             (
                 "sibling topups retain distinct receipts after both replies are lost",

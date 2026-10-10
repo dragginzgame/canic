@@ -3,8 +3,7 @@
 //! Responsibility: install and report issuer-local active delegation proof state.
 //! Does not own: root batch metadata, root issuer policy, or endpoint guards.
 
-use super::super::AuthOps;
-use super::errors::map_install_active_delegation_proof_error;
+use super::{super::AuthOps, errors::map_install_active_delegation_proof_error};
 use crate::{
     InternalError,
     cdk::types::Principal,
@@ -13,11 +12,13 @@ use crate::{
         DelegationProof, RootProof,
     },
     ops::{
-        auth::delegated::active_proof::{
-            InstallActiveDelegationProofInput,
-            install_active_delegation_proof as build_active_delegation_proof,
+        auth::delegated::{
+            active_proof::{
+                InstallActiveDelegationProofInput,
+                install_active_delegation_proof as build_active_delegation_proof,
+            },
+            chain_key::ChainKeyRootProofError,
         },
-        auth::delegated::chain_key::ChainKeyRootProofError,
         ic::IcOps,
         storage::auth::DelegatedTokenIssuerStateOps,
     },
@@ -28,16 +29,21 @@ pub(super) fn install_active_delegation_proof(
     installed_by: Principal,
 ) -> Result<ActiveDelegationProof, InternalError> {
     let cfg = AuthOps::auth_proof_verifier_config()?;
+    let verifier = cfg
+        .chain_key_root
+        .as_ref()
+        .ok_or_else(InternalError::auth_material_stale)?;
+    if verifier.policy.root_canister_id != cfg.root_canister_id {
+        return Err(InternalError::invalid_input());
+    }
     let now_ns = IcOps::now_nanos();
-    let active_proof = build_active_delegation_proof(
-        InstallActiveDelegationProofInput {
-            proof,
-            installed_by,
-            this_canister: IcOps::canister_self(),
-            now_ns,
-        },
-        |cert, root_proof| AuthOps::verify_delegation_root_proof(cert, root_proof, &cfg, now_ns),
-    )
+    let active_proof = build_active_delegation_proof(InstallActiveDelegationProofInput {
+        proof,
+        installed_by,
+        this_canister: IcOps::canister_self(),
+        now_ns,
+        verifier,
+    })
     .map_err(map_install_active_delegation_proof_error)?;
 
     set_active_delegation_proof(active_proof.clone());

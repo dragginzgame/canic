@@ -15,6 +15,7 @@ thread_local! {
 }
 
 const MAX_COMPONENT_CHILD_ALLOCATION_PHASES_PER_INVOCATION: usize = 16;
+const MAX_AUTOMATIC_CHILD_FAILURES: u32 = 16;
 
 /// Privately advance one accepted ordinary or peer top-level allocation.
 pub fn schedule_component_allocation(operation_id: [u8; 32]) {
@@ -167,7 +168,49 @@ pub fn schedule_component_child_allocation(component: ComponentInstanceId, opera
     if !inserted {
         return;
     }
-    schedule_component_child_allocation_after(component, operation_id, Duration::ZERO);
+    // Observe the failure only after this invocation has retained its outcome.
+    TimerApi::defer_lifecycle_required(
+        Duration::ZERO,
+        "Fleet Subnet Root Component child continuation",
+        async move {
+            let may_continue = ComponentRegistryOps::child_allocation(component, operation_id)
+                .ok()
+                .flatten()
+                .is_some_and(|allocation| {
+                    allocation.last_failure.is_none_or(|failure| {
+                        child_failure_can_continue(
+                            failure.diagnostic_code,
+                            failure.consecutive_failures,
+                        )
+                    })
+                });
+            if !may_continue {
+                SCHEDULED_COMPONENT_CHILD_ALLOCATIONS.with(|scheduled| {
+                    scheduled.borrow_mut().remove(&(component, operation_id));
+                });
+                return;
+            }
+            schedule_component_child_allocation_after(
+                component,
+                operation_id,
+                child_allocation_retry_delay(component, operation_id, Duration::ZERO),
+            );
+        },
+    );
+}
+
+fn child_allocation_retry_delay(
+    component: ComponentInstanceId,
+    operation_id: [u8; 32],
+    fallback: Duration,
+) -> Duration {
+    ComponentRegistryOps::child_allocation(component, operation_id)
+        .ok()
+        .flatten()
+        .and_then(|allocation| allocation.last_failure)
+        .map_or(fallback, |failure| {
+            Duration::from_nanos(failure.retry_at_ns.saturating_sub(IcOps::now_nanos()))
+        })
 }
 
 fn schedule_component_child_allocation_after(
@@ -202,20 +245,42 @@ fn schedule_component_child_allocation_after(
                         "child allocation attempt failed operation_id={operation_id:?} diagnostic={}",
                         error.code()
                     );
-                    let delay = ComponentRegistryOps::child_allocation(component, operation_id)
+                    let failures = ComponentRegistryOps::child_allocation(component, operation_id)
                         .ok()
                         .flatten()
                         .and_then(|allocation| allocation.last_failure)
-                        .map_or(Duration::from_secs(60), |failure| {
-                            Duration::from_nanos(
-                                failure.retry_at_ns.saturating_sub(IcOps::now_nanos()),
-                            )
+                        .map_or(MAX_AUTOMATIC_CHILD_FAILURES, |failure| {
+                            failure.consecutive_failures
                         });
+                    if !child_failure_can_continue(error.public_error().raw_code(), failures) {
+                        SCHEDULED_COMPONENT_CHILD_ALLOCATIONS.with(|scheduled| {
+                            scheduled.borrow_mut().remove(&(component, operation_id));
+                        });
+                        return;
+                    }
+                    let delay = child_allocation_retry_delay(
+                        component,
+                        operation_id,
+                        Duration::from_secs(60),
+                    );
                     schedule_component_child_allocation_after(component, operation_id, delay);
                 }
             }
         },
     );
+}
+
+fn child_failure_can_continue(code: u16, failures: u32) -> bool {
+    use canic_contracts::diagnostics::codes;
+    let permanent = [
+        codes::STATE_CONFLICT,
+        codes::CODEC_CONFLICT,
+        codes::AUTHORITY_CONFLICT,
+        codes::AUTHORITY_UNAUTHORIZED,
+        codes::STATE_INVALID,
+    ]
+    .map(|registered| registered.raw_code().raw());
+    !permanent.contains(&code) && failures < MAX_AUTOMATIC_CHILD_FAILURES
 }
 
 async fn advance_component_child_allocation_once(
@@ -490,7 +555,7 @@ pub(super) async fn advance_component_draining_boundary(
 }
 
 pub(super) async fn prepared_component_draining_boundary(
-    component: canic_core::ids::ComponentInstanceId,
+    component: canic_contracts::ids::ComponentInstanceId,
 ) -> Result<PreparedComponentDrainingBoundary, InternalError> {
     let (authority, root) = root_authority()?;
     let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
@@ -745,4 +810,35 @@ pub(in crate::workflow) async fn advance_existing_subtree_removal(
     }
     let removal = Box::pin(advance_subtree_removal_phase(removal)).await?;
     Ok(subtree_removal_response(removal))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn child_continuation_refuses_permanent_failures_and_exhausted_budget() {
+        assert!(child_failure_can_continue(
+            InternalError::unavailable().public_error().raw_code(),
+            1,
+        ));
+        assert!(!child_failure_can_continue(
+            InternalError::conflict().public_error().raw_code(),
+            1,
+        ));
+        assert!(!child_failure_can_continue(
+            InternalError::invariant().public_error().raw_code(),
+            1,
+        ));
+        assert!(!child_failure_can_continue(
+            canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED
+                .raw_code()
+                .raw(),
+            1,
+        ));
+        assert!(!child_failure_can_continue(
+            InternalError::unavailable().public_error().raw_code(),
+            MAX_AUTOMATIC_CHILD_FAILURES,
+        ));
+    }
 }

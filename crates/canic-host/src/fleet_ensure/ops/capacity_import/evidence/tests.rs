@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::fleet_ensure::policy::capacity_import::tests::{plan, principal};
-use canic_core::dto::pool_import::{PoolImportRootReceipt, PoolImportSourceReceipt};
+use canic_contracts::dto::pool_import::{PoolImportRootReceipt, PoolImportSourceReceipt};
 
 pub(in crate::fleet_ensure) fn settled(plan: &CapacityImportPlanRecord) -> PoolImportStatus {
     PoolImportStatus {

@@ -1,3 +1,4 @@
+use super::metrics::{WasmStorePublicationError, record_wasm_store_publish_failed};
 use crate::{
     dto::template::TemplateManifestResponse,
     workflow::runtime::template::{
@@ -6,16 +7,17 @@ use crate::{
         record_wasm_store_metric,
     },
 };
-use canic_core::api::lifecycle::metrics::{
-    WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason, WasmStoreMetricSource,
+use canic_core::{
+    api::lifecycle::metrics::{
+        WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason,
+        WasmStoreMetricSource,
+    },
+    cdk::types::Principal,
+    control_plane_support::{
+        error::InternalError,
+        ops::{cost_guard::CostGuardPermit, ic::mgmt::MgmtOps},
+    },
 };
-use canic_core::cdk::types::Principal;
-use canic_core::control_plane_support::{
-    error::InternalError,
-    ops::{cost_guard::CostGuardPermit, ic::mgmt::MgmtOps},
-};
-
-use super::metrics::{WasmStorePublicationError, record_wasm_store_publish_failed};
 
 impl WasmStorePublicationWorkflow {
     // Restore the management install cache for one exact release staged directly in a fresh

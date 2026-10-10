@@ -110,9 +110,18 @@ fn receipt_backed_stable_allocations_remain_single_owner() {
         1,
         "application terminal eligibility must have one ordered allocation",
     );
-    assert_eq!(intent::INTENT_RECEIPT_BACKED_RECORDS_ID, 45);
-    assert_eq!(placement::PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID, 49);
-    assert_eq!(application_receipt::APPLICATION_RECEIPT_ELIGIBILITY_ID, 48);
+    assert_eq!(
+        intent::INTENT_RECEIPT_BACKED_RECORDS_KEY,
+        "canic.core.intent.receipt_backed_records.v1"
+    );
+    assert_eq!(
+        placement::PLACEMENT_ACKNOWLEDGEMENT_INDEX_KEY,
+        "canic.core.placement.acknowledgement_index.v1"
+    );
+    assert_eq!(
+        application_receipt::APPLICATION_RECEIPT_ELIGIBILITY_KEY,
+        "canic.core.application_receipt.eligibility.v1"
+    );
 }
 
 fn source_paths_using(root: &Path, symbol: &str) -> BTreeSet<String> {

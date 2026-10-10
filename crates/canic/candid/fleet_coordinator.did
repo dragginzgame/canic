@@ -27,6 +27,11 @@ type CanicMetadataResponse = record {
   package_name : text;
 };
 //
+// ComponentProvisioningGrant
+//
+// Non-parent authorization for one requester Spec to create one exact peer Spec.
+//
+//
 // ComponentChildFundingPolicy
 //
 // Compiled child-level funding limits without configuration-only deserializers.
@@ -36,11 +41,6 @@ type ComponentChildFundingPolicy = record {
   max_per_request : nat;
   cooldown_secs : nat64;
 };
-//
-// ComponentChildKind
-//
-// Lifecycle class for a managed Component child at any tree depth.
-//
 type ComponentChildKind = variant { instance; shard; replica; singleton };
 //
 // ComponentChildSpec
@@ -61,7 +61,6 @@ type ComponentDeploymentConfiguration = record {
 };
 // One bounded inert metadata label on a flattened Component occurrence.
 type ComponentDeploymentLabel = record { key : text; value : text };
-// Fully effective quotas inherited by every placement of one member occurrence.
 type ComponentDeploymentLimits = record {
   maximum_descendants : nat32;
   maximum_registry_bytes : nat64;
@@ -74,7 +73,6 @@ type ComponentDeploymentMemberLimit = record {
   maximum_registry_bytes : opt nat64;
   spawn_grants : vec ComponentDeploymentSpawnGrantLimit;
 };
-// Exact typed purpose resolved for one flattened deployment occurrence.
 type ComponentDeploymentPurpose = variant {
   FleetServiceMember : record {
     "service" : text;
@@ -82,7 +80,6 @@ type ComponentDeploymentPurpose = variant {
   };
   Ordinary;
 };
-// Canonical reduced ceiling for one exact Component Spec spawn grant.
 type ComponentDeploymentSpawnGrantLimit = record {
   child_role : text;
   maximum_instances_per_parent : nat32;
@@ -166,11 +163,6 @@ type ComponentLimits = record {
   maximum_registry_bytes : nat64;
   cycles_funding : CyclesFundingBudget;
 };
-//
-// ComponentProvisioningGrant
-//
-// Non-parent authorization for one requester Spec to create one exact peer Spec.
-//
 type ComponentProvisioningGrant = record {
   requester_component_spec : text;
   maximum_instances_per_requester_per_root : nat32;
@@ -194,6 +186,7 @@ type ComponentSpawnGrant = record {
 // One compiled Component role, immutable Spec hash, limits, and child-role catalog.
 //
 type ComponentSpec = record {
+  application_init_required : bool;
   children : vec ComponentChildSpec;
   component_role : text;
   component_spec : text;
@@ -221,6 +214,11 @@ type ComponentTopology = record {
   provisioning_grants : vec ComponentProvisioningGrant;
   component_specs : vec ComponentSpec;
 };
+//
+// FleetCoordinatorInitArgs
+//
+// Exact authority and compiled provisioning configuration installed into a fresh Coordinator.
+//
 // Closed controller command union for the Fleet Coordinator.
 type CoordinatorCommand = variant {
   JoinRoot : FleetSubnetRootJoinRequest;
@@ -280,7 +278,31 @@ type CoordinatorFundingWindowStatusResponse = record {
   window_start_secs : nat64;
   reserved_cycles : nat;
 };
+// Coordinator diagnostics selected under one observer authorization rule.
+type CoordinatorObservabilityRequest = variant {
+  RootAcknowledgements;
+  Admission : FleetAdmissionStatusRequest;
+  IntentRelease : opt IntentReleaseKey;
+  RegistryManifest;
+  Funding;
+  AuthorityRestore;
+  RegistryVersion;
+  ReplayRelease : opt blob;
+};
+// Operational diagnostics returned only to authorized observers.
+type CoordinatorObservabilityResponse = variant {
+  RootAcknowledgements : vec FleetSubnetRootSnapshotAcknowledgement;
+  Admission : FleetAdmissionStatusResponse;
+  IntentRelease : IntentReleaseResponse;
+  RegistryManifest : FleetRegistryManifest;
+  Funding : CoordinatorFundingStatusResponse;
+  AuthorityRestore : AuthorityRestoreFenceStatusResponse;
+  RegistryVersion : FleetRegistryVersion;
+  ReplayRelease : ReplayReleaseResponse;
+};
+// Operation reads delegate authorization to the durable operation owner.
 type CoordinatorOperationReadRequest = variant { Operation : OperationReceipt };
+// One durable operation result under its existing exact caller contract.
 type CoordinatorOperationReadResponse = variant {
   Operation : CoordinatorOperationStatusResponse;
 };
@@ -292,8 +314,10 @@ type CoordinatorOperationStatusResponse = variant {
   Retirement : FleetRetirementStatus;
   ComponentProvisioning : FleetComponentProvisioningStatusResponse;
 };
-type CoordinatorRegistryReadRequest = variant { Registry };
-type CoordinatorRegistryReadResponse = variant { Registry : FleetRegistry };
+// Registry reads use the existing Coordinator registry-caller authority.
+type CoordinatorRegistryRequest = variant { Registry };
+// Registry snapshot returned to an authorized registry caller.
+type CoordinatorRegistryResponse = variant { Registry : FleetRegistry };
 // Controller-only funding usage and operation state for one registered Root.
 type CoordinatorRootFundingStatusResponse = record {
   automatic_grants : nat32;
@@ -577,11 +601,6 @@ type FleetCoordinatorBinding = record {
   coordinator_subnet : principal;
   coordinator : principal;
 };
-//
-// FleetCoordinatorInitArgs
-//
-// Exact authority and compiled provisioning configuration installed into a fresh Coordinator.
-//
 type FleetCoordinatorInitArgs = record {
   root_funding : opt FleetCoordinatorRootFundingPolicy;
   admission : FleetAdmissionPolicy;
@@ -871,11 +890,9 @@ type FleetServiceComponentBinding = record {
   fleet_subnet_root : principal;
   group_placement : ComponentGroupPlacementId;
 };
-// Exact semantic purpose assigned to one Fleet-service Component occurrence.
 type FleetServiceMemberPurpose = variant { replica; authority; pool_member };
 // Published service mode after configuration-only Authority selectors have been resolved.
 type FleetServiceMode = variant { AuthorityReplica; ActivePool };
-// Service-wide density and spread envelope independent of deployment placement.
 type FleetServicePlacementPolicy = record {
   minimum_distinct_roots : nat32;
   maximum_members_per_root : nat32;
@@ -1277,26 +1294,6 @@ type IntentReleaseResponse = record {
   entry : opt IntentReleaseEntry;
   next_after : opt IntentReleaseKey;
 };
-type ObservabilityRequest = variant {
-  RootAcknowledgements;
-  Admission : FleetAdmissionStatusRequest;
-  IntentRelease : opt IntentReleaseKey;
-  RegistryManifest;
-  Funding;
-  AuthorityRestore;
-  RegistryVersion;
-  ReplayRelease : opt blob;
-};
-type ObservabilityResponse = variant {
-  RootAcknowledgements : vec FleetSubnetRootSnapshotAcknowledgement;
-  Admission : FleetAdmissionStatusResponse;
-  IntentRelease : IntentReleaseResponse;
-  RegistryManifest : FleetRegistryManifest;
-  Funding : CoordinatorFundingStatusResponse;
-  AuthorityRestore : AuthorityRestoreFenceStatusResponse;
-  RegistryVersion : FleetRegistryVersion;
-  ReplayRelease : ReplayReleaseResponse;
-};
 // Durable identity returned when one role-owned asynchronous command is accepted.
 type OperationReceipt = record { operation_id : blob };
 type Page = record { total : nat64; entries : vec principal };
@@ -1312,7 +1309,6 @@ type ProvisioningFailureOrigin = record {
   failed_at_ns : nat64;
   diagnostic_code : nat16;
 };
-// Exact owner stage of the latest provisioning failure.
 type ProvisioningFailureStage = variant {
   ComponentRuntime;
   RootActivation;
@@ -1330,7 +1326,6 @@ type ProvisioningFailureStage = variant {
   StoreCredential;
   ComponentCommit;
 };
-// Whether another active attempt is justified by the originating failure.
 type ProvisioningRetryCategory = variant { ReviewRequired; Backoff };
 // Local identity and responsiveness without diagnostic checks or Fleet readiness.
 type PublicHealth = record {
@@ -1341,7 +1336,9 @@ type PublicHealth = record {
 };
 // Public query responsiveness; no runtime diagnostics or Fleet readiness assessment.
 type PublicHealthStatus = variant { responding };
+// PublicStatusRequest wire union selected from the role's compiled capabilities.
 type PublicStatusRequest = variant { Overview; Health };
+// PublicStatusResponse wire union selected from the role's compiled capabilities.
 type PublicStatusResponse = variant {
   Overview : RoleOverviewResponse;
   Health : PublicHealth;
@@ -1413,8 +1410,8 @@ type ReplayReleaseSettlement = record {
 };
 type Result = variant { Ok : CoordinatorCommandResponse; Err : Error };
 type Result_1 = variant { Ok : CoordinatorOperationReadResponse; Err : Error };
-type Result_2 = variant { Ok : CoordinatorRegistryReadResponse; Err : Error };
-type Result_3 = variant { Ok : ObservabilityResponse; Err : Error };
+type Result_2 = variant { Ok : CoordinatorRegistryResponse; Err : Error };
+type Result_3 = variant { Ok : CoordinatorObservabilityResponse; Err : Error };
 type Result_4 = variant { Ok : PublicStatusResponse; Err : Error };
 // Closed compiled capability identity exposed by the immutable role overview.
 type RoleCapability = variant {
@@ -1478,10 +1475,8 @@ service : (FleetCoordinatorInitArgs) -> {
   canic_coordinator_operation_status : (CoordinatorOperationReadRequest) -> (
       Result_1,
     ) query;
-  canic_coordinator_registry : (CoordinatorRegistryReadRequest) -> (
-      Result_2,
-    ) query;
-  canic_observability : (ObservabilityRequest) -> (Result_3) query;
+  canic_coordinator_registry : (CoordinatorRegistryRequest) -> (Result_2) query;
+  canic_observability : (CoordinatorObservabilityRequest) -> (Result_3) query;
   canic_public_status : (PublicStatusRequest) -> (Result_4) query;
 }
 // canic:payload-contract a46e736368656d615f76657273696f6e01782064656661756c745f7570646174655f696e67726573735f6d61785f6279746573194000707570646174655f6f766572726964657381a2666d6574686f64781963616e69635f636f6f7264696e61746f725f636f6d6d616e64696d61785f62797465731a00800000781976617269616e745f646570656e64656e745f6d6574686f647381781963616e69635f636f6f7264696e61746f725f636f6d6d616e64

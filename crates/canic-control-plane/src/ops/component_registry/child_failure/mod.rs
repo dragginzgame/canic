@@ -16,14 +16,16 @@ use crate::{
         RootComponentChildAllocationFailureView, RootComponentChildAllocationView,
     },
 };
-use canic_core::{
-    control_plane_support::error::{
-        InternalError, ProvisioningFailureStage, ProvisioningFailureView, retry_delay_seconds,
-    },
+use canic_contracts::{
     diagnostics::codes,
-    dto::component_provisioning::ProvisioningRetryCategory,
-    dto::component_registry::{ComponentLifecycleStatus, RootComponentChildAllocationFailure},
+    dto::{
+        component_provisioning::ProvisioningRetryCategory,
+        component_registry::{ComponentLifecycleStatus, RootComponentChildAllocationFailure},
+    },
     ids::ComponentInstanceId,
+};
+use canic_core::control_plane_support::error::{
+    InternalError, ProvisioningFailureStage, ProvisioningFailureView, retry_delay_seconds,
 };
 
 impl ComponentRegistryOps {

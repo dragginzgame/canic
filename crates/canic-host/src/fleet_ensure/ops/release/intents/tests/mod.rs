@@ -1,7 +1,7 @@
 //! Exact owner/store-qualified pagination and bounded decoding of canonical accounting.
 
 use super::*;
-use canic_core::dto::{
+use canic_contracts::dto::{
     release_intents::{IntentReleaseReceipt, IntentReleaseReceiptState},
     release_receipts::{ReplayReleaseIntent, ReplayReleaseIntentState},
 };

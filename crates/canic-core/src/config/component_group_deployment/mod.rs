@@ -9,24 +9,21 @@ mod member_limit;
 #[cfg(test)]
 mod tests;
 
-use crate::{
-    config::{
-        ComponentDeploymentLabel, ComponentDeploymentLabelKey, ComponentGroupLeafKind,
-        ComponentGroupTopology, ComponentGroupTopologyError, ComponentTopology,
-        ComponentTopologyError, FlattenedComponentGroup, FlattenedComponentGroupMember,
-        FleetServiceMemberPurpose, MAX_COMPONENT_DEPLOYMENT_LABELS,
-        component_group::source_labels,
-        schema::{ComponentGroupDeploymentConfig, ConfigModel},
-    },
-    ids::{
-        ComponentGroupDeploymentId, ComponentGroupMemberPath, ComponentGroupSpecId,
-        ComponentSpecId, FleetServiceId,
-    },
+use crate::config::{
+    ComponentDeploymentLabel, ComponentDeploymentLabelKey, ComponentGroupLeafKind,
+    ComponentGroupTopology, ComponentGroupTopologyError, ComponentTopology, ComponentTopologyError,
+    FlattenedComponentGroup, FlattenedComponentGroupMember, FleetServiceMemberPurpose,
+    MAX_COMPONENT_DEPLOYMENT_LABELS,
+    component_group::source_labels,
+    schema::{ComponentGroupDeploymentConfig, ConfigModel},
 };
-use std::collections::BTreeMap;
-
 use candid::CandidType;
+use canic_contracts::ids::{
+    ComponentGroupDeploymentId, ComponentGroupMemberPath, ComponentGroupSpecId, ComponentSpecId,
+    FleetServiceId,
+};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use thiserror::Error as ThisError;
 
 pub use canonical::MAX_COMPONENT_GROUP_DEPLOYMENT_TOPOLOGY_CANONICAL_BYTES;
@@ -264,14 +261,6 @@ pub struct FlattenedComponentGroupDeploymentMember {
 }
 
 /// Exact typed purpose resolved for one flattened deployment occurrence.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum ComponentDeploymentPurpose {
-    Ordinary,
-    FleetServiceMember {
-        service: FleetServiceId,
-        member_purpose: FleetServiceMemberPurpose,
-    },
-}
 
 /// Typed rejection for invalid Component Group deployment compilation.
 #[derive(Debug, ThisError)]
@@ -853,3 +842,5 @@ fn validate_placement_values(
     }
     Ok(())
 }
+
+pub use canic_contracts::deployment::ComponentDeploymentPurpose;

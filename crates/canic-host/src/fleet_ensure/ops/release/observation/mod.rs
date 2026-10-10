@@ -10,7 +10,7 @@ use crate::{
     fleet_ensure::{
         model::{capacity_import::CapacityImportSourceBinding, release::FleetReleaseAuthority},
         ops::capacity_import::{
-            admission::observer::management::{self, PreparedManagementObservation},
+            admission::observer::{management, management::PreparedManagementObservation},
             journal::CapacityImportJournalError,
         },
         policy::release::{FleetReleaseError, validate_physical_sample},
@@ -19,7 +19,7 @@ use crate::{
     icp::{IcpCli, IcpManagementCallError, SNAPSHOT_RESPONSE_BYTES, read_snapshot_ids},
 };
 use candid::Principal;
-use canic_core::ids::{CanonicalNetworkId, SubnetId};
+use canic_contracts::ids::{CanonicalNetworkId, SubnetId};
 use ic_agent::Agent;
 use sha2_host::{Digest, Sha256};
 use thiserror::Error;

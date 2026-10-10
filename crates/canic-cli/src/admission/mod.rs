@@ -19,38 +19,42 @@ use crate::{
     support::icp_target::IcpTargetOptions,
     version_text,
 };
-use candid::{CandidType, Principal};
-use canic_core::{
+use candid::Principal;
+use canic_contracts::{
     dto::{
         fleet_admission::{
             FleetAdmissionMutationAction, FleetAdmissionMutationOutcome,
-            FleetAdmissionMutationRequest, FleetAdmissionMutationResponse,
-            FleetAdmissionOperationPhase, FleetAdmissionRootParticipantPhase,
-            FleetAdmissionRootParticipantStatus, FleetAdmissionRootStatusResponse,
-            FleetAdmissionRootTransitionPhase, FleetAdmissionStatusRequest,
-            FleetAdmissionStatusResponse,
+            FleetAdmissionMutationRequest, FleetAdmissionOperationPhase,
+            FleetAdmissionRootParticipantPhase, FleetAdmissionRootParticipantStatus,
+            FleetAdmissionRootStatusResponse, FleetAdmissionRootTransitionPhase,
+            FleetAdmissionStatusRequest, FleetAdmissionStatusResponse,
         },
         fleet_registry::{FleetRegistry, FleetRegistryVersion, FleetSubnetRootStatus},
         page::PageRequest,
+        wire::projection::admission::{
+            RemoteCoordinatorCommand, RemoteCoordinatorCommandResponse,
+            RemoteCoordinatorStatusRequest, RemoteCoordinatorStatusResponse,
+            RemoteRootStatusRequest, RemoteRootStatusResponse,
+        },
     },
     ids::{
         ComponentInstanceId, FleetAdmissionPolicy, FleetAdmissionSelector, ManagedCanisterBinding,
         SubnetId,
     },
-    shared_support::{
-        fleet_admission_authority::{
-            FleetAdmissionMutationActionModel, FleetAdmissionMutationOperationInput,
-            FleetAdmissionRootCatalogAuthorityModel, fleet_admission_mutation_operation_id,
-            mutate_fleet_admission_membership,
-        },
-        fleet_admission_policy::compile_installed_fleet_admission_policy,
-        fleet_admission_policy::{
-            effective_fleet_admission_principals, fleet_admission_participant_catalog_digest,
-            fleet_admission_root_participant_catalog_digest, fleet_admission_target_for_binding,
-            materialize_fleet_admission_projection,
-        },
-        fleet_admission_root::MAX_FLEET_ADMISSION_ROOT_PARTICIPANTS,
+};
+use canic_core::shared_support::{
+    fleet_admission_authority::{
+        FleetAdmissionMutationActionModel, FleetAdmissionMutationOperationInput,
+        FleetAdmissionRootCatalogAuthorityModel, fleet_admission_mutation_operation_id,
+        mutate_fleet_admission_membership,
     },
+    fleet_admission_policy::{
+        compile_installed_fleet_admission_policy, effective_fleet_admission_principals,
+        fleet_admission_participant_catalog_digest,
+        fleet_admission_root_participant_catalog_digest, fleet_admission_target_for_binding,
+        materialize_fleet_admission_projection,
+    },
+    fleet_admission_root::MAX_FLEET_ADMISSION_ROOT_PARTICIPANTS,
 };
 use canic_host::{
     CanisterProtocolError, call_canister_with_arg,
@@ -63,12 +67,10 @@ use canic_host::{
     },
     query_canister_with_arg,
 };
-
 use clap::{ArgGroup, Command as ClapCommand};
+use ic_host_fs::durable::write_bytes;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, ffi::OsString, fs, path::PathBuf};
-
-use ic_host_fs::durable::write_bytes;
 use thiserror::Error as ThisError;
 
 const FLEET_ARG: &str = "fleet";
@@ -146,40 +148,6 @@ struct AdmissionStatusOptions {
     target: IcpTargetOptions,
     fleet: String,
     json: bool,
-}
-
-#[derive(CandidType)]
-enum RemoteCoordinatorStatusRequest {
-    Admission(FleetAdmissionStatusRequest),
-    Registry,
-    RegistryVersion,
-}
-
-#[derive(CandidType, Deserialize)]
-enum RemoteCoordinatorStatusResponse {
-    Admission(FleetAdmissionStatusResponse),
-    Registry(FleetRegistry),
-    RegistryVersion(FleetRegistryVersion),
-}
-
-#[derive(CandidType)]
-enum RemoteCoordinatorCommand {
-    MutateAdmission(FleetAdmissionMutationRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum RemoteCoordinatorCommandResponse {
-    MutateAdmission(FleetAdmissionMutationResponse),
-}
-
-#[derive(CandidType)]
-enum RemoteRootStatusRequest {
-    Admission(PageRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum RemoteRootStatusResponse {
-    Admission(FleetAdmissionRootStatusResponse),
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -298,7 +266,8 @@ fn run_plan(options: AdmissionPlanOptions) -> Result<(), AdmissionCommandError> 
     )?;
     let mut bytes = serde_json::to_vec_pretty(&plan)?;
     bytes.push(b'\n');
-    write_bytes(&crate::output::resolve_operator_path(&options.out)?, &bytes)?;
+    write_bytes(&crate::output::resolve_operator_path(&options.out)?, &bytes)
+        .map_err(canic_host::publication::ops::io_error)?;
     println!(
         "Fleet-admission plan written to {}\nOperation: {}\nGeneration: {} -> {}\nRegistry revision: {}\nParticipant Roots: {}\nManaged participants: {}",
         options.out.display(),
@@ -324,7 +293,7 @@ fn run_apply(options: AdmissionApplyOptions) -> Result<(), AdmissionCommandError
         &connection.icp,
         &connection.coordinator_binding,
         connection.coordinator,
-        canic_core::protocol::CANIC_COORDINATOR_COMMAND,
+        canic_contracts::protocol::CANIC_COORDINATOR_COMMAND,
         &RemoteCoordinatorCommand::MutateAdmission(plan.request.clone()),
     )?;
     let RemoteCoordinatorCommandResponse::MutateAdmission(response) = response;
@@ -779,7 +748,7 @@ fn query_coordinator_registry(
         icp,
         binding,
         coordinator,
-        canic_core::protocol::CANIC_COORDINATOR_REGISTRY,
+        canic_contracts::protocol::CANIC_COORDINATOR_REGISTRY,
         &RemoteCoordinatorStatusRequest::Registry,
     )?;
     match response {
@@ -799,7 +768,7 @@ fn query_coordinator_registry_version(
         icp,
         binding,
         coordinator,
-        canic_core::protocol::CANIC_OBSERVABILITY,
+        canic_contracts::protocol::CANIC_OBSERVABILITY,
         &RemoteCoordinatorStatusRequest::RegistryVersion,
     )?;
     match response {
@@ -819,7 +788,7 @@ fn query_coordinator_admission(
         icp,
         binding,
         coordinator,
-        canic_core::protocol::CANIC_OBSERVABILITY,
+        canic_contracts::protocol::CANIC_OBSERVABILITY,
         &RemoteCoordinatorStatusRequest::Admission(FleetAdmissionStatusRequest {
             selector: FleetAdmissionSelector::Fleet,
             page: PageRequest {
@@ -866,7 +835,7 @@ fn query_root_status(
             &connection.icp,
             binding,
             root,
-            canic_core::protocol::CANIC_ROOT_STATUS,
+            canic_contracts::protocol::CANIC_ROOT_STATUS,
             &RemoteRootStatusRequest::Admission(PageRequest {
                 limit: ROOT_STATUS_PAGE_SIZE,
                 offset,
@@ -1149,7 +1118,7 @@ fn parse_selector(
         return value
             .parse()
             .map(FleetAdmissionSelector::ComponentSpec)
-            .map_err(|error: canic_core::ids::ComponentSpecIdParseError| {
+            .map_err(|error: canic_contracts::ids::ComponentSpecIdParseError| {
                 AdmissionCommandError::InvalidSelector(error.to_string())
             });
     }
@@ -1176,7 +1145,7 @@ const fn action_model(action: FleetAdmissionMutationAction) -> FleetAdmissionMut
 }
 
 fn operation_identity(
-    operation: &canic_core::dto::fleet_admission::FleetAdmissionOperationStatusResponse,
+    operation: &canic_contracts::dto::fleet_admission::FleetAdmissionOperationStatusResponse,
 ) -> (String, String) {
     (
         hex_bytes(operation.operation_id),
@@ -1185,7 +1154,7 @@ fn operation_identity(
 }
 
 const fn operation_successor(
-    operation: &canic_core::dto::fleet_admission::FleetAdmissionOperationStatusResponse,
+    operation: &canic_contracts::dto::fleet_admission::FleetAdmissionOperationStatusResponse,
 ) -> (u64, [u8; 32]) {
     match &operation.phase {
         FleetAdmissionOperationPhase::Planned { successor }
@@ -1203,8 +1172,8 @@ const fn operation_successor(
 }
 
 const fn operation_successor_status(
-    operation: &canic_core::dto::fleet_admission::FleetAdmissionOperationStatusResponse,
-) -> Option<&canic_core::dto::fleet_admission::FleetAdmissionPolicyStatus> {
+    operation: &canic_contracts::dto::fleet_admission::FleetAdmissionOperationStatusResponse,
+) -> Option<&canic_contracts::dto::fleet_admission::FleetAdmissionPolicyStatus> {
     match &operation.phase {
         FleetAdmissionOperationPhase::Planned { successor }
         | FleetAdmissionOperationPhase::Preparing { successor }
@@ -1249,10 +1218,12 @@ const fn mutation_outcome_label(outcome: FleetAdmissionMutationOutcome) -> &'sta
     }
 }
 
-const fn target_principal(target: &canic_core::ids::ManagedCanisterBinding) -> Principal {
+const fn target_principal(target: &canic_contracts::ids::ManagedCanisterBinding) -> Principal {
     match target {
-        canic_core::ids::ManagedCanisterBinding::Component(binding) => binding.canister_id,
-        canic_core::ids::ManagedCanisterBinding::ComponentChild(binding) => binding.canister_id,
+        canic_contracts::ids::ManagedCanisterBinding::Component(binding) => binding.canister_id,
+        canic_contracts::ids::ManagedCanisterBinding::ComponentChild(binding) => {
+            binding.canister_id
+        }
     }
 }
 

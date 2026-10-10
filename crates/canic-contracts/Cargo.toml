@@ -1,0 +1,28 @@
+[package]
+name = "canic-contracts"
+edition.workspace = true
+rust-version.workspace = true
+version.workspace = true
+license.workspace = true
+description = "Runtime-free Canic protocol contracts and identifiers"
+readme = "README.md"
+repository.workspace = true
+homepage.workspace = true
+publish = true
+
+[dependencies]
+candid = { workspace = true, features = ["bignum"] }
+ciborium.workspace = true
+ic-auth-protocol-types.workspace = true
+remain.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_bytes.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+toml.workspace = true
+
+[lints]
+workspace = true

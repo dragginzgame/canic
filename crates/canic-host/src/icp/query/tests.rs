@@ -83,7 +83,7 @@ fn read_query_never_retries_authentication_integrity_or_decode_failures() {
 
 #[test]
 fn authenticated_query_http_502_retries_only_the_same_read_request() {
-    for method in ["read_status", canic_core::protocol::CANIC_ROOT_STATUS] {
+    for method in ["read_status", canic_contracts::protocol::CANIC_ROOT_STATUS] {
         assert_http_502_read_retry(method);
     }
 }

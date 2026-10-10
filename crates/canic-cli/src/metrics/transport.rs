@@ -13,7 +13,9 @@ use crate::metrics::{
     options::MetricsOptions,
     parse::metric_page,
 };
-use canic_core::dto::observability::{CanisterObservabilityRequest, CanisterObservabilityResponse};
+use canic_contracts::dto::observability::{
+    CanisterObservabilityRequest, CanisterObservabilityResponse,
+};
 use canic_host::{
     CanisterProtocolError,
     fleet_ensure::{CurrentFleetResolution, resolve_current_fleet},
@@ -211,14 +213,14 @@ const fn metric_value_is_zero(value: &MetricValue) -> bool {
     }
 }
 
-const fn metrics_kind_dto(kind: MetricsKind) -> canic_core::dto::metrics::MetricsKind {
+const fn metrics_kind_dto(kind: MetricsKind) -> canic_contracts::dto::metrics::MetricsKind {
     match kind {
-        MetricsKind::Core => canic_core::dto::metrics::MetricsKind::Core,
-        MetricsKind::Placement => canic_core::dto::metrics::MetricsKind::Placement,
-        MetricsKind::Platform => canic_core::dto::metrics::MetricsKind::Platform,
-        MetricsKind::Runtime => canic_core::dto::metrics::MetricsKind::Runtime,
-        MetricsKind::Security => canic_core::dto::metrics::MetricsKind::Security,
-        MetricsKind::Storage => canic_core::dto::metrics::MetricsKind::Storage,
+        MetricsKind::Core => canic_contracts::dto::metrics::MetricsKind::Core,
+        MetricsKind::Placement => canic_contracts::dto::metrics::MetricsKind::Placement,
+        MetricsKind::Platform => canic_contracts::dto::metrics::MetricsKind::Platform,
+        MetricsKind::Runtime => canic_contracts::dto::metrics::MetricsKind::Runtime,
+        MetricsKind::Security => canic_contracts::dto::metrics::MetricsKind::Security,
+        MetricsKind::Storage => canic_contracts::dto::metrics::MetricsKind::Storage,
     }
 }
 
@@ -230,9 +232,9 @@ fn query_metrics(
 ) -> Result<Vec<MetricEntry>, MetricsQueryError> {
     let mut icp = IcpCli::new(&options.icp, Some(options.environment.clone()));
     icp = icp.with_cwd(icp_root);
-    let request = canic_core::dto::role::MetricsStatusRequest {
+    let request = canic_contracts::dto::role::MetricsStatusRequest {
         kind: metrics_kind_dto(options.kind),
-        page: canic_core::dto::page::PageRequest {
+        page: canic_contracts::dto::page::PageRequest {
             offset: 0,
             limit: options.limit,
         },
@@ -280,7 +282,7 @@ mod tests {
         let error = MetricsQueryError::Observability(FleetObservabilityError::Protocol(
             CanisterProtocolError::Invocation {
                 canister: candid::Principal::management_canister(),
-                method: canic_core::protocol::CANIC_ROOT_COMMAND,
+                method: canic_contracts::protocol::CANIC_ROOT_COMMAND,
                 source: IcpCommandError::Failed {
                     command: "icp canister call".to_string(),
                     stderr: "Canister has no query method 'canic_observability'.".to_string(),
@@ -330,7 +332,7 @@ mod tests {
     fn maps_metric_kind_to_observability_dto() {
         assert!(matches!(
             metrics_kind_dto(MetricsKind::Security),
-            canic_core::dto::metrics::MetricsKind::Security
+            canic_contracts::dto::metrics::MetricsKind::Security
         ));
     }
 
@@ -353,7 +355,7 @@ mod tests {
         let error = MetricsQueryError::Observability(FleetObservabilityError::Protocol(
             CanisterProtocolError::Response {
                 canister: candid::Principal::management_canister(),
-                method: canic_core::protocol::CANIC_ROOT_COMMAND,
+                method: canic_contracts::protocol::CANIC_ROOT_COMMAND,
                 source: canic_host::icp::decode_json_result_response::<u64>("{}").unwrap_err(),
             },
         ));

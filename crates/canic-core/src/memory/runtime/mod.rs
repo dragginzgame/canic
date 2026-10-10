@@ -20,17 +20,15 @@ pub fn is_memory_bootstrap_ready() -> Result<bool, ic_memory::RuntimeStateError>
 /// # Panics
 ///
 /// Panics when the default memory manager has not been bootstrapped before the
-/// stable-memory slot identified by `label` and `id` is accessed. In tests and
+/// stable-memory slot identified by `key` is accessed. In tests and
 /// debug builds, an installed bootstrap hook is run first and the function only
 /// panics if memory remains unbootstrapped after that hook.
-pub fn assert_memory_bootstrap_ready(label: &str, id: u8) {
+pub fn assert_memory_bootstrap_ready(key: &str) {
     match is_memory_bootstrap_ready() {
         Ok(true) => return,
         Ok(false) => {}
         Err(error) => {
-            panic!(
-                "stable memory slot '{label}' (id {id}) could not inspect memory bootstrap: {error}"
-            );
+            panic!("stable memory slot '{key}' could not inspect memory bootstrap: {error}");
         }
     }
 
@@ -42,14 +40,14 @@ pub fn assert_memory_bootstrap_ready(label: &str, id: u8) {
             Ok(false) => {}
             Err(error) => {
                 panic!(
-                    "stable memory slot '{label}' (id {id}) could not inspect memory bootstrap after the test hook: {error}"
+                    "stable memory slot '{key}' could not inspect memory bootstrap after the test hook: {error}"
                 );
             }
         }
     }
 
     panic!(
-        "stable memory slot '{label}' (id {id}) accessed before memory bootstrap; call ic_memory::bootstrap_default_memory_manager_with_policy(...) first"
+        "stable memory slot '{key}' accessed before memory bootstrap; run Canic memory bootstrap with its host pool first"
     );
 }
 

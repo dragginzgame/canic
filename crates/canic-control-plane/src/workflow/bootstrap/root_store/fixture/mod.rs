@@ -12,8 +12,7 @@ use crate::{
         runtime::template::WasmStoreInternalClient,
     },
 };
-use canic_core::{
-    control_plane_support::{error::InternalError, workflow::topology::guard::TopologyGuard},
+use canic_contracts::{
     dto::{
         fixture_provisioning::{FixtureSourceStatus, FixtureStoreError},
         fleet_subnet_root::FleetSubnetRootAuthority,
@@ -23,9 +22,13 @@ use canic_core::{
     },
     ids::CanisterRole,
 };
+use canic_core::control_plane_support::{
+    error::InternalError, workflow::topology::guard::TopologyGuard,
+};
 use std::collections::BTreeSet;
 
 /// Register one exact source while Root is Prepared. Replays return Store's retained cursor.
+
 pub async fn prepare(
     request: RootStoreFixturePrepareRequest,
 ) -> Result<Result<FixtureSourceStatus, FixtureStoreError>, InternalError> {
@@ -124,7 +127,7 @@ fn completed_source(source: &RootStoreFixture, status: &FixtureSourceStatus) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use canic_core::dto::fixture_provisioning::{FixtureChunkDescriptor, FixtureDescriptor};
+    use canic_contracts::dto::fixture_provisioning::{FixtureChunkDescriptor, FixtureDescriptor};
 
     fn source(role: &'static str) -> RootStoreFixture {
         let descriptor = FixtureDescriptor {

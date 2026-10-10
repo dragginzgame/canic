@@ -19,20 +19,20 @@ use crate::{
     output,
     support::{build_cache::cache_report, build_lock::BuildCheckDisplay},
 };
-use canic_core::ids::{BuildNetwork, CanisterRole, ReleaseBuildId};
-use canic_host::build_provenance::{BuildProvenanceRequest, build_provenance_envelope};
-use canic_host::canister_build::{
-    BuildReuseError, BuildReuseProgress, CanisterArtifactBuildOptions, CanisterArtifactBuilder,
-    CanisterBuildProfile, CompleteBuildReuse, ConfiguredCanisterArtifactBuildOutput,
-    WorkspaceBuildContext, copy_icp_wasm_output, print_workspace_build_context_once,
-    read_wasm_artifact_metrics,
-};
-use canic_host::evidence_envelope::{CommandProvenanceV1, command_path_for_root};
+use canic_contracts::ids::{BuildNetwork, CanisterRole, ReleaseBuildId};
 use canic_host::{
+    build_provenance::{BuildProvenanceRequest, build_provenance_envelope},
+    canister_build::{
+        BuildReuseError, BuildReuseProgress, CanisterArtifactBuildOptions, CanisterArtifactBuilder,
+        CanisterBuildProfile, CompleteBuildReuse, ConfiguredCanisterArtifactBuildOutput,
+        WorkspaceBuildContext, copy_icp_wasm_output, print_workspace_build_context_once,
+        read_wasm_artifact_metrics,
+    },
     config_discovery::{
         ConfigDiscoveryError, current_canic_workspace_root,
         discover_workspace_canic_config_choices, select_discovered_app_config_path,
     },
+    evidence_envelope::{CommandProvenanceV1, command_path_for_root},
     format::wasm_size_label,
     icp_config::{resolve_current_canic_icp_root, resolve_icp_build_network_from_root},
     release_build::{
@@ -1774,7 +1774,7 @@ mod tests {
             package_name: format!("canister_{role}"),
             package_version: env!("CARGO_PKG_VERSION").to_string(),
             protocol_release_identity: env!("CARGO_PKG_VERSION").to_string(),
-            protocol_role: canic_core::ids::CanisterRole::owned(role.to_string()),
+            protocol_role: canic_contracts::ids::CanisterRole::owned(role.to_string()),
             protocol_capabilities: std::collections::BTreeSet::new(),
             artifact_root: artifact_root.clone(),
             wasm_path,

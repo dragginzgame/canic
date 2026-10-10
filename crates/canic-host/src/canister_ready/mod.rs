@@ -8,19 +8,16 @@ use crate::{
     icp::{IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_result_response},
     icp_config::IcpConfigError,
     protocol_binding::ResolvedProtocolBinding,
-    replica_query::{self, ReplicaQueryError},
+    replica_query,
+    replica_query::ReplicaQueryError,
 };
-use candid::{CandidType, Deserialize};
-use canic_core::{dto::role::RoleOverviewResponse, protocol::CANIC_PUBLIC_STATUS};
+use canic_contracts::{
+    dto::wire::projection::overview::RoleStatusResponse, protocol::CANIC_PUBLIC_STATUS,
+};
 use std::path::Path;
 use thiserror::Error as ThisError;
 
 const ICP_JSON_OUTPUT: &str = "json";
-
-#[derive(CandidType, Deserialize)]
-enum RoleStatusResponse {
-    Overview(RoleOverviewResponse),
-}
 
 ///
 /// CanisterReadyQueryError

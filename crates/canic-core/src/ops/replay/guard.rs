@@ -7,14 +7,16 @@
 use crate::{
     cdk::types::Principal,
     model::replay::{CommandKind, OperationId, RecoveryReason, ReplayActor},
-    ops::replay::{
-        receipt::{
-            ReplayReceiptDecision, ReplayReceiptReserveInput, ReplayReceiptStoreError,
-            ReplayReceiptToken, prepare_replay_receipt,
+    ops::{
+        replay::{
+            receipt::{
+                ReplayReceiptDecision, ReplayReceiptReserveInput, ReplayReceiptStoreError,
+                ReplayReceiptToken, prepare_replay_receipt,
+            },
+            ttl,
         },
-        ttl,
+        storage::replay::ReplayReceiptOps,
     },
-    ops::storage::replay::ReplayReceiptOps,
 };
 
 ///

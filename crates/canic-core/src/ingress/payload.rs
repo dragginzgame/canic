@@ -6,7 +6,7 @@
 
 use std::sync::Mutex;
 
-pub const DEFAULT_UPDATE_INGRESS_MAX_BYTES: usize = 16 * 1024;
+pub use canic_contracts::protocol::limits::DEFAULT_UPDATE_INGRESS_MAX_BYTES;
 
 static UPDATE_LIMITS: Mutex<Vec<UpdatePayloadLimit>> = Mutex::new(Vec::new());
 

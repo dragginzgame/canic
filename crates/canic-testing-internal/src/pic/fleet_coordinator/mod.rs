@@ -12,19 +12,15 @@ mod tests {
     use crate::pic::artifacts::build_canonical_fleet_coordinator_wasm;
     use crate::pic::startup::start_pocket_ic;
     use candid::{Principal, encode_one};
-    use canic_control_plane::dto::fleet_coordinator::{
+    use canic_contracts::dto::fleet_coordinator::{
         CoordinatorCommand, CoordinatorCommandResponse, CoordinatorObservabilityRequest,
         CoordinatorObservabilityResponse, CoordinatorOperationReadRequest,
         CoordinatorOperationReadResponse, CoordinatorOperationStatusResponse,
-        CoordinatorRegistryRequest, CoordinatorRegistryResponse, FleetCoordinatorInitArgs,
+        CoordinatorRegistryRequest, CoordinatorRegistryResponse,
     };
-    use canic_core::{
-        bootstrap::parse_config_model,
-        cdk::types::Cycles,
-        control_plane_support::ops::{
-            component_provisioning_plan::ComponentProvisioningPlanOps,
-            fleet_registry::FleetRegistryOps,
-        },
+    use canic_contracts::protocol;
+    use canic_contracts::{
+        cycles::Cycles,
         dto::{
             authority_restore::{AuthorityRestoreFencePhase, AuthoritySnapshotRequest},
             component_provisioning::{
@@ -48,7 +44,14 @@ mod tests {
             FleetSubnetRootLimits, FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseBuildNonce,
             ReleaseSetDigest, SubnetId,
         },
-        protocol,
+    };
+    use canic_control_plane::installation::FleetCoordinatorInitArgs;
+    use canic_core::{
+        bootstrap::parse_config_model,
+        control_plane_support::ops::{
+            component_provisioning_plan::ComponentProvisioningPlanOps,
+            fleet_registry::FleetRegistryOps,
+        },
     };
     use ic_testkit::{
         artifacts::workspace_root_for,
@@ -242,7 +245,7 @@ placement.minimum_distinct_roots = 2
         );
         assert_eq!(
             command_error(unauthorized, "non-controller join must fail").code(),
-            canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
+            canic_contracts::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
         );
 
         assert_authority_snapshot_restore_fence(&pic, coordinator);
@@ -374,7 +377,7 @@ placement.minimum_distinct_roots = 2
                 "restored authority must remain mutation-fenced",
             )
             .code(),
-            canic_core::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
+            canic_contracts::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
         );
         let ordinary_mutation = command(
             pic,
@@ -392,7 +395,7 @@ placement.minimum_distinct_roots = 2
     fn registry_version(
         pic: &PocketIc,
         coordinator: Principal,
-    ) -> canic_core::dto::fleet_registry::FleetRegistryVersion {
+    ) -> canic_contracts::dto::fleet_registry::FleetRegistryVersion {
         let CoordinatorObservabilityResponse::RegistryVersion(version) = status(
             pic,
             coordinator,
@@ -408,7 +411,7 @@ placement.minimum_distinct_roots = 2
         pic: &PocketIc,
         coordinator: Principal,
         registry: &FleetRegistry,
-        version: &canic_core::dto::fleet_registry::FleetRegistryVersion,
+        version: &canic_contracts::dto::fleet_registry::FleetRegistryVersion,
     ) {
         let first_root = principal(21);
         let CoordinatorRegistryResponse::Registry(snapshot) = status_as(
@@ -432,7 +435,7 @@ placement.minimum_distinct_roots = 2
                 "unregistered root snapshot must fail",
             )
             .code(),
-            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+            canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
         );
 
         let request = FleetSubnetRootSnapshotAcknowledgementRequest {
@@ -484,7 +487,7 @@ placement.minimum_distinct_roots = 2
     fn assert_registry_activation(
         pic: &PocketIc,
         coordinator: Principal,
-        version: &canic_core::dto::fleet_registry::FleetRegistryVersion,
+        version: &canic_contracts::dto::fleet_registry::FleetRegistryVersion,
     ) -> FleetRegistryActivationResponse {
         let activation_request = FleetRegistryActivationRequest {
             expected_registry: version.clone(),
@@ -516,7 +519,7 @@ placement.minimum_distinct_roots = 2
         );
         assert_eq!(
             command_error(unauthorized, "non-controller activation must fail").code(),
-            canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
+            canic_contracts::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
         );
         let CoordinatorRegistryResponse::Registry(active) =
             status(pic, coordinator, CoordinatorRegistryRequest::Registry)

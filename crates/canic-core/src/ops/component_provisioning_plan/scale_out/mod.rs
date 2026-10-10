@@ -19,9 +19,8 @@ use crate::{
         ComponentProvisioningPlanOpsError, PlanValidationLedger, validate_spec_admissions,
     },
 };
-use std::collections::BTreeMap;
-
 use candid::Principal;
+use std::collections::BTreeMap;
 
 /// One Coordinator-committed placement used to validate a scale-out addition.
 #[derive(Clone, Debug, Eq, PartialEq)]

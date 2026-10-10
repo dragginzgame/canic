@@ -4,24 +4,17 @@
 //! Boundary: the audit Root only prepares balance; maintained commands execute all funding.
 
 use super::*;
-use canic::dto::{
-    observability::{
-        CanisterObservabilityRequest, CanisterObservabilityResponse, ChildFundingUsage,
-    },
-    rpc::{CyclesFundingPreflightResponse, CyclesResponse},
-    runtime::CanisterTimerStatus,
-    state::{FleetStateCommandResult, SetCyclesFundingRequest},
-};
+use canic::dto::observability::CanisterObservabilityRequest;
+use canic::dto::observability::CanisterObservabilityResponse;
+use canic::dto::observability::ChildFundingUsage;
+use canic::dto::rpc::CyclesFundingPreflightResponse;
+use canic::dto::rpc::CyclesResponse;
+use canic::dto::runtime::CanisterTimerStatus;
+use canic::dto::state::SetCyclesFundingRequest;
 
-#[derive(CandidType)]
-enum Command {
-    SetCyclesFunding(SetCyclesFundingRequest),
-}
+use canic_contracts::dto::wire::projection::fixture_baseline_funding_deadline::Command;
 
-#[derive(CandidType, Deserialize)]
-enum Response {
-    SetCyclesFunding(FleetStateCommandResult<bool>),
-}
+use canic_contracts::dto::wire::projection::fixture_baseline_funding_deadline::Response;
 
 #[test]
 #[expect(

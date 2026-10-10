@@ -12,7 +12,6 @@ use crate::{
         fleet_activation::FleetActivationPhase,
         fleet_subnet_root::FleetSubnetWasmStoreInitArgs,
     },
-    ids::{CanisterRole, ComponentBinding, ManagedCanisterBinding},
     log::Topic,
     ops::{
         config::ConfigOps,
@@ -34,6 +33,7 @@ use crate::{
         },
     },
 };
+use canic_contracts::ids::{CanisterRole, ComponentBinding, ManagedCanisterBinding};
 
 ///
 /// init_nonroot_canister

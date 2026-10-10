@@ -1,5 +1,5 @@
-use crate::ids::FleetKey;
 use crate::storage::prelude::*;
+use canic_contracts::ids::FleetKey;
 
 ///
 /// LocalApplicationSessionRecord

@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 /// One private developer instance, separate from ICP CLI's ordinary local launcher.
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LocalFleetConfig {
@@ -53,7 +54,7 @@ pub struct LocalFleetRecord {
     pub allocations: Vec<LocalAllocationIntentRecord>,
     pub checkpoint: LocalCheckpoint,
     #[serde(deserialize_with = "Option::deserialize")]
-    pub release_build_id: Option<canic_core::ids::ReleaseBuildId>,
+    pub release_build_id: Option<canic_contracts::ids::ReleaseBuildId>,
 }
 
 /// Only an acknowledged simulator save authorizes reopening the recorded state.

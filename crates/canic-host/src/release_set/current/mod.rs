@@ -7,8 +7,8 @@
 #[cfg(test)]
 mod tests;
 
-use crate::MAX_DOCUMENT_READ_BYTES;
 use crate::{
+    MAX_DOCUMENT_READ_BYTES,
     release_build::{ReleaseBuildPlanError, ReleaseBuildPlanState, load_release_build_plan},
     release_set::{
         PersistedApplicationArtifactUnion, PersistedCanicInfrastructureArtifactManifest,
@@ -18,21 +18,16 @@ use crate::{
         },
     },
 };
+use canic_contracts::ids::{BuildNetwork, ReleaseBuildId};
+use canic_core::bootstrap::compiled::ComponentTopology;
 use ic_host_artifacts::artifact::ArtifactError;
-use ic_host_fs::durable::create_new_bytes_with_parents;
-use ic_host_fs::read::read_optional_file_no_follow;
-
-use canic_core::{
-    bootstrap::compiled::ComponentTopology,
-    ids::{BuildNetwork, ReleaseBuildId},
-};
+use ic_host_fs::{durable::create_new_bytes_with_parents, read::read_optional_file_no_follow};
 use serde::{Deserialize, Serialize};
 use sha2_host::{Digest, Sha256};
 use std::{
     io,
     path::{Path, PathBuf},
 };
-
 use thiserror::Error as ThisError;
 
 pub const CURRENT_RELEASE_SET_MANIFEST_FILE: &str = "current-release-set-manifest.json";
@@ -197,7 +192,9 @@ pub fn compile_and_persist_current_release_set_manifest(
         };
     }
     let bytes = expected.canonical_bytes()?;
-    if let Err(source) = create_new_bytes_with_parents(&path, &bytes) {
+    if let Err(source) =
+        create_new_bytes_with_parents(&path, &bytes).map_err(crate::publication::ops::io_error)
+    {
         if let Ok(Some(existing)) = load_optional(&path, release_build_id)
             && existing.manifest == expected
         {

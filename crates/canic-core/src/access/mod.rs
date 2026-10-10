@@ -8,14 +8,17 @@ pub mod auth;
 pub mod caller_authority;
 pub mod deployment;
 pub mod env;
+
 #[doc(hidden)]
 pub mod expr;
 pub mod fleet;
 pub mod metrics;
 
-use crate::InternalError;
-use crate::diagnostics::{RegisteredDiagnosticCode, codes};
-use crate::ids::FleetServiceId;
+use crate::{
+    InternalError,
+    diagnostics::{RegisteredDiagnosticCode, codes},
+};
+use canic_contracts::ids::FleetServiceId;
 use thiserror::Error as ThisError;
 
 ///

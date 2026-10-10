@@ -4,9 +4,10 @@
 //! Does not own: application callbacks, boundary conversion, transport or scheduling.
 //! Boundary: the application owns durable progress; this model serializes delivery.
 
-use crate::ids::{ManagedCanisterBinding, ReleaseBuildId};
+use canic_contracts::ids::{ManagedCanisterBinding, ReleaseBuildId};
 
 /// Exact installation and source authority retained by a heap fetch attempt.
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FixtureImportAuthority {
     pub target: ManagedCanisterBinding,

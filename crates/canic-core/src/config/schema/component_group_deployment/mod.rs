@@ -4,16 +4,15 @@
 //! Does not own: root selection, planning, or runtime state.
 //! Boundary: source declarations select one group and freeze placement plus member-limit envelopes.
 
-use crate::{
-    config::{
-        ComponentDeploymentLabelKey, ComponentDeploymentLabelValue, FleetServiceMemberPurpose,
-    },
-    ids::{CanisterRole, ComponentGroupMemberPath, ComponentGroupSpecId},
+use crate::config::{
+    ComponentDeploymentLabelKey, ComponentDeploymentLabelValue, FleetServiceMemberPurpose,
 };
+use canic_contracts::ids::{CanisterRole, ComponentGroupMemberPath, ComponentGroupSpecId};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// One independently scalable deployment of a reusable Component Group.
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ComponentGroupDeploymentConfig {

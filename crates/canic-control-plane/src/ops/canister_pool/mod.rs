@@ -3,30 +3,38 @@
 pub mod capacity_import;
 mod release;
 
-use crate::storage::stable::canister_pool::{
-    CanisterPoolAssetOriginRecord, CanisterPoolAssetRecord, CanisterPoolAssetStatusRecord,
-    CanisterPoolClaimRecord, CanisterPoolCreationFailureRecord, CanisterPoolCreationProgressRecord,
-    CanisterPoolCreationReceiptRecord, CanisterPoolCreationRecord,
-    CanisterPoolHandoffReceiptRecord, CanisterPoolHandoffRecord, CanisterPoolRecycleResetRecord,
-    CanisterPoolStore,
+use crate::{
+    storage::{
+        stable::canister_pool::{
+            CanisterPoolAssetOriginRecord, CanisterPoolAssetRecord, CanisterPoolAssetStatusRecord,
+            CanisterPoolClaimRecord, CanisterPoolCreationFailureRecord,
+            CanisterPoolCreationProgressRecord, CanisterPoolCreationReceiptRecord,
+            CanisterPoolCreationRecord, CanisterPoolHandoffReceiptRecord,
+            CanisterPoolHandoffRecord, CanisterPoolRecycleResetRecord, CanisterPoolStore,
+        },
+        transient::canister_pool::PoolResetExecutionGuard,
+    },
+    view::canister_pool::{
+        CanisterPoolCreationFailureView, CanisterPoolCreationProgressView,
+        CanisterPoolCreationView, CanisterPoolHandoffView,
+    },
 };
-use crate::storage::transient::canister_pool::PoolResetExecutionGuard;
-use crate::view::canister_pool::{
-    CanisterPoolCreationFailureView, CanisterPoolCreationProgressView, CanisterPoolCreationView,
-    CanisterPoolHandoffView,
-};
-use canic_core::{
-    cdk::types::{Cycles, Principal},
-    control_plane_support::error::InternalError,
-    control_plane_support::model::replay::ReplayCostGuardSettlement,
-    dto::component_provisioning::RootEstateFundingRequired,
-    dto::pool::{
-        CanisterPoolAsset, CanisterPoolAssetOrigin, CanisterPoolAssetStatus, CanisterPoolClaim,
-        CanisterPoolCreation, CanisterPoolCreationFailure, CanisterPoolCreationProgress,
-        CanisterPoolCreationReceipt, CanisterPoolHandoff, CanisterPoolRecycleReset,
-        CanisterPoolResponse,
+use canic_contracts::{
+    cycles::Cycles,
+    dto::{
+        component_provisioning::RootEstateFundingRequired,
+        pool::{
+            CanisterPoolAsset, CanisterPoolAssetOrigin, CanisterPoolAssetStatus, CanisterPoolClaim,
+            CanisterPoolCreation, CanisterPoolCreationFailure, CanisterPoolCreationProgress,
+            CanisterPoolCreationReceipt, CanisterPoolHandoff, CanisterPoolRecycleReset,
+            CanisterPoolResponse,
+        },
     },
     ids::{ComponentInstanceId, FleetSubnetCanisterPoolConfig},
+};
+use canic_core::{
+    cdk::types::Principal,
+    control_plane_support::{error::InternalError, model::replay::ReplayCostGuardSettlement},
 };
 use std::collections::BTreeSet;
 

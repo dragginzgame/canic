@@ -10,10 +10,10 @@
 //!
 //! The contents are replaced wholesale on import.
 
-use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
-    cdk::structures::{DefaultMemoryImpl, memory::RuntimeMemory},
-    role_contract::allocation::memory::runtime::RUNTIME_CANISTER_CHILDREN_ID,
+    cdk::structures::{
+        DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, memory::RuntimeMemory,
+    },
     storage::{canister::CanisterRecord, prelude::*},
 };
 use std::cell::RefCell;
@@ -25,7 +25,7 @@ std::thread_local! {
     static CANISTER_CHILDREN: RefCell<
         StableBtreeMap<Principal, CanisterChildRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.runtime.canister_children.v1", ty = CanisterChildren, id = RUNTIME_CANISTER_CHILDREN_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.runtime.canister_children.v1")),
     );
 }
 

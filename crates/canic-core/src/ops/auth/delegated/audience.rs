@@ -5,10 +5,8 @@
 //! Boundary: pure delegated auth helper used by cert and token validation.
 
 use super::canonical::{CanonicalAuthError, role_hash, validate_scope_label};
-use crate::{
-    dto::auth::{DelegatedRoleGrant, DelegationAudience},
-    ids::{CanisterRole, FleetKey},
-};
+use crate::dto::auth::{DelegatedRoleGrant, DelegationAudience};
+use canic_contracts::ids::{CanisterRole, FleetKey};
 use thiserror::Error;
 
 pub const MAX_DELEGATED_ROLE_GRANTS: usize = 16;

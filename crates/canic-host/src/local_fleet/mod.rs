@@ -33,7 +33,7 @@ pub enum LocalFleetError {
     #[error("PocketIC local operation failed: {0}")]
     Platform(String),
     #[error("local Root rejected authority observation: {0}")]
-    Root(canic_core::dto::error::Error),
+    Root(canic_contracts::dto::error::Error),
     #[error(transparent)]
     Startup(#[from] ic_testkit::pic::PocketIcStartupError),
     #[error("PocketIC instance startup failed: {source}\nstdout: {stdout}\nstderr: {stderr}")]

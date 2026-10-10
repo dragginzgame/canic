@@ -1,7 +1,7 @@
 # Shared Tooling adoption
 
 The [manifest](../../.shared-tooling.snapshot) records reviewed files from
-committed revision `ee48bb37c98c771e77b92fd891f0757d8c1c8b99` (committed 0.2.2).
+committed revision `34e5ad7aac3599306c9572bb547f2239d09df1a3` (committed 0.3.7).
 [AGENTS.md](../../AGENTS.md) retains the product overlay. Refresh only through
 the upstream distribution helper; verify exact snapshot bytes and executable
 modes before release validation. Dirty sibling source is never inherited. The
@@ -33,13 +33,25 @@ and PocketIC test entrypoints check prepared tools without downloading them.
 
 `ci/ic-tools.tsv` owns common versions and archive digests. Root
 `tool-versions.env` retains Canic Cargo/lint pins, Binaryen executable/runtime-library
-digests and the exact published Testkit command selection. The shell projection reads the matrix; it defines no independent
+digests. The shell projection reads the matrix; it defines no independent
 version. Testkit owns PocketIC provisioning, offline byte/receipt admission, the
 16.x protocol policy and command-scoped server custody. `make install-testkit-server`
 explicitly installs the registry CLI through the shared Cargo installer and calls
 its setup; `make testkit-server-check` checks both retained selections offline.
+The shared Cargo installer selects the published Testkit package directly from
+the root lock, validates its source and exact version, and refuses selection
+drift before admitting an installation. Canic supplies the package, binary,
+profile and lock path without a second parser or pin.
+Mandatory installer and fixture assertions explicitly stop on failure, including
+under Bash 3.2; failed checks retain their original evidence. Canic's custom hook
+and Make-recipe fixtures follow the same rule.
 Ordinary validation never installs these tools. The five-tool IC bundle must be
 prepared again through `make install-ic-tools`; old bundles and receipts are retained.
+Standard release preflight prepares the admitted locked cache, then invokes
+`make install-tools` and the offline
+`make tools-check` admission before version preparation or
+complete validation. Standalone `make validate` also starts with those offline
+checks. Testkit selection follows the held root lock; setup preserves older slots.
 Host exact tool admission and packaged
 `canic toolchain install` remain product-owned. Shared setup is qualified on
 Linux; native macOS CI owns both architectures' actual execution evidence.
@@ -55,6 +67,10 @@ establishing Canic release support or complete-toolset availability there.
 
 ## CI and verification helpers
 
+Routine CI uses the workflow/ref concurrency group and cancels superseded runs,
+retaining all required native hosts on the newest run. Cancelled runs do not
+qualify their source; publication and deployment retain their own effect scope.
+
 The canonical `run-sccache.sh` owns binary selection, protected persistent runtime
 paths and the server socket. Canic's `run-canic-sccache.sh` projects its explicit
 binary override and retains quiet compiler fallback for classified cache failures;
@@ -63,6 +79,14 @@ direct test entrypoints select that adapter. The canonical disk-space checker
 owns filesystem admission and explicitly selected diagnostic paths; CI supplies
 the workspace and Cargo cache paths without a second local scanner.
 
+
+Canic includes the canonical `make/execution.mk` and `make/release.mk`, binding
+their runtime root to this checkout. Make admission retains independent `MFLAGS`
+evidence when callers replace `MAKEFLAGS`. The canonical formatting reporter wraps
+Canic's formatter order and existing workspace catalog, printing one success line
+or a failure with its retained log. The CI evidence action retains those logs.
+The updated CI inspector reports failed-log retrieval errors rather than treating
+an unavailable log as a successful failure review.
 
 Release dispatch, the Canic validation logger, formatting hooks and hook installation
 use the canonical Make-execution guard. It qualifies actual recipe execution and

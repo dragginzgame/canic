@@ -8,10 +8,6 @@ mod store;
 #[cfg(test)]
 mod tests;
 
-pub use store::CapacityImportJournalStore;
-pub(in crate::fleet_ensure) use store::require_completion_fits;
-pub(in crate::fleet_ensure::ops) use store::require_no_approved_import;
-
 use crate::fleet_ensure::{
     model::{
         EffectRecord, EffectState, EnsureAction,
@@ -36,6 +32,10 @@ use crate::fleet_ensure::{
 };
 use candid::Principal;
 use thiserror::Error;
+
+pub use store::CapacityImportJournalStore;
+pub(in crate::fleet_ensure) use store::require_completion_fits;
+pub(in crate::fleet_ensure::ops) use store::require_no_approved_import;
 
 /// Typed phase identifying which bounded inventory observation failed.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -89,7 +89,7 @@ pub enum CapacityImportJournalError {
     )]
     CoordinatorUnavailable { coordinator: Principal },
     #[error("Coordinator rejected the import prerequisite query: {0}")]
-    CoordinatorRejected(canic_core::dto::error::Error),
+    CoordinatorRejected(canic_contracts::dto::error::Error),
     #[error(transparent)]
     Review(#[from] CapacityImportReviewError),
     #[error(transparent)]
@@ -101,7 +101,7 @@ pub enum CapacityImportJournalError {
     #[error("capacity import transport differs from the reviewed network or signer")]
     ReaderMismatch,
     #[error("Root rejected the capacity import request: {0}")]
-    RootRejected(canic_core::dto::error::Error),
+    RootRejected(canic_contracts::dto::error::Error),
     #[error(
         "capacity import budget cannot cover the complete operation: {paid_calls} calls, at least {minimum_calls} required; debit ceiling {maximum_debit_cycles}, required {required_debit_cycles}"
     )]
@@ -115,7 +115,7 @@ pub enum CapacityImportJournalError {
         "Root capacity import hit a capacity limit in phase {phase:?}: {reserved_debit_cycles}/{maximum_debit_cycles} cycles reserved, {observed_debit_cycles} observed debit, {paid_calls}/{maximum_paid_calls} calls; preserve issued operation authority"
     )]
     RootCapacityLimit {
-        phase: canic_core::dto::pool_import::PoolImportPhase,
+        phase: canic_contracts::dto::pool_import::PoolImportPhase,
         reserved_debit_cycles: u128,
         maximum_debit_cycles: u128,
         observed_debit_cycles: u128,

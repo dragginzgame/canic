@@ -11,7 +11,8 @@ trap 'if [[ $? == 0 ]]; then rm -rf -- "$fixture"; else printf "Preflight fixtur
 mkdir -p "$fixture/bin" "$fixture/scripts/release" "$fixture/scripts/ci" "$fixture/ci" "$fixture/make"
 cp "$root/Makefile" "$root/tool-versions.env" "$fixture/"
 cp "$root/ci/tool-versions.env" "$root/ci/ic-tools.tsv" "$fixture/ci/"
-cp "$root/make/tools.mk" "$fixture/make/"
+cp "$root/make/tools.mk" "$root/make/execution.mk" "$root/make/release.mk" "$fixture/make/"
+cp "$root/scripts/ci/check-make-execution.sh" "$fixture/scripts/ci/"
 cp "$root/scripts/ci/ic-tool-pins.sh" "$fixture/scripts/ci/"
 cp "$root/scripts/release/adapter.sh" "$fixture/scripts/release/"
 printf '[workspace.package]\nversion = "1.2.3"\n' > "$fixture/Cargo.toml"
@@ -57,8 +58,18 @@ SH
 cat > "$fixture/bin/make" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
-[[ "$*" == '--no-print-directory validate' && "${CARGO_NET_OFFLINE:-}" == true ]]
-printf 'validation offline=%s\n' "$CARGO_NET_OFFLINE" >> "$PREFLIGHT_EVENTS"
+case "$*" in
+    '--no-print-directory install-tools')
+        printf 'setup\n' >> "$PREFLIGHT_EVENTS"
+        exit "${PREFLIGHT_SETUP_STATUS:-0}" ;;
+    '--no-print-directory tools-check')
+        printf 'tools-check\n' >> "$PREFLIGHT_EVENTS"
+        exit "${PREFLIGHT_CHECK_STATUS:-0}" ;;
+    '--no-print-directory validate')
+        [[ "${CARGO_NET_OFFLINE:-}" == true ]]
+        printf 'validation offline=%s\n' "$CARGO_NET_OFFLINE" >> "$PREFLIGHT_EVENTS" ;;
+    *) exit 99 ;;
+esac
 SH
 chmod +x "$fixture/bin/git" "$fixture/bin/cargo" "$fixture/bin/make"
 real_make="$(command -v make)"
@@ -83,7 +94,7 @@ run_preflight() {
 # A cold cache is prepared without overriding an explicitly selected offline policy.
 CARGO_NET_OFFLINE=false run_preflight success
 [[ -f "$PREFLIGHT_CACHE" ]]
-printf 'draft patch\ncargo set-version --help offline=false\ncargo fetch --locked offline=false\n' > expected
+printf 'draft patch\ncargo fetch --locked offline=false\nsetup\ntools-check\ncargo set-version --help offline=false\n' > expected
 cmp expected "$PREFLIGHT_EVENTS"
 CARGO_NET_OFFLINE=true run_preflight success
 rm -f "$PREFLIGHT_CACHE"
@@ -92,7 +103,7 @@ CARGO_NET_OFFLINE=true run_preflight failure
 PREFLIGHT_FETCH_STATUS=37 CARGO_NET_OFFLINE=false run_preflight failure
 [[ ! -e "$PREFLIGHT_CACHE" ]]
 
-# Source/tool/draft refusals occur before cache preparation.
+# Source/draft refusals occur before cache preparation; tool checks follow setup.
 for kind in unstaged staged untracked; do
     PREFLIGHT_DIRTY_KIND="$kind" run_preflight failure
     [[ ! -s "$PREFLIGHT_EVENTS" && ! -e "$PREFLIGHT_CACHE" ]]
@@ -102,8 +113,12 @@ for allowed in CHANGELOG.md docs/changelog/1.2.md; do
 done
 PREFLIGHT_DRAFT_STATUS=23 run_preflight failure
 [[ "$(cat "$PREFLIGHT_EVENTS")" == 'draft patch' ]]
-PREFLIGHT_TOOL_STATUS=29 run_preflight failure
-[[ "$(wc -l < "$PREFLIGHT_EVENTS")" == 2 ]]
+PREFLIGHT_TOOL_STATUS=29 CARGO_NET_OFFLINE=false run_preflight failure
+[[ "$(tail -1 "$PREFLIGHT_EVENTS")" == 'cargo set-version --help offline=false' ]]
+PREFLIGHT_SETUP_STATUS=31 run_preflight failure
+[[ "$(tail -1 "$PREFLIGHT_EVENTS")" == setup ]]
+PREFLIGHT_CHECK_STATUS=32 run_preflight failure
+[[ "$(tail -1 "$PREFLIGHT_EVENTS")" == tools-check ]]
 
 # Make's actual validation recipe stays offline; the validation command is substituted.
 : > "$PREFLIGHT_EVENTS"

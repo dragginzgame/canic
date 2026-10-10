@@ -4,7 +4,8 @@ use super::*;
 use crate::fleet_ensure::{
     view::release::receipts::ReleaseReplayDisposition, workflow::release::assess_receipts,
 };
-use canic_core::dto::release_receipts::{
+use candid::CandidType;
+use canic_contracts::dto::release_receipts::{
     ReplayReleaseAuthentication, ReplayReleaseEffect, ReplayReleaseEntry, ReplayReleaseIntent,
     ReplayReleaseIntentState, ReplayReleasePhase, ReplayReleaseRecoveryReason,
     ReplayReleaseSettlement,
@@ -252,7 +253,7 @@ fn distinguishes_empty_inventory_from_typed_refusal() {
             .unwrap()
     );
     let rejected =
-        CanicError::from_registered(canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE);
+        CanicError::from_registered(canic_contracts::diagnostics::codes::AUTHORITY_UNAVAILABLE);
     let bytes = candid::encode_one(Err::<Response, _>(rejected)).unwrap();
     assert!(
         matches!(decode_response(owner, &bytes, &mut remaining), Err(ReleaseReceiptsError::Rejected { rejection, .. }) if rejection.code() == rejected.code())

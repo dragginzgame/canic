@@ -5,15 +5,9 @@
 use super::*;
 use canic::dto::auth::RootChainKeyPublicKeyRequest;
 
-#[derive(CandidType)]
-enum Command {
-    GetChainKeyPublicKey(RootChainKeyPublicKeyRequest),
-}
+use canic_contracts::dto::wire::projection::fixture_baseline_root_public_key::Command;
 
-#[derive(CandidType, Deserialize)]
-enum Response {
-    GetChainKeyPublicKey(Vec<u8>),
-}
+use canic_contracts::dto::wire::projection::fixture_baseline_root_public_key::Response;
 
 pub(super) fn assert_controller_key_discovery(pic: &PocketIc, root: Principal) {
     let key = |caller, path: Vec<Vec<u8>>| {

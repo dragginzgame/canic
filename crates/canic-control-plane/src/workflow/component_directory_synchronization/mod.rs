@@ -18,15 +18,7 @@ use crate::{
     workflow::{component_registry, root_authority::validated_root_authority},
 };
 use candid::Principal;
-use canic_core::{
-    control_plane_support::{
-        error::InternalError,
-        ops::{
-            component_provisioning_receipt::RootComponentProvisioningReceiptOps,
-            component_runtime::ComponentRuntimeOps, fleet_registry::FleetRegistryOps, ic::IcOps,
-        },
-        workflow::runtime::fleet_activation::FleetActivationWorkflow,
-    },
+use canic_contracts::{
     dto::{
         component_deployment::ProtectedComponentDeployment,
         component_provisioning::{
@@ -38,8 +30,17 @@ use canic_core::{
     },
     ids::ManagedCanisterBinding,
 };
+use canic_core::control_plane_support::{
+    error::InternalError,
+    ops::{
+        component_provisioning_receipt::RootComponentProvisioningReceiptOps,
+        component_runtime::ComponentRuntimeOps, fleet_registry::FleetRegistryOps, ic::IcOps,
+    },
+    workflow::runtime::fleet_activation::FleetActivationWorkflow,
+};
 
 /// Advance one exact affected-root Directory synchronization step.
+
 pub async fn synchronize(
     caller: Principal,
     request: RootComponentDirectorySynchronizationRequest,
@@ -98,9 +99,9 @@ pub async fn synchronize(
 async fn prepare_and_commit(
     request: &RootComponentDirectorySynchronizationRequest,
     root: Principal,
-    store_bootstrap: canic_core::dto::root_store::RootStoreBootstrapRequest,
+    store_bootstrap: canic_contracts::dto::root_store::RootStoreBootstrapRequest,
 ) -> Result<
-    canic_core::dto::fleet_registry::FleetSubnetRootRegistryMirrorActivationResponse,
+    canic_contracts::dto::fleet_registry::FleetSubnetRootRegistryMirrorActivationResponse,
     InternalError,
 > {
     let prepared = super::fleet_registry_mirror::prepare_component_publication_transition(
@@ -129,7 +130,7 @@ async fn prepare_and_commit(
 
 fn next_intent(
     view: &crate::view::component_directory_synchronization::RootComponentDirectorySynchronizationView,
-    fleet_directory: &canic_core::dto::fleet_registry::FleetDirectorySnapshot,
+    fleet_directory: &canic_contracts::dto::fleet_registry::FleetDirectorySnapshot,
     started_at_ns: u64,
 ) -> Result<Option<RootComponentDirectorySynchronizationIntentView>, InternalError> {
     let index = usize::try_from(view.synchronized_component_count)
@@ -161,7 +162,7 @@ fn next_intent(
 
 async fn synchronize_target(
     request: &RootComponentDirectorySynchronizationRequest,
-    fleet_directory: &canic_core::dto::fleet_registry::FleetDirectorySnapshot,
+    fleet_directory: &canic_contracts::dto::fleet_registry::FleetDirectorySnapshot,
     intent: &RootComponentDirectorySynchronizationIntentView,
 ) -> Result<RootComponentDirectorySynchronizationResponse, InternalError> {
     let allocation = ComponentRegistryOps::allocation(intent.allocation_operation_id)
@@ -203,9 +204,9 @@ async fn synchronize_target(
 
 fn validate_synchronized_target_coverage(
     intent: &RootComponentDirectorySynchronizationIntentView,
-    fleet_directory: &canic_core::dto::fleet_registry::FleetDirectorySnapshot,
+    fleet_directory: &canic_contracts::dto::fleet_registry::FleetDirectorySnapshot,
     committed_partition: &crate::view::component_registry::ComponentRegistryPartitionView,
-    status: &canic_core::dto::component_registry::ComponentRuntimeStatusResponse,
+    status: &canic_contracts::dto::component_registry::ComponentRuntimeStatusResponse,
 ) -> Result<(), InternalError> {
     let current = ComponentRegistryOps::partition(intent.component)?
         .ok_or_else(InternalError::unavailable)?;
@@ -237,7 +238,7 @@ fn validate_synchronized_target_coverage(
 
 fn group_member_runtime_limits(
     deployment: &ProtectedComponentDeployment,
-) -> Result<(canic_core::ids::ComponentBinding, u64), InternalError> {
+) -> Result<(canic_contracts::ids::ComponentBinding, u64), InternalError> {
     let ProtectedComponentDeployment::GroupMember {
         binding, limits, ..
     } = deployment

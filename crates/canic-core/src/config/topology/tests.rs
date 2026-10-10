@@ -4,9 +4,13 @@
 //! Does not own: host root placement, Registry persistence, or runtime lifecycle.
 //! Boundary: exercises the complete validated-config to protected-topology transition.
 
+use super::*;
 use crate::{
-    cdk::{candid::Principal, types::Cycles, utils::hash::hex_bytes},
+    cdk::{candid::Principal, utils::hash::hex_bytes},
     config::Config,
+};
+use canic_contracts::{
+    cycles::Cycles,
     ids::{
         AppId, CanonicalNetworkId, ComponentBinding, ComponentChildBinding, ComponentInstanceId,
         ComponentSpecAdmission, ComponentSpecId, CyclesFundingBudget, FleetBinding,
@@ -14,8 +18,6 @@ use crate::{
         FleetSubnetRootLimits, SubnetId,
     },
 };
-
-use super::*;
 
 const CONFIG: &str = r#"
 [app]

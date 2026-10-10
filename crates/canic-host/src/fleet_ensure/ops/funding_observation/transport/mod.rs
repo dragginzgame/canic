@@ -16,7 +16,10 @@ use crate::{
         ops::{
             IcpEnsurePlatform, IcpEnsurePlatformError,
             current_inventory::{ProtocolCatalog, ProtocolEntry},
-            startup_funding::observation::{self, binding, inventory, registry},
+            startup_funding::{
+                observation,
+                observation::{binding, inventory, registry},
+            },
         },
         policy::startup_funding::live_binding,
         view::startup_funding::*,
@@ -24,9 +27,8 @@ use crate::{
     },
     release_set::AppConfigSnapshot,
 };
-use candid::{CandidType, Deserialize, Principal};
-use canic_core::{
-    cdk::utils::hash::hex_bytes,
+use candid::Principal;
+use canic_contracts::{
     dto::{
         canister::{CanisterInspectionRequest, CanisterStatusResponse, CanisterStatusType},
         observability::{
@@ -34,23 +36,12 @@ use canic_core::{
             FleetCanisterObservabilityRequest,
         },
         pool::CanisterPoolAssetStatus,
+        wire::projection::funding_observation::{Command, Response},
     },
     protocol,
 };
+use canic_core::cdk::utils::hash::hex_bytes;
 use std::collections::BTreeSet;
-
-#[derive(CandidType)]
-enum Command {
-    InspectCanister(CanisterInspectionRequest),
-    ObserveCanister(FleetCanisterObservabilityRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum Response {
-    InspectCanister(Box<CanisterStatusResponse>),
-    InspectionReserveRequired(canic_core::dto::canister::CanisterInspectionReserveResponse),
-    ObserveCanister(CanisterObservabilityResponse),
-}
 
 impl FundingObservationPlatform for IcpEnsurePlatform {
     type Error = IcpEnsurePlatformError;

@@ -20,10 +20,12 @@ fi
 
 PUBLISH_ORDER=(
     canic-backup
+    canic-contracts
     canic-core
     canic-control-plane
     canic-macros
     canic
+    canic-blob-service
     canic-host
     canic-cli
 )

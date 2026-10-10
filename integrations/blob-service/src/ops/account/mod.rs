@@ -10,14 +10,14 @@ use ic_blob_storage::ops::service::{
     account::{AccountInspectionAccess, AccountInspectionLimits},
     operator::OperatorStores,
 };
-pub(crate) struct AccountHost;
+pub struct AccountHost;
 impl AccountInspectionAccess for AccountHost {
     type Memory = ops::memory::Memory;
     fn with_account_stores<R>(&self, f: impl FnOnce(OperatorStores<'_, Self::Memory>) -> R) -> R {
         ops::read(|stores| f(OperatorStores::from(stores)))
     }
 }
-pub(crate) fn limits() -> AccountInspectionLimits {
+pub fn limits() -> AccountInspectionLimits {
     AccountInspectionLimits {
         max_bytes: 4096.try_into().unwrap(),
         decoding_quota: 500_000.try_into().unwrap(),

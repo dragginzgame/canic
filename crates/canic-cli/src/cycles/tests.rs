@@ -1,3 +1,5 @@
+// Ensure common duration selectors parse into seconds.
+
 use super::*;
 use crate::cycles::{
     model::{
@@ -7,8 +9,8 @@ use crate::cycles::{
     parse::{cycle_tracker_page, topup_event_page},
     transport::summarize_cycle_tracker,
 };
-use canic_core::{
-    cdk::types::Cycles,
+use canic_contracts::{
+    cycles::Cycles,
     dto::{
         cycles::{CycleTopupEvent, CycleTopupEventStatus, CycleTrackerEntry},
         page::Page,
@@ -17,7 +19,6 @@ use canic_core::{
 use canic_host::registry::RegistryEntry;
 use std::ffi::OsString;
 
-// Ensure common duration selectors parse into seconds.
 #[test]
 fn parses_duration_selectors() {
     for (value, expected) in [("30m", 1_800), ("6h", 21_600), ("7d", 604_800)] {

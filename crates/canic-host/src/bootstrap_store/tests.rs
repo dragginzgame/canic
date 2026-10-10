@@ -1,6 +1,5 @@
 use super::*;
-use crate::canister_build::CanisterBuildProfile;
-use crate::test_support::temp_dir;
+use crate::{canister_build::CanisterBuildProfile, test_support::temp_dir};
 
 #[test]
 fn generated_wasm_store_wrapper_satisfies_role_package_contract() {
@@ -10,7 +9,7 @@ fn generated_wasm_store_wrapper_satisfies_role_package_contract() {
         role: WASM_STORE_ROLE.to_string(),
         profile: CanisterBuildProfile::Fast,
         environment: "local".into(),
-        build_network: canic_core::ids::BuildNetwork::Local,
+        build_network: canic_contracts::ids::BuildNetwork::Local,
         workspace_root,
         icp_root: root.clone(),
         config_path: root.join("canic.toml"),
@@ -78,7 +77,7 @@ fn wasm_store_build_uses_the_locked_resolver() {
         role: WASM_STORE_ROLE.to_string(),
         profile: CanisterBuildProfile::Fast,
         environment: "local".to_string(),
-        build_network: canic_core::ids::BuildNetwork::Local,
+        build_network: canic_contracts::ids::BuildNetwork::Local,
         workspace_root: "/workspace".into(),
         icp_root: "/project".into(),
         config_path: "/workspace/apps/demo/canic.toml".into(),
@@ -100,7 +99,7 @@ fn wasm_store_declaration_build_uses_the_canonical_candid_environment() {
         role: WASM_STORE_ROLE.to_string(),
         profile: CanisterBuildProfile::Fast,
         environment: "local".to_string(),
-        build_network: canic_core::ids::BuildNetwork::Local,
+        build_network: canic_contracts::ids::BuildNetwork::Local,
         workspace_root: "/workspace".into(),
         icp_root: "/project".into(),
         config_path: "/workspace/apps/demo/canic.toml".into(),
@@ -133,7 +132,7 @@ fn wasm_store_declaration_build_uses_the_canonical_candid_environment() {
 fn canonical_store_status_matches_current_rust_contract() {
     use candid::types::internal::TypeContainer;
     use candid_parser::utils::CandidSource;
-    use canic_control_plane::dto::template::WasmStoreStatusResponse;
+    use canic_contracts::dto::template::WasmStoreStatusResponse;
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../canic/candid/wasm_store.did");
     let source = fs::read_to_string(path).unwrap();
     let (mut env, _) = CandidSource::Text(&source).load().unwrap();

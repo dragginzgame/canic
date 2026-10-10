@@ -8,13 +8,11 @@
 mod tests;
 
 use candid::Principal;
-use canic_core::{
-    bootstrap::compiled::{ComponentTopology, ConfigModel},
-    ids::{
-        ComponentSpecAdmission, ComponentSpecId, ComponentTopologyDigest, FleetSubnetRootLimits,
-        SubnetId,
-    },
+use canic_contracts::ids::{
+    ComponentSpecAdmission, ComponentSpecId, ComponentTopologyDigest, FleetSubnetRootLimits,
+    SubnetId,
 };
+use canic_core::bootstrap::compiled::{ComponentTopology, ConfigModel};
 use std::collections::BTreeSet;
 use thiserror::Error as ThisError;
 

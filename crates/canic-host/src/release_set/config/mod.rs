@@ -9,13 +9,12 @@ use canic_core::bootstrap::{
     compiled::{ComponentTopology, ConfigModel},
     parse_config_model,
 };
+use ic_host_fs::durable::write_bytes;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs, io,
     path::{Path, PathBuf},
 };
-
-use ic_host_fs::durable::write_bytes;
 
 pub use error::{
     AppConfigDeclaration, AppConfigError, AppConfigIoOperation, AppConfigMutationConflict,
@@ -217,9 +216,11 @@ pub fn declare_app_role(
     let source = read_config_source(config_path)?;
     let updated = declare_app_role_source(&source, expected_app, role, package)
         .map_err(|error| error.at_config_path(config_path))?;
-    write_bytes(config_path, updated.source.as_bytes()).map_err(|source| {
-        AppConfigError::io(AppConfigIoOperation::WriteConfig, config_path, source)
-    })?;
+    write_bytes(config_path, updated.source.as_bytes())
+        .map_err(crate::publication::ops::io_error)
+        .map_err(|source| {
+            AppConfigError::io(AppConfigIoOperation::WriteConfig, config_path, source)
+        })?;
     Ok(updated.role)
 }
 
@@ -234,9 +235,11 @@ pub fn attach_app_role(
     let source = read_config_source(config_path)?;
     let updated = attach_app_role_source(&source, expected_app, role, component_spec, kind)
         .map_err(|error| error.at_config_path(config_path))?;
-    write_bytes(config_path, updated.source.as_bytes()).map_err(|source| {
-        AppConfigError::io(AppConfigIoOperation::WriteConfig, config_path, source)
-    })?;
+    write_bytes(config_path, updated.source.as_bytes())
+        .map_err(crate::publication::ops::io_error)
+        .map_err(|source| {
+            AppConfigError::io(AppConfigIoOperation::WriteConfig, config_path, source)
+        })?;
     Ok(updated.role)
 }
 
@@ -273,7 +276,7 @@ fn commit_role_rename_sources(
         original_config,
         updated_config,
         package_update,
-        write_bytes,
+        |path, bytes| write_bytes(path, bytes).map_err(crate::publication::ops::io_error),
     )
 }
 

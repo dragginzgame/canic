@@ -1,12 +1,10 @@
 //! Exercise the operator review/apply entrypoint on a genuinely completed current Fleet.
 
 use super::*;
-use canic_core::{
-    control_plane_support::{error::InternalError, policy::pool_import},
-    dto::pool_import::{
-        PoolImportCommand, PoolImportIdentity, PoolImportPhase, PoolImportSourceProgress,
-    },
+use canic_contracts::dto::pool_import::{
+    PoolImportCommand, PoolImportIdentity, PoolImportPhase, PoolImportSourceProgress,
 };
+use canic_core::control_plane_support::{error::InternalError, policy::pool_import};
 use canic_host::{
     fleet_ensure::{
         dto::capacity_import::CapacityImportReviewRequest,
@@ -24,6 +22,7 @@ use canic_host::{
 };
 
 /// Retain a real unfinished Root import with cleared, stopped and untouched sources.
+
 pub(super) fn pause_reset(input: &ReinstallJourney<'_>, journal: &CapacityImportJournalRecord) {
     use canic_host::fleet_ensure::ops::capacity_import::{
         journal as persistence, reservation_evidence, root_reservation,
@@ -118,11 +117,11 @@ pub(super) fn pause_reset(input: &ReinstallJourney<'_>, journal: &CapacityImport
         .canister_status(stopped, Some(input.root))
         .unwrap();
     assert!(stopped.module_hash.is_some());
-    let status: canic_core::dto::canister::CanisterStatusType =
+    let status: canic_contracts::dto::canister::CanisterStatusType =
         candid::decode_one(&encode_one(stopped.status).unwrap()).unwrap();
     assert_eq!(
         status,
-        canic_core::dto::canister::CanisterStatusType::Stopped
+        canic_contracts::dto::canister::CanisterStatusType::Stopped
     );
     assert!(approved.handoffs.iter().all(|entry| entry.effect.is_none()));
 }

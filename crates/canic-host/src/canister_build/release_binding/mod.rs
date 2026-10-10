@@ -6,12 +6,9 @@
 #[cfg(test)]
 mod tests;
 
-use canic_core::{
-    bootstrap::release_binding::{
-        RELEASE_BINDING_BYTES, RELEASE_BINDING_ID_BYTES, RELEASE_BINDING_PREFIX,
-        RELEASE_BINDING_SUFFIX,
-    },
-    ids::ReleaseBuildId,
+use canic_contracts::ids::ReleaseBuildId;
+use canic_core::bootstrap::release_binding::{
+    RELEASE_BINDING_BYTES, RELEASE_BINDING_ID_BYTES, RELEASE_BINDING_PREFIX, RELEASE_BINDING_SUFFIX,
 };
 use std::ops::Range;
 

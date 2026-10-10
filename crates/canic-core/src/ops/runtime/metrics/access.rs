@@ -4,7 +4,7 @@
 //! Does not own: workflow decisions, persisted records, or endpoint DTOs.
 //! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
-use crate::ids::AccessMetricKind;
+use canic_contracts::ids::AccessMetricKind;
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {

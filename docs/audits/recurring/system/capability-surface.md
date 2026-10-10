@@ -120,10 +120,10 @@ Primary code areas:
 
 - `crates/canic/src/macros/endpoints/**`
 - `crates/canic/src/macros/start.rs`
-- `crates/canic-core/src/protocol.rs`
+- `crates/canic-contracts/src/protocol/mod.rs`
 - `crates/canic/src/protocol.rs`
-- `crates/canic-core/src/dto/capability/**`
-- `crates/canic-core/src/dto/rpc.rs`
+- `crates/canic-contracts/src/dto/capability/**`
+- `crates/canic-contracts/src/dto/rpc/mod.rs`
 - `crates/canic-core/src/api/rpc/**`
 - generated `.did` files under `.icp/<environment>/canisters/**`
 
@@ -281,9 +281,9 @@ Measure wire/protocol growth.
 Suggested scans:
 
 ```bash
-rg -n '^pub const ' crates/canic-core/src/protocol.rs
+rg -n '^pub const ' crates/canic-contracts/src/protocol/mod.rs
 rg -n '^pub const ' crates/canic/src/protocol.rs
-rg -n '^pub enum ' crates/canic-core/src/dto/{capability,rpc}.rs crates/canic-core/src/dto/capability -g '*.rs'
+rg -n '^pub enum ' crates/canic-contracts/src/dto/{capability,rpc} -g '*.rs'
 rg -n 'RequestFamily|CapabilityProof|CapabilityService' crates/canic-core/src -g '*.rs'
 ```
 
@@ -546,7 +546,7 @@ rg -n 'dto::capability|dto::rpc|protocol::|canic_endpoints_' crates/ -g '*.rs'
 | `dto::capability` |  |  |  |  |
 | `dto::rpc` |  |  |  |  |
 | `macros/endpoints/**` |  |  |  |  |
-| `canic-core/src/protocol.rs` |  |  |  |  |
+| `canic-contracts/src/protocol/mod.rs` |  |  |  |  |
 | `canic/src/protocol.rs` |  |  |  |  |
 
 ## Deterministic Risk Score (Required)
@@ -579,7 +579,7 @@ Minimum commands to report:
 
 ```bash
 rg -n '^macro_rules!' crates/canic/src/macros/endpoints -g '*.rs'
-rg -n '^pub const ' crates/canic-core/src/protocol.rs
+rg -n '^pub const ' crates/canic-contracts/src/protocol/mod.rs
 rg -n '^pub const ' crates/canic/src/protocol.rs
 rg -n '^  canic_' .icp/local/canisters -g '*.did'
 rg -n 'canic_response_capability_v1|canic_upsert_root_issuer_policy|canic_upsert_root_issuer_renewal_template|canic_root_issuer_renewal_status|canic_get_or_create_chain_key_delegation_proof|canic_prepare_delegated_token|canic_get_delegated_token|canic_install_active_delegation_proof|canic_active_delegation_proof_status|canic_prepare_role_attestation|canic_get_role_attestation|canic_wasm_store_|canic_sync_' crates/canic-core/src crates/canic/src -g '*.rs'

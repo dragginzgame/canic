@@ -1,8 +1,7 @@
 use super::*;
 use crate::fleet_ensure::policy::startup_funding::tests::hub_config;
-use canic_core::{
-    cdk::types::Cycles, control_plane_support::config::ComponentDeploymentConfiguration,
-};
+use canic_contracts::cycles::Cycles;
+use canic_core::control_plane_support::config::ComponentDeploymentConfiguration;
 
 const T: u128 = 1_000_000_000_000;
 

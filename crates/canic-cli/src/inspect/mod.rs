@@ -16,11 +16,14 @@ use crate::{
     support::candid::registry_entry_candid_path,
     version_text,
 };
-use candid::{CandidType, Deserialize, Principal, types::principal::PrincipalError};
-use canic_core::{
-    dto::runtime::{
-        CanicRuntimeStatus, RUNTIME_INTROSPECTION_SCHEMA_VERSION, RuntimeFeatureStatus,
-        RuntimeStatus,
+use candid::{Principal, types::principal::PrincipalError};
+use canic_contracts::{
+    dto::{
+        runtime::{
+            CanicRuntimeStatus, RUNTIME_INTROSPECTION_SCHEMA_VERSION, RuntimeFeatureStatus,
+            RuntimeStatus,
+        },
+        wire::projection::runtime_inspection::RoleStatusResponse,
     },
     protocol::CANIC_OBSERVABILITY,
 };
@@ -131,11 +134,6 @@ struct ResolvedInspectTarget {
     protocol_binding: ResolvedProtocolBinding,
     icp_root: Option<PathBuf>,
     json: bool,
-}
-
-#[derive(CandidType, Deserialize)]
-enum RoleStatusResponse {
-    Runtime(CanicRuntimeStatus),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -639,8 +637,9 @@ mod tests {
     #[test]
     fn decodes_runtime_status_from_response_bytes() {
         let status = sample_runtime_status(RuntimeStatus::Ok);
-        let response =
-            Ok::<_, canic_core::dto::error::Error>(RoleStatusResponse::Runtime(status.clone()));
+        let response = Ok::<_, canic_contracts::dto::error::Error>(RoleStatusResponse::Runtime(
+            status.clone(),
+        ));
         let output = format!(
             r#"{{"response_bytes":"{}"}}"#,
             hex_bytes(Encode!(&response).expect("encode runtime status response"))
@@ -657,7 +656,8 @@ mod tests {
     fn rejects_unsupported_runtime_schema() {
         let mut status = sample_runtime_status(RuntimeStatus::Ok);
         status.schema_version = RUNTIME_INTROSPECTION_SCHEMA_VERSION + 1;
-        let response = Ok::<_, canic_core::dto::error::Error>(RoleStatusResponse::Runtime(status));
+        let response =
+            Ok::<_, canic_contracts::dto::error::Error>(RoleStatusResponse::Runtime(status));
         let output = format!(
             r#"{{"response_bytes":"{}"}}"#,
             hex_bytes(Encode!(&response).expect("encode unsupported runtime status response"))
@@ -676,7 +676,8 @@ mod tests {
     fn rejects_unsupported_readiness_schema() {
         let mut status = sample_runtime_status(RuntimeStatus::Ok);
         status.readiness.schema_version = RUNTIME_INTROSPECTION_SCHEMA_VERSION + 1;
-        let response = Ok::<_, canic_core::dto::error::Error>(RoleStatusResponse::Runtime(status));
+        let response =
+            Ok::<_, canic_contracts::dto::error::Error>(RoleStatusResponse::Runtime(status));
         let output = format!(
             r#"{{"response_bytes":"{}"}}"#,
             hex_bytes(Encode!(&response).expect("encode unsupported readiness response"))
@@ -829,7 +830,7 @@ mod tests {
     }
 
     fn sample_runtime_status(status: RuntimeStatus) -> CanicRuntimeStatus {
-        use canic_core::dto::runtime::{
+        use canic_contracts::dto::runtime::{
             CanicReadinessStatus, FailureSeverity, ReadinessStatus, RecentFailure,
             RuntimeAuthStatusSummary, RuntimeBuildInfo, RuntimeCheck, RuntimeCheckStatus,
             RuntimeFeatureStatus, RuntimeFieldVisibility, RuntimeStateDomainStatus,
@@ -837,12 +838,12 @@ mod tests {
         };
 
         CanicRuntimeStatus {
-            schema_version: canic_core::dto::runtime::RUNTIME_INTROSPECTION_SCHEMA_VERSION,
+            schema_version: canic_contracts::dto::runtime::RUNTIME_INTROSPECTION_SCHEMA_VERSION,
             observed_at_ns: 42,
             canister_id: Principal::anonymous(),
             role: Some("root".to_string()),
             root: None,
-            build_network: Some(canic_core::ids::BuildNetwork::Local),
+            build_network: Some(canic_contracts::ids::BuildNetwork::Local),
             build: RuntimeBuildInfo {
                 package_name: "root".to_string(),
                 package_version: "0.81.0".to_string(),
@@ -906,9 +907,9 @@ mod tests {
             visibility: Vec::new(),
             readiness: CanicReadinessStatus {
                 fixture: Ok(
-                    canic_core::dto::fixture_provisioning::FixtureProvisioningStatus::NotRequired,
+                    canic_contracts::dto::fixture_provisioning::FixtureProvisioningStatus::NotRequired,
                 ),
-                schema_version: canic_core::dto::runtime::RUNTIME_INTROSPECTION_SCHEMA_VERSION,
+                schema_version: canic_contracts::dto::runtime::RUNTIME_INTROSPECTION_SCHEMA_VERSION,
                 role: Some("root".to_string()),
                 status: ReadinessStatus::Ready,
                 observed_at_ns: 42,
@@ -920,9 +921,9 @@ mod tests {
         }
     }
 
-    fn sample_receipt_capacity() -> canic_core::dto::runtime::RuntimeReceiptCapacityStatus {
-        canic_core::dto::runtime::RuntimeReceiptCapacityStatus {
-            status: canic_core::dto::runtime::RuntimeCheckStatus::Pass,
+    fn sample_receipt_capacity() -> canic_contracts::dto::runtime::RuntimeReceiptCapacityStatus {
+        canic_contracts::dto::runtime::RuntimeReceiptCapacityStatus {
+            status: canic_contracts::dto::runtime::RuntimeCheckStatus::Pass,
             receipt_records: 12,
             application_receipt_records: 10,
             canic_owned_receipt_records: 2,
@@ -941,8 +942,8 @@ mod tests {
         }
     }
 
-    fn sample_timer_status() -> canic_core::dto::runtime::CanisterTimerStatus {
-        use canic_core::dto::runtime::{
+    fn sample_timer_status() -> canic_contracts::dto::runtime::CanisterTimerStatus {
+        use canic_contracts::dto::runtime::{
             CanisterTimerStatus, TimerCallbackPerformanceStatus, TimerExecutionOutcome,
             TimerMemoryPageExtentStatus, TimerMemoryPageSampleStatus, TimerProcessCondition,
             TimerRegistrationStatus, TimerSchedulingMode,

@@ -66,6 +66,7 @@ fn install_version_reader(root: &Path) {
         "scripts/ci/next-release-version.sh",
         "scripts/ci/finalize-release-changelog.awk",
         "scripts/release/rewrite-owned-lock.sh",
+        "scripts/release/adapter.sh",
         "scripts/ci/read-cargo-workspace-version.sh",
         "scripts/ci/rewrite-local-lock-versions.pl",
         "scripts/ci/require-jq.sh",
@@ -280,6 +281,28 @@ fn create_receipt_repo(previous_receipt: Option<&str>, handoff: &str) -> PathBuf
         "Cargo.lock",
         "version = 4\n\n[[package]]\nname = \"receipt-fixture\"\nversion = \"0.92.7\"\n",
     );
+    for consumer in ["consumer", "embedded-consumer"] {
+        let consumer_root = root.join("integrations/blob-service").join(consumer);
+        write_file(
+            &consumer_root,
+            "Cargo.toml",
+            &format!(
+                "[workspace]\n[package]\nname = \"fixture-{consumer}\"\n\
+                 version = \"0.1.0\"\nedition = \"2024\"\n\
+                 [dependencies]\nreceipt-fixture = {{ path = \"../../..\" }}\n"
+            ),
+        );
+        write_file(&consumer_root, "src/lib.rs", "");
+        write_file(
+            &consumer_root,
+            "Cargo.lock",
+            &format!(
+                "version = 4\n\n[[package]]\nname = \"fixture-{consumer}\"\n\
+                 version = \"0.1.0\"\ndependencies = [\"receipt-fixture\"]\n\n\
+                 [[package]]\nname = \"receipt-fixture\"\nversion = \"0.92.7\"\n"
+            ),
+        );
+    }
     write_file(
         &root,
         "docs/changelog/0.92.md",
@@ -355,6 +378,17 @@ fn assert_governed_receipt(previous_receipt: Option<&str>, gate: &str, fail_afte
     let handoff = "Current source remains descriptive.\n";
     let root = create_receipt_repo(previous_receipt, handoff);
     let original_lock = fs::read_to_string(root.join("Cargo.lock")).unwrap();
+    let original_consumer_locks: Vec<_> = ["consumer", "embedded-consumer"]
+        .into_iter()
+        .map(|consumer| {
+            let path = root
+                .join("integrations/blob-service")
+                .join(consumer)
+                .join("Cargo.lock");
+            let contents = fs::read_to_string(&path).unwrap();
+            (path, contents)
+        })
+        .collect();
     let validated_head = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     if fail_after_receipt {
         write_file(&root, "occupied-tag", "retained exact tag\n");
@@ -393,6 +427,9 @@ fn assert_governed_receipt(previous_receipt: Option<&str>, gate: &str, fail_afte
         handoff
     );
     if fail_after_receipt {
+        for (path, contents) in original_consumer_locks {
+            assert_eq!(fs::read_to_string(path).unwrap(), contents);
+        }
         let receipt = fs::read_to_string(root.join("release-validation.json")).ok();
         assert_eq!(receipt.as_deref(), previous_receipt);
         assert!(

@@ -4,18 +4,17 @@
 //! Does not own: application schemas, identity allocation, or network effects.
 //! Boundary: the consumer prepares inner Candid after observing the allocated target.
 
-use candid::{CandidType, Principal};
-use canic_core::dto::component_registry::{
-    MAX_COMPONENT_APPLICATION_INIT_BYTES, RootComponentInitializationRequest,
+use candid::Principal;
+use canic_contracts::dto::{
+    component_registry::{
+        MAX_COMPONENT_APPLICATION_INIT_BYTES, RootComponentInitializationRequest,
+    },
+    wire::projection::component_initialization::RootCommand,
 };
 use thiserror::Error;
 
-#[derive(CandidType)]
-enum RootCommand<'a> {
-    BindComponentInitialization(&'a RootComponentInitializationRequest),
-}
-
 /// Typed preparation refusal before any Root command is sent.
+
 #[derive(Debug, Error)]
 pub enum ComponentInitializationError {
     #[error("initialization requires a nonzero operation and an allocated target")]
@@ -51,13 +50,9 @@ pub fn encode_command(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use canic_core::dto::component_registry::ComponentApplicationInitialization;
-    use serde::Deserialize;
+    use canic_contracts::dto::component_registry::ComponentApplicationInitialization;
 
-    #[derive(CandidType, Deserialize)]
-    enum DecodedRootCommand {
-        BindComponentInitialization(RootComponentInitializationRequest),
-    }
+    use canic_contracts::dto::wire::root_command::RootCommand;
 
     fn request() -> RootComponentInitializationRequest {
         RootComponentInitializationRequest {
@@ -73,8 +68,10 @@ mod tests {
     fn command_preserves_exact_target_and_application_bytes() {
         let request = request();
         let bytes = encode_command(&request).unwrap();
-        let DecodedRootCommand::BindComponentInitialization(decoded) =
-            candid::decode_one(&bytes).unwrap();
+        let RootCommand::BindComponentInitialization(decoded) = candid::decode_one(&bytes).unwrap()
+        else {
+            panic!("initialization command selector");
+        };
         assert_eq!(decoded, request);
         assert_eq!(encode_command(&request).unwrap(), bytes);
     }

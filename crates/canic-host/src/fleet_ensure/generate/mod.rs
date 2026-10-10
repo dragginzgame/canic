@@ -11,8 +11,8 @@ mod startup_funding;
 #[cfg(test)]
 mod tests;
 
-use crate::MAX_DOCUMENT_READ_BYTES;
 use crate::{
+    MAX_DOCUMENT_READ_BYTES,
     canister_protocol::query_with_candid,
     component_topology::{
         PlannedFleetSubnetRootTopology, PlannedFleetSubnetRootTopologyInput, PlannedFleetTopology,
@@ -20,14 +20,16 @@ use crate::{
         RootPoolImportCapacityError, RootPoolImportCapacityInput, plan_initial_fleet_topology,
         validate_root_pool_capacity, validate_root_pool_import_capacity,
     },
-    fleet_ensure::model::{
-        CanisterRuntimeStatus, DesiredCanister, DesiredCanisterInit, DesiredCanisterKind,
-        DesiredComponentGroupPlacement, DesiredFleet, DesiredFleetBootstrap,
-        DesiredFleetBootstrapRoot, DesiredFleetProtocol, DesiredPresence,
-        FLEET_ENSURE_SCHEMA_VERSION, MAX_FLEET_ENSURE_CANISTERS, RetainedRootStartAuthorityRecord,
-        RootManagementBinding,
+    fleet_ensure::{
+        model::{
+            CanisterRuntimeStatus, DesiredCanister, DesiredCanisterInit, DesiredCanisterKind,
+            DesiredComponentGroupPlacement, DesiredFleet, DesiredFleetBootstrap,
+            DesiredFleetBootstrapRoot, DesiredFleetProtocol, DesiredPresence,
+            FLEET_ENSURE_SCHEMA_VERSION, MAX_FLEET_ENSURE_CANISTERS,
+            RetainedRootStartAuthorityRecord, RootManagementBinding,
+        },
+        ops::{EnsurePaths, root_owned_lifecycle, write_root_start_authority},
     },
-    fleet_ensure::ops::{EnsurePaths, root_owned_lifecycle, write_root_start_authority},
     icp::{IcpCli, LocalReplicaTarget},
     icp_config::resolve_icp_build_network_from_root,
     network::resolve_canonical_network_id_from_root,
@@ -40,16 +42,14 @@ use crate::{
     },
     subnet_catalog::MainnetCatalogClient,
 };
-use ic_host_artifacts::artifact::ArtifactError;
-use ic_host_fs::durable::create_new_bytes_with_parents;
-use ic_host_fs::read::read_optional_file_no_follow;
-
 use candid::{Nat, Principal};
-use canic_core::{
-    cdk::types::Cycles,
-    control_plane_support::config::ComponentDeploymentConfiguration,
-    dto::fleet_subnet_root::FleetSubnetRootAuthority,
-    dto::pool::{CanisterPoolResponse, CanisterPoolStatusRequest},
+use canic_contracts::{
+    cycles::Cycles,
+    dto::{
+        fleet_subnet_root::FleetSubnetRootAuthority,
+        pool::CanisterPoolStatusRequest,
+        wire::projection::estate_generation::{RootEstateStatusRequest, RootEstateStatusResponse},
+    },
     ids::{
         BuildNetwork, ComponentGroupDeploymentId, ComponentSpecId, CyclesFundingBudget,
         FleetAdmissionPolicyTemplate, FleetBinding, FleetCoordinatorBinding,
@@ -59,8 +59,13 @@ use canic_core::{
         ReleaseBuildId, SubnetId,
     },
     protocol,
+};
+use canic_core::{
+    control_plane_support::config::ComponentDeploymentConfiguration,
     shared_support::fleet_admission_policy::compile_fleet_admission_policy_template,
 };
+use ic_host_artifacts::artifact::ArtifactError;
+use ic_host_fs::{durable::create_new_bytes_with_parents, read::read_optional_file_no_follow};
 use ic_query::subnet_catalog::{CatalogLoadOutcome, SubnetSpecialization};
 use serde::{Deserialize, Serialize};
 use sha2_host::{Digest, Sha256};
@@ -69,7 +74,6 @@ use std::{
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
-
 use thiserror::Error as ThisError;
 
 const MAX_GENERATOR_INPUT_BYTES: usize = 1024 * 1024;
@@ -212,7 +216,6 @@ pub enum FleetGenerateError {
 
     #[error("retained canister {canister} is unavailable: {reason}")]
     CanisterUnavailable { canister: String, reason: String },
-
 
 
     #[error(transparent)]
@@ -431,7 +434,7 @@ struct CyclesFundingSource {
 #[serde(deny_unknown_fields)]
 struct EstateSeed {
     schema_version: u32,
-    fleet_id: canic_core::ids::FleetId,
+    fleet_id: canic_contracts::ids::FleetId,
     #[serde(default)]
     fresh_estate: bool,
     coordinator: String,
@@ -463,7 +466,7 @@ struct RootSeed {
 /// Create or replay one durable no-effect seed for a literally empty estate.
 pub fn initialize_fresh_estate_seed(
     request: &FreshEstateSeedRequest<'_>,
-) -> Result<canic_core::ids::FleetId, FleetGenerateError> {
+) -> Result<canic_contracts::ids::FleetId, FleetGenerateError> {
     let source: FleetSource = load_toml(request.source, "source")?;
     require_schema(source.schema_version, "source")?;
     canonical_recovery_controllers(
@@ -481,14 +484,16 @@ pub fn initialize_fresh_estate_seed(
     })?;
     let seed = fresh_seed(
         &source,
-        canic_core::ids::FleetId::from_generated_bytes(bytes),
+        canic_contracts::ids::FleetId::from_generated_bytes(bytes),
         request.cycles_ledger,
         request.management_creation_fee_cycles,
     )?;
     let encoded = toml::to_string_pretty(&seed).map_err(|error| {
         FleetGenerateError::Authority(format!("fresh seed encoding failed: {error}"))
     })?;
-    match create_new_bytes_with_parents(request.seed, encoded.as_bytes()) {
+    match create_new_bytes_with_parents(request.seed, encoded.as_bytes())
+        .map_err(crate::publication::ops::io_error)
+    {
         Ok(()) => Ok(seed.fleet_id),
         Err(io_error) if io_error.kind() == std::io::ErrorKind::AlreadyExists => {
             let existing = read_seed(request.seed)?.ok_or_else(|| FleetGenerateError::Read {
@@ -544,7 +549,7 @@ fn read_seed(path: &Path) -> Result<Option<EstateSeed>, FleetGenerateError> {
 
 fn fresh_seed(
     source: &FleetSource,
-    fleet_id: canic_core::ids::FleetId,
+    fleet_id: canic_contracts::ids::FleetId,
     cycles_ledger: &str,
     management_creation_fee_cycles: u128,
 ) -> Result<EstateSeed, FleetGenerateError> {
@@ -628,7 +633,7 @@ fn require_fresh_seed_authority(
 
 #[derive(Clone)]
 struct ObservedCanister {
-    pool_status: Option<canic_core::dto::pool::CanisterPoolAssetStatus>,
+    pool_status: Option<canic_contracts::dto::pool::CanisterPoolAssetStatus>,
     cycles: u128,
     module_sha256: Option<String>,
     subnet: String,
@@ -636,7 +641,7 @@ struct ObservedCanister {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct WasmStoreIdentityRelationship {
-    authority: canic_core::ids::FleetRegistryAuthority,
+    authority: canic_contracts::ids::FleetRegistryAuthority,
     placement_subnet: SubnetId,
     fleet_subnet_root: Principal,
     wasm_store: Principal,
@@ -655,7 +660,7 @@ impl From<&FleetSubnetWasmStoreAuthority> for WasmStoreIdentityRelationship {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct RootIdentityRelationship {
-    authority: canic_core::ids::FleetRegistryAuthority,
+    authority: canic_contracts::ids::FleetRegistryAuthority,
     placement_subnet: SubnetId,
     fleet_subnet_root: Principal,
 }
@@ -672,8 +677,8 @@ impl From<&FleetSubnetRootBinding> for RootIdentityRelationship {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct RootDesiredPolicy {
-    component_admissions: Vec<canic_core::ids::ComponentSpecAdmission>,
-    component_topology_digest: canic_core::ids::ComponentTopologyDigest,
+    component_admissions: Vec<canic_contracts::ids::ComponentSpecAdmission>,
+    component_topology_digest: canic_contracts::ids::ComponentTopologyDigest,
     funding: FleetSubnetRootFundingAuthority,
     installation_controller: Principal,
     limits: FleetSubnetRootLimits,
@@ -698,7 +703,7 @@ struct ExpectedRootEstateAuthority {
 }
 
 struct RootEstateAuthorityRequest<'a, 'request> {
-    app: &'a canic_core::ids::AppId,
+    app: &'a canic_contracts::ids::AppId,
     generation: &'a FleetGenerateRequest<'request>,
     root_candid: &'a Path,
     seed: &'a EstateSeed,
@@ -707,7 +712,7 @@ struct RootEstateAuthorityRequest<'a, 'request> {
 }
 
 struct EstateObservationRequest<'a, 'request> {
-    app: &'a canic_core::ids::AppId,
+    app: &'a canic_contracts::ids::AppId,
     generation: &'a FleetGenerateRequest<'request>,
     operator: Principal,
     root_candid: &'a Path,
@@ -717,18 +722,6 @@ struct EstateObservationRequest<'a, 'request> {
     topology: &'a crate::component_topology::PlannedFleetTopology,
     local_replica: Option<&'a LocalReplicaTarget>,
     catalog: Option<&'a CatalogLoadOutcome>,
-}
-
-#[derive(candid::CandidType)]
-enum RootEstateStatusRequest {
-    FleetAuthority,
-    Pool(CanisterPoolStatusRequest),
-}
-
-#[derive(candid::CandidType, Deserialize)]
-enum RootEstateStatusResponse {
-    FleetAuthority(Box<FleetSubnetRootAuthority>),
-    Pool(Box<CanisterPoolResponse>),
 }
 
 /// Generate one exact low-level desired document without issuing an IC update.
@@ -798,7 +791,7 @@ fn generate(
     let admission = compile_source_admission_policy(&source.admission.principals)?;
     if let Some(origin) = &source.admission.identity_origin {
         let local = canonical_network_id(request, &source)?
-            != canic_core::ids::CanonicalNetworkId::ic_mainnet();
+            != canic_contracts::ids::CanonicalNetworkId::ic_mainnet();
         crate::frontend::policy::validate_origin(origin, local)
             .map_err(FleetGenerateError::Frontend)?;
     }
@@ -848,7 +841,7 @@ fn generate(
     validate_source_funding(
         &source,
         canonical_network_id(request, &source)?
-            == canic_core::ids::CanonicalNetworkId::ic_mainnet(),
+            == canic_contracts::ids::CanonicalNetworkId::ic_mainnet(),
     )?;
 
     let (infrastructure, complete) = release_authority(request, config.component_topology())?;
@@ -1065,7 +1058,7 @@ struct CompileDesiredRequest<'a> {
     source: &'a FleetSource,
     seed: &'a EstateSeed,
     admission: FleetAdmissionPolicyTemplate,
-    app: canic_core::ids::AppId,
+    app: canic_contracts::ids::AppId,
     deployment_configuration: ComponentDeploymentConfiguration,
     topology: crate::component_topology::PlannedFleetTopology,
     coordinator_artifact: &'a CanicInfrastructureArtifactEntry,
@@ -2411,7 +2404,7 @@ fn relative_path(root: &Path, path: &Path) -> Result<String, FleetGenerateError>
 fn canonical_network_id(
     request: &FleetGenerateRequest<'_>,
     _source: &FleetSource,
-) -> Result<canic_core::ids::CanonicalNetworkId, FleetGenerateError> {
+) -> Result<canic_contracts::ids::CanonicalNetworkId, FleetGenerateError> {
     resolve_canonical_network_id_from_root(request.root, request.environment)
         .map_err(|error| FleetGenerateError::Authority(error.to_string()))
 }

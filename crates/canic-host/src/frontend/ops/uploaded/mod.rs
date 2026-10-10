@@ -11,10 +11,9 @@ use crate::{
     },
     icp::IcpCli,
 };
-use ic_host_fs::read::read_file_no_follow;
-
 use candid::{CandidType, Deserialize, Nat, Principal};
 use canic_core::cdk::utils::hash::sha256_hex;
+use ic_host_fs::read::read_file_no_follow;
 use std::time::{Duration, Instant};
 
 ///
@@ -124,9 +123,10 @@ impl IcpFrontendAssetReader {
         let agent = icp
             .authenticated_agent_with_response_limit(8 * 1024 * 1024)
             .map_err(Box::new)?;
-        let network =
-            canic_core::ids::CanonicalNetworkId::from_der_root_trust_anchor(&agent.read_root_key())
-                .map_err(|_| FrontendError::Environment)?;
+        let network = canic_contracts::ids::CanonicalNetworkId::from_der_root_trust_anchor(
+            &agent.read_root_key(),
+        )
+        .map_err(|_| FrontendError::Environment)?;
         if network != input.network {
             return Err(FrontendError::Environment);
         }

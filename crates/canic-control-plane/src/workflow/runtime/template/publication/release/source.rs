@@ -1,3 +1,4 @@
+use super::metrics::{WasmStorePublicationError, record_wasm_store_publish_failed};
 use crate::{
     dto::template::{TemplateChunkSetInfoResponse, TemplateManifestResponse},
     workflow::runtime::template::{
@@ -5,16 +6,16 @@ use crate::{
             WasmStorePublicationWorkflow,
             store::{store_chunk, store_chunk_set_info},
         },
-        record_wasm_store_metric,
+        record_wasm_store_metric, store_pid_for_binding,
     },
 };
-use canic_core::api::lifecycle::metrics::{
-    WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason, WasmStoreMetricSource,
+use canic_core::{
+    api::lifecycle::metrics::{
+        WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason,
+        WasmStoreMetricSource,
+    },
+    control_plane_support::{error::InternalError, ops::cost_guard::CostGuardPermit},
 };
-use canic_core::control_plane_support::{error::InternalError, ops::cost_guard::CostGuardPermit};
-
-use super::metrics::{WasmStorePublicationError, record_wasm_store_publish_failed};
-use crate::workflow::runtime::template::store_pid_for_binding;
 
 impl WasmStorePublicationWorkflow {
     // Resolve deterministic chunk-set metadata for one manifest from its authoritative source.

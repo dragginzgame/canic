@@ -17,10 +17,10 @@ use crate::{
     },
     view::component_registry::RootComponentInitialInventoryView,
 };
-use canic_core::{
-    control_plane_support::error::InternalError,
-    dto::{component_registry::ComponentRegistryHead, fleet_registry::FleetRegistryVersion},
+use canic_contracts::dto::{
+    component_registry::ComponentRegistryHead, fleet_registry::FleetRegistryVersion,
 };
+use canic_core::control_plane_support::error::InternalError;
 use sha2::{Digest, Sha256};
 
 impl ComponentRegistryOps {

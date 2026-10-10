@@ -4,6 +4,7 @@
 
 mod declarations;
 pub mod observer;
+
 pub(crate) mod review;
 pub mod survey;
 #[cfg(test)]
@@ -17,7 +18,8 @@ use crate::fleet_ensure::{
     ops::capacity_import::CapacityImportReviewError,
 };
 use candid::Principal;
-use canic_core::{cdk::utils::hash::decode_hex, dto::fleet_registry::FleetRegistry};
+use canic_contracts::dto::fleet_registry::FleetRegistry;
+use canic_core::cdk::utils::hash::decode_hex;
 use sha2_host::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 

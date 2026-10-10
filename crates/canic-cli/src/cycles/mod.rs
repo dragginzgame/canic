@@ -21,7 +21,8 @@ use crate::{
     version_text,
 };
 use canic_backup::discovery::DiscoveryError;
-use canic_core::{cdk::utils::hash::DecodeHexError, diagnostics::DiagnosticCode};
+use canic_contracts::diagnostics::DiagnosticCode;
+use canic_core::cdk::utils::hash::DecodeHexError;
 use canic_host::{
     CanisterProtocolError, fleet_ensure::CurrentFleetInventoryError, icp::IcpCommandError,
     icp_config::IcpConfigError,

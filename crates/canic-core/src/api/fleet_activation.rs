@@ -15,11 +15,11 @@ use crate::{
         },
         fleet_subnet_root::FleetSubnetRootAuthority,
     },
-    ids::FleetSubnetWasmStoreAuthority,
     ops::fleet_activation::FleetActivationEvidenceOps,
     view::fleet_activation::FleetActivationTransition,
     workflow::runtime::fleet_activation::FleetActivationWorkflow,
 };
+use canic_contracts::ids::FleetSubnetWasmStoreAuthority;
 
 ///
 /// FleetActivationApi

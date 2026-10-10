@@ -7,6 +7,8 @@
 mod memory;
 mod process;
 
+#[cfg(feature = "sharding")]
+use crate::ops::storage::placement::sharding::ShardingRegistryOps;
 use crate::{
     InternalError,
     config::{Config, RoleRuntimeConfig},
@@ -31,9 +33,6 @@ use crate::{
     },
 };
 use std::{cell::Cell, collections::BTreeSet};
-
-#[cfg(feature = "sharding")]
-use crate::ops::storage::placement::sharding::ShardingRegistryOps;
 
 thread_local! {
     static APPLICATION_SAMPLER: Cell<Option<ApplicationMetricsSampler>> = const { Cell::new(None) };
@@ -530,9 +529,9 @@ const fn shard_metrics() -> Vec<PublicMetricSample> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(feature = "sharding")]
-    use crate::ids::CanisterRole;
     use crate::model::public_metrics::MAX_PUBLIC_METRICS;
+    #[cfg(feature = "sharding")]
+    use canic_contracts::ids::CanisterRole;
 
     fn request(family: PublicMetricFamily) -> PublicMetricsRequest {
         PublicMetricsRequest {

@@ -14,17 +14,18 @@ use crate::fleet_ensure::model::{
     EstatePoolAssetOrigin, EstatePoolInventoryObservation, EstatePoolPendingCreationObservation,
     PoolFundingAuthority,
 };
-use std::collections::BTreeMap;
-
 use candid::Principal;
-use canic_core::{
-    cdk::types::Cycles,
-    control_plane_support::config::{ComponentLimits, ComponentSpawnGrant, ComponentSpec},
+use canic_contracts::{
+    cycles::Cycles,
     ids::{
         CanisterRole, ComponentSpecId, ComponentTopologyDigest, CyclesFundingBudget,
         FleetSubnetCanisterPoolConfig, FleetSubnetRootLimits, SubnetId,
     },
 };
+use canic_core::control_plane_support::config::{
+    ComponentLimits, ComponentSpawnGrant, ComponentSpec,
+};
+use std::collections::BTreeMap;
 
 #[test]
 fn terminal_pool_capacity_keeps_workloads_and_ready_reserve_independent() {
@@ -374,7 +375,7 @@ fn full_failed_inventory_funds_exact_retained_assets_without_creating_replacemen
             asset.cycles -= 1;
             actions.push(EnsureAction::FleetProtocol {
                 action: Box::new(CurrentFleetProtocolAction::ReconcilePoolAsset {
-                    request: canic_core::dto::pool::PoolCanisterRequest { canister_id },
+                    request: canic_contracts::dto::pool::PoolCanisterRequest { canister_id },
                     minimum_cycles: Cycles::new(pool.readiness_floor_cycles),
                 }),
                 candid: "root.did".into(),

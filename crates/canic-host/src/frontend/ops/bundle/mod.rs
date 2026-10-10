@@ -59,7 +59,7 @@ fn safe_file(root: &Path, relative: &str) -> Result<std::path::PathBuf, Frontend
 }
 
 fn retain_file(path: &Path, bytes: &[u8]) -> Result<(), FrontendError> {
-    match create_new_bytes_with_parents(path, bytes) {
+    match create_new_bytes_with_parents(path, bytes).map_err(crate::publication::ops::io_error) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
             if read_file_no_follow(path, MAX_FRONTEND_FILE_BYTES).map_err(std::io::Error::from)?

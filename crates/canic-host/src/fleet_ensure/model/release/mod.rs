@@ -5,11 +5,12 @@
 
 use crate::fleet_ensure::model::capacity_import::CapacityImportSourceBinding;
 use candid::Principal;
-use canic_core::ids::FleetBinding;
+use canic_contracts::ids::FleetBinding;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// Exact current-build authority for one whole-Fleet disposal review.
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetReleaseAuthority {

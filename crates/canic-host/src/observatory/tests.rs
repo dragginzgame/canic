@@ -1,8 +1,8 @@
 use super::{
     ObservatoryError,
     model::{ObservatoryOptions, ObservatoryProfile},
+    ops,
     ops::{
-        self,
         presentation::{http_response, json_bytes, public_view},
         transport::ObservatoryTransport,
     },
@@ -10,7 +10,7 @@ use super::{
     view::*,
 };
 use crate::registry::RegistryEntry;
-use canic_core::dto::public_status::PublicMetricFamily;
+use canic_contracts::dto::public_status::PublicMetricFamily;
 use std::collections::BTreeMap;
 
 fn profile() -> ObservatoryProfile {
@@ -470,9 +470,9 @@ fn exhausted_collection_never_launches_a_query_or_version_probe() {
 
 #[test]
 fn coordinator_metric_selectors_are_unsupported_without_transport_effects() {
-    use canic_core::{
-        ids::CanisterRole,
-        role_contract::{BuiltInRoleKind, ProtocolProfileDigest, built_in_role_capabilities},
+    use canic_contracts::ids::CanisterRole;
+    use canic_core::role_contract::{
+        BuiltInRoleKind, ProtocolProfileDigest, built_in_role_capabilities,
     };
 
     let icp = crate::icp::IcpCli::new("/does-not-exist", Some("local".into()));
@@ -520,10 +520,8 @@ fn coordinator_metric_selectors_are_unsupported_without_transport_effects() {
 
 #[test]
 fn metric_and_history_capabilities_are_independent() {
-    use canic_core::{
-        ids::CanisterRole,
-        role_contract::{ProtocolProfileDigest, RoleCapabilityKey},
-    };
+    use canic_contracts::ids::CanisterRole;
+    use canic_core::role_contract::{ProtocolProfileDigest, RoleCapabilityKey};
 
     let icp = crate::icp::IcpCli::new("/does-not-exist", Some("local".into()));
     let mut transport = ops::transport::IcpObservatoryTransport {

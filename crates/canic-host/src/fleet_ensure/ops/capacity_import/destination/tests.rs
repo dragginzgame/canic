@@ -5,8 +5,8 @@ use crate::fleet_ensure::{
     ops::capacity_import::prepare_review,
     policy::capacity_import::tests::{plan, principal},
 };
-use canic_core::{
-    cdk::types::Cycles,
+use canic_contracts::{
+    cycles::Cycles,
     dto::fleet_registry::FleetSubnetRootEntry,
     ids::{
         CyclesFundingBudget, FleetAdmissionPolicy, FleetCoordinatorBinding, FleetFundingProfile,
@@ -258,7 +258,7 @@ fn capacity_import_rejects_substituted_coordinator_and_root_policy() {
 #[test]
 fn capacity_import_bootstrap_requires_exact_source_set_and_operator() {
     let (plan, mut context, registry) = fixture();
-    context.bootstrap = Some(canic_core::dto::pool_import::PoolImportBootstrap {
+    context.bootstrap = Some(canic_contracts::dto::pool_import::PoolImportBootstrap {
         review_sha256: [43; 32],
         operator: plan.authority.operator,
         sources: plan

@@ -149,7 +149,8 @@ impl CapacityImportJournalStore {
                     }
                     Ok(_) => {}
                     Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                        ic_host_fs::durable::create_new_bytes_with_parents(&archive, &bytes)?;
+                        ic_host_fs::durable::create_new_bytes_with_parents(&archive, &bytes)
+                            .map_err(crate::publication::ops::io_error)?;
                     }
                     Err(error) => return Err(error.into()),
                 }
@@ -181,7 +182,7 @@ impl CapacityImportJournalStore {
         if bytes.len() > MAXIMUM_JOURNAL_BYTES {
             return Err(CapacityImportJournalError::Integrity);
         }
-        write_bytes(&self.path, &bytes)?;
+        write_bytes(&self.path, &bytes).map_err(crate::publication::ops::io_error)?;
         Ok(())
     }
 }

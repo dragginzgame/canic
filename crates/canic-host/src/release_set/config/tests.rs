@@ -53,8 +53,8 @@ role = "store"
         assert_eq!(renamed.package_manifest.as_ref(), Some(&manifest_path));
         assert_eq!(renamed.package_manifest_note, None);
         let config = parse_config_model(&fs::read_to_string(&config_path).unwrap()).unwrap();
-        assert!(config.declares_role(&canic_core::ids::CanisterRole::new("frontend")));
-        assert!(!config.declares_role(&canic_core::ids::CanisterRole::new("store")));
+        assert!(config.declares_role(&canic_contracts::ids::CanisterRole::new("frontend")));
+        assert!(!config.declares_role(&canic_contracts::ids::CanisterRole::new("store")));
         let manifest: toml::Value =
             toml::from_str(&fs::read_to_string(&manifest_path).unwrap()).unwrap();
         assert_eq!(

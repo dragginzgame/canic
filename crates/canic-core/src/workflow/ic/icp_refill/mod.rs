@@ -12,18 +12,16 @@ mod replay;
 
 use crate::{
     InternalError,
-    cdk::{
-        candid::Nat,
-        types::{Cycles, Principal},
-    },
-    domain::icp_refill::IcpRefillTrigger,
-    domain::policy::pure::icp_refill::{
-        AutomaticIcpRefillAmountError, AutomaticIcpRefillRules, AutomaticIcpRefillUsage,
-        IcpRefillPolicyInput, IcpRefillPolicyRules, IcpRefillPolicyViolation,
-        evaluate_automatic_refill, evaluate_manual_refill,
+    cdk::{candid::Nat, types::Principal},
+    domain::{
+        icp_refill::IcpRefillTrigger,
+        policy::pure::icp_refill::{
+            AutomaticIcpRefillAmountError, AutomaticIcpRefillRules, AutomaticIcpRefillUsage,
+            IcpRefillPolicyInput, IcpRefillPolicyRules, IcpRefillPolicyViolation,
+            evaluate_automatic_refill, evaluate_manual_refill,
+        },
     },
     dto::icp_refill::IcpRefillRequest,
-    ids::{BuildNetwork, FleetSubnetRootIcpRefillPolicy},
     infra::ic::icp_refill::{IcpRefillCanisterOverrides, Icrc1Account},
     ops::{
         ic::{IcOps, build_network::BuildNetworkOps, icp_refill::IcpRefillOps},
@@ -33,6 +31,10 @@ use crate::{
             state::fleet::FleetStateOps,
         },
     },
+};
+use canic_contracts::{
+    cycles::Cycles,
+    ids::{BuildNetwork, FleetSubnetRootIcpRefillPolicy},
 };
 use thiserror::Error as ThisError;
 

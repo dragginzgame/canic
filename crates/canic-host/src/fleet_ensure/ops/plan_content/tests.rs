@@ -1,5 +1,5 @@
 use super::*;
-use canic_core::dto::{
+use canic_contracts::dto::{
     fixture_provisioning::{
         FixtureChunkDescriptor, FixtureChunkUpload, FixtureDescriptor, FixtureSourceStatus,
     },
@@ -89,7 +89,7 @@ fn fixture_projection(paths: &EnsurePaths) -> Value {
         canic_control_plane::api::fixture_content::FixtureContentApi::content_id(&descriptor)
             .unwrap();
     let source = RootStoreFixture {
-        role: canic_core::ids::CanisterRole::new("app"),
+        role: canic_contracts::ids::CanisterRole::new("app"),
         content_id,
         descriptor,
     };

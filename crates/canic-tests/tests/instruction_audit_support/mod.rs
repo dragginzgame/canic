@@ -1,18 +1,17 @@
-use candid::{CandidType, Deserialize, Principal};
+use candid::Principal;
 use canic::{
     Error,
     dto::{
         auth::{
-            AuthRequestMetadata, DelegatedToken, DelegatedTokenPrepareRequest,
-            DelegatedTokenPrepareResponse, DelegationAudience, RootIssuerConfigureRequest,
-            RootIssuerConfigureResponse,
+            AuthRequestMetadata, DelegatedToken, DelegatedTokenPrepareRequest, DelegationAudience,
+            RootIssuerConfigureRequest,
         },
         capability::{
             CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,
-            RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
+            RootCapabilityEnvelopeV1,
         },
         metrics::{MetricEntry, MetricValue, MetricsKind},
-        page::{Page, PageRequest},
+        page::PageRequest,
         role::MetricsStatusRequest,
         rpc::{CyclesRequest, Request, Response, RootRequestMetadata},
     },

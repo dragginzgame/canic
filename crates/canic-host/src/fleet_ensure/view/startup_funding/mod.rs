@@ -5,7 +5,7 @@
 //! Boundary: live Coordinator usage does not turn fresh-child demand into a funding quotation.
 
 use candid::Principal;
-use canic_core::ids::{
+use canic_contracts::ids::{
     CanisterRole, ComponentBinding, ComponentSpecAdmission, ComponentSpecId,
     ComponentTopologyDigest, CyclesFundingBudget, FleetRegistryAuthority,
     FleetSubnetRootFundingAuthority, FleetSubnetRootLimits, FleetSubnetRootReleaseSet, SubnetId,
@@ -13,6 +13,7 @@ use canic_core::ids::{
 use std::collections::BTreeMap;
 
 /// Retained observation status and recomputed diagnostic demand; neither approves funding.
+
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct FundingObservationReport {
     pub review: crate::fleet_ensure::model::funding_observation::FundingObservationReviewRecord,

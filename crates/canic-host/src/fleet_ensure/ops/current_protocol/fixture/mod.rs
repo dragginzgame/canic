@@ -21,17 +21,15 @@ use crate::{
     },
 };
 use candid::Principal;
-use canic_control_plane::{
-    api::fixture_content::FixtureContentApi,
-    dto::template::{StoreCatalogRequest, StoreCatalogResponse},
-};
-use canic_core::{
+use canic_contracts::{
     dto::{
         fixture_provisioning::{FixtureChunkUpload, FixtureSourceStatus, FixtureStoreError},
         root_store::{RootStoreBootstrapRequest, RootStoreFixture, RootStoreFixturePrepareRequest},
+        template::{StoreCatalogRequest, StoreCatalogResponse},
     },
     protocol,
 };
+use canic_control_plane::api::fixture_content::FixtureContentApi;
 use std::{collections::BTreeSet, path::Path};
 
 pub(super) fn append_actions(

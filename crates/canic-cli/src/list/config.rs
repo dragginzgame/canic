@@ -3,7 +3,7 @@ use super::{
     options::{ListOptions, ListSource},
     render::ConfigRoleRow,
 };
-use canic_core::ids::AppId;
+use canic_contracts::ids::AppId;
 use canic_host::{
     config_discovery::{discover_current_canic_config_choices, select_discovered_app_config_path},
     fleet_ensure::CurrentFleetResolution,

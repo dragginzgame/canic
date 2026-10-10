@@ -11,7 +11,7 @@ trap 'rm -rf "$FIXTURE"' EXIT
 mkdir -p "$FIXTURE/scripts/ci" "$FIXTURE/make" "$FIXTURE/ci"
 cp "$ROOT/scripts/ci/"{run-canic-validation-targets,run-validation-targets,check-make-execution,ic-tool-pins}.sh "$FIXTURE/scripts/ci/"
 cp "$ROOT/Makefile" "$ROOT/tool-versions.env" "$FIXTURE/"
-cp "$ROOT/make/tools.mk" "$FIXTURE/make/"
+cp "$ROOT/make/tools.mk" "$ROOT/make/execution.mk" "$ROOT/make/release.mk" "$FIXTURE/make/"
 cp "$ROOT/ci/"{ic-tools.tsv,tool-versions.env} "$FIXTURE/ci/"
 
 # Exercise the actual consumer Make adapter without running real gates.

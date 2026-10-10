@@ -9,8 +9,8 @@ use crate::info_subnets::{
     render::text_report,
 };
 use candid::Principal;
-use canic_core::{
-    cdk::types::Cycles,
+use canic_contracts::{
+    cycles::Cycles,
     dto::{
         fleet_registry::{
             FleetRegistry, FleetRegistryManifest, FleetRegistryVersion, FleetSubnetRootEntry,
@@ -250,7 +250,7 @@ fn root(
             maximum_registry_bytes: 2_097_152,
             maximum_wasm_store_bytes: 268_435_456,
             maximum_group_placements: 16,
-            canister_pool: canic_core::ids::FleetSubnetCanisterPoolConfig {
+            canister_pool: canic_contracts::ids::FleetSubnetCanisterPoolConfig {
                 minimum_size: 1,
                 maximum_size: 10,
                 canister_cycles: Cycles::new(5_000_000_000_000),

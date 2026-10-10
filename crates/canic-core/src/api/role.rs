@@ -10,12 +10,13 @@ use crate::{
         role::{RoleCapability, RoleOverviewResponse},
         state::BootstrapStatusResponse,
     },
-    ids::CanisterRole,
     role_contract::RoleCapabilityKey,
 };
+use canic_contracts::ids::CanisterRole;
 use std::collections::BTreeSet;
 
 /// Endpoint-facing adapter for immutable compiled-role verification.
+
 pub struct RoleOverviewApi;
 
 impl RoleOverviewApi {

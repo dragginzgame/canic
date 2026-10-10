@@ -1,7 +1,9 @@
+// Ensure status defaults to the local environment and ordinary `icp` binary.
+
 use super::*;
 use crate::test_support::temp_dir;
 use candid::Principal;
-use canic_core::{
+use canic_contracts::{
     dto::fleet_registry::FleetRegistry,
     ids::{
         AppId, CanonicalNetworkId, FleetAdmissionPolicy, FleetBinding, FleetCoordinatorBinding,
@@ -20,7 +22,6 @@ use canic_host::fleet_ensure::{
 };
 use std::{collections::BTreeMap, fs};
 
-// Ensure status defaults to the local environment and ordinary `icp` binary.
 #[test]
 fn parses_status_options() {
     let default_options = StatusOptions::parse([]).expect("parse default options");
@@ -142,7 +143,6 @@ package = "app"
 
 [auth.delegated_tokens]
 enabled = false
-
 
 
 [component_specs.app]
@@ -271,7 +271,7 @@ fn status_usage_lists_options_and_examples() {
 fn current_fleet_summary() -> CurrentFleetSummary {
     CurrentFleetSummary {
         app: AppId::from("shop"),
-        canonical_network_id: canic_core::ids::CanonicalNetworkId::ic_mainnet(),
+        canonical_network_id: canic_contracts::ids::CanonicalNetworkId::ic_mainnet(),
         coordinator: "aaaaa-aa".to_string(),
         fleet: "demo".parse().expect("Fleet name"),
         fleet_id: FleetId::from_generated_bytes([7; 32]),

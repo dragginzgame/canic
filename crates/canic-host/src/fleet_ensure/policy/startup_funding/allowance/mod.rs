@@ -13,6 +13,7 @@ use crate::fleet_ensure::{
         StartupUsageUnavailable,
     },
 };
+use canic_contracts::ids::ReleaseBuildId;
 use canic_core::{
     bootstrap::compiled::ConfigModel,
     control_plane_support::{
@@ -22,7 +23,6 @@ use canic_core::{
             cooldown_retry_after_secs, evaluate, remaining_child_budget,
         },
     },
-    ids::ReleaseBuildId,
 };
 
 /// Bind selected release and Spec policy before interpreting a child's charged usage.

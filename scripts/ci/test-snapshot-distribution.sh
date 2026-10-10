@@ -6,7 +6,16 @@ ROOT="$0"
 ROOT="$(cd -P "${ROOT%/*}/../.." && printf '%s/.' "$PWD")"
 ROOT="${ROOT%/.}"
 FIXTURE="$(mktemp -d "${TMPDIR:-/tmp}/shared-tooling-snapshot-test.XXXXXX")"
-trap 'if [[ $? == 0 ]]; then rm -rf "$FIXTURE"; else printf "Failed snapshot-distribution fixture retained: %s\n" "$FIXTURE" >&2; fi' EXIT
+# Bash 3.2 can enter EXIT with status zero after nounset; require completion too.
+fixture_complete=false
+finish() {
+    local status=$?
+    [[ "$fixture_complete" == true || "$status" != 0 ]] || status=1
+    if [[ "$status" == 0 ]]; then rm -rf "$FIXTURE"
+    else printf "Failed snapshot-distribution fixture retained: %s\n" "$FIXTURE" >&2; fi
+    exit "$status"
+}
+trap finish EXIT
 # Match refresh-consumer physical paths when TMPDIR contains a host alias.
 FIXTURE="$(cd "$FIXTURE" && pwd -P)"
 REAL_GIT="$(command -v git)"
@@ -20,6 +29,7 @@ mkdir -p \
     "$consumer_root" \
     "$FIXTURE/bin"
 git init -q "$consumer_root"
+printf '8.8.8\n' > "$consumer_root/VERSION"
 
 cp "$ROOT/scripts/ci/verify-file-checksum.sh" "$source_root/scripts/ci/"
 cp "$ROOT/scripts/ci/verify-shared-tooling-snapshot.sh" "$source_root/scripts/ci/"
@@ -31,6 +41,9 @@ chmod +x "$source_root/scripts/ci/sample.sh"
 revision_root="$FIXTURE/revision"
 mkdir -p "$revision_root"
 cp -Rp "$source_root/scripts" "$revision_root/"
+printf '0.2.8\n' > "$revision_root/VERSION"
+# The export must use the committed version even if working bytes differ.
+printf '9.9.9\n' > "$source_root/VERSION"
 
 cat >"$FIXTURE/bin/git" <<'SCRIPT'
 #!/usr/bin/env bash
@@ -49,7 +62,8 @@ shift 2
 
 case "$1:$2" in
 rev-parse:--show-toplevel)
-    printf '%s\n' "$repository"
+    [[ "${SNAPSHOT_TEST_TOP_FAIL:-}" != true ]] || exit 9
+    printf '%s%s\n' "$repository" "${SNAPSHOT_TEST_TOP_SUFFIX:-}"
     ;;
 rev-parse:HEAD)
     printf '%s\n' 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
@@ -99,9 +113,9 @@ if PATH="$FIXTURE/bin:$PATH" \
     echo "snapshot distribution test failed: a file absent from the source revision was accepted" >&2
     exit 1
 fi
-[[ ! -e "$consumer_root/.shared-tooling.snapshot" ]]
-[[ ! -e "$consumer_root/scripts" ]]
-[[ ! -e "$consumer_root/ignored.txt" ]]
+[[ ! -e "$consumer_root/.shared-tooling.snapshot" ]] || exit 1
+[[ ! -e "$consumer_root/scripts" ]] || exit 1
+[[ ! -e "$consumer_root/ignored.txt" ]] || exit 1
 
 if PATH="$FIXTURE/bin:$PATH" \
     bash "$source_root/scripts/distribution/refresh-consumer.sh" \
@@ -111,8 +125,8 @@ if PATH="$FIXTURE/bin:$PATH" \
     echo "snapshot distribution test failed: incomplete verifier set was accepted" >&2
     exit 1
 fi
-[[ ! -e "$consumer_root/.shared-tooling.snapshot" ]]
-[[ ! -e "$consumer_root/scripts/ci/sample.sh" ]]
+[[ ! -e "$consumer_root/.shared-tooling.snapshot" ]] || exit 1
+[[ ! -e "$consumer_root/scripts/ci/sample.sh" ]] || exit 1
 
 if ! SNAPSHOT_TEST_SOURCE_DRIFT=true PATH="$FIXTURE/bin:$PATH" \
     bash "$source_root/scripts/distribution/refresh-consumer.sh" \
@@ -126,8 +140,8 @@ if ! SNAPSHOT_TEST_SOURCE_DRIFT=true PATH="$FIXTURE/bin:$PATH" \
 fi
 
 cmp "$revision_root/scripts/ci/sample.sh" "$consumer_root/scripts/ci/sample.sh"
-[[ -x "$consumer_root/scripts/ci/sample.sh" ]]
-[[ ! -x "$source_root/scripts/ci/sample.sh" ]]
+[[ -x "$consumer_root/scripts/ci/sample.sh" ]] || exit 1
+[[ ! -x "$source_root/scripts/ci/sample.sh" ]] || exit 1
 if cmp -s "$source_root/scripts/ci/sample.sh" "$consumer_root/scripts/ci/sample.sh"; then
     echo "snapshot distribution test failed: concurrent source drift reached the consumer" >&2
     exit 1
@@ -135,6 +149,110 @@ fi
 
 bash "$consumer_root/scripts/ci/verify-shared-tooling-snapshot.sh" \
     --consumer "$consumer_root" >/dev/null
+
+# Unsupported directory names must refuse, never select a trimmed neighbor.
+# Keep valid snapshot bytes in both neighbors so missing inputs cannot mask the
+# check. A normal-looking symlink must not hide a forbidden physical root.
+cp "$consumer_root/.shared-tooling.snapshot" "$FIXTURE/path-manifest"
+for suffix in $'\n' $'\n\n' $'\r' $'\r\n' $'\nchild'; do
+    bad_consumer="$consumer_root$suffix"
+    bad_source="$source_root$suffix"
+    mkdir "$bad_consumer" "$bad_source"
+    git init -q "$bad_consumer"
+    cp -Rp "$consumer_root/scripts" "$bad_consumer/"
+    cp "$FIXTURE/path-manifest" "$bad_consumer/.shared-tooling.snapshot"
+    ln -s "$bad_consumer" "$FIXTURE/consumer-alias"
+    ln -s "$bad_source" "$FIXTURE/source-alias"
+    for candidate in "$bad_consumer" "$FIXTURE/consumer-alias"; do
+        if bash "$ROOT/scripts/ci/verify-shared-tooling-snapshot.sh" --consumer "$candidate" \
+            > "$FIXTURE/path-verify.log" 2>&1; then
+            echo 'snapshot verifier accepted a forbidden directory name' >&2; exit 1
+        fi
+        if PATH="$FIXTURE/bin:$PATH" bash "$source_root/scripts/distribution/refresh-consumer.sh" \
+            --source "$source_root" --consumer "$candidate" > "$FIXTURE/path-refresh.log" 2>&1; then
+            echo 'snapshot refresh accepted a forbidden consumer directory' >&2; exit 1
+        fi
+    done
+    for candidate in "$bad_source" "$FIXTURE/source-alias"; do
+        if PATH="$FIXTURE/bin:$PATH" bash "$source_root/scripts/distribution/refresh-consumer.sh" \
+            --source "$candidate" --consumer "$consumer_root" > "$FIXTURE/path-source.log" 2>&1; then
+            echo 'snapshot refresh accepted a forbidden source directory' >&2; exit 1
+        fi
+    done
+    cmp "$FIXTURE/path-manifest" "$consumer_root/.shared-tooling.snapshot"
+    cmp "$FIXTURE/path-manifest" "$bad_consumer/.shared-tooling.snapshot"
+    diff -r "$consumer_root/scripts" "$bad_consumer/scripts"
+    [[ ! -e "$bad_consumer/.git/index" ]] || exit 1
+    rm "$FIXTURE/consumer-alias" "$FIXTURE/source-alias"
+done
+# Relative inputs and ordinary physical aliases stay valid under hostile CDPATH.
+ln -s "$consumer_root" "$FIXTURE/consumer-alias"
+ln -s "$source_root" "$FIXTURE/source-alias"
+(cd "$FIXTURE"; CDPATH="$FIXTURE/source" bash "$ROOT/scripts/ci/verify-shared-tooling-snapshot.sh" \
+    --consumer consumer-alias) > "$FIXTURE/path-normal-verify.log"
+(cd "$FIXTURE"; CDPATH="$FIXTURE/source" PATH="$FIXTURE/bin:$PATH" \
+    bash "$source_root/scripts/distribution/refresh-consumer.sh" \
+    --source source-alias --consumer consumer-alias) > "$FIXTURE/path-normal-refresh.log"
+cmp "$FIXTURE/path-manifest" "$consumer_root/.shared-tooling.snapshot"
+
+# A resolved custom-manifest parent must obey the same directory policy.
+mkdir "$consumer_root/config"$'\n'
+cp "$FIXTURE/path-manifest" "$consumer_root/config"$'\n'/snapshot
+ln -s $'config\n' "$consumer_root/config-alias"
+if bash "$ROOT/scripts/ci/verify-shared-tooling-snapshot.sh" --consumer "$consumer_root" \
+    --manifest config-alias/snapshot > "$FIXTURE/path-manifest-parent.log" 2>&1; then
+    echo 'snapshot verifier accepted a forbidden resolved manifest parent' >&2; exit 1
+fi
+rm "$consumer_root/config-alias"
+# Git output has one record terminator. Extra pathname bytes and observation
+# failures cannot be normalized into the valid source root beside them.
+for suffix in $'\n' $'\r'; do
+    if SNAPSHOT_TEST_TOP_SUFFIX="$suffix" PATH="$FIXTURE/bin:$PATH" \
+        bash "$source_root/scripts/distribution/refresh-consumer.sh" \
+        --source "$source_root" --consumer "$consumer_root" > "$FIXTURE/path-git.log" 2>&1; then
+        echo 'snapshot refresh trimmed a forbidden Git root observation' >&2; exit 1
+    fi
+done
+if SNAPSHOT_TEST_TOP_FAIL=true PATH="$FIXTURE/bin:$PATH" \
+    bash "$source_root/scripts/distribution/refresh-consumer.sh" \
+    --source "$source_root" --consumer "$consumer_root" > "$FIXTURE/path-git-failure.log" 2>&1; then
+    echo 'snapshot refresh accepted a failed Git root observation' >&2; exit 1
+fi
+cmp "$FIXTURE/path-manifest" "$consumer_root/.shared-tooling.snapshot"
+
+[[ "$(awk -F '\t' '$1 == "# version" {print $2}' "$consumer_root/.shared-tooling.snapshot")" == 0.2.8 ]] || exit 1
+[[ "$(cat "$consumer_root/VERSION")" == 8.8.8 ]] || exit 1
+cp "$consumer_root/.shared-tooling.snapshot" "$FIXTURE/version-manifest"
+for annotation in $'# version\t01.2.3' $'# version\t0.2.8\textra' $'# version\t0.2.8\n# version\t0.2.8'; do
+    sed '/^# version/d' "$FIXTURE/version-manifest" > "$consumer_root/.shared-tooling.snapshot"
+    printf '%s\n' "$annotation" >> "$consumer_root/.shared-tooling.snapshot"
+    cp "$consumer_root/.shared-tooling.snapshot" "$FIXTURE/invalid-version-manifest"
+    if bash "$ROOT/scripts/ci/verify-shared-tooling-snapshot.sh" --consumer "$consumer_root" \
+        > "$FIXTURE/invalid-version-verify.log" 2>&1; then exit 1; fi
+    if PATH="$FIXTURE/bin:$PATH" bash "$source_root/scripts/distribution/refresh-consumer.sh" \
+        --source "$source_root" --consumer "$consumer_root" > "$FIXTURE/invalid-version-refresh.log" 2>&1; then exit 1; fi
+    cmp "$FIXTURE/invalid-version-manifest" "$consumer_root/.shared-tooling.snapshot"
+done
+cp "$FIXTURE/version-manifest" "$consumer_root/.shared-tooling.snapshot"
+# Version annotations are display metadata. A record without one remains a
+# valid v1 snapshot; a real refresh adds the version from its selected source.
+sed '/^# version/d' "$FIXTURE/version-manifest" > "$consumer_root/.shared-tooling.snapshot"
+bash "$ROOT/scripts/ci/verify-shared-tooling-snapshot.sh" --consumer "$consumer_root" \
+    > "$FIXTURE/unrecorded-version.log"
+grep -F 'version unrecorded' "$FIXTURE/unrecorded-version.log" >/dev/null
+PATH="$FIXTURE/bin:$PATH" bash "$source_root/scripts/distribution/refresh-consumer.sh" \
+    --source "$source_root" --consumer "$consumer_root" >/dev/null
+cmp "$FIXTURE/version-manifest" "$consumer_root/.shared-tooling.snapshot"
+# Invalid or missing committed versions fail before replacing a consumer file.
+for version in missing 01.2.3 $'0.2.8\n\n'; do
+    if [[ "$version" == missing ]]; then rm "$revision_root/VERSION";
+    else printf '%s' "$version" > "$revision_root/VERSION"; fi
+    if PATH="$FIXTURE/bin:$PATH" bash "$source_root/scripts/distribution/refresh-consumer.sh" \
+        --source "$source_root" --consumer "$consumer_root" > "$FIXTURE/source-version.log" 2>&1; then exit 1; fi
+    cmp "$FIXTURE/version-manifest" "$consumer_root/.shared-tooling.snapshot"
+    cmp "$revision_root/scripts/ci/sample.sh" "$consumer_root/scripts/ci/sample.sh"
+done
+printf '0.2.8' > "$revision_root/VERSION"
 
 # The checksum helper is inspected data, never verification authority. Neither
 # helper-only corruption nor corruption of both helper and payload may pass.
@@ -150,7 +268,7 @@ SCRIPT
     fi
     if bash "$ROOT/scripts/ci/verify-shared-tooling-snapshot.sh" --consumer "$consumer_root" \
         > "$FIXTURE/corrupt-$corruption.log" 2>&1; then exit 1; fi
-    [[ ! -e "$SNAPSHOT_HELPER_EXECUTED" ]]
+    [[ ! -e "$SNAPSHOT_HELPER_EXECUTED" ]] || exit 1
     cp -p "$revision_root/scripts/ci/verify-file-checksum.sh" "$consumer_root/scripts/ci/"
     cp -p "$revision_root/scripts/ci/sample.sh" "$consumer_root/scripts/ci/"
 done
@@ -171,7 +289,7 @@ SCRIPT
 chmod +x "$hash_bin/shasum"
 PATH="$hash_bin" "$BASH" "$ROOT/scripts/ci/verify-shared-tooling-snapshot.sh" \
     --consumer "$consumer_root" > "$FIXTURE/shasum.log"
-[[ -f "$SNAPSHOT_FALLBACK_USED" ]]
+[[ -f "$SNAPSHOT_FALLBACK_USED" ]] || exit 1
 rm "$SNAPSHOT_FALLBACK_USED"
 printf '#!%s\n' "$BASH" > "$hash_bin/sha256sum"
 cat >> "$hash_bin/sha256sum" <<'SCRIPT'
@@ -189,7 +307,7 @@ for failure in malformed failed; do
         "$ROOT/scripts/ci/verify-shared-tooling-snapshot.sh" --consumer "$consumer_root" \
         > "$FIXTURE/hash-$failure.log" 2>&1; then exit 1; fi
 done
-[[ ! -e "$SNAPSHOT_FALLBACK_USED" ]]
+[[ ! -e "$SNAPSHOT_FALLBACK_USED" ]] || exit 1
 
 cp "$consumer_root/.shared-tooling.snapshot" "$consumer_root/duplicate.snapshot"
 awk '$1 == "file" { print; exit }' "$consumer_root/.shared-tooling.snapshot" \
@@ -241,7 +359,7 @@ if PATH="$FIXTURE/bin:$PATH" \
     echo 'snapshot distribution test failed: local executable-mode change was overwritten' >&2
     exit 1
 fi
-[[ ! -x "$consumer_root/scripts/ci/sample.sh" ]]
+[[ ! -x "$consumer_root/scripts/ci/sample.sh" ]] || exit 1
 chmod +x "$consumer_root/scripts/ci/sample.sh"
 
 # Ignored destinations are still local work, not disposable output.
@@ -302,7 +420,7 @@ if PATH="$FIXTURE/bin:$PATH" \
     exit 1
 fi
 cmp "$FIXTURE/original-checksum.sh" "$blocked_consumer/scripts/ci/verify-file-checksum.sh"
-[[ ! -e "$blocked_consumer/scripts/ci/verify-shared-tooling-snapshot.sh" ]]
+[[ ! -e "$blocked_consumer/scripts/ci/verify-shared-tooling-snapshot.sh" ]] || exit 1
 
 # Real Git status must distinguish index changes from working-tree changes.
 # Clone existing history; these fixtures never create commits or touch its index.
@@ -355,11 +473,11 @@ for state in staged unstaged deleted unavailable; do
         *) rg -F 'consumer destination has local changes' "$FIXTURE/$state.log" >/dev/null ;;
     esac
     cmp "$FIXTURE/original-tracked-checksum" "$tracked_consumer/$checksum_path"
-    [[ "$(git -C "$tracked_consumer" write-tree)" == "$index_before" ]]
-    [[ ! -e "$tracked_consumer/$tracked_manifest" ]]
+    [[ "$(git -C "$tracked_consumer" write-tree)" == "$index_before" ]] || exit 1
+    [[ ! -e "$tracked_consumer/$tracked_manifest" ]] || exit 1
     cmp "$FIXTURE/existing-consumer-manifest" "$tracked_consumer/.shared-tooling.snapshot"
     if [[ "$state" == deleted ]]; then
-        [[ ! -e "$tracked_consumer/$verifier_path" ]]
+        [[ ! -e "$tracked_consumer/$verifier_path" ]] || exit 1
     else
         cmp "$FIXTURE/before-verifier" "$tracked_consumer/$verifier_path"
     fi
@@ -396,7 +514,7 @@ if PATH="$FIXTURE/bin:$PATH" bash "$source_root/scripts/distribution/refresh-con
     --source "$source_root" --consumer "$selection_consumer" \
     --file "$checksum_path" --file "$verifier_path" --file scripts/ci/run-validation-targets.sh \
     > "$FIXTURE/missing-companion.log" 2>&1; then exit 1; fi
-[[ ! -e "$selection_consumer/scripts" && ! -e "$selection_consumer/.shared-tooling.snapshot" ]]
+[[ ! -e "$selection_consumer/scripts" && ! -e "$selection_consumer/.shared-tooling.snapshot" ]] || exit 1
 PATH="$FIXTURE/bin:$PATH" bash "$source_root/scripts/distribution/refresh-consumer.sh" \
     --source "$source_root" --consumer "$selection_consumer" --manifest config/selection \
     --file "$checksum_path" --file "$verifier_path" > "$FIXTURE/selection-initial.log"
@@ -405,7 +523,7 @@ if PATH="$FIXTURE/bin:$PATH" bash "$source_root/scripts/distribution/refresh-con
     --source "$source_root" --consumer "$selection_consumer" --manifest config/selection \
     --add-file scripts/ci/run-validation-targets.sh > "$FIXTURE/missing-addition.log" 2>&1; then exit 1; fi
 cmp "$FIXTURE/selection-before" "$selection_consumer/config/selection"
-[[ ! -e "$selection_consumer/scripts/ci/run-validation-targets.sh" ]]
+[[ ! -e "$selection_consumer/scripts/ci/run-validation-targets.sh" ]] || exit 1
 printf 'unrelated input\n' > "$selection_consumer/local.txt"
 for attempt in first retry; do
     PATH="$FIXTURE/bin:$PATH" bash "$source_root/scripts/distribution/refresh-consumer.sh" \
@@ -415,8 +533,8 @@ for attempt in first retry; do
     if [[ "$attempt" == first ]]; then cp "$selection_consumer/config/selection" "$FIXTURE/selection-after"; fi
 done
 cmp "$FIXTURE/selection-after" "$selection_consumer/config/selection"
-[[ "$(awk '$1 == "file" { n++ } END { print n }' "$selection_consumer/config/selection")" == 4 ]]
-[[ "$(cat "$selection_consumer/local.txt")" == 'unrelated input' ]]
+[[ "$(awk '$1 == "file" { n++ } END { print n }' "$selection_consumer/config/selection")" == 4 ]] || exit 1
+[[ "$(cat "$selection_consumer/local.txt")" == 'unrelated input' ]] || exit 1
 bash "$selection_consumer/scripts/ci/verify-shared-tooling-snapshot.sh" \
     --consumer "$selection_consumer" --manifest config/selection >/dev/null
 printf 'check:\n\t@echo consumer-check-reached\n' > "$selection_consumer/Makefile"
@@ -431,7 +549,7 @@ PATH="$FIXTURE/bin:$PATH" bash "$source_root/scripts/distribution/refresh-consum
     --source "$source_root" --consumer "$selection_consumer" --manifest config/selection \
     --add-file scripts/ci/run-release.sh --add-file scripts/ci/next-release-version.sh \
     > "$FIXTURE/selection-direct.log"
-[[ ! -e "$selection_consumer/scripts/ci/release-pr.sh" ]]
+[[ ! -e "$selection_consumer/scripts/ci/release-pr.sh" ]] || exit 1
 # The consumer simulation has a complete explicit selection without owner-only
 # native tracking fixtures. Missing changelog support still refuses atomically.
 cp "$selection_consumer/config/selection" "$FIXTURE/selection-before-simulation"
@@ -440,47 +558,160 @@ if PATH="$FIXTURE/bin:$PATH" bash "$source_root/scripts/distribution/refresh-con
     --add-file scripts/ci/test-release-runner.sh > "$FIXTURE/missing-simulation-companion.log" 2>&1; then exit 1; fi
 grep -F 'requires selected companion: scripts/ci/finalize-release-changelog.awk' "$FIXTURE/missing-simulation-companion.log" >/dev/null
 cmp "$FIXTURE/selection-before-simulation" "$selection_consumer/config/selection"
-[[ ! -e "$selection_consumer/scripts/ci/test-release-runner.sh" ]]
+[[ ! -e "$selection_consumer/scripts/ci/test-release-runner.sh" ]] || exit 1
 PATH="$FIXTURE/bin:$PATH" bash "$source_root/scripts/distribution/refresh-consumer.sh" \
     --source "$source_root" --consumer "$selection_consumer" --manifest config/selection \
     --add-file scripts/ci/test-release-runner.sh --add-file scripts/ci/finalize-release-changelog.awk \
     > "$FIXTURE/selection-simulation.log"
-[[ ! -e "$selection_consumer/scripts/ci/test-release-tracking.sh" ]]
+[[ ! -e "$selection_consumer/scripts/ci/test-release-tracking.sh" ]] || exit 1
 bash "$selection_consumer/scripts/ci/verify-shared-tooling-snapshot.sh" \
     --consumer "$selection_consumer" --manifest config/selection >/dev/null
 # Real installer fixture declarations must prevent the previously successful
 # incomplete export. Check both initial export and addition to an existing set.
 cp "$selection_consumer/config/selection" "$FIXTURE/selection-before-evidence"
-for entry in test-host-tools test-ic-tools test-tool-evidence; do
-    missing=scripts/ci/test-tool-evidence.sh
-    [[ "$entry" != test-tool-evidence ]] || missing=scripts/ci/select-tool-evidence.sh
+while read -r entry missing; do
+    mkdir -p "$source_root/${entry%/*}" "$revision_root/${entry%/*}"
+    cp -p "$ROOT/$entry" "$source_root/$entry"
+    cp -p "$ROOT/$entry" "$revision_root/$entry"
+    label="${entry##*/}"
     for mode in initial addition; do
         selected_consumer="$selection_consumer"
-        selection_args=(--manifest config/selection --add-file "scripts/ci/$entry.sh")
+        # The release runner is already selected in this addition fixture.
+        # A present companion is not an incomplete export; initial still tests it.
+        if [[ "$mode" == addition && -f "$selected_consumer/$missing" ]]; then continue; fi
+        selection_args=(--manifest config/selection --add-file "$entry")
         if [[ "$mode" == initial ]]; then
-            selected_consumer="$FIXTURE/incomplete-$entry"
+            selected_consumer="$FIXTURE/incomplete-$label"
             git init -q "$selected_consumer"
-            selection_args=(--file "$checksum_path" --file "$verifier_path" --file "scripts/ci/$entry.sh")
+            selection_args=(--file "$checksum_path" --file "$verifier_path" --file "$entry")
         fi
         if PATH="$FIXTURE/bin:$PATH" bash "$source_root/scripts/distribution/refresh-consumer.sh" \
             --source "$source_root" --consumer "$selected_consumer" "${selection_args[@]}" \
-            > "$FIXTURE/missing-$entry-$mode.log" 2>&1; then exit 1; fi
-        grep -F "requires selected companion: $missing" "$FIXTURE/missing-$entry-$mode.log" >/dev/null
+            > "$FIXTURE/missing-$label-$mode.log" 2>&1; then
+            echo "snapshot distribution test failed: exported $entry without $missing ($mode)" >&2
+            exit 1
+        fi
+        grep -F "requires selected companion: $missing" "$FIXTURE/missing-$label-$mode.log" >/dev/null
         if [[ "$mode" == initial ]]; then
-            [[ ! -e "$selected_consumer/scripts" && ! -e "$selected_consumer/.shared-tooling.snapshot" ]]
+            [[ ! -e "$selected_consumer/scripts" && ! -e "$selected_consumer/.shared-tooling.snapshot" ]] || exit 1
         else
             cmp "$FIXTURE/selection-before-evidence" "$selected_consumer/config/selection"
-            [[ ! -e "$selected_consumer/scripts/ci/$entry.sh" ]]
+            [[ ! -e "$selected_consumer/$entry" ]] || exit 1
+            bash "$ROOT/$verifier_path" --consumer "$selected_consumer" --manifest config/selection >/dev/null
+        fi
+    done
+done <<'COMPANIONS'
+scripts/ci/test-host-tools.sh scripts/ci/test-tool-evidence.sh
+scripts/ci/test-ic-tools.sh scripts/ci/test-tool-evidence.sh
+scripts/ci/test-tool-evidence.sh scripts/ci/select-tool-evidence.sh
+scripts/ci/test-cargo-metadata.sh scripts/ci/read-cargo-workspace-version.sh
+scripts/ci/test-cloc.sh scripts/dev/cloc.sh
+scripts/ci/test-cloc-tooling.sh scripts/dev/cloc-tooling.pl
+scripts/ci/test-crates-io-version.sh scripts/ci/check-crates-io-version.sh
+scripts/ci/test-dependency-pins.sh scripts/ci/check-dependency-pins.sh
+scripts/ci/test-evidence-archive.sh scripts/ci/archive-evidence.sh
+scripts/ci/test-evidence-checksums.sh scripts/ci/verify-evidence-checksums.sh
+scripts/ci/test-format-tools.sh scripts/ci/check-format-tools.sh
+scripts/ci/test-gh-ci.sh scripts/dev/gh-ci.sh
+scripts/ci/test-release-pr.sh scripts/ci/release-pr.sh
+scripts/ci/test-runner-disk-space.sh scripts/ci/check-runner-disk-space.sh
+scripts/ci/test-rust-tools.sh scripts/dev/install-rust-tools.sh
+scripts/ci/test-rustsec-db.sh scripts/ci/prepare-rustsec-db.sh
+scripts/ci/test-tool-commands.sh make/tools.mk
+make/release.mk scripts/ci/run-release.sh
+make/rust-format.mk make/tools.mk
+make/execution.mk scripts/ci/check-make-execution.sh
+make/tools.mk make/execution.mk
+scripts/ci/test-make-format.sh make/tools.mk
+scripts/dev/cloc-siblings.sh scripts/dev/cloc.sh
+COMPANIONS
+
+# Complete focused selections must remain independently runnable, without
+# owner-only integration fixtures or unrelated production tools.
+focused_consumer="$FIXTURE/focused-fixtures"
+git init -q "$focused_consumer"
+selection_args=(--file "$checksum_path" --file "$verifier_path")
+without_reporter=("${selection_args[@]}")
+for path in scripts/ci/test-format-tools.sh scripts/ci/check-format-tools.sh \
+    scripts/ci/test-rust-tools.sh scripts/dev/install-rust-tools.sh \
+    scripts/ci/test-make-format.sh make/tools.mk make/rust-format.mk make/execution.mk scripts/ci/check-make-execution.sh scripts/ci/run-formatting.sh; do
+    mkdir -p "$source_root/${path%/*}" "$revision_root/${path%/*}"
+    cp -p "$ROOT/$path" "$source_root/$path"
+    cp -p "$ROOT/$path" "$revision_root/$path"
+    selection_args+=(--file "$path")
+    if [[ "$path" != scripts/ci/run-formatting.sh ]]; then without_reporter+=(--file "$path"); fi
+done
+missing_reporter="$FIXTURE/missing-format-reporter"
+git init -q "$missing_reporter"
+if PATH="$FIXTURE/bin:$PATH" bash "$source_root/scripts/distribution/refresh-consumer.sh" \
+    --source "$source_root" --consumer "$missing_reporter" "${without_reporter[@]}" \
+    > "$FIXTURE/missing-format-reporter.log" 2>&1; then exit 1; fi
+grep -F 'requires selected companion: scripts/ci/run-formatting.sh' "$FIXTURE/missing-format-reporter.log" >/dev/null
+[[ ! -e "$missing_reporter/.shared-tooling.snapshot" && ! -e "$missing_reporter/scripts" ]] || exit 1
+PATH="$FIXTURE/bin:$PATH" bash "$source_root/scripts/distribution/refresh-consumer.sh" \
+    --source "$source_root" --consumer "$focused_consumer" "${selection_args[@]}" \
+    > "$FIXTURE/focused-fixtures-export.log"
+for entry in test-format-tools test-rust-tools test-make-format; do
+    bash "$focused_consumer/scripts/ci/$entry.sh" > "$FIXTURE/exported-$entry.log" 2>&1
+done
+bash "$ROOT/$verifier_path" --consumer "$focused_consumer" >/dev/null
+# CI installer fixtures require every wrapper, even when the consumer only
+# uses a subset in production. Omit each dependency from an otherwise complete
+# selection so no earlier missing edge can hide a missing declaration.
+installer_paths=(scripts/ci/test-installers.sh scripts/ci/install-ci-tool.sh)
+for tool in actionlint gitleaks shellcheck yq sccache; do
+    installer_paths+=("scripts/ci/install-$tool.sh")
+done
+for path in "${installer_paths[@]}"; do
+    cp -p "$ROOT/$path" "$source_root/$path"
+    cp -p "$ROOT/$path" "$revision_root/$path"
+done
+for tool in actionlint gitleaks shellcheck yq sccache; do
+    missing="scripts/ci/install-$tool.sh"
+    for mode in initial addition; do
+        selected_consumer="$selection_consumer"
+        selection_args=(--manifest config/selection)
+        option=--add-file
+        if [[ "$mode" == initial ]]; then
+            selected_consumer="$FIXTURE/incomplete-ci-$tool"
+            git init -q "$selected_consumer"
+            selection_args=(--file "$checksum_path" --file "$verifier_path")
+            option=--file
+        fi
+        for path in "${installer_paths[@]}"; do
+            [[ "$path" == "$missing" ]] || selection_args+=("$option" "$path")
+        done
+        if PATH="$FIXTURE/bin:$PATH" bash "$source_root/scripts/distribution/refresh-consumer.sh" \
+            --source "$source_root" --consumer "$selected_consumer" "${selection_args[@]}" \
+            > "$FIXTURE/missing-ci-$tool-$mode.log" 2>&1; then
+            echo "snapshot distribution test failed: CI fixture exported without $missing ($mode)" >&2
+            exit 1
+        fi
+        grep -F "requires selected companion: $missing" "$FIXTURE/missing-ci-$tool-$mode.log" >/dev/null
+        if [[ "$mode" == initial ]]; then
+            [[ ! -e "$selected_consumer/scripts" && ! -e "$selected_consumer/.shared-tooling.snapshot" ]] || exit 1
+        else
+            cmp "$FIXTURE/selection-before-evidence" "$selected_consumer/config/selection"
+            bash "$ROOT/$verifier_path" --consumer "$selected_consumer" --manifest config/selection >/dev/null
+            [[ "$(cat "$selected_consumer/local.txt")" == 'unrelated input' ]] || exit 1
+            for path in "${installer_paths[@]}"; do [[ ! -e "$selected_consumer/$path" ]] || exit 1; done
         fi
     done
 done
+selection_args=(--manifest config/selection)
+for path in "${installer_paths[@]}"; do selection_args+=(--add-file "$path"); done
+PATH="$FIXTURE/bin:$PATH" bash "$source_root/scripts/distribution/refresh-consumer.sh" \
+    --source "$source_root" --consumer "$selection_consumer" "${selection_args[@]}" \
+    > "$FIXTURE/complete-ci-installers.log"
+bash "$ROOT/$verifier_path" --consumer "$selection_consumer" --manifest config/selection >/dev/null
+bash "$selection_consumer/scripts/ci/test-installers.sh" > "$FIXTURE/exported-ci-installers.log" 2>&1
 cp "$selection_consumer/config/selection" "$FIXTURE/selection-before-conflict"
 printf 'consumer-owned file\n' > "$selection_consumer/scripts/ci/sample.sh"
 if PATH="$FIXTURE/bin:$PATH" bash "$source_root/scripts/distribution/refresh-consumer.sh" \
     --source "$source_root" --consumer "$selection_consumer" --manifest config/selection \
     --add-file scripts/ci/sample.sh > "$FIXTURE/addition-conflict.log" 2>&1; then exit 1; fi
 cmp "$FIXTURE/selection-before-conflict" "$selection_consumer/config/selection"
-[[ "$(cat "$selection_consumer/scripts/ci/sample.sh")" == 'consumer-owned file' ]]
+[[ "$(cat "$selection_consumer/scripts/ci/sample.sh")" == 'consumer-owned file' ]] || exit 1
 
 # Export the documented governance selection, then check links in that export.
 # This proves closure of the consumer file set, not merely the source checkout.
@@ -520,8 +751,9 @@ git -C "$advance_source" config core.hooksPath /dev/null
 git -C "$advance_source" remote add origin https://example.invalid/shared-tooling
 for path in "$checksum_path" "$verifier_path"; do cp -p "$ROOT/$path" "$advance_source/$path"; done
 printf '#!/usr/bin/env bash\nprintf "old snapshot\\n"\n' > "$advance_source/scripts/ci/sample.sh"
+printf '0.2.8\n' > "$advance_source/VERSION"
 chmod +x "$advance_source/scripts/ci/sample.sh"
-git -C "$advance_source" add scripts
+git -C "$advance_source" add scripts VERSION
 git -C "$advance_source" commit -qm 'Synthetic previous snapshot'
 git init -q "$advance_seed"
 bash "$ROOT/scripts/distribution/refresh-consumer.sh" --source "$advance_source" --consumer "$advance_seed" \
@@ -529,14 +761,15 @@ bash "$ROOT/scripts/distribution/refresh-consumer.sh" --source "$advance_source"
 printf 'unrelated staged input\n' > "$advance_seed/unrelated"
 git -C "$advance_seed" add unrelated
 printf '#!/usr/bin/env bash\nprintf "new snapshot\\n"\n' > "$advance_source/scripts/ci/sample.sh"
+printf '0.2.9\n' > "$advance_source/VERSION"
 chmod -x "$advance_source/scripts/ci/sample.sh"
-git -C "$advance_source" add scripts/ci/sample.sh
+git -C "$advance_source" add scripts/ci/sample.sh VERSION
 git -C "$advance_source" commit -qm 'Synthetic next snapshot'
 export SNAPSHOT_ADVANCE_SOURCE="$advance_source"
 cat > "$FIXTURE/advance-bin/git" <<'SCRIPT'
 #!/usr/bin/env bash
 set -euo pipefail
-if [[ "$1" == -C && "$2" == "$SNAPSHOT_ADVANCE_SOURCE" && "$3" == cat-file && "$4" == blob &&
+if [[ "$1" == -C && "$2" == "$SNAPSHOT_ADVANCE_SOURCE" && "$3" == cat-file && "$4" == blob && "$5" == *:scripts/ci/* &&
     ! -e "$SNAPSHOT_ADVANCE_CONSUMER/mutated" ]]; then
     consumer="$SNAPSHOT_ADVANCE_CONSUMER"
     case "$SNAPSHOT_ADVANCE_CASE" in
@@ -585,22 +818,24 @@ for state in unchanged partial edited mode staged symlink forged unavailable man
         PATH="$FIXTURE/advance-bin:$PATH" bash "$ROOT/scripts/distribution/refresh-consumer.sh" \
         --source "$advance_source" --consumer "$consumer" > "$FIXTURE/advance-$state.log" 2>&1 || status=$?
     if [[ "$state" == unchanged || "$state" == partial ]]; then
-        [[ "$status" == 0 ]]
+        [[ "$status" == 0 ]] || exit 1
+        [[ "$(awk -F '\t' '$1 == "# version" {print $2}' "$consumer/.shared-tooling.snapshot")" == 0.2.9 ]] || exit 1
         cmp "$advance_source/scripts/ci/sample.sh" "$consumer/scripts/ci/sample.sh"
-        [[ ! -x "$consumer/scripts/ci/sample.sh" ]]
+        [[ ! -x "$consumer/scripts/ci/sample.sh" ]] || exit 1
         bash "$ROOT/$verifier_path" --consumer "$consumer" >/dev/null
     else
-        [[ "$status" != 0 ]]
+        [[ "$status" != 0 ]] || exit 1
         cmp "$consumer/expected-sample" "$consumer/scripts/ci/sample.sh"
-        if [[ -x "$consumer/expected-sample" ]]; then [[ -x "$consumer/scripts/ci/sample.sh" ]];
-        else [[ ! -x "$consumer/scripts/ci/sample.sh" ]]; fi
+        if [[ -x "$consumer/expected-sample" ]]; then [[ -x "$consumer/scripts/ci/sample.sh" ]] || exit 1;
+        else [[ ! -x "$consumer/scripts/ci/sample.sh" ]] || exit 1; fi
         cmp "$consumer/expected-manifest" "$consumer/.shared-tooling.snapshot"
     fi
-    [[ "$(git -C "$consumer" write-tree)" == "$(cat "$consumer/expected-index")" ]]
-    [[ "$(cat "$consumer/unrelated")" == 'unrelated staged input' ]]
+    [[ "$(git -C "$consumer" write-tree)" == "$(cat "$consumer/expected-index")" ]] || exit 1
+    [[ "$(cat "$consumer/unrelated")" == 'unrelated staged input' ]] || exit 1
     if git -C "$consumer" rev-parse --verify HEAD >/dev/null 2>&1; then exit 1; fi
     cmp "$advance_seed/$checksum_path" "$consumer/$checksum_path"
     cmp "$advance_seed/$verifier_path" "$consumer/$verifier_path"
 done
 
 echo "snapshot distribution test passed"
+fixture_complete=true

@@ -4,13 +4,12 @@
 //! Does not own: canister-history observation, endpoint policy, or timer suspension.
 //! Boundary: ops validates complete transitions before this single-record store mutates.
 
-use crate::cdk::bounded_cell::BoundedCell;
 use crate::{
     cdk::{
+        bounded_cell::BoundedCell,
         structures::{DefaultMemoryImpl, memory::RuntimeMemory},
         types::Principal,
     },
-    role_contract::allocation::memory::authority_restore::AUTHORITY_RESTORE_FENCE_ID,
     storage::prelude::*,
 };
 use std::cell::RefCell;
@@ -24,8 +23,6 @@ std::thread_local! {
     > = RefCell::new(BoundedCell::init(crate::ic_memory_key!(
         authority = CANIC_CORE_MEMORY_AUTHORITY,
         key = "canic.core.authority_restore.fence.v1",
-        ty = AuthorityRestoreFenceStore,
-        id = AUTHORITY_RESTORE_FENCE_ID,
     ), None));
 }
 

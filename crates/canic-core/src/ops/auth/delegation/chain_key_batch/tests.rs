@@ -1,23 +1,25 @@
-use super::merkle::chain_key_batch_node_hash;
-use super::selection::chain_key_template_due;
-use super::*;
-use crate::ops::auth::delegation::root_issuer_renewal::renewal_template_fingerprint;
+use super::{selection::chain_key_template_due, *};
 use crate::{
-    dto::auth::{ChainKeyAlgorithm, ChainKeyBatchWitnessStepV1, ChainKeyKeyId},
-    ids::{BuildNetwork, CanisterRole},
+    dto::auth::{ChainKeyAlgorithm, ChainKeyKeyId, DelegationProof},
     model::auth::{
         ChainKeyRootDelegationInstallFailure, RootDelegatedRoleGrantPolicy, RootIssuerPolicy,
         RootIssuerRenewalState, RootIssuerRenewalTemplate,
     },
-    ops::auth::delegated::chain_key::{
-        ChainKeyRootVerifierPolicy, ChainKeySignatureVerificationInput,
-        verify_chain_key_batch_root_proof, verify_chain_key_ecdsa_signature,
-    },
     ops::{
-        auth::delegated::chain_key_signing::{ChainKeySigner, ChainKeySignerFuture},
+        auth::{
+            delegated::{
+                chain_key::{
+                    ChainKeyRootVerifierPolicy, ChainKeySignatureVerificationInput,
+                    verify_chain_key_batch_root_proof, verify_chain_key_ecdsa_signature,
+                },
+                chain_key_signing::{ChainKeySigner, ChainKeySignerFuture},
+            },
+            delegation::root_issuer_renewal::renewal_template_fingerprint,
+        },
         ic::mgmt::{SignWithEcdsaArgs, SignWithEcdsaResult},
     },
 };
+use canic_contracts::ids::{BuildNetwork, CanisterRole};
 use futures::executor::block_on;
 use k256::ecdsa::{
     Signature as K256TestSignature, SigningKey as K256SigningKey, signature::hazmat::PrehashSigner,
@@ -302,8 +304,10 @@ fn chain_key_batch_builder_prepares_merkle_batch_that_verifier_accepts() {
     let signing_policy = signing_policy();
     let issuer_a = p(42);
     let issuer_b = p(41);
+    let issuer_c = p(43);
     RootDelegationStateOps::upsert_root_issuer_policy(policy(issuer_a));
     RootDelegationStateOps::upsert_root_issuer_policy(policy(issuer_b));
+    RootDelegationStateOps::upsert_root_issuer_policy(policy(issuer_c));
 
     let batch = build_test_chain_key_root_delegation_batch(
         input(&signing_policy),
@@ -314,13 +318,16 @@ fn chain_key_batch_builder_prepares_merkle_batch_that_verifier_accepts() {
             DueChainKeyTemplate {
                 template: template(issuer_b, 60_000_000_000),
             },
+            DueChainKeyTemplate {
+                template: template(issuer_c, 60_000_000_000),
+            },
         ],
         10,
     )
     .expect("batch should build");
 
     assert_eq!(batch.status, ChainKeyRootDelegationBatchStatus::Prepared);
-    assert_eq!(batch.issuers.len(), 2);
+    assert_eq!(batch.issuers.len(), 3);
     assert_eq!(batch.header.not_before_ns, 1_000);
     assert_eq!(batch.header.expires_at_ns, 60_000_001_000);
     assert_eq!(
@@ -329,6 +336,7 @@ fn chain_key_batch_builder_prepares_merkle_batch_that_verifier_accepts() {
     );
     assert_eq!(batch.issuers[0].issuer_pid, issuer_b);
     assert_eq!(batch.issuers[1].issuer_pid, issuer_a);
+    assert_eq!(batch.issuers[2].issuer_pid, issuer_c);
 
     let signature = sign_header(&batch.header);
     for issuer in &batch.issuers {
@@ -351,6 +359,41 @@ fn chain_key_batch_builder_prepares_merkle_batch_that_verifier_accepts() {
             |input: ChainKeySignatureVerificationInput<'_>| verify_chain_key_ecdsa_signature(input),
         )
         .expect("builder proof material should verify");
+
+        let enrolled = verifier_policy(&signing_policy);
+        let verifier = crate::ops::auth::AuthChainKeyRootVerifierConfig {
+            policy: crate::dto::auth::RootKeyPolicyV1 {
+                root_canister_id: enrolled.root_canister_id,
+                algorithm: enrolled.algorithm,
+                key_id: enrolled.key_id,
+                derivation_path_hash: enrolled.derivation_path_hash,
+                public_key: enrolled.public_key,
+                key_version: enrolled.key_version,
+                min_accepted_key_version: enrolled.min_accepted_key_version,
+                min_accepted_proof_epoch: enrolled.min_accepted_proof_epoch,
+                min_accepted_registry_epoch: enrolled.min_accepted_registry_epoch,
+                valid_from_ns: enrolled.valid_from_ns,
+                accept_until_ns: enrolled.accept_until_ns,
+                max_revocation_latency_ns: enrolled.max_revocation_latency_ns,
+                build_network: enrolled.build_network,
+            },
+            allow_test_chain_key: enrolled.allow_test_chain_key,
+        };
+        let active = crate::ops::auth::delegated::active_proof::install_active_delegation_proof(
+            crate::ops::auth::delegated::active_proof::InstallActiveDelegationProofInput {
+                proof: DelegationProof {
+                    cert: issuer.delegation_cert.clone(),
+                    root_proof: proof,
+                },
+                installed_by: signing_policy.root_canister_id,
+                this_canister: issuer.issuer_pid,
+                now_ns: 1_000,
+                verifier: &verifier,
+            },
+        )
+        .expect("actual Root producer proof must be accepted by the shared installation verifier");
+        assert_eq!(active.cert_hash, issuer.cert_hash);
+        assert_eq!(active.expires_at_ns, issuer.delegation_cert.expires_at_ns);
     }
 }
 
@@ -1347,20 +1390,20 @@ fn retryable_batch_deadline_is_persisted_and_capped_before_expiry() {
 }
 
 #[test]
-fn merkle_witnesses_round_trip_for_odd_leaf_count() {
-    let leaves = [[1; 32], [2; 32], [3; 32]];
-    let (root, witnesses) = merkle_root_and_witnesses(&leaves).expect("tree should build");
+fn chain_key_batch_builder_rejects_more_than_its_issuer_budget() {
+    let signing_policy = signing_policy();
+    let due_templates = (0..=MAX_CHAIN_KEY_ROOT_DELEGATION_BATCH_ISSUERS)
+        .map(|index| {
+            let issuer = p(u8::try_from(100 + index).expect("test issuer id fits"));
+            RootDelegationStateOps::upsert_root_issuer_policy(policy(issuer));
+            DueChainKeyTemplate {
+                template: template(issuer, 60_000_000_000),
+            }
+        })
+        .collect::<Vec<_>>();
 
-    assert_eq!(witnesses.len(), 3);
-    for (leaf, witness) in leaves.into_iter().zip(witnesses) {
-        let witness_root = witness.steps.iter().fold(leaf, |current, step| match step {
-            ChainKeyBatchWitnessStepV1::LeftSibling(sibling) => {
-                chain_key_batch_node_hash(*sibling, current)
-            }
-            ChainKeyBatchWitnessStepV1::RightSibling(sibling) => {
-                chain_key_batch_node_hash(current, *sibling)
-            }
-        });
-        assert_eq!(witness_root, root);
-    }
+    let error =
+        build_test_chain_key_root_delegation_batch(input(&signing_policy), &due_templates, 10)
+            .expect_err("construction must refuse an over-budget plan even before selection");
+    assert_eq!(error.code(), InternalError::invalid_input().code());
 }

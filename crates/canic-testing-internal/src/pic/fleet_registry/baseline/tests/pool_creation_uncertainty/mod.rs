@@ -1,9 +1,10 @@
 //! Real Root retries preserve a debited creation until the Ledger returns its exact principal.
 
 use super::*;
-use canic_core::dto::pool::{CanisterPoolCreation, CanisterPoolCreationProgress};
+use canic_contracts::dto::pool::{CanisterPoolCreation, CanisterPoolCreationProgress};
 
 /// Typed faults at the test Ledger's reply boundary; no production fault path is added.
+
 #[derive(CandidType, Clone, Copy, Debug)]
 pub(super) enum CreationRetryRefusal {
     InsufficientFunds,

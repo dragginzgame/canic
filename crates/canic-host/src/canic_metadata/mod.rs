@@ -11,19 +11,14 @@ use crate::{
     icp::{IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_result_response},
     protocol_binding::ResolvedProtocolBinding,
 };
-use candid::{CandidType, Deserialize};
-use canic_core::{
-    dto::role::{RoleCapability, RoleOverviewResponse},
-    role_contract::RoleCapabilityKey,
+use canic_contracts::dto::{
+    role::{RoleCapability, RoleOverviewResponse},
+    wire::projection::overview::RoleStatusResponse,
 };
+use canic_core::role_contract::RoleCapabilityKey;
 use thiserror::Error as ThisError;
 
 const ICP_JSON_OUTPUT: &str = "json";
-
-#[derive(CandidType, Deserialize)]
-enum RoleStatusResponse {
-    Overview(RoleOverviewResponse),
-}
 
 ///
 /// CanicMetadataQueryError
@@ -49,7 +44,7 @@ pub fn query_canic_metadata_version(
 ) -> Result<String, CanicMetadataQueryError> {
     let output = icp.canister_query_arg_output_with_candid(
         canister_id,
-        canic_core::protocol::CANIC_PUBLIC_STATUS,
+        canic_contracts::protocol::CANIC_PUBLIC_STATUS,
         "(variant { Overview })",
         Some(ICP_JSON_OUTPUT),
         Some(binding.candid_path.as_path()),

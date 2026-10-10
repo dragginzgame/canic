@@ -10,11 +10,9 @@ mod tests;
 
 use super::{EnsurePaths, EnsureStateError};
 use crate::fleet_ensure::model::{CurrentFleetProtocolAction, EnsureAction, FleetEnsurePlan};
-use ic_host_artifacts::artifact::ArtifactError;
-use ic_host_fs::durable::create_new_bytes_with_parents;
-use ic_host_fs::read::read_optional_file_no_follow;
-
 use canic_core::cdk::utils::hash::{decode_hex, hex_bytes, wasm_hash};
+use ic_host_artifacts::artifact::ArtifactError;
+use ic_host_fs::{durable::create_new_bytes_with_parents, read::read_optional_file_no_follow};
 use serde_json::{Map, Value};
 use std::{collections::BTreeMap, io};
 
@@ -246,7 +244,7 @@ fn retain_object(
     bytes: &[u8],
 ) -> Result<(), EnsureStateError> {
     let path = object_path(paths, expected);
-    match create_new_bytes_with_parents(&path, bytes) {
+    match create_new_bytes_with_parents(&path, bytes).map_err(crate::publication::ops::io_error) {
         Ok(()) => Ok(()),
         Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {
             let retained = read_object(paths, expected, bytes.len() as u64)?;

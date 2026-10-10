@@ -4,10 +4,8 @@
 //! Does not own: topology attachment validation, package resolution, or runtime state.
 //! Boundary: config schema re-exports these data shapes for validated models.
 
-use crate::{
-    ids::{AppId, CanisterRole},
-    shared_support::is_ascii_snake_case,
-};
+use crate::shared_support::is_ascii_snake_case;
+use canic_contracts::ids::{AppId, CanisterRole};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 

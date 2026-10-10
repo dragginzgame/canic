@@ -7,12 +7,9 @@
 #[cfg(test)]
 mod tests;
 
-use canic_core::{
-    control_plane_support::{
-        error::InternalError, workflow::runtime::fleet_activation::FleetActivationWorkflow,
-    },
-    dto::error::Error,
-    ids::ManagedCanisterBinding,
+use canic_contracts::{dto::error::Error, ids::ManagedCanisterBinding};
+use canic_core::control_plane_support::{
+    error::InternalError, workflow::runtime::fleet_activation::FleetActivationWorkflow,
 };
 
 pub use super::component_registry::ActiveComponentMemberError;
@@ -69,9 +66,9 @@ pub fn require_active_fleet_subnet_root_internal() -> Result<(), InternalError> 
 /// Require the exact pre-activation Root phase for initial-child bootstrap and bounded funding.
 pub fn require_prepared_fleet_subnet_root() -> Result<(), Error> {
     let status = FleetActivationWorkflow::status().map_err(Error::from)?;
-    if status.phase != canic_core::dto::fleet_activation::FleetActivationPhase::Prepared {
+    if status.phase != canic_contracts::dto::fleet_activation::FleetActivationPhase::Prepared {
         return Err(Error::from_registered(
-            canic_core::diagnostics::codes::LIFECYCLE_INACTIVE,
+            canic_contracts::diagnostics::codes::LIFECYCLE_INACTIVE,
         ));
     }
     Ok(())

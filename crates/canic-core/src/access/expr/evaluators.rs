@@ -8,9 +8,10 @@ use super::{
     AccessContext, BuiltinPredicate, CallerPredicate, EnvironmentPredicate, FleetPredicate,
 };
 use crate::{
-    access::{self, AccessError, metrics::DelegatedAuthMetrics},
-    ids::AccessMetricKind,
+    access,
+    access::{AccessError, metrics::DelegatedAuthMetrics},
 };
+use canic_contracts::ids::AccessMetricKind;
 
 pub(super) const fn name(pred: &BuiltinPredicate) -> &'static str {
     match pred {

@@ -86,7 +86,8 @@ pub fn write_record(directory: &Path, record: &LocalFleetRecord) -> Result<(), L
     if bytes.len() > 1024 * 1024 {
         return Err(LocalFleetError::Capacity);
     }
-    durable::write_bytes(&directory.join("environment.json"), &bytes)?;
+    durable::write_bytes(&directory.join("environment.json"), &bytes)
+        .map_err(crate::publication::ops::io_error)?;
     Ok(())
 }
 

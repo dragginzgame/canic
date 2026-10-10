@@ -22,7 +22,8 @@ struct RootAcceptanceResponseProgress<'a> {
     claimed_component_count: u32,
     installed_component_count: u32,
     registry_committed_component_count: u32,
-    result: Option<&'a canic_core::dto::component_provisioning::RootComponentProvisioningResult>,
+    result:
+        Option<&'a canic_contracts::dto::component_provisioning::RootComponentProvisioningResult>,
     provisioned_at_ns: Option<u64>,
 }
 

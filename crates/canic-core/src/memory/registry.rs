@@ -42,16 +42,10 @@ pub enum MemoryRegistryError {
         reason: &'static str,
     },
 
-    /// The stable key namespace and memory ID range do not match.
-    #[error(
-        "memory stable key '{stable_key}' with id {id} violates namespace/range authority: {reason}"
-    )]
-    RangeAuthorityViolation {
-        /// Stable key being registered.
-        stable_key: String,
-        /// Stable-memory ID being registered.
-        id: u8,
-        /// Human-readable reason for the rejection.
-        reason: &'static str,
-    },
+    /// Host pool registration failed before bootstrap.
+    #[error("memory host pool registration rejected: {reason}")]
+    PoolRegistration { reason: &'static str },
+    /// The host supplied invalid namespace grants or physical exclusions.
+    #[error(transparent)]
+    Pool(#[from] ic_memory::MemoryAllocationPoolError),
 }

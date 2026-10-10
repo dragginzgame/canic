@@ -4,7 +4,7 @@
 //! Boundary: a missing reply never restores an attempt; these records do not issue calls.
 
 use candid::Principal;
-use canic_core::ids::{
+use canic_contracts::ids::{
     CanisterRole, ComponentBinding, ComponentInstanceId, FleetRegistryAuthority,
     FleetSubnetRootReleaseSet,
 };
@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// Which bounded observation-derived requirement a native credit restores.
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FundingQuoteStage {

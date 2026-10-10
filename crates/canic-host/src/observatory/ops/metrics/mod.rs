@@ -4,7 +4,7 @@
 mod tests;
 
 use crate::observatory::view::*;
-use canic_core::dto::public_status::{
+use canic_contracts::dto::public_status::{
     PublicMetricFamily, PublicMetricKind, PublicMetricsSnapshot, PublicSnapshotState,
 };
 use std::collections::BTreeSet;

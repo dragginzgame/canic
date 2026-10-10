@@ -14,7 +14,7 @@ use crate::{
     network::{NetworkIdentityError, resolve_canonical_network_id_from_root},
     registry::RegistryEntry,
 };
-use canic_core::ids::{AppId, CanonicalNetworkId, FleetId, FleetName};
+use canic_contracts::ids::{AppId, CanonicalNetworkId, FleetId, FleetName};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs, io,
@@ -23,9 +23,10 @@ use std::{
 use thiserror::Error as ThisError;
 
 /// Last safely converged Fleet inventory retained for backup.
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CurrentFleetInventory {
-    pub active_registry: Option<canic_core::dto::fleet_registry::FleetRegistry>,
+    pub active_registry: Option<canic_contracts::dto::fleet_registry::FleetRegistry>,
     pub entries: Vec<RegistryEntry>,
     pub roots: Vec<String>,
 }
@@ -51,7 +52,7 @@ pub struct CurrentFleetSummary {
 /// Terminal ensure inventory projected for current operator commands.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CurrentFleetResolution {
-    pub active_registry: Option<canic_core::dto::fleet_registry::FleetRegistry>,
+    pub active_registry: Option<canic_contracts::dto::fleet_registry::FleetRegistry>,
     pub plan: FleetEnsurePlan,
     pub registry: CurrentFleetRegistry,
     pub topology: CurrentFleetTopology,
@@ -155,7 +156,8 @@ impl CurrentFleetResolution {
     pub fn initial_active_registry(
         &self,
         fleet: &str,
-    ) -> Result<&canic_core::dto::fleet_registry::FleetRegistry, CurrentFleetInventoryError> {
+    ) -> Result<&canic_contracts::dto::fleet_registry::FleetRegistry, CurrentFleetInventoryError>
+    {
         let registry = self.active_registry.as_ref().ok_or_else(|| {
             CurrentFleetInventoryError::ProtocolAuthorityMissing {
                 fleet: fleet.to_string(),
@@ -165,7 +167,7 @@ impl CurrentFleetResolution {
             .fleet_subnet_roots
             .iter()
             .filter(|root| {
-                root.status != canic_core::dto::fleet_registry::FleetSubnetRootStatus::Removed
+                root.status != canic_contracts::dto::fleet_registry::FleetSubnetRootStatus::Removed
             })
             .map(|root| root.fleet_subnet_root.to_text())
             .collect::<Vec<_>>();
@@ -448,7 +450,7 @@ pub(super) fn project_current_fleet_inventory(
             .fleet_subnet_roots
             .iter()
             .filter(|root| {
-                root.status != canic_core::dto::fleet_registry::FleetSubnetRootStatus::Removed
+                root.status != canic_contracts::dto::fleet_registry::FleetSubnetRootStatus::Removed
             })
             .map(|root| root.fleet_subnet_root.to_text())
             .collect::<Vec<_>>();

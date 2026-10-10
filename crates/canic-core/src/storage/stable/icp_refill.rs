@@ -4,16 +4,20 @@
 //! Does not own: workflow decisions, ledger/CMC calls, or DTO projection.
 //! Boundary: storage ops wrap these records for ICP refill workflows.
 
-use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
-    cdk::candid::Nat,
-    cdk::structures::{DefaultMemoryImpl, memory::RuntimeMemory},
+    cdk::{
+        candid::Nat,
+        structures::{
+            DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, memory::RuntimeMemory,
+        },
+    },
     impl_storable_bounded,
-    role_contract::allocation::memory::cycles::CYCLES_ICP_REFILL_RECORDS_ID,
     storage::prelude::*,
 };
-use std::cell::RefCell;
-use std::ops::Bound::{Excluded, Unbounded};
+use std::{
+    cell::RefCell,
+    ops::Bound::{Excluded, Unbounded},
+};
 
 thread_local! {
     //
@@ -23,7 +27,7 @@ thread_local! {
     // Keeping it lazy prevents non-root canisters from opening root-only state.
     static ICP_REFILL_RECORDS: RefCell<IcpRefillRecords> =
         RefCell::new(IcpRefillRecords::new(StableBtreeMap::init(
-            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.cycles.icp_refill_records.v1", ty = IcpRefillRecords, id = CYCLES_ICP_REFILL_RECORDS_ID),
+            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.cycles.icp_refill_records.v1"),
         )));
 }
 

@@ -10,10 +10,13 @@ use crate::{
     ops::{ic::IcOps, rpc::RpcOps},
     protocol,
 };
-use candid::{CandidType, Principal};
-use serde::Deserialize;
+use candid::Principal;
+use canic_contracts::dto::wire::projection::observability_relay::{
+    CanisterCommandFragment, CanisterCommandResponseFragment,
+};
 
 /// Discover canonical accounting without requiring replay links or cleanup indexes.
+
 pub fn release_intents(
     start_after: Option<crate::dto::release_intents::IntentReleaseKey>,
 ) -> Result<crate::dto::release_intents::IntentReleaseResponse, InternalError> {
@@ -32,16 +35,6 @@ pub fn child_funding(
     child: Principal,
 ) -> Result<crate::dto::observability::ChildFundingUsage, InternalError> {
     crate::ops::runtime::funding_usage::child(child)
-}
-
-#[derive(CandidType)]
-enum CanisterCommandFragment {
-    Observe(CanisterObservabilityRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum CanisterCommandResponseFragment {
-    Observe(CanisterObservabilityResponse),
 }
 
 /// Relay protected observability without granting the operator lifecycle control of the target.

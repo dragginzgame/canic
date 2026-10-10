@@ -3,15 +3,15 @@
 //! Receiver publication, strict revocation and retained local admission evidence.
 
 use super::*;
-use crate::workflow::caller_authority::admission::CallerAdmissionWorkflow;
 use crate::{
     config::caller_authority::{
         CallerAuthorityConfig, CallerPermission, CallerScope, CallerSourceSelector,
     },
-    ids::{
-        CallerComponentInstallation, CallerInstallation, CallerRootAuthority, CanisterRole,
-        ComponentChildBinding, ManagedCanisterBinding,
-    },
+    workflow::caller_authority::admission::CallerAdmissionWorkflow,
+};
+use canic_contracts::ids::{
+    CallerComponentInstallation, CallerInstallation, CallerRootAuthority, CanisterRole,
+    ComponentChildBinding, ManagedCanisterBinding,
 };
 use std::collections::BTreeMap;
 

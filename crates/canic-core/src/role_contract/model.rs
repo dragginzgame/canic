@@ -4,7 +4,8 @@
 //! Does not own: Cargo evidence collection, state descriptors, or report rendering.
 //! Boundary: host/build consumers provide typed feature evidence to pure core policy.
 
-use crate::{config::schema::ConfigModel, ids::CanisterRole};
+use crate::config::schema::ConfigModel;
+use canic_contracts::ids::CanisterRole;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
@@ -179,37 +180,16 @@ impl AllocationOwner {
 }
 
 ///
-/// MemoryId
-///
-/// Typed stable-memory manager ID owned by the allocation registry.
-///
-
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct MemoryId(u8);
-
-impl MemoryId {
-    #[must_use]
-    pub const fn new(value: u8) -> Self {
-        Self(value)
-    }
-
-    #[must_use]
-    pub const fn get(self) -> u8 {
-        self.0
-    }
-}
-
-///
 /// AllocationDefinition
 ///
-/// Canonical assignment of one or more stable-memory IDs to an active allocation.
+/// Canonical assignment of one or more stable-memory keys to an active allocation.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct AllocationDefinition {
     pub key: StateAllocationKey,
     pub owner: AllocationOwner,
-    pub memory_ids: &'static [MemoryId],
+    pub memory_keys: &'static [&'static str],
 }
 
 ///
@@ -287,7 +267,7 @@ pub enum SelectionProvenance {
 pub struct ResolvedStateAllocation {
     pub key: StateAllocationKey,
     pub owner: AllocationOwner,
-    pub memory_ids: Vec<MemoryId>,
+    pub memory_keys: Vec<String>,
     pub selected_by: BTreeSet<SelectionProvenance>,
 }
 
@@ -318,10 +298,10 @@ pub enum RoleContractFinding {
     AllocationDescriptorDuplicate {
         key: StateAllocationKey,
     },
-    AllocationDescriptorIdMismatch {
+    AllocationDescriptorKeyMismatch {
         key: StateAllocationKey,
-        expected: Vec<MemoryId>,
-        actual: Vec<MemoryId>,
+        expected: Vec<String>,
+        actual: Vec<String>,
     },
     AllocationDescriptorMissing {
         key: StateAllocationKey,
@@ -346,8 +326,8 @@ pub enum RoleContractFinding {
     DependencyShapeUnsupported {
         reason: String,
     },
-    MemoryIdCollision {
-        memory_id: MemoryId,
+    MemoryKeyCollision {
+        stable_key: String,
         first: StateAllocationKey,
         second: StateAllocationKey,
     },
@@ -394,7 +374,7 @@ impl RoleContractFinding {
             Self::AllocationDescriptorDuplicate { .. } => {
                 "role_contract_allocation_descriptor_duplicate"
             }
-            Self::AllocationDescriptorIdMismatch { .. } => "role_contract_allocation_id_mismatch",
+            Self::AllocationDescriptorKeyMismatch { .. } => "role_contract_allocation_key_mismatch",
             Self::AllocationDescriptorMissing { .. } => {
                 "role_contract_allocation_descriptor_missing"
             }
@@ -404,7 +384,7 @@ impl RoleContractFinding {
             Self::CargoEvidenceUnavailable { .. } => "role_contract_cargo_evidence_unavailable",
             Self::CatalogInvalid { .. } => "role_contract_catalog_invalid",
             Self::DependencyShapeUnsupported { .. } => "role_contract_dependency_shape_unsupported",
-            Self::MemoryIdCollision { .. } => "role_contract_memory_id_collision",
+            Self::MemoryKeyCollision { .. } => "role_contract_memory_key_collision",
             Self::MultipleCanicPackages { .. } => "role_contract_multiple_canic_packages",
             Self::MultipleMemoryRuntimes { .. } => "role_contract_multiple_memory_runtimes",
             Self::MultipleTimerRuntimes { .. } => "role_contract_multiple_timer_runtimes",

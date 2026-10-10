@@ -1,7 +1,7 @@
 use super::{FrontendError, model::*, ops, policy};
 use crate::test_support::temp_dir;
 use candid::Principal;
-use canic_core::ids::{CanisterRole, CanonicalNetworkId};
+use canic_contracts::ids::{CanisterRole, CanonicalNetworkId};
 use std::fs;
 
 fn input() -> FrontendEnvironmentInput {

@@ -5,7 +5,7 @@
 //! Boundary: maps the root workflow result into the public error envelope.
 
 use crate::workflow::state::FleetStateWorkflow;
-use canic_core::dto::{
+use canic_contracts::dto::{
     error::Error,
     state::{FleetCommand, FleetCommandExecutionResponse},
 };

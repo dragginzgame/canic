@@ -34,6 +34,10 @@ canonical scripts/ci/verify-shared-tooling-snapshot.sh selects that bundle root;
 other manifests use the Git root. --snapshot-root explicitly selects another
 consumer root for a manifest (paths are relative to the invocation directory).
 Local LOC includes unrecorded files and drifted copies; drift is reported.
+The table also shows recorded version@revision and snapshot integrity. Integrity
+checks every declared file, including missing files and files outside LOC scope.
+Unrecorded versions remain explicit; no tags, network or sibling source are used
+to guess a version. Multiple snapshots retain their separate identities in JSON.
 --json includes per-file hashes/counts, skipped files and source identities.
 Repositories without a first commit are counted with head=null and unborn=true;
 the text report announces that identity on stderr. Broken Git state is an error.
@@ -126,6 +130,13 @@ sub load_snapshot {
     die "symlinked snapshot root\n" if is_linked($base);
     my (%files, %headers);
     for my $line (split /\n/, read_file($manifest)) {
+        if ($line =~ /^# version(?:\t|$)/) {
+            die "malformed or duplicate snapshot version annotation\n"
+                unless $line =~ /^# version\t((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))$/ &&
+                    !exists $headers{version};
+            $headers{version} = $1;
+            next;
+        }
         next if $line =~ /^\s*(?:#|$)/;
         my ($kind, @values) = split /\t/, $line, -1;
         if ($kind eq 'file') {
@@ -144,7 +155,9 @@ sub load_snapshot {
         ($headers{revision} // '') =~ /^[a-f0-9]{40,64}$/ &&
         ($headers{source} // '') =~ m{^(?:https://github\.com/|git\@github\.com:|ssh://git\@github\.com/)dragginzgame/shared-tooling(?:\.git)?$};
     my %resolved = map { ($base eq '.' ? $_ : "$base/$_") => $files{$_} } keys %files;
-    return (\%resolved, {path => $manifest, revision => $headers{revision}, root => $base});
+    die "empty snapshot file set\n" unless keys %resolved;
+    return (\%resolved, {path => $manifest, revision => $headers{revision}, root => $base,
+        version => $headers{version}, source => $headers{source}, files => [sort keys %resolved]});
 }
 
 capture('git', '--version');
@@ -192,7 +205,7 @@ for my $name (@names) {
         my (%snapshot, @manifests);
         for my $path (sort keys %paths) {
             next unless ($path =~ m{(?:^|/)\.shared-tooling[^/]*\.snapshot$} ||
-                exists $snapshot_roots{getcwd() . "/$path"}) && -f $path;
+                exists $snapshot_roots{getcwd() . "/$path"});
             my ($files, $manifest) = load_snapshot($path);
             for my $target (keys %$files) {
                 die "conflicting snapshot declarations for $target\n" if exists $snapshot{$target} &&
@@ -201,9 +214,25 @@ for my $name (@names) {
             }
             push @manifests, $manifest;
         }
+        # Integrity covers the complete selected snapshot, not just files that
+        # cloc can count. Capture declared bytes once for both ownership and LOC.
+        my (%snapshot_content, %drift);
+        for my $path (sort keys %snapshot) {
+            if (is_linked($path) || !-f $path) { $drift{$path} = 1; next; }
+            my $content = $snapshot_content{$path} = read_file($path);
+            $drift{$path} = 1 unless sha256_hex($content) eq $snapshot{$path}{hash} &&
+                (-x $path ? 'x' : '-') eq $snapshot{$path}{mode};
+        }
+        for my $manifest (@manifests) {
+            my $paths = delete $manifest->{files};
+            $manifest->{file_count} = scalar @$paths;
+            $manifest->{drifted_files} = [grep { $drift{$_} } @$paths];
+            $manifest->{integrity} = @{$manifest->{drifted_files}} ? 'drift' : 'ok';
+        }
         $repo->{snapshot_manifests} = \@manifests;
         my @snapshot_roots = sort { length($b) <=> length($a) } map { $_->{root} } grep { $_->{root} ne '.' } @manifests;
-        my (%sums, @files, @source_paths, @skipped, @drift);
+        my (%sums, @files, @source_paths, @skipped);
+        my @drift = sort keys %drift;
         @sums{@keys} = (0) x @keys;
         my $copy = "$temp/checkouts/$name";
         make_path($copy);
@@ -216,12 +245,10 @@ for my $name (@names) {
             safe_path($path);
             # Do not follow either file symlinks or symlinked parent directories.
             next if is_linked($path);
-            my $content = read_file($path);
+            my $content = exists $snapshot_content{$path} ? $snapshot_content{$path} : read_file($path);
             my $hash = sha256_hex($content);
-            my $mode = -x $path ? 'x' : '-';
             my $declared = $snapshot{$path};
-            my $owner = $declared && $hash eq $declared->{hash} && $mode eq $declared->{mode} ? 'shared' : 'local';
-            push @drift, $path if $declared && $owner eq 'local';
+            my $owner = $declared && !$drift{$path} ? 'shared' : 'local';
             my $file = { path => $path, sha256 => $hash, owner => $owner };
             if ($path =~ /\.(?:json|jsonl|patch|diff|tsv|csv)$/i) {
                 $file->{kind} = 'data';
@@ -256,7 +283,7 @@ for my $name (@names) {
         $repo->{drifted_files} = \@drift;
         $repo->{totals} = \%sums;
         warn "$name: cloc skipped " . scalar(@skipped) . " selected files; see --json\n" if @skipped;
-        warn "$name: " . scalar(@drift) . " snapshot files differ; counted as local\n" if @drift;
+        warn "$name: " . scalar(@drift) . " snapshot files differ or are missing; countable copies are local\n" if @drift;
         $total{$_} += $sums{$_} for @keys;
         1;
     };
@@ -279,14 +306,19 @@ if ($json) {
 } else {
     my $width = 24;
     for my $repo (@repos) { $width = length($repo->{name}) if length($repo->{name}) > $width; }
-    my $format = "%-${width}s" . (' %11s' x @keys) . "\n";
-    printf $format, 'repository', @keys;
-    printf $format, '-' x $width, ('-' x 11) x @keys;
+    my $format = "%-${width}s" . (' %11s' x @keys) . " %9s %s\n";
+    printf $format, 'repository', @keys, 'integrity', 'shared_snapshot';
+    printf $format, '-' x $width, ('-' x 11) x @keys, '-' x 9, '-' x 24;
     for my $repo (@repos) {
-        printf $format, $repo->{name}, $repo->{error} ? ('ERROR') x @keys : @{$repo->{totals}}{@keys};
+        my %identities = map { (($_->{version} // 'unrecorded') . '@' . substr($_->{revision}, 0, 12)) => 1 }
+            @{$repo->{snapshot_manifests} // []};
+        my $integrity = $repo->{error} ? 'ERROR' : !keys %identities ? 'NONE' :
+            @{$repo->{drifted_files}} ? 'DRIFT' : 'OK';
+        printf $format, $repo->{name}, $repo->{error} ? ('ERROR') x @keys : @{$repo->{totals}}{@keys},
+            $integrity, keys %identities ? join(',', sort keys %identities) : '-';
     }
-    printf $format, '-' x $width, ('-' x 11) x @keys;
-    printf $format, $failed ? 'TOTAL (partial)' : 'TOTAL', @total{@keys};
+    printf $format, '-' x $width, ('-' x 11) x @keys, '-' x 9, '-' x 24;
+    printf $format, $failed ? 'TOTAL (partial)' : 'TOTAL', @total{@keys}, '-', '-';
 }
 if ($failed) { warn "Failed tooling inventory retained: $temp\n"; }
 else { remove_tree($temp); }

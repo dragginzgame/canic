@@ -4,11 +4,12 @@
 //! Does not own: application rows, import progress, receipts or Store grant mutation.
 //! Boundary: ops converts and validates the complete assignment before persistence.
 
-use crate::ids::{ManagedCanisterBinding, ReleaseBuildId};
 use candid::Principal;
+use canic_contracts::ids::{ManagedCanisterBinding, ReleaseBuildId};
 use serde::{Deserialize, Serialize};
 
 /// Protected source authority for one exact managed installation.
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FixtureAssignmentRecord {
     pub store: Principal,

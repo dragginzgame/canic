@@ -36,16 +36,18 @@ use crate::{
         state::{PublicationStoreStateView, WasmStoreView},
     },
 };
-use canic_core::cdk::candid::Nat;
-use canic_core::cdk::types::Principal;
-use canic_core::control_plane_support::{
-    error::InternalError,
-    ops::ic::{
-        IcOps,
-        mgmt::{CanisterStatus, CanisterStatusObservation, CanisterStatusType, MgmtOps},
+use canic_core::{
+    cdk::{candid::Nat, types::Principal},
+    control_plane_support::{
+        error::InternalError,
+        ops::ic::{
+            IcOps,
+            mgmt::{CanisterStatus, CanisterStatusObservation, CanisterStatusType, MgmtOps},
+        },
     },
+    log,
+    log::Topic,
 };
-use canic_core::{log, log::Topic};
 use std::cell::Cell;
 
 const SECONDS_PER_DAY: u128 = 86_400;
@@ -1281,7 +1283,7 @@ mod tests {
         let err = LifecycleOperationGuard::try_enter().expect_err("second operation must reject");
         assert_eq!(
             err.public_error().code(),
-            canic_core::diagnostics::codes::REQUEST_INCOMPLETE.raw_code()
+            canic_contracts::diagnostics::codes::REQUEST_INCOMPLETE.raw_code()
         );
 
         drop(guard);

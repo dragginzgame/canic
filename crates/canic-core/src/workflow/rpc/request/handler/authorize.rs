@@ -10,9 +10,9 @@ use crate::{
     dto::rpc::{CreateCanisterParent, CreateCanisterRequest, RecycleCanisterRequest},
     log,
     log::Topic,
-    ops::{
-        runtime::env::EnvOps,
-        runtime::metrics::root_capability::{RootCapabilityMetricOutcome, RootCapabilityMetrics},
+    ops::runtime::{
+        env::EnvOps,
+        metrics::root_capability::{RootCapabilityMetricOutcome, RootCapabilityMetrics},
     },
     workflow::rpc::{RootCapabilityAuthority, RootCapabilityMemberLifecycle, RpcWorkflowError},
 };

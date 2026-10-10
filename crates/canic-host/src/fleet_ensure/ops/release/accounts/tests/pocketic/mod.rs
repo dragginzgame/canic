@@ -1,7 +1,7 @@
 //! Real query execution proves exact arguments and refusal without substituting review balances.
 
 use super::*;
-use canic_core::ids::CanonicalNetworkId;
+use canic_contracts::ids::CanonicalNetworkId;
 use ic_agent::identity::BasicIdentity;
 use ic_testkit::pocket_ic::PocketIcBuilder;
 use sha2_host::{Digest, Sha256};

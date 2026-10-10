@@ -5,6 +5,7 @@
 
 mod audit_root;
 mod host_inputs;
+
 #[cfg(test)]
 pub(super) mod tests;
 
@@ -17,10 +18,8 @@ use crate::pic::{
     },
     timing::Span,
 };
-use canic_core::{
-    cdk::utils::hash::hex_bytes,
-    ids::{BuildNetwork, CanisterRole, ReleaseBuildId, ReleaseBuildNonce},
-};
+use canic_contracts::ids::{BuildNetwork, CanisterRole, ReleaseBuildId, ReleaseBuildNonce};
+use canic_core::cdk::utils::hash::hex_bytes;
 use canic_host::{
     canister_build::{
         CanisterArtifactBuildOutput, CanisterArtifactBuilder, CanisterBuildProfile,

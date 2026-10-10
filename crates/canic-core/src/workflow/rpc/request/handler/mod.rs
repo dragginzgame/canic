@@ -29,7 +29,6 @@ use crate::{
     },
     workflow::rpc::{RootCapabilityAuthority, RootCapabilityLifecycleExecutor},
 };
-
 use capability::{RootCapability, RootReplayInput};
 
 pub(in crate::workflow::rpc) use nonroot_cycles::NonrootCyclesCapabilityWorkflow;

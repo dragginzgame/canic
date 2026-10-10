@@ -6,8 +6,8 @@
 #[cfg(test)]
 mod tests;
 
-use crate::MAX_DOCUMENT_READ_BYTES;
 use crate::{
+    MAX_DOCUMENT_READ_BYTES,
     release_build::{ReleaseBuildPlanError, validate_finalized_release_build_manifest},
     release_set::{
         ApplicationArtifactUnionPersistenceError, CanicInfrastructureArtifactPersistenceError,
@@ -16,13 +16,11 @@ use crate::{
         load_persisted_current_release_set_manifest,
     },
 };
+use canic_contracts::ids::ReleaseBuildId;
 use ic_host_artifacts::artifact::ArtifactError;
 use ic_host_fs::read::read_optional_file_no_follow;
-
-use std::path::{Path, PathBuf};
-
-use canic_core::ids::ReleaseBuildId;
 use sha2_host::{Digest, Sha256};
+use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 ///

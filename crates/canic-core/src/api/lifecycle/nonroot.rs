@@ -4,9 +4,9 @@ use crate::{
         abi::v1::CanisterInitPayload, env::EnvBootstrapArgs,
         fleet_subnet_root::FleetSubnetWasmStoreInitArgs,
     },
-    ids::{CanisterRole, ManagedCanisterBinding},
     lifecycle,
 };
+use canic_contracts::ids::{CanisterRole, ManagedCanisterBinding};
 
 ///
 /// LifecycleApi

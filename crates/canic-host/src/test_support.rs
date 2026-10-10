@@ -1,16 +1,15 @@
-use std::{
-    path::{Path, PathBuf},
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
-
-use canic_core::{
-    cdk::types::Cycles,
+use canic_contracts::{
+    cycles::Cycles,
     ids::{
         CyclesFundingBudget, FleetFundingProfile, FleetSubnetRootFundingAuthority,
         FleetSubnetRootFundingPolicy,
     },
 };
 use ic_testkit::pic::{PocketIc, PocketIcBuilder, PocketIcBuilderExt, PocketIcStartupConfig};
+use std::{
+    path::{Path, PathBuf},
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 const POCKET_IC_SERVER_URL_ENV: &str = "IC_TESTKIT_POCKET_IC_URL";
 const POCKET_IC_STARTUP_TIMEOUT: Duration = Duration::from_secs(30);

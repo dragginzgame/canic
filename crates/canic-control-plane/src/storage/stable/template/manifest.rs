@@ -1,20 +1,25 @@
-use crate::ids::{
-    CanisterRole, TemplateChunkingMode, TemplateManifestState, TemplateReleaseKey, TemplateVersion,
-    WasmStoreBinding,
+use crate::{
+    ids::{
+        CanisterRole, TemplateChunkingMode, TemplateManifestState, TemplateReleaseKey,
+        TemplateVersion, WasmStoreBinding,
+    },
+    storage::stable::template::key::TemplateReleaseKeyRecord,
 };
-use canic_core::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
-use canic_core::cdk::structures::{DefaultMemoryImpl, memory::RuntimeMemory, storable::Storable};
 use canic_core::{
-    impl_storable_bounded, role_contract::allocation::memory::control_plane::TEMPLATE_MANIFESTS_ID,
+    cdk::structures::{
+        DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, memory::RuntimeMemory,
+        storable::Storable,
+    },
+    impl_storable_bounded,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
 std::thread_local! {
     static TEMPLATE_MANIFESTS: RefCell<
-        StableBtreeMap<TemplateReleaseKey, TemplateManifestRecord, RuntimeMemory<DefaultMemoryImpl>>
+        StableBtreeMap<TemplateReleaseKeyRecord, TemplateManifestRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.template.manifests.v1", ty = TemplateManifestStateStore, id = TEMPLATE_MANIFESTS_ID)),
+        StableBtreeMap::init(canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.template.manifests.v1")),
     );
 }
 
@@ -85,7 +90,7 @@ impl TemplateManifestStateStore {
     // Insert or replace a stored template manifest record.
     pub fn upsert(release: TemplateReleaseKey, record: TemplateManifestRecord) {
         TEMPLATE_MANIFESTS.with_borrow_mut(|map| {
-            let previous = map.insert(release.clone(), record.clone());
+            let previous = map.insert(TemplateReleaseKeyRecord(release.clone()), record.clone());
             TEMPLATE_MANIFESTS_OCCUPIED_BYTES.with_borrow_mut(|occupied| {
                 if let Some(current) = occupied.as_mut() {
                     let previous_bytes = previous
@@ -103,7 +108,7 @@ impl TemplateManifestStateStore {
     // Remove one stored template manifest record.
     pub fn remove(release: &TemplateReleaseKey) -> Option<TemplateManifestRecord> {
         TEMPLATE_MANIFESTS.with_borrow_mut(|map| {
-            let removed = map.remove(release);
+            let removed = map.remove(&TemplateReleaseKeyRecord(release.clone()));
             TEMPLATE_MANIFESTS_OCCUPIED_BYTES.with_borrow_mut(|occupied| {
                 if let (Some(current), Some(record)) = (occupied.as_mut(), removed.as_ref()) {
                     *current = current.saturating_sub(manifest_entry_size(release, record));
@@ -120,7 +125,7 @@ impl TemplateManifestStateStore {
             entries: map
                 .iter()
                 .map(|entry| TemplateManifestEntryRecord {
-                    release: entry.key().clone(),
+                    release: entry.key().0.clone(),
                     record: entry.value(),
                 })
                 .collect(),
@@ -145,7 +150,7 @@ impl TemplateManifestStateStore {
 
         let bytes = TEMPLATE_MANIFESTS.with_borrow(|map| {
             map.iter()
-                .map(|entry| manifest_entry_size(entry.key(), &entry.value()))
+                .map(|entry| manifest_entry_size(&entry.key().0, &entry.value()))
                 .sum()
         });
         TEMPLATE_MANIFESTS_OCCUPIED_BYTES.with_borrow_mut(|occupied| {
@@ -172,7 +177,7 @@ impl TemplateManifestStateStore {
 }
 
 fn manifest_entry_size(release: &TemplateReleaseKey, record: &TemplateManifestRecord) -> u64 {
-    (release.to_bytes().len() + record.to_bytes().len()) as u64
+    (TemplateReleaseKeyRecord(release.clone()).to_bytes().len() + record.to_bytes().len()) as u64
 }
 
 #[cfg(test)]

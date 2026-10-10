@@ -22,11 +22,6 @@ use crate::{
         },
         replay::OperationId,
     },
-    role_contract::allocation::memory::{
-        application_receipt::APPLICATION_RECEIPT_ELIGIBILITY_ID,
-        intent::{INTENT_RECEIPT_BACKED_RECORDS_ID, INTENT_TOTALS_ID},
-        placement::PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID,
-    },
     storage::stable::intent::{
         APPLICATION_RECEIPT_ELIGIBILITY_SCHEMA_VERSION, ApplicationReceiptEligibilityKeyRecord,
         ApplicationReceiptEligibilityRecord, ApplicationReceiptRetentionRecord,
@@ -86,9 +81,9 @@ where
 fn managed_placement_ascending_pages() -> (u64, u64, u64, u64) {
     let physical = VectorMemory::default();
     let manager = MemoryManager::init_with_bucket_size(physical.clone(), 16);
-    let primary_memory = manager.get(MemoryId::new(INTENT_RECEIPT_BACKED_RECORDS_ID));
-    let acknowledgement_memory = manager.get(MemoryId::new(PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID));
-    let totals_memory = manager.get(MemoryId::new(INTENT_TOTALS_ID));
+    let primary_memory = manager.get(MemoryId::new(1));
+    let acknowledgement_memory = manager.get(MemoryId::new(2));
+    let totals_memory = manager.get(MemoryId::new(3));
     let mut primary = StableBtreeMap::init(primary_memory.clone());
     let mut acknowledgements = StableBtreeMap::init(acknowledgement_memory.clone());
     let mut totals = StableBtreeMap::init(totals_memory.clone());
@@ -116,9 +111,9 @@ fn managed_application_ascending_pages_with_reservation(
 ) -> (u64, u64, u64, u64) {
     let physical = VectorMemory::default();
     let manager = MemoryManager::init_with_bucket_size(physical.clone(), 16);
-    let primary_memory = manager.get(MemoryId::new(INTENT_RECEIPT_BACKED_RECORDS_ID));
-    let eligibility_memory = manager.get(MemoryId::new(APPLICATION_RECEIPT_ELIGIBILITY_ID));
-    let totals_memory = manager.get(MemoryId::new(INTENT_TOTALS_ID));
+    let primary_memory = manager.get(MemoryId::new(1));
+    let eligibility_memory = manager.get(MemoryId::new(4));
+    let totals_memory = manager.get(MemoryId::new(3));
     let mut primary = StableBtreeMap::init(primary_memory.clone());
     let mut eligibility = StableBtreeMap::init(eligibility_memory.clone());
     let mut totals = StableBtreeMap::init(totals_memory.clone());

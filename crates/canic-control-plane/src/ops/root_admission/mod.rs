@@ -10,8 +10,7 @@ use crate::storage::stable::root_admission::{
     RootAdmissionReleasedReservationRecord, RootAdmissionRetainedResultRecord, RootAdmissionStore,
     RootAdmissionTransitionRecord,
 };
-use canic_core::{
-    control_plane_support::error::InternalError,
+use canic_contracts::{
     dto::{
         fleet_admission::{
             FleetAdmissionActivateRootRequest, FleetAdmissionOpenRootRequest,
@@ -27,6 +26,9 @@ use canic_core::{
         FleetAdmissionPolicy, FleetAdmissionProjection, FleetSubnetRootBinding,
         ManagedCanisterBinding,
     },
+};
+use canic_core::{
+    control_plane_support::error::InternalError,
     shared_support::{
         fleet_admission_policy::{
             expected_fleet_admission_target_receipt, fleet_admission_root_activate_request_digest,
@@ -52,6 +54,7 @@ use canic_core::{
 };
 
 /// One exact outbound target action selected from durable Root progress.
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RootAdmissionStep {
     Prepare {

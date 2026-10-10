@@ -2,15 +2,14 @@
 //!
 //! Responsibility: project shared artifact checksums into Canic manifests and validate them.
 //! Does not own: snapshot capture, artifact storage, or restore planning.
-//! Boundary: IC Backup owns no-follow traversal and private staging; Canic owns publication.
+//! Boundary: IC Backup owns no-follow traversal, staging and publication; Canic owns manifests.
 
 #[cfg(test)]
 mod tests;
 
-use std::{
-    io::{self, Read},
-    path::{Path, PathBuf},
-};
+use std::{io, path::Path};
+#[cfg(test)]
+use std::{io::Read, path::PathBuf};
 
 use ic_backup::{
     model::artifacts::ArtifactChecksumRecord,
@@ -59,6 +58,7 @@ impl ArtifactChecksum {
     }
 
     /// Compute a file checksum from an already-open artifact descriptor.
+    #[cfg(test)]
     pub(crate) fn from_reader(reader: &mut impl Read) -> Result<Self, ArtifactChecksumError> {
         artifacts::checksum_reader(reader)
             .map(Self::from_record)
@@ -80,6 +80,7 @@ impl ArtifactChecksum {
     }
 
     /// Compose the maintained directory checksum from relative file checksums.
+    #[cfg(test)]
     pub(crate) fn from_relative_file_checksums(
         files: Vec<(PathBuf, Self)>,
     ) -> Result<Self, ArtifactChecksumError> {

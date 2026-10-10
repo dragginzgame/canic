@@ -1,13 +1,10 @@
-use std::{fs, path::PathBuf, process::Command};
-
-use canic_core::ids::{BuildNetwork, RELEASE_BUILD_ID_ENV, ReleaseBuildId};
-
-use crate::icp::LocalReplicaTarget;
-
 use super::{
     CanisterBuildProfile,
     process::{icp_ancestor_process_id, parent_process_id},
 };
+use crate::icp::LocalReplicaTarget;
+use canic_contracts::ids::{BuildNetwork, RELEASE_BUILD_ID_ENV, ReleaseBuildId};
+use std::{fs, path::PathBuf, process::Command};
 
 /// Exact authority for one canister artifact build.
 ///

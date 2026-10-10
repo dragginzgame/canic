@@ -8,7 +8,7 @@ use crate::fleet_ensure::model::{
     CurrentFleetProtocolAction, EffectRecord, EffectState, EnsureAction,
     MAX_INDEPENDENT_EFFECTS_IN_FLIGHT,
 };
-use canic_control_plane::ids::{TemplateId, TemplateVersion};
+use canic_contracts::ids::{TemplateId, TemplateVersion};
 
 #[derive(Eq, PartialEq)]
 struct ChunkAuthority<'a> {

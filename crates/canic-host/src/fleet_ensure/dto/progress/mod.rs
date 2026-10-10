@@ -8,6 +8,7 @@ use crate::fleet_ensure::model::FleetEnsureSuccessorReviewReason;
 use serde::Serialize;
 
 /// Named phase currently being advanced or verified by Fleet Ensure.
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FleetEnsurePhase {
@@ -47,8 +48,8 @@ pub struct FleetProvisioningProgress {
     pub components: Vec<FleetComponentProgress>,
     /// Latest retryable Root failure from this observation, not a new retry decision.
     pub pending_root_failure:
-        Option<canic_core::dto::component_provisioning::FleetComponentProvisioningRootFailure>,
-    pub phase: canic_core::dto::component_provisioning::FleetComponentProvisioningPhase,
+        Option<canic_contracts::dto::component_provisioning::FleetComponentProvisioningRootFailure>,
+    pub phase: canic_contracts::dto::component_provisioning::FleetComponentProvisioningPhase,
     pub root_batch_count: u32,
     pub accepted_root_count: u32,
     pub provisioned_root_count: u32,

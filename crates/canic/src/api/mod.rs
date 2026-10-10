@@ -34,7 +34,7 @@ pub mod env {
 
 /// Canister lifecycle, placement, and topology
 pub mod canister {
-    pub use crate::__internal::core::ids::CanisterRole;
+    pub use crate::__internal::contracts::ids::CanisterRole;
 
     pub mod children {
         pub use crate::__internal::core::api::topology::children::CanisterChildrenApi;
@@ -66,8 +66,8 @@ pub mod canister {
         #[cfg(feature = "wasm-store-canister")]
         pub use canic_control_plane::api::template::WasmStoreCanisterApi;
         #[cfg(feature = "control-plane")]
-        pub use canic_control_plane::api::template::{
-            WasmStoreBootstrapApi, WasmStorePublicationApi,
+        pub use canic_control_plane::{
+            api::template::WasmStoreBootstrapApi, api::template::WasmStorePublicationApi,
         };
     }
 }

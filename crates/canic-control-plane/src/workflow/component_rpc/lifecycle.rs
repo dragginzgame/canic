@@ -4,7 +4,16 @@
 //! Does not own: endpoint admission, core replay receipts, or Component Registry mutation rules.
 //! Boundary: implements the core lifecycle driver with existing control-plane phase owners.
 
+use crate::workflow::component_registry;
 use async_trait::async_trait;
+use canic_contracts::{
+    dto::component_registry::{
+        RootComponentChildAllocationRequest, RootComponentSubtreeRemovalPhase,
+        RootComponentSubtreeRemovalRequest, RootComponentSubtreeRemovalResponse,
+        RootComponentSubtreeRemovalStatusRequest,
+    },
+    ids::{CanisterRole, ComponentChildBinding, ComponentInstanceId},
+};
 use canic_core::{
     control_plane_support::{
         error::InternalError,
@@ -14,16 +23,8 @@ use canic_core::{
             RootComponentChildRecycleOutcome, RootComponentChildRecycleRequest,
         },
     },
-    dto::component_registry::{
-        RootComponentChildAllocationRequest, RootComponentSubtreeRemovalPhase,
-        RootComponentSubtreeRemovalRequest, RootComponentSubtreeRemovalResponse,
-        RootComponentSubtreeRemovalStatusRequest,
-    },
-    ids::{CanisterRole, ComponentChildBinding, ComponentInstanceId},
     log::Topic,
 };
-
-use crate::workflow::component_registry;
 
 ///
 /// ComponentChildLifecycleExecutor

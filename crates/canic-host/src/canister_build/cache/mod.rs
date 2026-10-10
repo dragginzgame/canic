@@ -7,6 +7,7 @@
 #[cfg(test)]
 mod tests;
 
+use ic_host_fs::durable::lock_regular_file_with_parents;
 use std::{
     env,
     ffi::OsStr,
@@ -15,8 +16,6 @@ use std::{
     process::{Command, Output},
     time::{Duration, Instant},
 };
-
-use ic_host_fs::durable::lock_regular_file_with_parents;
 
 const DEFAULT_WASM_TARGET_RELATIVE: &str = "target/canic-wasm";
 const CANISTER_BUILD_LOCK_RELATIVE: &str = ".canic/locks/canister-artifact-build.lock";
@@ -136,7 +135,7 @@ pub fn configure_declaration_command(
     };
     command
         .env(canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV, "1")
-        .env_remove(canic_core::ids::RELEASE_BUILD_ID_ENV)
+        .env_remove(canic_contracts::ids::RELEASE_BUILD_ID_ENV)
         .env_remove(canic_core::role_contract::PROTOCOL_PROFILE_DIGEST_ENV)
         .env_remove(canic_core::role_contract::build_context::PROTOCOL_BUILD_CONTEXT_ENV)
         .env(format!("CARGO_PROFILE_{profile}_LTO"), "off")

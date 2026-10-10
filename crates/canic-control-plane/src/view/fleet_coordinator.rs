@@ -5,7 +5,7 @@
 //! Boundary: ops returns one exact current result or root call authority.
 
 use candid::Principal;
-use canic_core::dto::{
+use canic_contracts::dto::{
     component_provisioning::{
         FleetComponentProvisioningStatusResponse, RootComponentActivationRequest,
         RootComponentDirectorySynchronizationRequest, RootComponentProvisioningAcceptanceRequest,
@@ -19,6 +19,7 @@ use canic_core::dto::{
 };
 
 /// Exact next effect derived from the Coordinator-owned rotation operation.
+
 pub enum FleetFundingPolicyRotationStep {
     PrepareRoot {
         fleet_subnet_root: Principal,

@@ -1,10 +1,4 @@
 use super::*;
-use canic_core::ids::BuildNetwork;
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
-
 use crate::{
     canister_build::{
         ArtifactTransformKind, ArtifactTransformOutcome, ArtifactTransformOutput,
@@ -13,6 +7,11 @@ use crate::{
     },
     evidence_envelope::{CommandProvenanceV1, EvidenceTargetKindV1, PayloadSchemaRefV1},
     test_support::temp_dir,
+};
+use canic_contracts::ids::BuildNetwork;
+use std::{
+    fs,
+    path::{Path, PathBuf},
 };
 
 #[test]
@@ -97,7 +96,7 @@ fn artifact_provenance_records_wasm_and_gzip_separately() {
             package_name: "app-package".to_string(),
             package_version: "0.101.51".to_string(),
             protocol_release_identity: "0.101.51".to_string(),
-            protocol_role: canic_core::ids::CanisterRole::new("app"),
+            protocol_role: canic_contracts::ids::CanisterRole::new("app"),
             protocol_capabilities: std::collections::BTreeSet::new(),
             artifact_root,
             wasm_path,
@@ -363,7 +362,6 @@ kind = "canister"
 package = "{role}"
 
 
-
 [component_specs.default]
 component_role = "{role}"
 maximum_instances = 1
@@ -402,7 +400,7 @@ fn write_sample_artifacts(root: &Path, role: &str) -> CanisterArtifactBuildOutpu
         package_name: format!("canister_demo_{role}"),
         package_version: "0.101.51".to_string(),
         protocol_release_identity: "0.101.51".to_string(),
-        protocol_role: canic_core::ids::CanisterRole::owned(role.to_string()),
+        protocol_role: canic_contracts::ids::CanisterRole::owned(role.to_string()),
         protocol_capabilities: std::collections::BTreeSet::new(),
         artifact_root,
         wasm_path,

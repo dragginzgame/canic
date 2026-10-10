@@ -3,12 +3,11 @@
 //! Responsibility: define root-owned issuer policy and renewal state.
 //! Does not own: admission decisions, DTO conversion, or persisted record layout.
 
-use crate::{
-    cdk::types::Principal,
-    ids::{CanisterRole, FleetKey},
-};
+use crate::cdk::types::Principal;
+use canic_contracts::ids::{CanisterRole, FleetKey};
 
 /// Role and scopes admitted by one root issuer policy.
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootDelegatedRoleGrantPolicy {
     pub target: CanisterRole,

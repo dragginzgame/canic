@@ -39,13 +39,13 @@ fn descriptor_id_drift_is_blocking() {
         .iter_mut()
         .find(|descriptor| descriptor.allocation == StateAllocationKey::ShardingRegistry)
         .expect("sharding registry descriptor");
-    registry.state[0].memory_id = Some(61);
+    registry.state[0].memory_key = Some("canic.core.fleet_admission.projection.v1".to_string());
 
     assert!(matches!(
         validate_descriptors(descriptors),
         Err(errors) if errors.iter().any(|finding| matches!(
             finding,
-            RoleContractFinding::AllocationDescriptorIdMismatch {
+            RoleContractFinding::AllocationDescriptorKeyMismatch {
                 key: StateAllocationKey::ShardingRegistry,
                 ..
             }
@@ -56,7 +56,7 @@ fn descriptor_id_drift_is_blocking() {
 #[test]
 fn materialization_joins_only_selected_allocations() {
     let contract = ResolvedRoleContract {
-        role: canic_core::ids::CanisterRole::owned("shard".to_string()),
+        role: canic_contracts::ids::CanisterRole::owned("shard".to_string()),
         built_in: None,
         capabilities: BTreeSet::new(),
         required_features: BTreeSet::new(),
@@ -64,7 +64,7 @@ fn materialization_joins_only_selected_allocations() {
         allocations: vec![ResolvedStateAllocation {
             key: StateAllocationKey::ShardingRegistry,
             owner: AllocationOwner::CanicCore,
-            memory_ids: vec![MemoryId::new(52)],
+            memory_keys: vec!["canic.core.sharding.registry.v1".to_string()],
             selected_by: BTreeSet::from([SelectionProvenance::EffectiveFeature(
                 canic_core::role_contract::CanicFeatureKey::Sharding,
             )]),
@@ -97,7 +97,11 @@ fn wasm_store_materializes_template_and_gc_state() {
             ResolvedStateAllocation {
                 key,
                 owner: definition.owner,
-                memory_ids: definition.memory_ids.to_vec(),
+                memory_keys: definition
+                    .memory_keys
+                    .iter()
+                    .map(|key| key.to_string())
+                    .collect(),
                 selected_by: BTreeSet::from([SelectionProvenance::BuiltInRole(
                     BuiltInRoleKind::WasmStore,
                 )]),
@@ -105,7 +109,7 @@ fn wasm_store_materializes_template_and_gc_state() {
         })
         .collect();
     let contract = ResolvedRoleContract {
-        role: canic_core::ids::CanisterRole::WASM_STORE,
+        role: canic_contracts::ids::CanisterRole::WASM_STORE,
         built_in: Some(BuiltInRoleKind::WasmStore),
         capabilities: BTreeSet::new(),
         required_features: BTreeSet::new(),
@@ -117,11 +121,17 @@ fn wasm_store_materializes_template_and_gc_state() {
     let ids = manifest.roles[0]
         .state
         .iter()
-        .filter_map(|domain| domain.memory_id)
+        .filter_map(|domain| domain.memory_key.clone())
         .collect::<Vec<_>>();
     assert_eq!(ids.len(), 5);
-    for expected in [10, 11, 12, 13, 14] {
-        assert!(ids.contains(&expected));
+    for expected in [
+        "canic.control_plane.template.manifests.v1",
+        "canic.control_plane.template.chunk_sets.v1",
+        "canic.control_plane.template.chunk_refs.v1",
+        "canic.control_plane.template.chunk_payloads.v1",
+        "canic.control_plane.wasm_store.gc_state.v1",
+    ] {
+        assert!(ids.contains(&expected.to_string()));
     }
 }
 
@@ -132,7 +142,7 @@ fn fleet_coordinator_materializes_its_registry_and_funding_state() {
         StateAllocationKey::FleetCoordinatorRegistry,
     ];
     let contract = ResolvedRoleContract {
-        role: canic_core::ids::CanisterRole::FLEET_COORDINATOR,
+        role: canic_contracts::ids::CanisterRole::FLEET_COORDINATOR,
         built_in: Some(BuiltInRoleKind::FleetCoordinator),
         capabilities: BTreeSet::new(),
         required_features: BTreeSet::new(),
@@ -147,7 +157,11 @@ fn fleet_coordinator_materializes_its_registry_and_funding_state() {
                 ResolvedStateAllocation {
                     key,
                     owner: definition.owner,
-                    memory_ids: definition.memory_ids.to_vec(),
+                    memory_keys: definition
+                        .memory_keys
+                        .iter()
+                        .map(|key| key.to_string())
+                        .collect(),
                     selected_by: BTreeSet::from([SelectionProvenance::BuiltInRole(
                         BuiltInRoleKind::FleetCoordinator,
                     )]),
@@ -163,9 +177,12 @@ fn fleet_coordinator_materializes_its_registry_and_funding_state() {
         manifest.roles[0]
             .state
             .iter()
-            .filter_map(|domain| domain.memory_id)
+            .filter_map(|domain| domain.memory_key.clone())
             .collect::<BTreeSet<_>>(),
-        BTreeSet::from([15, 62])
+        BTreeSet::from([
+            "canic.control_plane.fleet_coordinator.registry.v1".to_string(),
+            "canic.control_plane.fleet_coordinator.funding.v1".to_string()
+        ])
     );
 }
 
@@ -177,7 +194,7 @@ fn root_materializes_its_independent_funding_journal() {
         .find(|definition| definition.key == key)
         .expect("Root funding definition");
     let contract = ResolvedRoleContract {
-        role: canic_core::ids::CanisterRole::ROOT,
+        role: canic_contracts::ids::CanisterRole::ROOT,
         built_in: None,
         capabilities: BTreeSet::new(),
         required_features: BTreeSet::new(),
@@ -185,7 +202,11 @@ fn root_materializes_its_independent_funding_journal() {
         allocations: vec![ResolvedStateAllocation {
             key,
             owner: definition.owner,
-            memory_ids: definition.memory_ids.to_vec(),
+            memory_keys: definition
+                .memory_keys
+                .iter()
+                .map(|key| key.to_string())
+                .collect(),
             selected_by: BTreeSet::from([SelectionProvenance::Capability(
                 canic_core::role_contract::RoleCapabilityKey::RootControlPlane,
             )]),
@@ -196,5 +217,8 @@ fn root_materializes_its_independent_funding_journal() {
     assert_eq!(manifest.roles.len(), 1);
     assert_eq!(manifest.roles[0].state.len(), 1);
     assert_eq!(manifest.roles[0].state[0].domain, "root_funding");
-    assert_eq!(manifest.roles[0].state[0].memory_id, Some(63));
+    assert_eq!(
+        manifest.roles[0].state[0].memory_key,
+        Some("canic.control_plane.root.funding.v1".to_string())
+    );
 }

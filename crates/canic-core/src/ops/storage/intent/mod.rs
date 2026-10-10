@@ -40,8 +40,7 @@ use crate::{
         ApplicationReceiptReclamationBatch, PlacementAcknowledgementPage, ReceiptCapacityView,
     },
 };
-use std::collections::BTreeMap;
-use std::ops::Bound;
+use std::{collections::BTreeMap, ops::Bound};
 use thiserror::Error as ThisError;
 
 pub const INTENT_RESOURCE_TOTAL_RECORD_LIMIT: u64 = 1_000;

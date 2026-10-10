@@ -6,7 +6,6 @@
 
 mod batch_id;
 mod install;
-mod merkle;
 mod selection;
 mod signing;
 
@@ -18,8 +17,8 @@ use crate::{
     InternalError,
     cdk::types::Principal,
     dto::auth::{
-        ChainKeyBatchHeaderV1, ChainKeyDelegationCertV1, IssuerProofAlgorithm, IssuerProofBinding,
-        RootDelegationProofBatchProof,
+        ChainKeyBatchHeaderV1, ChainKeyDelegationCertV1, DelegationCert, IssuerProofAlgorithm,
+        IssuerProofBinding, RootDelegationProofBatchProof,
     },
     model::auth::RootIssuerRenewalTemplate,
     ops::{
@@ -42,29 +41,51 @@ use crate::{
     },
 };
 use batch_id::{ChainKeyBatchIdInput, chain_key_batch_id};
+use ic_auth::chain_key_batch::merkle_root_and_witnesses;
 use install::signed_chain_key_delegation_proof_for_issuer as find_signed_chain_key_delegation_proof_for_issuer;
 #[cfg(test)]
 use install::start_chain_key_root_delegation_batch_install;
-pub(in crate::ops::auth) use install::{
-    record_chain_key_root_delegation_install_failure,
-    record_chain_key_root_delegation_install_success,
-    start_next_chain_key_root_delegation_batch_install,
-};
-use merkle::{ChainKeyBatchLeaf, merkle_root_and_witnesses, reject_duplicate_chain_key_issuers};
 use selection::{
     DueChainKeyTemplate, cap_due_chain_key_templates,
     chain_key_root_delegation_batch_quota_exceeded, due_chain_key_templates,
     enabled_template_count, pending_chain_key_root_delegation_batch_count,
 };
+use std::cmp::Ordering;
+
+pub(in crate::ops::auth) use install::{
+    record_chain_key_root_delegation_install_failure,
+    record_chain_key_root_delegation_install_success,
+    start_next_chain_key_root_delegation_batch_install,
+};
+
 pub(in crate::ops::auth) use signing::{
     sign_chain_key_root_delegation_batch, sign_next_chain_key_root_delegation_batch,
 };
-use std::cmp::Ordering;
 
 const CHAIN_KEY_BATCH_SCHEMA_VERSION_V1: u16 = 1;
 const MAX_CHAIN_KEY_ROOT_DELEGATION_BATCH_ISSUERS: usize = 64;
 const MAX_PENDING_CHAIN_KEY_ROOT_DELEGATION_BATCHES: usize = 128;
 const CHAIN_KEY_SIGNING_RETRY_BACKOFF_NS: u64 = 60_000_000_000;
+
+/// Authorized issuer certificate and its canonical batch leaf material.
+struct ChainKeyBatchLeaf {
+    delegation_cert: DelegationCert,
+    chain_key_delegation_cert: ChainKeyDelegationCertV1,
+    cert_hash: [u8; 32],
+    leaf_hash: [u8; 32],
+    refresh_after_ns: u64,
+}
+
+fn reject_duplicate_chain_key_issuers(leaves: &[ChainKeyBatchLeaf]) -> Result<(), InternalError> {
+    let mut previous: Option<Principal> = None;
+    for leaf in leaves {
+        if previous.is_some_and(|issuer| issuer == leaf.delegation_cert.issuer_pid) {
+            return Err(InternalError::invalid_input());
+        }
+        previous = Some(leaf.delegation_cert.issuer_pid);
+    }
+    Ok(())
+}
 
 fn oldest_chain_key_batch_order(
     left: &ChainKeyRootDelegationBatch,
@@ -437,7 +458,9 @@ fn build_chain_key_root_delegation_batch(
     reject_duplicate_chain_key_issuers(&leaves)?;
 
     let leaf_hashes = leaves.iter().map(|leaf| leaf.leaf_hash).collect::<Vec<_>>();
-    let (tree_root, witnesses) = merkle_root_and_witnesses(&leaf_hashes)?;
+    let (tree_root, witnesses) =
+        merkle_root_and_witnesses(&leaf_hashes, MAX_CHAIN_KEY_ROOT_DELEGATION_BATCH_ISSUERS)
+            .map_err(|_| InternalError::invalid_input())?;
     let derivation_path_hash =
         chain_key_derivation_path_hash(&plan.signing_policy.derivation_path)?;
     let batch_id = chain_key_batch_id(ChainKeyBatchIdInput {

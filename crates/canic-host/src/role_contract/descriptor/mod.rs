@@ -7,7 +7,7 @@
 use canic_control_plane::state_contract::canic_control_plane_state_descriptors;
 use canic_core::{
     role_contract::{
-        MemoryId, ResolvedRoleContract, RoleContractFinding, StateAllocationKey,
+        ResolvedRoleContract, RoleContractFinding, StateAllocationKey,
         allocation::{allocation_definitions, validate_canonical_allocations},
     },
     state_contract::{
@@ -76,10 +76,10 @@ fn validate_descriptors(
             });
         }
 
-        let expected = sorted_ids(definition.memory_ids.iter().copied());
-        let actual = descriptor_active_ids(descriptor);
+        let expected = sorted_keys(definition.memory_keys.iter().map(ToString::to_string));
+        let actual = descriptor_active_keys(descriptor);
         if actual != expected {
-            errors.push(RoleContractFinding::AllocationDescriptorIdMismatch {
+            errors.push(RoleContractFinding::AllocationDescriptorKeyMismatch {
                 key: definition.key,
                 expected,
                 actual,
@@ -108,23 +108,22 @@ fn validate_descriptors(
     }
 }
 
-fn descriptor_active_ids(descriptor: &StateAllocationDescriptor) -> Vec<MemoryId> {
-    sorted_ids(
+fn descriptor_active_keys(descriptor: &StateAllocationDescriptor) -> Vec<String> {
+    sorted_keys(
         descriptor
             .state
             .iter()
-            .filter_map(|domain| domain.memory_id)
+            .filter_map(|domain| domain.memory_key.clone())
             .chain(
                 descriptor
                     .reserved_memory
                     .iter()
-                    .map(|reservation| reservation.memory_id),
-            )
-            .map(MemoryId::new),
+                    .map(|reservation| reservation.memory_key.clone()),
+            ),
     )
 }
 
-fn sorted_ids(ids: impl IntoIterator<Item = MemoryId>) -> Vec<MemoryId> {
+fn sorted_keys(ids: impl IntoIterator<Item = String>) -> Vec<String> {
     let mut ids = ids.into_iter().collect::<Vec<_>>();
     ids.sort_unstable();
     ids
@@ -198,7 +197,7 @@ fn materialize_role(
     }
 
     state.sort_by(|left, right| left.domain.cmp(&right.domain));
-    reserved_memory.sort_by_key(|reservation| reservation.memory_id);
+    reserved_memory.sort_by_key(|reservation| reservation.memory_key.clone());
     Ok(StateRoleManifest {
         canister_role: contract.role.as_str().to_string(),
         state,

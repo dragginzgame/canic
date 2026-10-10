@@ -4,20 +4,16 @@
 //! Does not own: participant discovery, transition decisions, calls, timers, or status.
 //! Boundary: Root admission ops convert complete model state to and from memory ID 65.
 
+use canic_contracts::ids::{
+    FleetAdmissionPolicy, FleetCoordinatorBinding, FleetSubnetRootBinding, ManagedCanisterBinding,
+};
 use canic_core::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
-    ids::{
-        FleetAdmissionPolicy, FleetCoordinatorBinding, FleetSubnetRootBinding,
-        ManagedCanisterBinding,
-    },
     impl_storable_bounded,
-    role_contract::allocation::memory::control_plane::ROOT_ADMISSION_ID,
     shared_support::fleet_admission_root::MAX_FLEET_ADMISSION_ROOT_RECORD_BYTES,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
-
-struct RootAdmissionState;
 
 std::thread_local! {
     static ROOT_ADMISSION_STATE:
@@ -25,10 +21,7 @@ std::thread_local! {
         RefCell::new(Cell::init(
             canic_core::ic_memory_key!(
                 authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-                key = "canic.control_plane.root.admission.v1",
-                ty = RootAdmissionState,
-                id = ROOT_ADMISSION_ID
-            ),
+                key = "canic.control_plane.root.admission.v1"),
             RootAdmissionStateRecord::default(),
         ));
 }
@@ -222,14 +215,17 @@ impl RootAdmissionStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use canic_core::{
-        cdk::{structures::storable::Storable, types::Cycles},
+    use canic_contracts::{
+        cycles::Cycles,
         ids::{
             AppId, CanisterRole, CanonicalNetworkId, ComponentBinding, ComponentInstanceId,
             ComponentSpecAdmission, ComponentSpecId, ComponentTopologyDigest, CyclesFundingBudget,
             FleetAdmissionRule, FleetAdmissionSelector, FleetBinding, FleetId, FleetKey,
             FleetRegistryAuthority, FleetSubnetCanisterPoolConfig, FleetSubnetRootLimits, SubnetId,
         },
+    };
+    use canic_core::{
+        cdk::structures::storable::Storable,
         shared_support::fleet_admission_policy::compile_installed_fleet_admission_policy,
     };
 

@@ -7,40 +7,39 @@
 use crate::{
     dto::fleet_coordinator::{
         CoordinatorCommand, CoordinatorCommandResponse, CoordinatorOperationStatusResponse,
-        FleetCoordinatorInitArgs,
     },
+    installation::FleetCoordinatorInitArgs,
     workflow::fleet_coordinator::FleetCoordinatorWorkflow,
 };
-use canic_core::{
-    api::runtime::MemoryRuntimeApi,
-    control_plane_support::ops::runtime::env::EnvOps,
-    dto::{
-        component_provisioning::{
-            FleetComponentProvisioningAdvanceRequest, FleetComponentProvisioningPrepareRequest,
-            FleetComponentProvisioningStatusRequest, FleetComponentProvisioningStatusResponse,
-        },
-        error::Error,
-        fleet_admission::{
-            FleetAdmissionMutationRequest, FleetAdmissionMutationResponse,
-            FleetAdmissionStatusRequest, FleetAdmissionStatusResponse,
-        },
-        fleet_funding::{
-            FleetFundingPolicyRotationApplyRequest, FleetFundingPolicyRotationBeginRequest,
-            FleetFundingPolicyRotationStageRootRequest, FleetRootFundingRequest,
-            FleetRootFundingResponse,
-        },
-        fleet_registry::{
-            FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
-            FleetRegistryManifest, FleetRegistryVersion, FleetSubnetRootDeletionCompletionRequest,
-            FleetSubnetRootDeletionExecutionRequest, FleetSubnetRootDeletionExecutionResponse,
-            FleetSubnetRootDeletionResponse, FleetSubnetRootDeletionStatusRequest,
-            FleetSubnetRootDrainingReservationRequest, FleetSubnetRootDrainingReservationResponse,
-            FleetSubnetRootDrainingReservationStatusRequest, FleetSubnetRootJoinRequest,
-            FleetSubnetRootJoinResponse, FleetSubnetRootSnapshotAcknowledgement,
-            FleetSubnetRootSnapshotAcknowledgementRequest,
-        },
-        state::{SetCyclesFundingRequest, SetStateResponse},
+use canic_contracts::dto::{
+    component_provisioning::{
+        FleetComponentProvisioningAdvanceRequest, FleetComponentProvisioningPrepareRequest,
+        FleetComponentProvisioningStatusRequest, FleetComponentProvisioningStatusResponse,
     },
+    error::Error,
+    fleet_admission::{
+        FleetAdmissionMutationRequest, FleetAdmissionMutationResponse, FleetAdmissionStatusRequest,
+        FleetAdmissionStatusResponse,
+    },
+    fleet_funding::{
+        FleetFundingPolicyRotationApplyRequest, FleetFundingPolicyRotationBeginRequest,
+        FleetFundingPolicyRotationStageRootRequest, FleetRootFundingRequest,
+        FleetRootFundingResponse,
+    },
+    fleet_registry::{
+        FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
+        FleetRegistryManifest, FleetRegistryVersion, FleetSubnetRootDeletionCompletionRequest,
+        FleetSubnetRootDeletionExecutionRequest, FleetSubnetRootDeletionExecutionResponse,
+        FleetSubnetRootDeletionResponse, FleetSubnetRootDeletionStatusRequest,
+        FleetSubnetRootDrainingReservationRequest, FleetSubnetRootDrainingReservationResponse,
+        FleetSubnetRootDrainingReservationStatusRequest, FleetSubnetRootJoinRequest,
+        FleetSubnetRootJoinResponse, FleetSubnetRootSnapshotAcknowledgement,
+        FleetSubnetRootSnapshotAcknowledgementRequest,
+    },
+    state::{SetCyclesFundingRequest, SetStateResponse},
+};
+use canic_core::{
+    api::runtime::MemoryRuntimeApi, control_plane_support::ops::runtime::env::EnvOps,
 };
 use ic_cdk::api::{canister_self, is_controller, msg_caller};
 
@@ -198,7 +197,7 @@ impl FleetCoordinatorApi {
 
     pub fn begin_funding_policy_rotation(
         request: FleetFundingPolicyRotationBeginRequest,
-    ) -> Result<canic_core::dto::role::OperationReceipt, Error> {
+    ) -> Result<canic_contracts::dto::role::OperationReceipt, Error> {
         FleetCoordinatorWorkflow::begin_funding_policy_rotation(request).map_err(Into::into)
     }
 
@@ -216,13 +215,13 @@ impl FleetCoordinatorApi {
 
     pub fn stage_funding_policy_rotation_root(
         request: FleetFundingPolicyRotationStageRootRequest,
-    ) -> Result<canic_core::dto::role::OperationReceipt, Error> {
+    ) -> Result<canic_contracts::dto::role::OperationReceipt, Error> {
         FleetCoordinatorWorkflow::stage_funding_policy_rotation_root(request).map_err(Into::into)
     }
 
     pub fn apply_funding_policy_rotation(
         request: FleetFundingPolicyRotationApplyRequest,
-    ) -> Result<canic_core::dto::role::OperationReceipt, Error> {
+    ) -> Result<canic_contracts::dto::role::OperationReceipt, Error> {
         FleetCoordinatorWorkflow::apply_funding_policy_rotation(request).map_err(Into::into)
     }
 

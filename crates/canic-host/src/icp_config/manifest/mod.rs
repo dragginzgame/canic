@@ -4,7 +4,7 @@
 //! fetching dependencies, or executing build/sync instructions.
 
 use crate::icp_config::DEFAULT_LOCAL_GATEWAY_PORT;
-use canic_core::ids::BuildNetwork;
+use canic_contracts::ids::BuildNetwork;
 use serde::{Deserialize, de::IgnoredAny};
 use std::collections::{BTreeMap, BTreeSet};
 

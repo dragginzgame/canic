@@ -16,12 +16,12 @@ use crate::{
     cdk::{types::Principal, utils::hash::decode_hex},
     config::schema::DelegatedTokenConfig,
     dto::auth::{ChainKeyAlgorithm, ChainKeyBatchHeaderV1, ChainKeyKeyId, ChainKeyRootSignatureV1},
-    ids::BuildNetwork,
     ops::{
         auth::AuthValidationError,
         ic::mgmt::{EcdsaKeyId, MgmtOps, SignWithEcdsaArgs, SignWithEcdsaResult},
     },
 };
+use canic_contracts::ids::BuildNetwork;
 #[cfg(any(feature = "auth-chain-key-ecdsa", test))]
 use k256::ecdsa::Signature as K256EcdsaSignature;
 use std::{future::Future, pin::Pin};

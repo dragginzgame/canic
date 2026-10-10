@@ -9,8 +9,8 @@ use crate::{
         ops::{
             EnsurePaths,
             capacity_import::{
-                funding,
-                journal::{self, CapacityImportJournalError, CapacityImportJournalStore},
+                funding, journal,
+                journal::{CapacityImportJournalError, CapacityImportJournalStore},
                 observation::{CapacityImportObserver, PreparedCapacityImportObservation},
                 publication, reservation_evidence,
                 transport::{CapacityImportTransport, HandoffOutcome},
@@ -20,7 +20,7 @@ use crate::{
     },
     icp::IcpCli,
 };
-use canic_core::dto::pool_import::PoolImportIdentity;
+use canic_contracts::dto::pool_import::PoolImportIdentity;
 use std::time::Duration;
 
 /// Apply one exact operator review under the held Fleet lock, preserving every issued request.

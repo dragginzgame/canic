@@ -19,7 +19,6 @@ use crate::{
         ChainKeyRootDelegationBatch, ChainKeyRootDelegationBatchIssuer, RootDelegationStateOps,
     },
 };
-
 use view::{root_issuer_renewal_batch_view, root_issuer_renewal_state_view};
 
 pub(in crate::ops::auth::delegation) use identity::renewal_template_fingerprint;

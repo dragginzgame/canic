@@ -4,17 +4,17 @@
 //! Does not own: graph compilation, deployments, placement, purpose, or runtime state.
 //! Boundary: TOML input is decoded into bounded identifier-keyed maps before compilation.
 
-use crate::{
-    config::{
-        ComponentDeploymentLabelKey, ComponentDeploymentLabelValue, FleetServiceMemberPurpose,
-    },
-    ids::{ComponentGroupMemberId, ComponentGroupSpecId, ComponentSpecId, FleetServiceId},
+use crate::config::{
+    ComponentDeploymentLabelKey, ComponentDeploymentLabelValue, FleetServiceMemberPurpose,
 };
+use canic_contracts::ids::{
+    ComponentGroupMemberId, ComponentGroupSpecId, ComponentSpecId, FleetServiceId,
+};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-use serde::{Deserialize, Serialize};
-
 /// Reusable configuration-only composition of Components and included groups.
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ComponentGroupSpecConfig {

@@ -8,7 +8,6 @@ use crate::{
     InternalError, VERSION,
     domain::policy::pure::env::{EnvInput, EnvPolicyError, validate_or_default},
     dto::{fleet_activation::FleetActivationPhase, fleet_subnet_root::FleetSubnetRootInitArgs},
-    ids::CanisterRole,
     log::Topic,
     ops::{
         config::{ConfigOps, RootConfigOps},
@@ -24,6 +23,7 @@ use crate::{
         require_no_resumable_refill_for_upgrade,
     },
 };
+use canic_contracts::ids::CanisterRole;
 
 ///
 /// init_root_canister

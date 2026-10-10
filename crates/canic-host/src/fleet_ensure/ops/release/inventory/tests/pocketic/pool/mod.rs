@@ -3,14 +3,14 @@
 mod multiple;
 
 use super::*;
-use crate::fleet_ensure::ops::release::{observation::ReleaseObservationError, pool};
 use crate::fleet_ensure::{
+    ops::release::{observation::ReleaseObservationError, pool},
     view::release::pool::{
         FleetReleasePoolAssessment, ReleasePoolCreationDisposition, ReleasePoolImportDisposition,
     },
     workflow::release::assess_pools,
 };
-use canic_control_plane::dto::root::RootPoolReleaseResponse;
+use canic_contracts::dto::root::RootPoolReleaseResponse;
 use ic_testkit::pocket_ic::PocketIc;
 
 pub(super) fn assert_census(

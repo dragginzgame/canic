@@ -4,11 +4,12 @@
 //! Does not own: DTO conversion, hashing, stable access, calls, timers, or Fleet policy choice.
 //! Boundary: ops supplies exact digests and workflow commits only validated replacements.
 
-use crate::ids::{
+use canic_contracts::ids::{
     FleetAdmissionPolicy, FleetCoordinatorBinding, FleetSubnetRootBinding, ManagedCanisterBinding,
 };
 
 /// Current schema for the sole Root admission-distribution journal.
+
 pub const FLEET_ADMISSION_ROOT_SCHEMA_VERSION: u16 = 1;
 /// Maximum encoded Root journal admitted to memory ID 65.
 pub const MAX_FLEET_ADMISSION_ROOT_RECORD_BYTES: u32 = 8 * 1024 * 1024;

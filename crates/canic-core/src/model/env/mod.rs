@@ -3,10 +3,8 @@
 //! Responsibility: own authoritative initialized environment values.
 //! Does not own: environment admission, stable record conversion, or storage access.
 
-use crate::{
-    domain::value::Principal,
-    ids::{CanisterRole, ComponentSpecId, ManagedCanisterBinding},
-};
+use crate::domain::value::Principal;
+use canic_contracts::ids::{CanisterRole, ComponentSpecId, ManagedCanisterBinding};
 
 ///
 /// ValidatedEnv

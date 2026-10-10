@@ -29,8 +29,8 @@ mod tests {
             component_allocation::ComponentAllocationPolicyError,
             component_child_allocation::ComponentChildAllocationPolicyError,
         },
-        ids::CanisterRole,
     };
+    use canic_contracts::ids::CanisterRole;
 
     #[test]
     fn internal_error_mapping_uses_registered_semantic_causes() {

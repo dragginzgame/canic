@@ -12,50 +12,15 @@ use canic::dto::{
         SetCyclesFundingRequest, SetFleetStatusRequest,
     },
 };
-use canic_control_plane::dto::template::{WasmStoreGcRequest, WasmStoreGcTarget};
-
-#[derive(CandidType)]
-enum StateCommand {
-    MaintainPool,
-    SetCyclesFunding(SetCyclesFundingRequest),
-    SetFleetStatus(SetFleetStatusRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum StateResponse {
-    SetCyclesFunding(FleetStateCommandResult<bool>),
-    SetFleetStatus(FleetStateCommandResult<FleetStatus>),
-}
-
-#[derive(CandidType)]
-enum StateQuery {
-    FleetState,
-}
-
-#[derive(CandidType, Deserialize)]
-enum StateQueryResponse {
-    FleetState(FleetStateResponse),
-}
-
-#[derive(CandidType)]
-enum SnapshotCommand {
-    SynchronizeState(StateSnapshotInput),
-}
-
-#[derive(CandidType, Deserialize)]
-enum SnapshotResponse {
-    SynchronizeState(StateCascadeReport),
-}
-
-#[derive(CandidType)]
-enum ManagedAdminCommand {
-    OpenFleetAdmission(canic::dto::fleet_admission::FleetAdmissionOpenTargetRequest),
-}
-
-#[derive(CandidType)]
-enum StoreAdminCommand {
-    RunGc(WasmStoreGcRequest),
-}
+use canic_contracts::dto::template::{WasmStoreGcRequest, WasmStoreGcTarget};
+use canic_contracts::dto::wire::projection::cascade::ComponentCommandResponseFragment as SnapshotResponse;
+use canic_contracts::dto::wire::projection::fixture_baseline_state_cascade::ManagedAdminCommand;
+use canic_contracts::dto::wire::projection::fixture_baseline_state_cascade::SnapshotCommand;
+use canic_contracts::dto::wire::projection::fixture_baseline_state_cascade::StateCommand;
+use canic_contracts::dto::wire::projection::fixture_baseline_state_cascade::StateQuery;
+use canic_contracts::dto::wire::projection::fixture_baseline_state_cascade::StateQueryResponse;
+use canic_contracts::dto::wire::projection::fixture_baseline_state_cascade::StateResponse;
+use canic_contracts::dto::wire::projection::fixture_baseline_state_cascade::StoreAdminCommand;
 
 #[test]
 pub(super) fn live_state_cascade_preserves_partial_outcomes_and_retry() {
@@ -94,7 +59,7 @@ pub(super) fn live_state_cascade_preserves_partial_outcomes_and_retry() {
             outsider,
             StateCommand::SetCyclesFunding(SetCyclesFundingRequest { enabled: false }),
         ),
-        canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code(),
+        canic_contracts::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code(),
     );
     for (target, caller, method) in [
         (shard, root, canic::protocol::CANIC_COMMAND),
@@ -113,7 +78,7 @@ pub(super) fn live_state_cascade_preserves_partial_outcomes_and_retry() {
         );
         assert_error(
             response,
-            canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code(),
+            canic_contracts::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code(),
         );
     }
 
@@ -184,8 +149,8 @@ fn assert_mode_recovery(
         assert_eq!(response.change.current, status);
         assert_complete(&response.propagation, expected);
         let code = match status {
-            FleetStatus::Readonly => canic_core::diagnostics::codes::AUTHORITY_INVALID_STATE,
-            FleetStatus::Stopped => canic_core::diagnostics::codes::AUTHORITY_INACTIVE,
+            FleetStatus::Readonly => canic_contracts::diagnostics::codes::AUTHORITY_INVALID_STATE,
+            FleetStatus::Stopped => canic_contracts::diagnostics::codes::AUTHORITY_INACTIVE,
             FleetStatus::Active => continue,
         }
         .raw_code();
@@ -225,7 +190,7 @@ fn assert_mode_recovery(
     }
 }
 
-fn assert_error<T>(response: Result<T, Error>, code: canic_core::diagnostics::DiagnosticCode) {
+fn assert_error<T>(response: Result<T, Error>, code: canic_contracts::diagnostics::DiagnosticCode) {
     assert_eq!(
         response.err().expect("typed command rejection").code(),
         code

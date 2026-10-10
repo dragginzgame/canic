@@ -18,8 +18,8 @@ use crate::{
         },
         state::FleetStateInput,
     },
-    ids::{FleetBinding, FleetKey},
 };
+use canic_contracts::ids::{FleetBinding, FleetKey};
 use ciborium::value::Value;
 use sha2::{Digest, Sha256};
 
@@ -340,7 +340,9 @@ fn canonical_error(_message: impl Into<String>) -> InternalError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ids::{AppId, CanonicalNetworkId, FleetId, ReleaseBuildId, ReleaseBuildNonce};
+    use canic_contracts::ids::{
+        AppId, CanonicalNetworkId, FleetId, ReleaseBuildId, ReleaseBuildNonce,
+    };
 
     fn identity() -> FleetActivationIdentity {
         FleetActivationIdentity {

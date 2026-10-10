@@ -3,7 +3,7 @@
 //! No credentials, controller lists or Fleet mutation authority belong in these records.
 
 use candid::Principal;
-use canic_core::ids::{CanisterRole, CanonicalNetworkId};
+use canic_contracts::ids::{CanisterRole, CanonicalNetworkId};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 

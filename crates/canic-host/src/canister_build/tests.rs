@@ -1,7 +1,6 @@
 use super::{WorkspaceBuildContext, parse_parent_process_id, remove_stale_icp_candid_sidecars};
-use crate::canister_build::model::CanisterArtifactSource;
-use crate::test_support::temp_dir;
-use canic_core::ids::BuildNetwork;
+use crate::{canister_build::model::CanisterArtifactSource, test_support::temp_dir};
+use canic_contracts::ids::BuildNetwork;
 use std::fs;
 
 #[test]
@@ -76,8 +75,8 @@ fn build_context_distinguishes_environment_from_build_network() {
 
 #[test]
 fn release_build_artifacts_use_one_immutable_identity_namespace() {
-    let release_build_id = canic_core::ids::ReleaseBuildId::from_nonce(
-        canic_core::ids::ReleaseBuildNonce::from_random_bytes([9; 32]),
+    let release_build_id = canic_contracts::ids::ReleaseBuildId::from_nonce(
+        canic_contracts::ids::ReleaseBuildNonce::from_random_bytes([9; 32]),
     );
     let context = WorkspaceBuildContext {
         role: "root".to_string(),
@@ -137,8 +136,8 @@ fn build_context_applies_exact_child_build_network() {
         config_path: "/workspace/apps/demo/canic.toml".into(),
         local_replica: None,
         refresh_canonical_infrastructure_did: false,
-        release_build_id: Some(canic_core::ids::ReleaseBuildId::from_nonce(
-            canic_core::ids::ReleaseBuildNonce::from_random_bytes([7; 32]),
+        release_build_id: Some(canic_contracts::ids::ReleaseBuildId::from_nonce(
+            canic_contracts::ids::ReleaseBuildNonce::from_random_bytes([7; 32]),
         )),
     };
     let mut command = std::process::Command::new("cargo");
@@ -176,7 +175,9 @@ fn build_context_applies_exact_child_build_network() {
     );
     assert_eq!(
         environment
-            .get(std::ffi::OsStr::new(canic_core::ids::RELEASE_BUILD_ID_ENV,))
+            .get(std::ffi::OsStr::new(
+                canic_contracts::ids::RELEASE_BUILD_ID_ENV,
+            ))
             .copied(),
         None
     );
@@ -196,11 +197,11 @@ fn changing_release_identity_preserves_cargo_environment_and_changes_artifact_de
         refresh_canonical_infrastructure_did: false,
         release_build_id: None,
     };
-    let first = context.with_release_build_id(canic_core::ids::ReleaseBuildId::from_nonce(
-        canic_core::ids::ReleaseBuildNonce::from_random_bytes([1; 32]),
+    let first = context.with_release_build_id(canic_contracts::ids::ReleaseBuildId::from_nonce(
+        canic_contracts::ids::ReleaseBuildNonce::from_random_bytes([1; 32]),
     ));
-    let second = context.with_release_build_id(canic_core::ids::ReleaseBuildId::from_nonce(
-        canic_core::ids::ReleaseBuildNonce::from_random_bytes([2; 32]),
+    let second = context.with_release_build_id(canic_contracts::ids::ReleaseBuildId::from_nonce(
+        canic_contracts::ids::ReleaseBuildNonce::from_random_bytes([2; 32]),
     ));
     let mut first_command = std::process::Command::new("cargo");
     let mut second_command = std::process::Command::new("cargo");
@@ -228,15 +229,13 @@ fn unqualified_build_context_removes_an_ambient_release_build_id() {
         release_build_id: None,
     };
     let mut command = std::process::Command::new("cargo");
-    command.env(canic_core::ids::RELEASE_BUILD_ID_ENV, "ambient");
+    command.env(canic_contracts::ids::RELEASE_BUILD_ID_ENV, "ambient");
 
     context.apply_to_command(&mut command);
 
-    assert!(
-        command.get_envs().any(|(key, value)| {
-            key == canic_core::ids::RELEASE_BUILD_ID_ENV && value.is_none()
-        })
-    );
+    assert!(command.get_envs().any(|(key, value)| {
+        key == canic_contracts::ids::RELEASE_BUILD_ID_ENV && value.is_none()
+    }));
 }
 
 #[test]

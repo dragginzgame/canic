@@ -12,7 +12,7 @@ use crate::fleet_ensure::{
     policy::operator_mint::operator_source,
     workflow::{EnsureWorkflowError, ordered_actions},
 };
-use canic_core::cdk::types::Cycles;
+use canic_contracts::cycles::Cycles;
 
 pub(super) fn applicable(plan: &FleetEnsurePlan, journal: &FleetEnsureJournalRecord) -> bool {
     let Some(effect) = journal.effects.first() else {

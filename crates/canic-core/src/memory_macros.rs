@@ -16,27 +16,32 @@ macro_rules! ic_memory_key {
     (authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, $($rest:tt)*) => {
         $crate::ic_memory_key!(authority = $crate::memory::CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, $($rest)*)
     };
-    (authority = $authority:expr, key = $stable_key:literal, ty = $label:path, id = $id:expr $(,)?) => {{
-        $crate::__reexports::ic_memory::ic_memory_declaration!(
-            authority = $authority, key = $stable_key, ty = $label, id = $id,
-        );
-        $crate::memory::runtime::assert_memory_bootstrap_ready(stringify!($label), $id);
-        $crate::__reexports::ic_memory::open_default_memory_manager_memory($stable_key, $id)
-            .expect("Canic failed to open committed stable memory; bootstrap must run first and the stable key/id must match the committed declaration")
+    (authority = $authority:expr, key = $stable_key:literal $(,)?) => {{
+        $crate::__reexports::ic_memory::ic_memory_declaration!(authority = $authority, key = $stable_key);
+        $crate::memory::runtime::assert_memory_bootstrap_ready($stable_key);
+        $crate::__reexports::ic_memory::open_default_memory_manager_memory($stable_key)
+            .expect("ic-memory committed key binding must exist before opening stable memory")
     }};
 }
 
-/// Declare a MemoryManager ID range owned by an explicit authority.
+/// Select the final host pool, including framework grants.
+///
+/// Additional grants
+/// must name each linked component's permanent namespace. Exclusions protect
+/// actual unmanaged physical memory, never component partitions.
 #[macro_export]
-macro_rules! ic_memory_range {
-    (authority = CANIC_CORE_MEMORY_AUTHORITY, $($rest:tt)*) => {
-        $crate::ic_memory_range!(authority = $crate::memory::CANIC_CORE_MEMORY_AUTHORITY, $($rest)*);
-    };
-    (authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, $($rest:tt)*) => {
-        $crate::ic_memory_range!(authority = $crate::memory::CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, $($rest)*);
-    };
-    (authority = $authority:expr, $($rest:tt)*) => {
-        $crate::__reexports::ic_memory::ic_memory_range!(authority = $authority, $($rest)*);
+macro_rules! memory_allocation_pool {
+    (authorities = [$(($owner:expr, $prefix:expr)),* $(,)?], exclusions = [$(($start:expr, $end:expr)),* $(,)?] $(,)?) => {
+        const _: () = {
+            #[$crate::__reexports::ctor::ctor(unsafe, anonymous, crate_path = $crate::__reexports::ctor)]
+            fn __canic_register_memory_pool() {
+                let pool = $crate::memory::pool::framework_pool(
+                    vec![$($crate::__reexports::ic_memory::MemoryAuthority::new($owner, $prefix).expect("valid host memory grant")),*],
+                    vec![$($crate::__reexports::ic_memory::MemoryManagerIdRange::new($start, $end).expect("valid unmanaged exclusion")),*],
+                ).expect("disjoint host memory grants");
+                $crate::memory::pool::register(pool).expect("one host memory pool before bootstrap");
+            }
+        };
     };
 }
 
@@ -45,7 +50,7 @@ macro_rules! ic_memory_range {
 /// Supply a semantic `ic_memory::PolicyIdentity` and a synchronous callback taking
 /// `&mut ic_memory::BootstrapAdmission` and returning `Result<(), E>` where `E`
 /// implements `Error + Send + Sync + 'static`. Register once per artifact, not per
-/// database. Grant consumer ranges separately with `ic_memory_range!`.
+/// database. Select host namespace grants separately with `memory_allocation_pool!`.
 #[macro_export]
 macro_rules! memory_bootstrap_admission {
     (identity = $identity:expr, prepare = $prepare:path $(,)?) => {

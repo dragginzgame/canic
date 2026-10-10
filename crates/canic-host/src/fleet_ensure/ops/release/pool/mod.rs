@@ -4,6 +4,7 @@
 //! grants settlement, new spending authority or permission to clear an owner.
 
 mod assessment;
+
 #[cfg(test)]
 pub(super) mod tests;
 
@@ -18,16 +19,18 @@ use crate::{
     },
     icp::IcpCli,
 };
-use std::time::Duration;
-
-use candid::{CandidType, Principal};
-use canic_control_plane::dto::root::RootPoolReleaseResponse;
-use canic_core::{
-    dto::{error::Error as CanicError, fleet_registry::FleetRegistry},
+use candid::Principal;
+use canic_contracts::{
+    dto::{
+        error::Error as CanicError,
+        fleet_registry::FleetRegistry,
+        root::RootPoolReleaseResponse,
+        wire::projection::release_pool::{Request, Response},
+    },
     protocol,
 };
 use ic_agent::Agent;
-use serde::Deserialize;
+use std::time::Duration;
 use thiserror::Error;
 
 pub(in crate::fleet_ensure) use assessment::assessment_facts;
@@ -69,16 +72,6 @@ pub enum ReleasePoolStage {
     Budget,
     Decode,
     Query,
-}
-
-#[derive(CandidType)]
-enum Request {
-    PoolRelease,
-}
-
-#[derive(CandidType, Deserialize)]
-enum Response {
-    PoolRelease(Box<RootPoolReleaseResponse>),
 }
 
 /// Preserve every selected Root's retained pool evidence, including exhausted and released imports.

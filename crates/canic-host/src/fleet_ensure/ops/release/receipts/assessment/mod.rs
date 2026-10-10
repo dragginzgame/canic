@@ -4,7 +4,7 @@ use crate::fleet_ensure::view::release::receipts::{
     ReleaseAccountingFacts, ReleaseIntentFact, ReleaseIntentState, ReleaseReplayFacts,
     ReleaseReplayState,
 };
-use canic_core::dto::release_receipts::{
+use canic_contracts::dto::release_receipts::{
     ReplayReleaseEntry, ReplayReleaseIntent, ReplayReleaseIntentState, ReplayReleasePhase,
     ReplayReleaseRecoveryReason,
 };

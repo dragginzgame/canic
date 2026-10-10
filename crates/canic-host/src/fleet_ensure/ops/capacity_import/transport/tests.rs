@@ -15,14 +15,14 @@ pub fn with_agent_and_icp(agent: Agent, icp: IcpCli) -> CapacityImportTransport 
     CapacityImportTransport { agent, icp }
 }
 
-pub fn root_context() -> canic_core::dto::pool_import::PoolImportContext {
+pub fn root_context() -> canic_contracts::dto::pool_import::PoolImportContext {
     crate::fleet_ensure::ops::capacity_import::destination::tests::fixture().1
 }
 
 pub fn awaiting_handoff_status(
     plan: &CapacityImportPlanRecord,
-) -> canic_core::dto::pool_import::PoolImportStatus {
-    use canic_core::dto::pool_import::{PoolImportPhase, PoolImportSourceProgress};
+) -> canic_contracts::dto::pool_import::PoolImportStatus {
+    use canic_contracts::dto::pool_import::{PoolImportPhase, PoolImportSourceProgress};
     let mut status = crate::fleet_ensure::ops::capacity_import::evidence::tests::settled(plan);
     status.progress = vec![PoolImportSourceProgress::AwaitingHandoff; plan.sources.len()];
     status.phase = PoolImportPhase::Reserved;

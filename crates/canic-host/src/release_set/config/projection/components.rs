@@ -1,8 +1,10 @@
 //! Project the configured deployable roles into deterministic display/build order.
 
-use canic_core::{bootstrap::compiled::ConfigModel, ids::CanisterRole};
-
 // Enumerate deployable roles across all Component Specs except implicit Wasm stores.
+
+use canic_contracts::ids::CanisterRole;
+use canic_core::bootstrap::compiled::ConfigModel;
+
 pub(in crate::release_set) fn configured_deployable_roles_from_config(
     config: &ConfigModel,
 ) -> Vec<String> {

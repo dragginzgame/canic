@@ -15,9 +15,9 @@ use crate::{
         rpc::RootRequestMetadata,
     },
     model::replay::{CommandKind, OperationId, ReplayActor, ReplayPayloadHasher, ReplayReceipt},
-    ops::replay::{
-        self as replay_ops,
-        receipt::{
+    ops::{
+        replay as replay_ops,
+        replay::receipt::{
             ReplayReceiptDecision, ReplayReceiptReserveInput, ReplayReceiptToken,
             commit_staged_receipt_response,
         },
@@ -298,7 +298,6 @@ mod tests {
     use super::*;
     use crate::{
         dto::auth::{DelegatedTokenClaims, RoleAttestation},
-        ids::CanisterRole,
         model::replay::{RecoveryReason, ReplayReceiptStatus},
         ops::{
             replay::receipt::{
@@ -307,6 +306,7 @@ mod tests {
             storage::replay::ReplayReceiptOps,
         },
     };
+    use canic_contracts::ids::CanisterRole;
 
     fn p(id: u8) -> crate::cdk::types::Principal {
         crate::cdk::types::Principal::from_slice(&[id; 29])

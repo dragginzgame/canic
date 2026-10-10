@@ -10,10 +10,10 @@ mod tests;
 use crate::{
     InternalError,
     domain::public_metrics::{PublicMetricFamily, PublicMetricKind},
-    ids::CanisterRole,
     model::public_metrics::{PublicMetricSample, PublicMetricsCache},
     ops::runtime::{env::EnvOps, memory::MemoryRegistryOps, public_metrics::PublicMetricsOps},
 };
+use canic_contracts::ids::CanisterRole;
 use ic_memory::MemoryAllocationSummary;
 
 const PREFIX: &str = "memory.allocations.";

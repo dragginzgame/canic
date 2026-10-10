@@ -15,13 +15,13 @@ use super::{
 use crate::{
     cdk::types::Principal,
     dto::auth::{DelegatedToken, DelegationCert, IssuerProof, RootProof},
-    ids::{CanisterRole, FleetKey},
     model::auth::application_authorization::{
         ApplicationAuthorityModelError, ApplicationScope, CanonicalApplicationScopes,
         VerifiedApplicationAuthority,
     },
     ops::auth::AUTH_TIME_SKEW_ALLOWANCE_NS,
 };
+use canic_contracts::ids::{CanisterRole, FleetKey};
 use thiserror::Error;
 
 ///

@@ -224,7 +224,7 @@ that reduction. A separate canister/service must own the state and effects.
 Account for the client's Candid/auth/retry cost and increased cross-canister
 latency; aggregate fleet code may increase even while the instance shrinks.
 
-The [0.111 extraction plan](../../../../design/0.111-standalone-blob-service-extraction/status.md)
+The [0.111 extraction plan](../../../../design/0.112-standalone-blob-service-extraction/status.md)
 already selects this direction. Its service/provider contract, external owner,
 publication and final 0.110 human closeout gates remain authoritative. This audit
 does not start that minor or authorize external repository changes. Preserve

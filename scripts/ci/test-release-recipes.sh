@@ -9,11 +9,13 @@ cp "$ROOT/tool-versions.env" "$fixture/"
 mkdir -p "$fixture/ci" "$fixture/scripts/ci"
 cp "$ROOT/ci/ic-tools.tsv" "$ROOT/ci/tool-versions.env" "$fixture/ci/"
 mkdir -p "$fixture/make"
-cp "$ROOT/make/tools.mk" "$fixture/make/"
+cp "$ROOT/make/tools.mk" "$ROOT/make/execution.mk" "$ROOT/make/release.mk" "$fixture/make/"
+cp "$ROOT/scripts/ci/check-make-execution.sh" "$fixture/scripts/ci/"
 cp "$ROOT/scripts/ci/ic-tool-pins.sh" "$fixture/scripts/ci/"
 cat >"$fixture/bin/record" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ "$1" == */check-make-execution.sh ]]; then exec "$CANIC_RECIPE_TEST_BASH" "$@"; fi
 printf '%s\n' "$*" >>"$EVENTS"
 if [[ "$*" == scripts/ci/push-release.sh ]]; then
     [[ "${CANIC_RELEASE_PUSH_READY:-}" == 1 ]] || exit 28
@@ -29,6 +31,7 @@ SH
 # Use the caller's real Bash to execute the recording stubs. No release helper
 # or Git command runs; Make's actual recipes own all sequencing in this fixture.
 real_bash="$(command -v bash)"
+export CANIC_RECIPE_TEST_BASH="$real_bash"
 for script in "$fixture/bin/record" "$fixture/bin/bash" "$fixture/bin/make" "$fixture/scripts/ci/check-release-index.sh"; do
     sed "1c\\#!$real_bash" "$script" >"$fixture/rewritten"
     cp "$fixture/rewritten" "$script"

@@ -202,11 +202,11 @@ mod tests {
     use super::*;
     use crate::{
         cdk::types::Principal,
-        ids::CanisterRole,
         model::auth::application_authorization::{ApplicationScope, CanonicalApplicationScopes},
         ops::storage::auth::application_sessions::ApplicationSessionTestStateGuard,
         test::{seams, support::fleet_key},
     };
+    use canic_contracts::ids::CanisterRole;
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])

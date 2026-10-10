@@ -1,6 +1,5 @@
-//! Minimal non-root canister for delegation proof tests.
-
 #![expect(clippy::unused_async)]
+//! Minimal non-root canister for delegation proof tests.
 
 use candid::{CandidType, Deserialize, Principal};
 use canic::{
@@ -23,19 +22,11 @@ use canic::{
     prelude::*,
     protocol::CANIC_ROOT_COMMAND,
 };
+use canic_contracts::dto::role::OperationAcceptedResponse as RootCommandResponse;
+use canic_contracts::dto::wire::projection::peer_allocation::RootCommand;
 
 const VERIFY_APPLICATION_SCOPE: canic::access::auth::ApplicationScopeRef<'static> =
     canic::application_scope!("app00:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
-
-#[derive(CandidType)]
-enum RootCommand {
-    ProvisionPeer(RootPeerComponentAllocationRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum RootCommandResponse {
-    OperationAccepted(OperationReceipt),
-}
 
 #[derive(CandidType, Clone, Copy, Deserialize)]
 enum LocalAuthorizationDenialProbe {

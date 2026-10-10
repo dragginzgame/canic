@@ -2,7 +2,7 @@
 
 use crate::{ops::fixture_store, workflow::fixture_store as workflow};
 use candid::Principal;
-use canic_core::dto::{
+use canic_contracts::dto::{
     error::Error,
     fixture_provisioning::{
         FixtureChunkRead, FixtureChunkUpload, FixtureDescriptor, FixtureGrant, FixtureGrantRequest,
@@ -11,6 +11,7 @@ use canic_core::dto::{
 };
 
 /// Typed Store API for immutable fixture publication and installation-bound delivery.
+
 pub struct FixtureStoreApi;
 
 impl FixtureStoreApi {

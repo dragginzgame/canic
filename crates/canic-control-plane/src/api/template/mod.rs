@@ -1,8 +1,3 @@
-#[cfg(feature = "wasm-store-canister")]
-use crate::dto::template::{
-    TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
-    TemplateManifestInput,
-};
 #[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
 use crate::{
     config,
@@ -12,8 +7,9 @@ use crate::{
 #[cfg(feature = "wasm-store-canister")]
 use crate::{
     dto::template::{
-        StoreOperationStatusResponse, TemplateChunkResponse, TemplateLookupRequest,
-        TemplateStagingStatusResponse, WasmStoreCatalogEntryResponse,
+        StoreOperationStatusResponse, TemplateChunkInput, TemplateChunkResponse,
+        TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput, TemplateLookupRequest,
+        TemplateManifestInput, TemplateStagingStatusResponse, WasmStoreCatalogEntryResponse,
         WasmStoreDeletionCycleReclamationRequest, WasmStoreDeletionCycleReclamationResponse,
         WasmStoreGcOperationStatus, WasmStoreGcRequest, WasmStoreStatusResponse,
     },
@@ -31,13 +27,14 @@ use crate::{
 };
 #[cfg(feature = "wasm-store-canister")]
 use async_trait::async_trait;
+use canic_contracts::dto::error::Error;
+#[cfg(feature = "root-control-plane")]
+use canic_contracts::dto::root_store::{RootStoreBootstrapRequest, RootStoreBootstrapResponse};
 #[cfg(feature = "wasm-store-canister")]
 use canic_core::control_plane_support::ops::ic::IcOps;
-use canic_core::dto::error::Error;
-#[cfg(feature = "root-control-plane")]
-use canic_core::dto::root_store::{RootStoreBootstrapRequest, RootStoreBootstrapResponse};
 
 /// Admit Store mutations from the exact Root or retained exact installation controller.
+
 #[cfg(feature = "wasm-store-canister")]
 pub struct WasmStoreMutationCallerPredicate;
 
@@ -79,8 +76,8 @@ impl WasmStoreBootstrapApi {
         content_id: [u8; 32],
     ) -> Result<
         Result<
-            canic_core::dto::fixture_provisioning::FixtureSourceStatus,
-            canic_core::dto::fixture_provisioning::FixtureStoreError,
+            canic_contracts::dto::fixture_provisioning::FixtureSourceStatus,
+            canic_contracts::dto::fixture_provisioning::FixtureStoreError,
         >,
         Error,
     > {
@@ -91,11 +88,11 @@ impl WasmStoreBootstrapApi {
 
     /// Register a source selected only from the installed Root release manifest.
     pub async fn prepare_root_store_fixture(
-        request: canic_core::dto::root_store::RootStoreFixturePrepareRequest,
+        request: canic_contracts::dto::root_store::RootStoreFixturePrepareRequest,
     ) -> Result<
         Result<
-            canic_core::dto::fixture_provisioning::FixtureSourceStatus,
-            canic_core::dto::fixture_provisioning::FixtureStoreError,
+            canic_contracts::dto::fixture_provisioning::FixtureSourceStatus,
+            canic_contracts::dto::fixture_provisioning::FixtureStoreError,
         >,
         Error,
     > {
@@ -147,7 +144,7 @@ impl WasmStoreCanisterApi {
     pub fn operation_status(operation_id: [u8; 32]) -> Result<StoreOperationStatusResponse, Error> {
         if operation_id == [0; 32] {
             return Err(Error::from_registered(
-                canic_core::diagnostics::codes::REQUEST_INVALID,
+                canic_contracts::diagnostics::codes::REQUEST_INVALID,
             ));
         }
         let gc = WasmStoreGcOps::status();
@@ -171,7 +168,7 @@ impl WasmStoreCanisterApi {
             return Ok(StoreOperationStatusResponse::FleetActivation(activation));
         }
         Err(Error::from_registered(
-            canic_core::diagnostics::codes::STATE_UNAVAILABLE,
+            canic_contracts::diagnostics::codes::STATE_UNAVAILABLE,
         ))
     }
 
@@ -373,7 +370,7 @@ mod tests {
 
         assert_eq!(
             error.code(),
-            canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
+            canic_contracts::diagnostics::codes::REQUEST_INVALID.raw_code()
         );
     }
 }

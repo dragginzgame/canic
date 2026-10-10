@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Shared companions: scripts/ci/read-cargo-workspace-version.sh scripts/ci/check-dependency-pins.sh
 set -euo pipefail
 
 ROOT="${BASH_SOURCE[0]}"
@@ -6,10 +7,14 @@ ROOT="${BASH_SOURCE[0]}"
 ROOT="$(cd -P "${ROOT%/*}/../.." && printf '%s/.' "$PWD")"
 ROOT="${ROOT%/.}"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/cargo-metadata-test.XXXXXX")"
+fixture_complete=false
 finish() {
     local status=$?
+    # Bash 3.2 may report zero after nounset before assertions finish.
+    [[ "$fixture_complete" == true || "$status" != 0 ]] || status=1
     if [[ "$status" == 0 ]]; then rm -rf "$fixture"
     else echo "Cargo metadata fixtures retained: $fixture" >&2; fi
+    exit "$status"
 }
 trap finish EXIT
 reader="$ROOT/scripts/ci/read-cargo-workspace-version.sh"
@@ -115,3 +120,4 @@ git -C "$consumer" show :testing/Cargo.toml > "$consumer/testing/Cargo.toml"
 check || { cat "$fixture/result" >&2; exit 1; }
 git -C "$consumer" diff --exit-code
 printf 'Cargo metadata tests passed\n'
+fixture_complete=true

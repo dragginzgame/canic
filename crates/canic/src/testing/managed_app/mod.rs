@@ -30,7 +30,7 @@ use crate::{
             FleetSubnetRootDirectoryEntry, FleetSubnetRootStatus,
         },
         page::PageRequest,
-        role::{ComponentRuntimeOperationStatus, OperationReceipt, OperationStatusRequest},
+        role::{OperationReceipt, OperationStatusRequest},
     },
     ids::{
         ComponentBinding, ComponentGroupPlacementId, ComponentInstanceId, ComponentSpecAdmission,
@@ -41,18 +41,21 @@ use crate::{
     protocol::{CANIC_ADMISSION_STATUS, CANIC_COMMAND, CANIC_CONTROL_STATUS},
     testing::build_pocketic,
 };
-use candid::{CandidType, Deserialize, Principal, encode_args, encode_one};
-use canic_core::{
-    bootstrap::parse_config_model,
-    cdk::{types::Cycles, utils::hash::sha256_bytes},
-    ids::{
-        FleetFundingProfile, FleetSubnetRootFundingAuthority, FleetSubnetRootFundingPolicy,
-        ReleaseBuildId,
-    },
-    shared_support::fleet_admission_policy::{
-        compile_fleet_admission_projection, compile_installed_fleet_admission_policy,
-    },
-};
+use candid::{Principal, encode_args, encode_one};
+use canic_contracts::cycles::Cycles;
+use canic_contracts::dto::wire::projection::component_registry::CanisterOperationStatusFragment as ManagedOperationStatusResponse;
+use canic_contracts::dto::wire::projection::fixture_managed_app::ManagedCommand;
+use canic_contracts::dto::wire::projection::fixture_managed_app::ManagedStatusRequest;
+use canic_contracts::dto::wire::projection::fixture_managed_app::ManagedStatusResponse;
+use canic_contracts::dto::wire::projection::fixture_managed_component_group::ManagedCommandResponse;
+use canic_contracts::ids::FleetFundingProfile;
+use canic_contracts::ids::FleetSubnetRootFundingAuthority;
+use canic_contracts::ids::FleetSubnetRootFundingPolicy;
+use canic_contracts::ids::ReleaseBuildId;
+use canic_core::bootstrap::parse_config_model;
+use canic_core::cdk::utils::hash::sha256_bytes;
+use canic_core::shared_support::fleet_admission_policy::compile_fleet_admission_projection;
+use canic_core::shared_support::fleet_admission_policy::compile_installed_fleet_admission_policy;
 use ic_testkit::pic::{CandidCallError, CandidCallExt, CanisterInstallExt, PocketIc};
 use std::{fmt, time::Duration};
 
@@ -106,7 +109,7 @@ impl<'a> ManagedAppQualificationInput<'a> {
 /// Installed managed App plus the exact synthetic Root authority that drives it.
 pub struct ManagedAppFixture {
     caller: (
-        canic_core::ids::CallerReceiverAuthority,
+        canic_contracts::ids::CallerReceiverAuthority,
         canic_core::bootstrap::compiled::CompiledCallerPolicy,
     ),
     app: Principal,
@@ -255,7 +258,7 @@ impl ManagedAppFixture {
                 "managed admission preparation",
             ));
         };
-        Ok(receipt)
+        Ok(*receipt)
     }
 
     /// Upgrade the exact App to the same Wasm and retain its stable lifecycle state.
@@ -381,7 +384,7 @@ pub fn install_standalone_app(wasm: Vec<u8>, install_cycles: u128) -> Standalone
 #[derive(Debug)]
 struct CompiledManagedApp {
     caller: (
-        canic_core::ids::CallerReceiverAuthority,
+        canic_contracts::ids::CallerReceiverAuthority,
         canic_core::bootstrap::compiled::CompiledCallerPolicy,
     ),
     directory: ComponentRuntimeDirectoryPreparationRequest,
@@ -413,7 +416,7 @@ fn compile_managed_app(
     })?;
     let deployment_id = input
         .component_group_deployment
-        .parse::<canic_core::ids::ComponentGroupDeploymentId>()
+        .parse::<canic_contracts::ids::ComponentGroupDeploymentId>()
         .map_err(|error| ManagedAppQualificationError::Config(error.to_string()))?;
     let deployments = config
         .compile_component_group_deployment_topology()
@@ -539,13 +542,13 @@ fn compile_managed_app(
         canic_core::bootstrap::compiled::RoleRuntimeAuthority::compile(&config, &binding.role)
             .map_err(|error| ManagedAppQualificationError::Config(error.to_string()))?
             .caller_policy;
-    let caller_authority = canic_core::ids::CallerReceiverAuthority {
-        receiver: canic_core::ids::CallerInstallation {
+    let caller_authority = canic_contracts::ids::CallerReceiverAuthority {
+        receiver: canic_contracts::ids::CallerInstallation {
             binding: ManagedCanisterBinding::Component(binding.clone()),
             install_id,
             component_install_id: install_id,
         },
-        issuer: canic_core::ids::CallerRootAuthority {
+        issuer: canic_contracts::ids::CallerRootAuthority {
             registry: root.authority.clone(),
             root: root_principal,
             install_id: [1; 32],
@@ -693,43 +696,6 @@ const fn test_root_limits(maximum_component_instances: u32) -> FleetSubnetRootLi
         maximum_registry_bytes: 1_048_576,
         maximum_wasm_store_bytes: 64 * 1_048_576,
     }
-}
-
-#[derive(CandidType)]
-enum ManagedCommand {
-    ConfigureRuntime(Box<ComponentRuntimeDirectoryPreparationRequest>),
-    PrepareFleetAdmission(Box<FleetAdmissionPrepareTargetRequest>),
-}
-
-#[derive(CandidType, Deserialize)]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "the test decoder mirrors the generated managed response wire"
-)]
-enum ManagedCommandResponse {
-    OperationAccepted(OperationReceipt),
-    PrepareFleetAdmission(FleetAdmissionTargetReceipt),
-}
-
-#[derive(CandidType)]
-enum ManagedStatusRequest {
-    Admission(PageRequest),
-    Operation(OperationStatusRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "the test decoder mirrors the generated managed status wire"
-)]
-enum ManagedStatusResponse {
-    Admission(FleetAdmissionProjectionStatusResponse),
-    Operation(Box<ManagedOperationStatusResponse>),
-}
-
-#[derive(CandidType, Deserialize)]
-enum ManagedOperationStatusResponse {
-    ConfigureRuntime(ComponentRuntimeOperationStatus),
 }
 
 /// Typed setup or lifecycle failure from the managed-App qualification surface.

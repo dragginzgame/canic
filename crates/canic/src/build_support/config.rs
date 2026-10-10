@@ -1,16 +1,14 @@
-use std::{error::Error, fmt, fs, io, path::Path};
-
-use canic_core::{
-    bootstrap::{
-        compact_config_source,
-        compiled::{ConfigModel, validate_canister_role_name},
-        emit_config_model_source, emit_role_runtime_authority_source,
-    },
-    ids::CanisterRole,
+use canic_contracts::ids::CanisterRole;
+use canic_core::bootstrap::{
+    compact_config_source,
+    compiled::{ConfigModel, validate_canister_role_name},
+    emit_config_model_source, emit_role_runtime_authority_source,
 };
+use std::{error::Error, fmt, fs, io, path::Path};
 use toml::Value as TomlValue;
 
 /// Root-only build outputs retained by the full control-plane configuration owner.
+
 #[derive(Clone, Debug)]
 pub struct RootBuildSources {
     pub compact_config: String,

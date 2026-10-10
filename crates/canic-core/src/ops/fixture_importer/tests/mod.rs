@@ -1,15 +1,17 @@
 use super::*;
 use crate::{
     diagnostics::codes,
-    dto::error::Error,
-    dto::fixture_provisioning::{
-        FixtureChunkDescriptor, FixtureDescriptor, FixtureGrant, FixtureImportReceipt,
-        FixtureTargetBinding,
+    dto::{
+        error::Error,
+        fixture_provisioning::{
+            FixtureChunkDescriptor, FixtureDescriptor, FixtureGrant, FixtureImportReceipt,
+            FixtureTargetBinding,
+        },
     },
-    ids::{ReleaseBuildId, ReleaseBuildNonce},
     ops::fixture_content,
 };
 use candid::Principal;
+use canic_contracts::ids::{ReleaseBuildId, ReleaseBuildNonce};
 use sha2::{Digest, Sha256};
 
 fn assignment() -> FixtureAssignment {

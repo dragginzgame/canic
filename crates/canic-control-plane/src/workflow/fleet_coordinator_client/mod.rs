@@ -5,9 +5,8 @@
 //! negotiation.
 
 use crate::dto::fleet_coordinator::CoordinatorRootRemovalOperationStatus;
-use candid::{CandidType, Principal};
-use canic_core::{
-    control_plane_support::{error::InternalError, ops::ic::call::CallOps},
+use candid::Principal;
+use canic_contracts::{
     dto::{
         error::Error,
         fleet_funding::{FleetRootFundingRequest, FleetRootFundingResponse},
@@ -16,39 +15,15 @@ use canic_core::{
             FleetSubnetRootSnapshotAcknowledgementRequest,
         },
         role::OperationStatusRequest,
+        wire::projection::coordinator_client::{
+            CoordinatorCommandFragment, CoordinatorCommandResponseFragment,
+            CoordinatorOperationStatusFragment, CoordinatorStatusRequestFragment,
+            CoordinatorStatusResponseFragment,
+        },
     },
     protocol,
 };
-use serde::Deserialize;
-
-#[derive(CandidType)]
-enum CoordinatorCommandFragment {
-    AcknowledgeRootSnapshot(FleetSubnetRootSnapshotAcknowledgementRequest),
-    RequestRootFunding(FleetRootFundingRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum CoordinatorCommandResponseFragment {
-    AcknowledgeRootSnapshot(FleetSubnetRootSnapshotAcknowledgement),
-    RequestRootFunding(FleetRootFundingResponse),
-}
-
-#[derive(CandidType)]
-enum CoordinatorStatusRequestFragment {
-    Operation(OperationStatusRequest),
-    Registry,
-}
-
-#[derive(CandidType, Deserialize)]
-enum CoordinatorStatusResponseFragment {
-    Operation(Box<CoordinatorOperationStatusFragment>),
-    Registry(Box<FleetRegistry>),
-}
-
-#[derive(CandidType, Deserialize)]
-enum CoordinatorOperationStatusFragment {
-    RootRemoval(CoordinatorRootRemovalOperationStatus),
-}
+use canic_core::control_plane_support::{error::InternalError, ops::ic::call::CallOps};
 
 pub(super) async fn registry(coordinator: Principal) -> Result<FleetRegistry, InternalError> {
     let call = CallOps::unbounded_wait(coordinator, protocol::CANIC_COORDINATOR_REGISTRY)

@@ -72,6 +72,11 @@ fi
 # Source validation belongs to the release lane. The editable handoff is not
 # a publication receipt; this guard checks the sealed package surfaces.
 
+consumer_locks=()
+consumer_lock_paths="$(bash "$ROOT/scripts/release/adapter.sh" consumer-locks)"
+[[ -n "$consumer_lock_paths" ]] || fail 'release consumer lock inventory is empty'
+while IFS= read -r path; do consumer_locks[${#consumer_locks[@]}]="$path"; done <<< "$consumer_lock_paths"
+
 is_release_only_path() {
     case "$1" in
         Cargo.toml | Cargo.lock | CHANGELOG.md | scripts/dev/install_dev.sh | \
@@ -80,6 +85,10 @@ is_release_only_path() {
             return 0
             ;;
         *)
+            local consumer_lock
+            for consumer_lock in "${consumer_locks[@]}"; do
+                [[ "$1" != "$consumer_lock" ]] || return 0
+            done
             return 1
             ;;
     esac
@@ -97,7 +106,7 @@ for changed_path in "${candidate_changes[@]}"; do
     is_release_only_path "$changed_path" ||
         fail "validated source is followed by non-release change: $changed_path"
     case "$changed_path" in
-        Cargo.toml | */Cargo.toml | Cargo.lock)
+        Cargo.toml | */Cargo.toml | Cargo.lock | */Cargo.lock)
             git -C "$ROOT" cat-file -e "$validated_source:$changed_path" ||
                 fail "release version mutation added an unvalidated Cargo file: $changed_path"
             ;;

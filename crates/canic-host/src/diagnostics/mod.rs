@@ -6,7 +6,7 @@
 
 mod generated;
 
-use canic_core::diagnostics::DiagnosticCode;
+use canic_contracts::diagnostics::DiagnosticCode;
 
 ///
 /// DiagnosticEntry

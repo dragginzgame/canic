@@ -72,14 +72,14 @@ pub const STORE_ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         None,
     ),
     query_read_only(CANIC_WASM_STORE_STATUS),
-    update_read_only("canic_wasm_store_chunk"),
+    update_read_only(crate::protocol::CANIC_WASM_STORE_CHUNK),
     update_read_only(crate::protocol::CANIC_WASM_STORE_FIXTURE_CHUNK),
     update_monotonic_transition(
         crate::protocol::CANIC_WASM_STORE_PUBLISH_FIXTURE,
         command_kind("wasm_store.publish_fixture.v1"),
     ),
     update_monotonic_transition(
-        "canic_wasm_store_publish_chunk",
+        crate::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
         command_kind("wasm_store.publish_chunk.v1"),
     ),
 ];

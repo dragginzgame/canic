@@ -16,7 +16,7 @@ pub(super) fn validate_allocation_caller(
             Err(InternalError::conflict())
         }
         ComponentProvisioningOrigin::ComponentGroup { .. } => Err(InternalError::public(
-            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+            canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
         )),
         ComponentProvisioningOrigin::FleetAdministrator { .. }
         | ComponentProvisioningOrigin::Component { .. }
@@ -27,9 +27,9 @@ pub(super) fn validate_allocation_caller(
 #[derive(Clone, Copy)]
 pub(super) struct PeerRequesterAccessEvidence<'a> {
     pub(super) caller: candid::Principal,
-    pub(super) indexed_component: Option<canic_core::ids::ComponentInstanceId>,
-    pub(super) retained: &'a canic_core::ids::ComponentBinding,
-    pub(super) current: &'a canic_core::ids::ComponentBinding,
+    pub(super) indexed_component: Option<canic_contracts::ids::ComponentInstanceId>,
+    pub(super) retained: &'a canic_contracts::ids::ComponentBinding,
+    pub(super) current: &'a canic_contracts::ids::ComponentBinding,
     pub(super) current_status: ComponentLifecycleStatus,
 }
 
@@ -65,7 +65,7 @@ pub(super) fn require_active_peer_allocation_caller(
 }
 
 pub(super) fn revalidate_peer_provisioning_origin(
-    authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
+    authority: &canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority,
     topology: &canic_core::control_plane_support::config::ComponentTopology,
     request: &PeerComponentRequester,
     origin: &ComponentProvisioningOrigin,
@@ -93,7 +93,7 @@ pub(super) fn revalidate_peer_provisioning_origin(
 }
 
 pub(super) fn revalidate_retained_peer_origin(
-    authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
+    authority: &canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority,
     topology: &canic_core::control_plane_support::config::ComponentTopology,
     origin: &ComponentProvisioningOrigin,
     caller: candid::Principal,
@@ -111,13 +111,13 @@ pub(super) fn revalidate_retained_peer_origin(
         ),
         ComponentProvisioningOrigin::FleetAdministrator { .. }
         | ComponentProvisioningOrigin::ComponentGroup { .. } => Err(InternalError::public(
-            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+            canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
         )),
     }
 }
 
 pub(super) fn revalidate_same_root_peer_origin(
-    authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
+    authority: &canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority,
     topology: &canic_core::control_plane_support::config::ComponentTopology,
     requester: &ComponentBinding,
     grant: &canic_core::control_plane_support::config::ComponentProvisioningGrant,
@@ -126,10 +126,10 @@ pub(super) fn revalidate_same_root_peer_origin(
     topology
         .validate_component_binding(&authority.binding, requester)
         .map_err(|_| {
-            InternalError::public(canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
+            InternalError::public(canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
         })?;
     let current = ComponentRegistryOps::partition(requester.component)?.ok_or_else(|| {
-        InternalError::public(canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
+        InternalError::public(canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
     })?;
     let evidence = PeerRequesterAccessEvidence {
         caller,
@@ -140,14 +140,14 @@ pub(super) fn revalidate_same_root_peer_origin(
     };
     if !evidence.is_exact_active() {
         return Err(InternalError::public(
-            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+            canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
         ));
     }
     validate_retained_peer_grant(topology, requester, grant)
 }
 
 pub(super) fn revalidate_fleet_service_peer_origin(
-    authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
+    authority: &canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority,
     topology: &canic_core::control_plane_support::config::ComponentTopology,
     requester: &FleetServiceComponentRequester,
     registry: &FleetRegistryVersion,
@@ -169,7 +169,7 @@ pub(super) fn revalidate_fleet_service_peer_origin(
     )?;
     if &current.requester != requester {
         return Err(InternalError::public(
-            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+            canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
         ));
     }
     validate_retained_peer_grant(topology, &requester.component, grant)
@@ -253,8 +253,8 @@ pub(super) fn child_install_evidence(
 }
 
 pub(in crate::workflow) fn validate_allocation_record(
-    root: &canic_core::ids::FleetSubnetRootBinding,
-    release_set: canic_core::ids::FleetSubnetRootReleaseSet,
+    root: &canic_contracts::ids::FleetSubnetRootBinding,
+    release_set: canic_contracts::ids::FleetSubnetRootReleaseSet,
     topology: &canic_core::control_plane_support::config::ComponentTopology,
     allocation: &RootComponentAllocationView,
     expected_operation_id: [u8; 32],
@@ -264,7 +264,7 @@ pub(in crate::workflow) fn validate_allocation_record(
     }
     if allocation.allocation_sequence == 0
         || allocation.component
-            != canic_core::ids::ComponentInstanceId::from_root_allocation(
+            != canic_contracts::ids::ComponentInstanceId::from_root_allocation(
                 root.authority.binding.fleet.fleet,
                 root.authority.epoch,
                 root.fleet_subnet_root,
@@ -299,7 +299,7 @@ pub(in crate::workflow) fn validate_allocation_record(
 }
 
 pub(super) fn validate_provisioning_origin(
-    root: &canic_core::ids::FleetSubnetRootBinding,
+    root: &canic_contracts::ids::FleetSubnetRootBinding,
     topology: &canic_core::control_plane_support::config::ComponentTopology,
     allocation: &RootComponentAllocationView,
 ) -> Result<(), InternalError> {
@@ -373,8 +373,8 @@ pub(super) const fn retained_subtree_stop_controller(
 }
 
 pub(super) fn validate_subtree_removal(
-    root: &canic_core::ids::FleetSubnetRootBinding,
-    release_set: canic_core::ids::FleetSubnetRootReleaseSet,
+    root: &canic_contracts::ids::FleetSubnetRootBinding,
+    release_set: canic_contracts::ids::FleetSubnetRootReleaseSet,
     topology: &canic_core::control_plane_support::config::ComponentTopology,
     removal: &RootComponentSubtreeRemovalView,
     request: Option<&RootComponentSubtreeRemovalRequest>,
@@ -429,7 +429,7 @@ pub(super) fn validate_subtree_removal(
 }
 
 pub(super) fn validate_subtree_removal_target(
-    root: &canic_core::ids::FleetSubnetRootBinding,
+    root: &canic_contracts::ids::FleetSubnetRootBinding,
     topology: &canic_core::control_plane_support::config::ComponentTopology,
     removal: &RootComponentSubtreeRemovalView,
 ) -> Result<(), InternalError> {
@@ -497,8 +497,8 @@ pub(super) fn subtree_target_membership_is_removed(
 }
 
 pub(super) fn validate_child_allocation(
-    root: &canic_core::ids::FleetSubnetRootBinding,
-    release_set: canic_core::ids::FleetSubnetRootReleaseSet,
+    root: &canic_contracts::ids::FleetSubnetRootBinding,
+    release_set: canic_contracts::ids::FleetSubnetRootReleaseSet,
     topology: &canic_core::control_plane_support::config::ComponentTopology,
     parent: &ManagedCanisterBinding,
     allocation: &RootComponentChildAllocationView,
@@ -520,7 +520,7 @@ pub(super) fn validate_child_allocation(
     };
     if parent_canister_id != allocation.parent_canister_id {
         return Err(InternalError::public(
-            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+            canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
         ));
     }
     let spec = topology
@@ -626,8 +626,8 @@ impl<'a> From<&'a RootComponentChildAllocationView> for ComponentChildRequestIde
 }
 
 pub(super) fn validate_partition(
-    root: &canic_core::ids::FleetSubnetRootBinding,
-    release_set: canic_core::ids::FleetSubnetRootReleaseSet,
+    root: &canic_contracts::ids::FleetSubnetRootBinding,
+    release_set: canic_contracts::ids::FleetSubnetRootReleaseSet,
     topology: &canic_core::control_plane_support::config::ComponentTopology,
     partition: &ComponentRegistryPartitionView,
 ) -> Result<(), InternalError> {
@@ -705,7 +705,7 @@ pub(super) fn validate_component_draining(
 }
 
 pub(super) fn validate_directory_member(
-    root: &canic_core::ids::FleetSubnetRootBinding,
+    root: &canic_contracts::ids::FleetSubnetRootBinding,
     topology: &canic_core::control_plane_support::config::ComponentTopology,
     partition: &ComponentRegistryPartitionView,
     member: &ManagedCanisterBinding,

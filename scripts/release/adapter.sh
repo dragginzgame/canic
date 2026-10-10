@@ -14,11 +14,19 @@ case "${1:-}" in
             esac
         done < "$paths"
         bash scripts/ci/check-release-draft-ready.sh "${RELEASE_KIND:?}"
-        cargo set-version --help >/dev/null
         cargo fetch --locked
+        make --no-print-directory install-tools
+        make --no-print-directory tools-check
+        cargo set-version --help >/dev/null
+        ;;
+    consumer-locks)
+        printf '%s\n' integrations/blob-service/consumer/Cargo.lock \
+            integrations/blob-service/embedded-consumer/Cargo.lock
         ;;
     files)
         printf '%s\0' Cargo.toml Cargo.lock scripts/dev/install_dev.sh release-validation.json CHANGELOG.md "docs/changelog/${RELEASE_VERSION%.*}.md"
+        consumer_lock_paths="$(bash "$0" consumer-locks)"
+        while IFS= read -r path; do printf '%s\0' "$path"; done <<< "$consumer_lock_paths"
         git ls-files -z -- ':(glob)crates/**/Cargo.toml' ':(glob)testing/**/Cargo.toml'
         ;;
     committed)
@@ -28,5 +36,5 @@ case "${1:-}" in
         bash scripts/ci/check-release-candidate.sh --commit "${RELEASE_COMMIT:?}"
         bash scripts/ci/check-release-tag.sh "$RELEASE_COMMIT" "${RELEASE_VERSION:?}"
         ;;
-    *) echo 'usage: adapter.sh preflight|files|committed|tagged' >&2; exit 2 ;;
+    *) echo 'usage: adapter.sh preflight|consumer-locks|files|committed|tagged' >&2; exit 2 ;;
 esac

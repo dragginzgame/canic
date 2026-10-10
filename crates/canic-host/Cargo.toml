@@ -22,6 +22,7 @@ local-fleet = ["dep:ic-testkit"]
 [dependencies]
 candid = { workspace = true }
 candid_parser = { workspace = true }
+canic-contracts.workspace = true
 # Host materializes metadata for every infrastructure role.
 canic-control-plane = { workspace = true, features = [
     "fleet-coordinator-canister",

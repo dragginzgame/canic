@@ -5,10 +5,12 @@
 use crate::{
     InternalError,
     dto::auth::RootChainKeyPublicKeyRequest,
-    ops::auth::AuthOps,
-    ops::ic::{
-        IcOps,
-        mgmt::{EcdsaKeyId, EcdsaPublicKeyArgs, MgmtOps},
+    ops::{
+        auth::AuthOps,
+        ic::{
+            IcOps,
+            mgmt::{EcdsaKeyId, EcdsaPublicKeyArgs, MgmtOps},
+        },
     },
 };
 

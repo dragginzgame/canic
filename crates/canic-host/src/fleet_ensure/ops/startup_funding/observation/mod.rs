@@ -17,15 +17,15 @@ use crate::{
     icp::IcpCli,
 };
 use candid::Principal;
-use canic_control_plane::dto::fleet_coordinator::{
-    CoordinatorFundingStatusResponse, CoordinatorObservabilityRequest,
-    CoordinatorObservabilityResponse,
-};
-use canic_core::{
-    control_plane_support::policy::fleet_funding::{
-        FleetFundingWindowSnapshot, funding_window_remaining,
+use canic_contracts::{
+    dto::fleet_coordinator::{
+        CoordinatorFundingStatusResponse, CoordinatorObservabilityRequest,
+        CoordinatorObservabilityResponse,
     },
     ids::FleetCoordinatorRootFundingPolicy,
+};
+use canic_core::control_plane_support::policy::fleet_funding::{
+    FleetFundingWindowSnapshot, funding_window_remaining,
 };
 use std::{collections::BTreeSet, path::Path};
 
@@ -39,14 +39,14 @@ pub fn observe_child(
     crate::fleet_ensure::view::startup_funding::StartupChildAccounting,
     StartupUsageUnavailable,
 > {
-    use canic_core::dto::observability::{
+    use canic_contracts::dto::observability::{
         CanisterObservabilityRequest, CanisterObservabilityResponse,
     };
     let response: CanisterObservabilityResponse = query_with_candid(
         icp,
         candid,
         parent,
-        canic_core::protocol::CANIC_OBSERVABILITY,
+        canic_contracts::protocol::CANIC_OBSERVABILITY,
         &CanisterObservabilityRequest::ChildFunding(child),
     )
     .map_err(|_| StartupUsageUnavailable::ObservationFailed)?;
@@ -57,7 +57,7 @@ pub fn observe_child(
 }
 
 pub(in crate::fleet_ensure) fn project_child(
-    value: canic_core::dto::observability::ChildFundingUsage,
+    value: canic_contracts::dto::observability::ChildFundingUsage,
     parent: Principal,
     child: Principal,
 ) -> Result<
@@ -95,7 +95,7 @@ pub fn observe(
         icp,
         candid,
         coordinator,
-        canic_core::protocol::CANIC_OBSERVABILITY,
+        canic_contracts::protocol::CANIC_OBSERVABILITY,
         &CoordinatorObservabilityRequest::Funding,
     );
     let Ok(CoordinatorObservabilityResponse::Funding(status)) = response else {

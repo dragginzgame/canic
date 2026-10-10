@@ -4,13 +4,12 @@
 //! Does not own: cycle funding policy, DTO mapping, or runtime metrics.
 //! Boundary: storage ops wrap these records before workflow access.
 
-use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
-    cdk::structures::{DefaultMemoryImpl, Storable, memory::RuntimeMemory, storable::Bound},
-    domain::cycles::CycleTopupFailureDisposition,
-    role_contract::allocation::memory::cycles::{
-        CYCLES_FUNDING_LEDGER_ID, CYCLES_TOPUP_EVENTS_ID, CYCLES_TRACKER_ID,
+    cdk::structures::{
+        DefaultMemoryImpl, Storable, btreemap::BTreeMap as StableBtreeMap, memory::RuntimeMemory,
+        storable::Bound,
     },
+    domain::cycles::CycleTopupFailureDisposition,
     storage::prelude::*,
 };
 use std::{borrow::Cow, cell::RefCell};
@@ -21,7 +20,7 @@ std::thread_local! {
     //
     static CYCLE_TRACKER: RefCell<CycleTracker> =
         RefCell::new(CycleTracker::new(StableBtreeMap::init(
-            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.cycles.tracker.v1", ty = CycleTracker, id = CYCLES_TRACKER_ID),
+            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.cycles.tracker.v1"),
         )));
 }
 
@@ -31,7 +30,7 @@ std::thread_local! {
     //
     static CYCLE_TOPUP_EVENTS: RefCell<CycleTopupEvents> =
         RefCell::new(CycleTopupEvents::new(StableBtreeMap::init(
-            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.cycles.topup_events.v1", ty = CycleTopupEvents, id = CYCLES_TOPUP_EVENTS_ID),
+            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.cycles.topup_events.v1"),
         )));
 }
 
@@ -41,7 +40,7 @@ std::thread_local! {
     //
     static CYCLES_FUNDING_LEDGER: RefCell<CyclesFundingLedger> =
         RefCell::new(CyclesFundingLedger::new(StableBtreeMap::init(
-            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.cycles.funding_ledger.v1", ty = CyclesFundingLedger, id = CYCLES_FUNDING_LEDGER_ID),
+            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.cycles.funding_ledger.v1"),
         )));
 }
 
@@ -53,7 +52,7 @@ std::thread_local! {
 ///
 
 pub struct CycleTracker {
-    map: StableBtreeMap<u64, Cycles, RuntimeMemory<DefaultMemoryImpl>>,
+    map: StableBtreeMap<u64, CycleTrackerBalanceRecord, RuntimeMemory<DefaultMemoryImpl>>,
 }
 
 ///
@@ -467,7 +466,9 @@ impl CycleTopupEvents {
 }
 
 impl CycleTracker {
-    pub const fn new(map: StableBtreeMap<u64, Cycles, RuntimeMemory<DefaultMemoryImpl>>) -> Self {
+    pub const fn new(
+        map: StableBtreeMap<u64, CycleTrackerBalanceRecord, RuntimeMemory<DefaultMemoryImpl>>,
+    ) -> Self {
         Self { map }
     }
 
@@ -483,7 +484,12 @@ impl CycleTracker {
 
     #[must_use]
     pub(crate) fn latest() -> Option<(u64, Cycles)> {
-        CYCLE_TRACKER.with_borrow(|tracker| tracker.map.last_key_value())
+        CYCLE_TRACKER.with_borrow(|tracker| {
+            tracker
+                .map
+                .last_key_value()
+                .map(|(timestamp, record)| (timestamp, record.0))
+        })
     }
 
     #[must_use]
@@ -493,7 +499,7 @@ impl CycleTracker {
                 .iter()
                 .skip(offset)
                 .take(limit)
-                .map(|entry| (*entry.key(), entry.value()))
+                .map(|entry| (*entry.key(), entry.value().0))
                 .collect()
         })
     }
@@ -507,7 +513,7 @@ impl CycleTracker {
                     .iter()
                     .map(|entry| CycleTrackerEntryRecord {
                         timestamp_secs: *entry.key(),
-                        cycles: entry.value(),
+                        cycles: entry.value().0,
                     })
                     .collect()
             }),
@@ -519,7 +525,10 @@ impl CycleTracker {
         CYCLE_TRACKER.with_borrow_mut(|tracker| {
             tracker.map.clear_new();
             for entry in data.entries {
-                tracker.map.insert(entry.timestamp_secs, entry.cycles);
+                tracker.map.insert(
+                    entry.timestamp_secs,
+                    CycleTrackerBalanceRecord(entry.cycles),
+                );
             }
         });
     }
@@ -542,7 +551,9 @@ impl CycleTracker {
     }
 
     fn insert(&mut self, now: u64, cycles: Cycles) -> bool {
-        self.map.insert(now, cycles).is_some()
+        self.map
+            .insert(now, CycleTrackerBalanceRecord(cycles))
+            .is_some()
     }
 }
 
@@ -554,6 +565,36 @@ impl CycleTracker {
 mod tests {
     use super::*;
     use crate::test::seams;
+
+    #[test]
+    fn cycle_balance_record_preserves_fixed_width_bytes() {
+        for amount in [0, 1, u128::MAX] {
+            let record = CycleTrackerBalanceRecord(Cycles::new(amount));
+            assert_eq!(record.to_bytes().as_ref(), amount.to_be_bytes());
+            assert_eq!(record.clone().into_bytes(), amount.to_be_bytes());
+            assert_eq!(
+                CycleTrackerBalanceRecord::from_bytes(record.to_bytes()).0,
+                record.0
+            );
+        }
+        assert_eq!(
+            CycleTrackerBalanceRecord::BOUND,
+            Bound::Bounded {
+                max_size: 16,
+                is_fixed_size: true
+            }
+        );
+    }
+
+    #[test]
+    fn cycle_balance_record_rejects_wrong_width() {
+        for length in [0, 15, 17] {
+            let result = std::panic::catch_unwind(|| {
+                CycleTrackerBalanceRecord::from_bytes(Cow::Owned(vec![0; length]))
+            });
+            assert!(result.is_err());
+        }
+    }
 
     #[test]
     fn cycle_history_round_trips_through_canonical_data_snapshots() {
@@ -608,5 +649,27 @@ mod tests {
         assert_eq!(CycleTracker::latest(), Some((4, Cycles::new(4))));
 
         let _ = CycleTracker::purge_before(u64::MAX, usize::MAX);
+    }
+}
+
+/// Exact fixed-width stable encoding of one observed cycle balance.
+#[derive(Clone)]
+pub struct CycleTrackerBalanceRecord(Cycles);
+
+impl Storable for CycleTrackerBalanceRecord {
+    const BOUND: Bound = Bound::Bounded {
+        max_size: 16,
+        is_fixed_size: true,
+    };
+    fn to_bytes(&self) -> Cow<'_, [u8]> {
+        Cow::Owned(self.0.to_u128().to_be_bytes().to_vec())
+    }
+    fn into_bytes(self) -> Vec<u8> {
+        self.0.to_u128().to_be_bytes().to_vec()
+    }
+    fn from_bytes(bytes: Cow<[u8]>) -> Self {
+        let exact = <[u8; 16]>::try_from(bytes.as_ref())
+            .expect("stable cycle balance must contain exactly 16 bytes");
+        Self(Cycles::new(u128::from_be_bytes(exact)))
     }
 }

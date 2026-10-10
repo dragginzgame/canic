@@ -8,6 +8,7 @@ pub mod attempt_recovery;
 mod bounded_observations;
 mod canic_init;
 pub mod capacity_import;
+
 pub(in crate::fleet_ensure) mod certified_custody;
 pub(super) mod clean_reinstall;
 pub(super) mod continuation;
@@ -33,20 +34,21 @@ pub mod retained_contract;
 pub(super) mod startup_funding;
 pub(super) mod terminal;
 
-use crate::MAX_DOCUMENT_READ_BYTES;
-use crate::fleet_ensure::model::{
-    DesiredCanisterKind, DesiredFleet, DesiredFleetArtifacts, EffectRecord, EnsureAction,
-    FLEET_ENSURE_SCHEMA_VERSION, FleetEnsureJournalRecord, FleetEnsurePlan, FleetEnsureStateRecord,
-    FleetObservation, ProtocolArtifactDigests, RetainedRootStartAuthorityRecord,
-    RootManagementObservation, RootOwnedCanisterLifecycle,
+use crate::{
+    MAX_DOCUMENT_READ_BYTES,
+    fleet_ensure::model::{
+        DesiredCanisterKind, DesiredFleet, DesiredFleetArtifacts, EffectRecord, EnsureAction,
+        FLEET_ENSURE_SCHEMA_VERSION, FleetEnsureJournalRecord, FleetEnsurePlan,
+        FleetEnsureStateRecord, FleetObservation, ProtocolArtifactDigests,
+        RetainedRootStartAuthorityRecord, RootManagementObservation, RootOwnedCanisterLifecycle,
+    },
 };
+use canic_contracts::{cycles::Cycles, dto::pool::CanisterPoolAssetStatus};
+use canic_core::cdk::utils::hash::sha256_hex;
 use ic_host_artifacts::artifact::ArtifactError;
-use ic_host_fs::durable::{RegularFileLockError, lock_regular_file_with_parents, write_bytes};
-use ic_host_fs::read::read_optional_file_no_follow;
-
-use canic_core::{
-    cdk::{types::Cycles, utils::hash::sha256_hex},
-    dto::pool::CanisterPoolAssetStatus,
+use ic_host_fs::{
+    durable::{RegularFileLockError, lock_regular_file_with_parents, write_bytes},
+    read::read_optional_file_no_follow,
 };
 use serde::{Serialize, de::DeserializeOwned};
 use std::{
@@ -55,7 +57,6 @@ use std::{
     io,
     path::{Path, PathBuf},
 };
-
 use thiserror::Error as ThisError;
 
 #[cfg(feature = "local-fleet")]
@@ -124,11 +125,11 @@ pub struct EffectObservation {
     pub provisioning_progress: Option<crate::fleet_ensure::dto::FleetProvisioningProgress>,
     /// Latest protected failure, excluded from work-progress identity.
     pub provisioning_failure:
-        Option<canic_core::dto::component_provisioning::FleetComponentProvisioningRootFailure>,
+        Option<canic_contracts::dto::component_provisioning::FleetComponentProvisioningRootFailure>,
     pub applied: bool,
     /// Exact Root-owned Cycles Ledger pause returned by current Component provisioning.
     pub estate_funding_required:
-        Option<canic_core::dto::component_provisioning::RootEstateFundingRequired>,
+        Option<canic_contracts::dto::component_provisioning::RootEstateFundingRequired>,
     /// Exact live source balance observed while reconciling this effect.
     ///
     /// This is populated only when the terminal predicate itself owns a
@@ -158,7 +159,7 @@ pub enum EffectRetry {
 /// Complete verified terminal projection published by one current protocol owner.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TerminalFleetInventory {
-    pub active_registry: Option<canic_core::dto::fleet_registry::FleetRegistry>,
+    pub active_registry: Option<canic_contracts::dto::fleet_registry::FleetRegistry>,
     pub controlled_cycles_by_principal: BTreeMap<String, u128>,
     pub entries: Vec<crate::registry::RegistryEntry>,
 }
@@ -339,7 +340,7 @@ pub trait EnsurePlatform {
     /// Verify completed infrastructure registration before publication permits pool import.
     fn verify_bootstrap_registry(
         &mut self,
-        _expected: &canic_core::dto::fleet_registry::FleetRegistry,
+        _expected: &canic_contracts::dto::fleet_registry::FleetRegistry,
     ) -> Result<bool, Self::Error> {
         Ok(false)
     }
@@ -677,6 +678,10 @@ pub(in crate::fleet_ensure::ops) fn lock_fleet_file_without_recovery(
             path: paths.lock.clone(),
             source,
         },
+        RegularFileLockError::Publication(source) => EnsureStateError::Io {
+            path: paths.lock.clone(),
+            source: crate::publication::ops::io_error(source),
+        },
         RegularFileLockError::NotRegular => EnsureStateError::Lock {
             path: paths.lock.clone(),
         },
@@ -916,10 +921,12 @@ pub fn write_plan(paths: &EnsurePaths, plan: &FleetEnsurePlan) -> Result<(), Ens
             path: paths.plan.clone(),
             source,
         })?;
-    write_bytes(&paths.plan, &bytes).map_err(|source| EnsureStateError::Io {
-        path: paths.plan.clone(),
-        source,
-    })
+    write_bytes(&paths.plan, &bytes)
+        .map_err(crate::publication::ops::io_error)
+        .map_err(|source| EnsureStateError::Io {
+            path: paths.plan.clone(),
+            source,
+        })
 }
 
 /// Atomically retain one complete generator-owned Root-start authority.
@@ -1015,10 +1022,12 @@ fn write_current(path: &Path, value: &impl Serialize) -> Result<(), EnsureStateE
         path: path.to_path_buf(),
         source,
     })?;
-    write_bytes(path, &bytes).map_err(|source| EnsureStateError::Io {
-        path: path.to_path_buf(),
-        source,
-    })
+    write_bytes(path, &bytes)
+        .map_err(crate::publication::ops::io_error)
+        .map_err(|source| EnsureStateError::Io {
+            path: path.to_path_buf(),
+            source,
+        })
 }
 
 fn validate_schema<T>(

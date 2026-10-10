@@ -13,16 +13,16 @@ use crate::{
     config::ComponentTopologyError,
     domain::policy::pure::env::{EnvInput, EnvPolicyError, validate_or_default},
     dto::env::EnvBootstrapArgs,
-    ids::{
-        CanisterRole, ComponentBinding, ComponentChildBinding, FleetSubnetRootBinding,
-        ManagedCanisterBinding,
-    },
     model::env::ValidatedEnv,
     ops::{
         config::ConfigOps,
         ic::{IcOps, build_network::BuildNetworkOps},
         runtime::env::EnvOps,
     },
+};
+use canic_contracts::ids::{
+    CanisterRole, ComponentBinding, ComponentChildBinding, FleetSubnetRootBinding,
+    ManagedCanisterBinding,
 };
 
 ///

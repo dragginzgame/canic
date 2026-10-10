@@ -5,10 +5,8 @@
 //! Boundary: the retained terminal authority and complete live Coordinator/Root evidence must
 //! agree before a report exists.
 
-use std::collections::{BTreeMap, BTreeSet};
-
 use candid::Principal;
-use canic_core::{
+use canic_contracts::{
     dto::{
         fleet_registry::{
             FleetRegistry, FleetRegistryManifest, FleetRegistryVersion, FleetSubnetRootEntry,
@@ -19,6 +17,7 @@ use canic_core::{
     ids::SubnetId,
 };
 use serde::Serialize;
+use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;
 
 const SUBNET_INVENTORY_SCHEMA_VERSION: u32 = 1;

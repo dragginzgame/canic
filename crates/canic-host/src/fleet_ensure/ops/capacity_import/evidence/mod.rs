@@ -7,7 +7,9 @@ use crate::fleet_ensure::{
     model::capacity_import::CapacityImportPlanRecord,
     ops::capacity_import::{CapacityImportReviewError, root_reservation},
 };
-use canic_core::dto::pool_import::{PoolImportPhase, PoolImportSourceProgress, PoolImportStatus};
+use canic_contracts::dto::pool_import::{
+    PoolImportPhase, PoolImportSourceProgress, PoolImportStatus,
+};
 
 /// Validate authenticated Root evidence before retaining or acting on its contents.
 /// This does not authenticate a reply or authorize local inventory publication.

@@ -1,7 +1,7 @@
 //! Target-bound initializer persistence, refusal and interrupted install evidence.
 
 use super::*;
-use canic_core::dto::component_registry::{
+use canic_contracts::dto::component_registry::{
     ComponentApplicationInitialization, MAX_COMPONENT_APPLICATION_INIT_BYTES,
     RootComponentInitializationRequest,
 };

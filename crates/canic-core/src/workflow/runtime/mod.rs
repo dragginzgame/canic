@@ -20,16 +20,16 @@ pub mod timer;
 
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
 use crate::ops::storage::auth::LocalApplicationAuthorizationStateOps;
-use crate::ops::storage::{
-    icp_refill::IcpRefillStoreOps,
-    intent::{IntentStoreOps, ReceiptBackedIntentOps},
-};
 use crate::{
     InternalError,
     log::Topic,
     ops::{
         ic::IcOps,
         runtime::{env::EnvOps, memory::MemoryRegistryOps},
+        storage::{
+            icp_refill::IcpRefillStoreOps,
+            intent::{IntentStoreOps, ReceiptBackedIntentOps},
+        },
     },
     workflow,
 };

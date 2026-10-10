@@ -26,7 +26,7 @@ use crate::{
     icp::IcpCli,
 };
 use candid::Principal;
-use canic_core::dto::{
+use canic_contracts::dto::{
     fleet_registry::FleetRegistry,
     pool_import::{PoolImportIdentity, PoolImportSourceProgress},
 };

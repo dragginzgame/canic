@@ -14,8 +14,7 @@ use crate::{
     },
 };
 use candid::Principal;
-use canic_core::{
-    control_plane_support::error::InternalError,
+use canic_contracts::{
     dto::{
         abi::v1::{CanisterInitAuthority, CanisterInitPayload},
         fixture_provisioning::{
@@ -26,8 +25,10 @@ use canic_core::{
     },
     ids::{FleetRegistryAuthority, ManagedCanisterBinding, ReleaseBuildId, SubnetId},
 };
+use canic_core::control_plane_support::error::InternalError;
 
 /// Exact Root identity shared by the selected Store and immutable target binding.
+
 #[derive(Eq, PartialEq)]
 struct FixtureRootIdentity<'a> {
     authority: &'a FleetRegistryAuthority,
@@ -206,7 +207,9 @@ pub fn next_revision(
         .ok_or_else(InternalError::conflict)
 }
 
-const fn target_component(target: &ManagedCanisterBinding) -> &canic_core::ids::ComponentBinding {
+const fn target_component(
+    target: &ManagedCanisterBinding,
+) -> &canic_contracts::ids::ComponentBinding {
     match target {
         ManagedCanisterBinding::Component(binding) => binding,
         ManagedCanisterBinding::ComponentChild(binding) => &binding.component,
@@ -309,7 +312,7 @@ pub fn revocation_request(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use canic_core::ids::{
+    use canic_contracts::ids::{
         ComponentBinding, ComponentChildBinding, ComponentInstanceId, ReleaseBuildId,
         ReleaseBuildNonce, SubnetId,
     };

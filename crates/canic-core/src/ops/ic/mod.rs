@@ -12,10 +12,8 @@ pub mod mgmt;
 pub mod nns;
 pub mod release_build;
 
-use crate::{
-    InternalError,
-    cdk::types::{Cycles, Principal},
-};
+use crate::{InternalError, cdk::types::Principal};
+use canic_contracts::cycles::Cycles;
 use std::time::SystemTime;
 
 ///

@@ -40,7 +40,7 @@ for kind in host ic; do
                 before="$(identity "$bundle")" || before=""
                 checker=(bash "$ROOT/scripts/dev/install-$kind-tools.sh" --consumer "$repository" --check)
                 if [[ "$kind" == host ]]; then
-                    checker+=(--versions "$detail/caller-pins" --with-ripgrep --with-cloc)
+                    checker+=(--versions "$detail/caller-pins")
                 else
                     checker+=(--pins "$detail/caller-pins")
                 fi

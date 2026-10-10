@@ -11,27 +11,27 @@ use crate::{
     protocol_binding::resolve_registry_protocol_binding,
     registry::RegistryEntry,
 };
-use candid::{CandidType, Deserialize, Principal};
-use canic_control_plane::{
-    dto::{
-        fleet_coordinator::CoordinatorFundingStatusResponse, root::RootFundingStatusResponse,
-        template::WasmStoreStatusResponse,
-    },
-    ids::WasmStoreGcMode,
-};
-use canic_core::{
-    dto::{
-        page::PageRequest,
-        pool::{CanisterPoolResponse, CanisterPoolStatusRequest},
-        public_status::{
-            PublicHistoryRequest, PublicHistorySnapshot, PublicMetricFamily, PublicMetricsRequest,
-            PublicMetricsSnapshot,
-        },
-        role::RoleOverviewResponse,
-    },
-    protocol,
-    role_contract::RoleCapabilityKey,
-};
+use candid::{CandidType, Principal};
+use canic_contracts::dto::page::PageRequest;
+use canic_contracts::dto::pool::CanisterPoolStatusRequest;
+use canic_contracts::dto::public_status::PublicHistoryRequest;
+use canic_contracts::dto::public_status::PublicMetricFamily;
+use canic_contracts::dto::public_status::PublicMetricsRequest;
+use canic_contracts::dto::template::WasmStoreStatusResponse;
+use canic_contracts::dto::wire::projection::capacity_inventory::RootRequest as EstateRequest;
+use canic_contracts::dto::wire::projection::capacity_inventory::RootResponse as EstateResponse;
+use canic_contracts::dto::wire::projection::observatory::MetricRequest;
+use canic_contracts::dto::wire::projection::observatory::MetricResponse;
+use canic_contracts::dto::wire::projection::observatory::RootFundingResponse;
+use canic_contracts::dto::wire::projection::observatory::StoreRequest;
+use canic_contracts::dto::wire::projection::observatory::StoreResponse;
+use canic_contracts::dto::wire::projection::overview::RoleStatusRequest as OverviewRequest;
+use canic_contracts::dto::wire::projection::overview::RoleStatusResponse as OverviewResponse;
+use canic_contracts::dto::wire::projection::release_coordinator_funding::Request as FundingRequest;
+use canic_contracts::dto::wire::projection::release_coordinator_funding::Response as CoordinatorResponse;
+use canic_contracts::ids::WasmStoreGcMode;
+use canic_contracts::protocol;
+use canic_core::role_contract::RoleCapabilityKey;
 use std::path::Path;
 
 /// Independent role observations; implementations must not retry or substitute another role.
@@ -59,55 +59,6 @@ pub struct IcpObservatoryTransport<'a> {
     pub query_timeout: std::time::Duration,
     pub deadline: std::time::Instant,
     pub compatibility: Option<Result<(), ObservationFailure>>,
-}
-
-#[derive(CandidType)]
-enum OverviewRequest {
-    Overview,
-}
-#[derive(CandidType, Deserialize)]
-enum OverviewResponse {
-    Overview(RoleOverviewResponse),
-}
-#[derive(CandidType)]
-enum FundingRequest {
-    Funding,
-}
-#[derive(CandidType, Deserialize)]
-enum CoordinatorResponse {
-    Funding(CoordinatorFundingStatusResponse),
-}
-#[derive(CandidType, Deserialize)]
-enum RootFundingResponse {
-    Funding(RootFundingStatusResponse),
-}
-#[derive(CandidType)]
-enum EstateRequest {
-    Pool(CanisterPoolStatusRequest),
-}
-#[derive(CandidType, Deserialize)]
-enum EstateResponse {
-    Pool(CanisterPoolResponse),
-}
-#[derive(CandidType)]
-enum StoreRequest {
-    Storage,
-}
-#[derive(CandidType, Deserialize)]
-enum StoreResponse {
-    Storage(WasmStoreStatusResponse),
-}
-
-#[derive(CandidType)]
-enum MetricRequest {
-    Metrics(PublicMetricsRequest),
-    History(PublicHistoryRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum MetricResponse {
-    Metrics(PublicMetricsSnapshot),
-    History(PublicHistorySnapshot),
 }
 
 impl IcpObservatoryTransport<'_> {
@@ -392,7 +343,7 @@ fn decode_reply<O: CandidType + serde::de::DeserializeOwned>(
     // Bound decoder work as well as captured bytes, including skipped Candid fields.
     config.set_decoding_quota(maximum_bytes.saturating_mul(64));
     config.set_skipping_quota(maximum_bytes);
-    let reply: Result<O, canic_core::dto::error::Error> =
+    let reply: Result<O, canic_contracts::dto::error::Error> =
         candid::utils::decode_one_with_config(&bytes, &config)
             .map_err(|_| ObservationFailure::InvalidResponse)?;
     reply.map_err(|error| ObservationFailure::Rejected {

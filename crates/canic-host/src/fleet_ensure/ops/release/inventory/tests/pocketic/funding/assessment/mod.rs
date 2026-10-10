@@ -4,9 +4,8 @@ use super::*;
 use crate::fleet_ensure::{
     view::release::funding::ReleaseRefillDisposition, workflow::release::assess_funding,
 };
-use canic_control_plane::dto::root::RootIcpRefillReleaseEvidence;
-use canic_core::{
-    cdk::types::Cycles,
+use canic_contracts::{
+    cycles::Cycles,
     dto::{
         fleet_funding::{
             FleetRootFundingAcceptanceReceipt, FleetRootFundingAcceptanceRequest,
@@ -14,6 +13,7 @@ use canic_core::{
         },
         fleet_registry::FleetRegistryVersion,
         icp_refill::{IcpRefillErrorCode, IcpRefillResponse, IcpRefillStatus, IcpRefillTrigger},
+        root::RootIcpRefillReleaseEvidence,
     },
 };
 
@@ -88,9 +88,9 @@ pub(super) fn assert_assessment(
     let mut coordinator = funding::tests::coordinator_status(registry);
     coordinator.roots[0].current_operation = page.current_request.clone();
     coordinator.roots[0].window.reserved_cycles = Cycles::new(200);
-    let coordinator_bytes = candid::encode_one(Ok::<_, Error>(Reply::Funding(Box::new(
-        coordinator.clone(),
-    ))))
+    let coordinator_bytes = candid::encode_one(Ok::<_, Error>(CoordinatorReply::Funding(
+        Box::new(coordinator.clone()),
+    )))
     .unwrap();
     pic.update_call(
         review.authority.coordinator,
@@ -109,7 +109,8 @@ pub(super) fn assert_assessment(
     let mut refused = refill(root, 3);
     refused.transfer_uncertain = false;
     page.icp_refills = vec![completed, unresolved, refused];
-    let bytes = candid::encode_one(Ok::<_, Error>(Reply::FundingRelease(Box::new(page)))).unwrap();
+    let bytes =
+        candid::encode_one(Ok::<_, Error>(RootReply::FundingRelease(Box::new(page)))).unwrap();
     pic.update_call(root, review.authority.operator, "replace", bytes.clone())
         .unwrap();
     let evidence = runtime
@@ -136,7 +137,10 @@ pub(super) fn assert_assessment(
     let retained = report.evidence.roots[0].pages[0].clone();
     assert_eq!(retained.icp_refills[0].source_subaccount, Some([4; 32]));
     assert_eq!(
-        candid::encode_one(Ok::<_, Error>(Reply::FundingRelease(Box::new(retained)))).unwrap(),
+        candid::encode_one(Ok::<_, Error>(RootReply::FundingRelease(Box::new(
+            retained
+        ))))
+        .unwrap(),
         bytes
     );
 }

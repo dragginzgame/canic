@@ -10,7 +10,7 @@ use crate::{
     },
     support::icp_target::IcpTargetOptions,
 };
-use canic_core::ids::ComponentSpecId;
+use canic_contracts::ids::ComponentSpecId;
 use canic_host::{
     component_operation::{
         ComponentOperationError, ops::transport::IcpComponentTransport, workflow,
@@ -25,6 +25,7 @@ use std::{
 use thiserror::Error;
 
 /// Component command boundary failures preserve the host's typed recovery diagnostic.
+
 #[derive(Debug, Error)]
 pub enum ComponentCommandError {
     #[error(transparent)]

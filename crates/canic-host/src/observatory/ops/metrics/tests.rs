@@ -1,5 +1,5 @@
 use super::*;
-use canic_core::dto::{page::Page, public_status::PublicMetric};
+use canic_contracts::dto::{page::Page, public_status::PublicMetric};
 
 fn snapshot(family: PublicMetricFamily, names: &[&str]) -> PublicMetricsSnapshot {
     PublicMetricsSnapshot {
@@ -73,7 +73,7 @@ fn timer_measurements_keep_source_registration_and_both_phases() {
     );
     for row in &mut reply.metrics.entries {
         row.kind = PublicMetricKind::TimerCounter {
-            registration: canic_core::dto::public_status::TimerMetricRegistration {
+            registration: canic_contracts::dto::public_status::TimerMetricRegistration {
                 canister_version: 3,
                 started_at_ns: 10,
                 sequence: 7,

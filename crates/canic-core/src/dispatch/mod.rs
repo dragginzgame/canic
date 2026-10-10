@@ -27,7 +27,8 @@
 
 pub mod icrc21;
 
-use crate::{ids::EndpointCall, perf};
+use crate::perf;
+use canic_contracts::ids::EndpointCall;
 
 #[cfg_attr(not(target_arch = "wasm32"), expect(clippy::missing_const_for_fn))]
 fn ensure_memory_bootstrap() {

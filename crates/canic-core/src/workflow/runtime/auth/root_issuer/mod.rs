@@ -18,7 +18,6 @@ use crate::{
         RootIssuerConfigureRequest, RootIssuerConfigureResponse, RootIssuerRenewalStatusRequest,
         RootIssuerRenewalStatusResponse,
     },
-    ids::FleetKey,
     ops::{
         auth::AuthOps,
         ic::IcOps,
@@ -26,6 +25,7 @@ use crate::{
     },
     workflow::runtime::auth::RuntimeAuthWorkflow,
 };
+use canic_contracts::ids::FleetKey;
 
 impl RuntimeAuthWorkflow {
     /// Configure one issuer's authority and renewal before reconciling its timer.
@@ -86,9 +86,9 @@ mod tests {
         cdk::types::Principal,
         diagnostics::codes,
         dto::auth::{DelegatedRoleGrant, DelegationAudience},
-        ids::CanisterRole,
         ops::storage::auth::RootDelegationStateOps,
     };
+    use canic_contracts::ids::CanisterRole;
     use std::cell::Cell;
 
     fn request(issuer: u8) -> RootIssuerConfigureRequest {

@@ -15,6 +15,15 @@ mod fleet_service;
 mod log;
 mod role;
 
+use crate::InternalError;
+use canic_contracts::ids::{
+    AppId, BuildNetwork, CanisterRole, ComponentGroupDeploymentId, ComponentGroupSpecId,
+    ComponentSpecId,
+};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
+use std::collections::{BTreeMap, BTreeSet};
+use thiserror::Error as ThisError;
+
 pub use chain_key::{ChainKeyDerivationError, ChainKeyPublicKeyDerivation};
 pub use component_group::*;
 pub use component_group_deployment::*;
@@ -22,17 +31,6 @@ pub use component_spec::*;
 pub use fleet_service::*;
 pub use log::*;
 pub use role::*;
-
-use crate::{
-    InternalError,
-    ids::{
-        AppId, BuildNetwork, CanisterRole, ComponentGroupDeploymentId, ComponentGroupSpecId,
-        ComponentSpecId,
-    },
-};
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
-use std::collections::{BTreeMap, BTreeSet};
-use thiserror::Error as ThisError;
 
 ///
 /// ConfigSchemaError
@@ -575,9 +573,9 @@ where
     D: Deserializer<'de>,
 {
     let value = String::deserialize(deserializer)?;
-    BuildNetwork::parse(&value).ok_or_else(|| {
-        D::Error::custom("auth.delegated_tokens.build_network must be one of ic, local")
-    })
+    BuildNetwork::deserialize(serde::de::value::StrDeserializer::<D::Error>::new(&value)).map_err(
+        |_| D::Error::custom("auth.delegated_tokens.build_network must be one of ic, local"),
+    )
 }
 
 #[expect(

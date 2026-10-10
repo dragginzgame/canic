@@ -1,0 +1,59 @@
+//
+// ShardingRegistryEntry
+//
+
+use crate::dto::prelude::*;
+
+#[derive(CandidType, Clone, Debug, Deserialize)]
+pub struct ShardingRegistryEntry {
+    pub pid: Principal,
+    pub entry: ShardEntry,
+}
+
+//
+// ShardingRegistryResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize)]
+pub struct ShardingRegistryResponse(pub Vec<ShardingRegistryEntry>);
+
+//
+// ShardingPartitionKeysResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize)]
+pub struct ShardingPartitionKeysResponse(pub Vec<String>);
+
+//
+// ShardEntry
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct ShardEntry {
+    // Logical slot index within the pool (assigned deterministically).
+    pub slot: u32,
+    pub capacity: u32,
+    pub count: u32,
+    pub pool: String,
+    pub canister_role: CanisterRole,
+    pub created_at: u64,
+}
+
+//
+// ShardingPlanStateResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub enum ShardingPlanStateResponse {
+    // Partition key already has a shard assigned.
+    AlreadyAssigned { pid: Principal },
+
+    // Partition key can be deterministically assigned to an existing shard (via HRW).
+    UseExisting { pid: Principal },
+
+    // Policy allows creation of a new shard.
+    CreateAllowed,
+
+    // Policy forbids creation of a new shard (e.g., capacity reached).
+    CreateBlocked { reason: String },
+}

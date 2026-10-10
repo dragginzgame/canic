@@ -19,7 +19,7 @@ use crate::{
     },
     version_text,
 };
-use canic_core::ids::ReleaseBuildId;
+use canic_contracts::ids::ReleaseBuildId;
 use canic_host::{
     fleet_ensure::{
         FleetEnsureReport, FleetGenerateRequest, IcpEnsurePlatform,
@@ -31,9 +31,8 @@ use canic_host::{
     icp::IcpCli,
     icp_config::resolve_current_canic_icp_root,
 };
-use ic_host_fs::read::read_file_no_follow;
-
 use clap::{ArgAction, ArgMatches, Command};
+use ic_host_fs::read::read_file_no_follow;
 use std::{ffi::OsString, path::PathBuf};
 
 pub(super) fn command() -> Command {

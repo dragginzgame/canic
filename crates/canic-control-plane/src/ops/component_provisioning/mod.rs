@@ -10,8 +10,8 @@ mod release;
 #[cfg(test)]
 mod tests;
 
-use crate::ops::{canister_pool::CanisterPoolOps, component_registry::ComponentRegistryOps};
 use crate::{
+    ops::{canister_pool::CanisterPoolOps, component_registry::ComponentRegistryOps},
     storage::stable::component_provisioning::{
         RootComponentProvisioningClaimCursorRecord, RootComponentProvisioningCommitError,
         RootComponentProvisioningInstallCursorRecord, RootComponentProvisioningPlacementKey,
@@ -39,18 +39,7 @@ use crate::{
     },
 };
 use candid::{CandidType, Principal};
-use canic_core::{
-    control_plane_support::{
-        error::InternalError,
-        ops::component_provisioning_plan::RootComponentProvisioningBatchValidation,
-        ops::component_provisioning_receipt::{
-            RootComponentProvisioningAcceptanceReceiptAuthority,
-            RootComponentProvisioningProvisionedReceiptAuthority,
-            RootComponentProvisioningPublishedReceiptAuthority,
-            RootComponentProvisioningReceiptOps,
-            RootComponentProvisioningRuntimesActiveReceiptAuthority,
-        },
-    },
+use canic_contracts::{
     dto::{
         component_deployment::{
             ComponentDeploymentLimits, ComponentDeploymentPurpose, ProtectedComponentDeployment,
@@ -72,6 +61,19 @@ use canic_core::{
         fleet_registry::FleetDirectorySnapshot,
     },
     ids::{ComponentBinding, ComponentGroupMemberPath, ComponentGroupPlacementId, ComponentSpecId},
+};
+use canic_core::control_plane_support::{
+    error::InternalError,
+    ops::{
+        component_provisioning_plan::RootComponentProvisioningBatchValidation,
+        component_provisioning_receipt::{
+            RootComponentProvisioningAcceptanceReceiptAuthority,
+            RootComponentProvisioningProvisionedReceiptAuthority,
+            RootComponentProvisioningPublishedReceiptAuthority,
+            RootComponentProvisioningReceiptOps,
+            RootComponentProvisioningRuntimesActiveReceiptAuthority,
+        },
+    },
 };
 use failure::{failure_response, failure_view};
 use sha2::{Digest, Sha256};
@@ -206,14 +208,14 @@ struct ReservedMemberAuthority<'a> {
     component_spec: &'a ComponentSpecId,
     spec_hash: [u8; 32],
     provisioning_origin: &'a ComponentProvisioningOrigin,
-    release_set: canic_core::ids::FleetSubnetRootReleaseSet,
+    release_set: canic_contracts::ids::FleetSubnetRootReleaseSet,
 }
 
 #[derive(Eq, PartialEq)]
 struct RegistryCommittedMemberAuthority<'a> {
     binding: &'a ComponentBinding,
     provisioning_origin: &'a ComponentProvisioningOrigin,
-    release_set: canic_core::ids::FleetSubnetRootReleaseSet,
+    release_set: canic_contracts::ids::FleetSubnetRootReleaseSet,
     status: ComponentLifecycleStatus,
     registry: ComponentRegistryHead,
     registry_encoded_bytes: u64,
@@ -225,7 +227,7 @@ struct RegistryCommittedMemberAuthority<'a> {
 #[derive(Eq, PartialEq)]
 struct ProvisionedPlacementAuthority<'a> {
     group_placement: &'a ComponentGroupPlacementId,
-    component_group: &'a canic_core::ids::ComponentGroupSpecId,
+    component_group: &'a canic_contracts::ids::ComponentGroupSpecId,
     member_count: usize,
 }
 
@@ -236,10 +238,10 @@ struct ProvisionedResultMemberAuthority<'a> {
     component_spec: &'a ComponentSpecId,
     purpose: &'a ComponentDeploymentPurpose,
     limits: &'a ComponentDeploymentLimits,
-    binding_authority: &'a canic_core::ids::FleetRegistryAuthority,
+    binding_authority: &'a canic_contracts::ids::FleetRegistryAuthority,
     binding_component_spec: &'a ComponentSpecId,
     binding_spec_hash: [u8; 32],
-    binding_placement_subnet: canic_core::ids::SubnetId,
+    binding_placement_subnet: canic_contracts::ids::SubnetId,
     binding_root: Principal,
 }
 
@@ -2536,7 +2538,7 @@ fn derive_component_group_directory_from_view(
 fn derive_component_group_directory_from_parts(
     operation_id: [u8; 32],
     plan_hash: [u8; 32],
-    batch: &canic_core::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
+    batch: &canic_contracts::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
     result: &RootComponentProvisioningResult,
     placement_index: usize,
 ) -> Result<ComponentGroupDirectory, InternalError> {
@@ -2615,7 +2617,7 @@ fn result_member_at(
 fn validate_provisioned_result(
     operation_id: [u8; 32],
     plan_hash: [u8; 32],
-    batch: &canic_core::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
+    batch: &canic_contracts::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
     component_count: u32,
     result: &RootComponentProvisioningResult,
 ) -> Result<(), InternalError> {
@@ -2667,9 +2669,9 @@ fn validate_provisioned_result(
 fn validate_provisioned_result_member(
     operation_id: [u8; 32],
     plan_hash: [u8; 32],
-    batch: &canic_core::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
+    batch: &canic_contracts::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
     group_placement: &ComponentGroupPlacementId,
-    entry: &canic_core::dto::component_provisioning::ComponentGroupPlanEntry,
+    entry: &canic_contracts::dto::component_provisioning::ComponentGroupPlanEntry,
     member: &RootProvisionedGroupMember,
 ) -> Result<(), InternalError> {
     let binding = &member.binding;
@@ -2746,7 +2748,7 @@ fn provisioned_receipt_hash(
 fn validate_record_cursors(
     operation_id: [u8; 32],
     plan_hash: [u8; 32],
-    batch: &canic_core::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
+    batch: &canic_contracts::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
     component_count: u32,
     cursors: ProvisioningCursorRecords,
 ) -> Result<(), InternalError> {
@@ -2786,7 +2788,7 @@ fn validate_record_cursors(
 fn validate_record_placement_index(
     operation_id: [u8; 32],
     plan_hash: [u8; 32],
-    batch: &canic_core::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
+    batch: &canic_contracts::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
 ) -> Result<(), InternalError> {
     let expected_placement = RootComponentProvisioningPlacementRecord {
         operation_id,
@@ -2815,7 +2817,7 @@ fn request_matches_view(
 fn validate_reservation_cursor(
     operation_id: [u8; 32],
     plan_hash: [u8; 32],
-    batch: &canic_core::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
+    batch: &canic_contracts::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
     component_count: u32,
     cursor: RootComponentProvisioningReservationCursorRecord,
 ) -> Result<(), InternalError> {
@@ -2842,7 +2844,7 @@ fn validate_reservation_cursor(
 fn validate_claim_cursor(
     operation_id: [u8; 32],
     plan_hash: [u8; 32],
-    batch: &canic_core::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
+    batch: &canic_contracts::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
     component_count: u32,
     reserved_component_count: u32,
     cursor: RootComponentProvisioningClaimCursorRecord,
@@ -2873,7 +2875,7 @@ fn validate_claim_cursor(
 fn validate_install_cursor(
     operation_id: [u8; 32],
     plan_hash: [u8; 32],
-    batch: &canic_core::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
+    batch: &canic_contracts::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
     component_count: u32,
     claimed_component_count: u32,
     cursor: RootComponentProvisioningInstallCursorRecord,
@@ -2904,7 +2906,7 @@ fn validate_install_cursor(
 fn validate_registry_cursor(
     operation_id: [u8; 32],
     plan_hash: [u8; 32],
-    batch: &canic_core::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
+    batch: &canic_contracts::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
     component_count: u32,
     installed_component_count: u32,
     cursor: RootComponentProvisioningRegistryCursorRecord,
@@ -2934,7 +2936,7 @@ fn validate_registry_cursor(
 }
 
 fn validate_member_cursor(
-    batch: &canic_core::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
+    batch: &canic_contracts::dto::component_provisioning::FleetSubnetRootProvisioningBatch,
     component_count: u32,
     placement_index: u32,
     member_index: u32,
@@ -3383,8 +3385,8 @@ fn accepted_member<'a>(
     member_path: &ComponentGroupMemberPath,
 ) -> Result<
     (
-        &'a canic_core::dto::component_provisioning::ComponentGroupPlacementPlan,
-        &'a canic_core::dto::component_provisioning::ComponentGroupPlanEntry,
+        &'a canic_contracts::dto::component_provisioning::ComponentGroupPlacementPlan,
+        &'a canic_contracts::dto::component_provisioning::ComponentGroupPlanEntry,
     ),
     InternalError,
 > {
@@ -3427,19 +3429,19 @@ fn acceptance_receipt_hash(
 pub(super) const fn map_commit_error(error: RootComponentProvisioningCommitError) -> InternalError {
     match error {
         RootComponentProvisioningCommitError::ActiveOperationConflict => {
-            InternalError::public(canic_core::diagnostics::codes::REQUEST_UNEXPECTED_STATE)
+            InternalError::public(canic_contracts::diagnostics::codes::REQUEST_UNEXPECTED_STATE)
         }
         RootComponentProvisioningCommitError::ConflictingOperation => {
-            InternalError::public(canic_core::diagnostics::codes::REQUEST_CONFLICT)
+            InternalError::public(canic_contracts::diagnostics::codes::REQUEST_CONFLICT)
         }
         RootComponentProvisioningCommitError::OperationChanged => {
-            InternalError::public(canic_core::diagnostics::codes::AUTHORITY_CONFLICT)
+            InternalError::public(canic_contracts::diagnostics::codes::AUTHORITY_CONFLICT)
         }
         RootComponentProvisioningCommitError::PlacementConflict => {
-            InternalError::public(canic_core::diagnostics::codes::POSITION_CONFLICT)
+            InternalError::public(canic_contracts::diagnostics::codes::POSITION_CONFLICT)
         }
         RootComponentProvisioningCommitError::PlacementCountOverflow => {
-            InternalError::public(canic_core::diagnostics::codes::CAPACITY_LIMIT)
+            InternalError::public(canic_contracts::diagnostics::codes::CAPACITY_LIMIT)
         }
     }
 }

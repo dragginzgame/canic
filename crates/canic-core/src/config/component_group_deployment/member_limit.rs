@@ -4,20 +4,20 @@
 //! Does not own: Component Spec envelopes, placement, persistence, or runtime enforcement.
 //! Boundary: source reductions become canonical declarations and effective member quotas.
 
-use crate::{
-    config::{
-        ComponentSpec, ComponentTopology, FlattenedComponentGroupMember,
-        schema::{ComponentChildKind, ComponentDeploymentMemberLimitConfig as SourceMemberLimit},
-    },
-    ids::{CanisterRole, ComponentGroupDeploymentId, ComponentGroupMemberPath, ComponentSpecId},
+use crate::config::{
+    ComponentSpec, ComponentTopology, FlattenedComponentGroupMember,
+    schema::{ComponentChildKind, ComponentDeploymentMemberLimitConfig as SourceMemberLimit},
 };
-use std::collections::{BTreeMap, BTreeSet};
-
 use candid::CandidType;
+use canic_contracts::ids::{
+    CanisterRole, ComponentGroupDeploymentId, ComponentGroupMemberPath, ComponentSpecId,
+};
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;
 
 /// Maximum member-limit declarations accepted by one deployment.
+
 pub const MAX_COMPONENT_DEPLOYMENT_MEMBER_LIMITS: usize = 4_096;
 /// Maximum total spawn-grant reductions accepted by one deployment.
 pub const MAX_COMPONENT_DEPLOYMENT_SPAWN_GRANT_REDUCTIONS: usize = 4_096;
@@ -30,24 +30,6 @@ pub struct ComponentDeploymentMemberLimit {
     pub maximum_descendants: Option<u32>,
     pub maximum_registry_bytes: Option<u64>,
     pub spawn_grants: Vec<ComponentDeploymentSpawnGrantLimit>,
-}
-
-/// Canonical reduced ceiling for one exact Component Spec spawn grant.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ComponentDeploymentSpawnGrantLimit {
-    pub parent_role: CanisterRole,
-    pub child_role: CanisterRole,
-    pub maximum_instances_per_parent: u32,
-}
-
-/// Fully effective quotas inherited by every placement of one member occurrence.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ComponentDeploymentLimits {
-    pub maximum_descendants: u32,
-    pub maximum_registry_bytes: u64,
-    pub spawn_grant_reductions: Vec<ComponentDeploymentSpawnGrantLimit>,
 }
 
 /// Typed rejection for an invalid deployment-member reduction.
@@ -527,3 +509,7 @@ fn canonical_spawn_grants(
     }
     Ok(canonical.into_values().collect())
 }
+
+pub use canic_contracts::deployment::{
+    ComponentDeploymentLimits, ComponentDeploymentSpawnGrantLimit,
+};

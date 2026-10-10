@@ -1,4 +1,4 @@
-use canic_core::ids::ReleaseBuildId;
+use canic_contracts::ids::ReleaseBuildId;
 use canic_host::candid_endpoints::EndpointEntry;
 use serde::Serialize;
 

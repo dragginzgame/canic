@@ -15,15 +15,16 @@ use crate::{
         RootComponentProvisioningFailureView, RootComponentProvisioningView,
     },
 };
+use canic_contracts::dto::component_provisioning::RootComponentProvisioningFailure;
 use canic_core::control_plane_support::error::{
     InternalError, ProvisioningFailureView, retry_delay_seconds,
 };
-use canic_core::dto::component_provisioning::RootComponentProvisioningFailure;
 
 /// Durable work counters, deliberately excluding diagnostic observations.
+
 #[derive(Eq, PartialEq)]
 struct ProvisioningProgress {
-    phase: canic_core::dto::component_provisioning::RootComponentProvisioningPhase,
+    phase: canic_contracts::dto::component_provisioning::RootComponentProvisioningPhase,
     reserved: u32,
     claimed: u32,
     installed: u32,
@@ -37,7 +38,7 @@ impl RootComponentProvisioningOps {
     /// Let the callback that first retained a failure own its next retry.
     pub(crate) fn failure_changed(
         before: &RootComponentProvisioningView,
-        after: &canic_core::dto::component_provisioning::RootComponentProvisioningStatusResponse,
+        after: &canic_contracts::dto::component_provisioning::RootComponentProvisioningStatusResponse,
     ) -> bool {
         before.last_failure.map(failure_response) != after.last_failure
     }
@@ -106,7 +107,7 @@ impl RootComponentProvisioningOps {
     /// Compare only durable work progress; failure timestamps and attempt counts are excluded.
     pub(crate) fn progress_changed(
         before: &RootComponentProvisioningView,
-        after: &canic_core::dto::component_provisioning::RootComponentProvisioningStatusResponse,
+        after: &canic_contracts::dto::component_provisioning::RootComponentProvisioningStatusResponse,
     ) -> bool {
         let previous = ProvisioningProgress {
             phase: before.phase,

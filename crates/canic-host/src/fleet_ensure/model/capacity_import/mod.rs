@@ -8,7 +8,7 @@ pub mod retirement;
 pub mod survey;
 
 use candid::Principal;
-use canic_core::ids::{FleetBinding, SubnetId};
+use canic_contracts::ids::{FleetBinding, SubnetId};
 use serde::{Deserialize, Serialize};
 
 /// Source debit used by clean reinstall and its advance headroom forecast.

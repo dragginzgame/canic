@@ -16,7 +16,8 @@ use crate::fleet_ensure::{
     view::release::FleetReleaseObservation,
 };
 use candid::Principal;
-use canic_core::{cdk::utils::hash::hex_bytes, ids::SubnetId};
+use canic_contracts::ids::SubnetId;
+use canic_core::cdk::utils::hash::hex_bytes;
 use std::{collections::BTreeMap, fs::File};
 use thiserror::Error;
 

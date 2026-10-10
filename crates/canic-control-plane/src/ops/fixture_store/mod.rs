@@ -16,14 +16,14 @@ use crate::{
     view::fixture_store::FixtureTargetAuthority,
 };
 use candid::Principal;
-use canic_core::{
+use canic_contracts::{
     dto::fixture_provisioning::{
         FixtureChunkRead, FixtureChunkUpload, FixtureDescriptor, FixtureGrant, FixtureGrantRequest,
         FixtureSourceStatus, FixtureStoreError, FixtureTargetBinding,
     },
     ids::{FleetSubnetWasmStoreAuthority, ManagedCanisterBinding},
-    ingress::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES,
 };
+use canic_core::ingress::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES;
 
 /// Read the existing executable-template allocation counters for shared admission.
 pub fn template_bytes() -> u64 {
@@ -163,12 +163,12 @@ pub fn read(request: FixtureChunkRead) -> Result<Vec<u8>, FixtureStoreError> {
 
 /// Reclaim one fixture entry only inside the existing one-way Store clearing phase.
 #[cfg(feature = "wasm-store-canister")]
-pub fn clear_retired_step() -> Result<bool, canic_core::dto::error::Error> {
+pub fn clear_retired_step() -> Result<bool, canic_contracts::dto::error::Error> {
     if crate::ops::storage::template::WasmStoreGcOps::status().mode
         != crate::ids::WasmStoreGcMode::Clearing
     {
-        return Err(canic_core::dto::error::Error::from_registered(
-            canic_core::diagnostics::codes::STATE_CONFLICT,
+        return Err(canic_contracts::dto::error::Error::from_registered(
+            canic_contracts::diagnostics::codes::STATE_CONFLICT,
         ));
     }
     Ok(FixtureStore::clear_retired_step())

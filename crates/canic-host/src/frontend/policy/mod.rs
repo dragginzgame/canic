@@ -4,11 +4,12 @@
 
 use crate::frontend::{FrontendError, model::FrontendEnvironmentInput};
 use candid::Principal;
-use canic_core::ids::CanonicalNetworkId;
+use canic_contracts::ids::CanonicalNetworkId;
 use std::collections::BTreeSet;
 use url::Url;
 
 /// II's externally specified maximum alternative-origin list length.
+
 pub const MAX_ALTERNATIVE_ORIGINS: usize = 100;
 /// Host collection budget, separate from any runtime role or database capacity.
 pub const MAX_EXPORTED_ROLES: usize = 128;

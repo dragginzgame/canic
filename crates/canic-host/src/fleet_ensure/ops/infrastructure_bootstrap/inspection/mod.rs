@@ -182,7 +182,7 @@ fn reserve_inner(
         return Err(InfrastructureBootstrapError::InspectionBudget);
     }
     *counter += 1;
-    write_bytes(&path, &serde_json::to_vec(&record)?)?;
+    write_bytes(&path, &serde_json::to_vec(&record)?).map_err(crate::publication::ops::io_error)?;
     Ok(())
 }
 

@@ -8,17 +8,14 @@ mod label;
 #[cfg(test)]
 mod tests;
 
-use crate::{
-    config::schema::{ComponentGroupSpecConfig, ConfigModel},
-    ids::{
-        ComponentGroupMemberId, ComponentGroupMemberPath, ComponentGroupMemberPathError,
-        ComponentGroupSpecId, ComponentSpecId, FleetServiceId,
-    },
-};
-use std::collections::{BTreeMap, BTreeSet};
-
+use crate::config::schema::{ComponentGroupSpecConfig, ConfigModel};
 use candid::CandidType;
+use canic_contracts::ids::{
+    ComponentGroupMemberId, ComponentGroupMemberPath, ComponentGroupMemberPathError,
+    ComponentGroupSpecId, ComponentSpecId, FleetServiceId,
+};
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;
 
 pub use label::{
@@ -459,15 +456,6 @@ pub enum ComponentGroupLeafKind {
 }
 
 /// Exact semantic purpose assigned to one Fleet-service Component occurrence.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum FleetServiceMemberPurpose {
-    #[serde(rename = "authority")]
-    Authority,
-    #[serde(rename = "replica")]
-    Replica,
-    #[serde(rename = "pool_member")]
-    PoolMember,
-}
 
 /// Complete flattened direct-Component occurrences for one selected group.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -833,3 +821,5 @@ fn extend_effective_labels(
     }
     Ok(added_label_keys)
 }
+
+pub use canic_contracts::deployment::FleetServiceMemberPurpose;

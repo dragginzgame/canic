@@ -266,7 +266,7 @@ fn balance(value: StartupNativeBalance) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use canic_core::{cdk::types::Cycles, ids::CyclesFundingBudget};
+    use canic_contracts::{cycles::Cycles, ids::CyclesFundingBudget};
 
     fn forecast() -> StartupFundingForecast {
         StartupFundingForecast {
@@ -301,7 +301,7 @@ mod tests {
 
     fn child_binding() -> canic_host::fleet_ensure::view::startup_funding::StartupChildFundingBinding
     {
-        use canic_core::ids::*;
+        use canic_contracts::ids::*;
         let principal = |byte| candid::Principal::from_slice(&[byte]);
         canic_host::fleet_ensure::view::startup_funding::StartupChildFundingBinding {
             release_set: FleetSubnetRootReleaseSet {

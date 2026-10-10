@@ -164,7 +164,8 @@ fn validate_cert_issuance_rules_for_built_cert(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ids::CanisterRole, ops::auth::issuer_canister_sig::issuer_canister_sig_seed_hash};
+    use crate::ops::auth::issuer_canister_sig::issuer_canister_sig_seed_hash;
+    use canic_contracts::ids::CanisterRole;
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])

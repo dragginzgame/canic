@@ -1,9 +1,11 @@
-use canic_core::ids::ReleaseBuildId;
-use canic_host::canister_build::{
-    CanisterBuildProfile, WorkspaceBuildContext, build_workspace_canister_artifact,
-    copy_icp_wasm_output, print_workspace_build_context_once,
+use canic_contracts::ids::ReleaseBuildId;
+use canic_host::{
+    canister_build::{
+        CanisterBuildProfile, WorkspaceBuildContext, build_workspace_canister_artifact,
+        copy_icp_wasm_output, print_workspace_build_context_once,
+    },
+    icp_config::resolve_icp_build_network_from_root,
 };
-use canic_host::icp_config::resolve_icp_build_network_from_root;
 use std::path::{Path, PathBuf};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

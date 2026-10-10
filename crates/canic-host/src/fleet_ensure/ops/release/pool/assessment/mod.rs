@@ -4,10 +4,10 @@ use crate::fleet_ensure::view::release::pool::{
     ReleasePoolCreationFacts, ReleasePoolCreationState, ReleasePoolFacts, ReleasePoolHandoffFact,
     ReleasePoolImportFacts, ReleasePoolImportState,
 };
-use canic_control_plane::dto::root::RootPoolReleaseResponse;
-use canic_core::dto::{
+use canic_contracts::dto::{
     pool::{CanisterPoolCreationFailure, CanisterPoolCreationProgress},
     pool_import::{PoolImportPhase, PoolImportSourceProgress},
+    root::RootPoolReleaseResponse,
 };
 use std::collections::BTreeSet;
 

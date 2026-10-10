@@ -22,20 +22,22 @@ use crate::{
         },
     },
     view::icp_refill::IcpRefillOperation,
-    workflow::ic::icp_refill::{
-        IcpRefillExecutionContext, MAX_NOTIFY_ATTEMPTS, RateQueryMode, TX_WINDOW_NANOS,
-        cost_guard::{
-            recover_icp_refill_cost_guard, require_icp_refill_cost_permit,
-            reserve_icp_refill_cost_guard_if_needed,
+    workflow::{
+        ic::icp_refill::{
+            IcpRefillExecutionContext, MAX_NOTIFY_ATTEMPTS, RateQueryMode, TX_WINDOW_NANOS,
+            cost_guard::{
+                recover_icp_refill_cost_guard, require_icp_refill_cost_permit,
+                reserve_icp_refill_cost_guard_if_needed,
+            },
+            policy_denied, prepare_context,
+            replay::{
+                finish_icp_refill_replay, mark_icp_refill_notify_effect,
+                mark_icp_refill_transfer_effect, preserve_icp_refill_post_effect_result,
+                preserve_icp_refill_recovery_required,
+            },
         },
-        policy_denied, prepare_context,
-        replay::{
-            finish_icp_refill_replay, mark_icp_refill_notify_effect,
-            mark_icp_refill_transfer_effect, preserve_icp_refill_post_effect_result,
-            preserve_icp_refill_recovery_required,
-        },
+        replay::abort_reserved_receipt_after_failure,
     },
-    workflow::replay::abort_reserved_receipt_after_failure,
 };
 
 pub(super) async fn execute_fresh_manual_refill(

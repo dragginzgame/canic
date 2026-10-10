@@ -4,14 +4,12 @@
 //! Does not own: binding construction, Registry persistence, authorization, or allocation.
 //! Boundary: compares passive binding facts against one canonical compiled topology.
 
-use crate::{
-    config::{ComponentTopology, ComponentTopologyError},
-    ids::{
-        ComponentBinding, ComponentChildBinding, ComponentSpecAdmission, ComponentTopologyDigest,
-        FleetSubnetRootBinding, FleetSubnetRootLimits,
-    },
-};
+use crate::config::{ComponentTopology, ComponentTopologyError};
 use candid::Principal;
+use canic_contracts::ids::{
+    ComponentBinding, ComponentChildBinding, ComponentSpecAdmission, ComponentTopologyDigest,
+    FleetSubnetRootBinding, FleetSubnetRootLimits,
+};
 
 impl ComponentTopology {
     /// Validate one root binding and return its exact canonical topology projection.

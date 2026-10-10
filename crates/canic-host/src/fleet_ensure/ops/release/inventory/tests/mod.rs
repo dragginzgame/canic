@@ -4,8 +4,8 @@ mod pocketic;
 
 use super::*;
 use crate::fleet_ensure::policy::release::tests::fixture as release_fixture;
-use canic_core::{
-    cdk::types::Cycles,
+use canic_contracts::{
+    cycles::Cycles,
     dto::fleet_registry::{FleetSubnetRootEntry, FleetSubnetRootStatus},
     ids::{
         ComponentTopologyDigest, CyclesFundingBudget, FleetAdmissionPolicy,

@@ -43,6 +43,7 @@ pub mod __internal {
     // This module exists ONLY for macro expansion.
     // Do NOT re-export canic_core publicly.
     pub use candid;
+    pub use canic_contracts as contracts;
     #[cfg(any(
         feature = "control-plane",
         feature = "fleet-coordinator-canister",
@@ -97,7 +98,7 @@ pub use canic_core::memory;
 // -----------------------------------------------------------------------------
 // Re-exports
 // -----------------------------------------------------------------------------
-pub use canic_core::dto::error::Error;
+pub use canic_contracts::dto::error::Error;
 pub use canic_core::{impl_storable_bounded, impl_storable_unbounded};
 pub use canic_macros::{canic_query, canic_update};
 pub use diagnostics::{DiagnosticCode, RegisteredDiagnosticCode};

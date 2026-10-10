@@ -1,17 +1,20 @@
 use super::*;
 use crate::{cli::globals, run};
 use candid::{CandidType, Encode, Principal};
-use canic_core::cdk::utils::hash::hex_bytes;
-use canic_core::diagnostics::codes;
-use canic_core::dto::{
-    auth::{
-        ActiveDelegationProofStatus, ActiveDelegationProofStatusResponse, DelegationAudience,
-        RootIssuerRenewalBatchStatus, RootIssuerRenewalBatchView, RootIssuerRenewalStateView,
-        RootIssuerRenewalStatusResponse, RootIssuerRenewalTemplateView,
+use canic_contracts::{
+    diagnostics::codes,
+    dto::{
+        auth::{
+            ActiveDelegationProofStatus, ActiveDelegationProofStatusResponse, DelegationAudience,
+            RootIssuerRenewalBatchStatus, RootIssuerRenewalBatchView, RootIssuerRenewalStateView,
+            RootIssuerRenewalStatusResponse, RootIssuerRenewalTemplateView,
+        },
+        error::Error as CanicError,
+        wire::projection::auth_status::{CanisterStatusResponse, RootStatusResponse},
     },
-    error::Error as CanicError,
+    ids::{CanonicalNetworkId, FleetId, FleetKey},
 };
-use canic_core::ids::{CanonicalNetworkId, FleetId, FleetKey};
+use canic_core::cdk::utils::hash::hex_bytes;
 use canic_host::icp::IcpJsonResponseError;
 use std::{cell::RefCell, collections::VecDeque};
 
@@ -159,7 +162,7 @@ fn renewal_status_reports_matching_issuer_observation() {
             renewal_status_response_json(issuer, [3; 32], 1_620_329_000_000_000_000),
         ),
         scripted_response(
-            canic_core::protocol::CANIC_AUTH_STATUS,
+            canic_contracts::protocol::CANIC_AUTH_STATUS,
             Some(codec::issuer_active_proof_status_arg().to_string()),
             Some("json"),
             issuer_status_response_json([3; 32], 1_620_329_000_000_000_000),
@@ -194,7 +197,7 @@ fn renewal_status_reports_root_issuer_drift() {
             renewal_status_response_json(issuer, [3; 32], 1_620_329_000_000_000_000),
         ),
         scripted_response(
-            canic_core::protocol::CANIC_AUTH_STATUS,
+            canic_contracts::protocol::CANIC_AUTH_STATUS,
             Some(codec::issuer_active_proof_status_arg().to_string()),
             Some("json"),
             issuer_status_response_json([4; 32], 1_620_329_000_000_000_000),
@@ -223,7 +226,7 @@ fn renewal_status_warns_when_active_proof_is_missing() {
             renewal_status_without_state_response_json(issuer),
         ),
         scripted_response(
-            canic_core::protocol::CANIC_AUTH_STATUS,
+            canic_contracts::protocol::CANIC_AUTH_STATUS,
             Some(codec::issuer_active_proof_status_arg().to_string()),
             Some("json"),
             issuer_missing_status_response_json(),
@@ -266,9 +269,9 @@ fn renewal_status_rejects_invalid_issuer_principal() {
 
 #[test]
 fn renewal_response_preserves_typed_remote_error() {
-    let response = icp_json_response(Err::<codec::RootStatusResponse, _>(
-        CanicError::from_registered(codes::AUTHORITY_UNAUTHORIZED),
-    ));
+    let response = icp_json_response(Err::<RootStatusResponse, _>(CanicError::from_registered(
+        codes::AUTHORITY_UNAUTHORIZED,
+    )));
 
     let error = codec::parse_renewal_status_summary(&response)
         .expect_err("remote rejection should remain typed");
@@ -326,8 +329,8 @@ fn renewal_template(issuer: &str) -> RootIssuerRenewalTemplateView {
 }
 
 fn renewal_status_with_batch_response_json(issuer: &str) -> String {
-    icp_json_response(Ok::<_, CanicError>(
-        codec::RootStatusResponse::IssuerRenewal(RootIssuerRenewalStatusResponse {
+    icp_json_response(Ok::<_, CanicError>(RootStatusResponse::IssuerRenewal(
+        RootIssuerRenewalStatusResponse {
             template: Some(renewal_template(issuer)),
             state: Some(RootIssuerRenewalStateView {
                 issuer_pid: Principal::from_text(issuer).expect("issuer principal"),
@@ -349,23 +352,23 @@ fn renewal_status_with_batch_response_json(issuer: &str) -> String {
                 retry_after_ns: None,
                 failure: None,
             }),
-        }),
-    ))
+        },
+    )))
 }
 
 fn renewal_status_without_state_response_json(issuer: &str) -> String {
-    icp_json_response(Ok::<_, CanicError>(
-        codec::RootStatusResponse::IssuerRenewal(RootIssuerRenewalStatusResponse {
+    icp_json_response(Ok::<_, CanicError>(RootStatusResponse::IssuerRenewal(
+        RootIssuerRenewalStatusResponse {
             template: Some(renewal_template(issuer)),
             state: None,
             latest_batch: None,
-        }),
-    ))
+        },
+    )))
 }
 
 fn issuer_missing_status_response_json() -> String {
     icp_json_response(Ok::<_, CanicError>(
-        codec::CanisterStatusResponse::ActiveDelegationProof(ActiveDelegationProofStatusResponse {
+        CanisterStatusResponse::ActiveDelegationProof(ActiveDelegationProofStatusResponse {
             status: ActiveDelegationProofStatus::Missing,
             root_pid: None,
             issuer_pid: None,
@@ -389,8 +392,8 @@ fn renewal_status_options(issuer: &str) -> RenewalStatusOptions {
 }
 
 fn renewal_status_response_json(issuer: &str, cert_hash: [u8; 32], expires_at_ns: u64) -> String {
-    icp_json_response(Ok::<_, CanicError>(
-        codec::RootStatusResponse::IssuerRenewal(RootIssuerRenewalStatusResponse {
+    icp_json_response(Ok::<_, CanicError>(RootStatusResponse::IssuerRenewal(
+        RootIssuerRenewalStatusResponse {
             template: Some(renewal_template(issuer)),
             state: Some(RootIssuerRenewalStateView {
                 issuer_pid: Principal::from_text(issuer).expect("issuer principal"),
@@ -402,13 +405,13 @@ fn renewal_status_response_json(issuer: &str, cert_hash: [u8; 32], expires_at_ns
                 updated_at_ns: 1_620_328_800_000_000_000,
             }),
             latest_batch: None,
-        }),
-    ))
+        },
+    )))
 }
 
 fn issuer_status_response_json(cert_hash: [u8; 32], expires_at_ns: u64) -> String {
     icp_json_response(Ok::<_, CanicError>(
-        codec::CanisterStatusResponse::ActiveDelegationProof(ActiveDelegationProofStatusResponse {
+        CanisterStatusResponse::ActiveDelegationProof(ActiveDelegationProofStatusResponse {
             status: ActiveDelegationProofStatus::Valid,
             root_pid: Some(
                 Principal::from_text("r7inp-6aaaa-aaaaa-aaabq-cai").expect("root principal"),

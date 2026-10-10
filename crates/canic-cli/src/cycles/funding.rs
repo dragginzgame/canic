@@ -12,21 +12,25 @@ use crate::{
     cycles::CyclesCommandError,
     support::icp_target::IcpTargetOptions,
 };
-use candid::{CandidType, Reserved, decode_one};
+use candid::decode_one;
+use canic_contracts::dto::error::Error;
+use canic_contracts::dto::fleet_coordinator::CoordinatorFundingWindowStatusResponse as RemoteFundingWindowStatus;
+use canic_contracts::dto::fleet_funding::FleetRootFundingResponse;
+use canic_contracts::dto::fleet_registry::FleetRegistry;
+use canic_contracts::dto::fleet_registry::FleetSubnetRootEntry;
+use canic_contracts::dto::wire::projection::capacity_inventory::CoordinatorRequest as RemoteCoordinatorStatusRequest;
+use canic_contracts::dto::wire::projection::funding_status::RemoteCoordinatorFundingStatus;
+use canic_contracts::dto::wire::projection::funding_status::RemoteCoordinatorRootFundingStatus;
+use canic_contracts::dto::wire::projection::funding_status::RemoteCoordinatorStatusResponse;
+use canic_contracts::dto::wire::projection::funding_status::RemoteRootFundingStatus;
+use canic_contracts::dto::wire::projection::funding_status::RemoteRootStatusResponse;
+use canic_contracts::ids::FleetFundingProfile;
+use canic_contracts::ids::FleetSubnetRootFundingAuthority;
+use canic_contracts::ids::FleetSubnetRootFundingPolicy;
 use canic_core::{
     cdk::{
-        types::{Cycles, Principal},
+        types::Principal,
         utils::hash::{decode_hex, hex_bytes},
-    },
-    dto::{
-        error::Error,
-        fleet_funding::{FleetRootFundingRequest, FleetRootFundingResponse},
-        fleet_registry::{FleetRegistry, FleetSubnetRootEntry, FleetSubnetRootStatus},
-        icp_refill::{IcpRefillResponse, IcpRefillTrigger},
-    },
-    ids::{
-        FleetCoordinatorRootFundingPolicy, FleetFundingProfile, FleetSubnetRootFundingAuthority,
-        FleetSubnetRootFundingPolicy, FleetSubnetRootIcpRefillPolicy,
     },
     shared_support::fleet_funding_policy::fleet_subnet_root_funding_policy_hash,
 };
@@ -37,7 +41,7 @@ use canic_host::{
     protocol_binding::{ResolvedProtocolBinding, resolve_registry_protocol_binding},
 };
 use clap::Command as ClapCommand;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::ffi::OsString;
 
 const FLEET_ARG: &str = "fleet";
@@ -48,129 +52,6 @@ struct FundingOptions {
     target: IcpTargetOptions,
     fleet: String,
     json: bool,
-}
-
-#[derive(CandidType, Deserialize)]
-enum RemoteCoordinatorStatusResponse {
-    Funding(Box<RemoteCoordinatorFundingStatus>),
-    Registry(Box<FleetRegistry>),
-}
-
-#[derive(CandidType)]
-enum RemoteCoordinatorStatusRequest {
-    Registry,
-}
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-struct RemoteFundingWindowStatus {
-    window_start_secs: u64,
-    spent_cycles: Cycles,
-    reserved_cycles: Cycles,
-}
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-struct RemoteCoordinatorRootFundingStatus {
-    fleet_subnet_root: Principal,
-    lifecycle_status: FleetSubnetRootStatus,
-    policy_hash: [u8; 32],
-    policy: FleetSubnetRootFundingPolicy,
-    window: RemoteFundingWindowStatus,
-    historical_automatic_grants: u64,
-    historical_automatic_cycles: Cycles,
-    automatic_grants: u32,
-    automatic_cycles: Cycles,
-    last_successful_grant_at_ns: Option<u64>,
-    current_operation: Option<FleetRootFundingRequest>,
-    last_result: Option<FleetRootFundingResponse>,
-}
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-enum RemoteFundingPolicyRotationPhase {
-    ActivatingRoots {
-        activated_root_count: u32,
-        expected_root_count: u32,
-        successor_registry: Box<canic_core::dto::fleet_registry::FleetRegistryVersion>,
-    },
-    Completed(Reserved),
-    PreparingRoots {
-        prepared_root_count: u32,
-        expected_root_count: u32,
-    },
-    Staging {
-        staged_root_count: u32,
-        expected_root_count: u32,
-    },
-}
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-struct RemoteFundingPolicyRotationStatus {
-    operation_id: [u8; 32],
-    plan_digest: [u8; 32],
-    predecessor_generation: u64,
-    successor_generation: u64,
-    phase: RemoteFundingPolicyRotationPhase,
-}
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-struct RemoteCoordinatorFundingStatus {
-    coordinator: Principal,
-    current_cycles: Cycles,
-    policy_generation: u64,
-    funding_enabled: bool,
-    funding_profile: Option<FleetFundingProfile>,
-    policy: Option<FleetCoordinatorRootFundingPolicy>,
-    fleet_window: Option<RemoteFundingWindowStatus>,
-    historical_automatic_grants: u64,
-    historical_automatic_cycles: Cycles,
-    automatic_grants: u32,
-    automatic_cycles: Cycles,
-    rotation_checkpoint_count: u32,
-    rotation_checkpoint_root_count: u32,
-    rotation_checkpoint_root_capacity_remaining: u32,
-    rotation: Option<RemoteFundingPolicyRotationStatus>,
-    roots: Vec<RemoteCoordinatorRootFundingStatus>,
-}
-
-#[derive(CandidType, Deserialize)]
-enum RemoteRootStatusResponse {
-    Funding(RemoteRootFundingStatus),
-}
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-struct RemoteRootIcpRefillStatus {
-    trigger: IcpRefillTrigger,
-    amount_e8s: u64,
-    fee_e8s: u64,
-    budget_window_start_secs: u64,
-    resumable: bool,
-    response: IcpRefillResponse,
-}
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-struct RemoteRootFundingStatus {
-    fleet_subnet_root: Principal,
-    lifecycle_status: FleetSubnetRootStatus,
-    funding_eligible: bool,
-    cycles_funding_enabled: bool,
-    current_cycles: Cycles,
-    policy_generation: u64,
-    funding_profile: FleetFundingProfile,
-    policy_hash: [u8; 32],
-    root_policy: FleetSubnetRootFundingPolicy,
-    current_operation: Option<FleetRootFundingRequest>,
-    last_result: Option<FleetRootFundingResponse>,
-    historical_automatic_grants: u64,
-    historical_automatic_cycles: Cycles,
-    automatic_grants: u32,
-    automatic_cycles: Cycles,
-    rotation_current: Option<Reserved>,
-    rotation_last: Option<Reserved>,
-    icp_refill_policy: Option<FleetSubnetRootIcpRefillPolicy>,
-    icp_window_start_secs: Option<u64>,
-    icp_window_reserved_e8s: u64,
-    automatic_icp_refills: u32,
-    automatic_icp_refill_e8s: u64,
-    latest_icp_refill: Option<RemoteRootIcpRefillStatus>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -321,7 +202,7 @@ fn query_registry(
             icp,
             binding,
             coordinator,
-            canic_core::protocol::CANIC_COORDINATOR_REGISTRY,
+            canic_contracts::protocol::CANIC_COORDINATOR_REGISTRY,
             &RemoteCoordinatorStatusRequest::Registry,
         )?;
     match response {
@@ -340,7 +221,7 @@ fn query_coordinator(
 ) -> Result<RemoteCoordinatorFundingStatus, CyclesCommandError> {
     let output = icp.canister_query_arg_output_with_candid(
         &coordinator.to_text(),
-        canic_core::protocol::CANIC_OBSERVABILITY,
+        canic_contracts::protocol::CANIC_OBSERVABILITY,
         "(variant { Funding })",
         Some("hex"),
         Some(binding.candid_path()),
@@ -364,7 +245,7 @@ fn query_root(
 ) -> Result<RemoteRootFundingStatus, CyclesCommandError> {
     let output = icp.canister_query_arg_output_with_candid(
         &root.to_text(),
-        canic_core::protocol::CANIC_ROOT_STATUS,
+        canic_contracts::protocol::CANIC_ROOT_STATUS,
         "(variant { Funding })",
         Some("hex"),
         Some(binding.candid_path()),

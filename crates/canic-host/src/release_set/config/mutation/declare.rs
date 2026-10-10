@@ -6,7 +6,8 @@ use crate::release_set::config::{
     AppConfigError, AppConfigMutationConflict, AppConfigNameField, AppConfigNameIssue,
     AppConfigOperation, model::DeclaredAppRole,
 };
-use canic_core::{bootstrap::parse_config_model, ids::CanisterRole};
+use canic_contracts::ids::CanisterRole;
+use canic_core::bootstrap::parse_config_model;
 
 pub(in crate::release_set) fn declare_app_role_source(
     config_source: &str,

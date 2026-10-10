@@ -6,12 +6,14 @@
 
 use std::{fs, path::Path, time::Duration};
 
-use ic_host_process::tool::{OutputLimits, capture_command};
+use ic_host_process::tool::{OutputLimit, OutputLimits, capture_command};
+
+const EXTRACTOR_STDERR_BYTES: usize = 64 * 1024;
 
 const EXTRACTION_LIMITS: OutputLimits = OutputLimits {
-    stdout_bytes: crate::MAX_DOCUMENT_READ_BYTES,
-    stderr_bytes: 64 * 1024,
-    timeout: Duration::from_secs(120),
+    stdout: OutputLimit::Terminate(crate::MAX_DOCUMENT_READ_BYTES),
+    stderr: OutputLimit::Terminate(EXTRACTOR_STDERR_BYTES),
+    timeout: Some(Duration::from_secs(120)),
 };
 
 /// Extract the compiled declaration through the canonical tool and normalize whitespace.
@@ -25,11 +27,11 @@ pub(super) fn extract_candid_with_tool(
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let mut command = crate::build_environment::command(extractor);
     command.arg(debug_wasm_path);
-    let output = capture_command(&mut command, EXTRACTION_LIMITS)?;
+    let output = capture_command(&mut command, EXTRACTION_LIMITS)?.require_complete()?;
 
     // Normalization can add one terminal newline, but never expands the
     // admitted capture beyond that. Process admission remains Canic-owned.
-    let limit = EXTRACTION_LIMITS.stdout_bytes + 1;
+    let limit = crate::MAX_DOCUMENT_READ_BYTES + 1;
     Ok(ic_host_tools::candid::normalize(&output.stdout, limit)?.into_bytes())
 }
 
@@ -103,8 +105,8 @@ mod tests {
     #[test]
     fn extractor_capture_refuses_oversized_output_without_returning_partial_candid() {
         for (stream, limit, redirect) in [
-            (OutputStream::Stdout, EXTRACTION_LIMITS.stdout_bytes, ""),
-            (OutputStream::Stderr, EXTRACTION_LIMITS.stderr_bytes, ">&2"),
+            (OutputStream::Stdout, crate::MAX_DOCUMENT_READ_BYTES, ""),
+            (OutputStream::Stderr, EXTRACTOR_STDERR_BYTES, ">&2"),
         ] {
             let error = run_extractor_script(&format!(
                 "perl -e 'print \"x\" x $ARGV[0]' {} {redirect}",

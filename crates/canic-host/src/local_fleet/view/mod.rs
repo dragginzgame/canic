@@ -4,6 +4,7 @@ use candid::Principal;
 use serde::Serialize;
 
 /// One local role target and its exact simulator subnet.
+
 #[derive(Clone, Debug, Serialize)]
 pub struct LocalCanisterView {
     pub name: String,
@@ -58,7 +59,7 @@ pub struct LocalRootInstallationView {
     pub wasm_sha256: String,
     pub arguments: Vec<u8>,
     pub arguments_sha256: String,
-    pub authority: canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
+    pub authority: canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority,
 }
 
 /// Resolved final controller set for one preallocated local canister.

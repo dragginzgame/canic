@@ -3,7 +3,6 @@
 use super::*;
 use crate::{
     bootstrap::parse_config_model,
-    cdk::types::Cycles,
     config::ComponentGroupDeploymentSpec,
     dto::{
         component_provisioning::{
@@ -15,6 +14,9 @@ use crate::{
         },
         fleet_registry::{FleetRegistry, FleetSubnetRootEntry, FleetSubnetRootStatus},
     },
+};
+use canic_contracts::{
+    cycles::Cycles,
     ids::{
         AppId, CanonicalNetworkId, ComponentGroupPlacementId, ComponentSpecAdmission,
         CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding, FleetId, FleetKey,

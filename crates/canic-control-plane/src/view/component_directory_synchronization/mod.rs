@@ -5,7 +5,7 @@
 //! Boundary: ops projects validated durable records for workflow orchestration.
 
 use candid::Principal;
-use canic_core::{
+use canic_contracts::{
     dto::{
         component_provisioning::RootComponentDirectorySynchronizationResponse,
         component_registry::ComponentRegistryHead, fleet_registry::FleetRegistryVersion,
@@ -14,6 +14,7 @@ use canic_core::{
 };
 
 /// Existing active service member selected before Fleet Registry mirror advancement.
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootComponentDirectorySynchronizationTargetView {
     pub component: ComponentInstanceId,

@@ -1,10 +1,10 @@
-use crate::access::AccessError;
-use crate::domain::policy::pure::{
-    component_allocation::ComponentAllocationPolicyError,
-    component_child_allocation::ComponentChildAllocationPolicyError,
-};
 use crate::{
+    access::AccessError,
     diagnostics::{RegisteredDiagnosticCode, codes},
+    domain::policy::pure::{
+        component_allocation::ComponentAllocationPolicyError,
+        component_child_allocation::ComponentChildAllocationPolicyError,
+    },
     dto::error::Error as PublicError,
 };
 use std::fmt;

@@ -5,16 +5,17 @@
 //! Boundary: ops invokes this adapter only after workflow has persisted exact effect authority.
 
 use crate::{
-    cdk::types::Cycles,
     dto::fleet_registry::FleetLedgerTransferIntent,
     infra::ic::{IcInfraError, call::Call, known::CYCLES_LEDGER_CANISTER},
 };
 use candid::{CandidType, Nat, Principal};
+use canic_contracts::cycles::Cycles;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use thiserror::Error as ThisError;
 
 /// Exact ICRC-1 account used for Root-owned estate funding.
+
 #[derive(CandidType)]
 pub struct CyclesLedgerAccount {
     pub owner: Principal,

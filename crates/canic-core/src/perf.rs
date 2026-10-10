@@ -7,7 +7,7 @@
 //! domain layering.
 //! Instrumentation modules are layer-neutral and may be used anywhere.
 
-use crate::ids::{EndpointCall, EndpointCallKind};
+use canic_contracts::ids::{EndpointCall, EndpointCallKind};
 use std::{
     borrow::Borrow,
     cell::RefCell,

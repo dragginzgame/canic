@@ -29,18 +29,18 @@ use crate::{
         PoolImportHistoryView, PoolImportObservationView,
     },
 };
-use canic_core::{
-    cdk::{
-        structures::Storable,
-        types::{Cycles, Principal},
-    },
-    control_plane_support::error::InternalError,
+use canic_contracts::{
+    cycles::Cycles,
     dto::pool_import::{
         PoolImportCommand, PoolImportIdentity, PoolImportPhase, PoolImportReservation,
         PoolImportRootReceipt, PoolImportSource, PoolImportSourceProgress, PoolImportSourceReceipt,
         PoolImportStatus,
     },
     ids::{FleetSubnetCanisterPoolConfig, MAX_FLEET_CAPACITY_IMPORT_SOURCES},
+};
+use canic_core::{
+    cdk::{structures::Storable, types::Principal},
+    control_plane_support::error::InternalError,
 };
 use sha2::{Digest, Sha256};
 
@@ -69,7 +69,7 @@ impl CanisterPoolImportOps {
 
     /// Bind the complete current Root authority, including controller and pool policy.
     pub fn authority_hash(
-        binding: &canic_core::ids::FleetSubnetRootBinding,
+        binding: &canic_contracts::ids::FleetSubnetRootBinding,
     ) -> Result<[u8; 32], InternalError> {
         let bytes = candid::encode_one(binding).map_err(|_| InternalError::invariant())?;
         let mut hash = Sha256::new();

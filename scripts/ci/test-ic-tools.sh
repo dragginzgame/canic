@@ -7,10 +7,14 @@ ROOT="$0"
 ROOT="$(cd -P "${ROOT%/*}/../.." && printf '%s/.' "$PWD")"
 ROOT="${ROOT%/.}"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/ic-tools-test.XXXXXX")"
+fixture_complete=false
 finish() {
     local status=$?
+    # Bash 3.2 may report zero after nounset before assertions finish.
+    [[ "$fixture_complete" == true || "$status" != 0 ]] || status=1
     if [[ "$status" == 0 ]]; then rm -rf "$fixture";
     else echo "IC tool fixture retained: $fixture" >&2; fi
+    exit "$status"
 }
 trap finish EXIT
 mkdir -p "$fixture/bin" "$fixture/assets" "$fixture/payload"
@@ -94,12 +98,14 @@ for host in Linux:x86_64 Darwin:x86_64 Darwin:arm64; do
     export IC_TOOLS_TEST_OS="${host%:*}" IC_TOOLS_TEST_ARCH="${host#*:}"
     consumer="$fixture/consumer $host"
     mkdir "$consumer"
+    install --preflight > "$fixture/preflight.log" 2>&1
+    [[ ! -s "$fixture/preflight.log" && ! -e "$consumer/.tools" ]] || exit 1
     install > "$fixture/install.log" 2>&1
-    [[ -f "$consumer/.tools/ic/lib/libbinaryen.dylib" ]]
+    [[ -f "$consumer/.tools/ic/lib/libbinaryen.dylib" ]] || exit 1
     before="$(wc -l < "$fixture/downloads")"
     install --check > /dev/null 2>&1
     install > /dev/null 2>&1
-    [[ "$(wc -l < "$fixture/downloads")" == "$before" ]]
+    [[ "$(wc -l < "$fixture/downloads")" == "$before" ]] || exit 1
     (cd "$fixture"; CDPATH="$fixture" bash "$ROOT/scripts/dev/install-ic-tools.sh" \
         --consumer "${consumer#"$fixture/"}" --pins pins.tsv --check) > /dev/null 2>&1
     # Comments and record order do not change selection or rewrite provenance.
@@ -117,7 +123,7 @@ for host in Linux:x86_64 Darwin:x86_64 Darwin:arm64; do
         install > /dev/null 2>&1
         [[ "$(wc -l < "$fixture/downloads")" == "$before" &&
            "$(readlink "$consumer/.tools/ic")" == "$original" &&
-           ! -e "$consumer/.tools/.ic-tools.lock" ]]
+           ! -e "$consumer/.tools/.ic-tools.lock" ]] || exit 1
         cmp "$consumer/.tools/ic/pins.tsv" "$pins"
         cmp "$consumer/.tools/ic/files.sha256" "$fixture/original-receipt"
         cmp "$selected_pins" "$fixture/caller-pins"
@@ -130,12 +136,12 @@ for host in Linux:x86_64 Darwin:x86_64 Darwin:arm64; do
     for target in "$original"$'\n' "$original"$'\n\n'; do
         rm "$consumer/.tools/ic"
         ln -s "$target" "$consumer/.tools/ic"
-        [[ ! -e "$consumer/.tools/ic/bin" ]]
+        [[ ! -e "$consumer/.tools/ic/bin" ]] || exit 1
         : > "$fixture/executions"
         expect_failure install --check
         expect_failure install
         [[ ! -s "$fixture/executions" && "$(wc -l < "$fixture/downloads")" == "$before" &&
-           ! -e "$consumer/.tools/.ic-tools.lock" ]]
+           ! -e "$consumer/.tools/.ic-tools.lock" ]] || exit 1
         perl -e 'my $s=readlink($ARGV[0]); exit(defined($s) && $s eq $ARGV[1] ? 0 : 1)' \
             "$consumer/.tools/ic" "$target"
     done
@@ -203,14 +209,14 @@ for change in version digest other-host host duplicate malformed extra-tool; do
     expect_failure install --check
     case "$change" in host|duplicate|malformed|extra-tool) expect_failure install ;; esac
     [[ ! -s "$fixture/executions" && "$(wc -l < "$fixture/downloads")" == "$before" &&
-       "$(readlink "$consumer/.tools/ic")" == "$original" ]]
+       "$(readlink "$consumer/.tools/ic")" == "$original" ]] || exit 1
 done
 # Retained pins are independently admitted, not merely stripped of comments.
 selected_pins="$pins"
 head -n 1 "$pins" >> "$consumer/.tools/ic/pins.tsv"
 : > "$fixture/executions"
 expect_failure install --check
-[[ ! -s "$fixture/executions" && "$(wc -l < "$fixture/downloads")" == "$before" ]]
+[[ ! -s "$fixture/executions" && "$(wc -l < "$fixture/downloads")" == "$before" ]] || exit 1
 cp "$pins" "$consumer/.tools/ic/pins.tsv"
 
 # Replacing an old six-tool bundle requires explicit setup. Offline checks and
@@ -226,11 +232,11 @@ cp "$consumer/.tools/ic/files.sha256" "$fixture/retained-receipt"
 cp "$consumer/.tools/ic/bin/pocket-ic" "$fixture/retained-server"
 : > "$fixture/executions"
 expect_failure install --check
-[[ ! -s "$fixture/executions" && "$(wc -l < "$fixture/downloads")" == "$before" ]]
+[[ ! -s "$fixture/executions" && "$(wc -l < "$fixture/downloads")" == "$before" ]] || exit 1
 IC_TOOLS_TEST_INTERRUPT=1 expect_failure install
-[[ "$(readlink "$consumer/.tools/ic")" == "$original" ]]
+[[ "$(readlink "$consumer/.tools/ic")" == "$original" ]] || exit 1
 install > /dev/null 2>&1
-[[ "$(readlink "$consumer/.tools/ic")" != "$original" && ! -e "$consumer/.tools/ic/bin/pocket-ic" ]]
+[[ "$(readlink "$consumer/.tools/ic")" != "$original" && ! -e "$consumer/.tools/ic/bin/pocket-ic" ]] || exit 1
 cmp "$fixture/retained-pins" "$consumer/.tools/$original/pins.tsv"
 cmp "$fixture/retained-receipt" "$consumer/.tools/$original/files.sha256"
 cmp "$fixture/retained-server" "$consumer/.tools/$original/bin/pocket-ic"
@@ -242,23 +248,23 @@ selected_pins="$fixture/bad.tsv"
 awk -F '\t' 'BEGIN { OFS="\t" } $1 == "quill" && $3 == "linux-x86_64" { $4=sprintf("%064d",0) } { print }' "$pins" > "$selected_pins"
 : > "$fixture/executions"
 expect_failure install
-[[ ! -s "$fixture/executions" && "$(readlink "$consumer/.tools/ic")" == "$original" ]]
-[[ ! -e "$consumer/.tools/.ic-tools.lock" ]]
+[[ ! -s "$fixture/executions" && "$(readlink "$consumer/.tools/ic")" == "$original" ]] || exit 1
+[[ ! -e "$consumer/.tools/.ic-tools.lock" ]] || exit 1
 rg -F 'Failed tool installation retained:' "$fixture/refusal.log" >/dev/null
 
 # Failure after earlier tools succeeded also preserves the previous activation.
 awk -F '\t' 'BEGIN { OFS="\t" } $1 == "wasm-opt" && $3 == "linux-x86_64" { $4=sprintf("%064d",0) } { print }' "$pins" > "$selected_pins"
 expect_failure install
-[[ "$(readlink "$consumer/.tools/ic")" == "$original" ]]
+[[ "$(readlink "$consumer/.tools/ic")" == "$original" ]] || exit 1
 
 # Offline checks reject changed binaries before executing any version command.
 selected_pins="$pins"
 printf '\nchanged\n' >> "$consumer/.tools/ic/bin/quill"
 : > "$fixture/executions"
 expect_failure install --check
-[[ ! -s "$fixture/executions" ]]
+[[ ! -s "$fixture/executions" ]] || exit 1
 install > /dev/null 2>&1
-[[ "$(readlink "$consumer/.tools/ic")" != "$original" && -d "$consumer/.tools/$original" ]]
+[[ "$(readlink "$consumer/.tools/ic")" != "$original" && -d "$consumer/.tools/$original" ]] || exit 1
 
 # Receipt traversal failure must not activate a candidate or lose its evidence.
 original="$(readlink "$consumer/.tools/ic")"
@@ -272,7 +278,7 @@ exit 9
 SCRIPT
 chmod +x "$fixture/bin/find"
 expect_failure install
-[[ "$(readlink "$consumer/.tools/ic")" == "$original" ]]
+[[ "$(readlink "$consumer/.tools/ic")" == "$original" ]] || exit 1
 rg -F 'receipt traversal failed' "$fixture/refusal.log" >/dev/null
 rg -F 'Failed tool installation retained:' "$fixture/refusal.log" >/dev/null
 rm "$fixture/bin/find"
@@ -287,8 +293,8 @@ rg -F 'version mismatch' "$fixture/refusal.log" >/dev/null
 
 original="$(readlink "$consumer/.tools/ic")"
 IC_TOOLS_TEST_INTERRUPT=1 expect_failure install
-[[ "$(readlink "$consumer/.tools/ic")" == "$original" ]]
-[[ ! -e "$consumer/.tools/.ic-tools.lock" ]]
+[[ "$(readlink "$consumer/.tools/ic")" == "$original" ]] || exit 1
+[[ ! -e "$consumer/.tools/.ic-tools.lock" ]] || exit 1
 rg -F 'Failed tool installation retained:' "$fixture/refusal.log" >/dev/null
 
 # Invalid/incomplete matrices and unknown hosts fail without downloading.
@@ -297,14 +303,15 @@ head -n 14 "$pins" > "$selected_pins"
 expect_failure install
 selected_pins="$pins"
 IC_TOOLS_TEST_ARCH=aarch64 expect_failure install
-[[ "$(wc -l < "$fixture/downloads")" == "$before" ]]
+[[ "$(wc -l < "$fixture/downloads")" == "$before" ]] || exit 1
 consumer="$fixture/locked"
 mkdir -p "$consumer/.tools/.ic-tools.lock"
 expect_failure install
-[[ -d "$consumer/.tools/.ic-tools.lock" ]]
+[[ -d "$consumer/.tools/.ic-tools.lock" ]] || exit 1
 consumer="$fixture/symlink"
 mkdir "$consumer"
 ln -s "$fixture" "$consumer/.tools"
 expect_failure install
 
 echo 'IC tool installation, offline verification, retention and activation tests passed'
+fixture_complete=true

@@ -1,162 +1,170 @@
-# Current handoff — 2026-10-09
+# Current handoff — 2026-10-10
 
-HEAD remains tagged v0.110.54 at
-`c4c046f947b2b28f4342cbf6efe9221ba1ed5f70`; package versions remain
-0.110.54. Changes are uncommitted and extend the undated 0.110.55 notes.
-This handoff describes source and evidence; GitHub issues own acceptance.
+The maintainer accepted the exact 0.110 closeout on 2026-10-10 and requested
+**0.111.0** live for the complete hard cut. Root package
+versions remain **0.110.54** over HEAD `ac55e50334dd6479ec36f404e89e60bcfe9184d6`
+(subject `0.110.55`); the implemented family remains uncommitted. The root
+changelog and detailed 0.111 notes describe one open release batch. GitHub issues
+own acceptance and follow-up decisions.
 
-## Current tooling hard cut
+## Settled release graph
 
-Shared Tooling 0.2.2 is adopted through its canonical exporter at reviewed
-revision `ee48bb37c98c771e77b92fd891f0757d8c1c8b99`. Selected bytes/modes,
-required companions and the task catalog are recorded in the snapshot.
-No maintenance schedule is activated. Dependency exceptions now require exactly
-one JSON document; the owning regression passes under
-[#503](https://github.com/dragginzgame/canic/issues/503).
+The root lock selects Auth/protocol-types 0.3.6, Backup 0.15.0,
+Blob/runtime contracts 0.22.4, all four Host crates 0.12.9, Memory 0.35.5,
+Metrics 0.5.6, Query 0.54.4, Testkit 0.33.1 and Timers 0.17.6.
+Both private Blob consumer locks align their runtime families with this graph.
+Selected dependency caches are explicitly prepared; ordinary qualification is
+locked and offline. Preserve the graph during qualification.
 
-Direct Host packages select 0.9.2, Query 0.52.1 and Testkit 0.27.0.
-Host repository release 0.9.2 publishes new package versions with unchanged
-Rust source from 0.9.1. Canic adopts the same Shared Tooling 0.2.2 corrections.
-The selected root lock is
-`c0e30304b41c72c58db7a64e36c4cebc833445b33ed5490034509f77fc399ea2`.
-It also selects Auth/protocol-types 0.2.1, Backup 0.11.1, Memory 0.33.0,
-Metrics 0.3.1 and Timers 0.16.0. The latest owner releases remove the older
-Host/Metrics generations. No local override is added. Query's 0.52.1 runtime
-source is unchanged from 0.51.1; its Host helper edges moved to 0.9.
-A final Query 0.52.1 patch arrived during the managed inventory compilation;
-its Rust runtime source is also unchanged, and the actual case uses that selection.
+Shared Tooling **0.3.8** is adopted through committed revision
+`67285b28a98b7c4211ad32de726709d4e87edea4`; canonical export and independent
+byte/mode checks cover all 107 selected files. The new archive guidance separates
+archive creation from mandatory independent consumer compilation, retaining
+registry admission during publication. The late lock update selected Host 0.12.8 alongside Auth 0.3.5, Blob 0.22.4
+and Timers 0.17.5. Published Rust sources for all nine affected upstream crates
+are byte-identical to the previously qualified patches; their focused behavior
+proofs are reused with their original graph identities. The serde_json 1.0.152
+parser patch receives the affected Backup persistence check. Exact latest-graph
+inputs are recorded in `latest-graph-inputs.sha256`.
 
-[#498](https://github.com/dragginzgame/canic/issues/498) transfers PocketIC
-provisioning, exact binary admission, protocol admission and command lifetime to
-the published Testkit CLI. Canic's launcher, port polling, PID/resource observer,
-Linux process-scanning cleanup and private binary/version pins are deleted.
-The runner retains case ordering, compile/fixture barriers, complete server
-output files, bounded failure tails and invocation scratch. Every worker attempt
-owns a fresh server; cancellation waits for the canonical command owner before
-releasing scratch. A real published-CLI fixture exposed and qualified the
-cancellation correction. The cache observer now recognizes Canic's actual wrapper.
+The later release selection adds Host 0.12.9, Memory 0.35.5 and Metrics 0.5.6.
+All six affected published Rust sources are byte-identical to the preceding
+patches. Release inputs and that comparison are recorded separately in
+`release-graph-inputs.sha256` and `upstream-release-patch-equivalence.log`;
+earlier archive and runtime proofs retain their original graph identities.
+The final selection adds Auth/protocol-types 0.3.6 and Timers 0.17.6;
+their published Rust sources are also byte-identical to the preceding patches.
+`release-final-graph-inputs.sha256` records the final three-lock selection.
 
-Explicit setup: `make install-tools install-testkit-server`. Offline admission:
-`make tools-check testkit-server-check`. Shared IC setup owns five tools;
-Testkit owns PocketIC. Old bundles and receipts are retained. Ordinary checks
-never install. The thin selector refuses package/version/profile overrides.
-The isolated-index hook selects original-checkout prepared tools; Canic's
-historical symlink overlay remains in place under
-[#454](https://github.com/dragginzgame/canic/issues/454).
+## Implemented family
 
-Public managed fixtures and both internal test adapters consume only canonical
-`IC_TESTKIT_POCKET_IC_URL`, without an old-variable fallback or hidden spawn.
-The private startup error is replaced by `ic_testkit::pic::PocketIcStartupError`
-([#501](https://github.com/dragginzgame/canic/issues/501)).
+Canonical wire unions, passive DTOs, IDs, diagnostics and codecs have one
+runtime-free owner in `canic-contracts`; storage registration and cycle/template
+bytes remain with Core and Control Plane. Endpoint emitters and consumers share
+those declarations. The maintainer explicitly allowed the Contracts path cut
+under [#354](https://github.com/dragginzgame/canic/issues/354); this is not a
+waiver of today's release closeout.
 
-## Focused qualification
+Memory declarations and opens use permanent keys. One sealed host allocation
+pool grants explicit framework/application namespaces and diagnostics resolve
+observed physical IDs from its protected ledger. Numeric owner partitions and
+old macro operands are removed
+([#510](https://github.com/dragginzgame/canic/issues/510)). Consumer database
+composition remains downstream work; Canic does not acquire IcyDB dependencies.
 
-Current Blob/Memory and [#33](https://github.com/dragginzgame/canic/issues/33)
-evidence: `target/review-validation/blob-memory-33-20261009/`.
-Published Blob runtime/contracts 0.21.0 are un-yanked, their archives match registry
-checksums and both identify `cea2d0f2740e0874a107a6a5e1c75a533b49e94b`.
-All three independent locks share Memory 0.33.0, Timers 0.16.0 and Metrics 0.3.1.
-Both complete managed Apps build with Rust 1.91; all eight manifest-bound normal
-Wasm graphs have one runtime identity per family. Both 32-method Blob projections
-match canonical 0.21 Candid strictly. Dedicated and embedded PocketIC cases pass,
-including tenant-only separate capacity dimensions, unenrolled refusal, two
-one-byte reservations, retained permissions, fenced restoration/exact resume and
-application counter 42. Test harness/fixture production uses Rust 1.99 separately
-from the minimum-version App artifacts. Provider upload, GC and funding are unqualified.
+Auth delegates canonical protocol identities, bounded delegation installation
+and batch Merkle construction to published IC Auth. Canic retains issuer policy,
+ordering, uniqueness, the 64-issuer budget, root-key deadlines and typed endpoint
+refusals. Complete verifier/cache, certification and durable-session adoption
+remain under [#491](https://github.com/dragginzgame/canic/issues/491).
 
-The root's 63 focused native Memory/admission/inventory/lifecycle/runtime-identity
-and initializer cases pass, as do all seven owning lifecycle-boundary PocketIC
-cases and the exact production target-bound initialization/recovery case
-(discarded binding ingress reply, retained bytes and exact replay). Root's code
-section is 8.93 MiB. This is not proof of a discarded management install callback.
-[#443](https://github.com/dragginzgame/canic/issues/443) is closed: committed
-constructor delegation now has its remaining actual Canic qualification.
-Current CLI builds on Rust 1.91; adapter native library/tests and Wasm library
-Clippy pass with warnings denied. Allocation peer provenance is refreshed for
-this root lock; unchanged peer SHA-256:
-`948756af6623cf8f1b3c39fb503c06034bd94b914ed0a8a89c035523a18abffb`.
-Final read-only verification passes. Failed cache/socket/Candid probes and the
-corrected capacity assertion retain their original logs and identities.
+Backup delegates checksum/traversal, private staging and verified publication to
+IC Backup, and ordinary JSON publication to Host. Canic retains its journal,
+create-only conflicts, exact-byte checks and same-operation recovery. Live Fleet
+capture/restore remains unavailable pending its authority/consistency orchestration
+([#394](https://github.com/dragginzgame/canic/issues/394)).
 
-Earlier tooling qualification remains bound to root lock
-`ccd253de2498028b21b1892c8dbfa7894f2ccdd97b8b38eb34b4c2a62e2f3a60`
-(Backup 0.11.0). Its 78 Host ICP / 79 Backup persistence cases, strict affected
-Clippy, Auth 202 cases, Rust 1.91 Host/Backup/full-feature facade checks and exact
-managed Component Group child-lifecycle case passed. That case's complete output
-is `target/test-runs/20261009T121633Z-3806957.qBWiNs/2.log`.
-Canonical installers, catalog, hooks, worker cancellation/order/cache, Linux tool
-setup/admission, governance, links and shell/CI lint also passed at those inputs.
-Evidence and failed attempts: `target/review-validation/tooling-hard-cut-20261009/`.
-Native macOS execution remains unrun. The optional exported installer fixture was
-omitted after missing owner companions; its complete exact-revision owner test
-passed. Feedback remains
-[Shared Tooling #73](https://github.com/dragginzgame/shared-tooling/issues/73#issuecomment-6079827949).
-No sibling files were mutated.
+`canic-blob-service` belongs to the main workspace at its established path,
+inherits the root catalog/version/lock and is publishable. Its dedicated and
+embedded application consumers remain private independent workspaces at version
+0.1.0. The publisher's nine-package order publishes Contracts before consumers
+and Blob after the facade. Provider uploads, GC, funding, registry-only
+consumption and actual Toko Miner acceptance remain separate from local
+composition qualification under [#444](https://github.com/dragginzgame/canic/issues/444).
+Production target-bound initialization is already implemented; the managed Blob
+helper uses a fixture Root and does not prove the production Root install flow.
 
-## Retained framework and adapter work
+Known active-parent child startup exhaustion now schedules the existing retained
+operation driver. It preserves the child, original publication/request identity,
+retry time and authority expiry; deduplicates drivers; and stops after sixteen
+consecutive failures or permanent conflict/refusal. Other activation errors are
+not classified as startup-pending. Protected operation status remains protected.
+The actual deployed #505 incident is not diagnosed solely by the delayed fixture
+([#505](https://github.com/dragginzgame/canic/issues/505)).
 
-[#491](https://github.com/dragginzgame/canic/issues/491) delegates canonical Auth
-encoding and eleven passive protocol declarations to published 0.1.14, preserving
-Fleet bytes and checked roles through ops. Fallible hashes propagate through
-configuration, issuance, signing and verification. Canic's key registry/policy
-framing, verifier/cache, certification stores and durable session engine remain;
-complete Auth adoption is WIP. Its 202 focused cases, Core Clippy and Rust 1.91
-native/default/full-Wasm checks remain bound to root lock
-`53c3a47e527dae3dd512ac401562cc52b1164141de88e11f835ae97463a34030`.
-Evidence: `target/review-validation/ic-auth-adoption-20261009/`.
-They retain their original identities. The same 202 owning encoding/wire/config
-cases also pass on the current Auth/protocol-types 0.2.1 graph under the tooling
-evidence directory; its runtime source is unchanged from 0.1.14. This does not
-complete adoption of the remaining verifier/certification/session engines.
+## Qualification and delivery boundary
 
-The earlier operator cleanup shares durable JSON publication, descriptor hashes
-and foreground communication with Host, preserves typed failures and crash
-barriers, skips unsupported Observatory capabilities, and uses the shared registry
-observer and report digest helper. Owning issues are
-[#458](https://github.com/dragginzgame/canic/issues/458),
-[#439](https://github.com/dragginzgame/canic/issues/439),
-[#462](https://github.com/dragginzgame/canic/issues/462) and
-[#471](https://github.com/dragginzgame/canic/issues/471).
-Independent checkpoint bounded-reader edits and their changelog were preserved;
-#458 owns their behavioral acceptance. The tooling case does not qualify that
-checkpoint behavior. Earlier artifact/process evidence retains its source identities under
-`target/review-validation/host-088-consolidation-20261009/` and the earlier
-shared-consolidation, report-digests and observatory-capabilities directories.
+Qualification evidence is retained at
+`target/review-validation/release111-settled-20261010/`. Auth (182), Backup
+persistence (73), Contracts (341), focused Memory (30), affected-package lint
+and shipping Rust 1.91 checks pass. The owning #505 PocketIC case passes
+automatic completion, changed-input refusal, restart recovery and exact replay;
+its later helper extraction and test-module relocation pass final Clippy without
+repeating the same runtime proof. Both complete managed Blob Apps, eight
+manifest-bound artifacts, single normal-Wasm identities, 32-method Candid parity
+and both dedicated/embedded PocketIC cases pass on the preceding fixed patch
+graph. The source-identical upstream patches reuse those proofs with their
+original identities; the latest-graph checks below qualify the new selection.
 
-[#444](https://github.com/dragginzgame/canic/issues/444)'s independent Blob roots
-now select published runtime/contracts 0.21.0 on the held Memory 0.33 graph;
-local propagation and managed qualification above are complete. The adapter is
-unpublished. Earlier 0.19.2/Memory 0.31 evidence and its prepared archive remain
-under `target/review-validation/toko-miner-priorities-20261009/` and are not today's
-registry-package proof. [Blob #41](https://github.com/dragginzgame/ic-blob-storage/issues/41)
-is closed after compatible publication and exact archive verification.
-An actual registry-only probe with published Canic 0.110.54 and Blob 0.21 plus the
-intended Memory 0.33/Timers 0.16 resolves two Memory and Timers identities. Coherent
-Canic library/CLI publication, adapter registry requirement/publication and
-actual Toko Miner acceptance remain; no override hides that gap.
+Root and both private Blob consumer locks now project root-owned release
+versions and roll back together; external selections and fixture versions stay
+unchanged. Stale/tampered lock, committed-view and rollback fixtures pass, as do
+three native governed-receipt cases with fake Git. All nine exact 0.111.0 archives
+pass independent unpacked CLI/native and
+facade/Blob Wasm checks on Rust 1.91, retained external-selection admission and
+final byte-integrity checks. The latest normal-Wasm graph has single Memory
+0.35.4, Timers 0.17.5, Auth 0.3.5 and Blob/contracts 0.22.4 identities, no
+TOML/YAML runtime parser and runtime-free Contracts. The refreshed owning
+allocation peer passes read-only verification on the latest graph.
+Passing and failed attempts retain separate logs. The
+[exact closeout audit](../audits/release-lines/0.110-closeout-audit.md#implemented-family-closeout--2026-10-10)
+is PASS WITH LIMITATIONS, accepted by the maintainer on 2026-10-10
+([#459](https://github.com/dragginzgame/canic/issues/459)). The implemented batch
+and 0.111 notes are ready for the governed release flow. This handoff is not a
+release-validation receipt.
 
-Published Canic 0.110.54 already delivers unchanged configuration-byte
-preservation and exact Memory/Timers admission under
+The maintainer deferred unfinished FR1/CS1 from this closeout
+([#459 decision](https://github.com/dragginzgame/canic/issues/459#issuecomment-6099958187)).
+The maintainer also selected current focused proofs for B5; the old two-clean-build
+full capability matrix remains historical evidence and no longer gates this
+closeout ([decision](https://github.com/dragginzgame/canic/issues/459#issuecomment-6100198166)).
+Current release code observes/assesses Fleet evidence and exposes no whole-Fleet
+release execution route. Deferral neither completes those batches nor discards
+unfinished paid effects; their next implementation batch is unscheduled.
+
+Coherent family publication remains
 [#33](https://github.com/dragginzgame/canic/issues/33) and
-[#34](https://github.com/dragginzgame/canic/issues/34).
-Actual Toko Miner registry-only installation and recovery remain owned by
-[Toko Miner #6](https://github.com/dragginzgame/toko-miner/issues/6).
-The browser certificate/provider/GC journey, parent initialization and funding
-acceptance remain distinct outcomes under #444, #493 and #494. Live Fleet backups
-[#394](https://github.com/dragginzgame/canic/issues/394), early complete funding
-forecasts [#37](https://github.com/dragginzgame/canic/issues/37) and progress detail
-[#29](https://github.com/dragginzgame/canic/issues/29) remain separate owners.
+[#444](https://github.com/dragginzgame/canic/issues/444). The isolated 0.111
+version/package preview is review preparation, not a live version mutation or
+registry-only acceptance. The governed version transaction requires a committed
+qualified source and owns the release-validation receipt. The closeout
+acceptance is complete. The maintainer explicitly authorized an exception to
+AGENTS.md's agent commit prohibition for the source and governed release commits
+required to deliver 0.111.0 only. The selected execution is the normal
+`make release-minor && make publish` flow, including its release-owned validation,
+tag and atomic push. Preparation and publication retain build artifacts; do not
+append cleanup. This scoped authorization does not change the standing policy
+for other releases.
 
-## Delivery boundary
+The planned 0.112 Blob design retains its next-line identity; no implementation
+of that next design is authorized by this handoff. Toko Miner's frozen-input and
+actual database/installation acceptance belongs to
+[Toko Miner #6](https://github.com/dragginzgame/toko-miner/issues/6), rather than
+an additional Canic release gate. #34 is already published; #493 is not required
+for its existing top-level Blob Component. Complete funding forecasts and
+operator progress remain [#37](https://github.com/dragginzgame/canic/issues/37)
+and [#29](https://github.com/dragginzgame/canic/issues/29).
 
-The tooling hard cut is qualified for Linux maintainer review. The whole accepted
-release batch is not ready to push: coherent library/CLI and adapter publication, actual Toko Miner acceptance, and
-[#459](https://github.com/dragginzgame/canic/issues/459)'s incompatible-patch/minor
-boundary remain. The human must explicitly request and accept the exact 0.110
-closeout audit before the next minor begins. No product-version or
-release-validation receipt mutation, full workspace suite, staging, commit, push, package publication, deployment or
-paid effect ran. The 0.110.55 draft is descriptive, not publication authority.
+## Retained evidence and prerequisites
+
+Earlier qualification directories retain their original graphs and artifacts:
+`contracts-354-current-selection-20261010`, `memory0350-metrics050-20261010`,
+`auth-batch-20261010`, `backup-publisher-20261010`,
+`shared037-host0126-20261010` and `blob0223-host0125-final-20261010`, all under
+`target/review-validation/`. Do not relabel earlier or graph-drift-rejected
+results as current qualification. The last Blob directory also retains Binaryen
+133 transformations and the successful optimized-component journeys; they are
+qualification copies, not published Release-profile manifests.
+
+Testkit setup/admission selects the package directly from Cargo.lock and owns
+PocketIC 16.1.0. Local `.tools/ic` selects Binaryen 133; the previously packaged
+optimizer under `~/.local/bin` remains 132. Ordinary Release-profile CLI builds
+require the governed canonical toolchain setup. No external tool installation,
+hook activation, deployment or paid effect is implied. Native macOS and hosted
+cancellation execution remain unrun.
 
 Preserve `.canic/local-work/`, `.canic/incident-repairs/canic188/`, old bundles,
-archives, failed scratch and historical evidence. Predecessor state must not be
-revived for compatibility; same-release recovery and cycle custody remain required.
+archives, failed scratch and historical evidence. Cross-release deployment is a
+clean reinstall with cycle custody; predecessor state must not be revived.
+Same-release interruption recovery, retry, backup/restore and exact replay remain
+required. No full workspace gate, staging, commit, tag, push or publication ran.

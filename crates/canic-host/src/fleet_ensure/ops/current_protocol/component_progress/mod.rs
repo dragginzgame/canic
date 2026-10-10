@@ -8,7 +8,7 @@ pub(super) mod tests;
 
 use crate::fleet_ensure::dto::{FleetComponentProgress, FleetComponentProgressState as State};
 use candid::Principal;
-use canic_core::dto::component_provisioning::{
+use canic_contracts::dto::component_provisioning::{
     FleetComponentProvisioningPlan, FleetComponentProvisioningStatusResponse,
 };
 

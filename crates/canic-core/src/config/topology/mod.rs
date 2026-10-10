@@ -8,21 +8,21 @@
 mod tests;
 mod validation;
 
-use crate::{
-    cdk::types::Cycles,
-    config::schema::{
-        CanisterAuthConfig, ComponentChildConfig, ComponentChildKind, ComponentSpecConfig,
-        ConfigModel, CyclesFundingPolicyConfig, DiagnosticsCanisterConfig, IndexConfig,
-        MAX_COMPONENT_PROVISIONING_GRANTS, MAX_COMPONENT_SPAWN_GRANTS, MetricsCanisterConfig,
-        MetricsProfile, ScalePoolPolicy, ScalingConfig, ShardPoolPolicy, ShardingConfig,
-        StandardsCanisterConfig, TopupPolicy,
-    },
+use crate::config::schema::{
+    CanisterAuthConfig, ComponentChildConfig, ComponentChildKind, ComponentSpecConfig, ConfigModel,
+    CyclesFundingPolicyConfig, DiagnosticsCanisterConfig, IndexConfig,
+    MAX_COMPONENT_PROVISIONING_GRANTS, MAX_COMPONENT_SPAWN_GRANTS, MetricsCanisterConfig,
+    MetricsProfile, ScalePoolPolicy, ScalingConfig, ShardPoolPolicy, ShardingConfig,
+    StandardsCanisterConfig, TopupPolicy,
+};
+use candid::CandidType;
+use canic_contracts::{
+    cycles::Cycles,
     ids::{
         CanisterRole, ComponentSpecAdmission, ComponentSpecId, ComponentTopologyDigest,
         CyclesFundingBudget,
     },
 };
-use candid::CandidType;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -506,14 +506,6 @@ pub struct ComponentSpawnGrant {
 ///
 /// Non-parent authorization for one requester Spec to create one exact peer Spec.
 ///
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ComponentProvisioningGrant {
-    pub requester_component_spec: ComponentSpecId,
-    pub target_component_spec: ComponentSpecId,
-    pub maximum_instances_per_requester_per_root: u32,
-}
 
 ///
 /// ComponentChildFundingPolicy
@@ -1333,3 +1325,5 @@ impl CanonicalEncoder {
         Ok(self.bytes)
     }
 }
+
+pub use canic_contracts::deployment::ComponentProvisioningGrant;

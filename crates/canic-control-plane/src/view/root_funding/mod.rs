@@ -5,7 +5,7 @@
 //! Boundary: Root workflow derives authority; Root ops return one fresh-or-replay decision.
 
 use candid::Principal;
-use canic_core::{
+use canic_contracts::{
     dto::{
         fleet_funding::FleetRootFundingAcceptanceReceipt,
         fleet_registry::{FleetRegistryVersion, FleetSubnetRootStatus},
@@ -14,6 +14,7 @@ use canic_core::{
 };
 
 /// Minimal protected and Registry-derived authority for one Root funding operation.
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootFundingAuthorityView {
     pub registry: FleetRegistryVersion,

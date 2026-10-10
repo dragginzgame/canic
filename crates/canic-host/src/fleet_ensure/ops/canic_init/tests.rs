@@ -1,16 +1,18 @@
 //! Focused wire-format evidence for generated infrastructure initialization.
 
 use super::*;
-use canic_core::{
-    bootstrap::parse_config_model,
-    cdk::types::Cycles,
-    control_plane_support::config::ComponentDeploymentConfiguration,
+use canic_contracts::{
+    cycles::Cycles,
     ids::{
         AppId, CanonicalNetworkId, ComponentSpecAdmission, CyclesFundingBudget,
         FleetAdmissionPolicyTemplate, FleetId, FleetSubnetCanisterPoolConfig,
         FleetSubnetRootLimits, FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseBuildNonce,
         ReleaseSetDigest, SubnetId,
     },
+};
+use canic_core::{
+    bootstrap::parse_config_model,
+    control_plane_support::config::ComponentDeploymentConfiguration,
     shared_support::fleet_admission_policy::{
         bind_initial_fleet_admission_policy, compile_fleet_admission_policy_template,
     },
@@ -241,7 +243,7 @@ fn qualify_reviewed_capacity_bootstrap(
     );
     assert_eq!(
         decoded.capacity_import_bootstrap,
-        Some(canic_core::dto::pool_import::PoolImportBootstrap {
+        Some(canic_contracts::dto::pool_import::PoolImportBootstrap {
             review_sha256: hold.review_sha256,
             operator: hold.operator,
             sources: hold.sources,
@@ -534,7 +536,7 @@ fn supplied_capacity_bootstrap_retains_typed_authority_and_rejects_ambiguous_sou
     )
     .unwrap();
     let original: FleetSubnetRootInitArgs = candid::decode_one(&bytes).unwrap();
-    let hold = canic_core::dto::pool_import::PoolImportBootstrap {
+    let hold = canic_contracts::dto::pool_import::PoolImportBootstrap {
         review_sha256: [43; 32],
         operator: principal(9),
         sources: vec![principal(5)],

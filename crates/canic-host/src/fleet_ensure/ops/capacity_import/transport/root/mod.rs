@@ -4,7 +4,8 @@ use crate::{
     fleet_ensure::{
         model::capacity_import::{CapacityImportJournalRecord, CapacityImportPlanRecord},
         ops::capacity_import::{
-            journal::{self, CapacityImportJournalError},
+            journal,
+            journal::CapacityImportJournalError,
             root_reservation,
             transport::{CALL_TIMEOUT, CapacityImportTransport, verify_agent},
             validate_destination_authority, validate_root_status,
@@ -12,51 +13,23 @@ use crate::{
     },
     icp::IcpRequestKind,
 };
-use candid::{CandidType, Principal};
-use canic_core::{
-    dto::{
-        error::Error,
-        fleet_registry::FleetRegistry,
-        pool_import::{PoolImportCommand, PoolImportContext, PoolImportIdentity, PoolImportStatus},
-    },
-    protocol,
-};
-use serde::Deserialize;
-
-#[derive(CandidType)]
-enum Command {
-    ImportPoolCapacity(PoolImportCommand),
-}
-
-#[derive(CandidType, Deserialize)]
-enum Response {
-    ImportPoolCapacity(PoolImportStatus),
-}
-
-#[derive(CandidType)]
-enum StatusRequest {
-    PoolImport(PoolImportIdentity),
-    PoolImportContext,
-}
-
-#[derive(CandidType, Deserialize)]
-enum StatusResponse {
-    PoolImport(Box<PoolImportStatus>),
-    PoolImportContext(Box<PoolImportContext>),
-}
-
-#[derive(CandidType)]
-enum CoordinatorRequest {
-    Registry,
-}
-
-#[derive(CandidType, Deserialize)]
-enum CoordinatorResponse {
-    Registry(Box<FleetRegistry>),
-}
+use candid::Principal;
+use canic_contracts::dto::error::Error;
+use canic_contracts::dto::pool_import::PoolImportCommand;
+use canic_contracts::dto::pool_import::PoolImportContext;
+use canic_contracts::dto::pool_import::PoolImportIdentity;
+use canic_contracts::dto::pool_import::PoolImportStatus;
+use canic_contracts::dto::wire::projection::capacity_import::Command;
+use canic_contracts::dto::wire::projection::capacity_import::Response;
+use canic_contracts::dto::wire::projection::capacity_import::StatusRequest;
+use canic_contracts::dto::wire::projection::capacity_import::StatusResponse;
+use canic_contracts::dto::wire::projection::capacity_inventory::CoordinatorRequest;
+use canic_contracts::dto::wire::projection::capacity_inventory::CoordinatorResponse;
+use canic_contracts::protocol;
 
 /// One Root update whose local checks and read-only authority preflight succeeded.
 /// Workflow persists its submission allowance before consuming this one-use value.
+
 pub struct PreparedRootCommand {
     transport: CapacityImportTransport,
     plan: CapacityImportPlanRecord,
@@ -315,7 +288,7 @@ impl CapacityImportTransport {
             .await;
         match result {
             Err(CapacityImportJournalError::RootRejected(error)) => {
-                if error.code() == canic_core::diagnostics::codes::CAPACITY_LIMIT.raw_code()
+                if error.code() == canic_contracts::diagnostics::codes::CAPACITY_LIMIT.raw_code()
                     && let Ok(status) = self.root_status(plan).await
                 {
                     return Err(CapacityImportJournalError::RootCapacityLimit {

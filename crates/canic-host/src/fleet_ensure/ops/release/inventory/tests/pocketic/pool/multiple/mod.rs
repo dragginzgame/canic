@@ -1,7 +1,7 @@
 //! A later Root refusal never turns earlier evidence into a partial successful census.
 
 use super::*;
-use canic_control_plane::dto::root::RootPoolReleaseResponse;
+use canic_contracts::dto::root::RootPoolReleaseResponse;
 
 pub(super) fn assert_complete(
     pic: &PocketIc,
@@ -53,7 +53,8 @@ pub(super) fn assert_complete(
         root, stage: pool::ReleasePoolStage::Decode,
     }) if root == second.root)
     );
-    let rejection = Error::from_registered(canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE);
+    let rejection =
+        Error::from_registered(canic_contracts::diagnostics::codes::AUTHORITY_UNAVAILABLE);
     let refused = pool::tests::refused(rejection);
     pic.update_call(second.root, review.authority.operator, "replace", refused)
         .unwrap();

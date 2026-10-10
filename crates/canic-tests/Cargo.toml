@@ -11,6 +11,7 @@ publish = false
 [dependencies]
 candid = { workspace = true }
 canic = { workspace = true, features = [] }
+canic-contracts.workspace = true
 canic-testing-internal = { workspace = true }
 ic-testkit = { workspace = true }
 ic-timers = { workspace = true }

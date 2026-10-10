@@ -4,12 +4,6 @@
 //! Does not own: deployment workflow, placement policy, or artifact validation.
 //! Boundary: extends `MgmtInfra` with lifecycle management effects.
 
-use crate::{
-    cdk::candid::{Principal, encode_args, utils::ArgumentEncoder},
-    infra::ic::{IcInfraError, call::Call},
-};
-use ic_cdk::api;
-
 use super::{
     MgmtInfra,
     types::{
@@ -18,6 +12,11 @@ use super::{
         InfraUploadChunkArgs,
     },
 };
+use crate::{
+    cdk::candid::{Principal, encode_args, utils::ArgumentEncoder},
+    infra::ic::{IcInfraError, call::Call},
+};
+use ic_cdk::api;
 
 impl MgmtInfra {
     /// Upload one wasm chunk into a canister's chunk store.

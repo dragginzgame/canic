@@ -9,8 +9,9 @@ use crate::{
     log::Topic,
     model::replay::OperationId,
     ops::{
-        rpc::request::RequestOps, runtime::env::EnvOps, storage::async_job_recovery::AsyncJobOwner,
-        storage::intent::ReceiptBackedIntentOps,
+        rpc::request::RequestOps,
+        runtime::env::EnvOps,
+        storage::{async_job_recovery::AsyncJobOwner, intent::ReceiptBackedIntentOps},
     },
     workflow::{
         placement::allocation::remove_exact_terminal_intent,

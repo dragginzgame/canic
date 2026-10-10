@@ -301,7 +301,7 @@ fn read(path: &Path) -> Result<Vec<u8>, EnsureStateError> {
 }
 
 fn retain(path: &Path, bytes: &[u8]) -> Result<(), EnsureStateError> {
-    match create_new_bytes_with_parents(path, bytes) {
+    match create_new_bytes_with_parents(path, bytes).map_err(crate::publication::ops::io_error) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
             if read(path)? == bytes {

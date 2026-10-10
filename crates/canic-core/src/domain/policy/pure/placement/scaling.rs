@@ -7,11 +7,10 @@
 
 use crate::{
     InternalError,
-    domain::policy::pure::PolicyError,
-    domain::value::BoundedString64,
-    ids::CanisterRole,
+    domain::{policy::pure::PolicyError, value::BoundedString64},
     model::placement::scaling::{ScalingPlanReason, ScalingWorkerEntry},
 };
+use canic_contracts::ids::CanisterRole;
 use std::collections::BTreeMap;
 use thiserror::Error as ThisError;
 

@@ -9,13 +9,12 @@ mod persistence;
 #[cfg(test)]
 mod tests;
 
-use canic_control_plane::api::fixture_content::FixtureContentApi;
-use canic_core::{
-    CANIC_WASM_CHUNK_BYTES,
-    bootstrap::compiled::ComponentTopology,
+use canic_contracts::{
     dto::fixture_provisioning::{FixtureChunkDescriptor, FixtureDescriptor, FixtureStoreError},
     ids::{CanisterRole, ComponentTopologyDigest, ReleaseBuildId},
 };
+use canic_control_plane::api::fixture_content::FixtureContentApi;
+use canic_core::{CANIC_WASM_CHUNK_BYTES, bootstrap::compiled::ComponentTopology};
 use serde::{Deserialize, Serialize};
 use sha2_host::{Digest, Sha256};
 use std::{collections::BTreeSet, io, path::PathBuf};

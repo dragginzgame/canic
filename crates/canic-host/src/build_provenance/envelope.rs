@@ -1,14 +1,3 @@
-use crate::evidence_envelope::{
-    EvidenceEnvelopeV1, EvidenceMessageSeverityV1, EvidenceMessageV1, EvidenceSummaryV1,
-    EvidenceTargetKindV1, EvidenceTargetV1, ExitClassV1, PayloadSchemaRefV1,
-    evidence_envelope_schema, file_input_fingerprint, json_payload_sha256,
-};
-use crate::{
-    release_set::AppConfigSnapshot,
-    role_contract::{declared_role_manifest_path, finding_detail},
-};
-use std::path::Path;
-
 use super::{
     artifacts::{artifact_provenance, artifact_transform_provenance, final_wasm_metrics},
     cargo::cargo_provenance,
@@ -19,6 +8,16 @@ use super::{
     },
     source::source_provenance,
 };
+use crate::{
+    evidence_envelope::{
+        EvidenceEnvelopeV1, EvidenceMessageSeverityV1, EvidenceMessageV1, EvidenceSummaryV1,
+        EvidenceTargetKindV1, EvidenceTargetV1, ExitClassV1, PayloadSchemaRefV1,
+        evidence_envelope_schema, file_input_fingerprint, json_payload_sha256,
+    },
+    release_set::AppConfigSnapshot,
+    role_contract::{declared_role_manifest_path, finding_detail},
+};
+use std::path::Path;
 
 #[must_use]
 pub fn build_provenance_schema() -> PayloadSchemaRefV1 {
@@ -29,7 +28,7 @@ pub fn build_provenance_envelope(
     request: &BuildProvenanceRequest,
 ) -> Result<EvidenceEnvelopeV1, Box<dyn std::error::Error>> {
     let config = AppConfigSnapshot::load(&request.config_path)?;
-    let role = canic_core::ids::CanisterRole::owned(request.role.clone());
+    let role = canic_contracts::ids::CanisterRole::owned(request.role.clone());
     let package_manifest = declared_role_manifest_path(&request.config_path, config.model(), &role)
         .map_err(|finding| finding_detail(&finding))?;
     let payload = build_provenance_payload(request, &package_manifest)?;

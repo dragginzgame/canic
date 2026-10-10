@@ -1,9 +1,12 @@
 use super::*;
-use canic_control_plane::dto::fleet_coordinator::{
-    CoordinatorFundingWindowStatusResponse, CoordinatorRootFundingStatusResponse,
-};
-use canic_core::{
-    dto::{fleet_funding::FleetRootFundingRequest, fleet_registry::FleetSubnetRootStatus},
+use canic_contracts::{
+    dto::{
+        fleet_coordinator::{
+            CoordinatorFundingWindowStatusResponse, CoordinatorRootFundingStatusResponse,
+        },
+        fleet_funding::FleetRootFundingRequest,
+        fleet_registry::FleetSubnetRootStatus,
+    },
     ids::{CyclesFundingBudget, FleetFundingProfile},
 };
 
@@ -11,7 +14,7 @@ use canic_core::{
 fn child_usage_requires_exact_participants_and_preserves_uncertain_reservations() {
     let parent = Principal::from_slice(&[1]);
     let child = Principal::from_slice(&[2]);
-    let mut value = canic_core::dto::observability::ChildFundingUsage {
+    let mut value = canic_contracts::dto::observability::ChildFundingUsage {
         parent,
         child,
         observed_at_ns: 10_000_000_000,
@@ -130,12 +133,12 @@ fn unavailable_usage_is_never_an_unused_budget() {
         Err(StartupUsageUnavailable::PolicyTransition)
     );
     let mut rotating = status();
-    rotating.rotation = Some(canic_control_plane::dto::fleet_coordinator::FleetFundingPolicyRotationStatusResponse {
+    rotating.rotation = Some(canic_contracts::dto::fleet_coordinator::FleetFundingPolicyRotationStatusResponse {
         operation_id: [0; 32],
         plan_digest: [0; 32],
         predecessor_generation: 1,
         successor_generation: 2,
-        phase: canic_control_plane::dto::fleet_coordinator::FleetFundingPolicyRotationStatusPhase::Staging {
+        phase: canic_contracts::dto::fleet_coordinator::FleetFundingPolicyRotationStatusPhase::Staging {
             staged_root_count: 0,
             expected_root_count: 1,
         },
@@ -168,7 +171,7 @@ fn unavailable_usage_is_never_an_unused_budget() {
 fn pending_root_operations_are_not_reported_as_successful_grants() {
     let root = Principal::from_slice(&[2]);
     let mut value = status();
-    let root_policy = canic_core::ids::FleetSubnetRootFundingPolicy {
+    let root_policy = canic_contracts::ids::FleetSubnetRootFundingPolicy {
         funding_profile: FleetFundingProfile::SingleSubnet,
         request_threshold: 10.into(),
         target_balance: 30.into(),
@@ -180,11 +183,11 @@ fn pending_root_operations_are_not_reported_as_successful_grants() {
     let request = FleetRootFundingRequest {
         operation_id: [0; 32],
         operation_sequence: 1,
-        expected_registry: canic_core::dto::fleet_registry::FleetRegistryVersion {
-            authority: canic_core::ids::FleetRegistryAuthority {
-                binding: canic_core::ids::FleetCoordinatorBinding {
-                    fleet: canic_core::ids::FleetBinding {
-                        fleet: canic_core::ids::FleetKey {
+        expected_registry: canic_contracts::dto::fleet_registry::FleetRegistryVersion {
+            authority: canic_contracts::ids::FleetRegistryAuthority {
+                binding: canic_contracts::ids::FleetCoordinatorBinding {
+                    fleet: canic_contracts::ids::FleetBinding {
+                        fleet: canic_contracts::ids::FleetKey {
                             canonical_network_id: "11".repeat(32).parse().unwrap(),
                             fleet_id: "22".repeat(32).parse().unwrap(),
                         },
@@ -247,7 +250,7 @@ fn protected_query_uses_canonical_candid_and_does_not_cache_usage() {
     std::fs::write(&executable, script).unwrap();
     std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
     let write = |value| {
-        let bytes = candid::encode_one(Ok::<_, canic_core::dto::error::Error>(
+        let bytes = candid::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
             CoordinatorObservabilityResponse::Funding(value),
         ))
         .unwrap();

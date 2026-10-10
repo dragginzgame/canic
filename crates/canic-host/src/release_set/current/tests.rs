@@ -8,12 +8,12 @@ use canic_core::bootstrap::parse_config_model;
 
 #[test]
 fn current_manifest_canonical_shape_binds_all_child_digests() {
-    let id = canic_core::ids::ReleaseBuildId::from_nonce(
-        canic_core::ids::ReleaseBuildNonce::from_random_bytes([7; 32]),
+    let id = canic_contracts::ids::ReleaseBuildId::from_nonce(
+        canic_contracts::ids::ReleaseBuildNonce::from_random_bytes([7; 32]),
     );
     let manifest = CurrentReleaseSetManifest {
         application_artifact_union_sha256: [8; 32],
-        build_network: canic_core::ids::BuildNetwork::Local,
+        build_network: canic_contracts::ids::BuildNetwork::Local,
         fixture_artifact_manifest_sha256: [10; 32],
         infrastructure_artifact_manifest_sha256: [9; 32],
         release_build_id: id,
@@ -25,7 +25,10 @@ fn current_manifest_canonical_shape_binds_all_child_digests() {
     let decoded: CurrentReleaseSetManifest = serde_json::from_slice(&bytes).expect("decode");
 
     assert_eq!(decoded, manifest);
-    assert_eq!(decoded.build_network, canic_core::ids::BuildNetwork::Local);
+    assert_eq!(
+        decoded.build_network,
+        canic_contracts::ids::BuildNetwork::Local
+    );
     assert_eq!(
         serde_json::from_slice::<serde_json::Value>(&bytes).unwrap()["transition_mode"],
         "reinstall_only"
@@ -39,7 +42,7 @@ fn current_manifest_rejects_unqualified_transition_policy_without_mutating_autho
     let release = plan.record.release_build_id;
     let manifest = CurrentReleaseSetManifest {
         application_artifact_union_sha256: [1; 32],
-        build_network: canic_core::ids::BuildNetwork::Local,
+        build_network: canic_contracts::ids::BuildNetwork::Local,
         fixture_artifact_manifest_sha256: [2; 32],
         infrastructure_artifact_manifest_sha256: [3; 32],
         release_build_id: release,

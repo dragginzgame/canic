@@ -4,12 +4,10 @@
 //! Does not own: storage, authentication, Store resolution, or Canister effects.
 //! Boundary: workflow supplies exact root authority, topology, and durable allocation counts.
 
-use crate::{
-    config::{ComponentProvisioningGrant, ComponentTopology},
-    ids::{
-        CanisterRole, ComponentBinding, ComponentInstanceId, ComponentSpecAdmission,
-        ComponentSpecId, FleetSubnetRootBinding,
-    },
+use crate::config::{ComponentProvisioningGrant, ComponentTopology};
+use canic_contracts::ids::{
+    CanisterRole, ComponentBinding, ComponentInstanceId, ComponentSpecAdmission, ComponentSpecId,
+    FleetSubnetRootBinding,
 };
 use thiserror::Error as ThisError;
 
@@ -283,12 +281,12 @@ fn admission<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        cdk::types::Cycles,
-        config::{
-            ComponentTopology,
-            schema::{ConfigModel, Validate},
-        },
+    use crate::config::{
+        ComponentTopology,
+        schema::{ConfigModel, Validate},
+    };
+    use canic_contracts::{
+        cycles::Cycles,
         ids::{
             AppId, CanonicalNetworkId, ComponentSpecAdmission, CyclesFundingBudget, FleetBinding,
             FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority,

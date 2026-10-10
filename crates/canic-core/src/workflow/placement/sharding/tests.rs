@@ -2,7 +2,6 @@ use super::*;
 use crate::{
     cdk::types::Principal,
     dto::placement::sharding::ShardingPlanStateResponse,
-    ids::CanisterRole,
     ops::storage::{children::CanisterChildrenOps, placement::sharding::ShardingRegistryOps},
     storage::stable::sharding::registry::ShardingRegistry,
     test::{
@@ -10,6 +9,7 @@ use crate::{
         support::{direct_child, init_sharding_test_config},
     },
 };
+use canic_contracts::ids::CanisterRole;
 use futures::executor::block_on;
 
 fn install_shards() -> (Principal, Principal) {

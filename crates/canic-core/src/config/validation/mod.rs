@@ -8,13 +8,11 @@ mod app;
 mod auth;
 mod component_spec;
 
-use crate::{
-    config::schema::{
-        ConfigModel, ConfigSchemaError, MAX_FLEET_COMPONENT_INSTANCES, RoleDeclarationKind,
-        Validate, validate_canister_role_name,
-    },
-    ids::{CanisterRole, ComponentSpecId},
+use crate::config::schema::{
+    ConfigModel, ConfigSchemaError, MAX_FLEET_COMPONENT_INSTANCES, RoleDeclarationKind, Validate,
+    validate_canister_role_name,
 };
+use canic_contracts::ids::{CanisterRole, ComponentSpecId};
 use std::collections::{BTreeMap, VecDeque};
 
 fn validate_canister_role(

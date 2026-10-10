@@ -1,12 +1,17 @@
-use super::config::{
-    attach_app_role_source, configured_role_auto_create_from_config,
-    configured_role_details_from_config, configured_role_kinds_from_config,
-    configured_role_lifecycle_from_config, configured_role_metrics_profiles_from_config,
-    configured_role_topups_from_config, declare_app_role_source, rename_app_role_source,
-};
+mod config;
+mod mutations;
+mod paths;
+mod roles;
+
 use super::{
-    app_sources_root, config_path, plan_attach_app_role, plan_declare_app_role,
-    plan_rename_app_role,
+    app_sources_root,
+    config::{
+        attach_app_role_source, configured_role_auto_create_from_config,
+        configured_role_details_from_config, configured_role_kinds_from_config,
+        configured_role_lifecycle_from_config, configured_role_metrics_profiles_from_config,
+        configured_role_topups_from_config, declare_app_role_source, rename_app_role_source,
+    },
+    config_path, plan_attach_app_role, plan_declare_app_role, plan_rename_app_role,
 };
 use crate::test_support::temp_dir;
 use canic_core::bootstrap::{compiled::ConfigModel, parse_config_model};
@@ -14,11 +19,6 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
-
-mod config;
-mod mutations;
-mod paths;
-mod roles;
 
 fn parsed_config(source: &str) -> ConfigModel {
     parse_config_model(source).expect("valid test config")
@@ -65,7 +65,6 @@ enabled = false
 
 [standards]
 icrc21 = true
-
 
 
 [component_specs.user_hub]

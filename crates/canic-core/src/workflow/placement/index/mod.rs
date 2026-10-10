@@ -11,9 +11,6 @@ mod create;
 pub mod query;
 mod state;
 
-use crate::workflow::placement::index::state::{
-    PlacementIndexEntryClassification, validate_bind_target_with_reason,
-};
 use crate::{
     InternalError,
     cdk::types::Principal,
@@ -28,6 +25,9 @@ use crate::{
             recording::PlacementIndexMetricEvent as MetricEvent,
         },
         storage::placement::index::PlacementIndexRegistryOps,
+    },
+    workflow::placement::index::state::{
+        PlacementIndexEntryClassification, validate_bind_target_with_reason,
     },
 };
 

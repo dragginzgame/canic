@@ -1,13 +1,9 @@
-use crate::release_set::WASM_MAGIC;
-use std::io::Write;
-
-use canic_core::{
-    cdk::utils::hash::sha256_hex,
-    ids::{ReleaseBuildId, ReleaseBuildNonce},
-};
-use flate2::{Compression, GzBuilder};
-
 use super::*;
+use crate::release_set::WASM_MAGIC;
+use canic_contracts::ids::{ReleaseBuildId, ReleaseBuildNonce};
+use canic_core::cdk::utils::hash::sha256_hex;
+use flate2::{Compression, GzBuilder};
+use std::io::Write;
 
 fn release_build(byte: u8) -> ReleaseBuildId {
     ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes([byte; 32]))

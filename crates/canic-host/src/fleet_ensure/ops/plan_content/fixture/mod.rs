@@ -10,11 +10,11 @@ use super::{
 };
 use crate::fleet_ensure::model::{CurrentFleetProtocolAction, EnsureAction, FleetEnsurePlan};
 use candid::Principal;
-use canic_control_plane::api::fixture_content::FixtureContentApi;
-use canic_core::dto::{
+use canic_contracts::dto::{
     fixture_provisioning::{FixtureChunkUpload, FixtureSourceStatus},
     root_store::RootStoreFixture,
 };
+use canic_control_plane::api::fixture_content::FixtureContentApi;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -24,6 +24,7 @@ use std::collections::BTreeMap;
 ///
 /// Reviewed descriptor with exact byte counts at each committed chunk boundary.
 ///
+
 struct PreparedSource {
     source: RootStoreFixture,
     prefix_bytes: Vec<u64>,
@@ -166,7 +167,7 @@ pub(super) fn hydrate(paths: &EnsurePaths, projection: &mut Value) -> Result<(),
             .get("action")
             .ok_or_else(|| authority("missing fixture action"))?;
         let source: RootStoreFixture = field(action, "source")?;
-        let request: canic_core::dto::root_store::RootStoreFixturePrepareRequest =
+        let request: canic_contracts::dto::root_store::RootStoreFixturePrepareRequest =
             field(action, "request")?;
         if request.role != source.role {
             return authority_error("fixture preparation role differs");

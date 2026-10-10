@@ -11,9 +11,10 @@ a Canic feature into another Cargo package does not meet that requirement.
 Technical independence is necessary but insufficient: a credible non-Canic use
 case must justify maintaining a separate product.
 
-The blob composition currently lives in `integrations/blob-service`, with its
-own Cargo workspace, lockfile and build target. `integrations/` holds deployable
-compositions and isolated qualification workspaces. Thin runtime hooks belong in
+The Canic-owned blob composition lives in `integrations/blob-service`, as a
+main-workspace member sharing the catalog, lockfile and release version. Its two
+application consumers retain isolated qualification workspaces. The upstream
+service remains independently usable and has no Canic dependency. Thin runtime hooks belong in
 Core, operator orchestration in Host, and command parsing/reporting in CLI.
 Creating an integration directory does not require moving those owners.
 
@@ -38,9 +39,11 @@ APIs must suffice; Canic must not copy an upstream engine into an adapter.
 
 ## Backup Adapter Contract
 
-The inspected `ic-backup` workspace supplies artifacts, durable publication,
-layout/reference locks and command custody. It does not yet expose usable
-capture/restore runners or the complete authority and spending contracts.
+IC Backup supplies artifacts, durable publication, layout/reference locks,
+command custody and bounded capture, metadata, download and upload stages under
+retained original plans and spending. Canic delegates verified directory
+publication to that owner. These individual stages do not supply a complete
+Fleet backup/restore runner or Canic's live authority and application consistency.
 Local file locks do not freeze a remote Fleet or prove a paid call completed.
 
 Host must supply these observations and decisions to the eventual public runner:

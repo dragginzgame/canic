@@ -3,6 +3,9 @@
 //! Coordinator admission encoding and allocation qualification.
 
 use super::*;
+use canic_contracts::ids::{
+    AppId, CanonicalNetworkId, FleetAdmissionRule, FleetBinding, FleetId, FleetKey, SubnetId,
+};
 use canic_core::{
     cdk::{
         bounded_cell::BoundedCell,
@@ -11,9 +14,6 @@ use canic_core::{
             memory::{MemoryId, MemoryManager},
             storable::Storable,
         },
-    },
-    ids::{
-        AppId, CanonicalNetworkId, FleetAdmissionRule, FleetBinding, FleetId, FleetKey, SubnetId,
     },
     shared_support::fleet_admission_policy::compile_installed_fleet_admission_policy,
 };

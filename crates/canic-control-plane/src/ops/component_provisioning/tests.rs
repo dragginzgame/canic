@@ -1,20 +1,22 @@
 //! Focused proofs for durable root-batch acceptance and protected member derivation.
 
 use super::*;
-use crate::dto::root::{RootProvisioningReleaseKey as Key, RootProvisioningReleasePhase as Phase};
-use crate::storage::stable::component_provisioning::{
-    RootComponentDirectorySynchronizationRecord, RootComponentDirectorySynchronizationStateRecord,
-    RootComponentProvisioningData, RootComponentProvisioningStore,
-};
-use crate::view::component_registry::{
-    ComponentRegistryPartitionView, RootComponentAllocationProgressView,
-    RootComponentCommitmentView, RootComponentCreationEffectView, RootComponentInstallEffectView,
+use crate::{
+    dto::root::{RootProvisioningReleaseKey as Key, RootProvisioningReleasePhase as Phase},
+    storage::stable::component_provisioning::{
+        RootComponentDirectorySynchronizationRecord,
+        RootComponentDirectorySynchronizationStateRecord, RootComponentProvisioningData,
+        RootComponentProvisioningStore,
+    },
+    view::component_registry::{
+        ComponentRegistryPartitionView, RootComponentAllocationProgressView,
+        RootComponentCommitmentView, RootComponentCreationEffectView,
+        RootComponentInstallEffectView,
+    },
 };
 use candid::Principal;
-use canic_core::{
-    bootstrap::parse_config_model,
-    cdk::types::Cycles,
-    control_plane_support::{config::ComponentTopology, model::replay::ReplayCostGuardSettlement},
+use canic_contracts::{
+    cycles::Cycles,
     dto::{
         component_provisioning::{
             ComponentGroupPlacementPlan, ComponentGroupPlanEntry, FleetSubnetRootProvisioningBatch,
@@ -33,9 +35,14 @@ use canic_core::{
         ComponentDeploymentConfigurationDigest, ComponentGroupMemberPath, ComponentInstanceId,
         ComponentSpecAdmission, CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding,
         FleetId, FleetKey, FleetRegistryAuthority, FleetSubnetCanisterPoolConfig,
-        FleetSubnetRootBinding, FleetSubnetRootLimits, FleetSubnetRootReleaseSet, IntentId,
-        ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
+        FleetSubnetRootBinding, FleetSubnetRootLimits, FleetSubnetRootReleaseSet, ReleaseBuildId,
+        ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
     },
+};
+use canic_core::{
+    bootstrap::parse_config_model,
+    control_plane_support::{config::ComponentTopology, model::replay::ReplayCostGuardSettlement},
+    ids::IntentId,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -170,7 +177,7 @@ fn authority() -> FleetRegistryAuthority {
 
 fn root_binding(
     topology: &ComponentTopology,
-    component_spec: &canic_core::ids::ComponentSpecId,
+    component_spec: &canic_contracts::ids::ComponentSpecId,
 ) -> FleetSubnetRootBinding {
     let spec = topology.get(component_spec).expect("Component Spec");
     let component_admissions = vec![ComponentSpecAdmission {
@@ -238,7 +245,7 @@ fn fixture() -> Fixture {
             manifest_digest: ReleaseSetDigest::from_bytes([9; 32]),
         },
         placements: vec![ComponentGroupPlacementPlan {
-            group_placement: canic_core::ids::ComponentGroupPlacementId {
+            group_placement: canic_contracts::ids::ComponentGroupPlacementId {
                 deployment: deployment.deployment.clone(),
                 ordinal: 0,
             },
@@ -337,7 +344,7 @@ fn installed_allocation(
                 [34; 32],
             ),
             chunk_hashes: vec![vec![34; 32]],
-            binding: canic_core::ids::ComponentBinding {
+            binding: canic_contracts::ids::ComponentBinding {
                 authority: root.authority.clone(),
                 component: allocation.component,
                 component_spec: allocation.component_spec.clone(),

@@ -3,7 +3,7 @@ use crate::fleet_ensure::model::{
     CurrentFleetProtocolAction, CycleConservation, EnsureAction, EstateFundingDomainPlan,
     FLEET_ENSURE_SCHEMA_VERSION, FleetEnsurePlan, FleetEnsurePlanScope, FleetEnsureReport,
 };
-use canic_control_plane::{
+use canic_contracts::{
     dto::template::TemplateChunkInput,
     ids::{TemplateId, TemplateVersion},
 };
@@ -173,12 +173,12 @@ fn fixture_upload_report_retains_identity_and_externalizes_payload() {
     let action = EnsureAction::FleetProtocol {
         action: Box::new(CurrentFleetProtocolAction::PublishStoreFixtureChunk {
             maximum_attempts: 1,
-            request: canic_core::dto::fixture_provisioning::FixtureChunkUpload {
+            request: canic_contracts::dto::fixture_provisioning::FixtureChunkUpload {
                 content_id: [7; 32],
                 index: 0,
                 bytes: bytes.clone(),
             },
-            expected: canic_core::dto::fixture_provisioning::FixtureSourceStatus {
+            expected: canic_contracts::dto::fixture_provisioning::FixtureSourceStatus {
                 content_id: [7; 32],
                 next_chunk: 1,
                 chunk_count: 1,

@@ -1,5 +1,5 @@
 use super::*;
-use canic_core::dto::fixture_provisioning::{FixtureChunkDescriptor, FixtureDescriptor};
+use canic_contracts::dto::fixture_provisioning::{FixtureChunkDescriptor, FixtureDescriptor};
 
 fn source() -> RootStoreFixture {
     let descriptor = FixtureDescriptor {
@@ -19,7 +19,7 @@ fn source() -> RootStoreFixture {
         completion_summary: [4; 32],
     };
     RootStoreFixture {
-        role: canic_core::ids::CanisterRole::new("app"),
+        role: canic_contracts::ids::CanisterRole::new("app"),
         content_id: FixtureContentApi::content_id(&descriptor).unwrap(),
         descriptor,
     }

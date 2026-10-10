@@ -7,9 +7,9 @@
 use crate::{
     InternalError,
     dto::{component_deployment::ProtectedComponentDeployment, error::Error},
-    ids::FleetServiceId,
     ops::storage::{StorageOpsError, fleet_activation::FleetActivationOps},
 };
+use canic_contracts::ids::FleetServiceId;
 
 ///
 /// ComponentDeploymentApi

@@ -9,7 +9,7 @@ use crate::fleet_ensure::{
     },
     ops::capacity_import::admission::{CapacityImportDeclaration, CapacityImportDispositionKind},
 };
-use canic_core::{cdk::types::Cycles, ids::SubnetId};
+use canic_contracts::{cycles::Cycles, ids::SubnetId};
 
 pub(in crate::fleet_ensure::ops) fn qualify_initialization(root: &Path, desired: &DesiredFleet) {
     let mut desired = desired.clone();

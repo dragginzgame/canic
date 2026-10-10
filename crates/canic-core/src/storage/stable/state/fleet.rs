@@ -1,6 +1,5 @@
 use crate::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
-    role_contract::allocation::memory::fleet::FLEET_STATE_ID,
     storage::prelude::*,
 };
 use std::cell::RefCell;
@@ -14,7 +13,7 @@ pub use crate::domain::state::FleetMode;
 std::thread_local! {
     static FLEET_STATE: RefCell<Cell<FleetStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.fleet.state.v1", ty = FleetState, id = FLEET_STATE_ID),
+            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.fleet.state.v1"),
             FleetStateRecord::default(),
         ));
 }

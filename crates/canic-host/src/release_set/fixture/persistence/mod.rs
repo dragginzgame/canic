@@ -13,17 +13,12 @@ use crate::{
     release_build::{ReleaseBuildPlanState, load_release_build_plan},
     release_set::validate_release_artifact_relative_path,
 };
-use ic_host_artifacts::artifact::ArtifactError;
-use ic_host_fs::durable::create_new_bytes_with_parents;
-use ic_host_fs::read::read_optional_file_no_follow;
-
-use canic_core::{
-    cdk::utils::hash::hex_bytes,
-    dto::{
-        fixture_provisioning::FixtureStoreError,
-        root_store::ROOT_STORE_RELEASE_SET_MANIFEST_MAX_BYTES,
-    },
+use canic_contracts::dto::{
+    fixture_provisioning::FixtureStoreError, root_store::ROOT_STORE_RELEASE_SET_MANIFEST_MAX_BYTES,
 };
+use canic_core::cdk::utils::hash::hex_bytes;
+use ic_host_artifacts::artifact::ArtifactError;
+use ic_host_fs::{durable::create_new_bytes_with_parents, read::read_optional_file_no_follow};
 use sha2_host::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
@@ -36,6 +31,7 @@ use std::{
 ///
 /// Host receipt for one immutable fixture manifest, to be bound by reviewed release authority.
 ///
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PersistedFixtureArtifactManifest {
     pub manifest: FixtureArtifactManifest,
@@ -212,7 +208,9 @@ fn retain_exact(
         Err(error) => return Err(error),
     }
     let path = root.join(relative);
-    if let Err(source) = create_new_bytes_with_parents(&path, bytes) {
+    if let Err(source) =
+        create_new_bytes_with_parents(&path, bytes).map_err(crate::publication::ops::io_error)
+    {
         // A competing exact writer or a lost successful response may already have committed.
         if read_workspace_file(root, relative, bytes.len()).is_ok_and(|retained| retained == bytes)
         {

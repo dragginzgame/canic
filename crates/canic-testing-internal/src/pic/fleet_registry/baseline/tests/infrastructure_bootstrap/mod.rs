@@ -127,7 +127,7 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, recovery: bool) {
     let declarations_toml = toml::to_string(&declarations).unwrap();
     let bootstrap = desired.bootstrap.as_mut().unwrap();
     bootstrap.canonical_network_id =
-        canic_core::ids::CanonicalNetworkId::from_der_root_trust_anchor(
+        canic_contracts::ids::CanonicalNetworkId::from_der_root_trust_anchor(
             &input.pic.root_key().unwrap(),
         )
         .unwrap();
@@ -403,7 +403,7 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, recovery: bool) {
             .fleet_subnet_roots
             .iter()
             .all(|entry| entry.status
-                == canic_core::dto::fleet_registry::FleetSubnetRootStatus::Active)
+                == canic_contracts::dto::fleet_registry::FleetSubnetRootStatus::Active)
     );
     let transport = canic_host::fleet_ensure::ops::capacity_import::transport::CapacityImportTransport::from_icp(&icp).unwrap();
     let runtime = tokio::runtime::Builder::new_current_thread()
@@ -580,7 +580,7 @@ fn seed_retained_budget_fixture(
                 .unwrap();
             configured
                 .minimum_cycles
-                .parse::<canic_core::cdk::types::Cycles>()
+                .parse::<canic_contracts::cycles::Cycles>()
                 .unwrap()
                 .to_u128()
                 + source.sources[&target.name].sample.reserved_cycles
@@ -873,7 +873,7 @@ fn write_import_inputs(
         fresh_estate = false
         coordinator = (input.coordinator.to_text())
         cycles_ledger = (desired.cycles_ledger.clone())
-        management_creation_fee_cycles = (desired.management_creation_fee_cycles.parse::<canic_core::cdk::types::Cycles>().unwrap().to_config_string())
+        management_creation_fee_cycles = (desired.management_creation_fee_cycles.parse::<canic_contracts::cycles::Cycles>().unwrap().to_config_string())
         [[roots]]
         placement_subnet = (subnet.to_text())
         root = (input.root.to_text())

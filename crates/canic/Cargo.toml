@@ -32,6 +32,7 @@ testing = ["dep:ic-testkit"]
 
 [dependencies]
 candid = { workspace = true }
+canic-contracts.workspace = true
 canic-control-plane = { workspace = true, default-features = false, optional = true }
 canic-core = { workspace = true }
 canic-macros = { workspace = true }

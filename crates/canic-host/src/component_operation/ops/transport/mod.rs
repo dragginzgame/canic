@@ -17,52 +17,27 @@ use crate::{
     icp::IcpCli,
     protocol_binding::{ResolvedProtocolBinding, resolve_registry_protocol_binding},
 };
-use candid::{CandidType, Principal};
-use canic_control_plane::dto::{
-    fleet_coordinator::{CoordinatorRegistryRequest, CoordinatorRegistryResponse},
-    root::RootOperationStatusResponse,
-};
-use canic_core::{
-    diagnostics::codes::STATE_UNAVAILABLE,
-    dto::{
-        component_registry::RootComponentAllocationRequest,
-        fleet_registry::FleetSubnetRootStatus,
-        fleet_subnet_root::FleetSubnetRootAuthority,
-        pool::{CanisterPoolResponse, CanisterPoolStatusRequest},
-        role::{OperationReceipt, OperationStatusRequest},
-    },
-    ids::{ComponentSpecId, FleetSubnetRootBinding},
-    protocol,
-};
-use serde::Deserialize;
+use candid::Principal;
+use canic_contracts::diagnostics::codes::STATE_UNAVAILABLE;
+use canic_contracts::dto::component_registry::RootComponentAllocationRequest;
+use canic_contracts::dto::fleet_coordinator::CoordinatorRegistryRequest;
+use canic_contracts::dto::fleet_coordinator::CoordinatorRegistryResponse;
+use canic_contracts::dto::fleet_registry::FleetSubnetRootStatus;
+use canic_contracts::dto::pool::CanisterPoolStatusRequest;
+use canic_contracts::dto::role::OperationAcceptedResponse as RootCommandResponse;
+use canic_contracts::dto::role::OperationStatusRequest;
+use canic_contracts::dto::root::RootOperationStatusResponse;
+use canic_contracts::dto::wire::projection::component_operation::RootCommand;
+use canic_contracts::dto::wire::projection::component_operation::RootRead;
+use canic_contracts::dto::wire::projection::component_operation::RootResponse;
+use canic_contracts::ids::ComponentSpecId;
+use canic_contracts::ids::FleetSubnetRootBinding;
+use canic_contracts::protocol;
 use sha2_host::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 
-#[derive(CandidType, Deserialize)]
-enum RootRead {
-    FleetAuthority,
-    Operation(OperationStatusRequest),
-    Pool(CanisterPoolStatusRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum RootResponse {
-    FleetAuthority(Box<FleetSubnetRootAuthority>),
-    Operation(Box<RootOperationStatusResponse>),
-    Pool(Box<CanisterPoolResponse>),
-}
-
-#[derive(CandidType, Deserialize)]
-enum RootCommand {
-    ProvisionComponent(RootComponentAllocationRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum RootCommandResponse {
-    OperationAccepted(OperationReceipt),
-}
-
 /// ICP transport rooted in the same selected workspace and environment as its review.
+
 pub struct IcpComponentTransport {
     root: PathBuf,
     icp: IcpCli,

@@ -9,13 +9,17 @@ use crate::{
     dto::cascade::{
         StateCascadeReport, StateSnapshotInput, TopologyPathNode, TopologySnapshotInput,
     },
-    ids::CanisterRole,
     ops::{cascade_report::StateCascadeReportOps, prelude::*, rpc::RpcOps},
     protocol,
     view::state_cascade::{StateCascadeEndpoint, StateCascadeTarget},
 };
-use candid::CandidType;
-use serde::Deserialize;
+use canic_contracts::{
+    dto::wire::projection::cascade::{
+        ComponentCommandFragment, ComponentCommandResponseFragment, StoreCommandFragment,
+        StoreCommandResponseFragment,
+    },
+    ids::CanisterRole,
+};
 use std::collections::{HashMap, HashSet};
 use thiserror::Error as ThisError;
 
@@ -162,28 +166,6 @@ fn validate_topology_receiver(
 ///
 
 pub struct CascadeOps;
-
-#[derive(CandidType)]
-enum StoreCommandFragment<'a> {
-    SynchronizeState(&'a StateSnapshotInput),
-    SynchronizeTopology(&'a TopologySnapshotInput),
-}
-
-#[derive(CandidType, Deserialize)]
-enum StoreCommandResponseFragment {
-    SynchronizeState(StateCascadeReport),
-    SynchronizeTopology,
-}
-
-#[derive(CandidType)]
-enum ComponentCommandFragment<'a> {
-    SynchronizeState(&'a StateSnapshotInput),
-}
-
-#[derive(CandidType, Deserialize)]
-enum ComponentCommandResponseFragment {
-    SynchronizeState(StateCascadeReport),
-}
 
 impl CascadeOps {
     pub(crate) fn validate_topology_snapshot(
@@ -348,8 +330,8 @@ mod tests {
         dto::cascade::{
             TopologyChildren, TopologyDirectChild, TopologyPathNode, TopologySnapshotInput,
         },
-        ids::CanisterRole,
     };
+    use canic_contracts::ids::CanisterRole;
 
     fn p(byte: u8) -> Principal {
         Principal::from_slice(&[byte; 29])

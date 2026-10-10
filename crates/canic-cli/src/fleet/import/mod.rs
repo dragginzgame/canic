@@ -17,10 +17,8 @@ use crate::{
     version_text,
 };
 use candid::Principal;
-use canic_core::cdk::{
-    types::Cycles,
-    utils::hash::{decode_hex, hex_bytes},
-};
+use canic_contracts::cycles::Cycles;
+use canic_core::cdk::utils::hash::{decode_hex, hex_bytes};
 use canic_host::{
     fleet_ensure::{
         dto::capacity_import::{CapacityImportFundingCreditRequest, CapacityImportReviewRequest},

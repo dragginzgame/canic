@@ -26,7 +26,7 @@ pub fn generate_infrastructure_bootstrap(
     if local_replica.is_some()
         && crate::icp_config::resolve_icp_build_network_from_root(request.root, request.environment)
             .map_err(|error| FleetGenerateError::Authority(error.to_string()))?
-            == canic_core::ids::BuildNetwork::Ic
+            == canic_contracts::ids::BuildNetwork::Ic
     {
         return Err(FleetGenerateError::Authority(
             "local bootstrap generation requires a local network profile".into(),
@@ -64,7 +64,7 @@ pub(in crate::fleet_ensure) fn seed_projection(
     original: &str,
     created_coordinator: Option<candid::Principal>,
 ) -> Result<String, FleetGenerateError> {
-    use canic_core::cdk::types::Cycles;
+    use canic_contracts::cycles::Cycles;
     let invalid = || {
         FleetGenerateError::SeedTopology(
             "bootstrap seed differs from reviewed physical authority".into(),

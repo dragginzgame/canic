@@ -12,6 +12,7 @@ pub mod funding_observation;
 pub mod infrastructure_bootstrap;
 pub mod operator_mint;
 pub mod release;
+
 pub(in crate::fleet_ensure) mod serialization;
 pub mod terminal;
 
@@ -336,19 +337,19 @@ pub struct DesiredFleetBootstrap {
     /// Browser Principal namespace reviewed with this Fleet's admission input.
     #[serde(default)]
     pub admission_identity_origin: Option<String>,
-    pub admission: canic_core::ids::FleetAdmissionPolicyTemplate,
-    pub app: canic_core::ids::AppId,
-    pub canonical_network_id: canic_core::ids::CanonicalNetworkId,
+    pub admission: canic_contracts::ids::FleetAdmissionPolicyTemplate,
+    pub app: canic_contracts::ids::AppId,
+    pub canonical_network_id: canic_contracts::ids::CanonicalNetworkId,
     pub component_deployment_configuration:
         canic_core::control_plane_support::config::ComponentDeploymentConfiguration,
     pub coordinator: String,
-    pub coordinator_subnet: canic_core::ids::SubnetId,
+    pub coordinator_subnet: canic_contracts::ids::SubnetId,
     /// Exact direct recovery controllers for every Fleet canister.
     pub recovery_controllers: Vec<canic_core::cdk::types::Principal>,
-    pub fleet_id: canic_core::ids::FleetId,
+    pub fleet_id: canic_contracts::ids::FleetId,
     pub fresh_estate: bool,
-    pub release_build_id: canic_core::ids::ReleaseBuildId,
-    pub root_funding: Option<canic_core::ids::FleetCoordinatorRootFundingPolicy>,
+    pub release_build_id: canic_contracts::ids::ReleaseBuildId,
+    pub root_funding: Option<canic_contracts::ids::FleetCoordinatorRootFundingPolicy>,
     pub roots: Vec<DesiredFleetBootstrapRoot>,
 }
 
@@ -359,11 +360,11 @@ pub struct DesiredFleetBootstrapRoot {
     /// No import hold is represented by an omitted TOML field (TOML has no null).
     pub capacity_import_bootstrap: Option<capacity_import::CapacityImportBootstrapRecord>,
     pub canister_pool_imports: Vec<String>,
-    pub component_admissions: Vec<canic_core::ids::ComponentSpecAdmission>,
-    pub component_topology_digest: canic_core::ids::ComponentTopologyDigest,
-    pub funding: canic_core::ids::FleetSubnetRootFundingAuthority,
-    pub limits: canic_core::ids::FleetSubnetRootLimits,
-    pub placement_subnet: canic_core::ids::SubnetId,
+    pub component_admissions: Vec<canic_contracts::ids::ComponentSpecAdmission>,
+    pub component_topology_digest: canic_contracts::ids::ComponentTopologyDigest,
+    pub funding: canic_contracts::ids::FleetSubnetRootFundingAuthority,
+    pub limits: canic_contracts::ids::FleetSubnetRootLimits,
+    pub placement_subnet: canic_contracts::ids::SubnetId,
     pub root: String,
     pub store: String,
 }
@@ -418,7 +419,7 @@ pub struct StartupFundingRequirement {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct StartupRoleShortfall {
-    pub role: canic_core::ids::CanisterRole,
+    pub role: canic_contracts::ids::CanisterRole,
     #[serde(with = "u128_text")]
     pub cycles: u128,
 }
@@ -646,66 +647,68 @@ pub enum CurrentFleetProtocolAction {
     /// Verify host-created local supply without authorizing mainnet-only refill.
     ObservePoolReadiness {
         minimum_ready: u32,
-        readiness_floor: canic_core::cdk::types::Cycles,
+        readiness_floor: canic_contracts::cycles::Cycles,
     },
     MaintainPoolReadiness {
         maximum_updates: u32,
         minimum_ready: u32,
-        readiness_floor: canic_core::cdk::types::Cycles,
+        readiness_floor: canic_contracts::cycles::Cycles,
     },
     ReconcilePoolAsset {
-        request: canic_core::dto::pool::PoolCanisterRequest,
-        minimum_cycles: canic_core::cdk::types::Cycles,
+        request: canic_contracts::dto::pool::PoolCanisterRequest,
+        minimum_cycles: canic_contracts::cycles::Cycles,
     },
     ActivateRegistry {
-        expected_registry: canic_core::dto::fleet_registry::FleetRegistry,
-        expected_version: canic_core::dto::fleet_registry::FleetRegistryVersion,
-        request: canic_core::dto::fleet_registry::FleetRegistryActivationRequest,
+        expected_registry: canic_contracts::dto::fleet_registry::FleetRegistry,
+        expected_version: canic_contracts::dto::fleet_registry::FleetRegistryVersion,
+        request: canic_contracts::dto::fleet_registry::FleetRegistryActivationRequest,
     },
     ActivateRegistryMirror {
-        expected: canic_core::dto::fleet_registry::FleetSubnetRootRegistryMirrorActivationResponse,
-        request: canic_core::dto::fleet_registry::FleetSubnetRootRegistrySyncRequest,
+        expected:
+            canic_contracts::dto::fleet_registry::FleetSubnetRootRegistryMirrorActivationResponse,
+        request: canic_contracts::dto::fleet_registry::FleetSubnetRootRegistrySyncRequest,
     },
     AdoptStore {
-        request: canic_core::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionRequest,
+        request: canic_contracts::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionRequest,
     },
     BootstrapStore {
-        expected: canic_core::dto::root_store::RootStoreBootstrapResponse,
-        request: canic_core::dto::root_store::RootStoreBootstrapRequest,
+        expected: canic_contracts::dto::root_store::RootStoreBootstrapResponse,
+        request: canic_contracts::dto::root_store::RootStoreBootstrapRequest,
     },
     JoinRoot {
-        expected_registry: canic_core::dto::fleet_registry::FleetRegistry,
-        expected_version: canic_core::dto::fleet_registry::FleetRegistryVersion,
-        request: canic_core::dto::fleet_registry::FleetSubnetRootJoinRequest,
+        expected_registry: canic_contracts::dto::fleet_registry::FleetRegistry,
+        expected_version: canic_contracts::dto::fleet_registry::FleetRegistryVersion,
+        request: canic_contracts::dto::fleet_registry::FleetSubnetRootJoinRequest,
     },
     PrepareStoreFixture {
         /// Total paid calls admitted by this exact reviewed action.
         maximum_attempts: u32,
-        request: canic_core::dto::root_store::RootStoreFixturePrepareRequest,
-        source: canic_core::dto::root_store::RootStoreFixture,
+        request: canic_contracts::dto::root_store::RootStoreFixturePrepareRequest,
+        source: canic_contracts::dto::root_store::RootStoreFixture,
         store: candid::Principal,
     },
     PublishStoreFixtureChunk {
         /// Total paid calls admitted by this exact reviewed action.
         maximum_attempts: u32,
-        request: canic_core::dto::fixture_provisioning::FixtureChunkUpload,
-        expected: canic_core::dto::fixture_provisioning::FixtureSourceStatus,
+        request: canic_contracts::dto::fixture_provisioning::FixtureChunkUpload,
+        expected: canic_contracts::dto::fixture_provisioning::FixtureSourceStatus,
         source_bytes: u64,
     },
     PrepareComponentRegistry {
-        expected: canic_core::dto::component_registry::RootComponentRegistryStatusResponse,
-        request: canic_core::dto::component_registry::RootComponentRegistryPreparationRequest,
+        expected: canic_contracts::dto::component_registry::RootComponentRegistryStatusResponse,
+        request: canic_contracts::dto::component_registry::RootComponentRegistryPreparationRequest,
     },
     ProvisionComponents {
         plan_hash: [u8; 32],
-        request: canic_core::dto::component_provisioning::FleetComponentProvisioningPrepareRequest,
+        request:
+            canic_contracts::dto::component_provisioning::FleetComponentProvisioningPrepareRequest,
     },
     PublishStoreChunk {
-        request: canic_control_plane::dto::template::TemplateChunkInput,
+        request: canic_contracts::dto::template::TemplateChunkInput,
     },
     SynchronizeRegistry {
-        expected: canic_core::dto::fleet_registry::FleetSubnetRootRegistrySyncResponse,
-        request: canic_core::dto::fleet_registry::FleetSubnetRootRegistrySyncRequest,
+        expected: canic_contracts::dto::fleet_registry::FleetSubnetRootRegistrySyncResponse,
+        request: canic_contracts::dto::fleet_registry::FleetSubnetRootRegistrySyncRequest,
     },
 }
 
@@ -1221,7 +1224,7 @@ pub struct RetainedRootStartAuthorityRecord {
     pub authority_sha256: String,
     pub environment: String,
     pub fleet: String,
-    pub fleet_id: canic_core::ids::FleetId,
+    pub fleet_id: canic_contracts::ids::FleetId,
     pub roots: Vec<RootManagementBinding>,
     pub schema_version: u16,
 }
@@ -1391,7 +1394,7 @@ pub fn reconcile_retirement_transfer(
 #[serde(deny_unknown_fields)]
 pub struct FleetEnsureStateRecord {
     #[serde(deserialize_with = "serialization::required_option")]
-    pub active_registry: Option<canic_core::dto::fleet_registry::FleetRegistry>,
+    pub active_registry: Option<canic_contracts::dto::fleet_registry::FleetRegistry>,
     /// Exact applied action identities for the adjacent completed reinstalls.
     pub completed_reinstall_action_sha256: BTreeMap<String, String>,
     /// Exact operation owning the adjacent completed-reinstall thresholds.

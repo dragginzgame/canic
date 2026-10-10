@@ -4,34 +4,19 @@
 
 mod candid_contract;
 
-use candid::{CandidType, Deserialize, Principal};
+use candid::CandidType;
+use candid::Principal;
 use canic::{
     Error,
     dto::{caller_authority::*, role::OperationStatusRequest},
     testing::ManagedComponentGroupFixture,
 };
+use canic_contracts::dto::wire::projection::caller_authority::StatusRequest;
+use canic_contracts::dto::wire::projection::caller_authority::StatusResponse;
+use canic_contracts::dto::wire::projection::fixture_caller_authority::Command;
+use canic_contracts::dto::wire::projection::fixture_caller_authority::Response;
 use ic_testkit::pic::{CandidCallExt, PocketIc};
 use std::time::Duration;
-
-#[derive(CandidType)]
-enum Command {
-    CallerAuthority(CallerAuthorityCommand),
-}
-
-#[derive(CandidType, Debug, Deserialize)]
-enum Response {
-    CallerAuthority(CallerAuthorityReceipt),
-}
-
-#[derive(CandidType)]
-enum StatusRequest {
-    CallerAuthority(OperationStatusRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum StatusResponse {
-    CallerAuthority(CallerAuthorityStatus),
-}
 
 pub(super) fn qualify_candid(workspace: &std::path::Path) {
     candid_contract::qualify(workspace);

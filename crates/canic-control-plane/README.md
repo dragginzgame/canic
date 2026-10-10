@@ -15,6 +15,10 @@ This crate exists to hold the shared control-plane runtime pieces used by:
 - host-generated Coordinator, Root and Store canisters
 - internal root/bootstrap orchestration support
 
+Passive control-plane contracts and template IDs live in `canic-contracts`.
+`installation::FleetCoordinatorInitArgs` stays here because its input includes
+Core’s compiled deployment configuration.
+
 ## Feature Contract
 
 All published features are enabled by default because the ordinary package

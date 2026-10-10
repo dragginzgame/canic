@@ -1,11 +1,11 @@
-use super::super::model::ConfiguredRoleLifecycle;
-use super::labels::metrics_profile_label;
+// Enumerate configured role kinds from one validated snapshot.
+
+use super::{super::model::ConfiguredRoleLifecycle, labels::metrics_profile_label};
 use crate::format::cycles_tc;
+use canic_contracts::ids::CanisterRole;
 use canic_core::bootstrap::compiled::ConfigModel;
-use canic_core::ids::CanisterRole;
 use std::collections::{BTreeMap, BTreeSet};
 
-// Enumerate configured role kinds from one validated snapshot.
 pub(in crate::release_set) fn configured_role_kinds_from_config(
     config: &ConfigModel,
 ) -> BTreeMap<String, String> {

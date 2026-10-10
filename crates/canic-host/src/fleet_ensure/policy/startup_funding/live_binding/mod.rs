@@ -15,12 +15,10 @@ use crate::fleet_ensure::{
     },
 };
 use candid::Principal;
-use canic_core::{
-    control_plane_support::config::ComponentTopology,
-    ids::{
-        CanisterRole, FleetBinding, FleetCoordinatorBinding, FleetKey, ReleaseBuildId, SubnetId,
-    },
+use canic_contracts::ids::{
+    CanisterRole, FleetBinding, FleetCoordinatorBinding, FleetKey, ReleaseBuildId, SubnetId,
 };
+use canic_core::control_plane_support::config::ComponentTopology;
 use std::collections::{BTreeMap, BTreeSet};
 
 #[cfg(test)]

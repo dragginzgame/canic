@@ -1,13 +1,11 @@
 mod client;
 pub mod publication;
 
-pub(in crate::workflow) use client::WasmStoreInternalClient;
-pub use publication::WasmStorePublicationWorkflow;
-
 use crate::{
     ids::{TemplateId, TemplateReleaseKey, TemplateVersion, WasmStoreBinding},
     ops::storage::state::root_wasm_store::RootWasmStoreStateOps,
 };
+use canic_contracts::diagnostics::codes;
 use canic_core::{
     api::{
         lifecycle::metrics::{
@@ -18,8 +16,10 @@ use canic_core::{
     },
     cdk::{types::Principal, utils::hash::wasm_hash},
     control_plane_support::error::InternalError,
-    diagnostics::codes,
 };
+
+pub(in crate::workflow) use client::WasmStoreInternalClient;
+pub use publication::WasmStorePublicationWorkflow;
 
 /// Read and verify one complete chunked payload from an exact Store.
 pub(in crate::workflow) async fn exact_store_payload_bytes(
@@ -61,14 +61,14 @@ fn release_source_label(template_id: &TemplateId, version: &TemplateVersion) -> 
 /// Resolve one exact root-local Store artifact selected by protected release-set evidence.
 pub(in crate::workflow) async fn resolved_root_store_module_source(
     store_pid: Principal,
-    release_build_id: canic_core::ids::ReleaseBuildId,
+    release_build_id: canic_contracts::ids::ReleaseBuildId,
     role: &crate::ids::CanisterRole,
     payload_hash: [u8; 32],
     payload_size_bytes: u64,
 ) -> Result<ApprovedModuleSource, InternalError> {
     let template_id = TemplateId::owned(format!(
         "{}{role}",
-        canic_core::dto::root_store::ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX
+        canic_contracts::dto::root_store::ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX
     ));
     let version = TemplateVersion::owned(release_build_id.to_string());
     let info = WasmStoreInternalClient::new(store_pid)
@@ -117,7 +117,8 @@ mod tests {
             PublicationStoreStateTestInput, RootWasmStoreStateOps, WasmStoreStateTestInput,
         },
     };
-    use canic_core::{cdk::types::Principal, diagnostics::codes};
+    use canic_contracts::diagnostics::codes;
+    use canic_core::cdk::types::Principal;
 
     fn import_store_inventory(wasm_stores: Vec<WasmStoreStateTestInput>) {
         RootWasmStoreStateOps::import_test_state(

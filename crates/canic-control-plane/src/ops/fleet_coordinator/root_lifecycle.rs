@@ -14,14 +14,7 @@ use crate::storage::stable::fleet_coordinator::{
     FleetSubnetRootRemovalPublicationReceiptRecord,
 };
 use candid::Principal;
-use canic_core::{
-    control_plane_support::{
-        error::InternalError,
-        ops::{
-            fleet_registry::FleetRegistryOps,
-            root_draining_reservation::FleetSubnetRootDrainingReservationOps,
-        },
-    },
+use canic_contracts::{
     dto::{
         component_provisioning::FleetComponentProvisioningPlan,
         fleet_registry::{
@@ -32,6 +25,13 @@ use canic_core::{
         },
     },
     ids::{ComponentTopologyDigest, FleetSubnetRootReleaseSet, SubnetId},
+};
+use canic_core::control_plane_support::{
+    error::InternalError,
+    ops::{
+        fleet_registry::FleetRegistryOps,
+        root_draining_reservation::FleetSubnetRootDrainingReservationOps,
+    },
 };
 
 struct GroupedRootLifecycleReferences {

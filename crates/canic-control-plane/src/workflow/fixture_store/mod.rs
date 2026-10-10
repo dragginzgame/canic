@@ -4,16 +4,14 @@ use crate::{
     config,
     ops::{fixture_store, storage::template::WasmStoreGcOps},
 };
-use canic_core::{
-    control_plane_support::workflow::runtime::fleet_activation::FleetActivationWorkflow,
-    dto::{
-        error::Error,
-        fixture_provisioning::{
-            FixtureChunkUpload, FixtureDescriptor, FixtureGrant, FixtureGrantRequest,
-            FixtureSourceStatus, FixtureStoreError,
-        },
+use canic_contracts::dto::{
+    error::Error,
+    fixture_provisioning::{
+        FixtureChunkUpload, FixtureDescriptor, FixtureGrant, FixtureGrantRequest,
+        FixtureSourceStatus, FixtureStoreError,
     },
 };
+use canic_core::control_plane_support::workflow::runtime::fleet_activation::FleetActivationWorkflow;
 
 pub fn prepare(
     descriptor: FixtureDescriptor,

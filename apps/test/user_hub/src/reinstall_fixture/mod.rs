@@ -10,9 +10,7 @@ use ic_memory::{
 };
 use std::cell::RefCell;
 
-canic::memory::ic_memory_range!(authority = "test", start = 200, end = 201, mode = Allowed);
-
-struct UserRows;
+canic::memory::memory_allocation_pool!(authorities = [("test", "test.")], exclusions = []);
 
 /// One passive application row exposed by the disposable fixture.
 #[derive(candid::CandidType)]
@@ -23,7 +21,7 @@ pub struct UserRow {
 
 thread_local! {
     static ROWS: RefCell<BTreeMap<u64, u64, RuntimeMemory<DefaultMemoryImpl>>> = RefCell::new(
-        BTreeMap::init(canic::memory::ic_memory_key!(authority = "test", key = "test.user_rows.v1", ty = UserRows, id = 200))
+        BTreeMap::init(canic::memory::ic_memory_key!(authority = "test", key = "test.user_rows.v1"))
     );
 }
 

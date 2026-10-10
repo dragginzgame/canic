@@ -1,21 +1,16 @@
 use crate::{
     dto::template::{
         StoreCatalogRequest, StoreCatalogResponse, StoreCommand, StoreCommandResponse,
-        TemplateChunkRequest, TemplateChunkResponse, TemplateChunkSetInfoResponse,
-        TemplateChunkSetPrepareInput, TemplateLookupRequest, TemplateManifestInput,
-        WasmStoreCatalogEntryResponse, WasmStoreDeletionCycleReclamationRequest,
-        WasmStoreDeletionCycleReclamationResponse, WasmStoreGcRequest, WasmStoreGcTarget,
-        WasmStoreStatusResponse,
+        TemplateChunkInputRef, TemplateChunkRequest, TemplateChunkResponse,
+        TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput, TemplateLookupRequest,
+        TemplateManifestInput, WasmStoreCatalogEntryResponse,
+        WasmStoreDeletionCycleReclamationRequest, WasmStoreDeletionCycleReclamationResponse,
+        WasmStoreGcRequest, WasmStoreGcTarget, WasmStoreStatusResponse,
     },
     ids::{TemplateId, TemplateVersion},
 };
 use candid::{CandidType, utils::ArgumentEncoder};
-use canic_core::cdk::types::Principal;
-use canic_core::{
-    control_plane_support::{
-        error::InternalError,
-        ops::{cost_guard::CostGuardPermit, ic::call::CallOps},
-    },
+use canic_contracts::{
     dto::{
         error::Error,
         fixture_provisioning::{
@@ -25,18 +20,26 @@ use canic_core::{
     },
     protocol,
 };
+use canic_core::{
+    cdk::types::Principal,
+    control_plane_support::{
+        error::InternalError,
+        ops::{cost_guard::CostGuardPermit, ic::call::CallOps},
+    },
+};
 
 ///
 /// WasmStoreInternalClient
 ///
+
 pub(in crate::workflow) struct WasmStoreInternalClient {
     store_pid: Principal,
 }
 
 impl WasmStoreInternalClient {
     const COMMAND: &str = protocol::CANIC_WASM_STORE_COMMAND;
-    const CHUNK: &str = "canic_wasm_store_chunk";
-    const PUBLISH_CHUNK: &str = "canic_wasm_store_publish_chunk";
+    const CHUNK: &str = protocol::CANIC_WASM_STORE_CHUNK;
+    const PUBLISH_CHUNK: &str = protocol::CANIC_WASM_STORE_PUBLISH_CHUNK;
     const STATUS: &str = protocol::CANIC_WASM_STORE_CATALOG;
     #[cfg(test)]
     const ENDPOINTS: &[&str] = &[
@@ -260,28 +263,20 @@ impl WasmStoreInternalClient {
     {
         let call = CallOps::bounded_wait(self.store_pid, method)
             .with_args(arg)
-            .map_err(|_err| InternalError::public(canic_core::diagnostics::codes::STATE_INVALID))?
+            .map_err(|_err| {
+                InternalError::public(canic_contracts::diagnostics::codes::STATE_INVALID)
+            })?
             .execute()
             .await
             .map_err(|_err| {
-                InternalError::public(canic_core::diagnostics::codes::STATE_UNAVAILABLE)
+                InternalError::public(canic_contracts::diagnostics::codes::STATE_UNAVAILABLE)
             })?;
-        let call_res: Result<T, Error> = call
-            .candid::<Result<T, Error>>()
-            .map_err(|_err| InternalError::public(canic_core::diagnostics::codes::STATE_INVALID))?;
+        let call_res: Result<T, Error> = call.candid::<Result<T, Error>>().map_err(|_err| {
+            InternalError::public(canic_contracts::diagnostics::codes::STATE_INVALID)
+        })?;
 
         call_res.map_err(InternalError::observed_public)
     }
-}
-
-// Borrowed chunk publish input for store-side chunk staging.
-#[derive(CandidType)]
-struct TemplateChunkInputRef<'a> {
-    preparation: Option<&'a TemplateChunkSetPrepareInput>,
-    pub template_id: &'a TemplateId,
-    pub version: &'a TemplateVersion,
-    pub chunk_index: u32,
-    pub bytes: &'a [u8],
 }
 
 #[cfg(test)]

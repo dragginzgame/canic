@@ -16,17 +16,19 @@ use crate::{
         rpc::{CyclesResponse, Response},
     },
     model::replay::{ExternalEffectDescriptor, RecoveryReason, ReplayActor, ReplayReceipt},
-    ops::replay::{
-        guard::ReplayPending,
-        receipt::{
-            PlacementReceiptAcknowledgementDecision, ReplayReceiptStoreError,
-            abort_reserved_receipt, acknowledge_placement_receipt, commit_staged_receipt_response,
-            mark_costed_external_effect_in_flight, mark_external_effect_in_flight,
-            mark_recovery_required, replay_cost_guard_settlement, reserve_receipt_token,
-            stage_receipt_response,
+    ops::{
+        replay::{
+            guard::ReplayPending,
+            receipt::{
+                PlacementReceiptAcknowledgementDecision, ReplayReceiptStoreError,
+                abort_reserved_receipt, acknowledge_placement_receipt,
+                commit_staged_receipt_response, mark_costed_external_effect_in_flight,
+                mark_external_effect_in_flight, mark_recovery_required,
+                replay_cost_guard_settlement, reserve_receipt_token, stage_receipt_response,
+            },
         },
+        storage::replay::ReplayReceiptOps,
     },
-    ops::storage::replay::ReplayReceiptOps,
 };
 use candid::{CandidType, decode_one, encode_one};
 

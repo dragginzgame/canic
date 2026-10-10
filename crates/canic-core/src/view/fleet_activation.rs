@@ -4,19 +4,19 @@
 //! Does not own: activation mutation, runtime startup, or endpoint serialization.
 //! Boundary: ops reconstructs the role-owned record view and reports committed transitions.
 
-use crate::cdk::types::Principal;
-use crate::storage::stable::fleet_activation::{
-    ComponentRuntimeRecord, FleetActivationStateRecord, FleetCascadeManifestEntryRecord,
-    FleetCredentialManifestRecord, FleetSubnetRootAuthorityRecord,
-    FleetSubnetWasmStoreAuthorityRecord,
-};
 use crate::{
+    cdk::types::Principal,
     dto::{
         component_registry::ComponentRuntimeStatusResponse,
         fleet_activation::FleetActivationStatusResponse,
     },
-    ids::FleetSubnetWasmStoreActivationAuthority,
+    storage::stable::fleet_activation::{
+        ComponentRuntimeRecord, FleetActivationStateRecord, FleetCascadeManifestEntryRecord,
+        FleetCredentialManifestRecord, FleetSubnetRootAuthorityRecord,
+        FleetSubnetWasmStoreAuthorityRecord,
+    },
 };
+use canic_contracts::ids::FleetSubnetWasmStoreActivationAuthority;
 
 ///
 /// FleetActivationView

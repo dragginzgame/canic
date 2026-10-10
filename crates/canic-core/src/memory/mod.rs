@@ -8,10 +8,11 @@
 pub mod admission;
 pub(crate) mod ledger;
 mod policy;
+pub mod pool;
 pub mod registry;
 pub mod runtime;
 
-pub use crate::{ic_memory_key, ic_memory_range, memory_bootstrap_admission};
+pub use crate::{ic_memory_key, memory_allocation_pool, memory_bootstrap_admission};
 pub use policy::CanicMemoryManagerPolicy;
 
 /// Stable allocation-policy authority for Canic core memory declarations.
@@ -46,5 +47,10 @@ pub(crate) fn bootstrap_default_memory_manager()
     {
         policy = policy.with_admission(participant);
     }
-    ic_memory::bootstrap_default_memory_manager_with_config(config, &policy).map(|_| ())
+    ic_memory::bootstrap_default_memory_manager_with_config(
+        config,
+        &pool::seal().map_err(ic_memory::RuntimeBootstrapError::AdmissionPolicy)?,
+        &policy,
+    )
+    .map(|_| ())
 }

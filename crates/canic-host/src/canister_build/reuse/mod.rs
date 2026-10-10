@@ -22,22 +22,24 @@ use crate::{
         load_persisted_current_release_set_manifest,
     },
 };
-use ic_host_fs::durable::write_bytes;
-use ic_host_fs::read::{hash_file_no_follow, read_file_no_follow};
-
-use canic_core::{cdk::utils::hash::hex_bytes, ids::ReleaseBuildId};
+use canic_contracts::ids::ReleaseBuildId;
+use canic_core::cdk::utils::hash::hex_bytes;
+use ic_host_fs::{
+    durable::write_bytes,
+    read::{hash_file_no_follow, read_file_no_follow},
+};
 use serde::{Deserialize, Serialize};
 use sha2_host::{Digest, Sha256};
+use snapshot::BuildInputSnapshot;
 use std::{
     collections::{BTreeMap, BTreeSet},
     env,
     ffi::OsStr,
-    fs,
-    io::{self, Read},
+    fs, io,
+    io::Read,
     path::{Path, PathBuf},
     time::Duration,
 };
-
 use thiserror::Error;
 
 pub use lock::{
@@ -45,8 +47,6 @@ pub use lock::{
     BuildProcessIdentity, BuildProcessKind, BuildProcessObservation, BuildProcessVisibility,
     KernelBuildLock, inspect_build_lock,
 };
-
-use snapshot::BuildInputSnapshot;
 
 const RECORD_LIMIT: usize = 4 * 1024 * 1024;
 
@@ -287,7 +287,8 @@ impl CompleteBuildReuse {
             files: output_files(&self.release_directory(release_build_id))?,
             roles,
         };
-        write_bytes(&record_path, &serde_json::to_vec(&record)?)?;
+        write_bytes(&record_path, &serde_json::to_vec(&record)?)
+            .map_err(crate::publication::ops::io_error)?;
         diagnostics::InputDiagnostics::capture(&self.context, &self.tool_paths, &after)
             .retain(&self.context.icp_root.join(".canic/build-reuse"));
         Ok(())
@@ -438,7 +439,7 @@ fn prepare_generated_inputs(context: &WorkspaceBuildContext) -> Result<(), Build
     let validation = crate::role_contract::validate_declared_role_package(
         &context.config_path,
         config.model(),
-        &canic_core::ids::CanisterRole::ROOT,
+        &canic_contracts::ids::CanisterRole::ROOT,
         crate::role_contract::PackageValidationMode::Build,
         &CargoFeatureSelection::default(),
     );

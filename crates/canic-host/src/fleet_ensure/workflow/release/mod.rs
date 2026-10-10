@@ -6,10 +6,8 @@ use crate::{
     fleet_ensure::{
         model::release::FleetReleaseReviewRecord,
         ops::release::{
-            funding::{self, ReleaseFundingError},
-            pool::{self, ReleasePoolError},
-            provisioning::{self, ReleaseProvisioningError},
-            receipts::{self, ReleaseReceiptsError},
+            funding, funding::ReleaseFundingError, pool, pool::ReleasePoolError, provisioning,
+            provisioning::ReleaseProvisioningError, receipts, receipts::ReleaseReceiptsError,
         },
         policy::release::{
             funding::assess_refill, pool::assess_pool, provisioning::assess_provisioning,
@@ -29,9 +27,10 @@ use crate::{
     },
     icp::IcpCli,
 };
-use canic_core::dto::fleet_registry::FleetRegistry;
+use canic_contracts::dto::fleet_registry::FleetRegistry;
 
 /// Observe provisioning journals without requiring completion of a disposable installation.
+
 pub async fn observe_provisioning(
     icp: &IcpCli,
     review: &FleetReleaseReviewRecord,

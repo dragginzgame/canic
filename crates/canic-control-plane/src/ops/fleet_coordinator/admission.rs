@@ -10,13 +10,15 @@ use crate::storage::stable::fleet_coordinator::{
     FleetAdmissionPublicationActionRecord, FleetAdmissionPublicationRecord,
     FleetCoordinatorFundingStore, FleetCoordinatorRegistryRecord,
 };
-use canic_core::{
-    control_plane_support::{error::InternalError, ops::fleet_registry::FleetRegistryOps},
+use canic_contracts::{
     dto::{
         component_provisioning::FleetComponentProvisioningPhase,
         fleet_registry::{FleetRegistry, FleetRegistryVersion, FleetSubnetRootStatus},
     },
     ids::FleetAdmissionPolicy,
+};
+use canic_core::{
+    control_plane_support::{error::InternalError, ops::fleet_registry::FleetRegistryOps},
     shared_support::{
         fleet_admission_authority::{
             FleetAdmissionMutationActionModel, FleetAdmissionMutationRequestModel,

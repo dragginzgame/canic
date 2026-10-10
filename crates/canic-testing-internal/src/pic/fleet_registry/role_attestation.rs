@@ -4,55 +4,34 @@
 //! Does not own: fixture construction, Component lifecycle, or proof implementation.
 //! Boundary: consumes an active Registry-issued Component binding from the Fleet journey.
 
+use candid::Principal;
+use canic::dto::auth::RoleAttestationGetRequest;
+use canic::dto::auth::RoleAttestationRequest;
+use canic::dto::auth::SignedRoleAttestation;
+use canic::dto::error::Error;
+use canic::dto::metrics::MetricEntry;
+use canic::dto::metrics::MetricValue;
+use canic::dto::metrics::MetricsKind;
+use canic::dto::page::PageRequest;
+use canic::dto::role::MetricsStatusRequest;
+use canic::dto::rpc::RootRequestMetadata;
+use canic::ids::CanisterRole;
+use canic::ids::ComponentBinding;
+use canic::protocol::CANIC_ROOT_COMMAND;
+use ic_testkit::pic::{CandidCallExt, PocketIc};
 use std::time::Duration;
 
-use candid::{CandidType, Deserialize, Principal};
-use canic::{
-    dto::{
-        auth::{
-            RoleAttestationGetRequest, RoleAttestationPrepareResponse, RoleAttestationRequest,
-            SignedRoleAttestation,
-        },
-        error::Error,
-        metrics::{MetricEntry, MetricValue, MetricsKind},
-        page::{Page, PageRequest},
-        role::MetricsStatusRequest,
-        rpc::RootRequestMetadata,
-    },
-    ids::{CanisterRole, ComponentBinding},
-    protocol::CANIC_ROOT_COMMAND,
-};
-use ic_testkit::pic::{CandidCallExt, PocketIc};
+use canic_contracts::dto::wire::projection::fixture_role_attestation::RootCommand;
 
-#[derive(CandidType)]
-enum RootCommand {
-    PrepareRoleAttestation(RoleAttestationRequest),
-}
+use canic_contracts::dto::wire::projection::fixture_role_attestation::RootCommandResponse;
 
-#[derive(CandidType, Debug, Deserialize)]
-enum RootCommandResponse {
-    PrepareRoleAttestation(RoleAttestationPrepareResponse),
-}
+use canic_contracts::dto::wire::projection::fixture_role_attestation::RootStatusRequest;
 
-#[derive(CandidType)]
-enum RootStatusRequest {
-    RoleAttestation(RoleAttestationGetRequest),
-}
+use canic_contracts::dto::wire::projection::fixture_role_attestation::RootStatusResponse;
 
-#[derive(CandidType, Deserialize)]
-enum RootStatusResponse {
-    RoleAttestation(SignedRoleAttestation),
-}
+use canic_contracts::dto::wire::projection::fixture_role_attestation::ManagedStatusRequest;
 
-#[derive(CandidType)]
-enum ManagedStatusRequest {
-    Metrics(MetricsStatusRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum ManagedStatusResponse {
-    Metrics(Page<MetricEntry>),
-}
+use canic_contracts::dto::wire::projection::fixture_role_attestation::ManagedStatusResponse;
 
 /// Exercise issuance, verification, and guard metrics through an active issuer Component.
 pub(super) fn assert_registry_bound_role_attestation(
@@ -75,7 +54,7 @@ fn assert_role_attestation_admission(pic: &PocketIc, root: Principal, issuer: &C
         root,
         issuer.canister_id,
         subject_drift,
-        canic_core::diagnostics::codes::AUTHORITY_CONFLICT.raw_code(),
+        canic_contracts::diagnostics::codes::AUTHORITY_CONFLICT.raw_code(),
     );
 
     let mut role_drift = role_attestation_request(issuer, issuer.canister_id, 60_000_000_000, 12);
@@ -85,7 +64,7 @@ fn assert_role_attestation_admission(pic: &PocketIc, root: Principal, issuer: &C
         root,
         issuer.canister_id,
         role_drift,
-        canic_core::diagnostics::codes::AUTHORITY_CONFLICT.raw_code(),
+        canic_contracts::diagnostics::codes::AUTHORITY_CONFLICT.raw_code(),
     );
 
     let mut subnet_drift = role_attestation_request(issuer, issuer.canister_id, 60_000_000_000, 13);
@@ -95,7 +74,7 @@ fn assert_role_attestation_admission(pic: &PocketIc, root: Principal, issuer: &C
         root,
         issuer.canister_id,
         subnet_drift,
-        canic_core::diagnostics::codes::AUTHORITY_CONFLICT.raw_code(),
+        canic_contracts::diagnostics::codes::AUTHORITY_CONFLICT.raw_code(),
     );
 
     let mut unregistered = role_attestation_request(issuer, issuer.canister_id, 60_000_000_000, 14);
@@ -105,7 +84,7 @@ fn assert_role_attestation_admission(pic: &PocketIc, root: Principal, issuer: &C
         root,
         Principal::anonymous(),
         unregistered,
-        canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code(),
+        canic_contracts::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code(),
     );
 }
 
@@ -141,7 +120,7 @@ fn assert_role_attestation_verification(
     .expect_err("local-Subnet access must reject an attestation without a Subnet claim");
     assert_eq!(
         missing_subnet.code(),
-        canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
+        canic_contracts::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
     );
 
     let attestation =
@@ -156,7 +135,7 @@ fn assert_role_attestation_verification(
     .expect_err("role attestation caller mismatch must fail");
     assert_eq!(
         caller_mismatch.code(),
-        canic_core::diagnostics::codes::AUTHORITY_CONFLICT.raw_code()
+        canic_contracts::diagnostics::codes::AUTHORITY_CONFLICT.raw_code()
     );
 
     let attestation = issue_role_attestation(pic, root, issuer, root, 60_000_000_000, 23);
@@ -170,7 +149,7 @@ fn assert_role_attestation_verification(
     .expect_err("role attestation audience mismatch must fail");
     assert_eq!(
         audience_mismatch.code(),
-        canic_core::diagnostics::codes::AUTHORITY_CONFLICT.raw_code()
+        canic_contracts::diagnostics::codes::AUTHORITY_CONFLICT.raw_code()
     );
 
     let attestation =
@@ -185,7 +164,7 @@ fn assert_role_attestation_verification(
     .expect_err("role attestation epoch floor mismatch must fail");
     assert_eq!(
         epoch_mismatch.code(),
-        canic_core::diagnostics::codes::VERSION_INACTIVE.raw_code()
+        canic_contracts::diagnostics::codes::VERSION_INACTIVE.raw_code()
     );
 
     let attestation =
@@ -202,7 +181,7 @@ fn assert_role_attestation_verification(
     .expect_err("expired role attestation must fail");
     assert_eq!(
         expired.code(),
-        canic_core::diagnostics::codes::SECURITY_EXPIRED.raw_code()
+        canic_contracts::diagnostics::codes::SECURITY_EXPIRED.raw_code()
     );
 }
 
@@ -231,7 +210,7 @@ fn assert_role_prepare_forbidden(
     root: Principal,
     caller: Principal,
     request: RoleAttestationRequest,
-    expected_code: canic_core::diagnostics::DiagnosticCode,
+    expected_code: canic_contracts::diagnostics::DiagnosticCode,
 ) {
     let response: Result<RootCommandResponse, Error> = pic
         .update_candid_as(
@@ -285,7 +264,7 @@ fn issue_requested_role_attestation(
         .query_candid_as(
             root,
             issuer.canister_id,
-            canic_core::protocol::CANIC_ROOT_AUTH_STATUS,
+            canic_contracts::protocol::CANIC_ROOT_AUTH_STATUS,
             (RootStatusRequest::RoleAttestation(
                 RoleAttestationGetRequest {
                     payload_hash: prepared.payload_hash,
@@ -338,7 +317,7 @@ fn assert_issuer_guard_metrics(pic: &PocketIc, root: Principal, issuer: Principa
         .expect("issuer root-guard denial transport");
     assert_eq!(
         denied.expect_err("anonymous root guard").code(),
-        canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
+        canic_contracts::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
     );
     assert_eq!(
         metric_count_for_labels(pic, root, issuer, MetricsKind::Security, &denial_labels),
@@ -392,7 +371,7 @@ fn query_metric_entries(
         .query_candid_as(
             canister,
             caller,
-            canic_core::protocol::CANIC_OBSERVABILITY,
+            canic_contracts::protocol::CANIC_OBSERVABILITY,
             (ManagedStatusRequest::Metrics(MetricsStatusRequest {
                 kind,
                 page: PageRequest {

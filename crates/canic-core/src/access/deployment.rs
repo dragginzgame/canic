@@ -4,9 +4,11 @@
 //! Does not own: caller authentication, service topology, or application write semantics.
 //! Boundary: only an active Directory-validated Authority purpose satisfies the write guard.
 
-use crate::{InternalError, access::AccessError, ids::FleetServiceId};
+use crate::{InternalError, access::AccessError};
+use canic_contracts::ids::FleetServiceId;
 
 /// Require this Component tree to hold one exact Fleet service's write Authority purpose.
+
 pub fn require_service_authority(service: &str) -> Result<(), AccessError> {
     let service = FleetServiceId::try_from(service.to_owned())
         .map_err(|_| AccessError::ServiceGuardInvalid)?;

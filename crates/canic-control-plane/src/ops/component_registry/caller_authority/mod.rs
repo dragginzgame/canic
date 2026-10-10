@@ -17,16 +17,16 @@ use crate::storage::stable::component_registry::{
     },
 };
 use candid::Principal;
-use canic_core::{
-    control_plane_support::{
-        error::InternalError,
-        model::caller_authority::{CallerPublicationRecord, CallerReceiptPhase},
-        ops::caller_authority::CallerAuthorityOps,
-    },
+use canic_contracts::{
     dto::caller_authority::{
         CallerAuthorityChange, CallerAuthorityPhase, CallerAuthorityReceipt, CallerAuthorityStatus,
     },
     ids::{CallerReceiverAuthority, CallerRootAuthority, CanisterRole},
+};
+use canic_core::control_plane_support::{
+    error::InternalError,
+    model::caller_authority::{CallerPublicationRecord, CallerReceiptPhase},
+    ops::caller_authority::CallerAuthorityOps,
 };
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
@@ -72,7 +72,7 @@ impl RootCallerOps {
     }
 
     pub fn source_receivers(
-        source: &canic_core::ids::CallerInstallation,
+        source: &canic_contracts::ids::CallerInstallation,
     ) -> Result<Vec<CallerEnrolledReceiverRecord>, InternalError> {
         RootComponentRegistryStore::caller_source_receivers(source)
             .into_iter()
@@ -494,9 +494,9 @@ fn build_step(
 impl super::ComponentRegistryOps {
     /// Read exact current installations from the Registry's own allocation and child indexes.
     pub(crate) fn caller_sources(
-        selected_component: Option<canic_core::ids::ComponentInstanceId>,
-    ) -> Result<Vec<canic_core::ids::CallerInstallation>, InternalError> {
-        use canic_core::{
+        selected_component: Option<canic_contracts::ids::ComponentInstanceId>,
+    ) -> Result<Vec<canic_contracts::ids::CallerInstallation>, InternalError> {
+        use canic_contracts::{
             dto::component_registry::ComponentLifecycleStatus,
             ids::{CallerInstallation, ManagedCanisterBinding},
         };

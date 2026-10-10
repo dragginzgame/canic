@@ -10,21 +10,21 @@
 pub mod canister;
 pub mod stable;
 
+use crate::InternalError;
+use thiserror::Error as ThisError;
+
 ///
 /// Prelude
 ///
 
 pub mod prelude {
+    pub use crate::cdk::types::Principal;
     pub use crate::impl_storable_bounded;
-    pub use crate::{
-        cdk::types::{Cycles, Principal},
-        ids::{CanisterRole, ComponentSpecId, ManagedCanisterBinding},
+    pub use canic_contracts::{
+        cycles::Cycles, ids::CanisterRole, ids::ComponentSpecId, ids::ManagedCanisterBinding,
     };
     pub use serde::{Deserialize, Serialize};
 }
-
-use crate::InternalError;
-use thiserror::Error as ThisError;
 
 ///
 /// StorageError

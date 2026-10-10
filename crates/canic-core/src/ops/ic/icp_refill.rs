@@ -6,7 +6,6 @@
 
 use crate::{
     InternalError,
-    ids::BuildNetwork,
     infra::ic::{
         IcInfraError,
         icp_refill::{
@@ -18,6 +17,7 @@ use crate::{
     ops::{OpsError, cost_guard::CostGuardPermit},
 };
 use candid::{Nat, Principal};
+use canic_contracts::ids::BuildNetwork;
 
 pub use crate::infra::ic::icp_refill::Icrc1Account;
 

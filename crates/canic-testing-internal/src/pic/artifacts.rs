@@ -1,4 +1,5 @@
-use canic_core::ids::BuildNetwork;
+use super::{progress, progress::ProgressStatus};
+use canic_contracts::ids::BuildNetwork;
 use canic_host::role_contract::{
     CargoFeatureSelection, PackageValidationMode, RolePackageValidation,
 };
@@ -18,20 +19,22 @@ use ic_testkit::artifacts::{
 use ic_testkit::artifacts::{
     ArtifactCacheOutcome, ArtifactCachePreparation, prepare_artifact_cache,
 };
-use std::fs;
 #[cfg(all(
     feature = "pocketic-fixtures",
     any(not(test), feature = "governed-pocketic-tests")
 ))]
 use std::sync::OnceLock;
 use std::{
+    fs,
     path::{Path, PathBuf},
     process::{Command, Output},
     time::Duration,
 };
 
-use super::progress::{self, ProgressStatus};
-
+#[cfg(all(
+    feature = "pocketic-fixtures",
+    any(not(test), feature = "governed-pocketic-tests")
+))]
 const INTERNAL_TEST_WASM_CACHE_MAX_AGE: Duration = Duration::from_hours(168);
 const INTERNAL_TEST_WASM_CACHE_MAX_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 const INTERNAL_TEST_WASM_CACHE_MAINTENANCE_INTERVAL: Duration = Duration::from_hours(1);
@@ -55,7 +58,7 @@ pub(super) fn with_canonical_root_cargo_inputs(
     let validation = canic_host::role_contract::validate_declared_role_package(
         config_path,
         config.model(),
-        &canic_core::ids::CanisterRole::ROOT,
+        &canic_contracts::ids::CanisterRole::ROOT,
         PackageValidationMode::Build,
         &CargoFeatureSelection::default(),
     );
@@ -81,7 +84,7 @@ pub(super) fn with_canonical_root_cargo_inputs(
 }
 
 pub(super) const INTERNAL_TEST_RELEASE_BUILD_ID: (&str, &str) = (
-    canic_core::ids::RELEASE_BUILD_ID_ENV,
+    canic_contracts::ids::RELEASE_BUILD_ID_ENV,
     "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae",
 );
 #[cfg(all(test, feature = "governed-pocketic-tests"))]

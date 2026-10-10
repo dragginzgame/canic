@@ -81,10 +81,15 @@ NOTES_EXISTED=0
 RECEIPT_EXISTED=0
 [[ ! -f "$VALIDATION_RECEIPT" ]] || RECEIPT_EXISTED=1
 RELEASE_SURFACES=()
+CONSUMER_LOCKS=()
+consumer_lock_paths="$(bash scripts/release/adapter.sh consumer-locks)"
+[[ -n "$consumer_lock_paths" ]]
+while IFS= read -r path; do CONSUMER_LOCKS[${#CONSUMER_LOCKS[@]}]="$path"; done <<< "$consumer_lock_paths"
 while IFS= read -r path; do RELEASE_SURFACES[${#RELEASE_SURFACES[@]}]="$path"; done < <(
   {
     git ls-files -- 'Cargo.toml' ':(glob)**/Cargo.toml'
     printf '%s\n' Cargo.lock CHANGELOG.md scripts/dev/install_dev.sh
+    printf '%s\n' "${CONSUMER_LOCKS[@]}"
     if [[ "$NOTES_EXISTED" -eq 1 ]]; then printf '%s\n' "$DETAILED_CHANGELOG"; fi
     if [[ "$RECEIPT_EXISTED" -eq 1 ]]; then printf '%s\n' "$VALIDATION_RECEIPT"; fi
   } | sort -u
@@ -92,6 +97,11 @@ while IFS= read -r path; do RELEASE_SURFACES[${#RELEASE_SURFACES[@]}]="$path"; d
 tar -cf "$BACKUP_ARCHIVE" "${RELEASE_SURFACES[@]}"
 cargo metadata --locked --offline --no-deps --format-version 1 > "$TRANSACTION_DIR/metadata.json"
 cp -p Cargo.lock "$TRANSACTION_DIR/Cargo.lock"
+for index in "${!CONSUMER_LOCKS[@]}"; do
+  consumer_lock="${CONSUMER_LOCKS[$index]}"
+  cargo metadata --locked --offline --format-version 1 --manifest-path "${consumer_lock%/Cargo.lock}/Cargo.toml" > "$TRANSACTION_DIR/consumer-$index.json"
+  cp -p "$consumer_lock" "$TRANSACTION_DIR/consumer-$index.lock"
+done
 
 rollback_release_surfaces() {
   local status="${1:-1}"
@@ -133,6 +143,13 @@ fi
 
 bash scripts/release/rewrite-owned-lock.sh "$TRANSACTION_DIR/metadata.json" "$TRANSACTION_DIR/Cargo.lock" "$PREV" "$NEW" > "$TRANSACTION_DIR/candidate.lock"
 cat "$TRANSACTION_DIR/candidate.lock" > Cargo.lock
+for index in "${!CONSUMER_LOCKS[@]}"; do
+  consumer_lock="${CONSUMER_LOCKS[$index]}"
+  bash scripts/release/rewrite-owned-lock.sh "$TRANSACTION_DIR/metadata.json" \
+    "$TRANSACTION_DIR/consumer-$index.lock" "$PREV" "$NEW" "$TRANSACTION_DIR/consumer-$index.json" > "$TRANSACTION_DIR/candidate.lock"
+  cat "$TRANSACTION_DIR/candidate.lock" > "$consumer_lock"
+  cargo metadata --locked --offline --no-deps --format-version 1 --manifest-path "${consumer_lock%/Cargo.lock}/Cargo.toml" >/dev/null
+done
 cargo metadata --locked --offline --no-deps --format-version 1 >/dev/null
 
 scripts/ci/sync-release-surface-version.sh "$NEW"

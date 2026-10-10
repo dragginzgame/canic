@@ -13,20 +13,15 @@ use crate::{
     icp::IcpCli,
 };
 use candid::{CandidType, Principal};
-use canic_core::dto::canister::{CanisterHistoryResponse, CanisterInspectionRequest};
+use canic_contracts::dto::{
+    canister::CanisterInspectionRequest,
+    wire::projection::install_history::{Command, Response},
+};
 use serde::Deserialize;
 use std::path::Path;
 
-#[derive(CandidType)]
-enum Command {
-    InspectCanisterHistory(CanisterInspectionRequest),
-}
-#[derive(CandidType, Deserialize)]
-enum Response {
-    InspectCanisterHistory(CanisterHistoryResponse),
-}
-
 /// Recovery decision backed by replicated history, including non-deployment version changes.
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum HistoryEffect {
     Applied,
@@ -93,7 +88,7 @@ pub(super) fn observe(
             icp,
             &path,
             witness_principal,
-            canic_core::protocol::CANIC_ROOT_COMMAND,
+            canic_contracts::protocol::CANIC_ROOT_COMMAND,
             &Command::InspectCanisterHistory(CanisterInspectionRequest {
                 canister_id: principal,
             }),

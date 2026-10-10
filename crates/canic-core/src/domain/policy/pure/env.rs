@@ -1,8 +1,5 @@
-use crate::{
-    domain::value::Principal,
-    ids::{CanisterRole, ComponentSpecId},
-    model::env::ValidatedEnv,
-};
+use crate::{domain::value::Principal, model::env::ValidatedEnv};
+use canic_contracts::ids::{CanisterRole, ComponentSpecId};
 use thiserror::Error as ThisError;
 
 ///

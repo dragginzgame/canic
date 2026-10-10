@@ -13,30 +13,34 @@ use crate::{
     InternalError,
     cdk::types::Principal,
     dto::rpc::Response,
-    ids::CanisterRole,
     model::replay::{CommandKind, ExternalEffectDescriptor, OperationId, RecoveryReason},
     ops::{
         ic::IcOps,
+        replay as replay_ops,
         replay::{
-            self as replay_ops, ReplayCommitError, ReplayDecodeError, ReplayFinalizeError,
-            ReplayReserveError,
-            guard::secs_to_ns,
-            guard::{ReplayDecision, ReplayGuardError, ReplayPending, RootReplayGuardInput},
+            ReplayCommitError, ReplayDecodeError, ReplayFinalizeError, ReplayReserveError,
+            guard::{
+                ReplayDecision, ReplayGuardError, ReplayPending, RootReplayGuardInput, secs_to_ns,
+            },
         },
-        runtime::metrics::replay::{
-            ReplayMetricOperation, ReplayMetricOutcome, ReplayMetricReason, ReplayMetrics,
-        },
-        runtime::metrics::root_capability::{
-            RootCapabilityMetricKey, RootCapabilityMetricOutcome, RootCapabilityMetrics,
+        runtime::metrics::{
+            replay::{
+                ReplayMetricOperation, ReplayMetricOutcome, ReplayMetricReason, ReplayMetrics,
+            },
+            root_capability::{
+                RootCapabilityMetricKey, RootCapabilityMetricOutcome, RootCapabilityMetrics,
+            },
         },
     },
     workflow::{cost_guard::CostGuardWorkflow, rpc::RpcWorkflowError},
 };
+use canic_contracts::ids::CanisterRole;
 use sha2::{Digest, Sha256};
 
 /// ReplayPreflight
 ///
 /// Workflow replay gate result used to branch execute-vs-cache behavior.
+
 #[derive(Debug)]
 pub(super) enum ReplayPreflight {
     Fresh(ReplayPending),

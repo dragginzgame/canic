@@ -73,7 +73,8 @@ where
 {
     if let Some(path) = out {
         let data = serde_json::to_vec_pretty(value)?;
-        write_bytes(&resolve_operator_path(path)?, &data)?;
+        write_bytes(&resolve_operator_path(path)?, &data)
+            .map_err(canic_host::publication::ops::io_error)?;
         return Ok(());
     }
 
@@ -91,7 +92,8 @@ where
     E: From<io::Error> + From<serde_json::Error>,
 {
     let data = serde_json::to_vec_pretty(value)?;
-    write_bytes(&resolve_operator_path(path)?, &data)?;
+    write_bytes(&resolve_operator_path(path)?, &data)
+        .map_err(canic_host::publication::ops::io_error)?;
     Ok(())
 }
 
@@ -101,7 +103,8 @@ where
     E: From<io::Error>,
 {
     if let Some(path) = out {
-        write_bytes(&resolve_operator_path(path)?, text.as_bytes())?;
+        write_bytes(&resolve_operator_path(path)?, text.as_bytes())
+            .map_err(canic_host::publication::ops::io_error)?;
     } else {
         println!("{text}");
     }

@@ -4,52 +4,35 @@
 //! Does not own: PocketIC installation or host effect-journal coverage.
 
 use super::*;
-use crate::storage::stable::fleet_admission::{
-    FleetAdmissionAuthorityRecord, FleetAdmissionAuthorityStore,
-    FleetAdmissionCoordinatorRootPhaseRecord, FleetAdmissionCoordinatorRootProgressRecord,
-    FleetAdmissionMutationActionRecord, FleetAdmissionMutationOutcomeRecord,
-    FleetAdmissionMutationRequestRecord, FleetAdmissionMutationResponseRecord,
-    FleetAdmissionRetainedResultRecord,
-};
-use crate::storage::stable::fleet_coordinator::{
-    FLEET_COORDINATOR_STATE_MAX_BYTES, FleetAdmissionPublicationActionRecord,
-    FleetAdmissionPublicationRecord, FleetComponentDirectoryConfirmationIntentRecord,
-    FleetComponentDirectoryConfirmationRecord, FleetComponentProvisioningStateRecord,
-    FleetCoordinatorFundingStore, FleetCoordinatorRegistryData, FleetCoordinatorRegistryStore,
-    FleetCoordinatorStateRecord,
-};
-use crate::view::fleet_coordinator::{
-    FleetComponentDirectoryConfirmationCallView, FleetComponentDirectoryConfirmationDisposition,
-    FleetComponentProvisioningRootAcceptanceDisposition,
-    FleetComponentProvisioningRootProvisionCallView,
-    FleetComponentProvisioningRootProvisionDisposition, FleetComponentRuntimeActivationDisposition,
-    FleetRootFundingDisposition,
-};
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    future::Future,
-    task::{Context, Poll, Waker},
-};
-
-use canic_core::{
-    bootstrap::parse_config_model,
-    cdk::structures::storable::Storable,
-    cdk::types::Cycles,
-    control_plane_support::{
-        config::ConfigModel,
-        ops::{
-            component_provisioning_plan::ComponentProvisioningPlanOps,
-            component_provisioning_receipt::{
-                RootComponentProvisioningAcceptanceReceiptAuthority,
-                RootComponentProvisioningProvisionedReceiptAuthority,
-                RootComponentProvisioningPublishedReceiptAuthority,
-                RootComponentProvisioningReceiptOps,
-                RootComponentProvisioningRuntimesActiveReceiptAuthority,
-            },
-            fleet_registry::FleetRegistryOps,
-            fleet_service_binding::FleetServiceBindingOps,
+use crate::{
+    installation::FleetCoordinatorInitArgs,
+    storage::stable::{
+        fleet_admission::{
+            FleetAdmissionAuthorityRecord, FleetAdmissionAuthorityStore,
+            FleetAdmissionCoordinatorRootPhaseRecord, FleetAdmissionCoordinatorRootProgressRecord,
+            FleetAdmissionMutationActionRecord, FleetAdmissionMutationOutcomeRecord,
+            FleetAdmissionMutationRequestRecord, FleetAdmissionMutationResponseRecord,
+            FleetAdmissionRetainedResultRecord,
+        },
+        fleet_coordinator::{
+            FLEET_COORDINATOR_STATE_MAX_BYTES, FleetAdmissionPublicationActionRecord,
+            FleetAdmissionPublicationRecord, FleetComponentDirectoryConfirmationIntentRecord,
+            FleetComponentDirectoryConfirmationRecord, FleetComponentProvisioningStateRecord,
+            FleetCoordinatorFundingStore, FleetCoordinatorRegistryData,
+            FleetCoordinatorRegistryStore, FleetCoordinatorStateRecord,
         },
     },
+    view::fleet_coordinator::{
+        FleetComponentDirectoryConfirmationCallView,
+        FleetComponentDirectoryConfirmationDisposition,
+        FleetComponentProvisioningRootAcceptanceDisposition,
+        FleetComponentProvisioningRootProvisionCallView,
+        FleetComponentProvisioningRootProvisionDisposition,
+        FleetComponentRuntimeActivationDisposition, FleetRootFundingDisposition,
+    },
+};
+use canic_contracts::{
+    cycles::Cycles,
     dto::{
         component_provisioning::{
             ComponentDirectoryPublicationEvidence, ComponentGroupDirectory,
@@ -68,8 +51,8 @@ use canic_core::{
         },
         fleet_admission::{
             FleetAdmissionMutationAction, FleetAdmissionMutationOutcome,
-            FleetAdmissionMutationRequest, FleetAdmissionPrepareRootStage,
-            FleetAdmissionRootTransitionPhase,
+            FleetAdmissionMutationRequest, FleetAdmissionPrepareRootRequest,
+            FleetAdmissionPrepareRootStage, FleetAdmissionRootTransitionPhase,
         },
         fleet_funding::{
             FleetFundingPolicyRotationApplyRequest, FleetFundingPolicyRotationBeginRequest,
@@ -101,10 +84,24 @@ use canic_core::{
         FleetId, FleetKey, FleetRegistryAuthority, FleetSubnetRootBinding, FleetSubnetRootLimits,
         FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
     },
-    shared_support::fleet_funding_policy::{
-        coordinator_root_funding_policy_hash, fleet_funding_policy_rotation_operation_id,
-        fleet_funding_policy_rotation_plan_digest, fleet_funding_policy_rotation_roots_digest,
-        fleet_root_funding_operation_id, fleet_subnet_root_funding_policy_hash,
+};
+use canic_core::{
+    bootstrap::parse_config_model,
+    cdk::structures::storable::Storable,
+    control_plane_support::{
+        config::ConfigModel,
+        ops::{
+            component_provisioning_plan::ComponentProvisioningPlanOps,
+            component_provisioning_receipt::{
+                RootComponentProvisioningAcceptanceReceiptAuthority,
+                RootComponentProvisioningProvisionedReceiptAuthority,
+                RootComponentProvisioningPublishedReceiptAuthority,
+                RootComponentProvisioningReceiptOps,
+                RootComponentProvisioningRuntimesActiveReceiptAuthority,
+            },
+            fleet_registry::FleetRegistryOps,
+            fleet_service_binding::FleetServiceBindingOps,
+        },
     },
     shared_support::{
         fleet_admission_authority::{
@@ -116,7 +113,17 @@ use canic_core::{
             compile_installed_fleet_admission_policy, fleet_admission_participant_catalog_digest,
             fleet_admission_root_receipt_digest_from_binding,
         },
+        fleet_funding_policy::{
+            coordinator_root_funding_policy_hash, fleet_funding_policy_rotation_operation_id,
+            fleet_funding_policy_rotation_plan_digest, fleet_funding_policy_rotation_roots_digest,
+            fleet_root_funding_operation_id, fleet_subnet_root_funding_policy_hash,
+        },
     },
+};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    future::Future,
+    task::{Context, Poll, Waker},
 };
 
 fn principal(byte: u8) -> Principal {
@@ -789,7 +796,7 @@ fn protected_init_commits_exact_genesis_and_supports_exact_retry() {
             .expect_err("invalid Coordinator funding policy must reject before commitment");
     assert_eq!(
         invalid.public_error().code(),
-        canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
+        canic_contracts::diagnostics::codes::REQUEST_INVALID.raw_code()
     );
     assert!(FleetCoordinatorRegistryStore::export().current.is_none());
 
@@ -817,7 +824,7 @@ fn protected_init_commits_exact_genesis_and_supports_exact_retry() {
     .expect_err("reject non-controller init");
     assert_eq!(
         unauthorized.public_error().code(),
-        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+        canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
     );
 
     let wrong_canister = FleetCoordinatorWorkflow::initialize(
@@ -829,7 +836,7 @@ fn protected_init_commits_exact_genesis_and_supports_exact_retry() {
     .expect_err("reject wrong Coordinator binding");
     assert_eq!(
         wrong_canister.public_error().code(),
-        canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
+        canic_contracts::diagnostics::codes::REQUEST_INVALID.raw_code()
     );
 
     let durable = FleetCoordinatorRegistryStore::export();
@@ -855,7 +862,7 @@ fn protected_init_commits_exact_genesis_and_supports_exact_retry() {
         .expect_err("corrupt durable compiled configuration must fail closed");
     assert_eq!(
         invalid.code(),
-        canic_core::diagnostics::codes::STATE_INVALID
+        canic_contracts::diagnostics::codes::STATE_INVALID
     );
     FleetCoordinatorRegistryStore::import(durable);
 }
@@ -902,7 +909,7 @@ fn coordinator_operation_status_resolves_the_durable_domain_from_one_id() {
     };
     assert_eq!(
         invalid.public_error().code(),
-        canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
+        canic_contracts::diagnostics::codes::REQUEST_INVALID.raw_code()
     );
 }
 
@@ -991,7 +998,7 @@ fn root_join_compare_and_commit_retains_exact_response_receipts() {
     .expect_err("a new root cannot commit against stale Registry authority");
     assert_eq!(
         stale.public_error().code(),
-        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
 
     let mut conflicting_entry = first_entry;
@@ -1003,7 +1010,7 @@ fn root_join_compare_and_commit_retains_exact_response_receipts() {
     .expect_err("an existing root identity cannot change authority");
     assert_eq!(
         conflict.public_error().code(),
-        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
 
     let mut corrupted = FleetCoordinatorRegistryStore::export();
@@ -1019,7 +1026,7 @@ fn root_join_compare_and_commit_retains_exact_response_receipts() {
         .expect_err("reject corrupted historical receipt");
     assert_eq!(
         invalid.code(),
-        canic_core::diagnostics::codes::STATE_INVALID.raw_code()
+        canic_contracts::diagnostics::codes::STATE_INVALID.raw_code()
     );
 }
 
@@ -1048,7 +1055,7 @@ fn root_join_rejects_a_fleet_budget_that_cannot_admit_the_root_target() {
     .expect_err("Fleet budget below the root target must reject");
     assert_eq!(
         rejected.public_error().code(),
-        canic_core::diagnostics::codes::STATE_INVALID.raw_code()
+        canic_contracts::diagnostics::codes::STATE_INVALID.raw_code()
     );
     assert!(
         FleetCoordinatorWorkflow::registry()
@@ -1105,7 +1112,7 @@ fn root_draining_reservation_is_durable_hash_bound_and_target_readable() {
     .expect_err("foreign caller cannot read reservation");
     assert_eq!(
         forbidden.public_error().code(),
-        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+        canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
     );
 
     FleetCoordinatorWorkflow::publish_root_draining(root_draining_publication_request(
@@ -1145,7 +1152,7 @@ fn root_draining_reservation_is_durable_hash_bound_and_target_readable() {
         .expect_err("corrupt reservation hash must fail closed");
     assert_eq!(
         invalid.code(),
-        canic_core::diagnostics::codes::STATE_INVALID
+        canic_contracts::diagnostics::codes::STATE_INVALID
     );
     FleetCoordinatorRegistryStore::import(durable);
 }
@@ -1166,7 +1173,7 @@ fn root_draining_reservation_rejects_stale_and_reused_authority() {
         .expect_err("zero reservation operation rejects");
     assert_eq!(
         invalid.public_error().code(),
-        canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
+        canic_contracts::diagnostics::codes::REQUEST_INVALID.raw_code()
     );
 
     let mut stale = request.clone();
@@ -1178,7 +1185,7 @@ fn root_draining_reservation_rejects_stale_and_reused_authority() {
         .expect_err("stale Registry hash rejects");
     assert_eq!(
         conflict.public_error().code(),
-        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), before);
 
@@ -1205,7 +1212,7 @@ fn root_draining_reservation_rejects_stale_and_reused_authority() {
     .expect_err("status cannot substitute another root");
     assert_eq!(
         conflict.public_error().code(),
-        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
 }
 
@@ -1235,7 +1242,7 @@ fn component_plan_and_root_draining_reservation_have_one_atomic_winner() {
         .expect_err("plan cannot select reserved root");
     assert_eq!(
         conflict.public_error().code(),
-        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), before_plan);
 
@@ -1295,7 +1302,7 @@ fn scale_out_cannot_select_a_root_reserved_after_fresh_provisioning() {
         .expect_err("scale-out cannot select reserved root");
     assert_eq!(
         conflict.public_error().code(),
-        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), before);
 }
@@ -1373,7 +1380,7 @@ fn root_draining_publication_requires_one_exact_retained_reservation() {
         .expect_err("publication without retained reservation must fail closed");
     assert_eq!(
         unavailable.public_error().code(),
-        canic_core::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
+        canic_contracts::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
     );
 
     let reservation =
@@ -1392,7 +1399,7 @@ fn root_draining_publication_requires_one_exact_retained_reservation() {
         .expect_err("publication with substituted reservation hash must fail closed");
     assert_eq!(
         conflict.public_error().code(),
-        canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
+        canic_contracts::diagnostics::codes::REQUEST_INVALID.raw_code()
     );
 }
 
@@ -1407,7 +1414,7 @@ fn assert_reservation_conflict(
         .expect_err(message);
     assert_eq!(
         conflict.public_error().code(),
-        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
 }
 
@@ -1499,7 +1506,7 @@ fn pending_root_retry_failure_is_typed_bounded_and_restart_safe() {
         operation_id: published.operation_id,
         plan_hash,
     };
-    let diagnostic_code = canic_core::diagnostics::codes::STATE_UNAVAILABLE
+    let diagnostic_code = canic_contracts::diagnostics::codes::STATE_UNAVAILABLE
         .raw_code()
         .raw();
     let failed = crate::ops::fleet_coordinator::FleetCoordinatorOps::
@@ -1514,26 +1521,26 @@ fn pending_root_retry_failure_is_typed_bounded_and_restart_safe() {
     );
     assert_eq!(
         failure.stage,
-        canic_core::dto::component_provisioning::FleetComponentProvisioningRetryStage::DirectoryConfirmation
+        canic_contracts::dto::component_provisioning::FleetComponentProvisioningRetryStage::DirectoryConfirmation
     );
     assert_eq!(failure.diagnostic_code, diagnostic_code);
     assert_eq!(failure.failed_at_ns, 162);
     assert_eq!(failure.origin, None);
 
-    let root_failure = canic_core::dto::component_provisioning::RootComponentProvisioningFailure {
+    let root_failure = canic_contracts::dto::component_provisioning::RootComponentProvisioningFailure {
         stage:
-            canic_core::dto::component_provisioning::ProvisioningFailureStage::ComponentMembership,
+            canic_contracts::dto::component_provisioning::ProvisioningFailureStage::ComponentMembership,
         target: principal(8),
         operation_id: [9; 32],
         diagnostic_code,
-        retry_category: canic_core::dto::component_provisioning::ProvisioningRetryCategory::Backoff,
+        retry_category: canic_contracts::dto::component_provisioning::ProvisioningRetryCategory::Backoff,
         failed_at_ns: 160,
         consecutive_failures: 1,
         retry_at_ns: Some(1_000_000_160),
     };
     for retry_at_ns in [root_failure.retry_at_ns, Some(2_000_000_160), None] {
         let observed = FleetCoordinatorOps::observed_failure_error(
-            canic_core::dto::component_provisioning::RootComponentProvisioningFailure {
+            canic_contracts::dto::component_provisioning::RootComponentProvisioningFailure {
                 retry_at_ns,
                 ..root_failure
             },
@@ -1634,7 +1641,7 @@ fn assert_invalid_service_publication_time(
         .expect_err("publication cannot predate complete provisioning");
     assert_eq!(
         invalid.public_error().code(),
-        canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
+        canic_contracts::diagnostics::codes::REQUEST_INVALID.raw_code()
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), before.clone());
 }
@@ -1714,7 +1721,7 @@ fn assert_service_publication_replay_and_corruption(
         .expect_err("publication phase without its atomic receipt must fail closed");
     assert_eq!(
         invalid.code(),
-        canic_core::diagnostics::codes::STATE_INVALID
+        canic_contracts::diagnostics::codes::STATE_INVALID
     );
 
     let mut duplicated = durable.clone();
@@ -1737,7 +1744,7 @@ fn assert_service_publication_replay_and_corruption(
         .expect_err("one operation cannot retain duplicate publication receipts");
     assert_eq!(
         invalid.code(),
-        canic_core::diagnostics::codes::STATE_INVALID
+        canic_contracts::diagnostics::codes::STATE_INVALID
     );
 
     let mut corrupted = durable;
@@ -1754,7 +1761,7 @@ fn assert_service_publication_replay_and_corruption(
         .expect_err("corrupted terminal publication evidence must fail closed");
     assert_eq!(
         invalid.code(),
-        canic_core::diagnostics::codes::STATE_INVALID.raw_code()
+        canic_contracts::diagnostics::codes::STATE_INVALID.raw_code()
     );
 }
 
@@ -1950,7 +1957,7 @@ fn scale_out_publishes_all_new_pool_members_in_one_atomic_registry_append() {
         .expect_err("scale-out publication cannot remove its appended member");
     assert_eq!(
         invalid.code(),
-        canic_core::diagnostics::codes::STATE_INVALID
+        canic_contracts::diagnostics::codes::STATE_INVALID
     );
 }
 
@@ -2089,7 +2096,7 @@ fn assert_restored_service_and_placement_authority(
         .expect_err("restored next ordinal cannot diverge from placement receipts");
     assert_eq!(
         invalid.code(),
-        canic_core::diagnostics::codes::STATE_INVALID
+        canic_contracts::diagnostics::codes::STATE_INVALID
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), invalid_ordinal);
 
@@ -2108,7 +2115,7 @@ fn assert_restored_service_and_placement_authority(
         .expect_err("restored service member cannot diverge from publication authority");
     assert_eq!(
         invalid.code(),
-        canic_core::diagnostics::codes::STATE_INVALID
+        canic_contracts::diagnostics::codes::STATE_INVALID
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), invalid_service);
 
@@ -2131,7 +2138,10 @@ fn assert_packed_root_limit_rejects_without_mutation(
             2_000,
         )
         .expect_err("a third placement cannot enter the already-full root");
-    assert_eq!(invalid.code(), canic_core::diagnostics::codes::STATE_FAILED);
+    assert_eq!(
+        invalid.code(),
+        canic_contracts::diagnostics::codes::STATE_FAILED
+    );
     assert_eq!(FleetCoordinatorRegistryStore::export(), *durable);
 }
 
@@ -2423,7 +2433,7 @@ fn assert_retired_scale_out_replays(scenario: &RepeatedScaleOutScenario) {
         .expect_err("retired operation cannot select different plan authority");
     assert_eq!(
         conflict.public_error().code(),
-        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), *rolled);
 }
@@ -2467,7 +2477,7 @@ fn complete_repeated_scale_out(scenario: RepeatedScaleOutScenario) {
         .expect_err("corrupted retired placement authority must fail closed");
     assert_eq!(
         invalid.code(),
-        canic_core::diagnostics::codes::STATE_INVALID
+        canic_contracts::diagnostics::codes::STATE_INVALID
     );
     FleetCoordinatorRegistryStore::import(terminal.clone());
 
@@ -2483,7 +2493,7 @@ fn complete_repeated_scale_out(scenario: RepeatedScaleOutScenario) {
         .expect_err("corrupted retired replay-only count must fail closed");
     assert_eq!(
         invalid.code(),
-        canic_core::diagnostics::codes::STATE_INVALID
+        canic_contracts::diagnostics::codes::STATE_INVALID
     );
     FleetCoordinatorRegistryStore::import(terminal);
     assert_second_rollover_retains_ordered_history(&config, &second);
@@ -2546,7 +2556,7 @@ fn assert_current_terminal_operation_rejects_conflicting_plan(
         .expect_err("active terminal operation cannot select different plan authority");
     assert_eq!(
         conflict.public_error().code(),
-        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), before);
 }
@@ -2567,7 +2577,7 @@ fn assert_next_scale_out_rejects_time_regression(
         .expect_err("next scale-out cannot predate retired terminal history");
     assert_eq!(
         invalid.code(),
-        canic_core::diagnostics::codes::STATE_INVALID
+        canic_contracts::diagnostics::codes::STATE_INVALID
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), before);
 }
@@ -2908,7 +2918,7 @@ fn coordinator_accepts_terminal_directory_publication_after_missing_every_compon
             .expect_err("invalid coalesced Directory publication must fail closed");
         assert_eq!(
             conflict.public_error().code(),
-            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+            canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
         );
         assert_eq!(FleetCoordinatorRegistryStore::export(), durable_intent);
     }
@@ -2919,7 +2929,7 @@ fn coordinator_accepts_terminal_directory_publication_after_missing_every_compon
                 operation_id: request.operation_id,
                 plan_hash: request.plan_hash,
             },
-            canic_core::diagnostics::codes::STATE_CONFLICT
+            canic_contracts::diagnostics::codes::STATE_CONFLICT
                 .raw_code()
                 .raw(),
             None,
@@ -2931,7 +2941,7 @@ fn coordinator_accepts_terminal_directory_publication_after_missing_every_compon
             .pending_root_failure
             .expect("pending Directory confirmation failure")
             .diagnostic_code,
-        canic_core::diagnostics::codes::STATE_CONFLICT
+        canic_contracts::diagnostics::codes::STATE_CONFLICT
             .raw_code()
             .raw()
     );
@@ -3034,7 +3044,7 @@ fn coordinator_accepts_partial_coalesced_directory_publication_and_rejects_regre
         .expect_err("Directory publication count regression must fail closed");
     assert_eq!(
         regression.public_error().code(),
-        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     assert_eq!(
         FleetCoordinatorRegistryStore::export(),
@@ -3141,7 +3151,7 @@ fn coordinator_accepts_coalesced_terminal_runtime_activation_and_publishes_catal
             .expect_err("invalid coalesced runtime activation must fail closed");
         assert_eq!(
             conflict.public_error().code(),
-            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+            canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
         );
         assert_eq!(FleetCoordinatorRegistryStore::export(), durable_intent);
     }
@@ -3223,7 +3233,7 @@ fn assert_invalid_plan_identity_rejects_before_persistence(
         .expect_err("zero operation ID must reject before persistence");
     assert_eq!(
         invalid.public_error().code(),
-        canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
+        canic_contracts::diagnostics::codes::REQUEST_INVALID.raw_code()
     );
     assert!(
         FleetCoordinatorRegistryStore::export()
@@ -3284,7 +3294,7 @@ fn assert_prepared_plan_replays_exactly(
         .expect_err("status cannot cross protected plan authority");
     assert_eq!(
         wrong_status.public_error().code(),
-        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     assert_eq!(
         crate::ops::fleet_coordinator::FleetCoordinatorOps::
@@ -3316,7 +3326,7 @@ fn assert_conflicting_plan_authority_fails_closed(
         .expect_err("one operation cannot replace its complete plan");
     assert_eq!(
         conflict.public_error().code(),
-        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), durable.clone());
 
@@ -3328,7 +3338,7 @@ fn assert_conflicting_plan_authority_fails_closed(
         .expect_err("a planned grouped Fleet fences root lifecycle");
     assert_eq!(
         drain.public_error().code(),
-        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
 
     let mut corrupted = durable.clone();
@@ -3352,7 +3362,7 @@ fn assert_conflicting_plan_authority_fails_closed(
         .expect_err("corrupt durable plan authority must fail closed");
     assert_eq!(
         invalid.code(),
-        canic_core::diagnostics::codes::STATE_INVALID
+        canic_contracts::diagnostics::codes::STATE_INVALID
     );
     FleetCoordinatorRegistryStore::import(durable.clone());
 }
@@ -3399,7 +3409,7 @@ fn coordinator_journals_each_root_acceptance_and_reconciles_lost_responses() {
         .expect_err("root acceptance cannot predate its durable call intent");
     assert_eq!(
         invalid_time.public_error().code(),
-        canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
+        canic_contracts::diagnostics::codes::REQUEST_INVALID.raw_code()
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), durable_intent);
 
@@ -3527,7 +3537,7 @@ fn coordinator_advances_each_accepted_root_and_freezes_terminal_receipts() {
         .expect_err("corrupt terminal root receipt must fail closed");
     assert_eq!(
         invalid.code(),
-        canic_core::diagnostics::codes::STATE_INVALID
+        canic_contracts::diagnostics::codes::STATE_INVALID
     );
 }
 
@@ -3677,7 +3687,7 @@ fn coordinator_accepts_a_root_that_finishes_before_its_first_observation() {
         .expect_err("terminal observation still requires its exact receipt hash");
     assert_eq!(
         conflict.public_error().code(),
-        canic_core::diagnostics::codes::STATE_FAILED.raw_code()
+        canic_contracts::diagnostics::codes::STATE_FAILED.raw_code()
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), durable_intent);
 
@@ -3693,7 +3703,7 @@ fn coordinator_accepts_a_root_that_finishes_before_its_first_observation() {
         .expect_err("Provisioned observation cannot carry publication progress");
     assert_eq!(
         conflict.public_error().code(),
-        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), durable_intent);
 
@@ -3737,7 +3747,7 @@ fn coordinator_accepts_a_root_that_finishes_before_its_first_observation() {
         .expect_err("durable Provisioned receipt cannot carry publication progress");
     assert_eq!(
         invalid.code(),
-        canic_core::diagnostics::codes::STATE_INVALID
+        canic_contracts::diagnostics::codes::STATE_INVALID
     );
 
     FleetCoordinatorRegistryStore::import(durable);
@@ -3779,7 +3789,7 @@ fn coordinator_normalizes_a_root_that_advances_before_acceptance_observation() {
                 .expect_err("pre-provisioning observation cannot carry publication progress");
             assert_eq!(
                 conflict.public_error().code(),
-                canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+                canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
             );
             assert_eq!(FleetCoordinatorRegistryStore::export(), durable_intent);
         }
@@ -3897,7 +3907,7 @@ fn assert_invalid_root_provision_responses(
         .expect_err("root response cannot install before its claim cursor");
     assert_eq!(
         conflict.public_error().code(),
-        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     let early = crate::ops::fleet_coordinator::FleetCoordinatorOps::
         record_component_provisioning_root_for_test(
@@ -3909,7 +3919,7 @@ fn assert_invalid_root_provision_responses(
         .expect_err("root response cannot predate its durable call intent");
     assert_eq!(
         early.public_error().code(),
-        canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
+        canic_contracts::diagnostics::codes::REQUEST_INVALID.raw_code()
     );
     let mut substituted = response.clone();
     substituted.fleet_subnet_root = principal(200);
@@ -3923,7 +3933,7 @@ fn assert_invalid_root_provision_responses(
         .expect_err("root response cannot substitute its protected root");
     assert_eq!(
         conflict.public_error().code(),
-        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     assert_eq!(
         FleetCoordinatorRegistryStore::export(),
@@ -3951,8 +3961,8 @@ fn root_provision_advance_request(
 
 const fn root_progress_for_test(
     response: &RootComponentProvisioningStatusResponse,
-) -> canic_core::dto::component_provisioning::FleetComponentProvisioningRootProgress {
-    canic_core::dto::component_provisioning::FleetComponentProvisioningRootProgress {
+) -> canic_contracts::dto::component_provisioning::FleetComponentProvisioningRootProgress {
+    canic_contracts::dto::component_provisioning::FleetComponentProvisioningRootProgress {
         fleet_subnet_root: response.fleet_subnet_root,
         component_count: response.component_count,
         reserved_component_count: response.reserved_component_count,
@@ -4423,7 +4433,7 @@ fn expect_scale_out_synchronization_call(
     disposition: FleetComponentDirectoryConfirmationDisposition,
 ) -> (
     Principal,
-    canic_core::dto::component_provisioning::RootComponentDirectorySynchronizationRequest,
+    canic_contracts::dto::component_provisioning::RootComponentDirectorySynchronizationRequest,
 ) {
     match disposition {
         FleetComponentDirectoryConfirmationDisposition::Invoke(
@@ -4576,7 +4586,7 @@ fn assert_conflicting_synchronization_cursor_rejects(
     };
     assert_eq!(
         invalid.public_error().code(),
-        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), durable);
 }
@@ -4672,7 +4682,7 @@ fn assert_terminal_scale_out_placement(
 fn terminal_scale_out_synchronization_response(
     call: &(
         Principal,
-        canic_core::dto::component_provisioning::RootComponentDirectorySynchronizationRequest,
+        canic_contracts::dto::component_provisioning::RootComponentDirectorySynchronizationRequest,
     ),
     affected_component_count: u32,
     synchronized_at_ns: u64,
@@ -4832,7 +4842,7 @@ fn directory_response(
 struct DirectoryPublicationTestContext {
     root_index: usize,
     previous: RootComponentProvisioningStatusResponse,
-    published_registry: canic_core::dto::fleet_registry::FleetRegistryVersion,
+    published_registry: canic_contracts::dto::fleet_registry::FleetRegistryVersion,
 }
 
 fn directory_publication_context(
@@ -5155,7 +5165,7 @@ fn accept_second_root_and_reject_substitution(config: &ConfigModel, plan_hash: [
         .expect_err("substituted root response must reject");
     assert_eq!(
         conflict.public_error().code(),
-        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), durable_intent);
 
@@ -5199,7 +5209,7 @@ fn assert_corrupt_root_acceptance_fails_closed(config: &ConfigModel, plan_hash: 
         .expect_err("corrupt accepted root evidence must fail closed");
     assert_eq!(
         invalid.code(),
-        canic_core::diagnostics::codes::STATE_INVALID
+        canic_contracts::diagnostics::codes::STATE_INVALID
     );
     FleetCoordinatorRegistryStore::import(exact);
 }
@@ -5224,7 +5234,7 @@ fn activate_one_root_with_config(
     .expect("join root");
     FleetCoordinatorWorkflow::acknowledge_root_snapshot(
         root.fleet_subnet_root,
-        canic_core::dto::fleet_registry::FleetSubnetRootSnapshotAcknowledgementRequest {
+        canic_contracts::dto::fleet_registry::FleetSubnetRootSnapshotAcknowledgementRequest {
             version: joined.version.clone(),
         },
     )
@@ -5288,7 +5298,7 @@ fn activate_two_roots_with_config_and_admission(
     for root in [&first, &second] {
         FleetCoordinatorWorkflow::acknowledge_root_snapshot(
             root.fleet_subnet_root,
-            canic_core::dto::fleet_registry::FleetSubnetRootSnapshotAcknowledgementRequest {
+            canic_contracts::dto::fleet_registry::FleetSubnetRootSnapshotAcknowledgementRequest {
                 version: second_join.version.clone(),
             },
         )
@@ -5470,8 +5480,8 @@ fn scale_out_plan_on_root(
 fn project_cell_plan_entries(
     config: &ConfigModel,
 ) -> (
-    canic_core::ids::ComponentGroupDeploymentId,
-    canic_core::ids::ComponentGroupSpecId,
+    canic_contracts::ids::ComponentGroupDeploymentId,
+    canic_contracts::ids::ComponentGroupSpecId,
     Vec<ComponentGroupPlanEntry>,
 ) {
     let deployment_topology = config
@@ -5558,7 +5568,7 @@ fn assert_snapshot_acknowledgements(
             .expect_err("unregistered caller must fail before Registry dispatch");
     assert_eq!(
         unauthorized_registry.public_error().code(),
-        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+        canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
     );
     let snapshot =
         FleetCoordinatorWorkflow::registry_for_caller(first_entry.fleet_subnet_root, false)
@@ -5572,12 +5582,13 @@ fn assert_snapshot_acknowledgements(
         .expect_err("unregistered caller cannot fetch Registry");
     assert_eq!(
         unauthorized_snapshot.public_error().code(),
-        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+        canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
     );
 
-    let request = canic_core::dto::fleet_registry::FleetSubnetRootSnapshotAcknowledgementRequest {
-        version: version.clone(),
-    };
+    let request =
+        canic_contracts::dto::fleet_registry::FleetSubnetRootSnapshotAcknowledgementRequest {
+            version: version.clone(),
+        };
     FleetCoordinatorWorkflow::authorize_root_snapshot_caller(first_entry.fleet_subnet_root)
         .expect("joining Root authorization");
     let unauthorized_acknowledgement =
@@ -5585,7 +5596,7 @@ fn assert_snapshot_acknowledgements(
             .expect_err("unregistered caller must fail before acknowledgement dispatch");
     assert_eq!(
         unauthorized_acknowledgement.public_error().code(),
-        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+        canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
     );
     let first_ack = FleetCoordinatorWorkflow::acknowledge_root_snapshot(
         first_entry.fleet_subnet_root,
@@ -5607,7 +5618,7 @@ fn assert_snapshot_acknowledgements(
         .expect_err("activation requires every root acknowledgement");
     assert_eq!(
         incomplete.public_error().code(),
-        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     FleetCoordinatorWorkflow::acknowledge_root_snapshot(second_entry.fleet_subnet_root, request)
         .expect("second acknowledgement");
@@ -5678,7 +5689,7 @@ fn assert_root_draining_publication(
         .expect_err("reject root draining receipt outside protected limits");
     assert_eq!(
         invalid.public_error().code(),
-        canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
+        canic_contracts::diagnostics::codes::REQUEST_INVALID.raw_code()
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), before_invalid);
 
@@ -5720,7 +5731,7 @@ fn assert_root_draining_publication(
         .expect_err("one root cannot publish different draining authority");
     assert_eq!(
         conflict.public_error().code(),
-        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
 
     let valid = FleetCoordinatorRegistryStore::export();
@@ -5738,7 +5749,7 @@ fn assert_root_draining_publication(
         .expect_err("reject corrupted root Draining publication receipt");
     assert_eq!(
         invalid.code(),
-        canic_core::diagnostics::codes::STATE_INVALID.raw_code()
+        canic_contracts::diagnostics::codes::STATE_INVALID.raw_code()
     );
     FleetCoordinatorRegistryStore::import(valid);
 
@@ -5748,7 +5759,7 @@ fn assert_root_draining_publication(
 fn assert_root_removal_publication(
     first_entry: &FleetSubnetRootEntry,
     second_entry: &FleetSubnetRootEntry,
-    published: &canic_core::dto::fleet_registry::FleetSubnetRootDrainingPublicationResponse,
+    published: &canic_contracts::dto::fleet_registry::FleetSubnetRootDrainingPublicationResponse,
 ) {
     let removal_request = FleetSubnetRootRemovalPublicationRequest {
         expected_registry: published.version.clone(),
@@ -5782,7 +5793,7 @@ fn assert_root_removal_publication(
     .expect_err("only the exact draining root can publish its removal");
     assert_eq!(
         unauthorized.public_error().code(),
-        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+        canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), before_unauthorized);
 
@@ -5827,7 +5838,7 @@ fn assert_root_removal_publication(
             .expect_err("Removed root cannot fetch a later Registry");
     assert_eq!(
         removed_snapshot.public_error().code(),
-        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+        canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
     );
     let surviving_snapshot =
         FleetCoordinatorWorkflow::registry_for_caller(second_entry.fleet_subnet_root, false)
@@ -5843,7 +5854,7 @@ fn assert_root_removal_publication(
 
 fn assert_root_deletion_lifecycle(
     root: &FleetSubnetRootEntry,
-    removal: &canic_core::dto::fleet_registry::FleetSubnetRootRemovalPublicationResponse,
+    removal: &canic_contracts::dto::fleet_registry::FleetSubnetRootRemovalPublicationResponse,
 ) {
     let coordinator = removal.version.authority.binding.coordinator;
     let operation_id = removal.final_inventory.operation_id;
@@ -5881,8 +5892,8 @@ fn assert_root_deletion_lifecycle(
     );
 
     let readiness_request = FleetSubnetRootDeletionReadinessRequest {
-        ledger_receipt: canic_core::dto::fleet_registry::FleetLedgerTransferReceipt {
-            intent: canic_core::dto::fleet_registry::FleetLedgerTransferIntent {
+        ledger_receipt: canic_contracts::dto::fleet_registry::FleetLedgerTransferReceipt {
+            intent: canic_contracts::dto::fleet_registry::FleetLedgerTransferIntent {
                 source: root.fleet_subnet_root,
                 destination: coordinator,
                 balance_before: 100,
@@ -5911,7 +5922,7 @@ fn assert_root_deletion_lifecycle(
         .expect_err("refuse deletion with a receipt for another destination");
     assert_eq!(
         rejected.public_error().code(),
-        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), before);
     let readiness =
@@ -6084,7 +6095,7 @@ fn joining_entry(
             maximum_registry_bytes: 2_097_152,
             maximum_wasm_store_bytes: 268_435_456,
             maximum_group_placements: 16,
-            canister_pool: canic_core::ids::FleetSubnetCanisterPoolConfig {
+            canister_pool: canic_contracts::ids::FleetSubnetCanisterPoolConfig {
                 minimum_size: 1,
                 maximum_size: 10,
                 canister_cycles: Cycles::new(5_000_000_000_000),
@@ -6592,7 +6603,7 @@ fn funding_rotation_plan(
 }
 
 fn rotation_root_receipt(
-    request: &canic_core::dto::fleet_funding::FleetFundingPolicyRotationRootPrepareRequest,
+    request: &canic_contracts::dto::fleet_funding::FleetFundingPolicyRotationRootPrepareRequest,
     activated: bool,
     recorded_at_ns: u64,
 ) -> FleetFundingPolicyRotationRootReceipt {
@@ -6612,7 +6623,7 @@ fn complete_policy_rotation_for_test(
     coordinator: Principal,
     plan: FleetFundingPolicyRotationPlan,
     timestamp_base: u64,
-) -> canic_core::dto::fleet_funding::FleetFundingPolicyRotationReceipt {
+) -> canic_contracts::dto::fleet_funding::FleetFundingPolicyRotationReceipt {
     let plan_digest = fleet_funding_policy_rotation_plan_digest(&plan);
     let operation_id = fleet_funding_policy_rotation_operation_id(coordinator, plan_digest);
     FleetCoordinatorOps::begin_funding_policy_rotation(
@@ -6867,7 +6878,7 @@ fn coordinator_root_funding_denials_and_rejections_are_terminal_without_spend() 
 
     assert_eq!(
         FleetCoordinatorOps::set_root_funding_enabled(false).expect("disable funding"),
-        canic_core::dto::state::SetStateResponse {
+        canic_contracts::dto::state::SetStateResponse {
             previous: true,
             current: false,
             changed: true,
@@ -6922,7 +6933,7 @@ fn coordinator_root_funding_denials_and_rejections_are_terminal_without_spend() 
     };
     assert_eq!(
         authority_error.public_error().code(),
-        canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
+        canic_contracts::diagnostics::codes::REQUEST_INVALID.raw_code()
     );
     assert_eq!(
         FleetCoordinatorFundingStore::export(),
@@ -7003,7 +7014,7 @@ fn coordinator_root_funding_denials_and_rejections_are_terminal_without_spend() 
 fn root_funding_request(
     coordinator: Principal,
     root: &FleetSubnetRootEntry,
-    expected_registry: canic_core::dto::fleet_registry::FleetRegistryVersion,
+    expected_registry: canic_contracts::dto::fleet_registry::FleetRegistryVersion,
     operation_sequence: u64,
     observed_balance: u128,
 ) -> FleetRootFundingRequest {
@@ -7035,7 +7046,7 @@ fn root_funding_request(
 
 #[test]
 fn provisioning_wait_does_not_block_coordinator_publication() {
-    use canic_core::dto::component_provisioning::{
+    use canic_contracts::dto::component_provisioning::{
         ProvisioningFailureStage, ProvisioningRetryCategory, RootComponentProvisioningFailure,
     };
     let failure = RootComponentProvisioningFailure {

@@ -1,11 +1,12 @@
 //! Read-only publication progress passed from the Registry owner to workflow.
 
-use canic_core::{
-    control_plane_support::model::caller_authority::{CallerPublicationRecord, CallerReceiptPhase},
-    ids::{CallerInstallation, CallerReceiverAuthority, CallerRootAuthority},
+use canic_contracts::ids::{CallerInstallation, CallerReceiverAuthority, CallerRootAuthority};
+use canic_core::control_plane_support::model::caller_authority::{
+    CallerPublicationRecord, CallerReceiptPhase,
 };
 
 /// Exact membership operation selected before publication begins.
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CallerLifecycleScope {
     ActivateComponent(CallerInstallation),

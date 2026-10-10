@@ -4,7 +4,7 @@
 //! Does not own: hashing, transport parsing, storage, or endpoint integration.
 
 use super::*;
-use crate::ids::{FleetAdmissionRule, FleetAdmissionSelector};
+use canic_contracts::ids::{FleetAdmissionRule, FleetAdmissionSelector};
 
 fn principal(index: usize) -> Principal {
     Principal::from_slice(

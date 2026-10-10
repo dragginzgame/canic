@@ -6,11 +6,11 @@
 
 use crate::{
     config::caller_authority::{CallerPermissionDirection, CallerScope, CompiledCallerPolicy},
-    ids::{CallerInstallation, CallerReceiverAuthority},
     model::caller_authority::CallerAdmissionError,
     view::caller_authority::CallerAdmissionView,
 };
 use candid::Principal;
+use canic_contracts::ids::{CallerInstallation, CallerReceiverAuthority};
 
 ///
 /// CallerAdmissionTicket

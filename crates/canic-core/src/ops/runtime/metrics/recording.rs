@@ -4,6 +4,10 @@
 //! Does not own: workflow decisions, persisted records, or endpoint DTOs.
 //! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
+#[cfg(feature = "sharding")]
+use crate::ops::runtime::metrics::sharding::{
+    ShardingMetricOperation, ShardingMetricOutcome, ShardingMetricReason, ShardingMetrics,
+};
 use crate::{
     InternalError,
     ops::runtime::metrics::{
@@ -15,11 +19,6 @@ use crate::{
             ScalingMetricOperation, ScalingMetricOutcome, ScalingMetricReason, ScalingMetrics,
         },
     },
-};
-
-#[cfg(feature = "sharding")]
-use crate::ops::runtime::metrics::sharding::{
-    ShardingMetricOperation, ShardingMetricOutcome, ShardingMetricReason, ShardingMetrics,
 };
 
 ///

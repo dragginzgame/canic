@@ -11,14 +11,15 @@ without `.md`; people and agents use the same definitions.
 | [cargo-machete](cargo-machete.md) | Which Cargo dependencies appear unused? | Every 3 days |
 | [msrv](msrv.md) | Does the advertised minimum really work, and can it be lower? | Every 3 days |
 | [rust-toolchain](rust-toolchain.md) | Are development compilers current with stable Rust? | Every 3 days |
-| [ci-health](ci-health.md) | Which current CI failures and issues need attention? | Every 3 days |
+| [ci-health](ci-health.md) | Which CI failures, persistent queues or repeated gates need attention? | Every 3 days |
 | [snapshot-drift](snapshot-drift.md) | Are shared snapshots intact and relevant fixes adopted? | Every 3 days |
 | [dependency-security](dependency-security.md) | Does the selected dependency graph have new advisories? | Every 3 days |
+| [readme-freshness](readme-freshness.md) | Do maintained README claims and examples match their owners? | Every 3 days |
 | [code-audit](code-audit.md) | What concrete correctness or complexity problems exist in one selected area? | Rotate one audit per pass |
 | [tooling-duplication](tooling-duplication.md) | Which locally owned tooling could share an existing implementation? | Alternate with code-audit |
 
-The `maintenance` pass runs the first six tasks for the selected repositories,
-then alternates the two audit tasks. Bound each audit to one useful area; record
+The `maintenance` pass runs the seven routine tasks above for the selected
+repositories, then alternates the two audit tasks. Bound each audit to one useful area; record
 remaining scope rather than claiming a complete estate audit. Cadences are
 suggestions until a schedule is enabled. Installing a snapshot enables no timer.
 

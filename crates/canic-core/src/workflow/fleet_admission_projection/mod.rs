@@ -4,14 +4,14 @@
 //! Does not own: endpoint authentication, stable encoding, policy compilation, or convergence.
 //! Boundary: lifecycle and API facades call this after acquiring exact managed authority.
 
-use crate::domain::policy::pure::fleet_admission_projection::{
-    FleetAdmissionTargetTransitionError, transition_fleet_admission_projection,
-};
 use crate::{
     InternalError,
     domain::policy::pure::{
         fleet_admission::effective_fleet_admission_principals,
-        fleet_admission_projection::open_fresh_fleet_admission_projection,
+        fleet_admission_projection::{
+            FleetAdmissionTargetTransitionError, open_fresh_fleet_admission_projection,
+            transition_fleet_admission_projection,
+        },
     },
     dto::{
         fleet_activation::FleetActivationPhase,
@@ -22,10 +22,6 @@ use crate::{
             FleetAdmissionTargetReceipt,
         },
         page::{Page, PageRequest},
-    },
-    ids::{
-        FleetAdmissionPolicy, FleetAdmissionProjection, MAX_FLEET_ADMISSION_PROJECTION_PAGE,
-        ManagedCanisterBinding,
     },
     model::fleet_admission_projection::{
         FleetAdmissionProjectionPhaseModel, FleetAdmissionProjectionState,
@@ -45,8 +41,13 @@ use crate::{
         },
     },
 };
+use canic_contracts::ids::{
+    FleetAdmissionPolicy, FleetAdmissionProjection, MAX_FLEET_ADMISSION_PROJECTION_PAGE,
+    ManagedCanisterBinding,
+};
 
 /// Apply the sole effective-membership policy, then materialize one exact target projection.
+
 pub fn compile_fleet_admission_projection(
     policy: &FleetAdmissionPolicy,
     target: ManagedCanisterBinding,

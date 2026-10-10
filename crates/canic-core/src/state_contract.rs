@@ -4,38 +4,39 @@
 //! state manifest and audit reports.
 //! Does not own: CLI rendering, stable-memory reads, or stable-memory writes.
 //! Boundary: declarations are static Rust metadata derived from the storage
-//! modules that own the records and memory IDs.
+//! modules that own the records and memory keys.
 
-use serde::Serialize;
-
-use crate::role_contract::allocation::memory::{
-    application_receipt::APPLICATION_RECEIPT_ELIGIBILITY_ID,
-    async_job_recovery::ASYNC_JOB_RECOVERY_ID,
-    auth::{
-        DELEGATED_TOKEN_ISSUER_STATE_ID, LOCAL_APPLICATION_AUTHORIZATION_STATE_ID,
-        ROOT_DELEGATION_STATE_ID,
+use crate::role_contract::{
+    AllocationOwner, StateAllocationKey,
+    allocation::memory::{
+        application_receipt::APPLICATION_RECEIPT_ELIGIBILITY_KEY,
+        async_job_recovery::ASYNC_JOB_RECOVERY_KEY,
+        auth::{
+            DELEGATED_TOKEN_ISSUER_STATE_KEY, LOCAL_APPLICATION_AUTHORIZATION_STATE_KEY,
+            ROOT_DELEGATION_STATE_KEY,
+        },
+        authority_restore::AUTHORITY_RESTORE_FENCE_KEY,
+        cycles::{
+            CYCLES_FUNDING_LEDGER_KEY, CYCLES_ICP_REFILL_RECORDS_KEY, CYCLES_TOPUP_EVENTS_KEY,
+            CYCLES_TRACKER_KEY,
+        },
+        fleet::{FLEET_ACTIVATION_KEY, FLEET_STATE_KEY},
+        fleet_admission_projection::FLEET_ADMISSION_PROJECTION_KEY,
+        intent::{
+            INTENT_EXPIRY_INDEX_KEY, INTENT_META_KEY, INTENT_PENDING_KEY,
+            INTENT_RECEIPT_BACKED_RECORDS_KEY, INTENT_RECORDS_KEY, INTENT_TOTALS_KEY,
+        },
+        log::LOG_ENTRIES_KEY,
+        placement::{
+            PLACEMENT_ACKNOWLEDGEMENT_INDEX_KEY, PLACEMENT_INDEX_REGISTRY_KEY,
+            PLACEMENT_SCALING_REGISTRY_KEY,
+        },
+        replay::REPLAY_RECEIPTS_KEY,
+        runtime::{RUNTIME_BINDINGS_KEY, RUNTIME_CANISTER_CHILDREN_KEY},
+        sharding::{SHARDING_ASSIGNMENTS_KEY, SHARDING_REGISTRY_KEY},
     },
-    authority_restore::AUTHORITY_RESTORE_FENCE_ID,
-    cycles::{
-        CYCLES_FUNDING_LEDGER_ID, CYCLES_ICP_REFILL_RECORDS_ID, CYCLES_TOPUP_EVENTS_ID,
-        CYCLES_TRACKER_ID,
-    },
-    fleet::{FLEET_ACTIVATION_ID, FLEET_STATE_ID},
-    fleet_admission_projection::FLEET_ADMISSION_PROJECTION_ID,
-    intent::{
-        INTENT_EXPIRY_INDEX_ID, INTENT_META_ID, INTENT_PENDING_ID,
-        INTENT_RECEIPT_BACKED_RECORDS_ID, INTENT_RECORDS_ID, INTENT_TOTALS_ID,
-    },
-    log::LOG_ENTRIES_ID,
-    placement::{
-        PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID, PLACEMENT_INDEX_REGISTRY_ID,
-        PLACEMENT_SCALING_REGISTRY_ID,
-    },
-    replay::REPLAY_RECEIPTS_ID,
-    runtime::{RUNTIME_BINDINGS_ID, RUNTIME_CANISTER_CHILDREN_ID},
-    sharding::{SHARDING_ASSIGNMENTS_ID, SHARDING_REGISTRY_ID},
 };
-use crate::role_contract::{AllocationOwner, StateAllocationKey};
+use serde::Serialize;
 
 pub const STATE_MANIFEST_SCHEMA_VERSION: u16 = 1;
 
@@ -75,7 +76,7 @@ pub struct StateDomainManifest {
     pub domain: String,
     pub version: u32,
     pub storage: StateStorage,
-    pub memory_id: Option<u8>,
+    pub memory_key: Option<String>,
     pub owner: String,
     pub record: String,
     pub snapshot: String,
@@ -111,14 +112,14 @@ impl StateStorage {
 ///
 /// ReservedMemoryManifest
 ///
-/// Explicit reservation for a stable memory ID whose persisted state shape is
+/// Explicit reservation for a stable memory key whose persisted state shape is
 /// known but not yet represented as one active state domain.
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct ReservedMemoryManifest {
     pub label: String,
-    pub memory_id: u8,
+    pub memory_key: String,
     pub owner: String,
     pub reason: String,
 }
@@ -243,7 +244,7 @@ fn placement_capacity_descriptors() -> Vec<StateAllocationDescriptor> {
             StateAllocationKey::PlacementScalingRegistry,
             vec![state_domain(
                 "placement_scaling_registry",
-                PLACEMENT_SCALING_REGISTRY_ID,
+                PLACEMENT_SCALING_REGISTRY_KEY,
                 ScalingRegistryEntryRecord::STATE_CONTRACT_NAME,
                 ScalingRegistryData::STATE_CONTRACT_NAME,
                 140,
@@ -255,7 +256,7 @@ fn placement_capacity_descriptors() -> Vec<StateAllocationDescriptor> {
             StateAllocationKey::PlacementIndexRegistry,
             vec![state_domain(
                 "placement_index_registry",
-                PLACEMENT_INDEX_REGISTRY_ID,
+                PLACEMENT_INDEX_REGISTRY_KEY,
                 PlacementIndexRegistryEntryRecord::STATE_CONTRACT_NAME,
                 PlacementIndexRegistryData::STATE_CONTRACT_NAME,
                 150,
@@ -276,7 +277,7 @@ fn sharding_descriptors() -> Vec<StateAllocationDescriptor> {
             StateAllocationKey::ShardingRegistry,
             vec![state_domain(
                 "sharding_registry",
-                SHARDING_REGISTRY_ID,
+                SHARDING_REGISTRY_KEY,
                 ShardEntryRecord::STATE_CONTRACT_NAME,
                 ShardingRegistryData::STATE_CONTRACT_NAME,
                 160,
@@ -288,7 +289,7 @@ fn sharding_descriptors() -> Vec<StateAllocationDescriptor> {
             StateAllocationKey::ShardingAssignments,
             vec![state_domain(
                 "sharding_assignments",
-                SHARDING_ASSIGNMENTS_ID,
+                SHARDING_ASSIGNMENTS_KEY,
                 ShardingAssignmentRecord::STATE_CONTRACT_NAME,
                 ShardingAssignmentsData::STATE_CONTRACT_NAME,
                 170,
@@ -305,7 +306,7 @@ fn descriptor(
     mut reserved_memory: Vec<ReservedMemoryManifest>,
 ) -> StateAllocationDescriptor {
     state.sort_by(|left, right| left.domain.cmp(&right.domain));
-    reserved_memory.sort_by_key(|reservation| reservation.memory_id);
+    reserved_memory.sort_by(|a, b| a.memory_key.cmp(&b.memory_key));
     StateAllocationDescriptor {
         allocation,
         owner: AllocationOwner::CanicCore,
@@ -319,7 +320,7 @@ fn runtime_children_domains() -> Vec<StateDomainManifest> {
 
     vec![state_domain(
         "runtime_canister_children",
-        RUNTIME_CANISTER_CHILDREN_ID,
+        RUNTIME_CANISTER_CHILDREN_KEY,
         CanisterChildEntryRecord::STATE_CONTRACT_NAME,
         CanisterChildrenData::STATE_CONTRACT_NAME,
         30,
@@ -332,7 +333,7 @@ fn runtime_bindings_domains() -> Vec<StateDomainManifest> {
 
     vec![state_domain(
         "runtime_bindings",
-        RUNTIME_BINDINGS_ID,
+        RUNTIME_BINDINGS_KEY,
         EnvRecord::STATE_CONTRACT_NAME,
         EnvData::STATE_CONTRACT_NAME,
         40,
@@ -345,7 +346,7 @@ fn fleet_state_domains() -> Vec<StateDomainManifest> {
 
     vec![state_domain(
         "fleet_state",
-        FLEET_STATE_ID,
+        FLEET_STATE_KEY,
         FleetStateRecord::STATE_CONTRACT_NAME,
         FleetStateData::STATE_CONTRACT_NAME,
         50,
@@ -360,7 +361,7 @@ fn local_application_authorization_state_domains() -> Vec<StateDomainManifest> {
 
     vec![state_domain(
         "local_application_authorization",
-        LOCAL_APPLICATION_AUTHORIZATION_STATE_ID,
+        LOCAL_APPLICATION_AUTHORIZATION_STATE_KEY,
         LocalApplicationAuthorizationStateRecord::STATE_CONTRACT_NAME,
         LocalApplicationAuthorizationStateData::STATE_CONTRACT_NAME,
         60,
@@ -375,7 +376,7 @@ fn delegated_token_issuer_state_domains() -> Vec<StateDomainManifest> {
 
     vec![state_domain(
         "delegated_token_issuer",
-        DELEGATED_TOKEN_ISSUER_STATE_ID,
+        DELEGATED_TOKEN_ISSUER_STATE_KEY,
         DelegatedTokenIssuerStateRecord::STATE_CONTRACT_NAME,
         DelegatedTokenIssuerStateData::STATE_CONTRACT_NAME,
         61,
@@ -388,7 +389,7 @@ fn root_delegation_state_domains() -> Vec<StateDomainManifest> {
 
     vec![state_domain(
         "root_delegation",
-        ROOT_DELEGATION_STATE_ID,
+        ROOT_DELEGATION_STATE_KEY,
         RootDelegationStateRecord::STATE_CONTRACT_NAME,
         RootDelegationStateData::STATE_CONTRACT_NAME,
         62,
@@ -401,7 +402,7 @@ fn replay_receipt_domains() -> Vec<StateDomainManifest> {
 
     vec![state_domain(
         "replay_receipts",
-        REPLAY_RECEIPTS_ID,
+        REPLAY_RECEIPTS_KEY,
         ReplayReceiptRecord::STATE_CONTRACT_NAME,
         ReplayReceiptsData::STATE_CONTRACT_NAME,
         70,
@@ -414,7 +415,7 @@ fn fleet_activation_domains() -> Vec<StateDomainManifest> {
 
     vec![state_domain(
         "fleet_activation",
-        FLEET_ACTIVATION_ID,
+        FLEET_ACTIVATION_KEY,
         FleetActivationRecord::STATE_CONTRACT_NAME,
         FleetActivationData::STATE_CONTRACT_NAME,
         55,
@@ -425,13 +426,13 @@ fn fleet_activation_domains() -> Vec<StateDomainManifest> {
 fn caller_authority_domains() -> Vec<StateDomainManifest> {
     use crate::model::caller_authority::CallerReceiverRecord;
     use crate::role_contract::allocation::memory::caller_authority::{
-        CALLER_AUTHORITY_HEADER_ID, CALLER_AUTHORITY_ROWS_ID,
+        CALLER_AUTHORITY_HEADER_KEY, CALLER_AUTHORITY_ROWS_KEY,
     };
     use crate::storage::stable::caller_authority::{CallerAuthorityData, CallerRowRecord};
     vec![
         state_domain(
             "caller_authority_header",
-            CALLER_AUTHORITY_HEADER_ID,
+            CALLER_AUTHORITY_HEADER_KEY,
             CallerReceiverRecord::STATE_CONTRACT_NAME,
             CallerAuthorityData::STATE_CONTRACT_NAME,
             63,
@@ -439,7 +440,7 @@ fn caller_authority_domains() -> Vec<StateDomainManifest> {
         ),
         state_domain(
             "caller_authority_rows",
-            CALLER_AUTHORITY_ROWS_ID,
+            CALLER_AUTHORITY_ROWS_KEY,
             CallerRowRecord::STATE_CONTRACT_NAME,
             CallerAuthorityData::STATE_CONTRACT_NAME,
             64,
@@ -455,7 +456,7 @@ fn authority_restore_fence_domains() -> Vec<StateDomainManifest> {
 
     vec![state_domain(
         "authority_restore_fence",
-        AUTHORITY_RESTORE_FENCE_ID,
+        AUTHORITY_RESTORE_FENCE_KEY,
         AuthorityRestoreFenceRecord::STATE_CONTRACT_NAME,
         AuthorityRestoreFenceData::STATE_CONTRACT_NAME,
         57,
@@ -470,7 +471,7 @@ fn async_job_recovery_domains() -> Vec<StateDomainManifest> {
 
     vec![state_domain(
         "async_job_recovery",
-        ASYNC_JOB_RECOVERY_ID,
+        ASYNC_JOB_RECOVERY_KEY,
         AsyncJobRecoveryRecord::STATE_CONTRACT_NAME,
         AsyncJobRecoveryData::STATE_CONTRACT_NAME,
         58,
@@ -485,7 +486,7 @@ fn fleet_admission_projection_domains() -> Vec<StateDomainManifest> {
 
     vec![state_domain(
         "fleet_admission_projection",
-        FLEET_ADMISSION_PROJECTION_ID,
+        FLEET_ADMISSION_PROJECTION_KEY,
         FleetAdmissionProjectionRecord::STATE_CONTRACT_NAME,
         FleetAdmissionProjectionData::STATE_CONTRACT_NAME,
         59,
@@ -501,7 +502,7 @@ fn cycles_domains() -> Vec<StateDomainManifest> {
     vec![
         state_domain(
             "cycles_tracker",
-            CYCLES_TRACKER_ID,
+            CYCLES_TRACKER_KEY,
             CycleTrackerEntryRecord::STATE_CONTRACT_NAME,
             CycleTrackerData::STATE_CONTRACT_NAME,
             75,
@@ -509,7 +510,7 @@ fn cycles_domains() -> Vec<StateDomainManifest> {
         ),
         state_domain(
             "cycles_topup_events",
-            CYCLES_TOPUP_EVENTS_ID,
+            CYCLES_TOPUP_EVENTS_KEY,
             CycleTopupEventRecord::STATE_CONTRACT_NAME,
             CycleTopupEventsData::STATE_CONTRACT_NAME,
             80,
@@ -517,7 +518,7 @@ fn cycles_domains() -> Vec<StateDomainManifest> {
         ),
         state_domain(
             "cycles_funding_ledger",
-            CYCLES_FUNDING_LEDGER_ID,
+            CYCLES_FUNDING_LEDGER_KEY,
             CyclesFundingLedgerRecord::STATE_CONTRACT_NAME,
             CyclesFundingLedgerData::STATE_CONTRACT_NAME,
             90,
@@ -531,7 +532,7 @@ fn runtime_log_domains() -> Vec<StateDomainManifest> {
 
     vec![state_domain(
         "runtime_log",
-        LOG_ENTRIES_ID,
+        LOG_ENTRIES_KEY,
         LogEntryRecord::STATE_CONTRACT_NAME,
         LogEntriesData::STATE_CONTRACT_NAME,
         85,
@@ -544,7 +545,7 @@ fn icp_refill_domains() -> Vec<StateDomainManifest> {
 
     vec![state_domain(
         "cycles_icp_refill_records",
-        CYCLES_ICP_REFILL_RECORDS_ID,
+        CYCLES_ICP_REFILL_RECORDS_KEY,
         IcpRefillRecord::STATE_CONTRACT_NAME,
         IcpRefillRecordsData::STATE_CONTRACT_NAME,
         100,
@@ -563,7 +564,7 @@ fn intent_domains() -> Vec<StateDomainManifest> {
     vec![
         state_domain(
             "intent_meta",
-            INTENT_META_ID,
+            INTENT_META_KEY,
             IntentStoreMetaRecord::STATE_CONTRACT_NAME,
             IntentMetaData::STATE_CONTRACT_NAME,
             110,
@@ -571,7 +572,7 @@ fn intent_domains() -> Vec<StateDomainManifest> {
         ),
         state_domain(
             "intent_records",
-            INTENT_RECORDS_ID,
+            INTENT_RECORDS_KEY,
             IntentRecord::STATE_CONTRACT_NAME,
             IntentRecordsData::STATE_CONTRACT_NAME,
             111,
@@ -579,7 +580,7 @@ fn intent_domains() -> Vec<StateDomainManifest> {
         ),
         state_domain(
             "intent_totals",
-            INTENT_TOTALS_ID,
+            INTENT_TOTALS_KEY,
             IntentResourceTotalsRecord::STATE_CONTRACT_NAME,
             IntentTotalsData::STATE_CONTRACT_NAME,
             112,
@@ -587,7 +588,7 @@ fn intent_domains() -> Vec<StateDomainManifest> {
         ),
         state_domain(
             "intent_pending",
-            INTENT_PENDING_ID,
+            INTENT_PENDING_KEY,
             IntentPendingEntryRecord::STATE_CONTRACT_NAME,
             IntentPendingData::STATE_CONTRACT_NAME,
             113,
@@ -595,7 +596,7 @@ fn intent_domains() -> Vec<StateDomainManifest> {
         ),
         state_domain(
             "intent_receipt_backed_records",
-            INTENT_RECEIPT_BACKED_RECORDS_ID,
+            INTENT_RECEIPT_BACKED_RECORDS_KEY,
             ReceiptBackedIntentRecord::STATE_CONTRACT_NAME,
             ReceiptBackedIntentsData::STATE_CONTRACT_NAME,
             114,
@@ -603,7 +604,7 @@ fn intent_domains() -> Vec<StateDomainManifest> {
         ),
         state_domain(
             "intent_expiry_index",
-            INTENT_EXPIRY_INDEX_ID,
+            INTENT_EXPIRY_INDEX_KEY,
             IntentExpiryEntryRecord::STATE_CONTRACT_NAME,
             IntentExpiryIndexData::STATE_CONTRACT_NAME,
             115,
@@ -619,7 +620,7 @@ fn application_receipt_domains() -> Vec<StateDomainManifest> {
 
     vec![state_domain(
         "application_receipt_eligibility",
-        APPLICATION_RECEIPT_ELIGIBILITY_ID,
+        APPLICATION_RECEIPT_ELIGIBILITY_KEY,
         ApplicationReceiptEligibilityRecord::STATE_CONTRACT_NAME,
         ApplicationReceiptEligibilityData::STATE_CONTRACT_NAME,
         117,
@@ -634,7 +635,7 @@ fn placement_acknowledgement_domains() -> Vec<StateDomainManifest> {
 
     vec![state_domain(
         "placement_acknowledgement_index",
-        PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID,
+        PLACEMENT_ACKNOWLEDGEMENT_INDEX_KEY,
         PlacementAcknowledgementEntryRecord::STATE_CONTRACT_NAME,
         PlacementAcknowledgementIndexData::STATE_CONTRACT_NAME,
         118,
@@ -644,7 +645,7 @@ fn placement_acknowledgement_domains() -> Vec<StateDomainManifest> {
 
 fn state_domain(
     domain: &str,
-    memory_id: u8,
+    memory_key: &str,
     record: &str,
     snapshot: &str,
     restore_order: u32,
@@ -654,7 +655,7 @@ fn state_domain(
         domain: domain.to_string(),
         version: 1,
         storage: StateStorage::StableMemory,
-        memory_id: Some(memory_id),
+        memory_key: Some(memory_key.to_string()),
         owner: AllocationOwner::CanicCore.as_str().to_string(),
         record: record.to_string(),
         snapshot: snapshot.to_string(),
@@ -668,7 +669,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn descriptors_use_unique_memory_ids() {
+    fn descriptors_use_unique_memory_keys() {
         let descriptors = canic_state_descriptors();
         let mut ids = descriptors
             .iter()
@@ -676,12 +677,12 @@ mod tests {
                 descriptor
                     .state
                     .iter()
-                    .filter_map(|domain| domain.memory_id)
+                    .filter_map(|domain| domain.memory_key.clone())
                     .chain(
                         descriptor
                             .reserved_memory
                             .iter()
-                            .map(|reservation| reservation.memory_id),
+                            .map(|reservation| reservation.memory_key.clone()),
                     )
             })
             .collect::<Vec<_>>();
@@ -709,18 +710,18 @@ mod tests {
     }
 
     #[test]
-    fn descriptors_exactly_cover_declared_core_memory_ids() {
+    fn descriptors_exactly_cover_declared_core_memory_keys() {
         let descriptors = canic_state_descriptors();
         let mut descriptor_ids = descriptors
             .iter()
             .flat_map(|descriptor| descriptor.state.iter())
-            .filter_map(|domain| domain.memory_id)
+            .filter_map(|domain| domain.memory_key.clone())
             .collect::<Vec<_>>();
         let mut allocation_ids = crate::role_contract::allocation::allocation_definitions()
             .iter()
             .filter(|definition| definition.owner == AllocationOwner::CanicCore)
-            .flat_map(|definition| definition.memory_ids)
-            .map(|memory_id| memory_id.get())
+            .flat_map(|definition| definition.memory_keys)
+            .map(ToString::to_string)
             .collect::<Vec<_>>();
 
         descriptor_ids.sort_unstable();

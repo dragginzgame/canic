@@ -1,8 +1,7 @@
 use super::{IcpJsonResponseError, decode_json_response, decode_json_result_response};
 use candid::Encode;
-use canic_core::{
-    cdk::utils::hash::hex_bytes, diagnostics::codes, dto::error::Error as CanicError,
-};
+use canic_contracts::{diagnostics::codes, dto::error::Error as CanicError};
+use canic_core::cdk::utils::hash::hex_bytes;
 use ic_host_tools::response::{JsonErrorKind, ResponseError};
 
 #[test]

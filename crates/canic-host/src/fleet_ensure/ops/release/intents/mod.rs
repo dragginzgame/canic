@@ -18,17 +18,17 @@ use crate::{
     },
     icp::IcpCli,
 };
-use candid::{CandidType, Principal};
-use canic_core::{
+use candid::Principal;
+use canic_contracts::{
     dto::{
         error::Error as CanicError,
         fleet_registry::FleetRegistry,
         release_intents::{IntentReleaseEntry, IntentReleaseKey, IntentReleaseResponse},
+        wire::projection::release_intents::{Request, Response},
     },
     protocol,
 };
 use ic_agent::Agent;
-use serde::Deserialize;
 use std::{collections::BTreeMap, time::Duration};
 use thiserror::Error;
 
@@ -67,16 +67,6 @@ pub enum ReleaseIntentsStage {
     Decode,
     Pagination,
     Query,
-}
-
-#[derive(CandidType)]
-enum Request {
-    IntentRelease(Option<IntentReleaseKey>),
-}
-
-#[derive(CandidType, Deserialize)]
-enum Response {
-    IntentRelease(IntentReleaseResponse),
 }
 
 /// Retain original canonical accounting evidence without interpreting expiry or completion as settlement.

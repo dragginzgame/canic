@@ -23,14 +23,16 @@ use crate::{
     },
     view::component_registry::RootComponentChildAllocationView,
 };
+use canic_contracts::{
+    dto::component_registry::{ComponentLifecycleStatus, ComponentRegistryHead},
+    ids::{CanisterRole, ComponentInstanceId},
+};
 use canic_core::{
     cdk::types::Principal,
     control_plane_support::{
         error::InternalError, model::replay::ReplayCostGuardSettlement,
         policy::component_child_allocation::ComponentChildAllocationDecision,
     },
-    dto::component_registry::{ComponentLifecycleStatus, ComponentRegistryHead},
-    ids::{CanisterRole, ComponentInstanceId},
 };
 
 impl ComponentRegistryOps {

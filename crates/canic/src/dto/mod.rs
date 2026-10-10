@@ -1,16 +1,10 @@
-pub use canic_core::dto::*;
+//! Supported facade for the canonical shared contract vocabulary.
 
+pub use canic_contracts::dto::*;
+
+/// Coordinator commands and its runtime-coupled installation input.
 #[cfg(feature = "fleet-coordinator-canister")]
 pub mod fleet_coordinator {
-    pub use canic_control_plane::dto::fleet_coordinator::*;
-}
-
-#[cfg(feature = "control-plane")]
-pub mod root {
-    pub use canic_control_plane::dto::root::*;
-}
-
-#[cfg(any(feature = "control-plane", feature = "wasm-store-canister"))]
-pub mod template {
-    pub use canic_control_plane::dto::template::*;
+    pub use canic_contracts::dto::fleet_coordinator::*;
+    pub use canic_control_plane::installation::FleetCoordinatorInitArgs;
 }

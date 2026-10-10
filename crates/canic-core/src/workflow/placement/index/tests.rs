@@ -1,16 +1,14 @@
 use super::*;
 use crate::{
-    cdk::types::Cycles,
     config::schema::{
         CanisterAuthConfig, CanisterConfig, CanisterKind, CyclesFundingPolicyConfig,
         DiagnosticsCanisterConfig, IndexConfig, IndexPool, MetricsCanisterConfig,
         StandardsCanisterConfig,
     },
-    ids::{CanisterRole, ComponentSpecId},
-    ops::{
-        storage::children::CanisterChildrenOps,
-        storage::intent::IntentStoreOps,
-        storage::placement::index::{
+    ops::storage::{
+        children::CanisterChildrenOps,
+        intent::IntentStoreOps,
+        placement::index::{
             PlacementIndexClaimResult, PlacementIndexPendingClaim, PlacementIndexRegistryOps,
         },
     },
@@ -19,6 +17,10 @@ use crate::{
         seams::{lock, p},
         support::{direct_child, import_test_env},
     },
+};
+use canic_contracts::{
+    cycles::Cycles,
+    ids::{CanisterRole, ComponentSpecId},
 };
 use futures::executor::block_on;
 

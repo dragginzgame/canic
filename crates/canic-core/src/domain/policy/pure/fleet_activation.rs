@@ -4,15 +4,13 @@
 //! Does not own: activation state reads, endpoint dispatch, caller authorization, or mutation.
 //! Boundary: workflow supplies the current role and endpoint call after reading protected state.
 
-use crate::{
-    ids::{EndpointCall, EndpointCallKind},
-    protocol::{
-        CANIC_ADMISSION_STATUS, CANIC_AUTH_STATUS, CANIC_COMMAND, CANIC_CONTROL_STATUS,
-        CANIC_OBSERVABILITY, CANIC_PUBLIC_STATUS, CANIC_ROOT_COMMAND, CANIC_ROOT_FIXTURE_STATUS,
-        CANIC_ROOT_OPERATION_STATUS, CANIC_ROOT_STATUS, CANIC_WASM_STORE_CATALOG,
-        CANIC_WASM_STORE_COMMAND, CANIC_WASM_STORE_STATUS,
-    },
+use crate::protocol::{
+    CANIC_ADMISSION_STATUS, CANIC_AUTH_STATUS, CANIC_COMMAND, CANIC_CONTROL_STATUS,
+    CANIC_OBSERVABILITY, CANIC_PUBLIC_STATUS, CANIC_ROOT_COMMAND, CANIC_ROOT_FIXTURE_STATUS,
+    CANIC_ROOT_OPERATION_STATUS, CANIC_ROOT_STATUS, CANIC_WASM_STORE_CATALOG,
+    CANIC_WASM_STORE_COMMAND, CANIC_WASM_STORE_STATUS,
 };
+use canic_contracts::ids::{EndpointCall, EndpointCallKind};
 use thiserror::Error as ThisError;
 
 ///
@@ -117,7 +115,7 @@ const fn fenced(call: EndpointCall) -> Result<(), FleetActivationEndpointPolicyE
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ids::EndpointId;
+    use canic_contracts::ids::EndpointId;
 
     fn call(name: &'static str, kind: EndpointCallKind) -> EndpointCall {
         EndpointCall {

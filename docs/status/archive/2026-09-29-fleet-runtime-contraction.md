@@ -491,7 +491,7 @@ must wait.** This section supersedes the earlier negative audit checkpoint.
 The maintainer accepts the [scope amendment](../../design/0.110-fleet-runtime-contraction/0.110-design.md#final-feature-boundary--accepted-2026-09-25):
 finish `.42`, deliver FI1 as the last planned feature batch in `.43`, stop B3,
 defer remaining B4 and then prioritize
-[blob extraction in 0.111](../../design/0.111-standalone-blob-service-extraction/status.md).
+[blob extraction in 0.111](../../design/0.112-standalone-blob-service-extraction/status.md).
 B1 acceptance and complete B2 evidence remain intact. Stopped/deferred work
 is not complete and carries no new claim of absent code or measured savings.
 

@@ -7,12 +7,15 @@
 use candid::{CandidType, Deserialize, Nat, Principal};
 use canic::{
     Error,
-    dto::capability::{RootCapabilityEnvelopeV1, RootCapabilityResponseV1},
+    dto::capability::RootCapabilityResponseV1,
     dto::rpc::{
         AcknowledgePlacementReceiptRequest, CreateCanisterParent, CreateCanisterRequest,
         CreateCanisterResponse, CyclesResponse, Request, Response,
     },
     ids::CanisterRole,
+};
+use canic_contracts::dto::wire::projection::capability_rpc::{
+    RootCommandFragment, RootCommandResponseFragment,
 };
 use ic_cdk::call::Call;
 use std::cell::RefCell;
@@ -79,24 +82,16 @@ struct StubCreateCanisterResult {
 #[ic_cdk::init]
 const fn init() {}
 
-#[derive(CandidType, Deserialize)]
-enum RootCommand {
-    RespondCapability(RootCapabilityEnvelopeV1),
-}
-
-#[derive(CandidType)]
-enum RootCommandResponse {
-    RespondCapability(RootCapabilityResponseV1),
-}
-
 #[ic_cdk::update]
-async fn canic_root_command(command: RootCommand) -> Result<RootCommandResponse, Error> {
-    let RootCommand::RespondCapability(envelope) = command;
+async fn canic_root_command(
+    command: RootCommandFragment,
+) -> Result<RootCommandResponseFragment, Error> {
+    let RootCommandFragment::RespondCapability(envelope) = command;
     let request_id = envelope.metadata.request_id;
     let response = RootCapabilityResponseV1 {
         response: handle_request(request_id, envelope.capability).await?,
     };
-    Ok(RootCommandResponse::RespondCapability(response))
+    Ok(RootCommandResponseFragment::RespondCapability(response))
 }
 
 #[ic_cdk::query]

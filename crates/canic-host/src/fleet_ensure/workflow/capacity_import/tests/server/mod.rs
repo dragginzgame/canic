@@ -1,28 +1,18 @@
 //! Bounded HTTP query fixture: Root replies, Coordinator fails, every update is rejected.
 
-use candid::{CandidType, Principal};
-use canic_core::dto::{
+use candid::Principal;
+use canic_contracts::dto::{
     error::Error,
-    pool_import::{PoolImportContext, PoolImportIdentity, PoolImportStatus},
+    pool_import::{PoolImportContext, PoolImportStatus},
+    wire::projection::capacity_import::{StatusRequest, StatusResponse},
 };
 use std::{
     io::{BufRead, BufReader, Read, Write},
     net::{TcpListener, TcpStream},
-    thread::{self, JoinHandle},
+    thread,
+    thread::JoinHandle,
     time::{Duration, Instant},
 };
-
-#[derive(CandidType, serde::Deserialize)]
-enum StatusRequest {
-    PoolImport(PoolImportIdentity),
-    PoolImportContext,
-}
-
-#[derive(CandidType)]
-enum StatusResponse {
-    PoolImport(Box<PoolImportStatus>),
-    PoolImportContext(Box<PoolImportContext>),
-}
 
 #[derive(serde::Deserialize)]
 struct QueryEnvelope {

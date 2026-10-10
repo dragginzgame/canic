@@ -253,7 +253,7 @@ fn repeated_activity_is_not_confirmed_remote_advancement() {
 
 #[test]
 fn retry_deadline_changes_are_retained_without_claiming_remote_advancement() {
-    use canic_core::dto::component_provisioning::{
+    use canic_contracts::dto::component_provisioning::{
         FleetComponentProvisioningPhase, FleetComponentProvisioningRetryStage,
         FleetComponentProvisioningRootFailure, ProvisioningFailureOrigin, ProvisioningFailureStage,
         ProvisioningRetryCategory,

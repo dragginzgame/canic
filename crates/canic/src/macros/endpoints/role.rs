@@ -9,24 +9,12 @@
 #[macro_export]
 macro_rules! __canic_emit_relay_observability_response {
     () => {
-        #[derive(
-            ::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize,
-        )]
-        #[serde(crate = "::canic::__internal::serde")]
-        pub enum RelayedObservabilityResponse {
-            ChildFunding(::canic::dto::observability::ChildFundingUsage),
-            CycleBalance(::canic::dto::role::CycleBalanceStatusResponse),
-            #[cfg(canic_capability_observability_history)]
-            CycleHistory(::canic::dto::page::Page<::canic::dto::cycles::CycleTrackerEntry>),
-            #[cfg(all(
-                canic_capability_observability_history,
-                canic_capability_automatic_topup
-            ))]
-            CycleTopups(::canic::dto::page::Page<::canic::dto::cycles::CycleTopupEvent>),
-            #[cfg(canic_capability_observability_diagnostics)]
-            MemoryAllocations(::canic::dto::memory::MemoryAllocationsResponse),
-            #[cfg(canic_capability_observability_metrics)]
-            Metrics(::canic::dto::page::Page<::canic::dto::metrics::MetricEntry>),
+        ::canic::__internal::contracts::__canic_relay_wire_types! {
+            serde_crate = "::canic::__internal::serde",
+            history_attributes = [#[cfg(canic_capability_observability_history)]],
+            topup_history_attributes = [#[cfg(all( canic_capability_observability_history, canic_capability_automatic_topup ))]],
+            diagnostics_attributes = [#[cfg(canic_capability_observability_diagnostics)]],
+            metrics_attributes = [#[cfg(canic_capability_observability_metrics)]],
         }
     };
 }
@@ -114,35 +102,22 @@ macro_rules! __canic_compiled_role_capabilities {
 #[macro_export]
 macro_rules! __canic_emit_managed_status_endpoint {
     () => {
-        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
-        #[serde(crate = "::canic::__internal::serde")]
-        pub enum CanisterOperationStatusResponse {
-            ConfigureRuntime(::canic::dto::role::ComponentRuntimeOperationStatus),
+        ::canic::__internal::contracts::__canic_managed_wire_types! {
+            serde_crate = "::canic::__internal::serde",
+            metrics_attributes = [#[cfg(canic_capability_observability_metrics)]],
+            history_attributes = [#[cfg(canic_capability_observability_history)]],
+            child_provisioning_attributes = [#[cfg(canic_capability_child_provisioning)]],
+            automatic_topup_attributes = [#[cfg(canic_capability_automatic_topup)]],
+            logs_attributes = [#[cfg(canic_capability_observability_logs)]],
+            diagnostics_attributes = [#[cfg(canic_capability_observability_diagnostics)]],
+            local_auth_attributes = [#[cfg(any( canic_capability_delegated_token_issuer, canic_capability_local_application_authorization ))]],
+            token_issuer_attributes = [#[cfg(canic_capability_delegated_token_issuer)]],
+            application_authorization_attributes = [#[cfg(canic_capability_local_application_authorization)]],
+            caller_authority_attributes = [#[cfg(canic_capability_caller_authority)]],
+            fleet_admission_attributes = [#[cfg(canic_capability_fleet_admission_projection)]],
         }
-        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
-        #[serde(crate = "::canic::__internal::serde")]
-        pub enum PublicStatusRequest {
-            Health,
-            #[cfg(canic_capability_observability_metrics)]
-            Metrics(::canic::dto::public_status::PublicMetricsRequest),
-            #[cfg(canic_capability_observability_history)]
-            History(::canic::dto::public_status::PublicHistoryRequest),
-            Overview,
-            #[cfg(canic_capability_child_provisioning)]
-            Children(::canic::dto::page::PageRequest),
-        }
-        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
-        #[serde(crate = "::canic::__internal::serde")]
-        pub enum PublicStatusResponse {
-            Health(::canic::dto::public_status::PublicHealth),
-            #[cfg(canic_capability_observability_metrics)]
-            Metrics(::canic::dto::public_status::PublicMetricsSnapshot),
-            #[cfg(canic_capability_observability_history)]
-            History(::canic::dto::public_status::PublicHistorySnapshot),
-            Overview(::canic::dto::role::RoleOverviewResponse),
-            #[cfg(canic_capability_child_provisioning)]
-            Children(::canic::dto::page::Page<::canic::dto::canister::CanisterInfo>),
-        }
+
+
         #[$crate::canic_query(public)]
         async fn canic_public_status(
             request: PublicStatusRequest,
@@ -166,50 +141,8 @@ macro_rules! __canic_emit_managed_status_endpoint {
                 )),
             }
         }
-        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
-        #[serde(crate = "::canic::__internal::serde")]
-        pub enum ObservabilityRequest {
-            Binding,
-            ChildFunding(::canic::__internal::candid::Principal),
-            CycleBalance,
-            #[cfg(canic_capability_observability_history)]
-            CycleHistory(::canic::dto::page::PageRequest),
-            #[cfg(canic_capability_automatic_topup)]
-            #[cfg(canic_capability_observability_history)]
-            CycleTopups(::canic::dto::page::PageRequest),
-            Health,
-            #[cfg(canic_capability_observability_logs)]
-            Logs(::canic::dto::role::LogStatusRequest),
-            #[cfg(canic_capability_observability_diagnostics)]
-            MemoryAllocations,
-            #[cfg(canic_capability_observability_metrics)]
-            Metrics(::canic::dto::role::MetricsStatusRequest),
-            Readiness,
-            #[cfg(canic_capability_observability_diagnostics)]
-            Runtime,
-        }
-        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
-        #[serde(crate = "::canic::__internal::serde")]
-        pub enum ObservabilityResponse {
-            Binding(::canic::ids::ManagedCanisterBinding),
-            ChildFunding(::canic::dto::observability::ChildFundingUsage),
-            CycleBalance(::canic::dto::role::CycleBalanceStatusResponse),
-            #[cfg(canic_capability_observability_history)]
-            CycleHistory(::canic::dto::page::Page<::canic::dto::cycles::CycleTrackerEntry>),
-            #[cfg(canic_capability_automatic_topup)]
-            #[cfg(canic_capability_observability_history)]
-            CycleTopups(::canic::dto::page::Page<::canic::dto::cycles::CycleTopupEvent>),
-            Health(::canic::dto::runtime::CanicHealthStatus),
-            #[cfg(canic_capability_observability_logs)]
-            Logs(::canic::dto::page::Page<::canic::dto::log::LogEntry>),
-            #[cfg(canic_capability_observability_diagnostics)]
-            MemoryAllocations(::canic::dto::memory::MemoryAllocationsResponse),
-            #[cfg(canic_capability_observability_metrics)]
-            Metrics(::canic::dto::page::Page<::canic::dto::metrics::MetricEntry>),
-            Readiness(::canic::dto::runtime::CanicReadinessStatus),
-            #[cfg(canic_capability_observability_diagnostics)]
-            Runtime(::canic::dto::runtime::CanicRuntimeStatus),
-        }
+
+
         #[$crate::canic_query(requires(caller::is_controller()))]
         async fn canic_observability(
             request: ObservabilityRequest,
@@ -292,34 +225,8 @@ macro_rules! __canic_emit_managed_status_endpoint {
                 )),
                         }
         }
-        #[cfg(any(
-            canic_capability_delegated_token_issuer,
-            canic_capability_local_application_authorization
-        ))]
-        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
-        #[serde(crate = "::canic::__internal::serde")]
-        pub enum AuthStatusRequest {
-            #[cfg(canic_capability_delegated_token_issuer)]
-            ActiveDelegationProof,
-            #[cfg(canic_capability_local_application_authorization)]
-            ApplicationSession,
-            #[cfg(canic_capability_delegated_token_issuer)]
-            DelegatedToken(::canic::dto::auth::DelegatedTokenGetRequest),
-        }
-        #[cfg(any(
-            canic_capability_delegated_token_issuer,
-            canic_capability_local_application_authorization
-        ))]
-        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
-        #[serde(crate = "::canic::__internal::serde")]
-        pub enum AuthStatusResponse {
-            #[cfg(canic_capability_delegated_token_issuer)]
-            ActiveDelegationProof(::canic::dto::auth::ActiveDelegationProofStatusResponse),
-            #[cfg(canic_capability_local_application_authorization)]
-            ApplicationSession(::canic::dto::auth::ApplicationSessionStatus),
-            #[cfg(canic_capability_delegated_token_issuer)]
-            DelegatedToken(::canic::dto::auth::DelegatedToken),
-        }
+
+
         #[cfg(any(
             canic_capability_delegated_token_issuer,
             canic_capability_local_application_authorization
@@ -346,24 +253,8 @@ macro_rules! __canic_emit_managed_status_endpoint {
                 }
             }
         }
-        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
-        #[serde(crate = "::canic::__internal::serde")]
-        pub enum ControlStatusRequest {
-            #[cfg(canic_capability_local_application_authorization)]
-            ApplicationSessionAudit(::canic::dto::page::PageRequest),
-            #[cfg(canic_capability_caller_authority)]
-            CallerAuthority(::canic::dto::role::OperationStatusRequest),
-            Operation(::canic::dto::role::OperationStatusRequest),
-        }
-        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
-        #[serde(crate = "::canic::__internal::serde")]
-        pub enum ControlStatusResponse {
-            #[cfg(canic_capability_local_application_authorization)]
-            ApplicationSessionAudit(::canic::dto::auth::ApplicationSessionAuditResponse),
-            #[cfg(canic_capability_caller_authority)]
-            CallerAuthority(::canic::dto::caller_authority::CallerAuthorityStatus),
-            Operation(CanisterOperationStatusResponse),
-        }
+
+
         #[$crate::canic_query(requires(caller::is_root()))]
         async fn canic_control_status(
             request: ControlStatusRequest,
@@ -388,20 +279,8 @@ macro_rules! __canic_emit_managed_status_endpoint {
                 }
             }
         }
-        #[cfg(canic_capability_fleet_admission_projection)]
-        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
-        #[serde(crate = "::canic::__internal::serde")]
-        pub enum AdmissionStatusRequest {
-            #[cfg(canic_capability_fleet_admission_projection)]
-            Admission(::canic::dto::page::PageRequest),
-        }
-        #[cfg(canic_capability_fleet_admission_projection)]
-        #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
-        #[serde(crate = "::canic::__internal::serde")]
-        pub enum AdmissionStatusResponse {
-            #[cfg(canic_capability_fleet_admission_projection)]
-            Admission(::canic::dto::fleet_admission::FleetAdmissionProjectionStatusResponse),
-        }
+
+
         #[cfg(canic_capability_fleet_admission_projection)]
         #[$crate::canic_query(requires(any(caller::is_controller(), caller::is_root())))]
         async fn canic_admission_status(
@@ -423,32 +302,16 @@ macro_rules! __canic_emit_managed_status_endpoint {
 #[macro_export]
 macro_rules! __canic_emit_local_status_endpoint {
     () => {
-        #[derive(
-            ::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize,
-        )]
-        #[serde(crate = "::canic::__internal::serde")]
-        pub enum PublicStatusRequest {
-            Health,
-            #[cfg(canic_capability_observability_metrics)]
-            Metrics(::canic::dto::public_status::PublicMetricsRequest),
-            #[cfg(canic_capability_observability_history)]
-            History(::canic::dto::public_status::PublicHistoryRequest),
-            #[cfg(canic_capability_child_provisioning)]
-            Children(::canic::dto::page::PageRequest),
+        ::canic::__internal::contracts::__canic_local_wire_types! {
+            serde_crate = "::canic::__internal::serde",
+            metrics_attributes = [#[cfg(canic_capability_observability_metrics)]],
+            history_attributes = [#[cfg(canic_capability_observability_history)]],
+            child_provisioning_attributes = [#[cfg(canic_capability_child_provisioning)]],
+            automatic_topup_attributes = [#[cfg(canic_capability_automatic_topup)]],
+            logs_attributes = [#[cfg(canic_capability_observability_logs)]],
+            diagnostics_attributes = [#[cfg(canic_capability_observability_diagnostics)]],
         }
-        #[derive(
-            ::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize,
-        )]
-        #[serde(crate = "::canic::__internal::serde")]
-        pub enum PublicStatusResponse {
-            Health(::canic::dto::public_status::PublicHealth),
-            #[cfg(canic_capability_observability_metrics)]
-            Metrics(::canic::dto::public_status::PublicMetricsSnapshot),
-            #[cfg(canic_capability_observability_history)]
-            History(::canic::dto::public_status::PublicHistorySnapshot),
-            #[cfg(canic_capability_child_provisioning)]
-            Children(::canic::dto::page::Page<::canic::dto::canister::CanisterInfo>),
-        }
+
         #[$crate::canic_query(public)]
         async fn canic_public_status(
             request: PublicStatusRequest,
@@ -479,48 +342,7 @@ macro_rules! __canic_emit_local_status_endpoint {
                 )),
             }
         }
-        #[derive(
-            ::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize,
-        )]
-        #[serde(crate = "::canic::__internal::serde")]
-        pub enum ObservabilityRequest {
-            ChildFunding(::canic::__internal::candid::Principal),
-            CycleBalance,
-            #[cfg(canic_capability_observability_history)]
-            CycleHistory(::canic::dto::page::PageRequest),
-            #[cfg(canic_capability_automatic_topup)]
-            #[cfg(canic_capability_observability_history)]
-            CycleTopups(::canic::dto::page::PageRequest),
-            Health,
-            #[cfg(canic_capability_observability_logs)]
-            Logs(::canic::dto::role::LogStatusRequest),
-            #[cfg(canic_capability_observability_metrics)]
-            Metrics(::canic::dto::role::MetricsStatusRequest),
-            Readiness,
-            #[cfg(canic_capability_observability_diagnostics)]
-            Runtime,
-        }
-        #[derive(
-            ::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize,
-        )]
-        #[serde(crate = "::canic::__internal::serde")]
-        pub enum ObservabilityResponse {
-            ChildFunding(::canic::dto::observability::ChildFundingUsage),
-            CycleBalance(::canic::dto::role::CycleBalanceStatusResponse),
-            #[cfg(canic_capability_observability_history)]
-            CycleHistory(::canic::dto::page::Page<::canic::dto::cycles::CycleTrackerEntry>),
-            #[cfg(canic_capability_automatic_topup)]
-            #[cfg(canic_capability_observability_history)]
-            CycleTopups(::canic::dto::page::Page<::canic::dto::cycles::CycleTopupEvent>),
-            Health(::canic::dto::runtime::CanicHealthStatus),
-            #[cfg(canic_capability_observability_logs)]
-            Logs(::canic::dto::page::Page<::canic::dto::log::LogEntry>),
-            #[cfg(canic_capability_observability_metrics)]
-            Metrics(::canic::dto::page::Page<::canic::dto::metrics::MetricEntry>),
-            Readiness(::canic::dto::runtime::CanicReadinessStatus),
-            #[cfg(canic_capability_observability_diagnostics)]
-            Runtime(::canic::dto::runtime::CanicRuntimeStatus),
-        }
+
         #[$crate::canic_query(requires(caller::is_controller()))]
         async fn canic_observability(
             request: ObservabilityRequest,
@@ -598,84 +420,20 @@ macro_rules! __canic_emit_managed_command_endpoint {
     () => {
         $crate::__canic_emit_relay_observability_response!();
 
-        #[derive(
-            ::canic::__internal::candid::CandidType,
-            ::canic::__internal::serde::Deserialize,
-        )]
-        #[serde(crate = "::canic::__internal::serde")]
-        pub enum CanisterCommand {
-            #[cfg(canic_capability_fleet_admission_projection)]
-            ActivateFleetAdmission(
-                ::canic::dto::fleet_admission::FleetAdmissionActivateTargetRequest,
-            ),
-            #[cfg(canic_capability_local_application_authorization)]
-            ApplicationSession(::canic::dto::auth::ApplicationSessionCommand),
-            #[cfg(canic_capability_caller_authority)]
-            CallerAuthority(::canic::dto::caller_authority::CallerAuthorityCommand),
-            #[cfg(canic_capability_caller_authority)]
-            ReleaseApplicationStartup(::canic::dto::caller_authority::CallerAuthorityPublication),
-            ConfigureRuntime(
-                ::canic::dto::component_registry::ComponentRuntimeDirectoryPreparationRequest,
-            ),
-            #[cfg(canic_capability_delegated_token_issuer)]
-            InstallDelegationProof(
-                ::canic::dto::auth::InstallActiveDelegationProofRequest,
-            ),
-            Observe(::canic::dto::observability::CanisterObservabilityRequest),
-            #[cfg(canic_capability_fleet_admission_projection)]
-            OpenFleetAdmission(
-                ::canic::dto::fleet_admission::FleetAdmissionOpenTargetRequest,
-            ),
-            #[cfg(canic_capability_delegated_token_issuer)]
-            PrepareDelegatedToken(::canic::dto::auth::DelegatedTokenPrepareRequest),
-            #[cfg(canic_capability_fleet_admission_projection)]
-            PrepareFleetAdmission(
-                ::canic::dto::fleet_admission::FleetAdmissionPrepareTargetRequest,
-            ),
-            #[cfg(canic_capability_child_provisioning)]
-            RespondCapability(::canic::dto::capability::NonrootCyclesCapabilityEnvelopeV1),
-            SynchronizeState(::canic::dto::cascade::StateSnapshotInput),
+        ::canic::__internal::contracts::__canic_managed_command_wire_types! {
+            serde_crate = "::canic::__internal::serde",
+            fleet_admission_attributes = [#[cfg(canic_capability_fleet_admission_projection)]],
+            application_authorization_attributes = [#[cfg(canic_capability_local_application_authorization)]],
+            caller_authority_attributes = [#[cfg(canic_capability_caller_authority)]],
+            token_issuer_attributes = [#[cfg(canic_capability_delegated_token_issuer)]],
+            child_provisioning_attributes = [#[cfg(canic_capability_child_provisioning)]],
         }
 
-        #[derive(
-            ::canic::__internal::candid::CandidType,
-            ::canic::__internal::serde::Deserialize,
-        )]
-        #[serde(crate = "::canic::__internal::serde")]
-        pub enum CanisterCommandResponse {
-            #[cfg(canic_capability_fleet_admission_projection)]
-            ActivateFleetAdmission(
-                ::canic::dto::fleet_admission::FleetAdmissionTargetReceipt,
-            ),
-            #[cfg(canic_capability_local_application_authorization)]
-            ApplicationSession(::canic::dto::auth::ApplicationSessionCommandResponse),
-            #[cfg(canic_capability_caller_authority)]
-            CallerAuthority(::canic::dto::caller_authority::CallerAuthorityReceipt),
-            #[cfg(canic_capability_delegated_token_issuer)]
-            InstallDelegationProof(
-                ::canic::dto::auth::InstallActiveDelegationProofResponse,
-            ),
-            Observe(RelayedObservabilityResponse),
-            #[cfg(canic_capability_fleet_admission_projection)]
-            OpenFleetAdmission(
-                ::canic::dto::fleet_admission::FleetAdmissionTargetReceipt,
-            ),
-            OperationAccepted(::canic::dto::role::OperationReceipt),
-            #[cfg(canic_capability_delegated_token_issuer)]
-            PrepareDelegatedToken(::canic::dto::auth::DelegatedTokenPrepareResponse),
-            #[cfg(canic_capability_fleet_admission_projection)]
-            PrepareFleetAdmission(
-                ::canic::dto::fleet_admission::FleetAdmissionTargetReceipt,
-            ),
-            #[cfg(canic_capability_child_provisioning)]
-            RespondCapability(::canic::dto::capability::NonrootCyclesCapabilityResponseV1),
-            SynchronizeState(::canic::dto::cascade::StateCascadeReport),
-        }
 
         #[doc(hidden)]
         fn __canic_inspect_managed_update_message() {
             if $crate::__internal::core::ingress::payload::current_method_name()
-                != $crate::__internal::core::protocol::CANIC_COMMAND
+                != $crate::__internal::contracts::protocol::CANIC_COMMAND
             {
                 $crate::__internal::core::ingress::payload::inspect_update_message();
                 return;
@@ -704,11 +462,11 @@ macro_rules! __canic_emit_managed_command_endpoint {
             if !matches!(&command, CanisterCommand::SynchronizeState(_)) {
                 $crate::__internal::core::access::expr::eval_default_fleet_guard(
                     $crate::__internal::core::access::expr::DefaultFleetGuard::AllowsUpdates,
-                    $crate::__internal::core::ids::EndpointCall {
-                        endpoint: $crate::__internal::core::ids::EndpointId::new(
-                            $crate::__internal::core::protocol::CANIC_COMMAND,
+                    $crate::__internal::contracts::ids::EndpointCall {
+                        endpoint: $crate::__internal::contracts::ids::EndpointId::new(
+                            $crate::__internal::contracts::protocol::CANIC_COMMAND,
                         ),
-                        kind: $crate::__internal::core::ids::EndpointCallKind::Update,
+                        kind: $crate::__internal::contracts::ids::EndpointCallKind::Update,
                     },
                 )
                     .map_err(::canic::Error::from)?;
@@ -862,7 +620,7 @@ macro_rules! __canic_role_overview {
     () => {{
         let capabilities = $crate::__canic_compiled_role_capabilities!();
         $crate::__internal::core::api::role::RoleOverviewApi::overview(
-            $crate::__internal::core::ids::CanisterRole::from(env!("CANIC_CANISTER_ROLE")),
+            $crate::__internal::contracts::ids::CanisterRole::from(env!("CANIC_CANISTER_ROLE")),
             &capabilities,
             $crate::__canic_protocol_profile_digest!(),
             $crate::__internal::core::api::metadata::CanicMetadataApi::metadata_for(

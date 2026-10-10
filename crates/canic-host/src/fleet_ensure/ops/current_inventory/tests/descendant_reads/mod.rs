@@ -40,7 +40,7 @@ impl ReceiptTransport {
             candid::encode_one(input).unwrap(),
         )
         .unwrap();
-        let response = Ok::<_, canic_core::dto::error::Error>(
+        let response = Ok::<_, canic_contracts::dto::error::Error>(
             RootInventoryStatusResponse::ComponentChildProvisioning(Box::new(allocation)),
         );
         fs::write(

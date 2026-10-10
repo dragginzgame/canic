@@ -1,10 +1,11 @@
 //! Actual infrastructure custody observed through the operator's management authority.
 
 use crate::fleet_ensure::model::capacity_import::survey::CapacityImportSampleRecord;
-use canic_core::dto::fleet_registry::FleetRegistry;
+use canic_contracts::dto::fleet_registry::FleetRegistry;
 use std::collections::BTreeMap;
 
 /// A complete source sample; missing Coordinator identity is permitted only for reviewed creation.
+
 #[derive(Clone, Debug)]
 pub struct InfrastructureBootstrapObservation {
     pub held_sources: BTreeMap<

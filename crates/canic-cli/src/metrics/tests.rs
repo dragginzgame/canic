@@ -1,15 +1,16 @@
+// Ensure the public kind selector accepts the expected CLI vocabulary.
+
 use super::*;
 use crate::metrics::{
     model::{MetricValue, MetricsKind, MetricsReport},
     parse::metric_page,
 };
 use candid::Principal;
-use canic_core::dto::{
+use canic_contracts::dto::{
     metrics::{MetricEntry as MetricEntryDto, MetricValue as MetricValueDto},
     page::Page,
 };
 
-// Ensure the public kind selector accepts the expected CLI vocabulary.
 #[test]
 fn parses_metric_kind_selectors() {
     let options =

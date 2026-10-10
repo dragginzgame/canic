@@ -7,7 +7,10 @@
 use super::{DesiredFleet, FleetGenerateError, ObservedCanister};
 use crate::{
     fleet_ensure::{
-        ops::startup_funding::observation::{self, binding, inventory, registry},
+        ops::startup_funding::{
+            observation,
+            observation::{binding, inventory, registry},
+        },
         policy::startup_funding::{add, live_binding, minimum_root_cycles, root_components},
         view::startup_funding::{
             StartupChildFundingUsage, StartupCoordinatorUsage, StartupDemandUnavailable,
@@ -19,10 +22,12 @@ use crate::{
     icp::{IcpCli, LocalReplicaTarget},
 };
 use candid::Principal;
-use canic_core::{bootstrap::compiled::ConfigModel, dto::pool::CanisterPoolAssetStatus};
+use canic_contracts::dto::pool::CanisterPoolAssetStatus;
+use canic_core::bootstrap::compiled::ConfigModel;
 use std::{collections::BTreeMap, path::Path};
 
 /// Observe Root-funded Workloads and explicitly separate assets requiring a parent relay.
+
 pub(super) fn observe_children(
     request: &super::FleetGenerateRequest<'_>,
     desired: &DesiredFleet,
@@ -485,7 +490,7 @@ fn native_balance(
     }
     canister
         .initial_cycles
-        .parse::<canic_core::cdk::types::Cycles>()
+        .parse::<canic_contracts::cycles::Cycles>()
         .map(|cycles| StartupNativeBalance::ConfiguredCreation(cycles.to_u128()))
         .map_err(|error| {
             FleetGenerateError::Authority(format!("invalid startup creation balance: {error}"))

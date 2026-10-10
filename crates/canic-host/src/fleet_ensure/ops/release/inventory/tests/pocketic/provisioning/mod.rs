@@ -1,20 +1,19 @@
 //! Signed query collection and whole-result refusals for the provisioning census wire.
 
 use super::*;
-use crate::fleet_ensure::ops::release::{
-    observation::ReleaseObservationError,
-    provisioning::{self, ReleaseProvisioningError as Failure, ReleaseProvisioningStage as Stage},
-};
 use crate::fleet_ensure::{
+    ops::release::{
+        observation::ReleaseObservationError,
+        provisioning,
+        provisioning::{ReleaseProvisioningError as Failure, ReleaseProvisioningStage as Stage},
+    },
     view::release::provisioning::{
         FleetReleaseProvisioningAssessment, ReleaseProvisioningDisposition,
         ReleaseProvisioningIdentity, ReleaseProvisioningOwner,
     },
     workflow::release::assess_provisioning_evidence,
 };
-use canic_control_plane::dto::root::{
-    RootProvisioningReleasePhase, RootProvisioningReleaseResponse,
-};
+use canic_contracts::dto::root::{RootProvisioningReleasePhase, RootProvisioningReleaseResponse};
 use ic_testkit::pocket_ic::PocketIc;
 
 pub(super) fn assert_census(

@@ -8,13 +8,13 @@ use crate::{
         abi::v1::CanisterInitPayload, env::EnvBootstrapArgs,
         fleet_subnet_root::FleetSubnetWasmStoreInitArgs,
     },
-    ids::CanisterRole,
     lifecycle::{LifecyclePhase, lifecycle_trap, retryable_nonroot_bootstrap_error},
     log,
     log::Topic,
     ops::runtime::bootstrap::{BootstrapPhaseLabel, BootstrapStatusOps},
-    workflow::{self},
+    workflow,
 };
+use canic_contracts::ids::CanisterRole;
 use std::time::Duration;
 
 const MAX_NONROOT_BOOTSTRAP_ATTEMPTS: u32 = 64;

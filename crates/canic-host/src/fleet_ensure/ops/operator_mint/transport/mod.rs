@@ -6,12 +6,15 @@
 use crate::{
     fleet_ensure::{
         model::operator_mint::{OperatorMintIntentRecord, OperatorMintNotificationOutcomeRecord},
-        ops::operator_mint::receipts::{
-            self, CyclesLedgerBlock, DepositVerificationError, ReceiptVerificationLimits,
-            VerifiedCyclesDeposit,
-            icp::{
-                self, IcpReadError, IcpReadLimits, IcpReadOutcome, IcpTransferRead,
-                VerifiedIcpTransfer,
+        ops::operator_mint::{
+            receipts,
+            receipts::{
+                CyclesLedgerBlock, DepositVerificationError, ReceiptVerificationLimits,
+                VerifiedCyclesDeposit, icp,
+                icp::{
+                    IcpReadError, IcpReadLimits, IcpReadOutcome, IcpTransferRead,
+                    VerifiedIcpTransfer,
+                },
             },
         },
         view::operator_mint::OperatorMintRateQuote,
@@ -192,9 +195,11 @@ impl OperatorMintTransport {
     /// Canonical identity of the same trust anchor used by this transport.
     pub fn canonical_network_id(
         &self,
-    ) -> Result<canic_core::ids::CanonicalNetworkId, OperatorMintTransportError> {
-        canic_core::ids::CanonicalNetworkId::from_der_root_trust_anchor(&self.agent.read_root_key())
-            .map_err(|_| OperatorMintTransportError::ReaderMismatch)
+    ) -> Result<canic_contracts::ids::CanonicalNetworkId, OperatorMintTransportError> {
+        canic_contracts::ids::CanonicalNetworkId::from_der_root_trust_anchor(
+            &self.agent.read_root_key(),
+        )
+        .map_err(|_| OperatorMintTransportError::ReaderMismatch)
     }
 
     /// Selected signer, checked against the desired operator before reviewing.

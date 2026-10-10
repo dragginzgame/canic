@@ -85,7 +85,7 @@ multiple update or query calls until `claims.expires_at_ns`.
 
 ## 3. Data Structures
 
-Source of truth: `crates/canic-core/src/dto/auth/`.
+Source of truth: `crates/canic-contracts/src/dto/auth/`.
 
 ```rust
 pub enum DelegationAudience {

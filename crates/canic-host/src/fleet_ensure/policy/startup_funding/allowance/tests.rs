@@ -1,8 +1,6 @@
 use super::*;
-use canic_core::{
-    cdk::types::Cycles, control_plane_support::config::ComponentDeploymentConfiguration,
-    ids::ReleaseBuildNonce,
-};
+use canic_contracts::{cycles::Cycles, ids::ReleaseBuildNonce};
+use canic_core::control_plane_support::config::ComponentDeploymentConfiguration;
 
 fn limits() -> FundingLimits {
     FundingLimits {

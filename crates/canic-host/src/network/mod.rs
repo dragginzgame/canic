@@ -7,21 +7,19 @@
 #[cfg(test)]
 mod tests;
 
-use crate::MAX_DOCUMENT_READ_BYTES;
-use crate::icp_config::{IcpConfigError, resolve_icp_build_network_from_root};
-use ic_host_artifacts::artifact::ArtifactError;
-use ic_host_artifacts::artifact::Sha256Digest;
-use ic_host_fs::durable::create_new_bytes_with_parents;
-use ic_host_fs::read::read_optional_file_no_follow;
-
-use canic_core::ids::{BuildNetwork, CanonicalNetworkId};
+use crate::{
+    MAX_DOCUMENT_READ_BYTES,
+    icp_config::{IcpConfigError, resolve_icp_build_network_from_root},
+};
+use canic_contracts::ids::{BuildNetwork, CanonicalNetworkId};
+use ic_host_artifacts::artifact::{ArtifactError, Sha256Digest};
+use ic_host_fs::{durable::create_new_bytes_with_parents, read::read_optional_file_no_follow};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 use std::{
     io,
     path::{Path, PathBuf},
     time::{SystemTime, SystemTimeError, UNIX_EPOCH},
 };
-
 use thiserror::Error as ThisError;
 
 const CANIC_STATE_DIRECTORY: &str = ".canic";
@@ -420,7 +418,7 @@ fn encode_digest(digest: [u8; 32]) -> String {
 }
 
 fn create_new(path: &Path, bytes: &[u8]) -> Result<(), NetworkIdentityError> {
-    match create_new_bytes_with_parents(path, bytes) {
+    match create_new_bytes_with_parents(path, bytes).map_err(crate::publication::ops::io_error) {
         Ok(()) => Ok(()),
         Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {
             let existing = read_required_regular_file(path)?;
@@ -445,7 +443,7 @@ fn create_new_enrollment(
 ) -> Result<(), NetworkIdentityError> {
     let path = &paths.enrollment;
     let bytes = encode_json(enrollment)?;
-    match create_new_bytes_with_parents(path, &bytes) {
+    match create_new_bytes_with_parents(path, &bytes).map_err(crate::publication::ops::io_error) {
         Ok(()) => Ok(()),
         Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {
             let existing = read_required_json::<NetworkEnrollmentRecord>(path)?;
@@ -471,7 +469,7 @@ fn create_new_profile(paths: &NetworkPaths, environment: &str) -> Result<(), Net
         canonical_network_id: paths.canonical_network_id,
     };
     let bytes = encode_json(&profile)?;
-    match create_new_bytes_with_parents(path, &bytes) {
+    match create_new_bytes_with_parents(path, &bytes).map_err(crate::publication::ops::io_error) {
         Ok(()) => Ok(()),
         Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {
             let existing = read_required_profile(path)?;

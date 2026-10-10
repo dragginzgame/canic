@@ -6,7 +6,6 @@
 
 use crate::{
     InternalError,
-    ids::ManagedCanisterBinding,
     model::fleet_admission_projection::{
         FleetAdmissionProjectionPhaseModel, FleetAdmissionProjectionReceiptModel,
         FleetAdmissionProjectionState, validate_fleet_admission_projection_state,
@@ -17,8 +16,10 @@ use crate::{
         FleetAdmissionProjectionRecord, FleetAdmissionProjectionStore,
     },
 };
+use canic_contracts::ids::ManagedCanisterBinding;
 
 /// Deterministic storage facade for the reused memory ID 61.
+
 pub struct FleetAdmissionProjectionOps;
 
 impl FleetAdmissionProjectionOps {

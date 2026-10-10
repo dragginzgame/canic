@@ -15,7 +15,7 @@ use crate::{
     },
     test_support::start_pocket_ic,
 };
-use canic_core::ids::{AppId, CanonicalNetworkId, FleetBinding, FleetId, FleetKey};
+use canic_contracts::ids::{AppId, CanonicalNetworkId, FleetBinding, FleetId, FleetKey};
 use ic_agent::identity::BasicIdentity;
 use ic_testkit::pocket_ic::{CanisterSettings, PocketIcBuilder};
 use std::{path::PathBuf, time::SystemTime};

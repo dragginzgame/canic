@@ -300,7 +300,7 @@ fn burn_to(input: &AutonomousFundingJourney<'_>, retain: u128) {
 fn child_status(
     input: &AutonomousFundingJourney<'_>,
     operation_id: [u8; 32],
-) -> canic_control_plane::dto::root::RootComponentChildOperationStatus {
+) -> canic_contracts::dto::root::RootComponentChildOperationStatus {
     let response: Result<RootStatusResponseFragment, Error> = input
         .pic
         .query_candid_as(
@@ -393,7 +393,7 @@ fn block_initial_child(
         };
         if let Some(origin) = status.pending_root_failure.and_then(|failure| failure.origin)
             && origin.stage == canic::dto::component_provisioning::ProvisioningFailureStage::ComponentChildAllocation {
-            assert_eq!(origin.diagnostic_code, canic_core::diagnostics::codes::DEPLOYMENT_CYCLE_RESERVE_REQUIRED.raw_code().raw());
+            assert_eq!(origin.diagnostic_code, canic_contracts::diagnostics::codes::DEPLOYMENT_CYCLE_RESERVE_REQUIRED.raw_code().raw());
             assert_eq!(origin.target, input.root);
             let status = child_status(input, origin.operation_id);
             assert_eq!(status.allocation.phase, RootComponentAllocationPhase::Reserved);

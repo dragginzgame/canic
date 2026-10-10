@@ -5,7 +5,8 @@ mod expiry;
 mod rejection;
 
 use super::*;
-use canic_core::{control_plane_support::policy::pool_import, protocol};
+use canic_contracts::protocol;
+use canic_core::control_plane_support::policy::pool_import;
 use canic_host::{
     fleet_ensure::{
         model::capacity_import::{
@@ -16,7 +17,8 @@ use canic_host::{
             EnsurePaths,
             capacity_import::{
                 admission::observer::CapacityImportLiveObserver,
-                journal::{self, CapacityImportJournalError, CapacityImportJournalStore},
+                journal,
+                journal::{CapacityImportJournalError, CapacityImportJournalStore},
                 prepare_review, publication, reservation_evidence,
                 transport::{CapacityImportTransport, HandoffOutcome},
             },

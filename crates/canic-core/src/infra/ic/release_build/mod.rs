@@ -4,7 +4,7 @@
 //! Does not own: release-build planning, artifact hashing, or install admission.
 //! Boundary: the leaf Canister supplies its compile-time value to the runtime lifecycle adapter.
 
-use crate::ids::{ReleaseBuildId, ReleaseBuildIdParseError};
+use canic_contracts::ids::{ReleaseBuildId, ReleaseBuildIdParseError};
 use thiserror::Error as ThisError;
 
 ///

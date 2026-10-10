@@ -6,9 +6,10 @@
 
 use super::*;
 use crate::{
-    cdk::types::Cycles, domain::auth::MAINNET_IC_ROOT_PUBLIC_KEY_RAW,
+    domain::auth::MAINNET_IC_ROOT_PUBLIC_KEY_RAW,
     model::auth::application_authorization::MAX_VERIFIED_APPLICATION_SCOPES,
 };
+use canic_contracts::cycles::Cycles;
 use std::{
     collections::BTreeMap,
     fmt::Write as _,

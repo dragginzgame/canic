@@ -9,32 +9,26 @@ use crate::{
     icp::IcpCli,
 };
 use candid::{
-    CandidType, Deserialize, Principal,
+    CandidType, Principal,
     types::{FuncMode, TypeInner},
 };
-use canic_core::{
-    dto::canister::{CanisterInspectionRequest, CanisterInspectionReserveResponse},
+use canic_contracts::{
+    dto::{
+        canister::{CanisterInspectionRequest, CanisterInspectionReserveResponse},
+        wire::projection::inspection_reserve::{
+            InspectionReserveRequest, InspectionReserveResponse,
+        },
+    },
     protocol,
 };
 use std::{fs, path::Path};
-
-/// Controller-owned observation request for the exact next inspection target.
-#[derive(CandidType)]
-pub enum InspectionReserveRequest {
-    InspectionReserve(CanisterInspectionRequest),
-}
-
-/// Indicative reserve evidence; this query cannot authorize a paid effect.
-#[derive(CandidType, Deserialize)]
-pub enum InspectionReserveResponse {
-    InspectionReserve(CanisterInspectionReserveResponse),
-}
 
 /// Query afresh when the exact bound contract exposes the reserve selector.
 ///
 /// Retained source evidence may expose only the protected inspection itself. Its
 /// absence of a quote is not evidence of sufficient reserve. A declared query's
 /// failure always propagates; it never permits bypassing preflight.
+
 pub fn preflight_inspection(
     icp: &IcpCli,
     candid_path: &Path,
@@ -235,11 +229,9 @@ mod tests {
             ..sample
         };
         let error = validate_inspection_reserve(root, target, shortfall.clone()).unwrap_err();
-        assert!(
-            !error.is_rejected_with(
-                canic_core::diagnostics::codes::PLATFORM_INSUFFICIENT_LIQUID_CYCLES
-            )
-        );
+        assert!(!error.is_rejected_with(
+            canic_contracts::diagnostics::codes::PLATFORM_INSUFFICIENT_LIQUID_CYCLES
+        ));
         let CanisterProtocolError::InspectionPreflightReserve(actual) = error else {
             panic!("preflight shortfall is distinct from SDK admission failure");
         };

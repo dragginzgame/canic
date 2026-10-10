@@ -8,7 +8,6 @@ use crate::{
     InternalError,
     cdk::types::Principal,
     dto::rpc::CreateCanisterParent,
-    ids::CanisterRole,
     model::{
         intent::{
             BeginPlacementReceiptBackedIntentInput, BeginReceiptBackedIntentResult,
@@ -29,6 +28,7 @@ use crate::{
         runtime::intent::ReceiptBackedIntentWorkflow,
     },
 };
+use canic_contracts::ids::CanisterRole;
 
 const ALLOCATION_RESULT_COMMAND: &str = "placement.allocate_child.result";
 

@@ -17,10 +17,6 @@ mod subtree_retirement;
 mod top_level_activation;
 mod top_level_allocation;
 
-use root_retirement::{
-    root_store_binding_finalization_hash, root_store_deletion_hash, root_store_reclamation_hash,
-};
-
 #[cfg(test)]
 use crate::ids::WasmStoreGcMode;
 use crate::{
@@ -85,17 +81,8 @@ use crate::{
     },
 };
 use candid::CandidType;
-use canic_core::{
-    cdk::types::{Cycles, Principal},
-    control_plane_support::{
-        config::schema::ComponentChildKind,
-        error::InternalError,
-        model::replay::ReplayCostGuardSettlement,
-        ops::{
-            component_runtime::ComponentRuntimeOps,
-            root_draining_reservation::FleetSubnetRootDrainingReservationOps,
-        },
-    },
+use canic_contracts::{
+    cycles::Cycles,
     dto::{
         component_provisioning::ComponentGroupDirectory,
         component_registry::{
@@ -109,10 +96,25 @@ use canic_core::{
     },
     ids::{
         CanisterRole, ComponentBinding, ComponentChildBinding, ComponentInstanceId,
-        ComponentSpecId, FleetSubnetRootBinding, FleetSubnetRootReleaseSet, IntentId,
-        ManagedCanisterBinding,
+        ComponentSpecId, FleetSubnetRootBinding, FleetSubnetRootReleaseSet, ManagedCanisterBinding,
     },
+};
+use canic_core::{
+    cdk::types::Principal,
+    control_plane_support::{
+        config::schema::ComponentChildKind,
+        error::InternalError,
+        model::replay::ReplayCostGuardSettlement,
+        ops::{
+            component_runtime::ComponentRuntimeOps,
+            root_draining_reservation::FleetSubnetRootDrainingReservationOps,
+        },
+    },
+    ids::IntentId,
     role_contract::ProtocolProfileDigest,
+};
+use root_retirement::{
+    root_store_binding_finalization_hash, root_store_deletion_hash, root_store_reclamation_hash,
 };
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -1237,7 +1239,7 @@ impl ComponentRegistryOps {
     }
 
     pub(crate) fn partition(
-        component: canic_core::ids::ComponentInstanceId,
+        component: canic_contracts::ids::ComponentInstanceId,
     ) -> Result<Option<ComponentRegistryPartitionView>, InternalError> {
         let Some(record) = RootComponentRegistryStore::partition(component) else {
             return Ok(None);
@@ -1372,7 +1374,7 @@ impl ComponentRegistryOps {
 
     pub(crate) fn component_for_principal(
         canister: Principal,
-    ) -> Option<canic_core::ids::ComponentInstanceId> {
+    ) -> Option<canic_contracts::ids::ComponentInstanceId> {
         RootComponentRegistryStore::component_for_principal(canister)
     }
 
@@ -2068,7 +2070,7 @@ const fn root_deletion_preparation_record_to_view(
 
 fn root_final_inventory_record_matches_response(
     record: &RootFleetSubnetFinalInventoryRecord,
-    response: &canic_core::dto::fleet_subnet_root::FleetSubnetRootFinalInventoryResponse,
+    response: &canic_contracts::dto::fleet_subnet_root::FleetSubnetRootFinalInventoryResponse,
 ) -> bool {
     [
         response.operation_id == record.operation_id,
@@ -6515,23 +6517,23 @@ const fn map_allocation_commit_error(error: RootComponentAllocationCommitError) 
         RootComponentAllocationCommitError::ComponentIdentityConflict
         | RootComponentAllocationCommitError::ComponentPrincipalConflict
         | RootComponentAllocationCommitError::ParentPrincipalConflict => {
-            InternalError::public(canic_core::diagnostics::codes::AUTHORITY_CONFLICT)
+            InternalError::public(canic_contracts::diagnostics::codes::AUTHORITY_CONFLICT)
         }
         RootComponentAllocationCommitError::ConflictingChildEntry
         | RootComponentAllocationCommitError::ConflictingPartition => {
-            InternalError::public(canic_core::diagnostics::codes::COLLECTION_CONFLICT)
+            InternalError::public(canic_contracts::diagnostics::codes::COLLECTION_CONFLICT)
         }
         RootComponentAllocationCommitError::ConflictingOperation => {
-            InternalError::public(canic_core::diagnostics::codes::REQUEST_CONFLICT)
+            InternalError::public(canic_contracts::diagnostics::codes::REQUEST_CONFLICT)
         }
         RootComponentAllocationCommitError::ConflictingState => {
-            InternalError::public(canic_core::diagnostics::codes::STATE_CONFLICT)
+            InternalError::public(canic_contracts::diagnostics::codes::STATE_CONFLICT)
         }
         RootComponentAllocationCommitError::MissingOperation => {
-            InternalError::public(canic_core::diagnostics::codes::REQUEST_UNAVAILABLE)
+            InternalError::public(canic_contracts::diagnostics::codes::REQUEST_UNAVAILABLE)
         }
         RootComponentAllocationCommitError::Uninitialized => {
-            InternalError::public(canic_core::diagnostics::codes::STATE_UNAVAILABLE)
+            InternalError::public(canic_contracts::diagnostics::codes::STATE_UNAVAILABLE)
         }
     }
 }

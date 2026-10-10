@@ -6,9 +6,6 @@
 #[cfg(test)]
 mod tests;
 
-#[cfg(test)]
-pub(in crate::fleet_ensure) use tests::qualify;
-
 use crate::fleet_ensure::{
     model::DesiredFleet,
     policy::startup_funding::{allowance, grant_demand, relay_quote},
@@ -19,6 +16,9 @@ use crate::fleet_ensure::{
 };
 use canic_core::bootstrap::compiled::ConfigModel;
 use std::collections::BTreeMap;
+
+#[cfg(test)]
+pub(in crate::fleet_ensure) use tests::qualify;
 
 /// Forecast a settled grant wave, preserving the Root recovery floor above outgoing transfers.
 pub(in crate::fleet_ensure) fn project(
@@ -117,7 +117,7 @@ fn checked_add(left: u128, right: u128) -> Result<u128, StartupDemandUnavailable
 fn edge(
     config: &ConfigModel,
     topology: &canic_core::control_plane_support::config::ComponentTopology,
-    release: canic_core::ids::ReleaseBuildId,
+    release: canic_contracts::ids::ReleaseBuildId,
     entry: &crate::fleet_ensure::view::startup_funding::StartupChildFundingUsage,
     outgoing: u128,
 ) -> Result<StartupRecursiveChildDemand, StartupDemandUnavailable> {

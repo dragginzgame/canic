@@ -4,7 +4,6 @@ use crate::{
     },
     bootstrap,
     config::RoleRuntimeAuthority,
-    ids::CanisterRole,
     lifecycle::{LifecyclePhase, lifecycle_trap, retryable_nonroot_bootstrap_error},
     log,
     log::Topic,
@@ -12,8 +11,9 @@ use crate::{
         bootstrap::{BootstrapPhaseLabel, BootstrapStatusOps},
         env::EnvOps,
     },
-    workflow::{self},
+    workflow,
 };
+use canic_contracts::ids::CanisterRole;
 use std::time::Duration;
 
 const MAX_NONROOT_BOOTSTRAP_ATTEMPTS: u32 = 64;

@@ -1,36 +1,51 @@
-use std::{
-    collections::BTreeMap,
-    path::{Path, PathBuf},
-    sync::{Arc, Mutex, OnceLock},
-};
-
-use candid::{CandidType, Deserialize, Principal, encode_one};
-use canic::{
-    Error,
-    dto::{
-        fleet_activation::{
-            FleetActivationPhase, FleetActivationResumeRequest, FleetActivationStatusResponse,
-        },
-        fleet_subnet_root::{
-            FleetSubnetRootAuthority, FleetSubnetRootInitArgs, FleetSubnetWasmStoreAdoptionRequest,
-            FleetSubnetWasmStoreInitArgs,
-        },
-        role::{OperationReceipt, OperationStatusRequest},
-        runtime::{CanicReadinessStatus, ReadinessStatus},
+use super::{
+    artifacts::{
+        CanicWasmBuildProfile, INTERNAL_TEST_RELEASE_BUILD_ID, build_internal_test_wasm_canisters,
     },
-    ids::{
-        CanisterRole, ComponentSpecAdmission, CyclesFundingBudget, FleetCoordinatorBinding,
-        FleetRegistryAuthority, FleetSubnetCanisterPoolConfig, FleetSubnetRootBinding,
-        FleetSubnetRootLimits, FleetSubnetRootReleaseSet, FleetSubnetWasmStoreActivationAuthority,
-        FleetSubnetWasmStoreAuthority, ReleaseSetDigest, SubnetId,
-    },
-    protocol,
+    startup::start_pocket_ic,
 };
-use canic_control_plane::dto::root::RootOperationStatusResponse;
-use canic_core::{
-    cdk::{types::Cycles, utils::hash::wasm_hash},
+use candid::Principal;
+use candid::encode_one;
+use canic::Error;
+use canic::dto::fleet_activation::FleetActivationPhase;
+use canic::dto::fleet_activation::FleetActivationResumeRequest;
+use canic::dto::fleet_activation::FleetActivationStatusResponse;
+use canic::dto::fleet_subnet_root::FleetSubnetRootAuthority;
+use canic::dto::fleet_subnet_root::FleetSubnetRootInitArgs;
+use canic::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionRequest;
+use canic::dto::fleet_subnet_root::FleetSubnetWasmStoreInitArgs;
+use canic::dto::role::OperationStatusRequest;
+use canic::dto::runtime::CanicReadinessStatus;
+use canic::dto::runtime::ReadinessStatus;
+use canic::ids::CanisterRole;
+use canic::ids::ComponentSpecAdmission;
+use canic::ids::CyclesFundingBudget;
+use canic::ids::FleetCoordinatorBinding;
+use canic::ids::FleetRegistryAuthority;
+use canic::ids::FleetSubnetCanisterPoolConfig;
+use canic::ids::FleetSubnetRootBinding;
+use canic::ids::FleetSubnetRootLimits;
+use canic::ids::FleetSubnetRootReleaseSet;
+use canic::ids::FleetSubnetWasmStoreActivationAuthority;
+use canic::ids::FleetSubnetWasmStoreAuthority;
+use canic::ids::ReleaseSetDigest;
+use canic::ids::SubnetId;
+use canic::protocol;
+use canic_contracts::dto::fleet_coordinator::CoordinatorOperationReadRequest as StoreStatusRequestFragment;
+use canic_contracts::dto::role::OperationAcceptedResponse as RootCommandResponseFragment;
+use canic_contracts::dto::wire::projection::fixture_canic::CanisterStatusRequestFragment;
+use canic_contracts::dto::wire::projection::fixture_canic::CanisterStatusResponseFragment;
+use canic_contracts::dto::wire::projection::fixture_canic::RootCommandFragment;
+use canic_contracts::dto::wire::projection::fixture_canic::RootStatusRequestFragment;
+use canic_contracts::dto::wire::projection::fixture_canic::RootStatusResponseFragment;
+use canic_contracts::dto::wire::projection::store_activation::StoreOperationStatusFragment;
+use canic_contracts::dto::wire::projection::store_activation::StoreStatusResponseFragment;
+use canic_contracts::{
+    cycles::Cycles,
+    dto::root::RootOperationStatusResponse,
     ids::{AppId, CanonicalNetworkId, FleetBinding, FleetId, FleetKey, ReleaseBuildId},
 };
+use canic_core::cdk::utils::hash::wasm_hash;
 use canic_host::release_set::AppConfigSnapshot;
 use ic_testkit::{
     artifacts::{test_target_dir, workspace_root_for},
@@ -40,71 +55,14 @@ use ic_testkit::{
         PocketIcDiagnosticsExt, StandaloneCanisterFixture,
     },
 };
-
-use super::artifacts::{
-    CanicWasmBuildProfile, INTERNAL_TEST_RELEASE_BUILD_ID, build_internal_test_wasm_canisters,
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex, OnceLock},
 };
-use super::startup::start_pocket_ic;
 
 const INSTALL_CYCLES: u128 = 500_000_000_000_000;
 const STANDALONE_READY_TICK_LIMIT: usize = 60;
-
-#[derive(CandidType)]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "the test decoder mirrors the direct Root command wire without a parallel DTO"
-)]
-enum RootCommandFragment {
-    AdoptStore(FleetSubnetWasmStoreAdoptionRequest),
-    PrepareFleetActivation,
-    ResumeFleetActivation(FleetActivationResumeRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum RootCommandResponseFragment {
-    OperationAccepted(OperationReceipt),
-}
-
-#[derive(CandidType)]
-enum RootStatusRequestFragment {
-    Operation(OperationStatusRequest),
-    Readiness,
-}
-
-#[derive(CandidType, Deserialize)]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "the test decoder mirrors the direct Root status wire without a parallel DTO"
-)]
-enum RootStatusResponseFragment {
-    Operation(RootOperationStatusResponse),
-    Readiness(CanicReadinessStatus),
-}
-
-#[derive(CandidType)]
-enum CanisterStatusRequestFragment {
-    Readiness,
-}
-
-#[derive(CandidType, Deserialize)]
-enum CanisterStatusResponseFragment {
-    Readiness(CanicReadinessStatus),
-}
-
-#[derive(CandidType)]
-enum StoreStatusRequestFragment {
-    Operation(OperationStatusRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum StoreStatusResponseFragment {
-    Operation(StoreOperationStatusFragment),
-}
-
-#[derive(CandidType, Deserialize)]
-enum StoreOperationStatusFragment {
-    FleetActivation(FleetActivationStatusResponse),
-}
 
 fn root_command(
     pic: &PocketIc,
@@ -185,15 +143,17 @@ pub(super) fn create_and_install_pre_adoption_root(
     pic.install_canister(
         wasm_store,
         wasm_store_wasm,
-        encode_one(store_args)
-            .map_err(|_| Error::from_registered(canic_core::diagnostics::codes::STATE_FAILED))?,
+        encode_one(store_args).map_err(|_| {
+            Error::from_registered(canic_contracts::diagnostics::codes::STATE_FAILED)
+        })?,
         Some(installation_controller),
     );
     pic.install_canister(
         root_id,
         root_wasm,
-        encode_one(&root_args)
-            .map_err(|_| Error::from_registered(canic_core::diagnostics::codes::STATE_FAILED))?,
+        encode_one(&root_args).map_err(|_| {
+            Error::from_registered(canic_contracts::diagnostics::codes::STATE_FAILED)
+        })?,
         None,
     );
     Ok(PreparedManagedRoot {
@@ -703,7 +663,7 @@ pub(super) fn install_root_args_with_release_set_digest_and_coordinator(
     input: ManagedRootInstallInput<'_>,
 ) -> Result<Vec<u8>, Error> {
     encode_one(managed_test_root_init_args(input)?)
-        .map_err(|_| Error::from_registered(canic_core::diagnostics::codes::STATE_FAILED))
+        .map_err(|_| Error::from_registered(canic_contracts::diagnostics::codes::STATE_FAILED))
 }
 
 /// Return the exact cached bytes used by standalone test installs and upgrades.
@@ -823,7 +783,7 @@ fn managed_test_root_init_args(
     } = input;
     let identity = managed_test_init_identity();
     let config = AppConfigSnapshot::load(config_path)
-        .map_err(|_| Error::from_registered(canic_core::diagnostics::codes::STATE_FAILED))?;
+        .map_err(|_| Error::from_registered(canic_contracts::diagnostics::codes::STATE_FAILED))?;
     let topology = config.component_topology();
     let component_admissions = topology
         .component_specs
@@ -837,7 +797,7 @@ fn managed_test_root_init_args(
     let component_topology_digest = topology
         .project_for_admissions(&component_admissions)
         .and_then(|projection| projection.digest())
-        .map_err(|_| Error::from_registered(canic_core::diagnostics::codes::STATE_FAILED))?;
+        .map_err(|_| Error::from_registered(canic_contracts::diagnostics::codes::STATE_FAILED))?;
     let expected_module_hash = <[u8; 32]>::try_from(wasm_hash(root_wasm))
         .expect("SHA-256 helper must return exactly 32 bytes");
     let expected_wasm_store_module_hash = <[u8; 32]>::try_from(wasm_hash(wasm_store_wasm))
@@ -936,27 +896,23 @@ pub(super) trait CoordinatorRead: candid::CandidType {
     feature = "pocketic-fixtures",
     any(not(test), feature = "governed-pocketic-tests")
 ))]
-impl CoordinatorRead
-    for canic_control_plane::dto::fleet_coordinator::CoordinatorObservabilityRequest
-{
-    type Response = canic_control_plane::dto::fleet_coordinator::CoordinatorObservabilityResponse;
+impl CoordinatorRead for canic_contracts::dto::fleet_coordinator::CoordinatorObservabilityRequest {
+    type Response = canic_contracts::dto::fleet_coordinator::CoordinatorObservabilityResponse;
     const METHOD: &'static str = canic::protocol::CANIC_OBSERVABILITY;
 }
 #[cfg(all(
     feature = "pocketic-fixtures",
     any(not(test), feature = "governed-pocketic-tests")
 ))]
-impl CoordinatorRead for canic_control_plane::dto::fleet_coordinator::CoordinatorRegistryRequest {
-    type Response = canic_control_plane::dto::fleet_coordinator::CoordinatorRegistryResponse;
+impl CoordinatorRead for canic_contracts::dto::fleet_coordinator::CoordinatorRegistryRequest {
+    type Response = canic_contracts::dto::fleet_coordinator::CoordinatorRegistryResponse;
     const METHOD: &'static str = canic::protocol::CANIC_COORDINATOR_REGISTRY;
 }
 #[cfg(all(
     feature = "pocketic-fixtures",
     any(not(test), feature = "governed-pocketic-tests")
 ))]
-impl CoordinatorRead
-    for canic_control_plane::dto::fleet_coordinator::CoordinatorOperationReadRequest
-{
-    type Response = canic_control_plane::dto::fleet_coordinator::CoordinatorOperationReadResponse;
+impl CoordinatorRead for canic_contracts::dto::fleet_coordinator::CoordinatorOperationReadRequest {
+    type Response = canic_contracts::dto::fleet_coordinator::CoordinatorOperationReadResponse;
     const METHOD: &'static str = canic::protocol::CANIC_COORDINATOR_OPERATION_STATUS;
 }

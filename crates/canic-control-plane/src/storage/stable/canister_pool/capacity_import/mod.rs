@@ -1,11 +1,12 @@
 //! Durable reservation and effect evidence owned by the existing pool singleton.
 
-use canic_core::dto::pool_import::{
+use canic_contracts::dto::pool_import::{
     PoolImportReservation, PoolImportRootReceipt, PoolImportSourceReceipt,
 };
 use serde::{Deserialize, Serialize};
 
 /// Exact fresh-install hold retained until registered Root capacity is published.
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PoolImportBootstrapRecord {

@@ -15,9 +15,9 @@ use crate::{
         },
     },
     dto::auth::{DelegatedRoleGrant, DelegatedTokenPrepareRequest, RoleAttestationRequest},
-    ids::{CanisterRole, ManagedCanisterBinding, SubnetId},
     ops::config::ConfigOps,
 };
+use canic_contracts::ids::{CanisterRole, ManagedCanisterBinding, SubnetId};
 
 pub(super) fn validate_role_attestation_request(
     caller: Principal,
@@ -142,7 +142,7 @@ fn map_token_prepare_policy_error(err: AuthPolicyError) -> InternalError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ids::{
+    use canic_contracts::ids::{
         AppId, CanisterRole, CanonicalNetworkId, ComponentBinding, ComponentChildBinding,
         ComponentInstanceId, FleetBinding, FleetCoordinatorBinding, FleetId, FleetKey,
         FleetRegistryAuthority, ManagedCanisterBinding, SubnetId,

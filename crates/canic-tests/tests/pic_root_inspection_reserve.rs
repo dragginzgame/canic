@@ -1,37 +1,17 @@
 //! Qualify outbound inspection admission through the maintained Root endpoint.
 //! Only the disposable fixture's freezing threshold changes; no funding policy changes.
 
-use candid::{CandidType, Deserialize, Nat, Principal, decode_one, encode_one};
+use candid::{Nat, Principal, decode_one, encode_one};
 use canic::{
     Error,
-    dto::canister::{
-        CanisterInspectionRequest, CanisterInspectionReserveResponse, CanisterStatusResponse,
-    },
+    dto::canister::{CanisterInspectionRequest, CanisterInspectionReserveResponse},
 };
+use canic_contracts::dto::wire::projection::capacity_management::RootRequest as RootCommand;
+use canic_contracts::dto::wire::projection::capacity_management::RootResponse;
+use canic_contracts::dto::wire::projection::fixture_root_inspection_reserve::ReserveRequest;
+use canic_contracts::dto::wire::projection::inspection_reserve::InspectionReserveResponse as ReserveResponse;
 use canic_testing_internal::pic::{CanicWasmBuildProfile, install_audit_root_probe};
 use ic_testkit::pic::{ErrorCode, PocketIc, RejectResponse};
-
-#[derive(CandidType)]
-enum RootCommand {
-    InspectCanister(CanisterInspectionRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum RootResponse {
-    InspectCanister(Box<CanisterStatusResponse>),
-    InspectionReserveRequired(CanisterInspectionReserveResponse),
-}
-
-#[derive(CandidType)]
-enum ReserveRequest {
-    CycleBalance,
-    InspectionReserve(CanisterInspectionRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum ReserveResponse {
-    InspectionReserve(CanisterInspectionReserveResponse),
-}
 
 #[test]
 fn positive_native_balance_can_fail_root_outbound_inspection_admission() {

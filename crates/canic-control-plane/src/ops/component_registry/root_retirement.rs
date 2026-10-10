@@ -46,9 +46,7 @@ use crate::{
     },
 };
 use candid::CandidType;
-use canic_core::{
-    cdk::types::Principal,
-    control_plane_support::error::InternalError,
+use canic_contracts::{
     dto::{
         fleet_registry::{
             FleetRegistryVersion, FleetSubnetRootDrainingReservationResponse,
@@ -58,6 +56,7 @@ use canic_core::{
     },
     ids::{ComponentTopologyDigest, FleetSubnetRootReleaseSet, SubnetId},
 };
+use canic_core::{cdk::types::Principal, control_plane_support::error::InternalError};
 
 #[derive(CandidType)]
 struct RootStoreFinalCatalogHashAuthority<'a> {
@@ -1461,7 +1460,8 @@ impl ComponentRegistryOps {
         balance_before: u128,
         fee: u128,
         created_at_time: u64,
-    ) -> Result<canic_core::dto::fleet_registry::FleetLedgerTransferIntent, InternalError> {
+    ) -> Result<canic_contracts::dto::fleet_registry::FleetLedgerTransferIntent, InternalError>
+    {
         let current =
             RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let draining = current
@@ -1475,7 +1475,7 @@ impl ComponentRegistryOps {
             .root_deletion_preparation_intent
             .clone()
             .ok_or_else(InternalError::unavailable)?;
-        let transfer = canic_core::dto::fleet_registry::FleetLedgerTransferIntent {
+        let transfer = canic_contracts::dto::fleet_registry::FleetLedgerTransferIntent {
             source: draining.fleet_subnet_root,
             destination: record.coordinator,
             balance_before,
@@ -1517,7 +1517,7 @@ impl ComponentRegistryOps {
             .ledger_transfer
             .clone()
             .ok_or_else(InternalError::unavailable)?;
-        let receipt = canic_core::dto::fleet_registry::FleetLedgerTransferReceipt {
+        let receipt = canic_contracts::dto::fleet_registry::FleetLedgerTransferReceipt {
             intent,
             block_index,
         };

@@ -1,6 +1,15 @@
+use super::{RootBaselineSpec, progress, progress_elapsed};
+use crate::pic::{
+    artifacts::{
+        INTERNAL_TEST_RELEASE_BUILD_ID, internal_test_artifact_maintenance_interval,
+        internal_test_artifact_prune_policy, report_artifact_cache_maintenance,
+        retained_artifact_path, run_icp_all_with_env, with_canonical_root_cargo_inputs,
+    },
+    progress as test_progress,
+};
 use candid::Principal;
 use canic::{Error, ids::CanisterRole, protocol};
-use canic_control_plane::{
+use canic_contracts::{
     dto::template::{
         StoreCommand, StoreCommandResponse, TemplateChunkInput, TemplateChunkSetPrepareInput,
         TemplateManifestInput,
@@ -24,23 +33,13 @@ use std::{
     path::PathBuf,
 };
 
-use crate::pic::{
-    artifacts::{
-        INTERNAL_TEST_RELEASE_BUILD_ID, internal_test_artifact_maintenance_interval,
-        internal_test_artifact_prune_policy, report_artifact_cache_maintenance,
-        retained_artifact_path, run_icp_all_with_env, with_canonical_root_cargo_inputs,
-    },
-    progress as test_progress,
-};
-
-use super::{RootBaselineSpec, progress, progress_elapsed};
-
 /// Build or transactionally reuse the complete local `.icp` root artifact set.
 ///
 /// # Panics
 ///
 /// Panics if exact inputs cannot be captured, the external build fails, inputs
 /// change during the build, or any required output cannot be committed.
+
 #[must_use]
 pub fn ensure_root_release_artifacts_built(spec: &RootBaselineSpec<'_>) -> ArtifactCacheRecord {
     progress(spec, "acquiring local ICP artifacts for root baseline");

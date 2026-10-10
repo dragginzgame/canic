@@ -47,7 +47,8 @@ pub fn begin(directory: &Path, expected: &str) -> Result<bool, LocalFleetError> 
         session_id: expected.into(),
         complete: false,
     };
-    durable::write_bytes(&directory.join("reset.json"), &serde_json::to_vec(&intent)?)?;
+    durable::write_bytes(&directory.join("reset.json"), &serde_json::to_vec(&intent)?)
+        .map_err(crate::publication::ops::io_error)?;
     Ok(true)
 }
 
@@ -87,6 +88,7 @@ pub fn finish(directory: &Path, expected: &str) -> Result<(), LocalFleetError> {
         session_id: expected.into(),
         complete: true,
     };
-    durable::write_bytes(&directory.join("reset.json"), &serde_json::to_vec(&record)?)?;
+    durable::write_bytes(&directory.join("reset.json"), &serde_json::to_vec(&record)?)
+        .map_err(crate::publication::ops::io_error)?;
     Ok(())
 }

@@ -5,12 +5,11 @@
 //! Boundary: host compilation and Store admission use the same wire-envelope and hash rules.
 
 use crate::dto::template::StoreCommand;
-use canic_core::{
-    dto::fixture_provisioning::{FixtureDescriptor, FixtureStoreError},
-    ingress::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES,
-};
+use canic_contracts::dto::fixture_provisioning::{FixtureDescriptor, FixtureStoreError};
+use canic_core::ingress::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES;
 
 /// Content hashing excludes all release and target identities to avoid circular binding.
+
 pub fn content_id(descriptor: &FixtureDescriptor) -> Result<[u8; 32], FixtureStoreError> {
     let content_id = canic_core::api::fixture_content::FixtureContentApi::content_id(descriptor)?;
     let encoded = candid::encode_one(StoreCommand::PrepareFixture(descriptor.clone()))

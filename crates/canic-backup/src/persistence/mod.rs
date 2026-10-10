@@ -4,7 +4,6 @@
 //! Does not own: manifest construction, journal state transitions, or backup execution.
 //! Boundary: validates data before filesystem writes and before resume integrity checks.
 
-mod artifact_commit;
 mod command_lifetime_lock;
 mod error;
 mod file_lock;
@@ -14,15 +13,10 @@ mod json;
 mod layout;
 mod layout_lifetime;
 
-pub(crate) use artifact_commit::commit_artifact_directory;
-#[cfg(all(
-    test,
-    any(target_os = "linux", target_os = "android", target_vendor = "apple")
-))]
-pub(crate) use artifact_commit::{ArtifactCommitBarrier, commit_artifact_directory_at_barriers};
 pub use command_lifetime_lock::CommandLifetimeHandle;
 pub(crate) use command_lifetime_lock::{CommandLifetimeLock, CommandLifetimeLockError};
 pub use error::PersistenceError;
+pub(crate) use ic_backup::ops::persistence::commit_artifact_directory;
 pub(crate) use integrity::verify_durable_artifact;
 pub use integrity::{
     ArtifactIntegrityReport, BackupExecutionIntegrityReport, BackupIntegrityReport,

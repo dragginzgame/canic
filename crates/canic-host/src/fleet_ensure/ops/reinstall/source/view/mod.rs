@@ -6,15 +6,16 @@
 
 use crate::fleet_ensure::{json, ops::EnsureStateError};
 use candid::Principal;
-use canic_core::{
-    cdk::utils::hash::sha256_hex,
+use canic_contracts::{
     dto::root_store::{RootStoreBootstrapRequest, RootStoreCatalogEntry},
     ids::FleetSubnetRootReleaseSet,
 };
+use canic_core::cdk::utils::hash::sha256_hex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// Verify only the completed receipt shape that has no fixture declaration.
+
 pub(super) fn completed_bootstrap_hash(action: &Value) -> Result<Option<String>, EnsureStateError> {
     if action.get("kind").and_then(Value::as_str) != Some("fleet_protocol")
         || action.pointer("/action/kind").and_then(Value::as_str) != Some("bootstrap_store")

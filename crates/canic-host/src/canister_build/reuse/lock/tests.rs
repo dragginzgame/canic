@@ -10,7 +10,7 @@ pub(super) fn context(root: PathBuf) -> WorkspaceBuildContext {
         role: "root".into(),
         profile: crate::canister_build::CanisterBuildProfile::Fast,
         environment: "local".into(),
-        build_network: canic_core::ids::BuildNetwork::Local,
+        build_network: canic_contracts::ids::BuildNetwork::Local,
         workspace_root: root.clone(),
         icp_root: root.clone(),
         config_path: root.join("canic.toml"),

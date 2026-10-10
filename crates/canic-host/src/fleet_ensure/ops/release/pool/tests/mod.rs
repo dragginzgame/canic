@@ -8,9 +8,9 @@ use crate::fleet_ensure::{
     },
     workflow::release::assess_pools,
 };
-use canic_control_plane::dto::root::RootPoolBootstrapReleaseEvidence;
-use canic_core::{
-    cdk::types::Cycles,
+use candid::CandidType;
+use canic_contracts::{
+    cycles::Cycles,
     dto::{
         pool::{
             CanisterPoolCreation, CanisterPoolCreationFailure, CanisterPoolCreationProgress,
@@ -20,6 +20,7 @@ use canic_core::{
             PoolImportPhase, PoolImportReservation, PoolImportSource, PoolImportSourceProgress,
             PoolImportStatus,
         },
+        root::RootPoolBootstrapReleaseEvidence,
     },
 };
 
@@ -220,7 +221,7 @@ fn empty_obligations_and_typed_refusal_are_distinct() {
         status
     );
     let rejection =
-        CanicError::from_registered(canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE);
+        CanicError::from_registered(canic_contracts::diagnostics::codes::AUTHORITY_UNAVAILABLE);
     let bytes = refused(rejection);
     assert!(matches!(decode(root, &bytes, &mut remaining),
         Err(ReleasePoolError::Rejected { root: target, rejection: observed })
@@ -243,7 +244,7 @@ fn assessment_keeps_wire_evidence_and_every_custody_candidate() {
     let import = status.capacity_import.as_mut().unwrap();
     import.reservation.sources[0].canister_id = imported;
     import.progress = vec![PoolImportSourceProgress::Ready(
-        canic_core::dto::pool_import::PoolImportSourceReceipt {
+        canic_contracts::dto::pool_import::PoolImportSourceReceipt {
             root_sender_canister_version: 1,
             canister_id: receipted,
             canister_version: 2,

@@ -4,7 +4,8 @@
 //! Does not own: encoding, authority enrollment, verification or storage.
 //! Boundary: preserve exact identity bytes, grant order and proof material.
 
-use crate::{dto::auth, ids::CanisterRole, ops::auth::delegated::canonical::CanonicalAuthError};
+use crate::{dto::auth, ops::auth::delegated::canonical::CanonicalAuthError};
+use canic_contracts::ids::CanisterRole;
 use ic_auth_protocol_types as protocol;
 
 pub(super) fn role(role: &CanisterRole) -> Result<protocol::AuthRole, CanonicalAuthError> {

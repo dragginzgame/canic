@@ -6,6 +6,7 @@
 
 use crate::ops::fleet_coordinator::FleetCoordinatorOps;
 use candid::Principal;
+use canic_contracts::dto::fleet_registry::{FleetRetirementRequest, FleetRetirementStatus};
 use canic_core::{
     control_plane_support::{
         error::InternalError,
@@ -19,7 +20,6 @@ use canic_core::{
         },
         workflow::cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error},
     },
-    dto::fleet_registry::{FleetRetirementRequest, FleetRetirementStatus},
     replay_policy::CostClass,
 };
 

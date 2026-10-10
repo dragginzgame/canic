@@ -7,11 +7,7 @@
 use crate::view::provisioning_release::{
     RootComponentOperationEntryView, RootComponentOperationReleasePageView,
 };
-use canic_core::{
-    cdk::structures::{
-        DefaultMemoryImpl, Storable, btreemap::BTreeMap as StableBtreeMap, cell::Cell,
-        memory::RuntimeMemory, storable::Bound,
-    },
+use canic_contracts::{
     dto::{
         component_deployment::{ComponentDeploymentLimits, ComponentDeploymentPurpose},
         component_provisioning::{
@@ -26,11 +22,13 @@ use canic_core::{
         ComponentGroupMemberPath, ComponentGroupPlacementId, ComponentGroupSpecId,
         ComponentInstanceId, ComponentSpecId,
     },
-    impl_storable_bounded,
-    role_contract::allocation::memory::control_plane::{
-        ROOT_COMPONENT_PROVISIONING_OPERATIONS_ID, ROOT_COMPONENT_PROVISIONING_PLACEMENTS_ID,
-        ROOT_COMPONENT_PROVISIONING_STATE_ID,
+};
+use canic_core::{
+    cdk::structures::{
+        DefaultMemoryImpl, Storable, btreemap::BTreeMap as StableBtreeMap, cell::Cell,
+        memory::RuntimeMemory, storable::Bound,
     },
+    impl_storable_bounded,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -47,10 +45,6 @@ const ROOT_COMPONENT_PROVISIONING_OPERATION_KEY_MAX_BYTES: u32 = 96;
 // two maximum-width operation keys.
 const ROOT_COMPONENT_PROVISIONING_PLACEMENT_RECORD_MAX_BYTES: u32 = 156;
 
-struct RootComponentProvisioningOperations;
-struct RootComponentProvisioningPlacements;
-struct RootComponentProvisioningState;
-
 std::thread_local! {
     static ROOT_COMPONENT_PROVISIONING_OPERATIONS: RefCell<
         StableBtreeMap<
@@ -61,10 +55,7 @@ std::thread_local! {
     > = RefCell::new(StableBtreeMap::init(
         canic_core::ic_memory_key!(
             authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-            key = "canic.control_plane.root.component_provisioning.operations.v1",
-            ty = RootComponentProvisioningOperations,
-            id = ROOT_COMPONENT_PROVISIONING_OPERATIONS_ID
-        ),
+            key = "canic.control_plane.root.component_provisioning.operations.v1"),
     ));
 }
 
@@ -78,10 +69,7 @@ std::thread_local! {
     > = RefCell::new(StableBtreeMap::init(
         canic_core::ic_memory_key!(
             authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-            key = "canic.control_plane.root.component_provisioning.placements.v1",
-            ty = RootComponentProvisioningPlacements,
-            id = ROOT_COMPONENT_PROVISIONING_PLACEMENTS_ID
-        ),
+            key = "canic.control_plane.root.component_provisioning.placements.v1"),
     ));
 }
 
@@ -91,10 +79,7 @@ std::thread_local! {
     > = RefCell::new(Cell::init(
         canic_core::ic_memory_key!(
             authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-            key = "canic.control_plane.root.component_provisioning.state.v1",
-            ty = RootComponentProvisioningState,
-            id = ROOT_COMPONENT_PROVISIONING_STATE_ID
-        ),
+            key = "canic.control_plane.root.component_provisioning.state.v1"),
         RootComponentProvisioningStateRecord::default(),
     ));
 }
@@ -185,11 +170,11 @@ pub struct RootComponentProvisioningRecord {
 /// One bounded failure retained with the provisioning operation across interruption.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentProvisioningFailureRecord {
-    pub stage: canic_core::dto::component_provisioning::ProvisioningFailureStage,
+    pub stage: canic_contracts::dto::component_provisioning::ProvisioningFailureStage,
     pub target: candid::Principal,
     pub operation_id: [u8; 32],
     pub diagnostic_code: u16,
-    pub retry_category: canic_core::dto::component_provisioning::ProvisioningRetryCategory,
+    pub retry_category: canic_contracts::dto::component_provisioning::ProvisioningRetryCategory,
     pub failed_at_ns: u64,
     pub consecutive_failures: u32,
     pub retry_at_ns: Option<u64>,

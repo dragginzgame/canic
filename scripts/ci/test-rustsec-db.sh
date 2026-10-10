@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Shared companions: scripts/ci/prepare-rustsec-db.sh
 set -euo pipefail
 root="$0"
 [[ "$root" == /* ]] || root="$PWD/$root"
@@ -7,10 +8,14 @@ root="${root%/.}"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/rustsec-db-test.XXXXXX")"
 # Local source selection uses physical paths, including macOS /var aliases.
 fixture="$(cd "$fixture" && pwd -P)"
+fixture_complete=false
 finish() {
     local status=$?
+    # Bash 3.2 may report zero after nounset before assertions finish.
+    [[ "$fixture_complete" == true || "$status" != 0 ]] || status=1
     if [[ "$status" == 0 ]]; then rm -rf "$fixture";
     else echo "RustSec preparation fixtures retained: $fixture" >&2; fi
+    exit "$status"
 }
 trap finish EXIT
 checker="$root/scripts/ci/prepare-rustsec-db.sh"
@@ -131,3 +136,4 @@ perl -MFile::Find -e 'find(sub { -f $_ && (stat($_))[3] != 1 and die "shared obj
 mv "$fixture/borrowed source" "$fixture/source removed"
 git -C "$fixture/isolated result/db" cat-file -e "$selected^{commit}"
 echo 'RustSec source selection, failure retention, network policy and local isolation tests passed'
+fixture_complete=true

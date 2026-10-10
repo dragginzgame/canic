@@ -19,9 +19,11 @@ use crate::{
             },
             recording::PlacementIndexMetricEvent as MetricEvent,
         },
-        storage::intent::ReceiptBackedIntentOps,
-        storage::placement::index::{
-            PlacementIndexClaimResult, PlacementIndexPendingClaim, PlacementIndexRegistryOps,
+        storage::{
+            intent::ReceiptBackedIntentOps,
+            placement::index::{
+                PlacementIndexClaimResult, PlacementIndexPendingClaim, PlacementIndexRegistryOps,
+            },
         },
     },
     workflow::placement::{

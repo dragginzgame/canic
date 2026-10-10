@@ -1,6 +1,6 @@
 # Stable-memory layout
 
-Canic uses ic-memory 0.25 and a single MemoryManager per canister.
+Canic uses ic-memory 0.35 and a single MemoryManager per canister.
 The default allocation bucket is **16 Wasm pages (1 MiB)**. A bucket belongs to
 one virtual memory; it cannot be shared between IDs. The manager's own metadata
 page is separate. This setting reduces the minimum physical allocation of a
@@ -8,7 +8,7 @@ small populated store from 8 MiB to 1 MiB.
 
 ## Bootstrap and store access
 
-Canic’s declaration and range macros delegate registration to ic-memory. Static
+Canic’s key-only declaration macros delegate registration to ic-memory. Static
 initialization queues registration hooks; ic-memory validates the declarations
 when sealing the registry for bootstrap. Invalid registrations return a bootstrap
 error before allocation authority is published. Canic retains its authority
@@ -22,14 +22,14 @@ pages. The allocation report includes declared but unopened slots.
 
 Lifecycle owners restore the state they need synchronously before invoking a
 configured lifecycle participant or scheduling deferred work. A lazy store
-still checks bootstrap readiness and its exact committed stable key and ID.
+still checks bootstrap readiness and its exact committed stable key.
 Application storage must follow the same bootstrap-before-access ordering.
 Early default-runtime opens return typed `RuntimeOpenError::NotBootstrapped`
 without constructing a manager or selecting its bucket size. Committed ID
 resolution and authority verification also observe only an existing runtime.
 Consumers can use `memory_id` / `default_memory_manager_memory_id` to resolve
 committed keys and `verify_authority` / `verify_default_memory_manager_authority`
-to check their fixed or logical requirements without replaying host admission.
+to check their key-only requirements without replaying host admission.
 
 ### Native composed tests
 
@@ -100,7 +100,7 @@ reopen and interruption recovery retain the same manager geometry.
 The 1 MiB default balances the many small framework stores against manager
 capacity. It is not claimed to be globally optimal for every application's data
 or workload. Application-owned stores share the same manager geometry;
-Canic does not change their schemas, IDs or ownership.
+Canic does not change their schemas or permanent key identities.
 
 Consumers composed into the same canister must use the same ic-memory package
 identity. Qualify consumer-specific composition in the consuming application's
@@ -163,19 +163,44 @@ it does not reproduce Toko's Generator, IcyDB composition or the native
 receipt-backed store at memory ID 45. Matching package identities remains a
 prerequisite for a composed artifact, not a sufficient qualification result.
 
-The 0.14 update retains fixed-ID declarations and bucket selection. It adds
-upstream limits to ledger recovery (including 16 MiB logical payloads, depth 32
-and bounded histories); out-of-contract state rejects. Canic retains its fixed
-framework declarations while applications may request logical placement within
-explicit grants and opt into composed admission. Release transitions retain
-Canic's reinstall-only policy; there is no automatic migration.
+## Host allocation pool
+
+The artifact owner selects one `MemoryAllocationPool`, including Canic's
+`canic-core` / `canic.core.` and `canic-control-plane` / `canic.control_plane.`
+grants. Every additional linked component needs an explicit disjoint namespace
+grant. A declaration contributes only its owner and permanent key; it cannot
+choose a physical ID. Framework-only artifacts use the framework grants.
+
+Select the final application pool once, before bootstrap:
+
+```rust
+canic::memory::memory_allocation_pool!(
+    authorities = [("app", "app."), ("jobs", "jobs.")],
+    exclusions = [],
+);
+```
+
+All owners share eligible IDs 10 through 254. Governance IDs 0 through 9 are
+excluded. Additional exclusions protect actual unmanaged physical users, not
+component partitions. Populated unmanaged IDs in the pool refuse bootstrap
+before commitment. Omitted, reserved and retired ledger keys retain their IDs;
+removing a component never frees its slots. Current grants determine diagnostic
+owner labels, which are not durable allocation identity.
+
+Protected allocation observations expose `pool_eligible`, independently of a
+current or retained ledger binding. Protected ledger observations include the
+selected `allocation_pool` grants and exclusions. Static role manifests use
+`memory_key`; public runtime state summaries resolve their numeric `memory_id`
+from the current protected ledger. A pool cannot change after selection or replace
+an established runtime binding. Release transitions remain clean reinstall;
+these retained bindings qualify same-release recovery only.
 
 ## Composed consumer admission
 
 A consuming application can register one composed admission callback for the
 entire artifact with `canic::memory::memory_bootstrap_admission!`. Supply the
 application-owned preparation function and a semantic `PolicyIdentity`; declare
-each consumer's disjoint allocation authority through `ic_memory_range!`.
+each consumer's disjoint namespace in the artifact's `memory_allocation_pool!`.
 Admission itself grants no allocation authority. The consuming application owns
 its schema, logical keys, required capacity and database-specific qualification.
 
@@ -210,18 +235,18 @@ the base policy identity.
   overflow pages, while its encoder and decoder enforce the existing 8,650,000
   byte record ceiling. The large logical record limit no longer sizes every
   B-tree node for the worst case.
-- Receipt ID 45 owns its application replay deadline. ID 41 maintains the exact
+- Receipt storage owns its application replay deadline. Intent metadata maintains the exact
   application receipt count for constant-time capacity reporting. Insertion,
   replacement and reclamation maintain that count; reconciliation validates it.
-  Cleanup eligibility remains in ordered ID 48, including reserved capacity and
+  Cleanup eligibility remains in the ordered application eligibility allocation, including reserved capacity and
   exact binding/revision validation. The separate deadline allocation is removed.
-- Shard ID 52 owns its activation flag. Registration records activation in the
+- Shard registry owns its activation flag. Registration records activation in the
   same row; selection still checks activation and routing authority. Assignment
-  lookup remains in ID 53. The separate active-set allocation and facades are
+  lookup remains in the assignments allocation. The separate active-set allocation and facades are
   removed.
-- Child projection ID 30 retains each Component child's allocation operation ID.
-  Scaling workers (50), bound index keys (51), shard entries (52) and individual
-  partition assignments (53) retain the same identity. Reusing a physical canister
+- Child projection retains each Component child's allocation operation ID.
+  Scaling workers, bound index keys, shard entries and individual
+  partition assignments retain the same identity. Reusing a physical canister
   does not grant its earlier assignments routing authority. Canonical child
   snapshots retain this identity; infrastructure topology carries no Component
   allocation. Directory refresh replaces the bounded child projection without
@@ -276,75 +301,75 @@ The following inventory covers every maintained Canic-owned allocation. Role
 and feature selection determine which entries a canister actually opens. Bucket
 selection applies to the whole manager; individual record bounds do not reserve
 that amount in cells. ic-memory owns its ledger at ID 0. Managed receiver roles
-select caller-authority header ID 47 and indexed rows ID 54 under the Core owner.
+select caller-authority header and indexed rows under the Core owner.
 Root publication journals and recipient indexes share the existing Component
-Registry entries owner at ID 20. This maintained layout uses the pre-1.0
+Registry entries owner. This maintained layout uses the pre-1.0
 reinstall-only boundary; same-release restoration validates current installation
 and publication authority before application hooks.
 
-| ID | Stable key | Representation |
-| ---: | --- | --- |
-| 10 | `canic.control_plane.template.manifests.v1` | B-tree |
-| 11 | `canic.control_plane.template.chunk_sets.v1` | B-tree |
-| 12 | `canic.control_plane.template.chunk_refs.v1` | B-tree |
-| 13 | `canic.control_plane.template.chunk_payloads.v1` | StableVec |
-| 14 | `canic.control_plane.wasm_store.gc_state.v1` | Cell |
-| 15 | `canic.control_plane.fleet_coordinator.registry.v1` | Cell |
-| 16 | `canic.control_plane.root.wasm_store.state.v1` | Cell |
-| 17 | `canic.control_plane.root.fleet_registry_mirror.v1` | Cell |
-| 18 | `canic.control_plane.root.component.registry_state.v1` | Cell |
-| 19 | `canic.control_plane.root.component.allocations.v1` | B-tree |
-| 20 | `canic.control_plane.root.component.registry_entries.v1` | B-tree |
-| 21 | `canic.control_plane.root.component.principal_index.v1` | B-tree |
-| 22 | `canic.control_plane.root.component.subtree_removal_history.v1` | B-tree |
-| 23 | `canic.control_plane.root.component.draining.v1` | B-tree |
-| 24 | `canic.control_plane.root.canister_inventory.assets.v1` | B-tree |
-| 25 | `canic.control_plane.root.canister_pool.state.v1` | Cell |
-| 26 | `canic.control_plane.root.canister_pool.handoff_receipts.v1` | B-tree |
-| 27 | `canic.control_plane.root.component_provisioning.operations.v1` | B-tree, checked record encoding / small overflow pages |
-| 28 | `canic.control_plane.root.component_provisioning.placements.v1` | B-tree |
-| 29 | `canic.control_plane.root.component_provisioning.state.v1` | Cell |
-| 30 | `canic.core.runtime.canister_children.v1` | B-tree |
-| 31 | `canic.core.runtime.bindings.v1` | Cell |
-| 32 | `canic.core.fleet.state.v1` | Cell |
-| 33 | `canic.core.fleet.activation.v1` | Bounded optional cell |
-| 34 | `canic.core.auth.local_application_authorization.state.v1` | Cell |
-| 35 | `canic.core.replay.receipts.v1` | B-tree |
-| 36 | `canic.core.cycles.tracker.v1` | B-tree |
-| 37 | `canic.core.cycles.topup_events.v1` | B-tree |
-| 38 | `canic.core.cycles.funding_ledger.v1` | B-tree |
-| 39 | `canic.core.cycles.icp_refill_records.v1` | B-tree |
-| 40 | `canic.core.log.entries.v1` | B-tree |
-| 41 | `canic.core.intent.meta.v1` | Cell, including application receipt count |
-| 42 | `canic.core.intent.records.v1` | B-tree |
-| 43 | `canic.core.intent.totals.v1` | B-tree, including explicit quota-window retention |
-| 44 | `canic.core.intent.pending.v1` | B-tree |
-| 45 | `canic.core.intent.receipt_backed_records.v1` | B-tree, including application retention |
-| 46 | `canic.core.intent.expiry_index.v1` | B-tree |
-| 47 | `canic.core.caller_authority.header.v1` | Bounded optional cell |
-| 48 | `canic.core.application_receipt.eligibility.v1` | B-tree plus reservation |
-| 49 | `canic.core.placement.acknowledgement_index.v1` | B-tree |
-| 50 | `canic.core.placement.scaling_registry.v1` | B-tree |
-| 51 | `canic.core.placement.index_registry.v1` | B-tree |
-| 52 | `canic.core.sharding.registry.v1` | B-tree, including activation |
-| 53 | `canic.core.sharding.assignments.v1` | B-tree |
-| 54 | `canic.core.caller_authority.rows.v1` | B-tree: sources, Component fences and original receipts |
-| 59 | `canic.core.authority_restore.fence.v1` | Bounded optional cell |
-| 60 | `canic.core.async_job_recovery.v1` | Cell |
-| 61 | `canic.core.fleet_admission.projection.v1` | Bounded optional cell |
-| 62 | `canic.control_plane.fleet_coordinator.funding.v1` | Cell |
-| 63 | `canic.control_plane.root.funding.v1` | Cell |
-| 64 | `canic.control_plane.fleet_admission.v1` | Bounded optional cell |
-| 65 | `canic.control_plane.root.admission.v1` | Cell |
-| 66 | `canic.core.auth.delegated_token_issuer.state.v1` | Cell |
-| 67 | `canic.core.auth.root_delegation.state.v1` | Cell |
-| 68 | `canic.control_plane.fixture_store.v1` | B-tree |
+| Stable key | Representation |
+| --- | --- |
+| `canic.control_plane.template.manifests.v1` | B-tree |
+| `canic.control_plane.template.chunk_sets.v1` | B-tree |
+| `canic.control_plane.template.chunk_refs.v1` | B-tree |
+| `canic.control_plane.template.chunk_payloads.v1` | StableVec |
+| `canic.control_plane.wasm_store.gc_state.v1` | Cell |
+| `canic.control_plane.fleet_coordinator.registry.v1` | Cell |
+| `canic.control_plane.root.wasm_store.state.v1` | Cell |
+| `canic.control_plane.root.fleet_registry_mirror.v1` | Cell |
+| `canic.control_plane.root.component.registry_state.v1` | Cell |
+| `canic.control_plane.root.component.allocations.v1` | B-tree |
+| `canic.control_plane.root.component.registry_entries.v1` | B-tree |
+| `canic.control_plane.root.component.principal_index.v1` | B-tree |
+| `canic.control_plane.root.component.subtree_removal_history.v1` | B-tree |
+| `canic.control_plane.root.component.draining.v1` | B-tree |
+| `canic.control_plane.root.canister_inventory.assets.v1` | B-tree |
+| `canic.control_plane.root.canister_pool.state.v1` | Cell |
+| `canic.control_plane.root.canister_pool.handoff_receipts.v1` | B-tree |
+| `canic.control_plane.root.component_provisioning.operations.v1` | B-tree, checked record encoding / small overflow pages |
+| `canic.control_plane.root.component_provisioning.placements.v1` | B-tree |
+| `canic.control_plane.root.component_provisioning.state.v1` | Cell |
+| `canic.core.runtime.canister_children.v1` | B-tree |
+| `canic.core.runtime.bindings.v1` | Cell |
+| `canic.core.fleet.state.v1` | Cell |
+| `canic.core.fleet.activation.v1` | Bounded optional cell |
+| `canic.core.auth.local_application_authorization.state.v1` | Cell |
+| `canic.core.replay.receipts.v1` | B-tree |
+| `canic.core.cycles.tracker.v1` | B-tree |
+| `canic.core.cycles.topup_events.v1` | B-tree |
+| `canic.core.cycles.funding_ledger.v1` | B-tree |
+| `canic.core.cycles.icp_refill_records.v1` | B-tree |
+| `canic.core.log.entries.v1` | B-tree |
+| `canic.core.intent.meta.v1` | Cell, including application receipt count |
+| `canic.core.intent.records.v1` | B-tree |
+| `canic.core.intent.totals.v1` | B-tree, including explicit quota-window retention |
+| `canic.core.intent.pending.v1` | B-tree |
+| `canic.core.intent.receipt_backed_records.v1` | B-tree, including application retention |
+| `canic.core.intent.expiry_index.v1` | B-tree |
+| `canic.core.caller_authority.header.v1` | Bounded optional cell |
+| `canic.core.application_receipt.eligibility.v1` | B-tree plus reservation |
+| `canic.core.placement.acknowledgement_index.v1` | B-tree |
+| `canic.core.placement.scaling_registry.v1` | B-tree |
+| `canic.core.placement.index_registry.v1` | B-tree |
+| `canic.core.sharding.registry.v1` | B-tree, including activation |
+| `canic.core.sharding.assignments.v1` | B-tree |
+| `canic.core.caller_authority.rows.v1` | B-tree: sources, Component fences and original receipts |
+| `canic.core.authority_restore.fence.v1` | Bounded optional cell |
+| `canic.core.async_job_recovery.v1` | Cell |
+| `canic.core.fleet_admission.projection.v1` | Bounded optional cell |
+| `canic.control_plane.fleet_coordinator.funding.v1` | Cell |
+| `canic.control_plane.root.funding.v1` | Cell |
+| `canic.control_plane.fleet_admission.v1` | Bounded optional cell |
+| `canic.control_plane.root.admission.v1` | Cell |
+| `canic.core.auth.delegated_token_issuer.state.v1` | Cell |
+| `canic.core.auth.root_delegation.state.v1` | Cell |
+| `canic.control_plane.fixture_store.v1` | B-tree |
 
 Retain the independent funding, registry, authority, authentication, replay and
 telemetry owners. Live assets and completed handoff receipts have different
 lifetimes. Ordered expiry, pending membership, reverse lookups and terminal
 eligibility avoid unbounded scans; they remain separate indexes. Fixture Store
-ID 68 is already a related typed namespace and remains separate from executable
+is a related typed namespace and remains separate from executable
 template authority. A smaller bucket reduces the minimum footprint of these
 small owners without coupling their mutation or retention rules.
 
@@ -377,7 +402,8 @@ Large provisioning records still traverse overflow pages when loaded.
 
 Allocation policies receive a checked `ic_memory::MemoryManagerSlot`. Its
 constructor and decoder reject ID 255, and `.id()` returns a usable ID directly.
-Canic retains its namespace, range, reservation and admission decisions; the
+The host pool owns namespace grants and physical exclusions; Canic retains
+its reservation and admission decisions; the
 upstream slot type does not grant allocation authority.
 
 ## Continue From Here

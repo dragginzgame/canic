@@ -10,8 +10,7 @@ use crate::{
         cycles::{CycleTopupEvent, CycleTopupFailure, CycleTrackerEntry},
         page::Page,
     },
-    model::cycles_funding::FundingLedgerSnapshot,
-    model::replay::OperationId,
+    model::{cycles_funding::FundingLedgerSnapshot, replay::OperationId},
     ops::prelude::*,
     storage::stable::cycles::{
         CycleTopupEventEntryRecord, CycleTopupEventStatusRecord, CycleTopupEvents,

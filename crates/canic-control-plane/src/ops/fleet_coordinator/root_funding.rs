@@ -20,16 +20,7 @@ use crate::{
     view::fleet_coordinator::{FleetRootFundingCallView, FleetRootFundingDisposition},
 };
 use candid::Principal;
-use canic_core::{
-    control_plane_support::{
-        error::InternalError,
-        ops::fleet_registry::FleetRegistryOps,
-        policy::fleet_funding::{
-            FleetFundingAutomaticUsageSnapshot, FleetFundingWindowSnapshot,
-            FleetRootGrantAuthorityMatch, FleetRootGrantAvailability, FleetRootGrantDecision,
-            FleetRootGrantDecisionInput, FleetRootGrantNoGrantReason, decide_fleet_root_grant,
-        },
-    },
+use canic_contracts::{
     dto::{
         fleet_funding::{
             FleetFundingPolicyRotationPlan, FleetRootFundingAcceptanceReceipt,
@@ -41,6 +32,17 @@ use canic_core::{
         state::SetStateResponse,
     },
     ids::{FLEET_ROOT_FUNDING_CALL_RESERVATION_CYCLES, MAX_FLEET_ROOT_FUNDING_SLOTS},
+};
+use canic_core::{
+    control_plane_support::{
+        error::InternalError,
+        ops::fleet_registry::FleetRegistryOps,
+        policy::fleet_funding::{
+            FleetFundingAutomaticUsageSnapshot, FleetFundingWindowSnapshot,
+            FleetRootGrantAuthorityMatch, FleetRootGrantAvailability, FleetRootGrantDecision,
+            FleetRootGrantDecisionInput, FleetRootGrantNoGrantReason, decide_fleet_root_grant,
+        },
+    },
     shared_support::fleet_funding_policy::{
         coordinator_root_funding_policy_hash, fleet_funding_policy_rotation_operation_id,
         fleet_funding_policy_rotation_plan_digest, fleet_funding_policy_rotation_roots_digest,
@@ -1101,7 +1103,7 @@ fn validate_staged_rotation_roots(
 
 fn validate_rotation_receipts(
     rotation: &crate::storage::stable::fleet_coordinator::FleetFundingPolicyRotationRecord,
-    receipts: &[canic_core::dto::fleet_funding::FleetFundingPolicyRotationRootReceipt],
+    receipts: &[canic_contracts::dto::fleet_funding::FleetFundingPolicyRotationRootReceipt],
     activated: bool,
 ) -> Result<(), InternalError> {
     for (root, receipt) in rotation.roots.iter().zip(receipts) {

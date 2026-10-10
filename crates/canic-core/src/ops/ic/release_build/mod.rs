@@ -6,9 +6,9 @@
 
 use crate::{
     InternalError,
-    ids::ReleaseBuildId,
     infra::ic::{IcInfraError, release_build::ReleaseBuildInfra},
 };
+use canic_contracts::ids::ReleaseBuildId;
 
 ///
 /// ReleaseBuildOps

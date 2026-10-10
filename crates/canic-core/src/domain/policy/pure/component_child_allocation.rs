@@ -7,10 +7,10 @@
 use crate::{
     cdk::types::Principal,
     config::{ComponentDeploymentLimits, ComponentTopology, schema::ComponentChildKind},
-    ids::{
-        CanisterRole, ComponentBinding, ComponentInstanceId, ComponentSpecId,
-        FleetSubnetRootBinding, ManagedCanisterBinding,
-    },
+};
+use canic_contracts::ids::{
+    CanisterRole, ComponentBinding, ComponentInstanceId, ComponentSpecId, FleetSubnetRootBinding,
+    ManagedCanisterBinding,
 };
 use thiserror::Error as ThisError;
 
@@ -377,8 +377,11 @@ fn validate_capacity(
 mod tests {
     use super::*;
     use crate::{
-        cdk::types::{Cycles, Principal},
+        cdk::types::Principal,
         config::schema::{ConfigModel, Validate},
+    };
+    use canic_contracts::{
+        cycles::Cycles,
         ids::{
             AppId, CanonicalNetworkId, ComponentChildBinding, ComponentSpecAdmission,
             CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding, FleetId, FleetKey,

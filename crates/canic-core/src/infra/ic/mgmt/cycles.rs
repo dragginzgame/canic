@@ -4,15 +4,12 @@
 //! Does not own: funding policy, threshold decisions, or workflow retries.
 //! Boundary: extends `MgmtInfra` with cycle-related management calls.
 
+use super::{MgmtInfra, MgmtInfraError, types::InfraCanisterIdRecord};
 use crate::{
-    cdk::{
-        candid::{Nat, Principal},
-        types::Cycles,
-    },
+    cdk::candid::{Nat, Principal},
     infra::ic::{IcInfraError, call::Call},
 };
-
-use super::{MgmtInfra, MgmtInfraError, types::InfraCanisterIdRecord};
+use canic_contracts::cycles::Cycles;
 
 impl MgmtInfra {
     /// Return the exact current-Subnet cost of one zero-cycle deposit call.

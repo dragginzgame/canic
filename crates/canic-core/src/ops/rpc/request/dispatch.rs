@@ -5,7 +5,6 @@
 //! Boundary: delegates transport to `RpcOps` after attaching request metadata.
 
 use super::RequestOpsError;
-use crate::model::replay::OperationId;
 use crate::{
     InternalError,
     dto::rpc::{
@@ -13,6 +12,7 @@ use crate::{
         CreateCanisterResponse, CyclesRequest, CyclesResponse, RecycleCanisterRequest, Request,
         Response, RootRequestMetadata,
     },
+    model::replay::OperationId,
     ops::{
         ic::IcOps,
         prelude::*,

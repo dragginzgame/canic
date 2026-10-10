@@ -10,7 +10,6 @@ use crate::{
     cdk::types::Principal,
     domain::public_metrics::{PublicMetricFamily, PublicMetricKind},
 };
-
 use std::{cell::RefCell, collections::BTreeMap};
 
 pub use history::{

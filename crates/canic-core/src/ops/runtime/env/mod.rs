@@ -9,15 +9,14 @@ pub mod mapper;
 use crate::{
     InternalError,
     dto::env::EnvSnapshotResponse,
-    ids::{ComponentSpecId, ManagedCanisterBinding},
-    model::{
-        env::ValidatedEnv,
-        runtime_kind::{self, CanicRuntimeKind},
+    model::{env::ValidatedEnv, runtime_kind, runtime_kind::CanicRuntimeKind},
+    ops::{
+        prelude::*,
+        runtime::{env::mapper::EnvRecordMapper, memory::MemoryRegistryOps},
     },
-    ops::prelude::*,
-    ops::runtime::{env::mapper::EnvRecordMapper, memory::MemoryRegistryOps},
     storage::stable::env::{Env, EnvData, EnvRecord},
 };
+use canic_contracts::ids::{ComponentSpecId, ManagedCanisterBinding};
 use ic_cdk::api::canister_self;
 use thiserror::Error as ThisError;
 
@@ -352,7 +351,8 @@ fn ensure_root_pid_immutable(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ids::CanisterRole, storage::stable::env::Env, test::seams};
+    use crate::{storage::stable::env::Env, test::seams};
+    use canic_contracts::ids::CanisterRole;
 
     ///
     /// EnvRestore

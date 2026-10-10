@@ -1,6 +1,6 @@
 //! Public identifiers and the passive types needed by their fields and constructors.
 
-pub use crate::__internal::core::ids::{
+pub use canic_contracts::ids::{
     AccessMetricKind, AppId, BuildNetwork, COMPONENT_GROUP_MEMBER_PATH_MAX_SEGMENTS,
     CallerComponentInstallation, CallerInstallation, CallerReceiverAuthority, CallerRootAuthority,
     CanisterRole, CanonicalNetworkId, CanonicalNetworkIdParseError,
@@ -17,13 +17,14 @@ pub use crate::__internal::core::ids::{
     FleetServiceId, FleetSubnetCanisterPoolConfig, FleetSubnetRootAutomaticIcpRefillPolicy,
     FleetSubnetRootBinding, FleetSubnetRootFundingAuthority, FleetSubnetRootFundingPolicy,
     FleetSubnetRootIcpRefillPolicy, FleetSubnetRootLimits, FleetSubnetRootReleaseSet,
-    FleetSubnetWasmStoreActivationAuthority, FleetSubnetWasmStoreAuthority, IntentId,
-    IntentResourceKey, ManagedCanisterBinding, ReleaseBuildId, ReleaseBuildIdParseError,
-    ReleaseBuildNonce, ReleaseSetDigest, SubnetId, cap,
+    FleetSubnetWasmStoreActivationAuthority, FleetSubnetWasmStoreAuthority, ManagedCanisterBinding,
+    ReleaseBuildId, ReleaseBuildIdParseError, ReleaseBuildNonce, ReleaseSetDigest, SubnetId, cap,
 };
 
 #[cfg(any(feature = "control-plane", feature = "wasm-store-canister"))]
-pub use canic_control_plane::ids::{
-    TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion, WasmStoreBinding,
-    WasmStoreGcMode, WasmStoreGcStatus,
+pub use canic_contracts::{
+    ids::TemplateChunkingMode, ids::TemplateId, ids::TemplateManifestState, ids::TemplateVersion,
+    ids::WasmStoreBinding, ids::WasmStoreGcMode, ids::WasmStoreGcStatus,
 };
+
+pub use canic_core::{ids::IntentId, ids::IntentResourceKey};

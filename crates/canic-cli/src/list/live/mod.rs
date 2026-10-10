@@ -1,8 +1,16 @@
-use super::{ListCommandError, options::ListOptions, render::ReadyStatus, state_environment};
-use crate::cli::defaults::local_environment;
-use crate::support::candid::registry_entry_candid_path;
-use crate::support::registry_tree::visible_entries;
-use canic_core::dto::observability::{CanisterObservabilityRequest, CanisterObservabilityResponse};
+use super::{
+    ListCommandError,
+    options::{ListOptions, ListSource},
+    render::ReadyStatus,
+    state_environment,
+};
+use crate::{
+    cli::defaults::local_environment,
+    support::{candid::registry_entry_candid_path, registry_tree::visible_entries},
+};
+use canic_contracts::dto::observability::{
+    CanisterObservabilityRequest, CanisterObservabilityResponse,
+};
 use canic_host::{
     canic_metadata::query_canic_metadata_version,
     canister_ready::{query_canister_ready, query_local_canister_ready},
@@ -22,8 +30,6 @@ use std::{
     sync::Arc,
     thread,
 };
-
-use super::options::ListSource;
 
 const OBSERVATION_ERROR: &str = "error";
 

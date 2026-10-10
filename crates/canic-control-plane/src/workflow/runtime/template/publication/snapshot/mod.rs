@@ -4,14 +4,18 @@
 //! Does not own: Store selection, lifecycle mutation, stable state, or artifact authority.
 //! Boundary: publication workflows validate and update this in-memory projection around IC calls.
 
-use crate::dto::template::{
-    TemplateManifestResponse, WasmStoreCatalogEntryResponse, WasmStoreStatusResponse,
+use crate::{
+    dto::template::{
+        TemplateManifestResponse, WasmStoreCatalogEntryResponse, WasmStoreStatusResponse,
+    },
+    ids::{TemplateReleaseKey, WasmStoreBinding},
 };
-use crate::ids::{TemplateReleaseKey, WasmStoreBinding};
-use canic_core::cdk::types::Principal;
-use canic_core::control_plane_support::{
-    error::InternalError,
-    ops::{cost_guard::CostGuardPermit, ic::mgmt::MgmtOps},
+use canic_core::{
+    cdk::types::Principal,
+    control_plane_support::{
+        error::InternalError,
+        ops::{cost_guard::CostGuardPermit, ic::mgmt::MgmtOps},
+    },
 };
 use std::collections::{BTreeMap, BTreeSet};
 

@@ -8,16 +8,17 @@ use super::{
     fixture_store::{FixtureStore, FixtureStoreData},
     fleet_admission::FleetAdmissionAuthorityRecord,
     template::chunked::{TemplateChunkPayloadRecord, TemplateChunkRefRecord},
+    template::key::TemplateChunkKeyRecord,
 };
 use crate::ids::{TemplateChunkKey, TemplateId, TemplateReleaseKey, TemplateVersion};
+use canic_contracts::dto::memory::MemoryAllocationBinding;
 use canic_core::{
     api::{memory::MemoryQuery, runtime::MemoryRuntimeApi},
-    cdk::bounded_cell::BoundedCell,
-    cdk::structures::{
-        BTreeMap, Memory, Storable, Vec as StableVec, VectorMemory, storable::Bound,
+    cdk::{
+        bounded_cell::BoundedCell,
+        structures::{BTreeMap, Memory, Storable, Vec as StableVec, VectorMemory, storable::Bound},
     },
-    dto::memory::MemoryAllocationBinding,
-    role_contract::allocation::memory::control_plane::FIXTURE_STORE_ID,
+    role_contract::allocation::memory::control_plane::FIXTURE_STORE_KEY,
 };
 use std::{borrow::Cow, cell::Cell, rc::Rc};
 
@@ -81,7 +82,7 @@ fn template_payload_layout_tradeoff_is_measured() {
             TemplateVersion::new("current"),
         );
         for index in 0..8 {
-            let key = TemplateChunkKey::new(release.clone(), index);
+            let key = TemplateChunkKeyRecord(TemplateChunkKey::new(release.clone(), index));
             let bytes = vec![u8::try_from(index).unwrap(); payload_len];
             let slot = payloads.len();
             payloads.push(&TemplateChunkPayloadRecord {
@@ -102,7 +103,7 @@ fn template_payload_layout_tradeoff_is_measured() {
         payload_memory.reads.set(0);
         direct_memory.reads.set(0);
         for index in 0..8 {
-            let key = TemplateChunkKey::new(release.clone(), index);
+            let key = TemplateChunkKeyRecord(TemplateChunkKey::new(release.clone(), index));
             let reference = refs.get(&key).unwrap();
             let split = payloads.get(reference.slot).unwrap();
             assert_eq!(split.bytes, direct.get(&key).unwrap().0);
@@ -130,7 +131,7 @@ fn bootstrap_keeps_control_plane_stores_lazy_until_selected_access() {
     let fixture = before
         .memories
         .iter()
-        .find(|entry| entry.memory_manager_id == FIXTURE_STORE_ID)
+        .find(|entry| matches!(&entry.binding, MemoryAllocationBinding::Current { stable_key, .. } if stable_key == FIXTURE_STORE_KEY))
         .expect("fixture allocation reserved");
     assert!(matches!(
         fixture.binding,
@@ -154,7 +155,8 @@ fn bootstrap_keeps_control_plane_stores_lazy_until_selected_access() {
     for (prior, current) in before.memories.iter().zip(&after.memories) {
         assert_eq!(prior.memory_manager_id, current.memory_manager_id);
         assert_eq!(prior.binding, current.binding);
-        if current.memory_manager_id == FIXTURE_STORE_ID {
+        if matches!(&current.binding, MemoryAllocationBinding::Current { stable_key, .. } if stable_key == FIXTURE_STORE_KEY)
+        {
             assert!(current.virtual_extent.wasm_pages > 0);
         } else {
             assert_eq!(prior.virtual_extent, current.virtual_extent);

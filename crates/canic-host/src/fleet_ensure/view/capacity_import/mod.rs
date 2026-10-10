@@ -4,10 +4,11 @@ use crate::fleet_ensure::model::capacity_import::{
     CapacityImportAuthority, CapacityImportSourceBinding,
 };
 use candid::Principal;
-use canic_core::ids::SubnetId;
+use canic_contracts::ids::SubnetId;
 use std::collections::BTreeSet;
 
 /// Original successful observation and its retained owner, before an additional credit.
+
 pub(in crate::fleet_ensure) struct CapacityImportFundingBaselineView {
     pub sample: crate::fleet_ensure::model::capacity_import::survey::CapacityImportSampleRecord,
     pub origin: crate::fleet_ensure::model::capacity_import::funding::CapacityImportFundingOrigin,

@@ -10,17 +10,18 @@ use super::{
 };
 use crate::{
     cdk::types::Principal,
-    ids::{CanisterRole, CanonicalNetworkId, FleetId, FleetKey},
     model::auth::application_authorization::{
         ApplicationScope, ApplicationScopeRef, CanonicalApplicationScopes,
         LocalApplicationAuthoritySnapshot, LocalApplicationSession,
     },
 };
+use canic_contracts::ids::{CanisterRole, CanonicalNetworkId, FleetId, FleetKey};
 
 /// Measure one exact pure denial branch in a Wasm query fixture.
 ///
 /// This is compiled only by internal test fixtures. Production consumers must
 /// use [`super::authorize_local_application`], which acquires ambient authority.
+
 #[must_use]
 pub fn measure_local_application_authorization_denial(
     expected: LocalApplicationAuthorizationDenial,

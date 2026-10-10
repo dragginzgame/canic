@@ -5,9 +5,9 @@
 //! Boundary: publication workflow code raises these causes and converts once to internal errors.
 
 use crate::ids::{CanisterRole, TemplateId, TemplateVersion, WasmStoreBinding, WasmStoreGcMode};
+use canic_contracts::diagnostics::codes;
 use canic_core::{
-    cdk::types::Principal, control_plane_support::error::InternalError, diagnostics::codes, log,
-    log::Topic,
+    cdk::types::Principal, control_plane_support::error::InternalError, log, log::Topic,
 };
 use thiserror::Error as ThisError;
 
@@ -160,7 +160,7 @@ impl From<PublicationWorkflowError> for InternalError {
 mod tests {
     use super::*;
 
-    fn public_code(err: PublicationWorkflowError) -> canic_core::diagnostics::DiagnosticCode {
+    fn public_code(err: PublicationWorkflowError) -> canic_contracts::diagnostics::DiagnosticCode {
         InternalError::from(err).public_error().code()
     }
 
@@ -265,8 +265,8 @@ mod tests {
 
     fn assert_diagnostic_codes(
         error: PublicationWorkflowError,
-        exact: canic_core::diagnostics::RegisteredDiagnosticCode,
-        public: canic_core::diagnostics::RegisteredDiagnosticCode,
+        exact: canic_contracts::diagnostics::RegisteredDiagnosticCode,
+        public: canic_contracts::diagnostics::RegisteredDiagnosticCode,
     ) {
         let error = InternalError::from(error);
         assert_eq!(error.code(), exact);

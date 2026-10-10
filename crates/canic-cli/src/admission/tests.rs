@@ -1,7 +1,7 @@
 //! Focused parser and deterministic-plan identity tests for the admission CLI.
 
 use super::*;
-use canic_core::{
+use canic_contracts::{
     dto::{
         fleet_admission::{FleetAdmissionOperationStatusResponse, FleetAdmissionPolicyStatus},
         page::Page,

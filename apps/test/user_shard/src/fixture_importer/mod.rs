@@ -27,7 +27,7 @@ struct ImportRecord {
 
 thread_local! {
     static IMPORT: RefCell<Cell<Vec<u8>, RuntimeMemory<DefaultMemoryImpl>>> = RefCell::new(Cell::init(
-        canic::memory::ic_memory_key!(authority = "test", key = "test.fixture_import.v1", ty = ImportRecord, id = 201),
+        canic::memory::ic_memory_key!(authority = "test", key = "test.fixture_import.v1"),
         Vec::new(),
     ));
 }

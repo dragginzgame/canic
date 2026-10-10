@@ -1,5 +1,5 @@
 use super::*;
-use canic_core::dto::canister::CanisterInspectionReserveResponse;
+use canic_contracts::dto::canister::CanisterInspectionReserveResponse;
 
 #[test]
 fn funding_inspection_reserve_requires_exact_call_participants_and_native_bounds() {

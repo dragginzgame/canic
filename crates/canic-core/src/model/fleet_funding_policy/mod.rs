@@ -4,13 +4,13 @@
 //! Does not own: config decoding, canonical hashing, storage, accounting, or effects.
 //! Boundary: host and canister admission validate the same protected policy shapes.
 
-use crate::ids::{
+use candid::Principal;
+use canic_contracts::ids::{
     COORDINATOR_ROOT_FUNDING_EXECUTION_RESERVE_FLOOR_CYCLES,
     FLEET_SUBNET_ROOT_FUNDING_REQUEST_FLOOR_CYCLES, FLEET_SUBNET_ROOT_ICP_REFILL_FLOOR_CYCLES,
     FleetCoordinatorRootFundingPolicy, FleetFundingProfile, FleetSubnetRootFundingAuthority,
     FleetSubnetRootFundingPolicy, MAX_FLEET_ROOT_FUNDING_SLOTS, SubnetId,
 };
-use candid::Principal;
 use thiserror::Error as ThisError;
 
 const TRILLION_CYCLES: u128 = 1_000_000_000_000;
@@ -574,8 +574,8 @@ fn principal_is_reserved(principal: Principal) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        cdk::types::Cycles,
+    use canic_contracts::{
+        cycles::Cycles,
         ids::{CyclesFundingBudget, FleetFundingProfile, FleetSubnetRootFundingPolicy},
     };
 

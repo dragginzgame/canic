@@ -5,6 +5,7 @@
 //! Boundary: certified custody and Registry observations bracket the complete collection.
 
 mod assessment;
+
 #[cfg(test)]
 pub(super) mod tests;
 
@@ -19,17 +20,20 @@ use crate::{
     },
     icp::IcpCli,
 };
-use candid::{CandidType, Principal};
-use canic_control_plane::dto::root::{
-    RootProvisioningReleaseKey as Key, RootProvisioningReleasePhase as Phase,
-    RootProvisioningReleaseResponse,
-};
-use canic_core::{
-    dto::{error::Error as CanicError, fleet_registry::FleetRegistry},
+use candid::Principal;
+use canic_contracts::{
+    dto::{
+        error::Error as CanicError,
+        fleet_registry::FleetRegistry,
+        root::{
+            RootProvisioningReleaseKey as Key, RootProvisioningReleasePhase as Phase,
+            RootProvisioningReleaseResponse,
+        },
+        wire::projection::release_provisioning::{Request, Response},
+    },
     protocol,
 };
 use ic_agent::Agent;
-use serde::Deserialize;
 use std::time::Duration;
 use thiserror::Error;
 
@@ -70,16 +74,6 @@ pub enum ReleaseProvisioningStage {
     Decode,
     Pagination,
     Query,
-}
-
-#[derive(CandidType)]
-enum Request {
-    ProvisioningRelease(Option<Key>),
-}
-
-#[derive(CandidType, Deserialize)]
-enum Response {
-    ProvisioningRelease(RootProvisioningReleaseResponse),
 }
 
 /// Discover both journal kinds without treating historical completion as a release blocker.

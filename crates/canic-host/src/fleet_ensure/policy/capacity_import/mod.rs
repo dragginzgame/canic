@@ -2,6 +2,7 @@
 //! Observations, evidence verification, record construction and IC effects belong to ops.
 
 pub mod bootstrap;
+
 pub(in crate::fleet_ensure) mod funding;
 #[cfg(test)]
 pub(crate) mod tests;
@@ -20,7 +21,7 @@ use crate::fleet_ensure::{
     },
 };
 use candid::Principal;
-use canic_core::ids::{MAX_FLEET_CAPACITY_IMPORT_SOURCES, SubnetId};
+use canic_contracts::ids::{MAX_FLEET_CAPACITY_IMPORT_SOURCES, SubnetId};
 use std::collections::BTreeSet;
 use thiserror::Error;
 

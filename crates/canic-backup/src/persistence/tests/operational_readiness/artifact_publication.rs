@@ -9,14 +9,11 @@ use super::{
     hold_at_acknowledged_barrier, kill_child_at_acknowledged_barrier,
 };
 use crate::{
-    artifacts::{ArtifactChecksum, ArtifactChecksumError},
+    artifacts::ArtifactChecksum,
     execution::{BackupExecutionJournalOperation, BackupExecutionOperationState},
     journal::ArtifactState,
     operational_readiness::manifest::assert_case_defined,
-    persistence::{
-        ArtifactCommitBarrier, BackupLayout, PersistenceError,
-        commit_artifact_directory_at_barriers,
-    },
+    persistence::{BackupLayout, PersistenceError, commit_artifact_directory},
     plan::BackupOperationKind,
     runner::{BackupRunnerError, backup_run_execute_with_executor},
     test_support::{FakeBackupRunnerExecutor, temp_dir},
@@ -64,19 +61,16 @@ fn canonical_artifact_publication_survives_process_death_on_both_write_sides() {
         .checksum
         .as_deref()
         .expect("checksum-verified checksum");
-    let target = match barrier_name.as_str() {
-        "before-publication" => ArtifactCommitBarrier::BeforePublication,
-        "after-publication-sync" => ArtifactCommitBarrier::AfterPublicationSync,
+    match barrier_name.as_str() {
+        "before-publication" => hold_at_acknowledged_barrier(&handshake_root),
+        "after-publication-sync" => {}
         _ => panic!("unsupported artifact publication barrier: {barrier_name}"),
-    };
-
-    commit_artifact_directory_at_barriers(&temporary, &canonical, checksum, |barrier| {
-        if barrier == target {
-            hold_at_acknowledged_barrier(&handshake_root);
-        }
-    })
-    .expect("publish artifact in crash child");
-    panic!("artifact-publication child passed its armed barrier");
+    }
+    // The public owner verifies and durably publishes the tree. Canic's
+    // interruption proof covers the call boundary and its unadvanced journal.
+    commit_artifact_directory(&temporary, &canonical, checksum)
+        .expect("publish artifact in crash child");
+    hold_at_acknowledged_barrier(&handshake_root);
 }
 
 #[test]
@@ -97,11 +91,13 @@ fn pending_finalize_rejects_changed_checksum_verified_staging() {
 
     std::assert_matches!(
         error,
-        BackupRunnerError::Persistence(PersistenceError::Checksum(
-            ArtifactChecksumError::ChecksumMismatch {
+        BackupRunnerError::Persistence(PersistenceError::ArtifactCommit(
+            ic_backup::ops::persistence::PersistenceError::Checksum(
+                ic_backup::model::artifacts::ChecksumError::ChecksumMismatch {
                 expected: error_expected,
                 actual: error_actual,
-            }
+                }
+            )
         )) if error_expected == expected.hash && error_actual == actual.hash
     );
     assert_failed_finalize_preserves_artifact(&layout, &finalize, &expected.hash);
@@ -127,7 +123,9 @@ fn pending_finalize_rejects_conflicting_canonical_directory() {
 
     std::assert_matches!(
         error,
-        BackupRunnerError::Persistence(PersistenceError::ArtifactCommitPathConflict { .. })
+        BackupRunnerError::Persistence(PersistenceError::ArtifactCommit(
+            ic_backup::ops::persistence::PersistenceError::ArtifactCommitPathConflict { .. }
+        ))
     );
     assert_failed_finalize_preserves_artifact(&layout, &finalize, &expected.hash);
     assert!(temporary.is_dir());

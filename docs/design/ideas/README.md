@@ -41,10 +41,10 @@ The maintainer's priorities, updated on 2026-09-25, are:
 
 1. [Canonical infrastructure crates](../0.110-fleet-runtime-contraction/0.110-design.md#canonical-fleet-subnet-root-batch-cr1):
    give Root one Canic-owned entrypoint and consistent Fleet crate names.
-2. [Standalone blob extraction](../0.111-standalone-blob-service-extraction/0.111-design.md):
-   now assigned the next 0.111 roadmap position after accepted 0.110 closeout.
-   External owner, repository, consumer and provider evidence remain to be
-   resolved before implementation depends on an external service.
+2. [Standalone blob extraction](../0.112-standalone-blob-service-extraction/0.112-design.md):
+   its pending roadmap position moved to 0.112 on 2026-10-10, reserving 0.111
+   for the current hard cut. Implemented adapter delivery remains in the current
+   coordinated batch; provider and application acceptance retain their owners.
 
 The operator Component lifecycle, frontend handoff, host-first observatory and
 persistent local Fleet were promoted to 0.110 OP1–OP4 on 2026-09-13 by explicit

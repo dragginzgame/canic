@@ -4,10 +4,10 @@
 //!
 //! Storage indexes independent rows; a transition never clones the receiver census.
 
-use crate::ids::{
+use candid::Principal;
+use canic_contracts::ids::{
     CallerComponentInstallation, CallerInstallation, CallerReceiverAuthority, ComponentInstanceId,
 };
-use candid::Principal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

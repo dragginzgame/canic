@@ -8,11 +8,14 @@ use crate::{
     fleet_ensure::view::startup_funding::{StartupChildFundingBinding, StartupUsageUnavailable},
     icp::IcpCli,
 };
-use candid::{CandidType, Deserialize, Principal};
-use canic_core::{
-    dto::component_registry::{
-        ComponentDirectoryHead, ComponentDirectoryPageRequest, ComponentDirectoryPageResponse,
-        ComponentLifecycleStatus,
+use candid::Principal;
+use canic_contracts::{
+    dto::{
+        component_registry::{
+            ComponentDirectoryHead, ComponentDirectoryPageRequest, ComponentDirectoryPageResponse,
+            ComponentLifecycleStatus,
+        },
+        wire::projection::startup_pages::{Request, Response},
     },
     ids::ComponentChildBinding,
     protocol,
@@ -23,16 +26,6 @@ use std::{
 };
 
 const PAGE_LIMIT: u16 = 100;
-
-#[derive(CandidType)]
-enum Request {
-    ComponentDirectoryPage(ComponentDirectoryPageRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum Response {
-    ComponentDirectoryPage(ComponentDirectoryPageResponse),
-}
 
 pub(super) fn observe(
     icp: &IcpCli,

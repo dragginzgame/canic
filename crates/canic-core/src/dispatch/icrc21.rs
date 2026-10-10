@@ -1,13 +1,13 @@
+//
+// ICRC 21 REGISTRY
+//
+
 use crate::{
     dto::icrc21::{ConsentMessageRequest, ConsentMessageResponse, ErrorInfo, Icrc21Error},
     log,
     log::Topic,
 };
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
-
-//
-// ICRC 21 REGISTRY
-//
 
 thread_local! {
     static ICRC_21_REGISTRY: RefCell<HashMap<String, RegisteredConsentHandler>> = RefCell::new(HashMap::new());

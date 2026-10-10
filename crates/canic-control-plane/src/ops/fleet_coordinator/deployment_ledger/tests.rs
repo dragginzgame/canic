@@ -6,9 +6,8 @@ use crate::storage::stable::fleet_coordinator::{
     FleetComponentRuntimeActivationRecord,
 };
 use candid::Principal;
-use canic_core::{
-    bootstrap::parse_config_model,
-    cdk::types::Cycles,
+use canic_contracts::{
+    cycles::Cycles,
     dto::{
         component_provisioning::{
             ComponentGroupPlacementPlan, FleetComponentActivationRootProgress,
@@ -25,6 +24,7 @@ use canic_core::{
         ReleaseSetDigest, SubnetId,
     },
 };
+use canic_core::bootstrap::parse_config_model;
 
 const CONFIG: &str = r#"
 [app]

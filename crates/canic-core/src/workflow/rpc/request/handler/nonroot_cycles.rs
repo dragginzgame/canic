@@ -10,18 +10,18 @@ use crate::{
     cdk::types::Principal,
     domain::policy::pure::cycles_funding::{FundingPolicyViolation, evaluate},
     dto::rpc::{CyclesFundingPreflightResponse, CyclesRequest, CyclesResponse},
-    ids::CanisterRole,
     log,
     log::Topic,
-    model::cycles_funding::CHILD_FUNDING_COMMAND_KIND,
-    model::replay::{
-        CommandKind, ExternalEffectDescriptor, OperationId, RecoveryReason, ReplayActor,
+    model::{
+        cycles_funding::CHILD_FUNDING_COMMAND_KIND,
+        replay::{CommandKind, ExternalEffectDescriptor, OperationId, RecoveryReason, ReplayActor},
     },
     ops::{
         config::ConfigOps,
         cost_guard::{CostGuardPermit, CostGuardRequest},
         ic::{IcOps, mgmt::MgmtOps},
-        replay::{self as replay_ops, guard::ReplayPending},
+        replay as replay_ops,
+        replay::guard::ReplayPending,
         runtime::{
             cycles_funding::CyclesFundingLedgerOps,
             env::EnvOps,
@@ -42,6 +42,7 @@ use crate::{
         runtime::cycles::CycleWorkflow,
     },
 };
+use canic_contracts::ids::CanisterRole;
 
 const ROOT_REQUEST_CYCLES_VALUE_TRANSFER_QUOTA_WINDOW_SECONDS: u64 = 60;
 const MAX_ROOT_REQUEST_CYCLES_VALUE_TRANSFER_OPERATIONS_PER_WINDOW: u64 = 60;

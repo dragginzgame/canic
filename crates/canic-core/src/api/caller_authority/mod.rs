@@ -3,10 +3,10 @@
 //! Facade for protected receiver publication and receipt observation.
 
 use crate::{
-    dto::caller_authority::{
-        CallerAuthorityCommand, CallerAuthorityReceipt, CallerAuthorityStatus,
+    dto::{
+        caller_authority::{CallerAuthorityCommand, CallerAuthorityReceipt, CallerAuthorityStatus},
+        error::Error,
     },
-    dto::error::Error,
     workflow::caller_authority,
 };
 

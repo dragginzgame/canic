@@ -1,5 +1,5 @@
 use super::*;
-use canic_core::{
+use canic_contracts::{
     dto::fleet_registry::{FleetComponentSpecEntry, FleetSubnetRootEntry},
     ids::{
         ComponentSpecAdmission, CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding,
@@ -7,8 +7,8 @@ use canic_core::{
         FleetSubnetRootLimits, FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseBuildNonce,
         ReleaseSetDigest,
     },
-    shared_support::fleet_admission_policy::compile_installed_fleet_admission_policy,
 };
+use canic_core::shared_support::fleet_admission_policy::compile_installed_fleet_admission_policy;
 
 fn fixture() -> (ComponentTopology, FleetRegistry) {
     let topology = canic_core::bootstrap::parse_config_model(
@@ -30,7 +30,7 @@ maximum_instances = 1
     .unwrap();
     let fleet = FleetBinding {
         fleet: FleetKey {
-            canonical_network_id: canic_core::ids::CanonicalNetworkId::ic_mainnet(),
+            canonical_network_id: canic_contracts::ids::CanonicalNetworkId::ic_mainnet(),
             fleet_id: FleetId::from_generated_bytes([1; 32]),
         },
         app: "funding".into(),
@@ -269,7 +269,7 @@ esac
     let mut version = FleetRegistryOps::version(&registry.authority, &topology, &registry).unwrap();
     write(
         "snapshot.json",
-        candid::encode_one(Ok::<_, canic_core::dto::error::Error>(
+        candid::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
             CoordinatorRegistryResponse::Registry(registry),
         ))
         .unwrap(),
@@ -277,7 +277,7 @@ esac
     let write_head = |version| {
         write(
             "head.json",
-            candid::encode_one(Ok::<_, canic_core::dto::error::Error>(
+            candid::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
                 CoordinatorObservabilityResponse::RegistryVersion(version),
             ))
             .unwrap(),
@@ -289,7 +289,7 @@ esac
     let root = root_summary.fleet_subnet_root;
     write(
         "root.json",
-        candid::encode_one(Ok::<_, canic_core::dto::error::Error>(
+        candid::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
             RootResponse::Inventory(root_summary),
         ))
         .unwrap(),

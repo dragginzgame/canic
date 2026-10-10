@@ -21,10 +21,6 @@ use crate::{
         FleetServiceComponentBinding, FleetServiceMode, FleetSubnetRootDirectoryEntry,
         FleetSubnetRootEntry, FleetSubnetRootStatus,
     },
-    ids::{
-        AppId, ComponentSpecAdmission, ComponentSpecId, FleetAdmissionPolicy,
-        FleetAdmissionSelector, FleetRegistryAuthority, FleetSubnetRootLimits, ReleaseBuildId,
-    },
     model::{
         fleet_admission_policy::FleetAdmissionPolicyValidationError,
         fleet_funding_policy::FleetFundingPolicyValidationError,
@@ -32,6 +28,10 @@ use crate::{
     ops::{OpsError, fleet_funding_policy::fleet_subnet_root_funding_policy_hash},
 };
 use candid::Principal;
+use canic_contracts::ids::{
+    AppId, ComponentSpecAdmission, ComponentSpecId, FleetAdmissionPolicy, FleetAdmissionSelector,
+    FleetRegistryAuthority, FleetSubnetRootLimits, ReleaseBuildId,
+};
 use sha2::{Digest, Sha256};
 use std::cmp::Ordering;
 use thiserror::Error as ThisError;

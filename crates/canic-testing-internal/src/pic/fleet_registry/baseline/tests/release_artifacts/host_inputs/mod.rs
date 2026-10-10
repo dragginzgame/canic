@@ -15,11 +15,7 @@ use std::{
     fs, io,
     path::{Path, PathBuf},
 };
-use syn::{
-    Item, Meta, Token,
-    punctuated::Punctuated,
-    visit::{self, Visit},
-};
+use syn::{Item, Meta, Token, punctuated::Punctuated, visit, visit::Visit};
 
 /// Cache identity and the conservative producer snapshot guarding acquisition and publication.
 pub(in crate::pic::fleet_registry::baseline) struct FixtureArtifactCache {

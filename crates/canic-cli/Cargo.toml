@@ -20,6 +20,7 @@ path = "src/main.rs"
 [dependencies]
 candid = { workspace = true }
 canic-backup = { workspace = true }
+canic-contracts.workspace = true
 canic-core = { workspace = true, features = [] }
 canic-host = { workspace = true }
 clap = { workspace = true }

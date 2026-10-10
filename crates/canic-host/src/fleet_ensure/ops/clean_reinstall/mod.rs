@@ -197,10 +197,12 @@ pub(in crate::fleet_ensure) fn import_request(
     })? {
         Some(existing) if existing == bytes => {}
         Some(_) => return Err(EnsureStateError::InvalidTerminalSource),
-        None => write_bytes(&declarations, &bytes).map_err(|source| EnsureStateError::Io {
-            path: declarations.clone(),
-            source,
-        })?,
+        None => write_bytes(&declarations, &bytes)
+            .map_err(crate::publication::ops::io_error)
+            .map_err(|source| EnsureStateError::Io {
+                path: declarations.clone(),
+                source,
+            })?,
     }
     let maximum_root_paid_calls =
         canic_core::control_plane_support::policy::pool_import::recommended_calls(samples.len())

@@ -2,8 +2,8 @@
 
 use super::*;
 use crate::fleet_ensure::policy::capacity_import::tests::principal;
-use canic_core::{
-    cdk::types::Cycles,
+use canic_contracts::{
+    cycles::Cycles,
     dto::pool::{CanisterPoolAsset, CanisterPoolAssetOrigin},
     ids::FleetSubnetCanisterPoolConfig,
 };

@@ -2,9 +2,9 @@
 
 use super::*;
 use crate::storage::stable::component_registry::RootComponentChildAllocationFailureRecord;
-use canic_core::{
-    control_plane_support::error::{ProvisioningFailureStage, ProvisioningRetryCategory},
-    diagnostics::codes,
+use canic_contracts::diagnostics::codes;
+use canic_core::control_plane_support::error::{
+    ProvisioningFailureStage, ProvisioningRetryCategory,
 };
 
 fn bootstrap_fixture() -> (ActiveComponentTreeFixture, RootComponentChildAllocationView) {
@@ -231,7 +231,7 @@ fn retained_child_failure_does_not_change_work_or_capacity() {
         Some(detail.as_str())
     );
     let encoded = candid::encode_one(&response).unwrap();
-    let decoded: canic_core::dto::component_registry::RootComponentChildAllocationFailure =
+    let decoded: canic_contracts::dto::component_registry::RootComponentChildAllocationFailure =
         candid::decode_one(&encoded).unwrap();
     assert_eq!(decoded, response);
     let record = retained.child_allocations[0].last_failure.clone().unwrap();

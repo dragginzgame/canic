@@ -4,15 +4,15 @@
 //! Does not own: occurrence resolution, placement assignment, publication, or runtime state.
 //! Boundary: source targets name logical service topology without physical roots or Canisters.
 
-use crate::ids::{
+use canic_contracts::ids::{
     CanisterRole, ComponentGroupDeploymentId, ComponentGroupMemberPath, ComponentSpecId,
     FleetServiceId,
 };
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-use serde::{Deserialize, Serialize};
-
 /// Top-level namespace for application service declarations.
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ServicesConfig {

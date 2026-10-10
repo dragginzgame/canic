@@ -7,7 +7,7 @@ pub(in crate::fleet_ensure) fn funding_binding(
     spec: &ComponentSpec,
 ) -> crate::fleet_ensure::view::startup_funding::StartupChildFundingBinding {
     use candid::Principal;
-    use canic_core::ids::*;
+    use canic_contracts::ids::*;
     let principal = |byte| Principal::from_slice(&[byte]);
     crate::fleet_ensure::view::startup_funding::StartupChildFundingBinding {
         release_set: FleetSubnetRootReleaseSet {
@@ -212,7 +212,7 @@ fn startup_tree_charges_root_only_for_direct_child_and_exposes_window_limits() {
         .get_mut("hubs")
         .unwrap()
         .cycles_funding
-        .max_per_request = canic_core::cdk::types::Cycles::new(2 * T);
+        .max_per_request = canic_contracts::cycles::Cycles::new(2 * T);
     let clamped = component(&clamped, spec, 49 * T / 10, "app", 0).unwrap();
     assert_eq!(clamped.root_grant_cycles, 36 * T);
     assert_eq!(

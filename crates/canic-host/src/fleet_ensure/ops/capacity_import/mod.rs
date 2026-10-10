@@ -4,6 +4,7 @@
 pub mod admission;
 mod destination;
 mod evidence;
+
 pub(in crate::fleet_ensure) mod funding;
 pub mod journal;
 pub mod observation;
@@ -142,9 +143,9 @@ fn review_digest(plan: &CapacityImportPlanRecord) -> Result<[u8; 32], serde_json
 /// Construct the exact Root reservation from verified retained review content.
 pub fn root_reservation(
     plan: &CapacityImportPlanRecord,
-) -> Result<canic_core::dto::pool_import::PoolImportReservation, CapacityImportReviewError> {
+) -> Result<canic_contracts::dto::pool_import::PoolImportReservation, CapacityImportReviewError> {
     verify_review(plan, plan.plan_sha256)?;
-    Ok(canic_core::dto::pool_import::PoolImportReservation {
+    Ok(canic_contracts::dto::pool_import::PoolImportReservation {
         sequence: plan.authority.import_sequence,
         plan_sha256: plan.plan_sha256,
         root_authority_sha256: plan.authority.root_authority_sha256,
@@ -156,19 +157,21 @@ pub fn root_reservation(
         sources: plan
             .sources
             .iter()
-            .map(|source| canic_core::dto::pool_import::PoolImportSource {
-                canister_id: source.binding.canister_id,
-                controllers: source.binding.controllers.clone(),
-                module_sha256: source.binding.module_sha256,
-                canister_version: source.binding.canister_version,
-                stopped: source.binding.stopped,
-                disposition_sha256:
-                    crate::fleet_ensure::policy::capacity_import::disposition_digest(source),
-                observed_cycles: source.observed_cycles,
-                observed_reserved_cycles: source.observed_reserved_cycles,
-                minimum_ready_cycles: source.minimum_ready_cycles,
-                maximum_debit_cycles: source.maximum_debit_cycles,
-            })
+            .map(
+                |source| canic_contracts::dto::pool_import::PoolImportSource {
+                    canister_id: source.binding.canister_id,
+                    controllers: source.binding.controllers.clone(),
+                    module_sha256: source.binding.module_sha256,
+                    canister_version: source.binding.canister_version,
+                    stopped: source.binding.stopped,
+                    disposition_sha256:
+                        crate::fleet_ensure::policy::capacity_import::disposition_digest(source),
+                    observed_cycles: source.observed_cycles,
+                    observed_reserved_cycles: source.observed_reserved_cycles,
+                    minimum_ready_cycles: source.minimum_ready_cycles,
+                    maximum_debit_cycles: source.maximum_debit_cycles,
+                },
+            )
             .collect(),
         observed_root_cycles: plan.root_budget.observed_cycles,
         observed_root_reserved_cycles: plan.root_budget.observed_reserved_cycles,
@@ -182,7 +185,7 @@ pub fn root_reservation(
 /// Authentication of this protected response remains the transport owner's responsibility.
 pub fn reservation_evidence(
     plan: &CapacityImportPlanRecord,
-    response: &canic_core::dto::pool_import::PoolImportStatus,
+    response: &canic_contracts::dto::pool_import::PoolImportStatus,
 ) -> Result<
     crate::fleet_ensure::model::capacity_import::CapacityImportReservationRecord,
     CapacityImportReviewError,

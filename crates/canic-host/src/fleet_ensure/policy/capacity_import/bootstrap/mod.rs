@@ -6,11 +6,12 @@ use crate::fleet_ensure::model::{
     DesiredCanister, DesiredCanisterKind, DesiredFleet, DesiredFleetBootstrapRoot, DesiredPresence,
 };
 use candid::Principal;
-use canic_core::ids::MAX_FLEET_CAPACITY_IMPORT_SOURCES;
+use canic_contracts::ids::MAX_FLEET_CAPACITY_IMPORT_SOURCES;
 use std::collections::BTreeSet;
 use thiserror::Error;
 
 /// An inconsistent initialization declaration cannot authorize installation or pool custody.
+
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 pub enum CapacityBootstrapError {
     #[error("capacity bootstrap requires exact supplied Root and Store identities")]

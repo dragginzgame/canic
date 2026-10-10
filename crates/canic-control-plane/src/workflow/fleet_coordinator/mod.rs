@@ -12,10 +12,11 @@ use crate::{
     dto::{
         fleet_coordinator::{
             CoordinatorFundingStatusResponse, CoordinatorOperationStatusResponse,
-            FleetCoordinatorInitArgs, FleetFundingPolicyRotationStatusPhase,
+            FleetFundingPolicyRotationStatusPhase,
         },
         root::RootRemovalOperationStatus,
     },
+    installation::FleetCoordinatorInitArgs,
     ops::{
         fleet_admission::{FleetAdmissionCoordinatorStep, FleetAdmissionOps},
         fleet_coordinator::FleetCoordinatorOps,
@@ -31,7 +32,62 @@ use crate::{
         FleetFundingPolicyRotationStep, FleetRootFundingCallView, FleetRootFundingDisposition,
     },
 };
-use candid::{CandidType, Principal};
+use candid::Principal;
+use canic_contracts::dto::component_provisioning::FleetComponentProvisioningAdvanceRequest;
+use canic_contracts::dto::component_provisioning::FleetComponentProvisioningOperation;
+use canic_contracts::dto::component_provisioning::FleetComponentProvisioningPhase;
+use canic_contracts::dto::component_provisioning::FleetComponentProvisioningPrepareRequest;
+use canic_contracts::dto::component_provisioning::FleetComponentProvisioningRootProgress;
+use canic_contracts::dto::component_provisioning::FleetComponentProvisioningStatusRequest;
+use canic_contracts::dto::component_provisioning::FleetComponentProvisioningStatusResponse;
+use canic_contracts::dto::component_provisioning::RootComponentDirectorySynchronizationResponse;
+use canic_contracts::dto::component_provisioning::RootComponentProvisioningStatusResponse;
+use canic_contracts::dto::error::Error;
+use canic_contracts::dto::fleet_admission::FleetAdmissionMutationOutcome;
+use canic_contracts::dto::fleet_admission::FleetAdmissionMutationRequest;
+use canic_contracts::dto::fleet_admission::FleetAdmissionMutationResponse;
+use canic_contracts::dto::fleet_admission::FleetAdmissionOperationPhase;
+use canic_contracts::dto::fleet_admission::FleetAdmissionRootReceipt;
+use canic_contracts::dto::fleet_admission::FleetAdmissionStatusRequest;
+use canic_contracts::dto::fleet_admission::FleetAdmissionStatusResponse;
+use canic_contracts::dto::fleet_coordinator::CoordinatorOperationReadRequest as RemoteRootStatusRequest;
+use canic_contracts::dto::fleet_funding::FleetFundingPolicyRotationApplyRequest;
+use canic_contracts::dto::fleet_funding::FleetFundingPolicyRotationBeginRequest;
+use canic_contracts::dto::fleet_funding::FleetFundingPolicyRotationRootActivateRequest;
+use canic_contracts::dto::fleet_funding::FleetFundingPolicyRotationRootPrepareRequest;
+use canic_contracts::dto::fleet_funding::FleetFundingPolicyRotationRootReceipt;
+use canic_contracts::dto::fleet_funding::FleetFundingPolicyRotationStageRootRequest;
+use canic_contracts::dto::fleet_funding::FleetRootFundingAcceptanceReceipt;
+use canic_contracts::dto::fleet_funding::FleetRootFundingRequest;
+use canic_contracts::dto::fleet_funding::FleetRootFundingResponse;
+use canic_contracts::dto::fleet_registry::FleetRegistry;
+use canic_contracts::dto::fleet_registry::FleetRegistryActivationRequest;
+use canic_contracts::dto::fleet_registry::FleetRegistryActivationResponse;
+use canic_contracts::dto::fleet_registry::FleetRegistryManifest;
+use canic_contracts::dto::fleet_registry::FleetRegistryVersion;
+use canic_contracts::dto::fleet_registry::FleetSubnetRootDeletionCompletionRequest;
+use canic_contracts::dto::fleet_registry::FleetSubnetRootDeletionExecutionRequest;
+use canic_contracts::dto::fleet_registry::FleetSubnetRootDeletionExecutionResponse;
+use canic_contracts::dto::fleet_registry::FleetSubnetRootDeletionResponse;
+use canic_contracts::dto::fleet_registry::FleetSubnetRootDeletionStatusRequest;
+use canic_contracts::dto::fleet_registry::FleetSubnetRootDrainingPublicationRequest;
+use canic_contracts::dto::fleet_registry::FleetSubnetRootDrainingReservationRequest;
+use canic_contracts::dto::fleet_registry::FleetSubnetRootDrainingReservationResponse;
+use canic_contracts::dto::fleet_registry::FleetSubnetRootDrainingReservationStatusRequest;
+use canic_contracts::dto::fleet_registry::FleetSubnetRootJoinRequest;
+use canic_contracts::dto::fleet_registry::FleetSubnetRootJoinResponse;
+use canic_contracts::dto::fleet_registry::FleetSubnetRootRemovalPublicationRequest;
+use canic_contracts::dto::fleet_registry::FleetSubnetRootSnapshotAcknowledgement;
+use canic_contracts::dto::fleet_registry::FleetSubnetRootSnapshotAcknowledgementRequest;
+use canic_contracts::dto::role::OperationReceipt;
+use canic_contracts::dto::role::OperationStatusRequest;
+use canic_contracts::dto::role::RootRemovalRequest;
+use canic_contracts::dto::state::SetStateResponse;
+use canic_contracts::dto::wire::projection::coordinator_root::RemoteRootCommand;
+use canic_contracts::dto::wire::projection::coordinator_root::RemoteRootCommandResponse;
+use canic_contracts::dto::wire::projection::coordinator_root::RemoteRootOperationStatusResponse;
+use canic_contracts::dto::wire::projection::coordinator_root::RemoteRootStatusResponse;
+use canic_contracts::protocol;
 use canic_core::{
     api::timer::TimerApi,
     cdk::utils::hash::hex_bytes,
@@ -39,91 +95,10 @@ use canic_core::{
         error::InternalError,
         ops::ic::{IcOps, call::CallOps},
     },
-    dto::{
-        component_provisioning::{
-            FleetComponentProvisioningAdvanceRequest, FleetComponentProvisioningOperation,
-            FleetComponentProvisioningPhase, FleetComponentProvisioningPrepareRequest,
-            FleetComponentProvisioningRootProgress, FleetComponentProvisioningStatusRequest,
-            FleetComponentProvisioningStatusResponse, RootComponentDirectorySynchronizationRequest,
-            RootComponentDirectorySynchronizationResponse,
-            RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningStatusResponse,
-        },
-        error::Error,
-        fleet_admission::{
-            FleetAdmissionActivateRootRequest, FleetAdmissionMutationOutcome,
-            FleetAdmissionMutationRequest, FleetAdmissionMutationResponse,
-            FleetAdmissionOpenRootRequest, FleetAdmissionOperationPhase,
-            FleetAdmissionPrepareRootRequest, FleetAdmissionRootReceipt,
-            FleetAdmissionStatusRequest, FleetAdmissionStatusResponse,
-        },
-        fleet_funding::{
-            FleetFundingPolicyRotationApplyRequest, FleetFundingPolicyRotationBeginRequest,
-            FleetFundingPolicyRotationRootActivateRequest,
-            FleetFundingPolicyRotationRootPrepareRequest, FleetFundingPolicyRotationRootReceipt,
-            FleetFundingPolicyRotationStageRootRequest, FleetRootFundingAcceptanceReceipt,
-            FleetRootFundingRequest, FleetRootFundingResponse,
-        },
-        fleet_registry::{
-            FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
-            FleetRegistryManifest, FleetRegistryVersion, FleetSubnetRootDeletionCompletionRequest,
-            FleetSubnetRootDeletionExecutionRequest, FleetSubnetRootDeletionExecutionResponse,
-            FleetSubnetRootDeletionResponse, FleetSubnetRootDeletionStatusRequest,
-            FleetSubnetRootDrainingPublicationRequest, FleetSubnetRootDrainingReservationRequest,
-            FleetSubnetRootDrainingReservationResponse,
-            FleetSubnetRootDrainingReservationStatusRequest, FleetSubnetRootJoinRequest,
-            FleetSubnetRootJoinResponse, FleetSubnetRootRemovalPublicationRequest,
-            FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootSnapshotAcknowledgementRequest,
-        },
-        role::{OperationReceipt, OperationStatusRequest, RootRemovalRequest},
-        state::SetStateResponse,
-    },
     log,
     log::Topic,
-    protocol,
 };
-use serde::Deserialize;
 use std::time::Duration;
-
-#[derive(CandidType)]
-enum RemoteRootCommand {
-    AcceptFunding(canic_core::dto::fleet_funding::FleetRootFundingAcceptanceRequest),
-    ActivateFleetAdmission(FleetAdmissionActivateRootRequest),
-    ActivateFundingPolicyRotation(FleetFundingPolicyRotationRootActivateRequest),
-    OpenFleetAdmission(FleetAdmissionOpenRootRequest),
-    PrepareFleetAdmission(FleetAdmissionPrepareRootRequest),
-    PrepareFundingPolicyRotation(FleetFundingPolicyRotationRootPrepareRequest),
-    ProvisionComponents(RootComponentProvisioningAcceptanceRequest),
-    RemoveRoot(RootRemovalRequest),
-    SynchronizeComponentDirectories(RootComponentDirectorySynchronizationRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum RemoteRootCommandResponse {
-    AcceptFunding(Box<FleetRootFundingAcceptanceReceipt>),
-    ActivateFleetAdmission(Box<FleetAdmissionRootReceipt>),
-    ActivateFundingPolicyRotation(Box<FleetFundingPolicyRotationRootReceipt>),
-    OpenFleetAdmission(Box<FleetAdmissionRootReceipt>),
-    OperationAccepted(Box<OperationReceipt>),
-    PrepareFleetAdmission(Box<FleetAdmissionRootReceipt>),
-    PrepareFundingPolicyRotation(Box<FleetFundingPolicyRotationRootReceipt>),
-    SynchronizeComponentDirectories(Box<RootComponentDirectorySynchronizationResponse>),
-}
-
-#[derive(CandidType)]
-enum RemoteRootStatusRequest {
-    Operation(OperationStatusRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum RemoteRootStatusResponse {
-    Operation(RemoteRootOperationStatusResponse),
-}
-
-#[derive(CandidType, Deserialize)]
-enum RemoteRootOperationStatusResponse {
-    ProvisionComponents(Box<RootComponentProvisioningStatusResponse>),
-    RemoveRoot(Box<RootRemovalOperationStatus>),
-}
 
 ///
 /// FleetCoordinatorWorkflow
@@ -480,7 +455,7 @@ impl FleetCoordinatorWorkflow {
     pub(crate) fn publish_root_draining(
         request: FleetSubnetRootDrainingPublicationRequest,
     ) -> Result<
-        canic_core::dto::fleet_registry::FleetSubnetRootDrainingPublicationResponse,
+        canic_contracts::dto::fleet_registry::FleetSubnetRootDrainingPublicationResponse,
         InternalError,
     > {
         FleetCoordinatorOps::publish_root_draining(request)
@@ -546,7 +521,7 @@ impl FleetCoordinatorWorkflow {
         caller: Principal,
         request: FleetSubnetRootRemovalPublicationRequest,
     ) -> Result<
-        canic_core::dto::fleet_registry::FleetSubnetRootRemovalPublicationResponse,
+        canic_contracts::dto::fleet_registry::FleetSubnetRootRemovalPublicationResponse,
         InternalError,
     > {
         FleetCoordinatorOps::publish_root_removed(caller, request)
@@ -924,7 +899,7 @@ async fn advance_scheduled_component_provisioning(operation_id: [u8; 32], plan_h
         return;
     }
     if status.pending_root_failure.and_then(|failure| failure.origin).is_some_and(|origin|
-        origin.retry_category == canic_core::dto::component_provisioning::ProvisioningRetryCategory::ReviewRequired)
+        origin.retry_category == canic_contracts::dto::component_provisioning::ProvisioningRetryCategory::ReviewRequired)
     {
         return;
     }
@@ -965,7 +940,7 @@ async fn advance_scheduled_component_provisioning(operation_id: [u8; 32], plan_h
                 status.phase,
             );
             if !error.provisioning_failure().is_some_and(|origin|
-                origin.retry_category == canic_core::dto::component_provisioning::ProvisioningRetryCategory::ReviewRequired)
+                origin.retry_category == canic_contracts::dto::component_provisioning::ProvisioningRetryCategory::ReviewRequired)
             {
                 schedule_component_provisioning(operation_id, plan_hash, Duration::from_secs(1));
             }

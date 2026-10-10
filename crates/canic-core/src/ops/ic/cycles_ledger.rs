@@ -6,7 +6,7 @@
 
 use crate::{
     InternalError,
-    cdk::types::{Cycles, Principal},
+    cdk::types::Principal,
     dto::fleet_registry::FleetLedgerTransferIntent,
     infra::ic::{
         IcInfraError,
@@ -18,8 +18,10 @@ use crate::{
     ops::{OpsError, cost_guard::CostGuardPermit},
 };
 use candid::Nat;
+use canic_contracts::cycles::Cycles;
 
 /// Operations facade for the IC-mainnet Cycles Ledger.
+
 pub struct CyclesLedgerOps;
 
 impl CyclesLedgerOps {

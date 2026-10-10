@@ -11,30 +11,21 @@ mod tests;
 mod transport;
 
 use self::transport::local_query;
-use std::path::Path;
-
-use candid::{CandidType, Decode, Deserialize, Encode};
-use canic_core::{
-    dto::{error::Error as CanicError, role::RoleOverviewResponse},
-    ids::BuildNetwork,
-};
-use thiserror::Error as ThisError;
-
 use crate::icp_config::{
     IcpConfigError, resolve_current_canic_icp_root, resolve_icp_build_network_from_root,
 };
+use candid::{Decode, Encode};
+use canic_contracts::{
+    dto::{
+        error::Error as CanicError,
+        wire::projection::overview::{RoleStatusRequest, RoleStatusResponse},
+    },
+    ids::BuildNetwork,
+};
+use std::path::Path;
+use thiserror::Error as ThisError;
 
 pub use self::status::local_replica_status_reachable_from_root;
-
-#[derive(CandidType)]
-enum RoleStatusRequest {
-    Overview,
-}
-
-#[derive(CandidType, Deserialize)]
-enum RoleStatusResponse {
-    Overview(RoleOverviewResponse),
-}
 
 ///
 /// ReplicaQueryError

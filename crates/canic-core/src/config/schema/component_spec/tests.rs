@@ -5,12 +5,10 @@
 //! Boundary: focused parsing and validation checks for one Component Spec.
 
 use super::*;
-use crate::{
-    cdk::types::TC,
-    config::schema::{
-        MAX_COMPONENT_PROVISIONING_GRANTS, MAX_COMPONENT_SPAWN_GRANTS, NAME_MAX_BYTES, Validate,
-    },
+use crate::config::schema::{
+    MAX_COMPONENT_PROVISIONING_GRANTS, MAX_COMPONENT_SPAWN_GRANTS, NAME_MAX_BYTES, Validate,
 };
+use canic_contracts::cycles::TC;
 
 fn component_spec(role: &str) -> ComponentSpecConfig {
     ComponentSpecConfig {

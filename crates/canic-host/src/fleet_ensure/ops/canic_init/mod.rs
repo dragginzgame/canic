@@ -13,7 +13,7 @@ use crate::{
             DesiredCanisterInit, DesiredCanisterKind, DesiredFleet, DesiredFleetBootstrap,
             DesiredFleetBootstrapRoot,
         },
-        ops::protocol::{self, ProtocolEffectError},
+        ops::{protocol, protocol::ProtocolEffectError},
         policy::capacity_import::bootstrap::{self as capacity_bootstrap, CapacityBootstrapError},
     },
     release_build::validate_finalized_release_build_manifest,
@@ -27,8 +27,7 @@ use crate::{
     },
 };
 use candid::{Principal, encode_one};
-use canic_control_plane::dto::fleet_coordinator::FleetCoordinatorInitArgs;
-use canic_core::{
+use canic_contracts::{
     dto::fleet_subnet_root::{
         FleetSubnetRootAuthority, FleetSubnetRootInitArgs, FleetSubnetWasmStoreInitArgs,
     },
@@ -37,8 +36,9 @@ use canic_core::{
         FleetSubnetRootBinding, FleetSubnetRootReleaseSet, FleetSubnetWasmStoreActivationAuthority,
         FleetSubnetWasmStoreAuthority,
     },
-    shared_support::fleet_admission_policy::bind_initial_fleet_admission_policy,
 };
+use canic_control_plane::installation::FleetCoordinatorInitArgs;
+use canic_core::shared_support::fleet_admission_policy::bind_initial_fleet_admission_policy;
 use sha2_host::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
@@ -117,7 +117,7 @@ pub struct CanicInitRequest<'a> {
 
 fn bind_capacity_bootstrap(
     bytes: &[u8],
-    hold: canic_core::dto::pool_import::PoolImportBootstrap,
+    hold: canic_contracts::dto::pool_import::PoolImportBootstrap,
 ) -> Result<Vec<u8>, CanicInitError> {
     let mut args: FleetSubnetRootInitArgs = candid::decode_one(bytes)?;
     args.capacity_import_bootstrap = Some(hold);
@@ -387,7 +387,7 @@ fn encode_reviewed_root_arguments(
     )?;
     bind_capacity_bootstrap(
         &bytes,
-        canic_core::dto::pool_import::PoolImportBootstrap {
+        canic_contracts::dto::pool_import::PoolImportBootstrap {
             review_sha256: hold.review_sha256,
             operator: hold.operator,
             sources: hold.sources.clone(),
@@ -398,7 +398,7 @@ fn encode_reviewed_root_arguments(
 fn encode_coordinator_arguments(
     bootstrap: &DesiredFleetBootstrap,
     authority: FleetRegistryAuthority,
-    admission: canic_core::ids::FleetAdmissionPolicy,
+    admission: canic_contracts::ids::FleetAdmissionPolicy,
 ) -> Result<Vec<u8>, CanicInitError> {
     encode_one(FleetCoordinatorInitArgs {
         configured_app: bootstrap.app.clone(),

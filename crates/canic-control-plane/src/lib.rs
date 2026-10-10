@@ -4,23 +4,7 @@
 //! managed-store workflows on top of `canic-core`. The `canic` facade
 //! re-exports each role-specific surface through its matching feature.
 
-canic_core::ic_memory_range!(
-    authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-    start = canic_core::role_contract::allocation::CANIC_CONTROL_PLANE_MIN_ID,
-    end = canic_core::role_contract::allocation::CANIC_CONTROL_PLANE_MAX_ID,
-);
-#[cfg(feature = "wasm-store-canister")]
-canic_core::ic_memory_range!(
-    authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-    start = canic_core::role_contract::allocation::memory::control_plane::FIXTURE_STORE_ID,
-    end = canic_core::role_contract::allocation::memory::control_plane::FIXTURE_STORE_ID,
-);
-canic_core::ic_memory_range!(
-    authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-    start =
-        canic_core::role_contract::allocation::memory::control_plane::FLEET_COORDINATOR_FUNDING_ID,
-    end = canic_core::role_contract::allocation::memory::control_plane::ROOT_ADMISSION_ID,
-);
+use canic_contracts::{dto, ids};
 
 #[cfg(test)]
 const _: () = {
@@ -42,9 +26,8 @@ const _: () = {
 pub mod api;
 #[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
 pub(crate) mod config;
-pub mod dto;
-#[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
-pub mod ids;
+pub mod installation;
+
 pub(crate) mod ops;
 #[cfg(feature = "root-control-plane")]
 pub(crate) mod runtime;

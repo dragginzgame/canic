@@ -13,6 +13,12 @@ pub mod metrics;
 #[doc(hidden)]
 pub mod workflow;
 
+/// Host namespace owner for the service’s permanent memory requests.
+pub const MEMORY_AUTHORITY: &str = "blob-service";
+
+/// Permanent namespace granted by the composing artifact’s allocation pool.
+pub const MEMORY_KEY_PREFIX: &str = "blob.";
+
 /// Upstream typed service contracts, shared without a second DTO schema.
 pub use ic_blob_storage_contracts::dto;
 

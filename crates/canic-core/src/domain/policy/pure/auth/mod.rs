@@ -4,15 +4,14 @@
 //! Does not own: proof verification, storage access, replay, or signing.
 //! Boundary: called by workflow before auth ops prepare delegated-token proofs.
 
-use crate::{
-    domain::value::Principal,
-    ids::{CanisterRole, cap},
-    model::auth::application_authorization::ApplicationScopeRef,
-};
-use thiserror::Error as ThisError;
-
 pub mod application_authorization;
 mod root_provisioning;
+
+use crate::{
+    domain::value::Principal, model::auth::application_authorization::ApplicationScopeRef,
+};
+use canic_contracts::ids::{CanisterRole, cap};
+use thiserror::Error as ThisError;
 
 pub use root_provisioning::{
     RootDelegationProofPreparePolicyInput, validate_root_delegation_proof_prepare_policy,

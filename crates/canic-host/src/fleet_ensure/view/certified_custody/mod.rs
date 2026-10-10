@@ -1,7 +1,7 @@
 //! Certified physical canister identity observed at the current IC boundary.
 
 use candid::Principal;
-use canic_core::ids::SubnetId;
+use canic_contracts::ids::SubnetId;
 
 ///
 /// CertifiedCanisterCustodyView
@@ -9,6 +9,7 @@ use canic_core::ids::SubnetId;
 /// One verified certificate's controller, code and subnet observations. This is
 /// a time-local custody sample; it contains no cycle balance or wipe permission.
 ///
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CertifiedCanisterCustodyView {
     pub(in crate::fleet_ensure) principal: Principal,

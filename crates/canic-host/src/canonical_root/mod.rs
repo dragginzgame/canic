@@ -8,14 +8,13 @@ mod tests;
 
 use crate::{
     cargo_metadata::{CargoFeatureSelection, cargo_metadata_catalog_for_manifest},
-    fleet_package::{
-        self, FleetPackageSpec, resolved_canic_package, resolved_wrapper_dependencies,
-    },
+    fleet_package,
+    fleet_package::{FleetPackageSpec, resolved_canic_package, resolved_wrapper_dependencies},
     role_contract::PackageValidationMode,
 };
+use canic_contracts::ids::CanisterRole;
 use canic_core::{
     bootstrap::compiled::ConfigModel,
-    ids::CanisterRole,
     role_contract::{RoleContractFinding, required_features_for_role},
 };
 use std::path::{Path, PathBuf};

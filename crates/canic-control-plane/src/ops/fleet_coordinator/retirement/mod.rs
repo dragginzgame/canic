@@ -9,12 +9,12 @@ use crate::storage::stable::fleet_coordinator::{
     FleetCoordinatorRegistryRecord, FleetRetirementRecord,
 };
 use candid::Principal;
-use canic_core::{
-    control_plane_support::{error::InternalError, ops::fleet_registry::FleetRegistryOps},
-    dto::fleet_registry::{
-        FleetLedgerTransferIntent, FleetLedgerTransferReceipt, FleetRetirementRequest,
-        FleetRetirementStatus, FleetSubnetRootStatus,
-    },
+use canic_contracts::dto::fleet_registry::{
+    FleetLedgerTransferIntent, FleetLedgerTransferReceipt, FleetRetirementRequest,
+    FleetRetirementStatus, FleetSubnetRootStatus,
+};
+use canic_core::control_plane_support::{
+    error::InternalError, ops::fleet_registry::FleetRegistryOps,
 };
 
 impl FleetCoordinatorOps {

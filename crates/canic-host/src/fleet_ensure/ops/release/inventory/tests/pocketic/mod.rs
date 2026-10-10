@@ -7,13 +7,16 @@ mod provisioning;
 mod receipts;
 
 use super::*;
-use candid::{CandidType, Principal};
-use canic_core::{
+use candid::Principal;
+use canic_contracts::{
     dto::{
         error::Error,
         pool::{
             CanisterPoolAsset, CanisterPoolAssetOrigin, CanisterPoolAssetStatus,
             CanisterPoolResponse,
+        },
+        wire::projection::capacity_inventory::{
+            CoordinatorResponse as RegistryReply, RootResponse as PoolReply,
         },
     },
     ids::{CanonicalNetworkId, SubnetId},
@@ -22,16 +25,6 @@ use ic_agent::identity::BasicIdentity;
 use ic_testkit::pocket_ic::{CanisterSettings, PocketIcBuilder};
 use sha2_host::{Digest, Sha256};
 use std::{fs, process::Command, time::SystemTime};
-
-#[derive(CandidType)]
-enum RegistryReply {
-    Registry(Box<FleetRegistry>),
-}
-
-#[derive(CandidType)]
-enum PoolReply {
-    Pool(Box<CanisterPoolResponse>),
-}
 
 fn wire_fixture() -> Vec<u8> {
     let directory = crate::test_support::temp_dir("release-inventory-wire");

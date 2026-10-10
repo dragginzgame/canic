@@ -1,31 +1,29 @@
 //! Shared explicit protected-authority fixtures for control-plane unit tests.
 
 use candid::Principal;
+#[cfg(feature = "root-control-plane")]
+use canic_contracts::dto::fleet_funding::{
+    FleetRootFundingAcceptanceReceipt, FleetRootFundingAcceptanceRequest,
+};
+#[cfg(any(feature = "root-control-plane", feature = "fleet-coordinator-canister"))]
+use canic_contracts::ids::FleetAdmissionPolicy;
 #[cfg(feature = "fleet-coordinator-canister")]
-use canic_core::ids::FleetCoordinatorRootFundingPolicy;
-use canic_core::{
-    cdk::types::Cycles,
+use canic_contracts::ids::FleetCoordinatorRootFundingPolicy;
+use canic_contracts::{
+    cycles::Cycles,
     dto::{fleet_funding::FleetRootFundingRequest, fleet_registry::FleetRegistryVersion},
     ids::{
         AppId, CanonicalNetworkId, CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding,
         FleetFundingProfile, FleetId, FleetKey, FleetRegistryAuthority,
         FleetSubnetRootFundingAuthority, FleetSubnetRootFundingPolicy, SubnetId,
     },
-    shared_support::fleet_funding_policy::{
-        fleet_root_funding_operation_id, fleet_subnet_root_funding_policy_hash,
-    },
-};
-
-#[cfg(feature = "root-control-plane")]
-use canic_core::dto::fleet_funding::{
-    FleetRootFundingAcceptanceReceipt, FleetRootFundingAcceptanceRequest,
 };
 #[cfg(any(feature = "root-control-plane", feature = "fleet-coordinator-canister"))]
-use canic_core::{
-    ids::FleetAdmissionPolicy,
-    shared_support::fleet_admission_policy::{
-        bind_initial_fleet_admission_policy, compile_fleet_admission_policy_template,
-    },
+use canic_core::shared_support::fleet_admission_policy::{
+    bind_initial_fleet_admission_policy, compile_fleet_admission_policy_template,
+};
+use canic_core::shared_support::fleet_funding_policy::{
+    fleet_root_funding_operation_id, fleet_subnet_root_funding_policy_hash,
 };
 
 #[cfg(feature = "fleet-coordinator-canister")]

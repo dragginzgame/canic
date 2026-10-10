@@ -10,10 +10,10 @@ use crate::{
         DelegatedRoleGrant, DelegationAudience, RootIssuerConfigureRequest,
         RootIssuerConfigureResponse, RootIssuerPolicyView,
     },
-    ids::FleetKey,
     model::auth::{RootDelegatedRoleGrantPolicy, RootIssuerPolicy, RootIssuerRenewalTemplate},
     ops::{auth::delegated::audience::validate_role_grants, storage::auth::RootDelegationStateOps},
 };
+use canic_contracts::ids::FleetKey;
 
 ///
 /// RootIssuerConfiguration

@@ -21,11 +21,11 @@ pub(in crate::pic::fleet_registry::baseline) fn running_application_import_clear
     pic.set_controllers(source, None, vec![root, Principal::anonymous()])
         .unwrap();
     let before = pic.canister_status(source, Some(root)).unwrap();
-    let running: canic_core::dto::canister::CanisterStatusType =
+    let running: canic_contracts::dto::canister::CanisterStatusType =
         candid::decode_one(&encode_one(before.status).unwrap()).unwrap();
     assert_eq!(
         running,
-        canic_core::dto::canister::CanisterStatusType::Running
+        canic_contracts::dto::canister::CanisterStatusType::Running
     );
     let root_before = pic.cycle_balance(root);
     let import = || {
@@ -33,7 +33,7 @@ pub(in crate::pic::fleet_registry::baseline) fn running_application_import_clear
             .update_candid_as(
                 root,
                 Principal::anonymous(),
-                canic_core::protocol::CANIC_ROOT_COMMAND,
+                canic_contracts::protocol::CANIC_ROOT_COMMAND,
                 (RootCommandFragment::ImportPoolCanister(
                     PoolCanisterRequest {
                         canister_id: source,
@@ -48,11 +48,11 @@ pub(in crate::pic::fleet_registry::baseline) fn running_application_import_clear
     // Discard the successful reply as an interrupted host would; Root retains Ready ownership.
     import();
     let cleared = pic.canister_status(source, Some(root)).unwrap();
-    let stopped: canic_core::dto::canister::CanisterStatusType =
+    let stopped: canic_contracts::dto::canister::CanisterStatusType =
         candid::decode_one(&encode_one(cleared.status).unwrap()).unwrap();
     assert_eq!(
         stopped,
-        canic_core::dto::canister::CanisterStatusType::Stopped
+        canic_contracts::dto::canister::CanisterStatusType::Stopped
     );
     assert!(cleared.module_hash.is_none());
     assert_eq!(cleared.memory_metrics.stable_memory_size, Nat::from(0_u8));

@@ -9,21 +9,17 @@ use super::{
     FleetSubnetRootRemovalPublicationReceiptRecord, receipt_invariant,
 };
 use candid::{CandidType, Principal};
-use canic_core::{
-    control_plane_support::error::InternalError,
-    dto::{
-        fleet_registry::{
-            FleetSubnetRootDeletionCompletionRequest, FleetSubnetRootDeletionExecutionRequest,
-            FleetSubnetRootDeletionExecutionResponse,
-            FleetSubnetRootDeletionReadinessIntentRequest,
-            FleetSubnetRootDeletionReadinessIntentResponse,
-            FleetSubnetRootDeletionReadinessRequest, FleetSubnetRootDeletionReadinessResponse,
-            FleetSubnetRootDeletionResponse, FleetSubnetRootDeletionStatusRequest,
-            FleetSubnetRootStatus,
-        },
-        fleet_subnet_root::FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
+use canic_contracts::dto::{
+    fleet_registry::{
+        FleetSubnetRootDeletionCompletionRequest, FleetSubnetRootDeletionExecutionRequest,
+        FleetSubnetRootDeletionExecutionResponse, FleetSubnetRootDeletionReadinessIntentRequest,
+        FleetSubnetRootDeletionReadinessIntentResponse, FleetSubnetRootDeletionReadinessRequest,
+        FleetSubnetRootDeletionReadinessResponse, FleetSubnetRootDeletionResponse,
+        FleetSubnetRootDeletionStatusRequest, FleetSubnetRootStatus,
     },
+    fleet_subnet_root::FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
 };
+use canic_core::control_plane_support::error::InternalError;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 

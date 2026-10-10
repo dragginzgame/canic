@@ -19,7 +19,6 @@ use crate::{
     dto::authority_restore::{
         AuthorityReleaseRequest, AuthorityRestoreFenceStatusResponse, AuthoritySnapshotRequest,
     },
-    ids::{EndpointCall, EndpointCallKind},
     ops::{
         ic::{IcOps, mgmt::MgmtOps},
         runtime::env::EnvOps,
@@ -29,6 +28,7 @@ use crate::{
     view::authority_restore::AuthorityMutationFence,
     workflow::runtime::timer::{TimerAuthorityWorkflow, TimerError},
 };
+use canic_contracts::ids::{EndpointCall, EndpointCallKind};
 
 /// Runtime coordinator for Fleet authority release sealing and snapshot recovery.
 pub struct AuthorityRestoreWorkflow;

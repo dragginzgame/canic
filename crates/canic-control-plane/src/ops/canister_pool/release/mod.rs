@@ -5,10 +5,8 @@ use crate::{
     ops::canister_pool::{CanisterPoolOps, capacity_import, creation_to_dto},
     storage::stable::canister_pool::CanisterPoolStore,
 };
-use canic_core::{
-    cdk::types::Principal, control_plane_support::error::InternalError,
-    dto::pool::CanisterPoolHandoff,
-};
+use canic_contracts::dto::pool::CanisterPoolHandoff;
+use canic_core::{cdk::types::Principal, control_plane_support::error::InternalError};
 
 impl CanisterPoolOps {
     /// Preserve issued effects, exhaustion and historical receipts without touching physical assets.

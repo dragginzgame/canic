@@ -4,13 +4,12 @@
 //! Does not own: network discovery, root creation, release-set construction, or installation.
 //! Boundary: exercises canonicalization and Fleet-scoped admission/placement invariants.
 
-use canic_core::{
-    bootstrap::{compiled::ConfigModel, parse_config_model},
-    cdk::types::Cycles,
+use super::*;
+use canic_contracts::{
+    cycles::Cycles,
     ids::{CyclesFundingBudget, FleetSubnetRootLimits, SubnetId},
 };
-
-use super::*;
+use canic_core::bootstrap::{compiled::ConfigModel, parse_config_model};
 
 const CONFIG: &str = r#"
 [app]
@@ -54,7 +53,7 @@ fn limits() -> FleetSubnetRootLimits {
         maximum_registry_bytes: 4_194_304,
         maximum_wasm_store_bytes: 40_000_000,
         maximum_group_placements: 16,
-        canister_pool: canic_core::ids::FleetSubnetCanisterPoolConfig {
+        canister_pool: canic_contracts::ids::FleetSubnetCanisterPoolConfig {
             minimum_size: 1,
             maximum_size: 10,
             canister_cycles: Cycles::new(5_000_000_000_000),

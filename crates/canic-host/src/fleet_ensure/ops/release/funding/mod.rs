@@ -5,6 +5,7 @@
 
 mod assessment;
 mod coordinator;
+
 #[cfg(test)]
 pub(super) mod tests;
 
@@ -17,12 +18,16 @@ use crate::{
     icp::IcpCli,
 };
 use candid::{CandidType, Principal};
-use canic_control_plane::dto::root::RootFundingReleaseResponse;
-use canic_core::{
-    dto::{error::Error as CanicError, fleet_registry::FleetRegistry},
+use canic_contracts::{
+    dto::{
+        error::Error as CanicError,
+        fleet_registry::FleetRegistry,
+        root::RootFundingReleaseResponse,
+        wire::projection::release_funding::{Request, Response},
+    },
     protocol,
-    shared_support::fleet_funding_policy::fleet_subnet_root_funding_policy_hash,
 };
+use canic_core::shared_support::fleet_funding_policy::fleet_subnet_root_funding_policy_hash;
 use ic_agent::Agent;
 use serde::Deserialize;
 use std::{collections::BTreeSet, time::Duration};
@@ -66,16 +71,6 @@ pub enum ReleaseFundingStage {
     Decode,
     Pagination,
     Query,
-}
-
-#[derive(CandidType)]
-enum Request {
-    FundingRelease(Option<u64>),
-}
-
-#[derive(CandidType, Deserialize)]
-enum Response {
-    FundingRelease(Box<RootFundingReleaseResponse>),
 }
 
 /// Collect Coordinator treasury and every selected Root's funding evidence under reviewed custody.

@@ -1,0 +1,468 @@
+//
+// TemplateManifestInput
+//
+
+use crate::{
+    dto::{
+        capability::{NonrootCyclesCapabilityEnvelopeV1, NonrootCyclesCapabilityResponseV1},
+        cascade::{StateSnapshotInput, TopologySnapshotInput},
+        fixture_provisioning::{
+            FixtureDescriptor, FixtureGrant, FixtureGrantRequest, FixtureSourceStatus,
+            FixtureStoreError,
+        },
+        fleet_activation::{
+            FleetActivationRequest, FleetActivationStatusResponse, FleetCredentialGenerationRequest,
+        },
+        role::{OperationReceipt, OperationStatusRequest},
+    },
+    ids::{
+        CanisterRole, FleetSubnetWasmStoreAuthority, TemplateChunkingMode, TemplateId,
+        TemplateManifestState, TemplateVersion, WasmStoreBinding, WasmStoreGcMode,
+    },
+};
+use candid::{CandidType, Principal};
+use serde::Deserialize;
+
+#[cfg(test)]
+mod chunk_encoding_tests;
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
+pub struct TemplateManifestInput {
+    pub template_id: TemplateId,
+    pub role: CanisterRole,
+    pub version: TemplateVersion,
+    pub payload_hash: Vec<u8>,
+    pub payload_size_bytes: u64,
+    pub store_binding: WasmStoreBinding,
+    pub chunking_mode: TemplateChunkingMode,
+    pub manifest_state: TemplateManifestState,
+    pub approved_at: Option<u64>,
+    pub created_at: u64,
+}
+
+//
+// TemplateManifestResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct TemplateManifestResponse {
+    pub template_id: TemplateId,
+    pub role: CanisterRole,
+    pub version: TemplateVersion,
+    pub payload_hash: Vec<u8>,
+    pub payload_size_bytes: u64,
+    pub store_binding: WasmStoreBinding,
+    pub chunking_mode: TemplateChunkingMode,
+    pub manifest_state: TemplateManifestState,
+    pub approved_at: Option<u64>,
+    pub created_at: u64,
+}
+
+//
+// TemplateChunkSetPrepareInput
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
+pub struct TemplateChunkSetPrepareInput {
+    /// Optional approved manifest admitted atomically with this exact chunk set.
+    pub manifest: Option<TemplateManifestInput>,
+    pub template_id: TemplateId,
+    pub version: TemplateVersion,
+    pub payload_hash: Vec<u8>,
+    pub payload_size_bytes: u64,
+    pub chunk_hashes: Vec<Vec<u8>>,
+}
+
+//
+// TemplateChunkInput
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
+pub struct TemplateChunkInput {
+    /// Exact metadata admitted with chunk zero; absent for subsequent chunks.
+    pub preparation: Option<TemplateChunkSetPrepareInput>,
+    pub template_id: TemplateId,
+    pub version: TemplateVersion,
+    pub chunk_index: u32,
+    pub bytes: Vec<u8>,
+}
+
+/// Borrowed encoding of [`TemplateChunkInput`] without copying retained chunk bytes.
+/// Its complete Candid shape and encoded bytes match the owned request.
+#[derive(CandidType)]
+pub struct TemplateChunkInputRef<'a> {
+    pub preparation: Option<&'a TemplateChunkSetPrepareInput>,
+    pub template_id: &'a TemplateId,
+    pub version: &'a TemplateVersion,
+    pub chunk_index: u32,
+    pub bytes: &'a [u8],
+}
+
+//
+// TemplateChunkSetInfoResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct TemplateChunkSetInfoResponse {
+    pub chunk_hashes: Vec<Vec<u8>>,
+}
+
+//
+// TemplateChunkResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct TemplateChunkResponse {
+    pub bytes: Vec<u8>,
+}
+
+/// Exact template release key used by Store command inspection.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct TemplateLookupRequest {
+    pub template_id: TemplateId,
+    pub version: TemplateVersion,
+}
+
+/// Exact template chunk key used by the Store's bounded read lane.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct TemplateChunkRequest {
+    pub template_id: TemplateId,
+    pub version: TemplateVersion,
+    pub chunk_index: u32,
+}
+
+//
+// WasmStoreCatalogEntryResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct WasmStoreCatalogEntryResponse {
+    pub role: CanisterRole,
+    pub template_id: TemplateId,
+    pub version: TemplateVersion,
+    pub payload_hash: Vec<u8>,
+    pub payload_size_bytes: u64,
+}
+
+//
+// WasmStoreTemplateStatusResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct WasmStoreTemplateStatusResponse {
+    pub template_id: TemplateId,
+    pub versions: u16,
+}
+
+//
+// WasmStoreGcStatusResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct WasmStoreGcStatusResponse {
+    pub mode: WasmStoreGcMode,
+    pub changed_at: u64,
+    pub prepared_at: Option<u64>,
+    pub started_at: Option<u64>,
+    pub completed_at: Option<u64>,
+    pub runs_completed: u32,
+}
+
+//
+// WasmStoreStatusResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct WasmStoreStatusResponse {
+    pub inventory: WasmStoreInventoryResponse,
+    pub gc: WasmStoreGcStatusResponse,
+    pub occupied_store_bytes: u64,
+    pub occupied_store_size: String,
+    pub max_store_bytes: u64,
+    pub max_store_size: String,
+    pub remaining_store_bytes: u64,
+    pub remaining_store_size: String,
+    pub headroom_bytes: Option<u64>,
+    pub headroom_size: Option<String>,
+    pub within_headroom: bool,
+    pub template_count: u32,
+    pub max_templates: Option<u32>,
+    pub release_count: u32,
+    pub max_template_versions_per_template: Option<u16>,
+    pub templates: Vec<WasmStoreTemplateStatusResponse>,
+}
+
+/// Aggregate retained inventory; template and opaque fixture chunks stay distinct.
+#[derive(CandidType, Clone, Debug, Default, Deserialize, Eq, PartialEq)]
+pub struct WasmStoreInventoryResponse {
+    pub approved_catalog_entries: u64,
+    pub expected_template_chunks: u64,
+    pub stored_template_chunks: u64,
+    pub fixture_sources: u64,
+    pub expected_fixture_chunks: u64,
+    pub stored_fixture_chunks: u64,
+}
+
+/// Store garbage-collection detail projected through the operation lane.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct WasmStoreGcOperationStatus {
+    pub operation_id: [u8; 32],
+    pub gc: WasmStoreGcStatusResponse,
+}
+
+/// Exact outcome requested from the existing Store retirement operation.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub enum WasmStoreGcTarget {
+    Complete,
+    Prepared,
+}
+
+/// Root-owned retirement intent; preparation replay never authorizes collection.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct WasmStoreGcRequest {
+    pub operation_id: [u8; 32],
+    pub target: WasmStoreGcTarget,
+}
+
+/// Closed Store control-plane command union.
+#[derive(CandidType, Deserialize)]
+pub enum StoreCommand {
+    ActivateFleet(FleetActivationRequest),
+    InspectTemplate(TemplateLookupRequest),
+    PrepareChunkSet(TemplateChunkSetPrepareInput),
+    PrepareFleetCredential(FleetCredentialGenerationRequest),
+    PrepareFixture(FixtureDescriptor),
+    ReclaimDeletionCycles(WasmStoreDeletionCycleReclamationRequest),
+    RespondCapability(NonrootCyclesCapabilityEnvelopeV1),
+    RunGc(WasmStoreGcRequest),
+    StageManifest(TemplateManifestInput),
+    SetFixtureGrant(Box<FixtureGrantRequest>),
+    SynchronizeState(StateSnapshotInput),
+    SynchronizeTopology(TopologySnapshotInput),
+}
+
+/// Closed response union correlated to one accepted Store command.
+#[derive(CandidType, Deserialize)]
+pub enum StoreCommandResponse {
+    FixtureSource(Result<FixtureSourceStatus, FixtureStoreError>),
+    FixtureGrant(Box<Result<FixtureGrant, FixtureStoreError>>),
+    InspectTemplate(TemplateChunkSetInfoResponse),
+    OperationAccepted(OperationReceipt),
+    PrepareChunkSet(TemplateChunkSetInfoResponse),
+    ReclaimDeletionCycles(WasmStoreDeletionCycleReclamationResponse),
+    RespondCapability(NonrootCyclesCapabilityResponseV1),
+    StageManifest,
+    SynchronizeState(crate::dto::cascade::StateCascadeReport),
+    SynchronizeTopology,
+}
+
+/// Store diagnostics are uniformly controller-authorized.
+#[derive(CandidType, Clone, Debug, Deserialize)]
+pub enum StoreObservabilityRequest {
+    CycleBalance,
+    CycleHistory(crate::dto::page::PageRequest),
+}
+
+/// Store diagnostic results under one controller rule.
+#[derive(CandidType, Deserialize)]
+pub enum StoreObservabilityResponse {
+    CycleBalance(crate::dto::role::CycleBalanceStatusResponse),
+    CycleHistory(crate::dto::page::Page<crate::dto::cycles::CycleTrackerEntry>),
+}
+
+/// Store catalog reads share the existing Store publication-caller authority.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub enum StoreCatalogRequest {
+    Catalog,
+    Fixture([u8; 32]),
+    FixtureGrant(Principal),
+    Storage,
+    Template(TemplateLookupRequest),
+}
+
+/// Catalog results under one Store publication-caller rule.
+#[derive(CandidType, Deserialize)]
+pub enum StoreCatalogResponse {
+    Catalog(Vec<WasmStoreCatalogEntryResponse>),
+    Fixture(Result<FixtureSourceStatus, FixtureStoreError>),
+    FixtureGrant(Option<Box<FixtureGrant>>),
+    Storage(WasmStoreStatusResponse),
+    Template(TemplateStagingStatusResponse),
+}
+
+/// Controller-owned Store authority and operation reads.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub enum StoreStatusRequest {
+    Authority,
+    Operation(OperationStatusRequest),
+}
+
+/// Store-owned durable operation detail selected by one operation ID.
+#[derive(CandidType, Deserialize)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "the accepted Candid union carries each existing status DTO directly"
+)]
+pub enum StoreOperationStatusResponse {
+    FleetActivation(FleetActivationStatusResponse),
+    GarbageCollection(WasmStoreGcOperationStatus),
+}
+
+/// Responses to controller-owned Store authority and operation reads.
+#[derive(CandidType, Deserialize)]
+pub enum StoreStatusResponse {
+    Authority(FleetSubnetWasmStoreAuthority),
+    Operation(StoreOperationStatusResponse),
+}
+
+/// Minimum operational headroom retained above the live freezing reserve while
+/// an empty Store returns cycles and remains available for stop/delete calls.
+pub const WASM_STORE_DELETION_EXECUTION_RESERVE_CYCLES: u128 = 300_000_000_000;
+
+/// Headroom below the retained target used to absorb post-call cycle refunds.
+pub const WASM_STORE_DELETION_CALL_REFUND_HEADROOM_CYCLES: u128 = 150_000_000_000;
+
+//
+// WasmStoreDeletionCycleReclamationRequest
+//
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub struct WasmStoreDeletionCycleReclamationRequest {
+    pub retained_cycles_target: u128,
+}
+
+//
+// WasmStoreDeletionCycleReclamationResponse
+//
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub struct WasmStoreDeletionCycleReclamationResponse {
+    pub destination: Principal,
+    pub cycles_before: u128,
+    pub retained_cycles_target: u128,
+    pub cycles_transferred: u128,
+    pub cycles_after: u128,
+}
+
+//
+// WasmStorePublicationSlotResponse
+//
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub enum WasmStorePublicationSlotResponse {
+    Active,
+    Detached,
+    Retired,
+}
+
+//
+// WasmStoreOverviewStoreResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct WasmStoreOverviewStoreResponse {
+    pub binding: WasmStoreBinding,
+    pub pid: Principal,
+    pub created_at: u64,
+    pub publication_slot: Option<WasmStorePublicationSlotResponse>,
+    pub gc: WasmStoreGcStatusResponse,
+    pub approved_payload_bytes: u64,
+    pub approved_payload_size: String,
+    pub max_store_bytes: u64,
+    pub max_store_size: String,
+    pub remaining_approved_payload_bytes: u64,
+    pub remaining_approved_payload_size: String,
+    pub headroom_bytes: Option<u64>,
+    pub headroom_size: Option<String>,
+    pub within_approved_headroom: bool,
+    pub approved_template_count: u32,
+    pub max_templates: Option<u32>,
+    pub approved_release_count: u32,
+    pub max_template_versions_per_template: Option<u16>,
+    pub approved_templates: Vec<WasmStoreTemplateStatusResponse>,
+}
+
+//
+// WasmStoreOverviewResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct WasmStoreOverviewResponse {
+    pub publication: WasmStorePublicationStateResponse,
+    pub stores: Vec<WasmStoreOverviewStoreResponse>,
+}
+
+//
+// TemplateStagingStatusResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct TemplateStagingStatusResponse {
+    pub template_id: TemplateId,
+    pub version: TemplateVersion,
+    pub manifest: Option<TemplateManifestResponse>,
+    pub chunk_set_present: bool,
+    pub expected_chunk_count: u32,
+    pub expected_chunk_hashes: Vec<Vec<u8>>,
+    pub payload_hash: Option<Vec<u8>>,
+    pub payload_size_bytes: Option<u64>,
+    pub stored_chunk_hashes: Vec<Option<Vec<u8>>>,
+    pub stored_chunk_count: u32,
+    pub complete: bool,
+}
+
+//
+// WasmStorePublicationStateResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct WasmStorePublicationStateResponse {
+    pub active_binding: Option<WasmStoreBinding>,
+    pub detached_binding: Option<WasmStoreBinding>,
+    pub retired_binding: Option<WasmStoreBinding>,
+    pub generation: u64,
+    pub changed_at: u64,
+    pub retired_at: u64,
+}
+
+//
+// WasmStoreAdminCommand
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub enum WasmStoreAdminCommand {
+    PublishActiveReleaseSet,
+}
+
+//
+// WasmStoreAdminResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub enum WasmStoreAdminResponse {
+    PublishedActiveReleaseSet,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use candid::{Decode, Encode};
+
+    #[test]
+    fn store_status_request_keeps_the_manifest_exact_flat_variants() {
+        let requests = [
+            StoreStatusRequest::Authority,
+            StoreStatusRequest::Operation(OperationStatusRequest {
+                operation_id: [5; 32],
+            }),
+        ];
+
+        for request in requests {
+            let bytes = Encode!(&request).expect("encode Store status request");
+            assert_eq!(
+                Decode!(&bytes, StoreStatusRequest).expect("decode Store status request"),
+                request
+            );
+        }
+    }
+}

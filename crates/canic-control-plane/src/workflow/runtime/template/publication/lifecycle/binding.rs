@@ -11,8 +11,11 @@ use crate::{
     view::state::PublicationStoreStateView,
     workflow::runtime::template::publication::error::PublicationWorkflowError,
 };
-use canic_core::control_plane_support::{error::InternalError, ops::ic::IcOps};
-use canic_core::{log, log::Topic};
+use canic_core::{
+    control_plane_support::{error::InternalError, ops::ic::IcOps},
+    log,
+    log::Topic,
+};
 
 impl WasmStorePublicationWorkflow {
     // Format one publication-state binding slot for structured transition logs.
@@ -139,7 +142,8 @@ mod tests {
     use crate::ops::storage::state::root_wasm_store::{
         PublicationStoreStateTestInput, WasmStoreStateTestInput,
     };
-    use canic_core::{cdk::types::Principal, diagnostics::codes};
+    use canic_contracts::diagnostics::codes;
+    use canic_core::cdk::types::Principal;
 
     #[test]
     fn initial_publication_rejects_gc_fenced_store_without_binding_it() {

@@ -1,0 +1,75 @@
+//! Bounded transport schemas owned beside the complete canonical wire unions.
+//! Each purpose documents its schema/decoding bound and is covered by the
+//! variant payload compatibility registry in this module.
+
+pub mod admission;
+pub mod auth_status;
+pub mod caller_authority;
+pub mod capability_rpc;
+pub mod capacity_import;
+pub mod capacity_inventory;
+pub mod capacity_management;
+pub mod cascade;
+pub mod component_initialization;
+pub mod component_operation;
+pub mod component_provisioning;
+pub mod component_registry;
+pub mod coordinator_client;
+pub mod coordinator_root;
+pub mod current_inventory;
+pub mod cycle_conversion;
+pub mod delegation_proof;
+pub mod estate_generation;
+pub mod fixture_baseline;
+pub mod fixture_baseline_application_initialization;
+pub mod fixture_baseline_capacity_import;
+pub mod fixture_baseline_child_reserve;
+pub mod fixture_baseline_funding_deadline;
+pub mod fixture_baseline_funding_inventory;
+pub mod fixture_baseline_root_public_key;
+pub mod fixture_baseline_state_cascade;
+pub mod fixture_caller_authority;
+pub mod fixture_canic;
+pub mod fixture_delegation;
+pub mod fixture_host_inspection;
+pub mod fixture_instruction_audit;
+pub mod fixture_issuer_bootstrap;
+pub mod fixture_lifecycle;
+pub mod fixture_lifecycle_boundary;
+pub mod fixture_managed_app;
+pub mod fixture_managed_component_group;
+pub mod fixture_native_delegation;
+pub mod fixture_role_attestation;
+pub mod fixture_root_inspection_reserve;
+pub mod fixture_root_topology;
+pub mod fixture_timer_authority;
+pub mod fleet_setup;
+pub mod funding_observation;
+pub mod funding_status;
+pub mod inspection_reserve;
+pub mod install_history;
+pub mod local_authority;
+pub mod observability_relay;
+pub mod observatory;
+pub mod ordinary_inventory;
+pub mod overview;
+pub mod peer_allocation;
+pub mod pool_observation;
+pub mod protected_observability;
+pub mod release_coordinator_funding;
+pub mod release_funding;
+pub mod release_intents;
+pub mod release_pool;
+pub mod release_provisioning;
+pub mod release_receipts;
+pub mod role_attestation;
+pub mod root_admission;
+pub mod runtime_inspection;
+pub mod startup_binding;
+pub mod startup_inventory;
+pub mod startup_pages;
+pub mod store_activation;
+pub mod subnet_information;
+
+#[cfg(test)]
+mod tests;

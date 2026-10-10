@@ -8,7 +8,6 @@ use crate::{
     InternalError,
     cdk::types::Principal,
     config::schema::ShardPoolPolicy,
-    ids::CanisterRole,
     log::Topic,
     model::placement::allocation::PlacementAllocationIdentity,
     ops::{
@@ -26,12 +25,14 @@ use crate::{
         sharding::ShardingWorkflow,
     },
 };
+use canic_contracts::ids::CanisterRole;
 
 ///
 /// ShardAllocator
 ///
 /// Internal helper for creating shard canisters before registry admission.
 ///
+
 pub(super) struct ShardAllocator;
 
 impl ShardAllocator {

@@ -1,11 +1,13 @@
 use super::*;
 use crate::{
     dto::component_deployment::ProtectedComponentDeployment,
-    ids::{ComponentChildBinding, ManagedCanisterBinding, ReleaseBuildId, ReleaseBuildNonce},
     ops::storage::fleet_activation::protected_component_deployment_dto_to_record,
     storage::stable::fleet_activation::{
         ComponentRuntimeRecord, FleetActivationEvidenceRecord, FleetActivationIdentityRecord,
     },
+};
+use canic_contracts::ids::{
+    ComponentChildBinding, ManagedCanisterBinding, ReleaseBuildId, ReleaseBuildNonce,
 };
 use sha2::{Digest, Sha256};
 

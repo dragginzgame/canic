@@ -5,11 +5,13 @@ use crate::local_fleet::{
     view::{LocalFleetDiscoveryView, LocalFleetView, LocalRoleView},
 };
 use candid::Principal;
-use canic_core::{cdk::utils::hash::hex_bytes, ids::CanonicalNetworkId};
+use canic_contracts::ids::CanonicalNetworkId;
+use canic_core::cdk::utils::hash::hex_bytes;
 use ic_testkit::pocket_ic::PocketIc;
 use std::{collections::BTreeMap, path::Path};
 
 /// Verify every terminal role in the owned instance, including imported Root-owned assets.
+
 pub fn resolve(
     workspace: &Path,
     fleet: &str,

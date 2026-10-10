@@ -24,25 +24,7 @@ use crate::{
     },
 };
 use candid::{Nat, Principal};
-use canic_core::{
-    api::{
-        fleet_activation::FleetActivationApi, runtime::root_funding::RootFundingTimerApi,
-        timer::TimerApi,
-    },
-    control_plane_support::{
-        error::InternalError,
-        model::replay::CommandKind,
-        ops::{
-            cost_guard::{CostGuardPermit, CostGuardRequest},
-            ic::{
-                IcOps,
-                mgmt::{CanisterSettings, MgmtOps, UpdateSettingsArgs},
-            },
-            icp_refill::IcpRefillStoreOps,
-            root_draining_reservation::FleetSubnetRootDrainingReservationOps,
-        },
-        workflow::cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error},
-    },
+use canic_contracts::{
     dto::{
         component_registry::{ComponentRegistryHead, RootComponentDrainingRequest},
         fleet_registry::{
@@ -72,6 +54,26 @@ use canic_core::{
     ids::{
         ComponentInstanceId, FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
         FleetSubnetWasmStoreAuthority,
+    },
+};
+use canic_core::{
+    api::{
+        fleet_activation::FleetActivationApi, runtime::root_funding::RootFundingTimerApi,
+        timer::TimerApi,
+    },
+    control_plane_support::{
+        error::InternalError,
+        model::replay::CommandKind,
+        ops::{
+            cost_guard::{CostGuardPermit, CostGuardRequest},
+            ic::{
+                IcOps,
+                mgmt::{CanisterSettings, MgmtOps, UpdateSettingsArgs},
+            },
+            icp_refill::IcpRefillStoreOps,
+            root_draining_reservation::FleetSubnetRootDrainingReservationOps,
+        },
+        workflow::cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error},
     },
     replay_policy::CostClass,
 };
@@ -1534,8 +1536,8 @@ pub(super) fn settle_root_deletion_cycle_reclamation(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use canic_core::{
-        cdk::types::Cycles,
+    use canic_contracts::{
+        cycles::Cycles,
         dto::root_store::RootStoreBootstrapRequest,
         ids::{
             AppId, CanonicalNetworkId, ComponentTopologyDigest, CyclesFundingBudget, FleetBinding,
@@ -1770,7 +1772,7 @@ mod tests {
                     maximum_registry_bytes: 1_024,
                     maximum_wasm_store_bytes: 2_048,
                     maximum_group_placements: 16,
-                    canister_pool: canic_core::ids::FleetSubnetCanisterPoolConfig {
+                    canister_pool: canic_contracts::ids::FleetSubnetCanisterPoolConfig {
                         minimum_size: 1,
                         maximum_size: 10,
                         canister_cycles: Cycles::new(500_000),

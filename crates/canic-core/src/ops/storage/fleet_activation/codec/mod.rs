@@ -345,15 +345,12 @@ fn decode_wasm_store(bytes: &[u8]) -> Result<FleetActivationView, FleetActivatio
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        ids::{
-            AppId, CanonicalNetworkId, FleetBinding, FleetId, FleetKey, ReleaseBuildId,
-            ReleaseBuildNonce,
-        },
-        storage::stable::fleet_activation::{
-            FleetActivationEvidenceRecord, FleetActivationIdentityRecord,
-            FleetActivationStateRecord,
-        },
+    use crate::storage::stable::fleet_activation::{
+        FleetActivationEvidenceRecord, FleetActivationIdentityRecord, FleetActivationStateRecord,
+    };
+    use canic_contracts::ids::{
+        AppId, CanonicalNetworkId, FleetBinding, FleetId, FleetKey, ReleaseBuildId,
+        ReleaseBuildNonce,
     };
 
     fn ordinary() -> FleetActivationView {

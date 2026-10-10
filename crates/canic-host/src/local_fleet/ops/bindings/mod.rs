@@ -1,9 +1,8 @@
 //! Materialize exact sealed Candid into the maintained selected-environment binding layout.
 
 use crate::{fleet_ensure::model::DesiredFleet, local_fleet::LocalFleetError, release_set};
-use ic_host_fs::durable;
-
 use canic_core::cdk::utils::hash::{hex_bytes, sha256_hex};
+use ic_host_fs::durable;
 use std::path::Path;
 
 fn failure(error: impl std::fmt::Display) -> LocalFleetError {
@@ -80,6 +79,6 @@ fn publish(
         return Err(LocalFleetError::Identity);
     }
     let destination = crate::icp::local_canister_candid_path(workspace, environment, role);
-    durable::write_bytes(&destination, &bytes)?;
+    durable::write_bytes(&destination, &bytes).map_err(crate::publication::ops::io_error)?;
     Ok(())
 }

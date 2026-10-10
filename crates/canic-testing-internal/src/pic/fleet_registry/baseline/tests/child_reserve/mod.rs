@@ -4,19 +4,11 @@ use super::*;
 use canic::dto::component_registry::{
     ComponentRegistryPartitionRequest, RootComponentChildAllocationRequest,
 };
-use canic_control_plane::dto::root::RootComponentChildOperationStatus;
+use canic_contracts::dto::root::RootComponentChildOperationStatus;
 
-#[derive(CandidType)]
-enum Command {
-    ProvisionChild(RootComponentChildAllocationRequest),
-    SetCyclesFunding(canic::dto::state::SetCyclesFundingRequest),
-}
+use canic_contracts::dto::wire::projection::fixture_baseline_child_reserve::Command;
 
-#[derive(CandidType, Deserialize)]
-enum Response {
-    OperationAccepted(canic::dto::role::OperationReceipt),
-    SetCyclesFunding(canic::dto::state::FleetStateCommandResult<bool>),
-}
+use canic_contracts::dto::wire::projection::fixture_baseline_child_reserve::Response;
 
 #[test]
 pub(super) fn initial_child_failure_reaches_coordinator_and_recovers_same_claim() {
@@ -71,7 +63,7 @@ pub(super) fn initial_child_failure_reaches_coordinator_and_recovers_same_claim(
     assert_eq!(origin.target, root);
     assert_eq!(
         origin.diagnostic_code,
-        canic_core::diagnostics::codes::DEPLOYMENT_CYCLE_RESERVE_REQUIRED
+        canic_contracts::diagnostics::codes::DEPLOYMENT_CYCLE_RESERVE_REQUIRED
             .raw_code()
             .raw()
     );
@@ -305,7 +297,7 @@ pub(super) fn low_native_reserve_retains_child_failure_and_recovers_same_claim()
     let failure = blocked.allocation.last_failure.unwrap();
     assert_eq!(
         failure.diagnostic_code,
-        canic_core::diagnostics::codes::DEPLOYMENT_CYCLE_RESERVE_REQUIRED
+        canic_contracts::diagnostics::codes::DEPLOYMENT_CYCLE_RESERVE_REQUIRED
             .raw_code()
             .raw()
     );
@@ -373,7 +365,7 @@ fn prepare_spare(pic: &PocketIc, root: Principal) {
             // Retry only its transient contention result; authority conflicts fail.
             Err(error) => assert_eq!(
                 error.code(),
-                canic_core::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
+                canic_contracts::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
             ),
             _ => panic!("correlated pool import"),
         }

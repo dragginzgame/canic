@@ -1,3 +1,6 @@
+// Fetch the approved live catalog from one Wasm Store.
+
+use super::super::WasmStoreInternalClient;
 use crate::{
     dto::template::{
         TemplateChunkSetInfoResponse, TemplateManifestInput, WasmStoreCatalogEntryResponse,
@@ -6,12 +9,11 @@ use crate::{
     },
     ids::{TemplateId, TemplateVersion},
 };
-use canic_core::cdk::types::Principal;
-use canic_core::control_plane_support::{error::InternalError, ops::cost_guard::CostGuardPermit};
+use canic_core::{
+    cdk::types::Principal,
+    control_plane_support::{error::InternalError, ops::cost_guard::CostGuardPermit},
+};
 
-use super::super::WasmStoreInternalClient;
-
-// Fetch the approved live catalog from one Wasm Store.
 pub(super) async fn store_catalog(
     store_pid: Principal,
 ) -> Result<Vec<WasmStoreCatalogEntryResponse>, InternalError> {

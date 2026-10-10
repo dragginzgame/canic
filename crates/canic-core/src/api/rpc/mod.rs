@@ -8,12 +8,12 @@ use crate::{
         error::Error,
         rpc::{CreateCanisterParent, CreateCanisterResponse, CyclesResponse},
     },
-    ids::CanisterRole,
     workflow::rpc::{
         RootCapabilityAuthority, RootCapabilityLifecycleExecutor, capability,
         request::RpcRequestWorkflow,
     },
 };
+use canic_contracts::ids::CanisterRole;
 
 ///
 /// RpcApi

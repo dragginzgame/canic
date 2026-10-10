@@ -1,0 +1,482 @@
+//! Module: cdk::types::cycles
+//!
+//! Responsibility: cycle amount wrapper and parsing helpers.
+//! Does not own: billing policy, cycle transfer workflows, or ledger calls.
+//! Boundary: provides stable serialization and display behavior for cycle values.
+
+use candid::{CandidType, Nat};
+use serde::{
+    Deserialize, Serialize,
+    de::{Deserializer, Visitor},
+};
+use std::{fmt, fmt::Display, str::FromStr};
+use thiserror::Error as ThisError;
+
+///
+/// Constants
+///
+/// Cycle unit shorthands for configs and logs
+///
+
+pub const KC: u128 = 1_000;
+pub const MC: u128 = 1_000_000;
+pub const BC: u128 = 1_000_000_000;
+pub const TC: u128 = 1_000_000_000_000;
+pub const QC: u128 = 1_000_000_000_000_000;
+
+///
+/// Cycles
+///
+/// Thin wrapper around `u128` that carries exact parsing and serialization
+/// helpers for cycle balances.
+///
+
+#[derive(CandidType, Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+pub struct Cycles(u128);
+
+impl<'de> Deserialize<'de> for Cycles {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            deserializer.deserialize_any(HumanReadableCyclesVisitor)
+        } else {
+            u128::deserialize(deserializer).map(Self::new)
+        }
+    }
+}
+
+struct HumanReadableCyclesVisitor;
+
+impl Visitor<'_> for HumanReadableCyclesVisitor {
+    type Value = Cycles;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("a cycle amount encoded as bounded decimal text")
+    }
+
+    fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        u128::try_from(value).map(Cycles::new).map_err(E::custom)
+    }
+
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        value.parse::<u128>().map(Cycles::new).map_err(E::custom)
+    }
+
+    fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Ok(Cycles::new(u128::from(value)))
+    }
+
+    fn visit_u128<E>(self, value: u128) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Ok(Cycles::new(value))
+    }
+}
+
+impl Cycles {
+    #[must_use]
+    pub const fn new(n: u128) -> Self {
+        Self(n)
+    }
+
+    #[must_use]
+    pub const fn to_u128(&self) -> u128 {
+        self.0
+    }
+
+    /// Render an exact compact value for human-authored configuration.
+    #[must_use]
+    pub fn to_config_string(&self) -> String {
+        let (unit, suffix, decimal_places) = if self.0 >= QC {
+            (QC, "Q", 15)
+        } else if self.0 >= TC {
+            (TC, "T", 12)
+        } else {
+            (BC, "B", 9)
+        };
+        let whole = self.0 / unit;
+        let remainder = self.0 % unit;
+        if remainder == 0 {
+            return format!("{whole}{suffix}");
+        }
+        let fraction = format!("{remainder:0decimal_places$}");
+        let fraction = fraction.trim_end_matches('0');
+        format!("{whole}.{fraction}{suffix}")
+    }
+
+    /// Parse one exact human-authored cycle amount with a mandatory `B`, `T`, or `Q` unit.
+    pub fn from_human_config_str(value: &str) -> Result<Self, CyclesParseError> {
+        if !matches!(value.as_bytes().last(), Some(b'B' | b'T' | b'Q')) {
+            return Err(CyclesParseError::HumanUnitRequired {
+                value: value.to_string(),
+            });
+        }
+        value.parse()
+    }
+
+    /// Deserialize one human-authored cycle amount from quoted compact text.
+    pub fn from_human_config<'de, D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_any(HumanConfigCyclesVisitor)
+    }
+}
+
+struct HumanConfigCyclesVisitor;
+
+impl Visitor<'_> for HumanConfigCyclesVisitor {
+    type Value = Cycles;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("a quoted exact cycle amount with an uppercase B, T, or Q suffix")
+    }
+
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Cycles::from_human_config_str(value).map_err(E::custom)
+    }
+
+    fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Err(E::custom(CyclesParseError::HumanUnitRequired {
+            value: value.to_string(),
+        }))
+    }
+
+    fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Err(E::custom(CyclesParseError::HumanUnitRequired {
+            value: value.to_string(),
+        }))
+    }
+
+    fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Err(E::custom(CyclesParseError::HumanUnitRequired {
+            value: value.to_string(),
+        }))
+    }
+}
+
+#[expect(clippy::cast_precision_loss)]
+impl Display for Cycles {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Render balances in teracycles for compact operator output.
+        write!(f, "{:.3} TC", self.to_u128() as f64 / 1_000_000_000_000f64)
+    }
+}
+
+///
+/// CyclesConversionError
+///
+/// Typed failure while converting an unbounded Candid cycle amount.
+/// Owned by the cycle value boundary and preserved by callers that narrow `Nat`.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, ThisError)]
+pub enum CyclesConversionError {
+    #[error("cycle amount does not fit in u128: {value}")]
+    NatOverflow { value: Nat },
+}
+
+impl TryFrom<Nat> for Cycles {
+    type Error = CyclesConversionError;
+
+    fn try_from(value: Nat) -> Result<Self, Self::Error> {
+        u128::try_from(value.0.clone())
+            .map(Self::new)
+            .map_err(|_| CyclesConversionError::NatOverflow { value })
+    }
+}
+
+impl From<u128> for Cycles {
+    fn from(v: u128) -> Self {
+        Self(v)
+    }
+}
+
+impl From<Cycles> for u128 {
+    fn from(c: Cycles) -> Self {
+        c.0
+    }
+}
+
+///
+/// CyclesParseError
+///
+/// Typed failure while parsing an exact human-readable cycle amount.
+/// Owned by the cycle value boundary and returned by `Cycles::from_str`.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, ThisError)]
+pub enum CyclesParseError {
+    #[error("cycle amount is empty")]
+    Empty,
+
+    #[error("cycle amount number is invalid: {value}")]
+    InvalidNumber { value: String },
+
+    #[error(
+        "human-authored cycle amount must be quoted text with an uppercase B, T, or Q suffix: {value}"
+    )]
+    HumanUnitRequired { value: String },
+
+    #[error("cycle amount suffix is invalid: {suffix}")]
+    InvalidSuffix { suffix: String },
+
+    #[error("cycle amount exceeds u128: {value}")]
+    Overflow { value: String },
+
+    #[error("cycle amount has precision below one cycle: {value}")]
+    SubcyclePrecision { value: String },
+}
+
+// Accept exact human-input cycle shorthand such as "10K" and "1.5T".
+impl FromStr for Cycles {
+    type Err = CyclesParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.is_empty() {
+            return Err(CyclesParseError::Empty);
+        }
+
+        let suffix_start = s
+            .find(|character: char| !(character.is_ascii_digit() || character == '.'))
+            .unwrap_or(s.len());
+        let (number, suffix) = s.split_at(suffix_start);
+        let (multiplier, decimal_places) = match suffix {
+            "" => (1, 0),
+            "K" => (KC, 3),
+            "M" => (MC, 6),
+            "B" => (BC, 9),
+            "T" => (TC, 12),
+            "Q" => (QC, 15),
+            _ => {
+                return Err(CyclesParseError::InvalidSuffix {
+                    suffix: suffix.to_string(),
+                });
+            }
+        };
+        let mut parts = number.split('.');
+        let whole = parts.next().unwrap_or_default();
+        let fraction = parts.next();
+        if parts.next().is_some()
+            || (whole.is_empty() && fraction.is_none_or(str::is_empty))
+            || !whole.chars().all(|character| character.is_ascii_digit())
+            || fraction
+                .is_some_and(|digits| !digits.chars().all(|character| character.is_ascii_digit()))
+        {
+            return Err(CyclesParseError::InvalidNumber {
+                value: number.to_string(),
+            });
+        }
+
+        let whole = if whole.is_empty() {
+            0
+        } else {
+            whole
+                .parse::<u128>()
+                .map_err(|_| CyclesParseError::Overflow {
+                    value: s.to_string(),
+                })?
+        };
+        let whole_cycles =
+            whole
+                .checked_mul(multiplier)
+                .ok_or_else(|| CyclesParseError::Overflow {
+                    value: s.to_string(),
+                })?;
+        let Some(fraction) = fraction else {
+            return Ok(Self::new(whole_cycles));
+        };
+        let fraction = fraction.trim_end_matches('0');
+        if fraction.is_empty() {
+            return Ok(Self::new(whole_cycles));
+        }
+        let fraction_places =
+            u32::try_from(fraction.len()).map_err(|_| CyclesParseError::SubcyclePrecision {
+                value: s.to_string(),
+            })?;
+        if fraction_places > decimal_places {
+            return Err(CyclesParseError::SubcyclePrecision {
+                value: s.to_string(),
+            });
+        }
+        let fraction_value = fraction
+            .parse::<u128>()
+            .map_err(|_| CyclesParseError::Overflow {
+                value: s.to_string(),
+            })?;
+        let fraction_scale = 10_u128.pow(fraction_places);
+        let fraction_cycles = fraction_value
+            .checked_mul(multiplier / fraction_scale)
+            .ok_or_else(|| CyclesParseError::Overflow {
+                value: s.to_string(),
+            })?;
+        whole_cycles
+            .checked_add(fraction_cycles)
+            .map(Self::new)
+            .ok_or_else(|| CyclesParseError::Overflow {
+                value: s.to_string(),
+            })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn candid_cycle_amount_remains_an_exact_u128() {
+        let expected = Cycles::new(u128::MAX);
+        let encoded = candid::encode_one(&expected).expect("encode Candid Cycles");
+        let decoded = candid::decode_one::<Cycles>(&encoded).expect("decode exact Candid Cycles");
+
+        assert_eq!(decoded, expected);
+    }
+
+    #[test]
+    fn parses_exact_cycle_shorthand_without_floating_point() {
+        assert_eq!("10K".parse::<Cycles>(), Ok(Cycles::new(10_000)));
+        assert_eq!("2B".parse::<Cycles>(), Ok(Cycles::new(2_000_000_000)));
+        assert_eq!("1.5T".parse::<Cycles>(), Ok(Cycles::new(1_500_000_000_000)));
+        assert_eq!(
+            "4Q".parse::<Cycles>(),
+            Ok(Cycles::new(4_000_000_000_000_000))
+        );
+        assert_eq!(".25M".parse::<Cycles>(), Ok(Cycles::new(250_000)));
+        assert_eq!("1.0000T".parse::<Cycles>(), Ok(Cycles::new(TC)));
+        assert_eq!(
+            u128::MAX.to_string().parse::<Cycles>(),
+            Ok(Cycles::new(u128::MAX))
+        );
+    }
+
+    #[test]
+    fn renders_exact_compact_config_values_without_floating_point() {
+        let cases = [
+            (0, "0B"),
+            (1, "0.000000001B"),
+            (999_999_999, "0.999999999B"),
+            (1_000_000_000, "1B"),
+            (1_500_000_000, "1.5B"),
+            (999_999_999_999, "999.999999999B"),
+            (1_000_000_000_000, "1T"),
+            (1_500_000_000_000, "1.5T"),
+            (1_000_000_000_000_000, "1Q"),
+        ];
+        for (cycles, expected) in cases {
+            let rendered = Cycles::new(cycles).to_config_string();
+            assert_eq!(rendered, expected);
+            assert_eq!(rendered.parse::<Cycles>(), Ok(Cycles::new(cycles)));
+        }
+
+        let maximum = Cycles::new(u128::MAX);
+        assert_eq!(
+            maximum.to_config_string().parse::<Cycles>(),
+            Ok(maximum.clone()),
+        );
+        assert_eq!(
+            Cycles::from_human_config_str(&maximum.to_config_string()),
+            Ok(maximum),
+        );
+    }
+
+    #[test]
+    fn human_config_requires_quoted_uppercase_billion_or_larger_units() {
+        #[derive(Deserialize)]
+        struct Config {
+            #[serde(deserialize_with = "Cycles::from_human_config")]
+            cycles: Cycles,
+        }
+
+        for (source, expected) in [
+            (r#"cycles = "5T""#, 5 * TC),
+            (r#"cycles = "5.1T""#, 5_100_000_000_000),
+            (r#"cycles = "0.1B""#, 100_000_000),
+            (r#"cycles = "1Q""#, QC),
+        ] {
+            let parsed = toml::from_str::<Config>(source).expect("parse strict human cycles");
+            assert_eq!(parsed.cycles, Cycles::new(expected));
+        }
+
+        for source in [
+            "cycles = 5000000000000",
+            r#"cycles = "5000000000000""#,
+            r#"cycles = "5t""#,
+            r#"cycles = "5 T""#,
+            r#"cycles = "5e3B""#,
+            r#"cycles = "0.0000000001B""#,
+        ] {
+            assert!(
+                toml::from_str::<Config>(source).is_err(),
+                "accepted {source}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_cycle_overflow_and_subcycle_precision() {
+        let overflow = format!("{}K", u128::MAX);
+        assert!(matches!(
+            overflow.parse::<Cycles>(),
+            Err(CyclesParseError::Overflow { .. })
+        ));
+        assert!(matches!(
+            "0.1".parse::<Cycles>(),
+            Err(CyclesParseError::SubcyclePrecision { .. })
+        ));
+        assert!(matches!(
+            "0.0001K".parse::<Cycles>(),
+            Err(CyclesParseError::SubcyclePrecision { .. })
+        ));
+    }
+
+    #[test]
+    fn converts_candid_nat_only_when_it_fits() {
+        assert_eq!(
+            Cycles::try_from(Nat::from(u128::MAX)),
+            Ok(Cycles::new(u128::MAX))
+        );
+        let too_large = Nat::parse(b"340282366920938463463374607431768211456")
+            .expect("u128 max plus one is valid Nat");
+        assert!(matches!(
+            Cycles::try_from(too_large),
+            Err(CyclesConversionError::NatOverflow { .. })
+        ));
+    }
+
+    #[test]
+    fn rejects_invalid_cycle_number_and_suffix() {
+        assert!(matches!("".parse::<Cycles>(), Err(CyclesParseError::Empty)));
+        assert!(matches!(
+            ".".parse::<Cycles>(),
+            Err(CyclesParseError::InvalidNumber { .. })
+        ));
+        assert!(matches!(
+            "1TT".parse::<Cycles>(),
+            Err(CyclesParseError::InvalidSuffix { .. })
+        ));
+    }
+}

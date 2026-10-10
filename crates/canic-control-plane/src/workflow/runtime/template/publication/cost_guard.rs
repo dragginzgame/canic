@@ -4,8 +4,9 @@
 //! Does not own: publication placement, store mutation, or public error DTOs.
 //! Boundary: publication entrypoints reserve before effects and pass the permit inward.
 
+use canic_contracts::cycles::TC;
 use canic_core::{
-    cdk::types::{Principal, TC},
+    cdk::types::Principal,
     control_plane_support::{
         error::InternalError,
         model::replay::CommandKind,
@@ -194,7 +195,7 @@ mod tests {
 
         assert_eq!(
             err.public_error().code(),
-            canic_core::diagnostics::codes::CAPACITY_INSUFFICIENT.raw_code()
+            canic_contracts::diagnostics::codes::CAPACITY_INSUFFICIENT.raw_code()
         );
     }
 

@@ -8,21 +8,19 @@ mod persistence;
 #[cfg(test)]
 mod tests;
 
-use std::collections::BTreeSet;
-
-use canic_core::{
-    cdk::utils::hash::decode_hex,
-    ids::{CanisterRole, ReleaseBuildId},
-    role_contract::{ProtocolProfileDigest, RoleCapabilityKey},
-};
-use serde::{Deserialize, Serialize};
-use sha2_host::{Digest, Sha256};
-use thiserror::Error as ThisError;
-
 use crate::release_set::{
     artifact::{RepresentationError, qualify_representation},
     valid_package_name, validate_release_artifact_relative_path,
 };
+use canic_contracts::ids::{CanisterRole, ReleaseBuildId};
+use canic_core::{
+    cdk::utils::hash::decode_hex,
+    role_contract::{ProtocolProfileDigest, RoleCapabilityKey},
+};
+use serde::{Deserialize, Serialize};
+use sha2_host::{Digest, Sha256};
+use std::collections::BTreeSet;
+use thiserror::Error as ThisError;
 
 pub use persistence::{
     CanicInfrastructureArtifactBuildOutput, CanicInfrastructureArtifactPersistenceError,

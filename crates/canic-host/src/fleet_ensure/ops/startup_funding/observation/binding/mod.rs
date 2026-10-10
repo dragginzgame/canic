@@ -11,31 +11,21 @@ use crate::{
     fleet_ensure::view::startup_funding::{StartupChildFundingBinding, StartupUsageUnavailable},
     icp::IcpCli,
 };
-use candid::{CandidType, Deserialize, Principal};
-use canic_control_plane::dto::root::RootOperationStatusResponse;
-use canic_core::{
-    dto::{
-        component_registry::RootComponentAllocationPhase,
-        pool::{CanisterPoolAssetStatus, CanisterPoolClaim},
-        role::OperationStatusRequest,
-    },
-    ids::{
-        CanisterRole, ComponentBinding, ComponentInstanceId, ComponentSpecId,
-        FleetSubnetRootReleaseSet,
-    },
-    protocol,
-};
+use candid::Principal;
+use canic_contracts::dto::component_registry::RootComponentAllocationPhase;
+use canic_contracts::dto::fleet_coordinator::CoordinatorOperationReadRequest as Request;
+use canic_contracts::dto::pool::CanisterPoolAssetStatus;
+use canic_contracts::dto::pool::CanisterPoolClaim;
+use canic_contracts::dto::role::OperationStatusRequest;
+use canic_contracts::dto::root::RootOperationStatusResponse;
+use canic_contracts::dto::wire::projection::startup_binding::Response;
+use canic_contracts::ids::CanisterRole;
+use canic_contracts::ids::ComponentBinding;
+use canic_contracts::ids::ComponentInstanceId;
+use canic_contracts::ids::ComponentSpecId;
+use canic_contracts::ids::FleetSubnetRootReleaseSet;
+use canic_contracts::protocol;
 use std::path::Path;
-
-#[derive(CandidType)]
-enum Request {
-    Operation(OperationStatusRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum Response {
-    Operation(Box<RootOperationStatusResponse>),
-}
 
 /// Query the exact allocation behind a current Workload; never guess a parent for other assets.
 pub fn observe(

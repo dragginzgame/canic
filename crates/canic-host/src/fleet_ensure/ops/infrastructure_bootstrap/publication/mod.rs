@@ -9,16 +9,18 @@ use crate::fleet_ensure::{
             InfrastructureBootstrapSeedRecord,
         },
     },
+    ops,
     ops::{
-        self, EnsurePaths,
+        EnsurePaths,
         infrastructure_bootstrap::{InfrastructureBootstrapError, seal_sources, terminal},
     },
     policy::expected_plan_sha256,
 };
-use ic_host_fs::durable::write_bytes;
-use ic_host_fs::read::{read_file_no_follow, read_optional_file_no_follow};
-
 use candid::Principal;
+use ic_host_fs::{
+    durable::write_bytes,
+    read::{read_file_no_follow, read_optional_file_no_follow},
+};
 use sha2_host::{Digest, Sha256};
 use std::path::{Component, Path, PathBuf};
 
@@ -242,7 +244,8 @@ fn finish(
         if bytes != seed.original.as_bytes() {
             return Err(invalid());
         }
-        write_bytes(&destination, record.replacement.as_bytes())?;
+        write_bytes(&destination, record.replacement.as_bytes())
+            .map_err(crate::publication::ops::io_error)?;
     }
     record.completed = true;
     save(paths, &record)?;
@@ -257,10 +260,8 @@ fn save(
     if bytes.len() > MAX_BYTES {
         return Err(invalid());
     }
-    Ok(write_bytes(
-        &path(paths, &record.plan.plan_sha256)?,
-        &bytes,
-    )?)
+    Ok(write_bytes(&path(paths, &record.plan.plan_sha256)?, &bytes)
+        .map_err(crate::publication::ops::io_error)?)
 }
 
 fn validate_path(relative: &str) -> Result<(), InfrastructureBootstrapError> {
@@ -311,7 +312,7 @@ pub(in crate::fleet_ensure) fn bind_holds(
             .collect::<Result<Vec<_>, _>>()?;
         sources.sort_unstable();
         if sources.is_empty()
-            || sources.len() > canic_core::ids::MAX_FLEET_CAPACITY_IMPORT_SOURCES
+            || sources.len() > canic_contracts::ids::MAX_FLEET_CAPACITY_IMPORT_SOURCES
             || sources.windows(2).any(|pair| pair[0] == pair[1])
         {
             return Err(invalid());

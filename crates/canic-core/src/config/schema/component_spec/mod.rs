@@ -4,8 +4,8 @@
 //! Does not own: topology validation, placement execution, or runtime canister state.
 //! Boundary: config schema re-exports these data shapes for validated models.
 
-use crate::{
-    cdk::{candid::CandidType, types::Cycles},
+use canic_contracts::{
+    cycles::Cycles,
     ids::{CanisterRole, ComponentSpecId},
 };
 use serde::{Deserialize, Serialize};
@@ -15,8 +15,9 @@ use std::{
 };
 
 mod defaults {
+
     use super::Cycles;
-    use crate::cdk::types::TC;
+    use canic_contracts::cycles::TC;
 
     pub const fn initial_cycles() -> Cycles {
         Cycles::new(5_000_000_000_000)
@@ -345,33 +346,6 @@ pub struct ComponentProvisioningGrantConfig {
 ///
 /// Lifecycle class for a managed Component child at any tree depth.
 ///
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum ComponentChildKind {
-    #[serde(rename = "singleton")]
-    Singleton,
-
-    #[serde(rename = "replica")]
-    Replica,
-
-    #[serde(rename = "shard")]
-    Shard,
-
-    #[serde(rename = "instance")]
-    Instance,
-}
-
-impl fmt::Display for ComponentChildKind {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let label = match self {
-            Self::Singleton => "singleton",
-            Self::Replica => "replica",
-            Self::Shard => "shard",
-            Self::Instance => "instance",
-        };
-        formatter.write_str(label)
-    }
-}
 
 impl From<ComponentChildKind> for CanisterKind {
     fn from(kind: ComponentChildKind) -> Self {
@@ -858,3 +832,5 @@ impl Default for ShardPoolPolicy {
 
 #[cfg(test)]
 mod tests;
+
+pub use canic_contracts::deployment::ComponentChildKind;

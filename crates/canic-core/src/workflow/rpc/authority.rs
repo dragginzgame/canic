@@ -4,12 +4,8 @@
 //! Does not own: Component Registry lookup, endpoint admission, or capability execution.
 //! Boundary: the control plane resolves protected membership; core validates and consumes it.
 
-use crate::{
-    InternalError,
-    cdk::types::Principal,
-    dto::component_registry::ComponentRegistryHead,
-    ids::{CanisterRole, ComponentInstanceId, ManagedCanisterBinding},
-};
+use crate::{InternalError, cdk::types::Principal, dto::component_registry::ComponentRegistryHead};
+use canic_contracts::ids::{CanisterRole, ComponentInstanceId, ManagedCanisterBinding};
 
 ///
 /// RootCapabilityCallerAuthority

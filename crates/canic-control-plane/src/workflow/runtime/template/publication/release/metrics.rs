@@ -1,11 +1,15 @@
-use crate::workflow::runtime::template::record_wasm_store_metric;
-use canic_core::api::lifecycle::metrics::{
-    WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason, WasmStoreMetricSource,
-};
-use canic_core::control_plane_support::error::InternalError;
-use canic_core::diagnostics::codes;
-
 // Record one target-store release publish failure reason.
+
+use crate::workflow::runtime::template::record_wasm_store_metric;
+use canic_contracts::diagnostics::codes;
+use canic_core::{
+    api::lifecycle::metrics::{
+        WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason,
+        WasmStoreMetricSource,
+    },
+    control_plane_support::error::InternalError,
+};
+
 pub(super) fn record_wasm_store_publish_failed(reason: WasmStoreMetricReason) {
     record_wasm_store_metric(
         WasmStoreMetricOperation::ReleasePublish,

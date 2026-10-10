@@ -32,19 +32,10 @@ use crate::{
     protocol,
     workflow::runtime::auth::{RuntimeAuthWorkflow, root_delegation_batch},
 };
-use candid::CandidType;
-use serde::Deserialize;
+use canic_contracts::dto::wire::projection::role_attestation::{
+    IssuerCommandFragment, IssuerCommandResponseFragment,
+};
 use std::future::Future;
-
-#[derive(CandidType)]
-enum IssuerCommandFragment {
-    InstallDelegationProof(InstallActiveDelegationProofRequest),
-}
-
-#[derive(CandidType, Deserialize)]
-enum IssuerCommandResponseFragment {
-    InstallDelegationProof(InstallActiveDelegationProofResponse),
-}
 
 impl RuntimeAuthWorkflow {
     /// Create or reuse and install one chain-key root delegation proof.
@@ -308,8 +299,8 @@ mod tests {
             DelegatedRoleGrant, DelegationAudience, DelegationCert, DelegationProof,
             IssuerProofAlgorithm, IssuerProofBinding, RootDelegationProofBatchProof,
         },
-        ids::{CanisterRole, cap},
     };
+    use canic_contracts::ids::{CanisterRole, cap};
     use futures::executor::block_on;
     use std::cell::Cell;
 

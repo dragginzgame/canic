@@ -5,6 +5,7 @@
 
 mod retirement;
 mod root;
+
 #[cfg(test)]
 pub(crate) mod tests;
 
@@ -18,8 +19,7 @@ use crate::{
             },
         },
         ops::capacity_import::{
-            destination::require_active_reservation,
-            journal::{self, CapacityImportJournalError},
+            destination::require_active_reservation, journal, journal::CapacityImportJournalError,
             verify_review,
         },
     },
@@ -259,9 +259,10 @@ pub(in crate::fleet_ensure::ops::capacity_import) fn verify_agent(
 ) -> Result<(), CapacityImportJournalError> {
     verify_review(plan, plan.plan_sha256)?;
     let key_hash: [u8; 32] = Sha256::digest(agent.read_root_key()).into();
-    let canonical_network =
-        canic_core::ids::CanonicalNetworkId::from_der_root_trust_anchor(&agent.read_root_key())
-            .map_err(|_| CapacityImportJournalError::ReaderMismatch)?;
+    let canonical_network = canic_contracts::ids::CanonicalNetworkId::from_der_root_trust_anchor(
+        &agent.read_root_key(),
+    )
+    .map_err(|_| CapacityImportJournalError::ReaderMismatch)?;
     if agent.get_principal().ok() != Some(plan.authority.operator)
         || key_hash != plan.authority.network_root_key_sha256
         || canonical_network != plan.authority.fleet.fleet.canonical_network_id

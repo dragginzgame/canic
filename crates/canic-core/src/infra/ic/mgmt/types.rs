@@ -4,12 +4,12 @@
 //! Does not own: lifecycle orchestration, deployment policy, or public DTO schemas.
 //! Boundary: management infra leaves encode and decode these raw payloads.
 
-use crate::cdk::candid::{CandidType, Nat, Principal};
-use serde::Deserialize;
-
 //
 // InfraCanisterSettings
 //
+
+use crate::cdk::candid::{CandidType, Nat, Principal};
+use serde::Deserialize;
 
 #[derive(CandidType, Clone, Debug, Default, Deserialize, Eq, PartialEq)]
 pub struct InfraCanisterSettings {

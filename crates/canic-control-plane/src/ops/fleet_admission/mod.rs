@@ -12,8 +12,7 @@ use crate::storage::stable::fleet_admission::{
     FleetAdmissionMutationResponseRecord, FleetAdmissionRetainedResultRecord,
     FleetAdmissionTransitionRecord,
 };
-use canic_core::{
-    control_plane_support::error::InternalError,
+use canic_contracts::{
     dto::{
         fleet_admission::{
             FleetAdmissionActivateRootRequest, FleetAdmissionMutationAction,
@@ -32,6 +31,9 @@ use canic_core::{
         FleetAdmissionPolicy, FleetAdmissionSelector, FleetCoordinatorBinding,
         FleetSubnetRootBinding,
     },
+};
+use canic_core::{
+    control_plane_support::error::InternalError,
     shared_support::{
         fleet_admission_authority::{
             FLEET_ADMISSION_AUTHORITY_SCHEMA_VERSION, FleetAdmissionAuthorityPolicyError,
@@ -55,6 +57,7 @@ use canic_core::{
 };
 
 /// Deterministic storage and DTO facade for the Coordinator admission authority.
+
 pub struct FleetAdmissionOps;
 
 /// One exact next Coordinator-owned distributed convergence action.
@@ -1081,7 +1084,7 @@ fn registry_root_binding(
         .filter(|root| root.fleet_subnet_root == fleet_subnet_root);
     let root = matches.next().ok_or_else(InternalError::conflict)?;
     if matches.next().is_some()
-        || root.status != canic_core::dto::fleet_registry::FleetSubnetRootStatus::Active
+        || root.status != canic_contracts::dto::fleet_registry::FleetSubnetRootStatus::Active
     {
         return Err(InternalError::conflict());
     }
@@ -1110,7 +1113,7 @@ fn selector_exists(registry: &FleetRegistry, selector: &FleetAdmissionSelector) 
                         && registry.fleet_subnet_roots.iter().any(|root| {
                             root.fleet_subnet_root == member.fleet_subnet_root
                                 && root.status
-                                    == canic_core::dto::fleet_registry::FleetSubnetRootStatus::Active
+                                    == canic_contracts::dto::fleet_registry::FleetSubnetRootStatus::Active
                         })
                 })
             })
@@ -1121,23 +1124,21 @@ fn selector_exists(registry: &FleetRegistry, selector: &FleetAdmissionSelector) 
             .any(|root| {
                 &root.placement_subnet == placement_subnet
                     && root.status
-                        == canic_core::dto::fleet_registry::FleetSubnetRootStatus::Active
+                        == canic_contracts::dto::fleet_registry::FleetSubnetRootStatus::Active
             }),
     }
 }
 
 fn registry_accepts_admission_mutation(registry: &FleetRegistry) -> bool {
-    registry
-        .fleet_subnet_roots
-        .iter()
-        .any(|root| root.status == canic_core::dto::fleet_registry::FleetSubnetRootStatus::Active)
-        && registry.fleet_subnet_roots.iter().all(|root| {
-            matches!(
-                root.status,
-                canic_core::dto::fleet_registry::FleetSubnetRootStatus::Active
-                    | canic_core::dto::fleet_registry::FleetSubnetRootStatus::Removed
-            )
-        })
+    registry.fleet_subnet_roots.iter().any(|root| {
+        root.status == canic_contracts::dto::fleet_registry::FleetSubnetRootStatus::Active
+    }) && registry.fleet_subnet_roots.iter().all(|root| {
+        matches!(
+            root.status,
+            canic_contracts::dto::fleet_registry::FleetSubnetRootStatus::Active
+                | canic_contracts::dto::fleet_registry::FleetSubnetRootStatus::Removed
+        )
+    })
 }
 
 fn selector_principals(
@@ -1369,7 +1370,7 @@ fn registry_roots(
         .fleet_subnet_roots
         .iter()
         .filter(|root| {
-            root.status == canic_core::dto::fleet_registry::FleetSubnetRootStatus::Active
+            root.status == canic_contracts::dto::fleet_registry::FleetSubnetRootStatus::Active
         })
         .collect::<Vec<_>>();
     active_roots.sort_by(|left, right| {
@@ -1608,9 +1609,8 @@ const fn response_model_to_record(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use canic_core::{
-        cdk::structures::storable::Storable,
-        cdk::types::Cycles,
+    use canic_contracts::{
+        cycles::Cycles,
         dto::fleet_registry::{FleetRegistry, FleetSubnetRootEntry, FleetSubnetRootStatus},
         ids::{
             AppId, CanonicalNetworkId, ComponentTopologyDigest, CyclesFundingBudget, FleetBinding,
@@ -1619,6 +1619,7 @@ mod tests {
             ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
         },
     };
+    use canic_core::cdk::structures::storable::Storable;
 
     #[test]
     fn genesis_and_stable_conversion_preserve_the_exact_compiled_authority() {
@@ -1724,7 +1725,7 @@ mod tests {
             .expect_err("operation identity conflict");
         assert_eq!(
             error.public_error().code(),
-            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+            canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
         );
     }
 
@@ -1898,7 +1899,7 @@ mod tests {
             &registry,
             FleetAdmissionStatusRequest {
                 selector: FleetAdmissionSelector::Fleet,
-                page: canic_core::dto::page::PageRequest {
+                page: canic_contracts::dto::page::PageRequest {
                     limit: u64::MAX,
                     offset: 0,
                 },
@@ -1942,7 +1943,7 @@ mod tests {
             .expect_err("Joining Registry must reject");
         assert_eq!(
             error.public_error().code(),
-            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+            canic_contracts::diagnostics::codes::STATE_CONFLICT.raw_code()
         );
         assert!(
             FleetAdmissionAuthorityStore::get()

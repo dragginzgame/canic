@@ -8,11 +8,6 @@ mod model;
 #[cfg(test)]
 mod tests;
 
-pub use model::{
-    ManagedApplicationInit, ManagedComponentGroupQualificationInput, ManagedComponentNode,
-    ManagedRoleQualificationArtifact,
-};
-
 use crate::{
     Error,
     dto::{
@@ -56,24 +51,26 @@ use crate::{
     testing::build_pocketic,
 };
 use candid::{CandidType, Deserialize, Principal, encode_args, encode_one};
-use canic_core::{
-    bootstrap::{
-        compiled::{
-            ComponentGroupDeploymentSpec, ComponentTopology, ConfigModel,
-            FlattenedComponentGroupDeploymentMember,
-        },
-        parse_config_model,
-    },
-    cdk::{types::Cycles, utils::hash::sha256_bytes},
-    ids::{
-        FleetAdmissionPolicy, FleetFundingProfile, FleetSubnetRootFundingAuthority,
-        FleetSubnetRootFundingPolicy, ReleaseBuildId,
-    },
-    role_contract::ProtocolProfileDigest,
-    shared_support::fleet_admission_policy::{
-        compile_fleet_admission_projection, compile_installed_fleet_admission_policy,
-    },
-};
+use canic_contracts::cycles::Cycles;
+use canic_contracts::dto::wire::projection::component_registry::CanisterOperationStatusFragment as ManagedOperationStatusResponse;
+use canic_contracts::dto::wire::projection::fixture_managed_app::ManagedCommand;
+use canic_contracts::dto::wire::projection::fixture_managed_component_group::ManagedCommandResponse;
+use canic_contracts::dto::wire::projection::fixture_managed_component_group::ManagedStatusRequest;
+use canic_contracts::dto::wire::projection::fixture_managed_component_group::ManagedStatusResponse;
+use canic_contracts::ids::FleetAdmissionPolicy;
+use canic_contracts::ids::FleetFundingProfile;
+use canic_contracts::ids::FleetSubnetRootFundingAuthority;
+use canic_contracts::ids::FleetSubnetRootFundingPolicy;
+use canic_contracts::ids::ReleaseBuildId;
+use canic_core::bootstrap::compiled::ComponentGroupDeploymentSpec;
+use canic_core::bootstrap::compiled::ComponentTopology;
+use canic_core::bootstrap::compiled::ConfigModel;
+use canic_core::bootstrap::compiled::FlattenedComponentGroupDeploymentMember;
+use canic_core::bootstrap::parse_config_model;
+use canic_core::cdk::utils::hash::sha256_bytes;
+use canic_core::role_contract::ProtocolProfileDigest;
+use canic_core::shared_support::fleet_admission_policy::compile_fleet_admission_projection;
+use canic_core::shared_support::fleet_admission_policy::compile_installed_fleet_admission_policy;
 use ic_testkit::{
     pic::{CandidCallError, CandidCallExt, CanisterInstallExt, PocketIc},
     pocket_ic::common::rest::RawMessageId,
@@ -82,6 +79,11 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
     time::Duration,
+};
+
+pub use model::{
+    ManagedApplicationInit, ManagedComponentGroupQualificationInput, ManagedComponentNode,
+    ManagedRoleQualificationArtifact,
 };
 
 const DEFAULT_INSTALL_CYCLES: u128 = 10_000_000_000_000;
@@ -689,14 +691,14 @@ impl ManagedComponentGroupFixture {
                 ManagedComponentGroupQualificationError::Config("missing receiver policy".into())
             })?;
             receivers.push((
-                canic_core::ids::CallerReceiverAuthority {
-                    receiver: canic_core::ids::CallerInstallation {
+                canic_contracts::ids::CallerReceiverAuthority {
+                    receiver: canic_contracts::ids::CallerInstallation {
                         binding: node.public.binding.clone(),
                         install_id: node.directory.operation_id,
                         component_install_id: self
                             .component_installation(component.binding.canister_id)?,
                     },
-                    issuer: canic_core::ids::CallerRootAuthority {
+                    issuer: canic_contracts::ids::CallerRootAuthority {
                         registry: self.root.authority.clone(),
                         root: self.root(),
                         install_id: [1; 32],
@@ -1467,41 +1469,6 @@ const fn test_root_limits(maximum_group_placements: u32) -> FleetSubnetRootLimit
         maximum_registry_bytes: 8 * 1_048_576,
         maximum_wasm_store_bytes: 8 * 1_048_576,
     }
-}
-
-#[derive(CandidType)]
-enum ManagedCommand {
-    ConfigureRuntime(Box<ComponentRuntimeDirectoryPreparationRequest>),
-    PrepareFleetAdmission(Box<FleetAdmissionPrepareTargetRequest>),
-}
-
-#[derive(CandidType, Deserialize)]
-enum ManagedCommandResponse {
-    OperationAccepted(OperationReceipt),
-    PrepareFleetAdmission(Box<FleetAdmissionTargetReceipt>),
-}
-
-#[derive(CandidType)]
-enum ManagedStatusRequest {
-    Admission(PageRequest),
-    Binding,
-    Operation(OperationStatusRequest),
-    Overview,
-    Runtime,
-}
-
-#[derive(CandidType, Deserialize)]
-enum ManagedStatusResponse {
-    Admission(FleetAdmissionProjectionStatusResponse),
-    Binding(ManagedCanisterBinding),
-    Operation(Box<ManagedOperationStatusResponse>),
-    Overview(RoleOverviewResponse),
-    Runtime(CanicRuntimeStatus),
-}
-
-#[derive(CandidType, Deserialize)]
-enum ManagedOperationStatusResponse {
-    ConfigureRuntime(ComponentRuntimeOperationStatus),
 }
 
 /// Typed setup or lifecycle failure from the managed Component Group fixture.

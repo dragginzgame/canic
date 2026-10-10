@@ -6,13 +6,15 @@ use super::operator_mint_tests::funded_operator;
 use crate::{
     fleet_ensure::{
         model::*,
+        ops,
         ops::{
-            self, EffectObservation, EffectOutcome, EffectRetry, EnsurePaths, EnsurePlatform,
+            EffectObservation, EffectOutcome, EffectRetry, EnsurePaths, EnsurePlatform,
             NativeFundingObservation, native_funding_applied,
             operator_mint::{prepare_intent, transport::OperatorMintTransport},
         },
         view::OperatorFundingObservation,
-        workflow::{self, EnsureWorkflowError, operator_mint},
+        workflow,
+        workflow::{EnsureWorkflowError, operator_mint},
     },
     test_support::temp_dir,
 };

@@ -14,11 +14,7 @@ use crate::{
         ValidatedRootFleetRegistryMirrorView,
     },
 };
-use canic_core::{
-    control_plane_support::{
-        error::InternalError,
-        ops::{config::ConfigOps, fleet_registry::FleetRegistryOps},
-    },
+use canic_contracts::{
     dto::{
         fleet_registry::{
             FleetDirectorySnapshot, FleetRegistryManifest, FleetRegistrySnapshotResponse,
@@ -28,6 +24,10 @@ use canic_core::{
         fleet_subnet_root::FleetSubnetRootAuthority,
     },
     ids::{FleetAdmissionPolicy, FleetSubnetRootBinding},
+};
+use canic_core::control_plane_support::{
+    error::InternalError,
+    ops::{config::ConfigOps, fleet_registry::FleetRegistryOps},
 };
 
 #[derive(Eq, PartialEq)]
@@ -138,7 +138,7 @@ impl FleetRegistryMirrorOps {
 
     pub(crate) fn commit_candidate(
         operation_id: [u8; 32],
-        store_bootstrap: canic_core::dto::root_store::RootStoreBootstrapRequest,
+        store_bootstrap: canic_contracts::dto::root_store::RootStoreBootstrapRequest,
         snapshot: FleetRegistrySnapshotResponse,
         acknowledgement: Option<FleetSubnetRootSnapshotAcknowledgement>,
     ) {

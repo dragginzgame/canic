@@ -6,10 +6,8 @@
 
 use super::*;
 use crate::release_set::AppConfigSnapshot;
-use canic_core::{
-    cdk::utils::hash::{decode_hex, sha256_hex},
-    dto::root_store::ROOT_STORE_RELEASE_SET_MANIFEST_MAX_BYTES,
-};
+use canic_contracts::dto::root_store::ROOT_STORE_RELEASE_SET_MANIFEST_MAX_BYTES;
+use canic_core::cdk::utils::hash::{decode_hex, sha256_hex};
 use std::{collections::BTreeMap, path::Path};
 
 ///
@@ -17,6 +15,7 @@ use std::{collections::BTreeMap, path::Path};
 ///
 /// Host-owned pre-build selection and exact source-file fingerprints, including packages without fixtures.
 ///
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ConfiguredFixtureSources {
     pub inputs: Vec<FixtureSourceInput>,

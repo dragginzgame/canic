@@ -5,22 +5,21 @@
 //! Does not own: role applicability, CLI rendering, or stable-memory access.
 //! Boundary: descriptors are static metadata supplied to host-side materialization.
 
-#[cfg(feature = "root-control-plane")]
-use crate::storage::stable::canister_pool::{
-    CanisterPoolAssetRecord, CanisterPoolData, CanisterPoolHandoffReceiptData,
-    CanisterPoolHandoffReceiptRecord, CanisterPoolStateRecord,
-};
-#[cfg(feature = "root-control-plane")]
-use crate::storage::stable::component_provisioning::{
-    RootComponentOperationRecord, RootComponentProvisioningData,
-    RootComponentProvisioningPlacementRecord, RootComponentProvisioningStateRecord,
-};
 #[cfg(feature = "wasm-store-canister")]
 use crate::storage::stable::fixture_store::{FixtureStoreData, FixtureStoreEntryRecord};
 #[cfg(feature = "root-control-plane")]
-use crate::storage::stable::root_admission::{RootAdmissionData, RootAdmissionRecord};
-#[cfg(feature = "root-control-plane")]
-use crate::storage::stable::root_funding::{RootFundingData, RootFundingRecord};
+use crate::storage::stable::{
+    canister_pool::{
+        CanisterPoolAssetRecord, CanisterPoolData, CanisterPoolHandoffReceiptData,
+        CanisterPoolHandoffReceiptRecord, CanisterPoolStateRecord,
+    },
+    component_provisioning::{
+        RootComponentOperationRecord, RootComponentProvisioningData,
+        RootComponentProvisioningPlacementRecord, RootComponentProvisioningStateRecord,
+    },
+    root_admission::{RootAdmissionData, RootAdmissionRecord},
+    root_funding::{RootFundingData, RootFundingRecord},
+};
 use crate::storage::stable::{
     component_registry::{
         ComponentRegistryEntryRecord, ComponentRegistryPrincipalIndexRecord,
@@ -45,22 +44,22 @@ use crate::storage::stable::{
 };
 #[cfg(feature = "root-control-plane")]
 use canic_core::role_contract::allocation::memory::control_plane::{
-    ROOT_ADMISSION_ID, ROOT_CANISTER_INVENTORY_ASSETS_ID, ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID,
-    ROOT_CANISTER_POOL_STATE_ID, ROOT_COMPONENT_PROVISIONING_OPERATIONS_ID,
-    ROOT_COMPONENT_PROVISIONING_PLACEMENTS_ID, ROOT_COMPONENT_PROVISIONING_STATE_ID,
-    ROOT_FUNDING_ID,
+    ROOT_ADMISSION_KEY, ROOT_CANISTER_INVENTORY_ASSETS_KEY,
+    ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_KEY, ROOT_CANISTER_POOL_STATE_KEY,
+    ROOT_COMPONENT_PROVISIONING_OPERATIONS_KEY, ROOT_COMPONENT_PROVISIONING_PLACEMENTS_KEY,
+    ROOT_COMPONENT_PROVISIONING_STATE_KEY, ROOT_FUNDING_KEY,
 };
 use canic_core::{
     role_contract::{
         AllocationOwner, StateAllocationKey,
         allocation::memory::control_plane::{
-            FLEET_COORDINATOR_ADMISSION_ID, FLEET_COORDINATOR_FUNDING_ID,
-            FLEET_COORDINATOR_REGISTRY_ID, ROOT_COMPONENT_ALLOCATIONS_ID,
-            ROOT_COMPONENT_DRAINING_ID, ROOT_COMPONENT_PRINCIPAL_INDEX_ID,
-            ROOT_COMPONENT_REGISTRY_ENTRIES_ID, ROOT_COMPONENT_REGISTRY_STATE_ID,
-            ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID, ROOT_FLEET_REGISTRY_MIRROR_ID,
-            ROOT_WASM_STORE_STATE_ID, TEMPLATE_CHUNK_PAYLOADS_ID, TEMPLATE_CHUNK_REFS_ID,
-            TEMPLATE_CHUNK_SETS_ID, TEMPLATE_MANIFESTS_ID, WASM_STORE_GC_STATE_ID,
+            FLEET_COORDINATOR_ADMISSION_KEY, FLEET_COORDINATOR_FUNDING_KEY,
+            FLEET_COORDINATOR_REGISTRY_KEY, ROOT_COMPONENT_ALLOCATIONS_KEY,
+            ROOT_COMPONENT_DRAINING_KEY, ROOT_COMPONENT_PRINCIPAL_INDEX_KEY,
+            ROOT_COMPONENT_REGISTRY_ENTRIES_KEY, ROOT_COMPONENT_REGISTRY_STATE_KEY,
+            ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_KEY, ROOT_FLEET_REGISTRY_MIRROR_KEY,
+            ROOT_WASM_STORE_STATE_KEY, TEMPLATE_CHUNK_PAYLOADS_KEY, TEMPLATE_CHUNK_REFS_KEY,
+            TEMPLATE_CHUNK_SETS_KEY, TEMPLATE_MANIFESTS_KEY, WASM_STORE_GC_STATE_KEY,
         },
     },
     state_contract::{StateAllocationDescriptor, StateDomainManifest, StateStorage},
@@ -75,7 +74,7 @@ pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor>
         descriptor(
             StateAllocationKey::FleetCoordinatorRegistry,
             "fleet_coordinator_registry",
-            FLEET_COORDINATOR_REGISTRY_ID,
+            FLEET_COORDINATOR_REGISTRY_KEY,
             FleetCoordinatorRegistryRecord::STATE_CONTRACT_NAME,
             FleetCoordinatorRegistryData::STATE_CONTRACT_NAME,
             190,
@@ -88,7 +87,7 @@ pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor>
         descriptor(
             StateAllocationKey::RootFunding,
             "root_funding",
-            ROOT_FUNDING_ID,
+            ROOT_FUNDING_KEY,
             RootFundingRecord::STATE_CONTRACT_NAME,
             RootFundingData::STATE_CONTRACT_NAME,
             192,
@@ -97,7 +96,7 @@ pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor>
         descriptor(
             StateAllocationKey::RootFleetRegistryMirror,
             "root_fleet_registry_mirror",
-            ROOT_FLEET_REGISTRY_MIRROR_ID,
+            ROOT_FLEET_REGISTRY_MIRROR_KEY,
             RootFleetRegistryMirrorStateRecord::STATE_CONTRACT_NAME,
             RootFleetRegistryMirrorData::STATE_CONTRACT_NAME,
             195,
@@ -111,7 +110,7 @@ pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor>
         descriptor(
             StateAllocationKey::TemplateManifests,
             "template_manifests",
-            TEMPLATE_MANIFESTS_ID,
+            TEMPLATE_MANIFESTS_KEY,
             TemplateManifestRecord::STATE_CONTRACT_NAME,
             TemplateManifestsData::STATE_CONTRACT_NAME,
             202,
@@ -120,7 +119,7 @@ pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor>
         descriptor(
             StateAllocationKey::TemplateChunkSets,
             "template_chunk_sets",
-            TEMPLATE_CHUNK_SETS_ID,
+            TEMPLATE_CHUNK_SETS_KEY,
             TemplateChunkSetRecord::STATE_CONTRACT_NAME,
             TemplateChunkSetsData::STATE_CONTRACT_NAME,
             210,
@@ -129,7 +128,7 @@ pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor>
         descriptor(
             StateAllocationKey::TemplateChunkRefs,
             "template_chunk_refs",
-            TEMPLATE_CHUNK_REFS_ID,
+            TEMPLATE_CHUNK_REFS_KEY,
             TemplateChunkRefRecord::STATE_CONTRACT_NAME,
             TemplateChunkRefsData::STATE_CONTRACT_NAME,
             220,
@@ -138,7 +137,7 @@ pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor>
         descriptor(
             StateAllocationKey::TemplateChunkPayloads,
             "template_chunk_payloads",
-            TEMPLATE_CHUNK_PAYLOADS_ID,
+            TEMPLATE_CHUNK_PAYLOADS_KEY,
             TemplateChunkPayloadRecord::STATE_CONTRACT_NAME,
             TemplateChunkPayloadsData::STATE_CONTRACT_NAME,
             230,
@@ -147,7 +146,7 @@ pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor>
         descriptor(
             StateAllocationKey::RootWasmStoreState,
             "root_wasm_store_state",
-            ROOT_WASM_STORE_STATE_ID,
+            ROOT_WASM_STORE_STATE_KEY,
             RootWasmStoreStateRecord::STATE_CONTRACT_NAME,
             RootWasmStoreStateData::STATE_CONTRACT_NAME,
             240,
@@ -156,7 +155,7 @@ pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor>
         descriptor(
             StateAllocationKey::WasmStoreGcState,
             "wasm_store_gc_state",
-            WASM_STORE_GC_STATE_ID,
+            WASM_STORE_GC_STATE_KEY,
             WasmStoreGcStateRecord::STATE_CONTRACT_NAME,
             WasmStoreGcStateData::STATE_CONTRACT_NAME,
             240,
@@ -169,7 +168,7 @@ fn fleet_coordinator_funding_descriptor() -> StateAllocationDescriptor {
     descriptor(
         StateAllocationKey::FleetCoordinatorFunding,
         "fleet_coordinator_funding",
-        FLEET_COORDINATOR_FUNDING_ID,
+        FLEET_COORDINATOR_FUNDING_KEY,
         FleetCoordinatorFundingRecord::STATE_CONTRACT_NAME,
         FleetCoordinatorFundingData::STATE_CONTRACT_NAME,
         191,
@@ -182,7 +181,7 @@ fn root_admission_descriptor() -> StateAllocationDescriptor {
     descriptor(
         StateAllocationKey::RootAdmission,
         "root_admission",
-        ROOT_ADMISSION_ID,
+        ROOT_ADMISSION_KEY,
         RootAdmissionRecord::STATE_CONTRACT_NAME,
         RootAdmissionData::STATE_CONTRACT_NAME,
         193,
@@ -195,7 +194,7 @@ fn fixture_store_descriptor() -> StateAllocationDescriptor {
     descriptor(
         StateAllocationKey::FixtureStore,
         "fixture_store",
-        canic_core::role_contract::allocation::memory::control_plane::FIXTURE_STORE_ID,
+        canic_core::role_contract::allocation::memory::control_plane::FIXTURE_STORE_KEY,
         FixtureStoreEntryRecord::STATE_CONTRACT_NAME,
         FixtureStoreData::STATE_CONTRACT_NAME,
         231,
@@ -212,7 +211,7 @@ fn root_component_registry_descriptor() -> StateAllocationDescriptor {
                 domain: "root_component_registry_state".to_string(),
                 version: 1,
                 storage: StateStorage::StableMemory,
-                memory_id: Some(ROOT_COMPONENT_REGISTRY_STATE_ID),
+                memory_key: Some(ROOT_COMPONENT_REGISTRY_STATE_KEY.to_string()),
                 owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
                 record: RootComponentRegistryStateRecord::STATE_CONTRACT_NAME.to_string(),
                 snapshot: RootComponentRegistryData::STATE_CONTRACT_NAME.to_string(),
@@ -226,7 +225,7 @@ fn root_component_registry_descriptor() -> StateAllocationDescriptor {
                 domain: "root_component_allocations".to_string(),
                 version: 1,
                 storage: StateStorage::StableMemory,
-                memory_id: Some(ROOT_COMPONENT_ALLOCATIONS_ID),
+                memory_key: Some(ROOT_COMPONENT_ALLOCATIONS_KEY.to_string()),
                 owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
                 record: RootComponentAllocationRecord::STATE_CONTRACT_NAME.to_string(),
                 snapshot: RootComponentRegistryData::STATE_CONTRACT_NAME.to_string(),
@@ -240,7 +239,7 @@ fn root_component_registry_descriptor() -> StateAllocationDescriptor {
                 domain: "component_registry_entries".to_string(),
                 version: 1,
                 storage: StateStorage::StableMemory,
-                memory_id: Some(ROOT_COMPONENT_REGISTRY_ENTRIES_ID),
+                memory_key: Some(ROOT_COMPONENT_REGISTRY_ENTRIES_KEY.to_string()),
                 owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
                 record: ComponentRegistryEntryRecord::STATE_CONTRACT_NAME.to_string(),
                 snapshot: RootComponentRegistryData::STATE_CONTRACT_NAME.to_string(),
@@ -254,7 +253,7 @@ fn root_component_registry_descriptor() -> StateAllocationDescriptor {
                 domain: "component_registry_principal_index".to_string(),
                 version: 1,
                 storage: StateStorage::StableMemory,
-                memory_id: Some(ROOT_COMPONENT_PRINCIPAL_INDEX_ID),
+                memory_key: Some(ROOT_COMPONENT_PRINCIPAL_INDEX_KEY.to_string()),
                 owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
                 record: ComponentRegistryPrincipalIndexRecord::STATE_CONTRACT_NAME.to_string(),
                 snapshot: RootComponentRegistryData::STATE_CONTRACT_NAME.to_string(),
@@ -268,7 +267,7 @@ fn root_component_registry_descriptor() -> StateAllocationDescriptor {
                 domain: "root_component_subtree_removal_history".to_string(),
                 version: 1,
                 storage: StateStorage::StableMemory,
-                memory_id: Some(ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID),
+                memory_key: Some(ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_KEY.to_string()),
                 owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
                 record: RootComponentSubtreeRemovalCompletedLeafRecord::STATE_CONTRACT_NAME
                     .to_string(),
@@ -290,7 +289,7 @@ fn root_component_draining_domain() -> StateDomainManifest {
         domain: "root_component_draining".to_string(),
         version: 1,
         storage: StateStorage::StableMemory,
-        memory_id: Some(ROOT_COMPONENT_DRAINING_ID),
+        memory_key: Some(ROOT_COMPONENT_DRAINING_KEY.to_string()),
         owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
         record: RootComponentDrainingRecord::STATE_CONTRACT_NAME.to_string(),
         snapshot: RootComponentRegistryData::STATE_CONTRACT_NAME.to_string(),
@@ -312,7 +311,7 @@ fn root_canister_pool_descriptor() -> StateAllocationDescriptor {
                 domain: "root_canister_pool_assets".to_string(),
                 version: 1,
                 storage: StateStorage::StableMemory,
-                memory_id: Some(ROOT_CANISTER_INVENTORY_ASSETS_ID),
+                memory_key: Some(ROOT_CANISTER_INVENTORY_ASSETS_KEY.to_string()),
                 owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
                 record: CanisterPoolAssetRecord::STATE_CONTRACT_NAME.to_string(),
                 snapshot: CanisterPoolData::STATE_CONTRACT_NAME.to_string(),
@@ -326,7 +325,7 @@ fn root_canister_pool_descriptor() -> StateAllocationDescriptor {
                 domain: "root_canister_pool_state".to_string(),
                 version: 1,
                 storage: StateStorage::StableMemory,
-                memory_id: Some(ROOT_CANISTER_POOL_STATE_ID),
+                memory_key: Some(ROOT_CANISTER_POOL_STATE_KEY.to_string()),
                 owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
                 record: CanisterPoolStateRecord::STATE_CONTRACT_NAME.to_string(),
                 snapshot: CanisterPoolData::STATE_CONTRACT_NAME.to_string(),
@@ -339,7 +338,7 @@ fn root_canister_pool_descriptor() -> StateAllocationDescriptor {
                 domain: "root_canister_pool_handoff_receipts".to_string(),
                 version: 1,
                 storage: StateStorage::StableMemory,
-                memory_id: Some(ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID),
+                memory_key: Some(ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_KEY.to_string()),
                 owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
                 record: CanisterPoolHandoffReceiptRecord::STATE_CONTRACT_NAME.to_string(),
                 snapshot: CanisterPoolHandoffReceiptData::STATE_CONTRACT_NAME.to_string(),
@@ -363,7 +362,7 @@ fn root_component_provisioning_descriptor() -> StateAllocationDescriptor {
                 domain: "root_component_provisioning_operations".to_string(),
                 version: 1,
                 storage: StateStorage::StableMemory,
-                memory_id: Some(ROOT_COMPONENT_PROVISIONING_OPERATIONS_ID),
+                memory_key: Some(ROOT_COMPONENT_PROVISIONING_OPERATIONS_KEY.to_string()),
                 owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
                 record: RootComponentOperationRecord::STATE_CONTRACT_NAME.to_string(),
                 snapshot: RootComponentProvisioningData::STATE_CONTRACT_NAME.to_string(),
@@ -377,7 +376,7 @@ fn root_component_provisioning_descriptor() -> StateAllocationDescriptor {
                 domain: "root_component_provisioning_placements".to_string(),
                 version: 1,
                 storage: StateStorage::StableMemory,
-                memory_id: Some(ROOT_COMPONENT_PROVISIONING_PLACEMENTS_ID),
+                memory_key: Some(ROOT_COMPONENT_PROVISIONING_PLACEMENTS_KEY.to_string()),
                 owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
                 record: RootComponentProvisioningPlacementRecord::STATE_CONTRACT_NAME.to_string(),
                 snapshot: RootComponentProvisioningData::STATE_CONTRACT_NAME.to_string(),
@@ -391,7 +390,7 @@ fn root_component_provisioning_descriptor() -> StateAllocationDescriptor {
                 domain: "root_component_provisioning_state".to_string(),
                 version: 1,
                 storage: StateStorage::StableMemory,
-                memory_id: Some(ROOT_COMPONENT_PROVISIONING_STATE_ID),
+                memory_key: Some(ROOT_COMPONENT_PROVISIONING_STATE_KEY.to_string()),
                 owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
                 record: RootComponentProvisioningStateRecord::STATE_CONTRACT_NAME.to_string(),
                 snapshot: RootComponentProvisioningData::STATE_CONTRACT_NAME.to_string(),
@@ -410,7 +409,7 @@ fn fleet_admission_descriptor() -> StateAllocationDescriptor {
     descriptor(
         StateAllocationKey::FleetCoordinatorAdmission,
         "fleet_coordinator_admission",
-        FLEET_COORDINATOR_ADMISSION_ID,
+        FLEET_COORDINATOR_ADMISSION_KEY,
         FleetAdmissionAuthorityRecord::STATE_CONTRACT_NAME,
         FleetAdmissionAuthorityData::STATE_CONTRACT_NAME,
         193,
@@ -421,7 +420,7 @@ fn fleet_admission_descriptor() -> StateAllocationDescriptor {
 fn descriptor(
     allocation: StateAllocationKey,
     domain: &str,
-    memory_id: u8,
+    memory_key: &str,
     record: &str,
     snapshot: &str,
     restore_order: u32,
@@ -434,7 +433,7 @@ fn descriptor(
             domain: domain.to_string(),
             version: 1,
             storage: StateStorage::StableMemory,
-            memory_id: Some(memory_id),
+            memory_key: Some(memory_key.to_string()),
             owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
             record: record.to_string(),
             snapshot: snapshot.to_string(),
@@ -579,7 +578,7 @@ mod tests {
                 .iter()
                 .map(|domain| (
                     domain.domain.as_str(),
-                    domain.memory_id,
+                    domain.memory_key.clone(),
                     domain.record.as_str(),
                     domain.restore_order,
                 ))
@@ -587,37 +586,37 @@ mod tests {
             vec![
                 (
                     "root_component_registry_state",
-                    Some(ROOT_COMPONENT_REGISTRY_STATE_ID),
+                    Some(ROOT_COMPONENT_REGISTRY_STATE_KEY.to_string()),
                     RootComponentRegistryStateRecord::STATE_CONTRACT_NAME,
                     Some(196),
                 ),
                 (
                     "root_component_allocations",
-                    Some(ROOT_COMPONENT_ALLOCATIONS_ID),
+                    Some(ROOT_COMPONENT_ALLOCATIONS_KEY.to_string()),
                     RootComponentAllocationRecord::STATE_CONTRACT_NAME,
                     Some(197),
                 ),
                 (
                     "component_registry_entries",
-                    Some(ROOT_COMPONENT_REGISTRY_ENTRIES_ID),
+                    Some(ROOT_COMPONENT_REGISTRY_ENTRIES_KEY.to_string()),
                     ComponentRegistryEntryRecord::STATE_CONTRACT_NAME,
                     Some(198),
                 ),
                 (
                     "component_registry_principal_index",
-                    Some(ROOT_COMPONENT_PRINCIPAL_INDEX_ID),
+                    Some(ROOT_COMPONENT_PRINCIPAL_INDEX_KEY.to_string()),
                     ComponentRegistryPrincipalIndexRecord::STATE_CONTRACT_NAME,
                     Some(199),
                 ),
                 (
                     "root_component_subtree_removal_history",
-                    Some(ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID),
+                    Some(ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_KEY.to_string()),
                     RootComponentSubtreeRemovalCompletedLeafRecord::STATE_CONTRACT_NAME,
                     Some(200),
                 ),
                 (
                     "root_component_draining",
-                    Some(ROOT_COMPONENT_DRAINING_ID),
+                    Some(ROOT_COMPONENT_DRAINING_KEY.to_string()),
                     RootComponentDrainingRecord::STATE_CONTRACT_NAME,
                     Some(201),
                 ),
@@ -642,7 +641,7 @@ mod tests {
                 .iter()
                 .map(|domain| (
                     domain.domain.as_str(),
-                    domain.memory_id,
+                    domain.memory_key.clone(),
                     domain.record.as_str(),
                     domain.restore_order,
                 ))
@@ -650,19 +649,19 @@ mod tests {
             vec![
                 (
                     "root_component_provisioning_operations",
-                    Some(ROOT_COMPONENT_PROVISIONING_OPERATIONS_ID),
+                    Some(ROOT_COMPONENT_PROVISIONING_OPERATIONS_KEY.to_string()),
                     RootComponentOperationRecord::STATE_CONTRACT_NAME,
                     Some(205),
                 ),
                 (
                     "root_component_provisioning_placements",
-                    Some(ROOT_COMPONENT_PROVISIONING_PLACEMENTS_ID),
+                    Some(ROOT_COMPONENT_PROVISIONING_PLACEMENTS_KEY.to_string()),
                     RootComponentProvisioningPlacementRecord::STATE_CONTRACT_NAME,
                     Some(206),
                 ),
                 (
                     "root_component_provisioning_state",
-                    Some(ROOT_COMPONENT_PROVISIONING_STATE_ID),
+                    Some(ROOT_COMPONENT_PROVISIONING_STATE_KEY.to_string()),
                     RootComponentProvisioningStateRecord::STATE_CONTRACT_NAME,
                     Some(207),
                 ),

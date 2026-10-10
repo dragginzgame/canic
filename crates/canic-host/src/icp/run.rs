@@ -8,12 +8,14 @@ use std::{
 use ic_host_process::{
     child::OwnedChild,
     tool::{
-        CommunicationLimits, ExecutionFailure, ExecutionOperation, SuccessfulExit, ToolError,
+        ExecutionFailure, ExecutionOperation, OutputLimit, OutputLimits, SuccessfulExit, ToolError,
         communicate_child_with_observer,
     },
 };
 
 use crate::{output_with_executable_busy_retry, with_executable_busy_retry};
+
+const FOREGROUND_DIAGNOSTIC_BYTES: usize = 64 * 1024;
 
 use super::{
     command::{command_display, configure_inherited_fd, ensure_command_compatible},
@@ -140,11 +142,10 @@ fn run_status_inherit_to(
     let result = communicate_child_with_observer(
         &mut child,
         None,
-        CommunicationLimits {
-            stdout_bytes: 0,
-            // Foreground diagnostics retain their existing no-quota contract.
-            // The shared engine reports allocation failure instead of panicking.
-            stderr_bytes: usize::MAX,
+        OutputLimits {
+            stdout: OutputLimit::Terminate(0),
+            // Forward every byte without terminating a verbose foreground command.
+            stderr: OutputLimit::Truncate(FOREGROUND_DIAGNOSTIC_BYTES),
             timeout: None,
         },
         SuccessfulExit::Cleanup,
@@ -174,26 +175,22 @@ fn run_status_inherit_to(
 }
 
 fn foreground_command_error(command: String, error: ToolError) -> IcpCommandError {
-    if let Some(execution) = error.execution_error() {
-        let cleanup_complete = [
-            execution.term_error.as_ref(),
-            execution.group_error.as_ref(),
-            execution.kill_error.as_ref(),
-            execution.wait_error.as_ref(),
-        ]
-        .iter()
-        .all(Option::is_none);
-        if matches!(execution.failure, ExecutionFailure::ExitStatus) && cleanup_complete {
-            let stderr = if execution.evidence.stderr.is_empty() {
-                execution.evidence.status.map_or_else(
-                    || "command exited unsuccessfully".to_string(),
-                    |status| format!("command exited with status {}", exit_status_label(status)),
-                )
-            } else {
-                String::from_utf8_lossy(&execution.evidence.stderr).to_string()
-            };
-            return IcpCommandError::Failed { command, stderr };
+    if let Some(execution) = error.execution_error()
+        && matches!(execution.failure, ExecutionFailure::ExitStatus)
+        && execution.cleanup.is_none()
+    {
+        let mut stderr = if execution.evidence.stderr.is_empty() {
+            execution.evidence.status.map_or_else(
+                || "command exited unsuccessfully".to_string(),
+                |status| format!("command exited with status {}", exit_status_label(status)),
+            )
+        } else {
+            String::from_utf8_lossy(&execution.evidence.stderr).to_string()
+        };
+        if execution.evidence.stderr_truncated {
+            stderr.push_str("\n[retained stderr truncated; full output was forwarded]");
         }
+        return IcpCommandError::Failed { command, stderr };
     }
     let kind = match error.execution_error().map(|execution| &execution.failure) {
         Some(ExecutionFailure::Io { source, .. }) => source.kind(),
@@ -308,6 +305,26 @@ mod tests {
     }
 
     #[test]
+    fn foreground_runner_forwards_complete_output_with_bounded_failure_diagnostics() {
+        let mut command = Command::new("sh");
+        command.args(["-c", "perl -e 'print \"x\" x 131072' >&2; exit 7"]);
+        let mut terminal = Vec::new();
+        let IcpCommandError::Failed { stderr, .. } =
+            run_status_inherit_to(&mut command, &mut terminal).unwrap_err()
+        else {
+            panic!("expected failed command diagnostics");
+        };
+        assert_eq!(terminal, vec![b'x'; 131_072]);
+        assert_eq!(
+            stderr,
+            format!(
+                "{}\n[retained stderr truncated; full output was forwarded]",
+                "x".repeat(FOREGROUND_DIAGNOSTIC_BYTES)
+            )
+        );
+    }
+
+    #[test]
     fn foreground_runner_preserves_inherited_and_configured_process_groups() {
         for configured_group in [false, true] {
             let mut command = Command::new("sh");
@@ -368,8 +385,7 @@ mod tests {
             &execution.failure,
             ExecutionFailure::Io { source, .. } if source.kind() == io::ErrorKind::BrokenPipe
         ));
-        assert!(execution.kill_error.is_none());
-        assert!(execution.wait_error.is_none());
+        assert!(execution.cleanup.is_none());
         let pid = fs::read_to_string(pid_file)
             .unwrap()
             .parse::<i32>()

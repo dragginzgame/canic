@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::storage::stable::canister_pool::capacity_import::PoolImportBootstrapRecord;
-use canic_core::dto::pool::CanisterPoolCreationProgress;
+use canic_contracts::dto::pool::CanisterPoolCreationProgress;
 
 #[test]
 fn release_observes_uncertain_and_blocked_creation_without_readmission() {

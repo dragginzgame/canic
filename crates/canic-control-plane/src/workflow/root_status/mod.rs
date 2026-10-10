@@ -19,15 +19,13 @@ use crate::{
     },
 };
 use candid::Principal;
-use canic_core::{
-    control_plane_support::{
-        error::InternalError, ops::icp_refill::IcpRefillStoreOps,
-        workflow::runtime::fleet_activation::FleetActivationWorkflow,
-    },
-    dto::{
-        component_provisioning::RootComponentProvisioningStatusResponse,
-        component_registry::RootComponentChildAllocationResponse,
-    },
+use canic_contracts::dto::{
+    component_provisioning::RootComponentProvisioningStatusResponse,
+    component_registry::RootComponentChildAllocationResponse,
+};
+use canic_core::control_plane_support::{
+    error::InternalError, ops::icp_refill::IcpRefillStoreOps,
+    workflow::runtime::fleet_activation::FleetActivationWorkflow,
 };
 
 #[derive(Clone, Copy)]
@@ -254,7 +252,7 @@ mod tests {
         };
         assert_eq!(
             error.public_error().code(),
-            canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
+            canic_contracts::diagnostics::codes::REQUEST_INVALID.raw_code()
         );
 
         let Err(error) = component_provisioning_status([0; 32], Principal::anonymous(), false)
@@ -263,7 +261,7 @@ mod tests {
         };
         assert_eq!(
             error.public_error().code(),
-            canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
+            canic_contracts::diagnostics::codes::REQUEST_INVALID.raw_code()
         );
 
         let Err(error) =
@@ -273,7 +271,7 @@ mod tests {
         };
         assert_eq!(
             error.public_error().code(),
-            canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
+            canic_contracts::diagnostics::codes::REQUEST_INVALID.raw_code()
         );
     }
 
@@ -287,7 +285,7 @@ mod tests {
         };
         assert_eq!(
             error.public_error().code(),
-            canic_core::diagnostics::codes::STATE_INVALID.raw_code()
+            canic_contracts::diagnostics::codes::STATE_INVALID.raw_code()
         );
     }
 }

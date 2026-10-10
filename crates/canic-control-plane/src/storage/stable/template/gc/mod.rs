@@ -2,8 +2,6 @@ use crate::ids::WasmStoreGcMode;
 #[cfg(feature = "wasm-store-canister")]
 use canic_core::cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory};
 use canic_core::impl_storable_bounded;
-#[cfg(feature = "wasm-store-canister")]
-use canic_core::role_contract::allocation::memory::control_plane::WASM_STORE_GC_STATE_ID;
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "wasm-store-canister")]
 use std::cell::RefCell;
@@ -13,7 +11,7 @@ std::thread_local! {
     static WASM_STORE_GC_STATE: RefCell<
         Cell<WasmStoreGcStateRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(Cell::init(
-        canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.wasm_store.gc_state.v1", ty = WasmStoreGcStateRecord, id = WASM_STORE_GC_STATE_ID),
+        canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.wasm_store.gc_state.v1"),
         WasmStoreGcStateRecord::default(),
     ));
 }

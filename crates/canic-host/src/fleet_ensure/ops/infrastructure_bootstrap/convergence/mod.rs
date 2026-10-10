@@ -77,7 +77,8 @@ fn retain(path: &Path, bytes: &[u8]) -> Result<(), InfrastructureBootstrapError>
     {
         Some(existing) if existing == bytes => Ok(()),
         Some(_) => Err(InfrastructureBootstrapError::Integrity),
-        None => Ok(create_new_bytes_with_parents(path, bytes)?),
+        None => Ok(create_new_bytes_with_parents(path, bytes)
+            .map_err(crate::publication::ops::io_error)?),
     }
 }
 

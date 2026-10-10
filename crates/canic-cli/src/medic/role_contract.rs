@@ -11,14 +11,9 @@ use crate::medic::{
     },
     report::{MedicCategory, MedicCheck, MedicSource},
 };
-use std::{
-    collections::BTreeMap,
-    path::{Path, PathBuf},
-};
-
+use canic_contracts::ids::CanisterRole;
 use canic_core::{
     bootstrap::compiled::ConfigModel,
-    ids::CanisterRole,
     role_contract::{
         ResolvedRoleContract, RoleContractFinding, RoleContractResolution, RoleFeatureRequirement,
         required_features_for_role,
@@ -32,6 +27,10 @@ use canic_host::{
         resolve_canonical_root_contract, resolve_declared_role_package_contract,
         validate_declared_role_package,
     },
+};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
 };
 
 pub(super) fn workspace_config_quality_checks(root: &Path, configs: &[PathBuf]) -> Vec<MedicCheck> {
@@ -304,7 +303,7 @@ fn check_role_package_contract(
             "resolve the reported Cargo dependency/cache failure; run cargo fetch --locked for this workspace, then rerun canic medic (metadata checks are locked and offline)"
         }
         RoleContractFinding::AllocationDescriptorDuplicate { .. }
-        | RoleContractFinding::AllocationDescriptorIdMismatch { .. }
+        | RoleContractFinding::AllocationDescriptorKeyMismatch { .. }
         | RoleContractFinding::AllocationDescriptorMissing { .. } => {
             "repair the Canic state descriptor registry and rerun canic medic"
         }

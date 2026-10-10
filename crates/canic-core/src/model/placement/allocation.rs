@@ -6,12 +6,13 @@
 
 use crate::{
     cdk::types::Principal,
-    ids::{CanisterRole, IntentResourceKey},
+    ids::IntentResourceKey,
     model::{
         intent::PayloadBinding,
         replay::{OperationId, ReplayPayloadHasher},
     },
 };
+use canic_contracts::ids::CanisterRole;
 use sha2::{Digest, Sha256};
 
 const ALLOCATION_OPERATION_COMMAND: &str = "placement.allocate_child";

@@ -1,4 +1,5 @@
-use super::*;
+// Ensure bare top-level medic selects the workspace scope without inventing a Fleet.
+
 use super::{
     auth::{auth_renewal_medic_check_from_summary, auth_renewal_medic_error_check},
     command::{medic_subcommand_help_requested, usage},
@@ -7,6 +8,7 @@ use super::{
     report::{MedicStatus, aggregate_status},
     role_contract::workspace_config_quality_checks,
     workspace::workspace_environment_selection_check,
+    *,
 };
 use crate::{
     CliError,
@@ -14,16 +16,14 @@ use crate::{
     cli_error_exit_code, render_cli_error,
     test_support::temp_dir,
 };
-use std::{ffi::OsString, fs};
-
-use canic_core::ids::CanisterRole;
+use canic_contracts::ids::CanisterRole;
 use canic_host::{
     fleet_ensure::CurrentFleetInventoryError,
     state_manifest::{StateAuditStatus, build_state_audit_report},
 };
 use serde_json::Value as JsonValue;
+use std::{ffi::OsString, fs};
 
-// Ensure bare top-level medic selects the workspace scope without inventing a Fleet.
 #[test]
 fn parses_bare_workspace_medic_options() {
     let options = MedicOptions::parse([
@@ -561,7 +561,6 @@ kind = "canister"
 package = "store"
 
 
-
 [component_specs.app]
 component_role = "app"
 maximum_instances = 1
@@ -614,7 +613,6 @@ kind = "canister"
 package = "store"
 
 
-
 [component_specs.app]
 component_role = "app"
 maximum_instances = 1
@@ -663,7 +661,6 @@ kind = "root"
 [roles.app]
 kind = "canister"
 package = "app"
-
 
 
 [component_specs.app]
@@ -721,7 +718,6 @@ kind = "root"
 [roles.app]
 kind = "canister"
 package = "app"
-
 
 
 [component_specs.app]
@@ -839,7 +835,6 @@ kind = "canister"
 package = "app"
 
 
-
 [component_specs.app]
 component_role = "app"
 maximum_instances = 1
@@ -891,7 +886,6 @@ kind = "root"
 [roles.app]
 kind = "canister"
 package = "app"
-
 
 
 [component_specs.app]

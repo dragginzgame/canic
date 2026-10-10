@@ -6,14 +6,14 @@ use crate::{
         ComponentDeploymentPurpose, Config, ConfigError, RoleRuntimeAuthority, schema::CanisterKind,
     },
     dto::component_deployment::ProtectedComponentDeployment,
-    ids::{
-        AppId, CanisterRole, CanonicalNetworkId, ComponentBinding, ComponentGroupDeploymentId,
-        ComponentGroupMemberId, ComponentGroupMemberPath, ComponentGroupPlacementId,
-        ComponentGroupSpecId, ComponentInstanceId, ComponentSpecId, FleetBinding,
-        FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority, SubnetId,
-    },
 };
 use candid::Principal;
+use canic_contracts::ids::{
+    AppId, CanisterRole, CanonicalNetworkId, ComponentBinding, ComponentGroupDeploymentId,
+    ComponentGroupMemberId, ComponentGroupMemberPath, ComponentGroupPlacementId,
+    ComponentGroupSpecId, ComponentInstanceId, ComponentSpecId, FleetBinding,
+    FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority, SubnetId,
+};
 
 const BASELINE: &str = r#"
 [app]

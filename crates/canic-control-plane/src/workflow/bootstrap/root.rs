@@ -12,27 +12,31 @@ use crate::{
     },
     workflow::runtime::template::WasmStorePublicationWorkflow,
 };
-use canic_core::api::lifecycle::metrics::{
-    LifecycleMetricOutcome, LifecycleMetricPhase, LifecycleMetricRole, LifecycleMetricsApi,
-};
-use canic_core::control_plane_support::{
-    config::ComponentTopology,
-    error::InternalError,
-    ops::{
-        config::ConfigOps,
-        ic::build_network::BuildNetworkOps,
-        runtime::{
-            bootstrap::{BootstrapPhaseLabel, BootstrapStatusOps},
-            env::EnvOps,
-            ready::ReadyOps,
+use canic_contracts::dto::fleet_activation::FleetActivationPhase;
+use canic_core::{
+    api::lifecycle::metrics::{
+        LifecycleMetricOutcome, LifecycleMetricPhase, LifecycleMetricRole, LifecycleMetricsApi,
+    },
+    control_plane_support::{
+        config::ComponentTopology,
+        error::InternalError,
+        ops::{
+            config::ConfigOps,
+            ic::build_network::BuildNetworkOps,
+            runtime::{
+                bootstrap::{BootstrapPhaseLabel, BootstrapStatusOps},
+                env::EnvOps,
+                ready::ReadyOps,
+            },
+        },
+        workflow::{
+            ic::IcWorkflow, runtime::fleet_activation::FleetActivationWorkflow,
+            topology::guard::TopologyGuard,
         },
     },
-    workflow::{
-        ic::IcWorkflow, runtime::fleet_activation::FleetActivationWorkflow,
-        topology::guard::TopologyGuard,
-    },
+    log,
+    log::Topic,
 };
-use canic_core::{dto::fleet_activation::FleetActivationPhase, log, log::Topic};
 use std::collections::BTreeSet;
 
 ///

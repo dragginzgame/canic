@@ -20,7 +20,7 @@ in [the maintained design](../../../design/0.110-fleet-runtime-contraction/0.110
 - Predecessor gate: complete. Published `v0.109.35` retains B8-B10 and the
   passing immutable superseding complexity audit; the human maintainer
   accepted the minor closeout and explicitly promoted B1 on 2026-09-01.
-- Successor: [0.111 blob service extraction](../../../design/0.111-standalone-blob-service-extraction/0.111-design.md)
+- Successor: [0.111 blob service extraction](../../../design/0.112-standalone-blob-service-extraction/0.112-design.md)
   follows accepted human closeout. Multi-Fleet estates are deferred.
 - Deployment boundary: 0.110 is reinstall-only and cannot delay or gate the
   already-published 0.109 Toko Miner unblock.

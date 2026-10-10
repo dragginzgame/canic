@@ -4,8 +4,8 @@ use crate::fleet_ensure::{
     ops::{EnsureStateError, resolve_desired_artifacts},
     policy::{compile_plan, expected_plan_sha256},
 };
-use canic_core::{
-    cdk::types::Cycles,
+use canic_contracts::{
+    cycles::Cycles,
     dto::component_provisioning::{
         ComponentGroupPlacementPlan, ComponentGroupPlanEntry, FleetSubnetRootProvisioningBatch,
     },

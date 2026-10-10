@@ -6,22 +6,22 @@
 
 pub mod fixture;
 
-use crate::cdk::bounded_cell::BoundedCell;
 use crate::{
-    cdk::structures::{DefaultMemoryImpl, memory::RuntimeMemory},
+    cdk::{
+        bounded_cell::BoundedCell,
+        structures::{DefaultMemoryImpl, memory::RuntimeMemory},
+    },
     config::{
         ComponentDeploymentLabel, ComponentDeploymentLimits, ComponentDeploymentPurpose,
         FleetServiceMemberPurpose, FleetServicePlacementPolicy,
     },
-    ids::{
-        CanisterRole, ComponentBinding, ComponentDeploymentConfigurationDigest,
-        ComponentGroupMemberPath, ComponentGroupPlacementId, ComponentGroupSpecId,
-        ComponentInstanceId, ComponentSpecId, FleetBinding, FleetRegistryAuthority, FleetServiceId,
-        FleetSubnetRootBinding, FleetSubnetRootReleaseSet, ManagedCanisterBinding, ReleaseBuildId,
-        SubnetId,
-    },
-    role_contract::allocation::memory::fleet::FLEET_ACTIVATION_ID,
     storage::prelude::*,
+};
+use canic_contracts::ids::{
+    CanisterRole, ComponentBinding, ComponentDeploymentConfigurationDigest,
+    ComponentGroupMemberPath, ComponentGroupPlacementId, ComponentGroupSpecId, ComponentInstanceId,
+    ComponentSpecId, FleetBinding, FleetRegistryAuthority, FleetServiceId, FleetSubnetRootBinding,
+    FleetSubnetRootReleaseSet, ManagedCanisterBinding, ReleaseBuildId, SubnetId,
 };
 use std::cell::RefCell;
 
@@ -36,8 +36,6 @@ std::thread_local! {
     > = RefCell::new(BoundedCell::init(crate::ic_memory_key!(
         authority = CANIC_CORE_MEMORY_AUTHORITY,
         key = "canic.core.fleet.activation.v1",
-        ty = FleetActivation,
-        id = FLEET_ACTIVATION_ID,
     ), None));
 }
 

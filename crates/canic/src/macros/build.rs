@@ -65,11 +65,11 @@ macro_rules! __canic_build_internal {
         println!("cargo:rerun-if-changed={}", $cfg_path.display());
         println!("cargo:rerun-if-env-changed={__canic_config_path_env}");
         let __canic_release_build_id_env =
-            $crate::__internal::core::ids::RELEASE_BUILD_ID_ENV;
+            $crate::__internal::contracts::ids::RELEASE_BUILD_ID_ENV;
         println!("cargo:rerun-if-env-changed={__canic_release_build_id_env}");
         if let Ok(value) = std::env::var(__canic_release_build_id_env) {
             let release_build_id = value
-                .parse::<$crate::__internal::core::ids::ReleaseBuildId>()
+                .parse::<$crate::__internal::contracts::ids::ReleaseBuildId>()
                 .expect("CANIC_RELEASE_BUILD_ID must be one canonical release-build ID");
             println!(
                 "cargo:rustc-env={__canic_release_build_id_env}={release_build_id}"
@@ -125,7 +125,7 @@ macro_rules! __canic_build_internal {
             println!("cargo:rustc-cfg=canic_export_candid");
         }
         let role_name = __canic_role_name.as_str();
-        let role_id: $crate::__internal::core::ids::CanisterRole = role_name.to_string().into();
+        let role_id: $crate::__internal::contracts::ids::CanisterRole = role_name.to_string().into();
         let mut app_name = __canic_app_name.as_str();
         let __canic_wasm_store_special = role_name == "wasm_store";
         let __canic_infrastructure = __canic_wasm_store_special || role_name == "root";

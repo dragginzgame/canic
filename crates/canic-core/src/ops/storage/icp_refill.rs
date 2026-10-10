@@ -6,7 +6,6 @@
 
 use crate::{
     InternalError,
-    cdk::types::Cycles,
     domain::icp_refill::{
         IcpRefillErrorCode, IcpRefillStatus, IcpRefillTrigger, icp_refill_outcome_is_resumable,
     },
@@ -18,6 +17,7 @@ use crate::{
     view::icp_refill::{IcpRefillOperation, IcpRefillReleasePage},
 };
 use candid::{Nat, Principal};
+use canic_contracts::cycles::Cycles;
 use std::{cell::RefCell, collections::BTreeMap};
 use thiserror::Error as ThisError;
 

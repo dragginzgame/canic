@@ -6,9 +6,8 @@
 
 mod representation;
 
-pub(in crate::release_set) use representation::{RepresentationError, qualify_representation};
-
 use crate::MAX_ARTIFACT_READ_BYTES;
+use canic_contracts::ids::ReleaseBuildId;
 use ic_host_artifacts::artifact::ArtifactError;
 use ic_host_fs::read::read_optional_file_no_follow;
 use std::{
@@ -16,7 +15,7 @@ use std::{
     path::{Component, Path},
 };
 
-use canic_core::ids::ReleaseBuildId;
+pub(in crate::release_set) use representation::{RepresentationError, qualify_representation};
 
 pub(in crate::release_set) struct MaterializedReleaseArtifact {
     pub relative_path: String,

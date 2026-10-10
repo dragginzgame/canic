@@ -1,9 +1,9 @@
 use super::{
     AllocationDefinition, AllocationOwner, BuiltInRoleKind, CanicFeatureEffect, CanicFeatureKey,
-    MemoryId, RoleCapabilityKey, RoleContractFinding, RoleContractInput, RoleContractResolution,
+    RoleCapabilityKey, RoleContractFinding, RoleContractInput, RoleContractResolution,
     RoleContractSource, SelectionProvenance, StateAllocationKey, allocation,
-    built_in_role_capabilities,
-    catalog::{self, default_features, implied_features},
+    built_in_role_capabilities, catalog,
+    catalog::{default_features, implied_features},
     derive_role_capabilities, required_features_for_role, resolve_effective_features,
     resolve_role_contract,
 };
@@ -12,9 +12,9 @@ use crate::{
         CanisterAuthConfig, CanisterConfig, CanisterKind, IndexConfig,
         LocalApplicationAuthorizationConfig, ScalingConfig, ShardingConfig, TopupPolicy,
     },
-    ids::CanisterRole,
     test::config::ConfigTestBuilder,
 };
+use canic_contracts::ids::CanisterRole;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
@@ -141,6 +141,10 @@ fn catalog_is_valid_and_classifies_every_public_feature() {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "the independent permanent-key fixture covers every canonical allocation group"
+)]
 fn canonical_allocations_match_the_active_memory_map() {
     allocation::validate_canonical_allocations()
         .expect("canonical allocation definitions should be valid");
@@ -151,86 +155,220 @@ fn canonical_allocations_match_the_active_memory_map() {
             (
                 definition.key,
                 definition
-                    .memory_ids
+                    .memory_keys
                     .iter()
-                    .map(|memory_id| memory_id.get())
+                    .map(ToString::to_string)
                     .collect::<Vec<_>>(),
             )
         })
         .collect::<BTreeMap<_, _>>();
     let expected = BTreeMap::from([
-        (StateAllocationKey::CoreRuntimeChildren, vec![30]),
-        (StateAllocationKey::CoreRuntimeBindings, vec![31]),
-        (StateAllocationKey::CoreFleetState, vec![32]),
-        (StateAllocationKey::CoreFleetActivation, vec![33]),
-        (StateAllocationKey::CoreCallerAuthority, vec![47, 54]),
+        (
+            StateAllocationKey::CoreRuntimeChildren,
+            vec!["canic.core.runtime.canister_children.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::CoreRuntimeBindings,
+            vec!["canic.core.runtime.bindings.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::CoreFleetState,
+            vec!["canic.core.fleet.state.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::CoreFleetActivation,
+            vec!["canic.core.fleet.activation.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::CoreCallerAuthority,
+            vec![
+                "canic.core.caller_authority.header.v1".to_string(),
+                "canic.core.caller_authority.rows.v1".to_string(),
+            ],
+        ),
         (
             StateAllocationKey::CoreLocalApplicationAuthorizationState,
-            vec![34],
+            vec!["canic.core.auth.local_application_authorization.state.v1".to_string()],
         ),
-        (StateAllocationKey::CoreReplayReceipts, vec![35]),
-        (StateAllocationKey::CoreCycles, vec![36, 37, 38]),
-        (StateAllocationKey::CoreCyclesIcpRefillRecords, vec![39]),
-        (StateAllocationKey::CoreRuntimeLog, vec![40]),
-        (StateAllocationKey::CoreIntent, vec![41, 42, 43, 44, 45, 46]),
-        (StateAllocationKey::CoreApplicationReceipts, vec![48]),
-        (StateAllocationKey::CorePlacementAcknowledgement, vec![49]),
-        (StateAllocationKey::PlacementScalingRegistry, vec![50]),
-        (StateAllocationKey::PlacementIndexRegistry, vec![51]),
-        (StateAllocationKey::ShardingRegistry, vec![52]),
-        (StateAllocationKey::ShardingAssignments, vec![53]),
-        (StateAllocationKey::CoreAuthorityRestoreFence, vec![59]),
-        (StateAllocationKey::CoreAsyncJobRecovery, vec![60]),
-        (StateAllocationKey::CoreFleetAdmissionProjection, vec![61]),
-        (StateAllocationKey::CoreDelegatedTokenIssuerState, vec![66]),
-        (StateAllocationKey::CoreRootDelegationState, vec![67]),
-        (StateAllocationKey::FleetCoordinatorFunding, vec![62]),
-        (StateAllocationKey::RootFunding, vec![63]),
-        (StateAllocationKey::FleetCoordinatorAdmission, vec![64]),
-        (StateAllocationKey::RootAdmission, vec![65]),
-        (StateAllocationKey::TemplateManifests, vec![10]),
-        (StateAllocationKey::TemplateChunkSets, vec![11]),
-        (StateAllocationKey::TemplateChunkRefs, vec![12]),
-        (StateAllocationKey::TemplateChunkPayloads, vec![13]),
-        (StateAllocationKey::WasmStoreGcState, vec![14]),
-        (StateAllocationKey::FixtureStore, vec![68]),
-        (StateAllocationKey::FleetCoordinatorRegistry, vec![15]),
-        (StateAllocationKey::RootWasmStoreState, vec![16]),
-        (StateAllocationKey::RootFleetRegistryMirror, vec![17]),
+        (
+            StateAllocationKey::CoreReplayReceipts,
+            vec!["canic.core.replay.receipts.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::CoreCycles,
+            vec![
+                "canic.core.cycles.tracker.v1".to_string(),
+                "canic.core.cycles.topup_events.v1".to_string(),
+                "canic.core.cycles.funding_ledger.v1".to_string(),
+            ],
+        ),
+        (
+            StateAllocationKey::CoreCyclesIcpRefillRecords,
+            vec!["canic.core.cycles.icp_refill_records.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::CoreRuntimeLog,
+            vec!["canic.core.log.entries.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::CoreIntent,
+            vec![
+                "canic.core.intent.meta.v1".to_string(),
+                "canic.core.intent.records.v1".to_string(),
+                "canic.core.intent.totals.v1".to_string(),
+                "canic.core.intent.pending.v1".to_string(),
+                "canic.core.intent.receipt_backed_records.v1".to_string(),
+                "canic.core.intent.expiry_index.v1".to_string(),
+            ],
+        ),
+        (
+            StateAllocationKey::CoreApplicationReceipts,
+            vec!["canic.core.application_receipt.eligibility.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::CorePlacementAcknowledgement,
+            vec!["canic.core.placement.acknowledgement_index.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::PlacementScalingRegistry,
+            vec!["canic.core.placement.scaling_registry.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::PlacementIndexRegistry,
+            vec!["canic.core.placement.index_registry.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::ShardingRegistry,
+            vec!["canic.core.sharding.registry.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::ShardingAssignments,
+            vec!["canic.core.sharding.assignments.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::CoreAuthorityRestoreFence,
+            vec!["canic.core.authority_restore.fence.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::CoreAsyncJobRecovery,
+            vec!["canic.core.async_job_recovery.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::CoreFleetAdmissionProjection,
+            vec!["canic.core.fleet_admission.projection.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::CoreDelegatedTokenIssuerState,
+            vec!["canic.core.auth.delegated_token_issuer.state.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::CoreRootDelegationState,
+            vec!["canic.core.auth.root_delegation.state.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::FleetCoordinatorFunding,
+            vec!["canic.control_plane.fleet_coordinator.funding.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::RootFunding,
+            vec!["canic.control_plane.root.funding.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::FleetCoordinatorAdmission,
+            vec!["canic.control_plane.fleet_admission.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::RootAdmission,
+            vec!["canic.control_plane.root.admission.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::TemplateManifests,
+            vec!["canic.control_plane.template.manifests.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::TemplateChunkSets,
+            vec!["canic.control_plane.template.chunk_sets.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::TemplateChunkRefs,
+            vec!["canic.control_plane.template.chunk_refs.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::TemplateChunkPayloads,
+            vec!["canic.control_plane.template.chunk_payloads.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::WasmStoreGcState,
+            vec!["canic.control_plane.wasm_store.gc_state.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::FixtureStore,
+            vec!["canic.control_plane.fixture_store.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::FleetCoordinatorRegistry,
+            vec!["canic.control_plane.fleet_coordinator.registry.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::RootWasmStoreState,
+            vec!["canic.control_plane.root.wasm_store.state.v1".to_string()],
+        ),
+        (
+            StateAllocationKey::RootFleetRegistryMirror,
+            vec!["canic.control_plane.root.fleet_registry_mirror.v1".to_string()],
+        ),
         (
             StateAllocationKey::RootComponentRegistry,
-            vec![18, 19, 20, 21, 22, 23],
+            vec![
+                "canic.control_plane.root.component.registry_state.v1".to_string(),
+                "canic.control_plane.root.component.allocations.v1".to_string(),
+                "canic.control_plane.root.component.registry_entries.v1".to_string(),
+                "canic.control_plane.root.component.principal_index.v1".to_string(),
+                "canic.control_plane.root.component.subtree_removal_history.v1".to_string(),
+                "canic.control_plane.root.component.draining.v1".to_string(),
+            ],
         ),
-        (StateAllocationKey::RootCanisterPool, vec![24, 25, 26]),
+        (
+            StateAllocationKey::RootCanisterPool,
+            vec![
+                "canic.control_plane.root.canister_inventory.assets.v1".to_string(),
+                "canic.control_plane.root.canister_pool.state.v1".to_string(),
+                "canic.control_plane.root.canister_pool.handoff_receipts.v1".to_string(),
+            ],
+        ),
         (
             StateAllocationKey::RootComponentProvisioning,
-            vec![27, 28, 29],
+            vec![
+                "canic.control_plane.root.component_provisioning.operations.v1".to_string(),
+                "canic.control_plane.root.component_provisioning.placements.v1".to_string(),
+                "canic.control_plane.root.component_provisioning.state.v1".to_string(),
+            ],
         ),
     ]);
     assert_eq!(actual, expected);
 }
 
 #[test]
-fn distinct_allocation_keys_cannot_share_a_memory_id() {
-    const FIRST_IDS: &[MemoryId] = &[MemoryId::new(70)];
-    const SECOND_IDS: &[MemoryId] = &[MemoryId::new(70)];
+fn distinct_allocation_groups_cannot_share_a_memory_key() {
+    const FIRST_IDS: &[&str] = &["canic.core.shared.v1"];
+    const SECOND_IDS: &[&str] = &["canic.core.shared.v1"];
     let definitions = [
         AllocationDefinition {
             key: StateAllocationKey::ShardingRegistry,
             owner: AllocationOwner::CanicCore,
-            memory_ids: FIRST_IDS,
+            memory_keys: FIRST_IDS,
         },
         AllocationDefinition {
             key: StateAllocationKey::ShardingAssignments,
             owner: AllocationOwner::CanicCore,
-            memory_ids: SECOND_IDS,
+            memory_keys: SECOND_IDS,
         },
     ];
 
     assert_eq!(
         allocation::validate_allocation_definitions(&definitions),
-        Err(RoleContractFinding::MemoryIdCollision {
-            memory_id: MemoryId::new(70),
+        Err(RoleContractFinding::MemoryKeyCollision {
+            stable_key: "canic.core.shared.v1".to_string(),
             first: StateAllocationKey::ShardingRegistry,
             second: StateAllocationKey::ShardingAssignments,
         })
@@ -238,20 +376,20 @@ fn distinct_allocation_keys_cannot_share_a_memory_id() {
 }
 
 #[test]
-fn allocation_owners_cannot_claim_another_owner_range() {
-    const CONTROL_PLANE_ID: &[MemoryId] = &[MemoryId::new(allocation::CANIC_CONTROL_PLANE_MIN_ID)];
-    const CORE_ID: &[MemoryId] = &[MemoryId::new(allocation::CANIC_CORE_MAX_ID)];
+fn allocation_owners_cannot_claim_another_owner_namespace() {
+    const CONTROL_PLANE_ID: &[&str] = &["canic.control_plane.rows.v1"];
+    const CORE_ID: &[&str] = &["canic.core.rows.v1"];
 
     for definition in [
         AllocationDefinition {
             key: StateAllocationKey::ShardingRegistry,
             owner: AllocationOwner::CanicCore,
-            memory_ids: CONTROL_PLANE_ID,
+            memory_keys: CONTROL_PLANE_ID,
         },
         AllocationDefinition {
             key: StateAllocationKey::TemplateManifests,
             owner: AllocationOwner::CanicControlPlane,
-            memory_ids: CORE_ID,
+            memory_keys: CORE_ID,
         },
     ] {
         assert!(matches!(
@@ -756,7 +894,10 @@ fn root_inherently_selects_icp_refill_state() {
         .iter()
         .find(|allocation| allocation.key == StateAllocationKey::CoreCyclesIcpRefillRecords)
         .expect("ICP refill state allocation");
-    assert_eq!(allocation.memory_ids, vec![MemoryId::new(39)]);
+    assert_eq!(
+        allocation.memory_keys,
+        vec!["canic.core.cycles.icp_refill_records.v1".to_string()]
+    );
     assert_eq!(
         allocation.selected_by,
         BTreeSet::from([SelectionProvenance::Capability(RoleCapabilityKey::Root)])
@@ -768,23 +909,26 @@ fn placement_capabilities_select_only_their_placement_state() {
     let mut scaling = ConfigTestBuilder::canister_config(CanisterKind::Service);
     scaling.scaling = Some(ScalingConfig::default());
     assert_eq!(
-        placement_allocation_ids(&resolved_service_contract(scaling, BTreeSet::new()).allocations),
-        vec![50]
+        placement_allocation_keys(&resolved_service_contract(scaling, BTreeSet::new()).allocations),
+        sorted_keys(vec!["canic.core.placement.scaling_registry.v1".to_string()])
     );
 
     let mut index = ConfigTestBuilder::canister_config(CanisterKind::Service);
     index.index = Some(IndexConfig::default());
     assert_eq!(
-        placement_allocation_ids(&resolved_service_contract(index, BTreeSet::new()).allocations),
-        vec![51]
+        placement_allocation_keys(&resolved_service_contract(index, BTreeSet::new()).allocations),
+        sorted_keys(vec!["canic.core.placement.index_registry.v1".to_string()])
     );
 
     let mut sharding = ConfigTestBuilder::canister_config(CanisterKind::Service);
     sharding.sharding = Some(ShardingConfig::default());
     let contract = resolved_service_contract(sharding, BTreeSet::from([CanicFeatureKey::Sharding]));
     assert_eq!(
-        placement_allocation_ids(&contract.allocations),
-        vec![52, 53]
+        placement_allocation_keys(&contract.allocations),
+        sorted_keys(vec![
+            "canic.core.sharding.registry.v1".to_string(),
+            "canic.core.sharding.assignments.v1".to_string()
+        ])
     );
 }
 
@@ -867,10 +1011,31 @@ fn surplus_state_feature_allocates_normally() {
     };
 
     assert_eq!(
-        allocation_ids(&contract.allocations),
-        vec![
-            30, 31, 32, 33, 35, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 52, 53, 54, 60,
-        ]
+        allocation_keys(&contract.allocations),
+        sorted_keys(vec![
+            "canic.core.runtime.canister_children.v1".to_string(),
+            "canic.core.runtime.bindings.v1".to_string(),
+            "canic.core.fleet.state.v1".to_string(),
+            "canic.core.fleet.activation.v1".to_string(),
+            "canic.core.replay.receipts.v1".to_string(),
+            "canic.core.cycles.tracker.v1".to_string(),
+            "canic.core.cycles.topup_events.v1".to_string(),
+            "canic.core.cycles.funding_ledger.v1".to_string(),
+            "canic.core.log.entries.v1".to_string(),
+            "canic.core.intent.meta.v1".to_string(),
+            "canic.core.intent.records.v1".to_string(),
+            "canic.core.intent.totals.v1".to_string(),
+            "canic.core.intent.pending.v1".to_string(),
+            "canic.core.intent.receipt_backed_records.v1".to_string(),
+            "canic.core.intent.expiry_index.v1".to_string(),
+            "canic.core.caller_authority.header.v1".to_string(),
+            "canic.core.application_receipt.eligibility.v1".to_string(),
+            "canic.core.placement.acknowledgement_index.v1".to_string(),
+            "canic.core.sharding.registry.v1".to_string(),
+            "canic.core.sharding.assignments.v1".to_string(),
+            "canic.core.caller_authority.rows.v1".to_string(),
+            "canic.core.async_job_recovery.v1".to_string()
+        ])
     );
 }
 
@@ -904,11 +1069,49 @@ fn repeated_selection_merges_allocation_provenance() {
         ])
     );
     assert_eq!(
-        allocation_ids(&contract.allocations),
-        vec![
-            10, 11, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33,
-            35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 48, 49, 59, 60, 63, 65,
-        ]
+        allocation_keys(&contract.allocations),
+        sorted_keys(vec![
+            "canic.control_plane.template.manifests.v1".to_string(),
+            "canic.control_plane.template.chunk_sets.v1".to_string(),
+            "canic.control_plane.template.chunk_refs.v1".to_string(),
+            "canic.control_plane.template.chunk_payloads.v1".to_string(),
+            "canic.control_plane.root.wasm_store.state.v1".to_string(),
+            "canic.control_plane.root.fleet_registry_mirror.v1".to_string(),
+            "canic.control_plane.root.component.registry_state.v1".to_string(),
+            "canic.control_plane.root.component.allocations.v1".to_string(),
+            "canic.control_plane.root.component.registry_entries.v1".to_string(),
+            "canic.control_plane.root.component.principal_index.v1".to_string(),
+            "canic.control_plane.root.component.subtree_removal_history.v1".to_string(),
+            "canic.control_plane.root.component.draining.v1".to_string(),
+            "canic.control_plane.root.canister_inventory.assets.v1".to_string(),
+            "canic.control_plane.root.canister_pool.state.v1".to_string(),
+            "canic.control_plane.root.canister_pool.handoff_receipts.v1".to_string(),
+            "canic.control_plane.root.component_provisioning.operations.v1".to_string(),
+            "canic.control_plane.root.component_provisioning.placements.v1".to_string(),
+            "canic.control_plane.root.component_provisioning.state.v1".to_string(),
+            "canic.core.runtime.canister_children.v1".to_string(),
+            "canic.core.runtime.bindings.v1".to_string(),
+            "canic.core.fleet.state.v1".to_string(),
+            "canic.core.fleet.activation.v1".to_string(),
+            "canic.core.replay.receipts.v1".to_string(),
+            "canic.core.cycles.tracker.v1".to_string(),
+            "canic.core.cycles.topup_events.v1".to_string(),
+            "canic.core.cycles.funding_ledger.v1".to_string(),
+            "canic.core.cycles.icp_refill_records.v1".to_string(),
+            "canic.core.log.entries.v1".to_string(),
+            "canic.core.intent.meta.v1".to_string(),
+            "canic.core.intent.records.v1".to_string(),
+            "canic.core.intent.totals.v1".to_string(),
+            "canic.core.intent.pending.v1".to_string(),
+            "canic.core.intent.receipt_backed_records.v1".to_string(),
+            "canic.core.intent.expiry_index.v1".to_string(),
+            "canic.core.application_receipt.eligibility.v1".to_string(),
+            "canic.core.placement.acknowledgement_index.v1".to_string(),
+            "canic.core.authority_restore.fence.v1".to_string(),
+            "canic.core.async_job_recovery.v1".to_string(),
+            "canic.control_plane.root.funding.v1".to_string(),
+            "canic.control_plane.root.admission.v1".to_string()
+        ])
     );
     assert_eq!(
         contract
@@ -937,11 +1140,33 @@ fn built_in_wasm_store_owns_template_gc_and_fixture_ids() {
     };
 
     assert_eq!(
-        allocation_ids(&contract.allocations),
-        vec![
-            10, 11, 12, 13, 14, 30, 31, 32, 33, 35, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 48, 49,
-            60, 68,
-        ]
+        allocation_keys(&contract.allocations),
+        sorted_keys(vec![
+            "canic.control_plane.template.manifests.v1".to_string(),
+            "canic.control_plane.template.chunk_sets.v1".to_string(),
+            "canic.control_plane.template.chunk_refs.v1".to_string(),
+            "canic.control_plane.template.chunk_payloads.v1".to_string(),
+            "canic.control_plane.wasm_store.gc_state.v1".to_string(),
+            "canic.core.runtime.canister_children.v1".to_string(),
+            "canic.core.runtime.bindings.v1".to_string(),
+            "canic.core.fleet.state.v1".to_string(),
+            "canic.core.fleet.activation.v1".to_string(),
+            "canic.core.replay.receipts.v1".to_string(),
+            "canic.core.cycles.tracker.v1".to_string(),
+            "canic.core.cycles.topup_events.v1".to_string(),
+            "canic.core.cycles.funding_ledger.v1".to_string(),
+            "canic.core.log.entries.v1".to_string(),
+            "canic.core.intent.meta.v1".to_string(),
+            "canic.core.intent.records.v1".to_string(),
+            "canic.core.intent.totals.v1".to_string(),
+            "canic.core.intent.pending.v1".to_string(),
+            "canic.core.intent.receipt_backed_records.v1".to_string(),
+            "canic.core.intent.expiry_index.v1".to_string(),
+            "canic.core.application_receipt.eligibility.v1".to_string(),
+            "canic.core.placement.acknowledgement_index.v1".to_string(),
+            "canic.core.async_job_recovery.v1".to_string(),
+            "canic.control_plane.fixture_store.v1".to_string()
+        ])
     );
     assert_eq!(
         contract.required_features,
@@ -960,7 +1185,15 @@ fn built_in_fleet_coordinator_selects_admission_registry_funding_and_restore_fen
         panic!("built-in Fleet Coordinator contract should resolve");
     };
 
-    assert_eq!(allocation_ids(&contract.allocations), vec![15, 59, 62, 64]);
+    assert_eq!(
+        allocation_keys(&contract.allocations),
+        sorted_keys(vec![
+            "canic.control_plane.fleet_coordinator.registry.v1".to_string(),
+            "canic.core.authority_restore.fence.v1".to_string(),
+            "canic.control_plane.fleet_coordinator.funding.v1".to_string(),
+            "canic.control_plane.fleet_admission.v1".to_string()
+        ])
+    );
     assert!(contract.allocations.iter().all(|allocation| !matches!(
         allocation.key,
         StateAllocationKey::CoreDelegatedTokenIssuerState
@@ -973,17 +1206,17 @@ fn built_in_fleet_coordinator_selects_admission_registry_funding_and_restore_fen
     );
 }
 
-fn allocation_ids(allocations: &[super::ResolvedStateAllocation]) -> Vec<u8> {
+fn allocation_keys(allocations: &[super::ResolvedStateAllocation]) -> Vec<String> {
     let mut ids = allocations
         .iter()
-        .flat_map(|allocation| allocation.memory_ids.iter())
-        .map(|memory_id| memory_id.get())
+        .flat_map(|allocation| allocation.memory_keys.iter())
+        .cloned()
         .collect::<Vec<_>>();
     ids.sort_unstable();
     ids
 }
 
-fn placement_allocation_ids(allocations: &[super::ResolvedStateAllocation]) -> Vec<u8> {
+fn placement_allocation_keys(allocations: &[super::ResolvedStateAllocation]) -> Vec<String> {
     let selected: Vec<_> = allocations
         .iter()
         .filter(|allocation| {
@@ -997,7 +1230,7 @@ fn placement_allocation_ids(allocations: &[super::ResolvedStateAllocation]) -> V
         })
         .cloned()
         .collect();
-    allocation_ids(&selected)
+    allocation_keys(&selected)
 }
 
 fn resolved_service_contract(
@@ -1077,4 +1310,9 @@ fn cargo_public_implications(
     }
 
     implications
+}
+
+fn sorted_keys(mut keys: Vec<String>) -> Vec<String> {
+    keys.sort_unstable();
+    keys
 }

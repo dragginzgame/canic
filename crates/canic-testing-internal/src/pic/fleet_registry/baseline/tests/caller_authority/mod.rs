@@ -18,7 +18,7 @@ pub(super) fn qualify_live_projection(
 ) {
     assert_eq!(probe(pic, hub, shard), Ok(shard));
     let denied = Err(Error::from_registered(
-        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+        canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
     ));
     assert_eq!(probe(pic, hub, hub), denied);
     assert_eq!(probe(pic, hub, Principal::anonymous()), denied);
@@ -36,7 +36,7 @@ pub(super) fn qualify_live_projection(
     assert_eq!(
         unauthorized_proxy,
         Err(Error::from_registered(
-            canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE
+            canic_contracts::diagnostics::codes::AUTHORITY_UNAVAILABLE
         ))
     );
     pic.stop_canister(root, None).unwrap();
@@ -95,14 +95,14 @@ pub(super) fn assert_effect_fenced(
     assert_eq!(
         result,
         Err(Error::from_registered(
-            canic_core::diagnostics::codes::AUTHORITY_INACTIVE
+            canic_contracts::diagnostics::codes::AUTHORITY_INACTIVE
         ))
     );
     assert_eq!(effects(pic, root, hub), (false, held.1));
     assert_eq!(
         probe(pic, hub, shard),
         Err(Error::from_registered(
-            canic_core::diagnostics::codes::AUTHORITY_INACTIVE
+            canic_contracts::diagnostics::codes::AUTHORITY_INACTIVE
         ))
     );
 }
@@ -131,7 +131,7 @@ pub(super) fn hold_during_pending_denial(
     .unwrap();
     assert_eq!(
         unavailable_receiver,
-        Error::from_registered(canic_core::diagnostics::codes::STATE_UNAVAILABLE)
+        Error::from_registered(canic_contracts::diagnostics::codes::STATE_UNAVAILABLE)
     );
     root_membership::assert_child_discovery(pic, root, &binding.component, binding);
     pic.upgrade_canister(
@@ -149,7 +149,7 @@ pub(super) fn hold_during_pending_denial(
     assert_eq!(
         competing,
         Err(Error::from_registered(
-            canic_core::diagnostics::codes::STATE_CONFLICT
+            canic_contracts::diagnostics::codes::STATE_CONFLICT
         ))
     );
     hold_effect(pic, root, hub, shard)
