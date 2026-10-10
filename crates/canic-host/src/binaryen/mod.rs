@@ -304,10 +304,18 @@ fn binaryen_authority_for(
 
 /// Resolve and admit the governed install path, falling back to the first optimizer on PATH.
 pub fn resolve_required_binaryen() -> Result<BinaryenExecutable, BinaryenToolError> {
-    let authority = current_binaryen_authority()?;
+    current_binaryen_authority()?;
     let path = resolve_executable(OsStr::new(WASM_OPT_TOOL))?;
+    admit_required_binaryen(&path)
+}
+
+/// Admit an explicitly selected optimizer against the current platform authority.
+pub(crate) fn admit_required_binaryen(
+    path: &Path,
+) -> Result<BinaryenExecutable, BinaryenToolError> {
+    let authority = current_binaryen_authority()?;
     admit_binaryen_executable(
-        &path,
+        path,
         authority.executable_sha256(),
         authority.runtime_library_sha256,
     )

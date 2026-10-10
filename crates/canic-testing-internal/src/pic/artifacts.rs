@@ -211,6 +211,51 @@ pub(super) fn internal_test_artifact_build_target(workspace_root: &Path) -> Path
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
 pub(super) fn preflight_governed_shared_artifacts() {
     let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    // Parallel journeys generate packages beneath this audit source root. Freeze
+    // every maintained configuration before either worker hashes that source.
+    let mut configs = fs::read_dir(workspace_root.join("canisters/audit/root_probe"))
+        .expect("read audit Root configurations")
+        .map(|entry| entry.expect("read audit Root configuration entry").path())
+        .filter(|path| {
+            path.extension()
+                .is_some_and(|extension| extension == "toml")
+        })
+        .filter(|path| path.file_name().is_some_and(|name| name != "Cargo.toml"))
+        .collect::<Vec<_>>();
+    configs.sort();
+    assert!(
+        !configs.is_empty(),
+        "audit Root configurations are required"
+    );
+    for config_path in configs {
+        let context = canic_host::canister_build::WorkspaceBuildContext {
+            role: "root".to_string(),
+            profile: canic_host::canister_build::CanisterBuildProfile::Fast,
+            environment: "local".to_string(),
+            build_network: BuildNetwork::Local,
+            workspace_root: workspace_root.clone(),
+            icp_root: workspace_root.clone(),
+            config_path: config_path.clone(),
+            local_replica: None,
+            refresh_canonical_infrastructure_did: false,
+            release_build_id: None,
+        };
+        canic_host::canister_build::prepare_workspace_infrastructure_packages(&context)
+            .expect("prepare audit infrastructure packages before parallel acquisition");
+        let config = canic_host::release_set::AppConfigSnapshot::load(&config_path)
+            .expect("load audit Root configuration");
+        let admission = canic_host::role_contract::validate_declared_role_package(
+            &config_path,
+            config.model(),
+            &canic_contracts::ids::CanisterRole::ROOT,
+            PackageValidationMode::Build,
+            &CargoFeatureSelection::default(),
+        );
+        assert!(
+            matches!(admission, RolePackageValidation::Supported(_)),
+            "{admission:?}"
+        );
+    }
     let _ = build_canonical_fleet_coordinator_wasm(&workspace_root);
 }
 

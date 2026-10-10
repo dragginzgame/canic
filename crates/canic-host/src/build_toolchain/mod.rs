@@ -39,6 +39,29 @@ pub struct BuildToolchain {
 }
 
 impl BuildToolchain {
+    /// Resolve the fixture invocation's prepared PATH optimizer with production admission.
+    #[cfg(test)]
+    pub(crate) fn resolve_prepared(
+        profile: CanisterBuildProfile,
+    ) -> Result<Self, BuildToolchainError> {
+        let mut tools = Self::resolve(CanisterBuildProfile::Fast)?;
+        tools.profile = profile;
+        if profile == CanisterBuildProfile::Release {
+            let directories = env::var_os("PATH")
+                .map(|paths| env::split_paths(&paths).collect::<Vec<_>>())
+                .unwrap_or_default();
+            let path = crate::tool_resolution::resolve(Path::new("wasm-opt"), &directories)
+                .map_err(|source| BinaryenToolError::Io {
+                    operation: "resolve prepared fixture optimizer",
+                    path: PathBuf::from("wasm-opt"),
+                    source,
+                })?
+                .ok_or(BinaryenToolError::MissingOptimizerWithoutHome)?;
+            tools.binaryen = Some(crate::binaryen::admit_required_binaryen(&path)?);
+        }
+        Ok(tools)
+    }
+
     /// Resolve every required tool before Cargo or artifact mutation begins.
     pub fn resolve(profile: CanisterBuildProfile) -> Result<Self, BuildToolchainError> {
         let ic_wasm = resolve_required_ic_wasm()?;

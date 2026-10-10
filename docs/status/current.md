@@ -3,7 +3,7 @@
 The maintainer accepted the exact 0.110 closeout on 2026-10-10 and requested
 **0.111.0** live for the complete hard cut. Root package
 versions remain **0.110.54** over HEAD `ac55e50334dd6479ec36f404e89e60bcfe9184d6`
-(subject `0.110.55`); the implemented family remains uncommitted. The root
+(subject `0.110.55`); the implemented family is committed for the authorized release. The root
 changelog and detailed 0.111 notes describe one open release batch. GitHub issues
 own acceptance and follow-up decisions.
 
@@ -187,3 +187,12 @@ the corrections pass all 314 Backup tests, all 11 managed-endpoint tests and
 their focused lints. Selected directory aliases resolve through Host while
 publication leaves and artifacts retain no-follow admission. The governed
 release is continuing; no publication result is claimed by this handoff.
+The complete ordinary, runtime and payload suites passed. The ignored PocketIC
+tier exposed generated audit-package acquisition races, a rent fixture missing
+scheduled charging rounds and a release-binding fixture selecting a stale
+canonical optimizer. The focused corrections retain input-drift refusal, actual
+bounded debit checks and production tool admission
+([#511](https://github.com/dragginzgame/canic/issues/511)). All three owning
+regressions, seven optimizer admission/resolution checks, final focused Clippy
+and the governed generated-package preflight pass. The next normal release
+attempt will qualify the parallel harness; publication remains pending.

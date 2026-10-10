@@ -3505,6 +3505,14 @@ exec icp "$@"
             )
         );
         assert!(pic.cycle_balance(hub) <= exhausted_balance);
+        // Charging requires scheduled rounds as well as elapsed time. Observe a
+        // real debit within a bounded round budget instead of assuming one tick charges rent.
+        for _ in 0..100 {
+            if pic.cycle_balance(hub) < initial_balance + total {
+                break;
+            }
+            pic.tick();
+        }
         // One observed day of idle rent bounds the whole stopped interval, not each replay.
         assert!(pic.get_time().as_nanos_since_unix_epoch() - started_at < 86_400_000_000_000);
         let terminal =

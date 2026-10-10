@@ -121,7 +121,7 @@ fn governed_pocketic_release_binding_retains_runtime_identity() {
     let pic =
         crate::test_support::start_pocket_ic(PocketIcBuilder::new().with_application_subnet());
     for profile in [CanisterBuildProfile::Fast, CanisterBuildProfile::Release] {
-        let tools = BuildToolchain::resolve(profile).unwrap();
+        let tools = BuildToolchain::resolve_prepared(profile).unwrap();
         for id in [identity(1), identity(2)] {
             let wasm_path = root.join(format!("{}-{id}.wasm", profile.target_dir_name()));
             let did_path = wasm_path.with_extension("did");

@@ -25,6 +25,7 @@ Detailed notes: [docs/changelog/0.111.md](docs/changelog/0.111.md)
   [#498](https://github.com/dragginzgame/canic/issues/498),
   [#505](https://github.com/dragginzgame/canic/issues/505),
   [#510](https://github.com/dragginzgame/canic/issues/510),
+  [#511](https://github.com/dragginzgame/canic/issues/511),
   [Shared #108](https://github.com/dragginzgame/shared-tooling/issues/108)).
 
 ## [0.110.54] - 2026-10-08
