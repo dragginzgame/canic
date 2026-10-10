@@ -164,7 +164,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.110.54"
+version = "0.111.0"
 dependencies = [
  "candid",
  "canic-contracts",
@@ -178,7 +178,7 @@ dependencies = [
 
 [[package]]
 name = "canic-blob-service"
-version = "0.110.54"
+version = "0.111.0"
 dependencies = [
  "candid",
  "canic",
@@ -190,7 +190,7 @@ dependencies = [
 
 [[package]]
 name = "canic-contracts"
-version = "0.110.54"
+version = "0.111.0"
 dependencies = [
  "candid",
  "ciborium",
@@ -204,7 +204,7 @@ dependencies = [
 
 [[package]]
 name = "canic-core"
-version = "0.110.54"
+version = "0.111.0"
 dependencies = [
  "async-trait",
  "candid",
@@ -230,7 +230,7 @@ dependencies = [
 
 [[package]]
 name = "canic-macros"
-version = "0.110.54"
+version = "0.111.0"
 dependencies = [
  "proc-macro2",
  "quote",
