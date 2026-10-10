@@ -31,10 +31,6 @@ use std::{
     time::Duration,
 };
 
-#[cfg(all(
-    feature = "pocketic-fixtures",
-    any(not(test), feature = "governed-pocketic-tests")
-))]
 const INTERNAL_TEST_WASM_CACHE_MAX_AGE: Duration = Duration::from_hours(168);
 const INTERNAL_TEST_WASM_CACHE_MAX_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 const INTERNAL_TEST_WASM_CACHE_MAINTENANCE_INTERVAL: Duration = Duration::from_hours(1);
