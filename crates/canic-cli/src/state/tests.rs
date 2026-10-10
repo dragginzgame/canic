@@ -53,7 +53,7 @@ fn root_contract() -> ResolvedRoleContract {
                 memory_keys: definition
                     .memory_keys
                     .iter()
-                    .map(|key| key.to_string())
+                    .map(ToString::to_string)
                     .collect(),
                 selected_by: BTreeSet::from([
                     if definition.owner == AllocationOwner::CanicControlPlane {
