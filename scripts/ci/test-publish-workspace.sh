@@ -64,6 +64,9 @@ export PUBLICATION_TEST_EVENTS="$FIXTURE/events"
 export PUBLICATION_TEST_REGISTRY="$FIXTURE/registry"
 export CANIC_PUBLICATION_LOG_DIR="$FIXTURE/logs"
 export PUBLISH_FROM='' PUBLISH_DRY_RUN=0
+# Stubbed online cases own their policy independently of the offline release gate.
+# The explicit offline case below still verifies the production refusal.
+export CARGO_NET_OFFLINE=false
 expected_packages=(canic-backup canic-contracts canic-core canic-control-plane canic-macros canic canic-blob-service canic-host canic-cli)
 
 run_case() {
