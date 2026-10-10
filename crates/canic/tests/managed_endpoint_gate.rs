@@ -283,26 +283,7 @@ fn fleet_admission_projection_is_managed_only_and_authenticates_before_state_acc
         })
         .expect("standalone-local status emitter");
 
-    assert!(
-        managed_status.contains(
-            "#[cfg(canic_capability_fleet_admission_projection)]\n            Admission("
-        ) && managed_status.contains("AdmissionStatusRequest::Admission"),
-        "an explicitly enrolled managed role must expose the local Fleet-admission projection"
-    );
-    for variant in [
-        "ActivateFleetAdmission(",
-        "OpenFleetAdmission(",
-        "PrepareFleetAdmission(",
-    ] {
-        let position = managed_command
-            .find(variant)
-            .unwrap_or_else(|| panic!("managed admission command variant {variant}"));
-        let prefix = &managed_command[..position];
-        assert!(
-            prefix.ends_with("#[cfg(canic_capability_fleet_admission_projection)]\n            "),
-            "managed admission command variant {variant} must be role-pruned"
-        );
-    }
+    assert_managed_admission_contracts(&workspace, managed_status, managed_command);
     let auth = managed_status
         .find("requires(any(caller::is_controller(), caller::is_root()))")
         .expect("controller-or-Root authorization");
@@ -332,6 +313,55 @@ fn fleet_admission_projection_is_managed_only_and_authenticates_before_state_acc
             "specialized infrastructure surface must not expose target-local projection: {relative}"
         );
     }
+}
+
+fn assert_managed_admission_contracts(workspace: &Path, status: &str, command: &str) {
+    let capability =
+        "fleet_admission_attributes=[#[cfg(canic_capability_fleet_admission_projection)]],";
+    for emitter in [status, command] {
+        let compact: String = emitter.split_whitespace().collect();
+        assert!(
+            compact.contains(capability),
+            "managed admission capability selection"
+        );
+    }
+    assert!(status.contains("AdmissionStatusRequest::Admission"));
+    let managed = wire_macro_tokens(workspace, "managed", "__canic_managed_wire_types");
+    assert!(managed.contains("$($fleet_admission_attributes)*Admission("));
+    let command = wire_macro_tokens(
+        workspace,
+        "managed_command",
+        "__canic_managed_command_wire_types",
+    );
+    for variant in [
+        "ActivateFleetAdmission",
+        "OpenFleetAdmission",
+        "PrepareFleetAdmission",
+    ] {
+        assert!(
+            command.contains(&format!("$($fleet_admission_attributes)*{variant}(")),
+            "managed admission command variant {variant} must be role-pruned"
+        );
+    }
+}
+
+fn wire_macro_tokens(workspace: &Path, module: &str, name: &str) -> String {
+    let source = fs::read_to_string(workspace.join(format!(
+        "crates/canic-contracts/src/dto/wire/{module}/mod.rs"
+    )))
+    .expect("wire contract source");
+    let file = syn::parse_file(&source).expect("wire contract syntax");
+    let tokens = file
+        .items
+        .into_iter()
+        .find_map(|item| match item {
+            syn::Item::Macro(item) if item.ident.as_ref().is_some_and(|ident| ident == name) => {
+                Some(item.mac.tokens.to_string())
+            }
+            _ => None,
+        })
+        .expect("wire declaration macro");
+    tokens.split_whitespace().collect()
 }
 
 #[test]

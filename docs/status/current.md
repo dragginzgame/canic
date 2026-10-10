@@ -179,3 +179,11 @@ formatter corruption of `$crate` paths in two exported wire macros; restored
 paths are protected with the tool's scoped exclusion and pass Contracts compile
 and all 341 owning tests
 ([Shared Tooling #113](https://github.com/dragginzgame/shared-tooling/issues/113)).
+Subsequent release checks passed workspace compile/Clippy, the feature matrix
+and embedded-peer preflight. Default-feature cache policy availability and
+test-only lint findings are corrected. Ordinary tests exposed stale managed-wire
+and upstream checksum assertions plus a selected-directory Backup regression;
+the corrections pass all 314 Backup tests, all 11 managed-endpoint tests and
+their focused lints. Selected directory aliases resolve through Host while
+publication leaves and artifacts retain no-follow admission. The governed
+release is continuing; no publication result is claimed by this handoff.

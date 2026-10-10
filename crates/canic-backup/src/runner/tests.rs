@@ -436,8 +436,10 @@ fn runner_rejects_unverifiable_post_publication_artifact() {
 
     std::assert_matches!(
         error,
-        BackupRunnerError::Persistence(crate::persistence::PersistenceError::Checksum(
-            crate::artifacts::ArtifactChecksumError::ChecksumMismatch { .. }
+        BackupRunnerError::Persistence(crate::persistence::PersistenceError::ArtifactCommit(
+            ic_backup::ops::persistence::PersistenceError::Checksum(
+                ic_backup::model::artifacts::ChecksumError::ChecksumMismatch { .. }
+            )
         ))
     );
     assert_eq!(

@@ -12,7 +12,10 @@ use std::{
     path::Path,
 };
 
-use ic_host_fs::durable::{NamedWriteError, PublicationMode, WriteOptions, write_with};
+use ic_host_fs::{
+    durable::{NamedWriteError, PublicationMode, WriteOptions, write_with},
+    path::canonicalize_allow_missing,
+};
 use serde::{Serialize, de::DeserializeOwned};
 
 pub fn write_json_durable<T>(path: &Path, value: &T) -> Result<(), PersistenceError>
@@ -53,9 +56,14 @@ fn publish_bytes_at_barriers(
     mode: PublicationMode,
     mut barrier: impl FnMut(DurableWriteBarrier),
 ) -> io::Result<()> {
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let name = path.file_name().ok_or(io::ErrorKind::InvalidInput)?;
+    // Resolve selected directory aliases without following the publication leaf.
+    let parent = canonicalize_allow_missing(parent, &std::env::current_dir()?)?;
+    let destination = parent.join(name);
     // Preserve the existing umask-governed mode; layout custody remains local.
     write_with(
-        path,
+        &destination,
         WriteOptions {
             mode,
             permissions: 0o666,
