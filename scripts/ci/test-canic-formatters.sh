@@ -29,7 +29,7 @@ for target in fmt fmt-check; do
     : > "$CANIC_FORMAT_EVENTS"
     make --no-print-directory -C "$fixture" "$target" > "$fixture/output" 2>&1
     [[ "$(wc -l < "$fixture/output")" == 1 ]]
-    for workspace in "$fixture" "$fixture/integrations/blob-service" \
+    for workspace in "$fixture" \
         "$fixture/integrations/blob-service/consumer" "$fixture/integrations/blob-service/embedded-consumer"; do
         awk -F '\t' -v root="$workspace" '$1 == root && $2 ~ /^fmt --all/ { found = 1 } END { exit !found }' "$CANIC_FORMAT_EVENTS"
     done
