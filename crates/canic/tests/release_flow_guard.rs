@@ -281,28 +281,7 @@ fn create_receipt_repo(previous_receipt: Option<&str>, handoff: &str) -> PathBuf
         "Cargo.lock",
         "version = 4\n\n[[package]]\nname = \"receipt-fixture\"\nversion = \"0.92.7\"\n",
     );
-    for consumer in ["consumer", "embedded-consumer"] {
-        let consumer_root = root.join("integrations/blob-service").join(consumer);
-        write_file(
-            &consumer_root,
-            "Cargo.toml",
-            &format!(
-                "[workspace]\n[package]\nname = \"fixture-{consumer}\"\n\
-                 version = \"0.1.0\"\nedition = \"2024\"\n\
-                 [dependencies]\nreceipt-fixture = {{ path = \"../../..\" }}\n"
-            ),
-        );
-        write_file(&consumer_root, "src/lib.rs", "");
-        write_file(
-            &consumer_root,
-            "Cargo.lock",
-            &format!(
-                "version = 4\n\n[[package]]\nname = \"fixture-{consumer}\"\n\
-                 version = \"0.1.0\"\ndependencies = [\"receipt-fixture\"]\n\n\
-                 [[package]]\nname = \"receipt-fixture\"\nversion = \"0.92.7\"\n"
-            ),
-        );
-    }
+    write_receipt_consumers(&root);
     write_file(
         &root,
         "docs/changelog/0.92.md",
@@ -372,6 +351,31 @@ esac
 "#,
     );
     root
+}
+
+fn write_receipt_consumers(root: &Path) {
+    for consumer in ["consumer", "embedded-consumer"] {
+        let consumer_root = root.join("integrations/blob-service").join(consumer);
+        write_file(
+            &consumer_root,
+            "Cargo.toml",
+            &format!(
+                "[workspace]\n[package]\nname = \"fixture-{consumer}\"\n\
+                 version = \"0.1.0\"\nedition = \"2024\"\n\
+                 [dependencies]\nreceipt-fixture = {{ path = \"../../..\" }}\n"
+            ),
+        );
+        write_file(&consumer_root, "src/lib.rs", "");
+        write_file(
+            &consumer_root,
+            "Cargo.lock",
+            &format!(
+                "version = 4\n\n[[package]]\nname = \"fixture-{consumer}\"\n\
+                 version = \"0.1.0\"\ndependencies = [\"receipt-fixture\"]\n\n\
+                 [[package]]\nname = \"receipt-fixture\"\nversion = \"0.92.7\"\n"
+            ),
+        );
+    }
 }
 
 fn assert_governed_receipt(previous_receipt: Option<&str>, gate: &str, fail_after_receipt: bool) {

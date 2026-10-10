@@ -226,6 +226,12 @@ pub fn build_state_audit_report(
 }
 
 #[cfg(test)]
+fn sorted_keys(mut keys: Vec<String>) -> Vec<String> {
+    keys.sort_unstable();
+    keys
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::role_contract::materialize_state_manifest;
@@ -308,7 +314,7 @@ mod tests {
                     memory_keys: definition
                         .memory_keys
                         .iter()
-                        .map(|key| key.to_string())
+                        .map(ToString::to_string)
                         .collect(),
                     selected_by: BTreeSet::from([if let Some(built_in) = built_in {
                         SelectionProvenance::BuiltInRole(built_in)
@@ -755,7 +761,7 @@ mod tests {
             owner: "canic-core".to_string(),
             reason: "synthetic collision fixture".to_string(),
         });
-        role.state[0].memory_key = Some(reserved_id.clone());
+        role.state[0].memory_key = Some(reserved_id);
 
         let checks = audit_checks(&manifest, Some("root"));
 
@@ -808,10 +814,4 @@ mod tests {
         assert_eq!(report.status, StateAuditStatus::Fail);
         assert_eq!(report.checks[0].code, "state_role_missing");
     }
-}
-
-#[cfg(test)]
-fn sorted_keys(mut keys: Vec<String>) -> Vec<String> {
-    keys.sort_unstable();
-    keys
 }

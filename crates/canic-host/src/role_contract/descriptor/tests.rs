@@ -100,7 +100,7 @@ fn wasm_store_materializes_template_and_gc_state() {
                 memory_keys: definition
                     .memory_keys
                     .iter()
-                    .map(|key| key.to_string())
+                    .map(ToString::to_string)
                     .collect(),
                 selected_by: BTreeSet::from([SelectionProvenance::BuiltInRole(
                     BuiltInRoleKind::WasmStore,
@@ -160,7 +160,7 @@ fn fleet_coordinator_materializes_its_registry_and_funding_state() {
                     memory_keys: definition
                         .memory_keys
                         .iter()
-                        .map(|key| key.to_string())
+                        .map(ToString::to_string)
                         .collect(),
                     selected_by: BTreeSet::from([SelectionProvenance::BuiltInRole(
                         BuiltInRoleKind::FleetCoordinator,
@@ -205,7 +205,7 @@ fn root_materializes_its_independent_funding_journal() {
             memory_keys: definition
                 .memory_keys
                 .iter()
-                .map(|key| key.to_string())
+                .map(ToString::to_string)
                 .collect(),
             selected_by: BTreeSet::from([SelectionProvenance::Capability(
                 canic_core::role_contract::RoleCapabilityKey::RootControlPlane,
