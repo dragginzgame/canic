@@ -10,6 +10,7 @@
 //! Boundary: ordinary consumers use the complete types; endpoint emitters select
 //! the same declarations with the build-resolved capability attributes.
 
+// sort-derives-disable-start: preserve macro hygiene in derive paths.
 /// Emit the root contract with an explicit capability selection.
 #[doc(hidden)]
 #[macro_export]
@@ -23,7 +24,7 @@ macro_rules! __canic_root_wire_types {
         role_attestation_attributes = [$($role_attestation_attributes:tt)*],
         root_delegation_attributes = [$($root_delegation_attributes:tt)*],
     ) => {
-        #[derive(::__reexports::candid::CandidType, ::__reexports::serde::Deserialize)]
+        #[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
         #[serde(crate = $serde_crate)]
         /// PublicStatusRequest wire union selected from the role's compiled capabilities.
         pub enum PublicStatusRequest {
@@ -37,7 +38,7 @@ macro_rules! __canic_root_wire_types {
             ComponentDirectoryPage($crate::dto::component_registry::ComponentDirectoryPageRequest),
         }
 
-#[derive(::__reexports::candid::CandidType, ::__reexports::serde::Deserialize)]
+#[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
         #[serde(crate = $serde_crate)]
         /// PublicStatusResponse wire union selected from the role's compiled capabilities.
         pub enum PublicStatusResponse {
@@ -51,7 +52,7 @@ macro_rules! __canic_root_wire_types {
             ComponentDirectoryPage($crate::dto::component_registry::ComponentDirectoryPageResponse),
         }
 
-#[derive(::__reexports::candid::CandidType, ::__reexports::serde::Deserialize)]
+#[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
         #[serde(crate = $serde_crate)]
         /// ObservabilityRequest wire union selected from the role's compiled capabilities.
         pub enum ObservabilityRequest {
@@ -72,7 +73,7 @@ macro_rules! __canic_root_wire_types {
             Runtime,
         }
 
-#[derive(::__reexports::candid::CandidType, ::__reexports::serde::Deserialize)]
+#[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
         #[serde(crate = $serde_crate)]
         /// ObservabilityResponse wire union selected from the role's compiled capabilities.
         pub enum ObservabilityResponse {
@@ -94,7 +95,7 @@ macro_rules! __canic_root_wire_types {
         }
 
 $($role_attestation_attributes)*
-        #[derive(::__reexports::candid::CandidType, ::__reexports::serde::Deserialize)]
+        #[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
         #[serde(crate = $serde_crate)]
         /// RootAuthStatusRequest wire union selected from the role's compiled capabilities.
         pub enum RootAuthStatusRequest {
@@ -103,7 +104,7 @@ $($role_attestation_attributes)*
         }
 
 $($role_attestation_attributes)*
-        #[derive(::__reexports::candid::CandidType, ::__reexports::serde::Deserialize)]
+        #[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
         #[serde(crate = $serde_crate)]
         /// RootAuthStatusResponse wire union selected from the role's compiled capabilities.
         pub enum RootAuthStatusResponse {
@@ -111,7 +112,7 @@ $($role_attestation_attributes)*
             RoleAttestation($crate::dto::auth::SignedRoleAttestation),
         }
 
-#[derive(::__reexports::candid::CandidType, ::__reexports::serde::Deserialize)]
+#[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
         #[serde(crate = $serde_crate)]
         /// RootOperationStatusRequest wire union selected from the role's compiled capabilities.
         pub enum RootOperationStatusRequest {
@@ -120,7 +121,7 @@ $($role_attestation_attributes)*
             Operation($crate::dto::role::OperationStatusRequest),
         }
 
-#[derive(::__reexports::candid::CandidType, ::__reexports::serde::Deserialize)]
+#[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
         #[serde(crate = $serde_crate)]
         /// RootOperationStatusResponse wire union selected from the role's compiled capabilities.
         pub enum RootOperationStatusResponse {
@@ -133,7 +134,7 @@ $($role_attestation_attributes)*
             Operation($crate::dto::root::RootOperationStatusResponse),
         }
 
-#[derive(::__reexports::candid::CandidType, ::__reexports::serde::Deserialize)]
+#[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
         #[serde(crate = $serde_crate)]
         /// RootStatusRequest wire union selected from the role's compiled capabilities.
         pub enum RootStatusRequest {
@@ -164,7 +165,7 @@ $($role_attestation_attributes)*
             StoreOverview,
         }
 
-#[derive(::__reexports::candid::CandidType, ::__reexports::serde::Deserialize)]
+#[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
         #[serde(crate = $serde_crate)]
         /// RootStatusResponse wire union selected from the role's compiled capabilities.
         pub enum RootStatusResponse {
@@ -198,6 +199,8 @@ $($role_attestation_attributes)*
         }
     };
 }
+
+// sort-derives-disable-end
 
 crate::__canic_root_wire_types! {
     serde_crate = "serde",

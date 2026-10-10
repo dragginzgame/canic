@@ -173,3 +173,9 @@ release attempt stopped before compilation on a missing snapshot companion and
 a stale chain-key Root crypto inventory. Both corrections retain the selected
 upstream revision and runtime graph. The normal release flow is continuing;
 no release version, tag, push or registry publication has occurred yet.
+Release qualification also corrected stale formatter-root and inherited-offline
+publication fixtures. All policy gates then passed. Compilation exposed derive
+formatter corruption of `$crate` paths in two exported wire macros; restored
+paths are protected with the tool's scoped exclusion and pass Contracts compile
+and all 341 owning tests
+([Shared Tooling #113](https://github.com/dragginzgame/shared-tooling/issues/113)).

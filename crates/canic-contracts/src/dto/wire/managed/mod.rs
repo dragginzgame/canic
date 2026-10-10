@@ -10,6 +10,7 @@
 //! Boundary: ordinary consumers use the complete types; endpoint emitters select
 //! the same declarations with the build-resolved capability attributes.
 
+// sort-derives-disable-start: preserve macro hygiene in derive paths.
 /// Emit the managed contract with an explicit capability selection.
 #[doc(hidden)]
 #[macro_export]
@@ -28,14 +29,14 @@ macro_rules! __canic_managed_wire_types {
         caller_authority_attributes = [$($caller_authority_attributes:tt)*],
         fleet_admission_attributes = [$($fleet_admission_attributes:tt)*],
     ) => {
-        #[derive(::__reexports::candid::CandidType, ::__reexports::serde::Deserialize)]
+        #[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
         #[serde(crate = $serde_crate)]
         /// CanisterOperationStatusResponse wire union selected from the role's compiled capabilities.
         pub enum CanisterOperationStatusResponse {
             ConfigureRuntime($crate::dto::role::ComponentRuntimeOperationStatus),
         }
 
-#[derive(::__reexports::candid::CandidType, ::__reexports::serde::Deserialize)]
+#[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
         #[serde(crate = $serde_crate)]
         /// PublicStatusRequest wire union selected from the role's compiled capabilities.
         pub enum PublicStatusRequest {
@@ -49,7 +50,7 @@ macro_rules! __canic_managed_wire_types {
             Children($crate::dto::page::PageRequest),
         }
 
-#[derive(::__reexports::candid::CandidType, ::__reexports::serde::Deserialize)]
+#[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
         #[serde(crate = $serde_crate)]
         /// PublicStatusResponse wire union selected from the role's compiled capabilities.
         pub enum PublicStatusResponse {
@@ -63,7 +64,7 @@ macro_rules! __canic_managed_wire_types {
             Children($crate::dto::page::Page<$crate::dto::canister::CanisterInfo>),
         }
 
-#[derive(::__reexports::candid::CandidType, ::__reexports::serde::Deserialize)]
+#[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
         #[serde(crate = $serde_crate)]
         /// ObservabilityRequest wire union selected from the role's compiled capabilities.
         pub enum ObservabilityRequest {
@@ -87,7 +88,7 @@ macro_rules! __canic_managed_wire_types {
             Runtime,
         }
 
-#[derive(::__reexports::candid::CandidType, ::__reexports::serde::Deserialize)]
+#[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
         #[serde(crate = $serde_crate)]
         /// ObservabilityResponse wire union selected from the role's compiled capabilities.
         pub enum ObservabilityResponse {
@@ -112,7 +113,7 @@ macro_rules! __canic_managed_wire_types {
         }
 
 $($local_auth_attributes)*
-        #[derive(::__reexports::candid::CandidType, ::__reexports::serde::Deserialize)]
+        #[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
         #[serde(crate = $serde_crate)]
         /// AuthStatusRequest wire union selected from the role's compiled capabilities.
         pub enum AuthStatusRequest {
@@ -125,7 +126,7 @@ $($local_auth_attributes)*
         }
 
 $($local_auth_attributes)*
-        #[derive(::__reexports::candid::CandidType, ::__reexports::serde::Deserialize)]
+        #[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
         #[serde(crate = $serde_crate)]
         /// AuthStatusResponse wire union selected from the role's compiled capabilities.
         pub enum AuthStatusResponse {
@@ -137,7 +138,7 @@ $($local_auth_attributes)*
             DelegatedToken($crate::dto::auth::DelegatedToken),
         }
 
-#[derive(::__reexports::candid::CandidType, ::__reexports::serde::Deserialize)]
+#[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
         #[serde(crate = $serde_crate)]
         /// ControlStatusRequest wire union selected from the role's compiled capabilities.
         pub enum ControlStatusRequest {
@@ -148,7 +149,7 @@ $($local_auth_attributes)*
             Operation($crate::dto::role::OperationStatusRequest),
         }
 
-#[derive(::__reexports::candid::CandidType, ::__reexports::serde::Deserialize)]
+#[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
         #[serde(crate = $serde_crate)]
         /// ControlStatusResponse wire union selected from the role's compiled capabilities.
         pub enum ControlStatusResponse {
@@ -160,7 +161,7 @@ $($local_auth_attributes)*
         }
 
 $($fleet_admission_attributes)*
-        #[derive(::__reexports::candid::CandidType, ::__reexports::serde::Deserialize)]
+        #[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
         #[serde(crate = $serde_crate)]
         /// AdmissionStatusRequest wire union selected from the role's compiled capabilities.
         pub enum AdmissionStatusRequest {
@@ -169,7 +170,7 @@ $($fleet_admission_attributes)*
         }
 
 $($fleet_admission_attributes)*
-        #[derive(::__reexports::candid::CandidType, ::__reexports::serde::Deserialize)]
+        #[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
         #[serde(crate = $serde_crate)]
         /// AdmissionStatusResponse wire union selected from the role's compiled capabilities.
         pub enum AdmissionStatusResponse {
@@ -178,6 +179,8 @@ $($fleet_admission_attributes)*
         }
     };
 }
+
+// sort-derives-disable-end
 
 crate::__canic_managed_wire_types! {
     serde_crate = "serde",
