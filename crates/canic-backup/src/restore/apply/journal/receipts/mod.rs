@@ -139,9 +139,7 @@ impl RestoreApplyOperationReceipt {
             && load.operation == RestoreApplyOperationKind::LoadSnapshot
             && self.source_canister == load.source_canister
             && self.target_canister == load.target_canister
-            && self.source_snapshot_id == load.snapshot_id
-            && self.artifact_path == load.artifact_path
-            && self.artifact_checksum == load.artifact_checksum
+            && self.matches_artifact_identity(load)
             && self
                 .uploaded_snapshot_id
                 .as_ref()
@@ -220,10 +218,16 @@ impl RestoreApplyOperationReceipt {
     fn matches_artifact_identity(&self, operation: &RestoreApplyJournalOperation) -> bool {
         let snapshot_id = &operation.snapshot_id;
         let artifact_path = &operation.artifact_path;
-        let artifact_checksum = &operation.artifact_checksum;
+        let checksum_matches = self
+            .artifact_checksum
+            .as_ref()
+            .zip(operation.artifact_checksum.as_ref())
+            .is_some_and(|(received, expected)| {
+                received.algorithm == expected.algorithm && received.verify(&expected.hash).is_ok()
+            });
         self.source_snapshot_id.as_deref() == snapshot_id.as_deref()
             && self.artifact_path.as_deref() == artifact_path.as_deref()
-            && self.artifact_checksum.as_ref() == artifact_checksum.as_ref()
+            && checksum_matches
     }
 
     fn validate_present<'a, T>(

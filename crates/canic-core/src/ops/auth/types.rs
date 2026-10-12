@@ -7,9 +7,9 @@
 use crate::{
     cdk::types::Principal,
     dto::auth::{
-        DelegatedRoleGrant, DelegatedToken, DelegationAudience, RoleAttestation, RootKeyPolicyV1,
+        DelegatedRoleGrant, DelegatedToken, DelegatedTokenClaims, DelegationAudience,
+        RoleAttestation, RootKeyPolicyV1,
     },
-    ops::auth::delegated::prepare::PreparedDelegatedToken,
 };
 use canic_contracts::ids::{BuildNetwork, CanisterRole};
 
@@ -120,7 +120,7 @@ pub struct PreparedRootRoleAttestation {
 ///
 
 pub struct PreparedDelegatedTokenIssuerProof {
-    pub prepared: PreparedDelegatedToken,
+    pub claims: DelegatedTokenClaims,
     pub claims_hash: [u8; 32],
     pub retrieval_expires_at_ns: u64,
 }
@@ -133,6 +133,13 @@ pub struct PreparedDelegatedTokenIssuerProof {
 
 #[derive(Debug)]
 pub struct AuthProofVerifierConfig {
+    #[cfg_attr(
+        not(any(test, feature = "auth-delegated-token-verify")),
+        expect(
+            dead_code,
+            reason = "network binding is consumed by the enabled verifier"
+        )
+    )]
     pub build_network: BuildNetwork,
     pub root_canister_id: Principal,
     pub ic_root_public_key_raw: Vec<u8>,
@@ -157,6 +164,13 @@ pub struct AuthChainKeyRootVerifierConfig {
 /// Auth-ops input for local delegated-token verification.
 ///
 
+#[cfg_attr(
+    not(any(test, feature = "auth-delegated-token-verify")),
+    expect(
+        dead_code,
+        reason = "verification input is rejected when the capability is absent"
+    )
+)]
 pub struct VerifyDelegatedTokenRuntimeInput<'a> {
     pub token: &'a DelegatedToken,
     pub caller: Principal,

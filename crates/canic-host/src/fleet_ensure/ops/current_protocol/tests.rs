@@ -1554,6 +1554,13 @@ fn assert_retry_timestamp_is_not_durable_progress(
     first_failure.pending_root_failure = Some(
         canic_contracts::dto::component_provisioning::FleetComponentProvisioningRootFailure {
             origin: Some(canic_contracts::dto::component_provisioning::ProvisioningFailureOrigin {
+        dependency: Some(canic_contracts::values::provisioning_failure::ProvisioningDependencyFailure {
+                    target: principal(11),
+                    method: canic_contracts::protocol::CANIC_WASM_STORE_COMMAND.into(),
+                    step: "inspect_template".into(),
+                    rejection_code: Some(5),
+                    rejection_detail: Some("Store stopped".into()),
+                }),
                 failed_at_ns: 9,
                 retry_at_ns: Some(1_000_000_009),
                 stage: canic_contracts::dto::component_provisioning::ProvisioningFailureStage::StoreCatalog,
@@ -1571,45 +1578,26 @@ fn assert_retry_timestamp_is_not_durable_progress(
         },
     );
     let mut repeated_failure = first_failure.clone();
+    let observation = component_provisioning_observation(false, &first_failure).unwrap();
     assert_eq!(
-        component_provisioning_observation(false, &first_failure)
-            .unwrap()
+        observation
             .provisioning_progress
             .unwrap()
-            .pending_root_failure,
-        first_failure.pending_root_failure,
+            .pending_root_failure
+            .as_deref(),
+        first_failure.pending_root_failure.as_ref(),
     );
-    repeated_failure
+    let failure = repeated_failure
         .pending_root_failure
         .as_mut()
-        .expect("failure")
-        .failed_at_ns = 20;
-    repeated_failure
-        .pending_root_failure
-        .as_mut()
-        .unwrap()
-        .origin
-        .as_mut()
-        .unwrap()
-        .failed_at_ns = 19;
-    repeated_failure
-        .pending_root_failure
-        .as_mut()
-        .unwrap()
-        .origin
-        .as_mut()
-        .unwrap()
-        .retry_at_ns = Some(2_000_000_019);
+        .expect("failure");
+    failure.failed_at_ns = 20;
+    let origin = failure.origin.as_mut().unwrap();
+    origin.failed_at_ns = 19;
+    origin.retry_at_ns = Some(2_000_000_019);
+    assert_eq!(observation.retry, EffectRetry::ReplayExactIssuedCommand);
     assert_eq!(
-        component_provisioning_observation(false, &first_failure)
-            .expect("first failure observation")
-            .retry,
-        EffectRetry::ReplayExactIssuedCommand
-    );
-    assert_eq!(
-        component_provisioning_observation(false, &first_failure)
-            .expect("first failure identity")
-            .progress_identity,
+        observation.progress_identity,
         component_provisioning_observation(false, &repeated_failure)
             .expect("repeated failure identity")
             .progress_identity,
@@ -1618,6 +1606,13 @@ fn assert_retry_timestamp_is_not_durable_progress(
     let mut permanent = repeated_failure.clone();
     permanent.pending_root_failure.as_mut().unwrap().origin = Some(
         canic_contracts::dto::component_provisioning::ProvisioningFailureOrigin {
+        dependency: Some(canic_contracts::values::provisioning_failure::ProvisioningDependencyFailure {
+                    target: principal(11),
+                    method: canic_contracts::protocol::CANIC_WASM_STORE_COMMAND.into(),
+                    step: "inspect_template".into(),
+                    rejection_code: Some(5),
+                    rejection_detail: Some("Store stopped".into()),
+                }),
             failed_at_ns: 10,
             retry_at_ns: None,
             stage: canic_contracts::dto::component_provisioning::ProvisioningFailureStage::StoreStatus,
@@ -1628,16 +1623,23 @@ fn assert_retry_timestamp_is_not_durable_progress(
                 canic_contracts::dto::component_provisioning::ProvisioningRetryCategory::ReviewRequired,
         },
     );
+    let expected_dependency = permanent
+        .pending_root_failure
+        .as_ref()
+        .unwrap()
+        .origin
+        .as_ref()
+        .unwrap()
+        .dependency
+        .as_ref();
     assert!(
         matches!(component_provisioning_observation(false, &permanent),
-        Err(CurrentProtocolError::ProvisioningReviewRequired { target, diagnostic_code: 132, failed_at_ns: 10, .. })
-        if target == principal(11))
+        Err(CurrentProtocolError::ProvisioningReviewRequired { target, dependency, diagnostic_code: 132, failed_at_ns: 10, .. })
+        if target == principal(11) && dependency.as_deref() == expected_dependency)
     );
     repeated_failure.pending_root_failure = None;
     assert_eq!(
-        component_provisioning_observation(false, &first_failure)
-            .unwrap()
-            .progress_identity,
+        observation.progress_identity,
         component_provisioning_observation(false, &repeated_failure)
             .unwrap()
             .progress_identity

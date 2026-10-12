@@ -45,7 +45,7 @@ pub(in crate::fleet) fn plain(progress: &FleetEnsureProgress) -> String {
                 detail.root_batch_count,
                 detail.component_count
             );
-            if let Some(retry) = detail.pending_root_failure {
+            if let Some(retry) = &detail.pending_root_failure {
                 let _ = write!(line, "; {}", pending_retry(retry).join("; "));
             }
             for component in &detail.components {
@@ -129,7 +129,7 @@ pub(super) fn panel(
             lines.push(format!("{:<32} State   Roots", "Stage"));
             lines.extend(stages(detail));
             lines.push("Final checks                     Pending".into());
-            if let Some(retry) = detail.pending_root_failure {
+            if let Some(retry) = &detail.pending_root_failure {
                 lines.extend(pending_retry(retry));
             }
             lines.push(format!(
@@ -324,22 +324,38 @@ fn safe_text(value: &str) -> String {
 }
 
 fn pending_retry(
-    retry: canic_contracts::dto::component_provisioning::FleetComponentProvisioningRootFailure,
-) -> [String; 2] {
-    if let Some(origin) = retry.origin {
+    retry: &canic_contracts::dto::component_provisioning::FleetComponentProvisioningRootFailure,
+) -> Vec<String> {
+    if let Some(origin) = &retry.origin {
         let deadline = origin.retry_at_ns.map_or_else(
             || "retry deadline unavailable".to_owned(),
             |value| format!("observed retry deadline: {}", utc_timestamp_ns(value)),
         );
-        [
+        let mut lines = vec![
             format!(
                 "Pending owner {}: {:?}, code {}, {:?}",
                 origin.target, origin.stage, origin.diagnostic_code, origin.retry_category,
             ),
             deadline,
-        ]
+        ];
+        if let Some(dependency) = &origin.dependency {
+            lines.push(format!(
+                "Dependency {} {} ({}), rejection {:?}: {}",
+                dependency.target,
+                safe_text(&dependency.method),
+                safe_text(&dependency.step),
+                dependency.rejection_code,
+                safe_text(
+                    dependency
+                        .rejection_detail
+                        .as_deref()
+                        .unwrap_or("unavailable")
+                ),
+            ));
+        }
+        lines
     } else {
-        [
+        vec![
             format!(
                 "Root {}: {:?}, code {}; originating owner unavailable",
                 retry.fleet_subnet_root, retry.stage, retry.diagnostic_code

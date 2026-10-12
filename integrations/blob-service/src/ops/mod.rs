@@ -9,14 +9,12 @@ pub mod gateways;
 pub mod memory;
 pub mod metrics;
 
-use crate::ops::memory::{Grants, Memory};
+use crate::ops::memory::Memory;
 
 use std::cell::RefCell;
 
 use ic_blob_storage::ops::service::{
-    installation::{
-        ServiceInstallation, ServiceInstallationMemories, ValidatedServiceInstallation,
-    },
+    installation::{ServiceInstallation, ValidatedServiceInstallation},
     stores::ServiceStores,
 };
 use ic_blob_storage_contracts::{
@@ -46,18 +44,8 @@ pub fn install(input: &ServiceInstallationInput) {
     )
     .expect("invalid installation configuration");
     assert_uninitialized();
-    let Grants {
-        configuration,
-        stores,
-    } = memory::open();
-    let installation = ServiceInstallation::install(
-        ServiceInstallationMemories {
-            configuration,
-            stores,
-        },
-        candidate,
-    )
-    .expect("service installation");
+    let installation =
+        ServiceInstallation::install(memory::open(), candidate).expect("service installation");
     publish(Host {
         installation,
         last_platform_version: ic_cdk::api::canister_version(),
@@ -65,15 +53,8 @@ pub fn install(input: &ServiceInstallationInput) {
 }
 pub fn restore() {
     assert_uninitialized();
-    let Grants {
-        configuration,
-        stores,
-    } = memory::open();
     let installation = ServiceInstallation::open(
-        ServiceInstallationMemories {
-            configuration,
-            stores,
-        },
+        memory::open(),
         ic_cdk::api::canister_self(),
         ic_blob_storage::LIBRARY_VERSION,
     )

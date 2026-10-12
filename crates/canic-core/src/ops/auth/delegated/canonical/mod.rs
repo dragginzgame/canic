@@ -4,13 +4,14 @@
 //! Does not own: proof verification, storage, or endpoint authorization.
 //! Boundary: signed protocol bytes are library-owned; deployment envelopes stay local.
 
+#[cfg(test)]
+use crate::dto::auth::DelegatedTokenClaims;
 use crate::{
     cdk::types::Principal,
     dto::auth::{
         ChainKeyAlgorithm, ChainKeyBatchHeaderV1, ChainKeyDelegationCertV1, ChainKeyKeyId,
-        DelegatedAuthRegistrySnapshotV1, DelegatedRoleGrant, DelegatedTokenClaims,
-        DelegationAudience, DelegationCert, DelegationProof, IssuerProof, IssuerProofAlgorithm,
-        IssuerProofBinding, RootKeyPolicyV1,
+        DelegatedAuthRegistrySnapshotV1, DelegatedRoleGrant, DelegationAudience, DelegationCert,
+        IssuerProofAlgorithm, IssuerProofBinding, RootKeyPolicyV1,
     },
     ops::auth::delegated::protocol,
 };
@@ -72,16 +73,9 @@ pub fn cert_hash(cert: &DelegationCert) -> Result<[u8; 32], CanonicalAuthError> 
     Ok(ic_auth::canonical::cert_hash(&protocol::cert(cert)?)?)
 }
 
+#[cfg(test)]
 pub fn claims_hash(claims: &DelegatedTokenClaims) -> Result<[u8; 32], CanonicalAuthError> {
     Ok(ic_auth::canonical::claims_hash(&protocol::claims(claims)?)?)
-}
-
-pub fn proof_hash(proof: &DelegationProof) -> Result<[u8; 32], CanonicalAuthError> {
-    Ok(ic_auth::canonical::proof_hash(&protocol::proof(proof)?)?)
-}
-
-pub fn issuer_proof_hash(proof: &IssuerProof) -> Result<[u8; 32], CanonicalAuthError> {
-    Ok(ic_auth::canonical::issuer_proof_hash(proof)?)
 }
 
 pub fn chain_key_batch_header_hash(
@@ -130,10 +124,6 @@ pub fn issuer_proof_binding_hash(
         issuer_proof_alg,
         issuer_proof_binding,
     )?)
-}
-
-pub fn role_hash(role: &CanisterRole) -> Result<[u8; 32], CanonicalAuthError> {
-    Ok(ic_auth::canonical::role_hash(&protocol::role(role)?)?)
 }
 
 fn hash_bytes(bytes: &[u8]) -> [u8; 32] {
@@ -356,7 +346,7 @@ mod tests {
     use super::*;
     use crate::dto::auth::{
         ChainKeyBatchWitnessStepV1, ChainKeyBatchWitnessV1, ChainKeyRootSignatureV1,
-        IcCanisterSignatureProofV1, IcChainKeyBatchSignatureProofV1, RootProof,
+        DelegationProof, IcChainKeyBatchSignatureProofV1, RootProof,
     };
 
     fn p(id: u8) -> Principal {
@@ -607,7 +597,10 @@ mod tests {
         let role = CanisterRole::new("project_instance");
         let cert = sample_cert();
 
-        assert_ne!(role_hash(&role).unwrap(), cert_hash(&cert).unwrap());
+        assert_ne!(
+            ic_auth::canonical::role_hash(&protocol::role(&role).unwrap()).unwrap(),
+            cert_hash(&cert).unwrap()
+        );
     }
 
     #[test]
@@ -663,10 +656,13 @@ mod tests {
             ]
         );
         assert_eq!(
-            proof_hash(&DelegationProof {
-                cert: sample_cert(),
-                root_proof: RootProof::IcChainKeyBatchSignatureV1(proof),
-            })
+            ic_auth::canonical::proof_hash(
+                &protocol::proof(&DelegationProof {
+                    cert: sample_cert(),
+                    root_proof: RootProof::IcChainKeyBatchSignatureV1(proof),
+                })
+                .unwrap(),
+            )
             .unwrap(),
             [
                 40, 0, 43, 111, 76, 97, 74, 157, 46, 216, 136, 161, 160, 142, 247, 203, 124, 187,
@@ -743,7 +739,8 @@ mod tests {
             cert: sample_cert(),
             root_proof: RootProof::IcChainKeyBatchSignatureV1(proof.clone()),
         };
-        let base_hash = proof_hash(&delegation_proof).unwrap();
+        let base_hash =
+            ic_auth::canonical::proof_hash(&protocol::proof(&delegation_proof).unwrap()).unwrap();
         let mut changed_witness = proof.clone();
         changed_witness.issuer_witness.steps[0] =
             ChainKeyBatchWitnessStepV1::RightSibling([36; 32]);
@@ -752,18 +749,24 @@ mod tests {
 
         assert_ne!(
             base_hash,
-            proof_hash(&DelegationProof {
-                cert: sample_cert(),
-                root_proof: RootProof::IcChainKeyBatchSignatureV1(changed_witness),
-            })
+            ic_auth::canonical::proof_hash(
+                &protocol::proof(&DelegationProof {
+                    cert: sample_cert(),
+                    root_proof: RootProof::IcChainKeyBatchSignatureV1(changed_witness),
+                })
+                .unwrap(),
+            )
             .unwrap()
         );
         assert_ne!(
             base_hash,
-            proof_hash(&DelegationProof {
-                cert: sample_cert(),
-                root_proof: RootProof::IcChainKeyBatchSignatureV1(changed_public_key),
-            })
+            ic_auth::canonical::proof_hash(
+                &protocol::proof(&DelegationProof {
+                    cert: sample_cert(),
+                    root_proof: RootProof::IcChainKeyBatchSignatureV1(changed_public_key),
+                })
+                .unwrap(),
+            )
             .unwrap()
         );
     }
@@ -811,29 +814,6 @@ mod tests {
                 len: MAX_TOKEN_EXT_BYTES + 1,
                 max: MAX_TOKEN_EXT_BYTES,
             })
-        );
-    }
-
-    #[test]
-    fn issuer_proof_hash_binds_signature_and_public_key() {
-        let proof = IssuerProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
-            signature_cbor: vec![1, 2, 3],
-            public_key_der: vec![4, 5, 6],
-        });
-        let mut changed_signature = proof.clone();
-        let mut changed_public_key = proof.clone();
-        let IssuerProof::IcCanisterSignatureV1(changed) = &mut changed_signature;
-        changed.signature_cbor[0] ^= 1;
-        let IssuerProof::IcCanisterSignatureV1(changed) = &mut changed_public_key;
-        changed.public_key_der[0] ^= 1;
-
-        assert_ne!(
-            issuer_proof_hash(&proof).unwrap(),
-            issuer_proof_hash(&changed_signature).unwrap()
-        );
-        assert_ne!(
-            issuer_proof_hash(&proof).unwrap(),
-            issuer_proof_hash(&changed_public_key).unwrap()
         );
     }
 

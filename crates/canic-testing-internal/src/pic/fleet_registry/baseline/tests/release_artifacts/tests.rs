@@ -1,7 +1,7 @@
 //! Behavioral qualification of the fixture build-source cache boundary.
 
 use super::*;
-use ic_testkit::artifacts::workspace_root_for;
+use ic_build::artifacts::workspace_root_for;
 use std::time::SystemTime;
 
 #[test]

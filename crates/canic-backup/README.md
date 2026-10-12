@@ -15,6 +15,10 @@ maintained manifest shape and preserves native I/O failures. Other traversal
 failures use `ArtifactChecksumError::Artifact(ic_backup::ops::artifacts::ArtifactError)`.
 Tree names must be UTF-8 so checksum paths retain exact identity.
 
+Host Artifacts owns raw SHA-256 calculation and formatting for topology hashes,
+layout sidecar names and restore-authority digests. Canic retains their exact
+input framing and persisted representation.
+
 Canic retains publication barriers, layout custody and same-operation recovery.
 Ordinary JSON creation and replacement use Host Tooling's durable publication
 engine after serialization succeeds. The existing `PersistenceError::Io` kind
@@ -42,6 +46,11 @@ artifact integrity, safe verification, uploaded snapshot receipts, and journaled
 execution state. Code/module hash metadata remains useful provenance, but it is
 not a prerequisite for snapshot load because snapshot load restores code and
 state together.
+
+Restore upload receipts and load selection compare validated digest identities
+through IC Backup. Equivalent hexadecimal case does not change artifact identity;
+malformed hashes, different bytes and unsupported algorithms still reject.
+Validation preserves the original checksum text in operations and receipts.
 
 ## Continue From Here
 

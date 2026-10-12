@@ -35,11 +35,12 @@ crc32fast = { workspace = true }
 getrandom = { workspace = true }
 hmac = { workspace = true }
 ic-agent = { workspace = true }
+ic-build.workspace = true
 ic-certification = { workspace = true }
 ic-host-artifacts = { workspace = true, features = ["gzip", "wasm"] }
 ic-host-fs = { workspace = true }
 ic-host-process = { workspace = true }
-ic-host-tools = { workspace = true, features = ["ic-limits"] }
+ic-host-tools = { workspace = true, features = ["ic-interface", "ic-limits"] }
 ic-query = { workspace = true }
 ic-testkit = { workspace = true, optional = true }
 icrc-ledger-types = { workspace = true }

@@ -8,11 +8,11 @@ use crate::{
     ops::{
         auth::{
             delegated::{
-                chain_key::{
-                    ChainKeyRootVerifierPolicy, ChainKeySignatureVerificationInput,
-                    verify_chain_key_batch_root_proof, verify_chain_key_ecdsa_signature,
-                },
                 chain_key_signing::{ChainKeySigner, ChainKeySignerFuture},
+                root_proof::{
+                    RootDelegationProofError, VerifyRootDelegationProofInput,
+                    verify_root_delegation_proof,
+                },
             },
             delegation::root_issuer_renewal::renewal_template_fingerprint,
         },
@@ -186,24 +186,48 @@ where
     ))
 }
 
-fn verifier_policy(signing_policy: &ChainKeySigningPolicy) -> ChainKeyRootVerifierPolicy {
-    ChainKeyRootVerifierPolicy {
-        root_canister_id: signing_policy.root_canister_id,
-        algorithm: signing_policy.algorithm,
-        key_id: signing_policy.key_id.clone(),
-        derivation_path_hash: chain_key_derivation_path_hash(&signing_policy.derivation_path)
-            .unwrap(),
-        public_key: signing_policy.public_key.clone(),
-        key_version: signing_policy.key_version,
-        min_accepted_key_version: signing_policy.key_version,
-        min_accepted_proof_epoch: 10,
-        min_accepted_registry_epoch: 11,
-        valid_from_ns: 1,
-        accept_until_ns: 120_000_000_000,
-        build_network: BuildNetwork::Local,
+fn verifier_policy(
+    signing_policy: &ChainKeySigningPolicy,
+) -> crate::ops::auth::AuthChainKeyRootVerifierConfig {
+    crate::ops::auth::AuthChainKeyRootVerifierConfig {
+        policy: crate::dto::auth::RootKeyPolicyV1 {
+            root_canister_id: signing_policy.root_canister_id,
+            algorithm: signing_policy.algorithm,
+            key_id: signing_policy.key_id.clone(),
+            derivation_path_hash: chain_key_derivation_path_hash(&signing_policy.derivation_path)
+                .unwrap(),
+            public_key: signing_policy.public_key.clone(),
+            key_version: signing_policy.key_version,
+            min_accepted_key_version: signing_policy.key_version,
+            min_accepted_proof_epoch: 10,
+            min_accepted_registry_epoch: 11,
+            valid_from_ns: 1,
+            accept_until_ns: 120_000_000_000,
+            build_network: BuildNetwork::Local,
+            max_revocation_latency_ns: 60_000_000_000,
+        },
         allow_test_chain_key: true,
-        max_revocation_latency_ns: 60_000_000_000,
     }
+}
+
+fn verify_producer_proof(
+    cert: &DelegationCert,
+    root_proof: &crate::dto::auth::RootProof,
+    signing_policy: &ChainKeySigningPolicy,
+    now_ns: u64,
+) -> Result<(), RootDelegationProofError> {
+    verify_root_delegation_proof(VerifyRootDelegationProofInput {
+        cert,
+        root_proof,
+        expected_issuer: cert.issuer_pid,
+        verifier: &verifier_policy(signing_policy),
+        now_ns,
+        ttl_limits: crate::ops::auth::delegated::cert_rules::DelegatedAuthTtlLimits {
+            max_cert_ttl_ns: 60_000_000_000,
+            max_token_ttl_ns: 60_000_000_000,
+        },
+    })
+    .map(|_| ())
 }
 
 fn sign_header(header: &ChainKeyBatchHeaderV1) -> crate::dto::auth::ChainKeyRootSignatureV1 {
@@ -349,36 +373,10 @@ fn chain_key_batch_builder_prepares_merkle_batch_that_verifier_accepts() {
             },
         );
 
-        verify_chain_key_batch_root_proof(
-            crate::ops::auth::delegated::chain_key::VerifyChainKeyBatchRootProofInput {
-                cert: &issuer.delegation_cert,
-                root_proof: &proof,
-                policy: &verifier_policy(&signing_policy),
-                now_ns: 1_000,
-            },
-            |input: ChainKeySignatureVerificationInput<'_>| verify_chain_key_ecdsa_signature(input),
-        )
-        .expect("builder proof material should verify");
+        verify_producer_proof(&issuer.delegation_cert, &proof, &signing_policy, 1_000)
+            .expect("builder proof material should verify");
 
-        let enrolled = verifier_policy(&signing_policy);
-        let verifier = crate::ops::auth::AuthChainKeyRootVerifierConfig {
-            policy: crate::dto::auth::RootKeyPolicyV1 {
-                root_canister_id: enrolled.root_canister_id,
-                algorithm: enrolled.algorithm,
-                key_id: enrolled.key_id,
-                derivation_path_hash: enrolled.derivation_path_hash,
-                public_key: enrolled.public_key,
-                key_version: enrolled.key_version,
-                min_accepted_key_version: enrolled.min_accepted_key_version,
-                min_accepted_proof_epoch: enrolled.min_accepted_proof_epoch,
-                min_accepted_registry_epoch: enrolled.min_accepted_registry_epoch,
-                valid_from_ns: enrolled.valid_from_ns,
-                accept_until_ns: enrolled.accept_until_ns,
-                max_revocation_latency_ns: enrolled.max_revocation_latency_ns,
-                build_network: enrolled.build_network,
-            },
-            allow_test_chain_key: enrolled.allow_test_chain_key,
-        };
+        let verifier = verifier_policy(&signing_policy);
         let active = crate::ops::auth::delegated::active_proof::install_active_delegation_proof(
             crate::ops::auth::delegated::active_proof::InstallActiveDelegationProofInput {
                 proof: DelegationProof {
@@ -631,14 +629,11 @@ fn chain_key_batch_signing_covers_multiple_issuers_with_one_signature() {
     assert!(proof_issuers.contains(&issuer_a));
     assert!(proof_issuers.contains(&issuer_b));
     for proof in &plan.proofs {
-        verify_chain_key_batch_root_proof(
-            crate::ops::auth::delegated::chain_key::VerifyChainKeyBatchRootProofInput {
-                cert: &proof.proof.cert,
-                root_proof: &proof.proof.root_proof,
-                policy: &verifier_policy(&signing_policy),
-                now_ns: 3_000,
-            },
-            |input: ChainKeySignatureVerificationInput<'_>| verify_chain_key_ecdsa_signature(input),
+        verify_producer_proof(
+            &proof.proof.cert,
+            &proof.proof.root_proof,
+            &signing_policy,
+            3_000,
         )
         .expect("each issuer proof from the shared batch should verify");
     }
@@ -912,14 +907,11 @@ fn chain_key_batch_install_plan_materializes_signed_proof_and_records_success() 
 
     let proof = &plan.proofs[0];
     assert_eq!(proof.issuer_pid, issuer);
-    verify_chain_key_batch_root_proof(
-        crate::ops::auth::delegated::chain_key::VerifyChainKeyBatchRootProofInput {
-            cert: &proof.proof.cert,
-            root_proof: &proof.proof.root_proof,
-            policy: &verifier_policy(&signing_policy),
-            now_ns: 3_000,
-        },
-        |input: ChainKeySignatureVerificationInput<'_>| verify_chain_key_ecdsa_signature(input),
+    verify_producer_proof(
+        &proof.proof.cert,
+        &proof.proof.root_proof,
+        &signing_policy,
+        3_000,
     )
     .expect("materialized install proof should verify");
 
@@ -1120,14 +1112,11 @@ fn chain_key_lazy_repair_get_or_create_signs_once_then_reuses_cached_proof() {
 
     assert_eq!(proof.issuer_pid, issuer);
     assert_eq!(signer.sign_calls, 1);
-    verify_chain_key_batch_root_proof(
-        crate::ops::auth::delegated::chain_key::VerifyChainKeyBatchRootProofInput {
-            cert: &proof.proof.cert,
-            root_proof: &proof.proof.root_proof,
-            policy: &verifier_policy(&signing_policy),
-            now_ns: 1_000,
-        },
-        |input: ChainKeySignatureVerificationInput<'_>| verify_chain_key_ecdsa_signature(input),
+    verify_producer_proof(
+        &proof.proof.cert,
+        &proof.proof.root_proof,
+        &signing_policy,
+        1_000,
     )
     .expect("lazy repair proof should verify");
 

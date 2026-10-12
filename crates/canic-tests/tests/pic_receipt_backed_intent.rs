@@ -4,10 +4,8 @@ use candid::{CandidType, Deserialize, Principal, encode_one};
 use canic_testing_internal::pic::{
     CanicWasmBuildProfile, InternalTestWasms, build_internal_test_wasm_canisters, start_pocket_ic,
 };
-use ic_testkit::{
-    artifacts::{test_target_dir, workspace_root_for},
-    pic::{InstallSpec, PocketIc, PocketIcBuilder, RetryPolicy, prelude::*},
-};
+use ic_build::artifacts::{test_target_dir, workspace_root_for};
+use ic_testkit::pic::{InstallSpec, PocketIc, PocketIcBuilder, RetryPolicy, prelude::*};
 use std::{
     path::{Path, PathBuf},
     sync::OnceLock,

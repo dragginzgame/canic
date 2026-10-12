@@ -1,11 +1,13 @@
 //! Module: persistence::journal_lock
 //!
-//! Responsibility: serialize mutation of a persisted journal with a sidecar lock.
-//! Does not own: journal validation, workflow policy, or domain error projection.
+//! Responsibility: project shared journal-lock failures into Canic persistence errors.
+//! Does not own: descriptor locking, journal validation, or workflow policy.
 
-use std::{fs, io, path::Path, path::PathBuf};
+use std::{io, path::Path};
 
-use super::file_lock::{self, FileLockError};
+use ic_backup::ops::persistence::{
+    JournalLock as SharedJournalLock, JournalLockError as SharedJournalLockError,
+};
 use thiserror::Error as ThisError;
 
 ///
@@ -34,68 +36,35 @@ pub enum JournalLockError {
 
 #[derive(Debug)]
 pub struct JournalLock {
-    #[cfg(unix)]
-    file: fs::File,
+    _lock: SharedJournalLock,
 }
 
 impl JournalLock {
     pub(crate) fn acquire(journal_path: &Path) -> Result<Self, JournalLockError> {
-        let path = journal_lock_path(journal_path);
-
-        #[cfg(unix)]
-        {
-            acquire_supported(path)
-        }
-
-        #[cfg(not(unix))]
-        {
-            Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                format!(
-                    "journal locking is unsupported on this host: {}",
-                    path.display()
-                ),
-            )
-            .into())
-        }
+        SharedJournalLock::acquire(journal_path)
+            .map(|lock| Self { _lock: lock })
+            .map_err(|error| match error {
+                SharedJournalLockError::Locked { lock_path } => {
+                    JournalLockError::Locked { lock_path }
+                }
+                SharedJournalLockError::UnsafeEntry { lock_path, kind } => {
+                    JournalLockError::UnsafeEntry { lock_path, kind }
+                }
+                SharedJournalLockError::Io(error) => JournalLockError::Io(error),
+            })
     }
 }
 
-#[cfg(unix)]
-impl Drop for JournalLock {
-    fn drop(&mut self) {
-        file_lock::unlock(&self.file);
-    }
-}
-
-#[cfg(unix)]
-fn acquire_supported(path: PathBuf) -> Result<JournalLock, JournalLockError> {
-    match file_lock::acquire(&path) {
-        Ok(file) => Ok(JournalLock { file }),
-        Err(FileLockError::Locked) => Err(JournalLockError::Locked {
-            lock_path: path.to_string_lossy().to_string(),
-        }),
-        Err(FileLockError::UnsafeEntry { kind }) => Err(JournalLockError::UnsafeEntry {
-            lock_path: path.to_string_lossy().to_string(),
-            kind,
-        }),
-        Err(FileLockError::Io(error)) => Err(JournalLockError::Io(error)),
-    }
-}
-
-fn journal_lock_path(path: &Path) -> PathBuf {
-    let mut lock_path = path.as_os_str().to_os_string();
-    lock_path.push(".lock");
-    PathBuf::from(lock_path)
-}
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::test_support::temp_path;
+    use std::{fs, path::PathBuf};
 
-    #[cfg(unix)]
-    use rustix::io::{FdFlags, fcntl_getfd};
     #[cfg(unix)]
     use std::{os::unix::fs::symlink, process::Command, thread, time::Duration};
 
@@ -110,10 +79,9 @@ mod tests {
         let lock = JournalLock::acquire(&journal_path).expect("acquire lock");
 
         assert!(lock_path.is_file());
-        assert!(
-            fcntl_getfd(&lock.file)
-                .expect("read lock descriptor flags")
-                .contains(FdFlags::CLOEXEC)
+        std::assert_matches!(
+            SharedJournalLock::acquire(&journal_path),
+            Err(SharedJournalLockError::Locked { .. })
         );
         std::assert_matches!(
             JournalLock::acquire(&journal_path),
@@ -123,7 +91,11 @@ mod tests {
 
         drop(lock);
         assert!(lock_path.is_file());
-        let reacquired = JournalLock::acquire(&journal_path).expect("reacquire lock");
+        let reacquired = SharedJournalLock::acquire(&journal_path).expect("reacquire lock");
+        std::assert_matches!(
+            JournalLock::acquire(&journal_path),
+            Err(JournalLockError::Locked { .. })
+        );
         drop(reacquired);
         fs::remove_file(lock_path).expect("remove lock path");
     }
@@ -204,5 +176,11 @@ mod tests {
         loop {
             thread::sleep(Duration::from_secs(1));
         }
+    }
+
+    fn journal_lock_path(path: &Path) -> PathBuf {
+        let mut lock_path = path.as_os_str().to_os_string();
+        lock_path.push(".lock");
+        PathBuf::from(lock_path)
     }
 }

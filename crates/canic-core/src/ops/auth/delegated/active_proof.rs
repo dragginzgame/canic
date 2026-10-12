@@ -4,7 +4,14 @@
 //! Does not own: active proof storage, root proof construction, or endpoint guards.
 //! Boundary: pure installation helper called before auth storage mutation.
 
-use super::canonical::CanonicalAuthError;
+use super::{
+    canonical::CanonicalAuthError,
+    cert_rules::DelegatedAuthTtlLimits,
+    root_proof::{
+        RootDelegationProofError, VerifiedRootDelegationProof, VerifyRootDelegationProofInput,
+        verify_root_delegation_proof,
+    },
+};
 use crate::{
     cdk::types::Principal,
     dto::auth::{ActiveDelegationProof, DelegationProof},
@@ -83,69 +90,39 @@ pub fn install_active_delegation_proof(
     })
 }
 
-/// Proof evidence copied from IC Auth; it carries no installation authorization.
-struct VerifiedActiveProof {
-    cert_hash: [u8; 32],
-    expires_at_ns: u64,
-}
-
-#[cfg(any(feature = "auth-chain-key-ecdsa", test))]
 fn verify_for_installation(
     input: &InstallActiveDelegationProofInput<'_>,
-) -> Result<VerifiedActiveProof, InstallActiveDelegationProofError> {
-    let policy = &input.verifier.policy;
-    let permitted_key = match policy.build_network {
-        crate::ids::BuildNetwork::Ic => policy.key_id.name == "key_1",
-        crate::ids::BuildNetwork::Local => {
-            policy.key_id.name != "test_key_1" || input.verifier.allow_test_chain_key
-        }
-    };
-    if !permitted_key {
-        return Err(InstallActiveDelegationProofError::RootPolicyRejected);
-    }
-    let root_key = ic_auth::token::RootKeyPolicy {
-        root_canister_id: policy.root_canister_id,
-        algorithm: policy.algorithm,
-        key_id: policy.key_id.clone(),
-        derivation_path_hash: policy.derivation_path_hash,
-        public_key: policy.public_key.clone(),
-        key_version: policy.key_version,
-        min_accepted_key_version: policy.min_accepted_key_version,
-        min_accepted_proof_epoch: policy.min_accepted_proof_epoch,
-        min_accepted_registry_epoch: policy.min_accepted_registry_epoch,
-        valid_from_ns: policy.valid_from_ns,
-        accept_until_ns: policy.accept_until_ns,
-        max_revocation_latency_ns: policy.max_revocation_latency_ns,
-    };
-    let protocol_proof = super::protocol::proof(&input.proof)?;
-    let verified = ic_auth::token::verify_delegation_proof(
-        &protocol_proof,
-        &ic_auth::token::DelegationProofVerificationContext {
-            expected_issuer: input.this_canister,
-            root_key: &root_key,
-            now_ns: input.now_ns,
-            limits: ic_auth::token::DelegationProofVerificationLimits {
-                max_cert_ttl_ns: policy.max_revocation_latency_ns,
-                max_token_ttl_ns: policy.max_revocation_latency_ns,
-                max_future_skew_ns: crate::ops::auth::AUTH_TIME_SKEW_ALLOWANCE_NS,
-                max_variable_bytes: 64 * 1024,
-                max_witness_steps: 64,
-            },
+) -> Result<VerifiedRootDelegationProof, InstallActiveDelegationProofError> {
+    let max_ttl_ns = input.verifier.policy.max_revocation_latency_ns;
+    verify_root_delegation_proof(VerifyRootDelegationProofInput {
+        cert: &input.proof.cert,
+        root_proof: &input.proof.root_proof,
+        expected_issuer: input.this_canister,
+        verifier: input.verifier,
+        now_ns: input.now_ns,
+        ttl_limits: DelegatedAuthTtlLimits {
+            max_cert_ttl_ns: max_ttl_ns,
+            max_token_ttl_ns: max_ttl_ns,
         },
-    )
-    .map_err(InstallActiveDelegationProofError::RootProofInvalid)?;
-    Ok(VerifiedActiveProof {
-        cert_hash: verified.certificate_hash(),
-        expires_at_ns: verified.expires_at_ns(),
     })
-}
-
-#[cfg(not(any(feature = "auth-chain-key-ecdsa", test)))]
-const fn verify_for_installation(
-    input: &InstallActiveDelegationProofInput<'_>,
-) -> Result<VerifiedActiveProof, InstallActiveDelegationProofError> {
-    let _ = input.verifier;
-    Err(InstallActiveDelegationProofError::VerificationUnavailable)
+    .map_err(|cause| match cause {
+        #[cfg(any(feature = "auth-chain-key-ecdsa", test))]
+        RootDelegationProofError::RootPolicyRejected => {
+            InstallActiveDelegationProofError::RootPolicyRejected
+        }
+        #[cfg(any(feature = "auth-chain-key-ecdsa", test))]
+        RootDelegationProofError::Verification(cause) => {
+            InstallActiveDelegationProofError::RootProofInvalid(cause)
+        }
+        #[cfg(any(feature = "auth-chain-key-ecdsa", test))]
+        RootDelegationProofError::Canonical(cause) => {
+            InstallActiveDelegationProofError::Canonical(cause)
+        }
+        #[cfg(not(any(feature = "auth-chain-key-ecdsa", test)))]
+        RootDelegationProofError::VerificationUnavailable => {
+            InstallActiveDelegationProofError::VerificationUnavailable
+        }
+    })
 }
 
 const fn refresh_after_ns(now_ns: u64, expires_at_ns: u64) -> u64 {

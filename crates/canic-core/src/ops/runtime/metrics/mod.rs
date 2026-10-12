@@ -586,7 +586,8 @@ fn perf_entries_from(
 ) -> Vec<MetricEntry> {
     let mut entries = snapshot
         .into_iter()
-        .map(|entry| {
+        .filter_map(|entry| {
+            let total_instructions = u64::try_from(entry.total_instructions).ok()?;
             let labels = match entry.key {
                 PerfKey::Endpoint { kind, name } => vec![
                     "endpoint".to_string(),
@@ -598,14 +599,14 @@ fn perf_entries_from(
                 }
             };
 
-            MetricEntry {
+            Some(MetricEntry {
                 labels,
                 principal: None,
                 value: MetricValue::CountAndU64 {
                     count: entry.count,
-                    value_u64: entry.total_instructions,
+                    value_u64: total_instructions,
                 },
-            }
+            })
         })
         .collect::<Vec<_>>();
     entries.extend(timer_snapshots.iter().flat_map(|snapshot| {
@@ -615,19 +616,23 @@ fn perf_entries_from(
             ("scheduler", performance.scheduler_instructions()),
             ("work", performance.work_instructions()),
         ]
-        .map(|(phase, summary)| MetricEntry {
-            labels: vec![
-                "timer".to_string(),
-                identity.owner().to_string(),
-                identity.subsystem().to_string(),
-                identity.name().to_string(),
-                phase.to_string(),
-            ],
-            principal: None,
-            value: MetricValue::CountAndU64 {
-                count: summary.samples(),
-                value_u64: summary.total(),
-            },
+        .into_iter()
+        .filter_map(|(phase, summary)| {
+            let total = u64::try_from(summary.total()).ok()?;
+            Some(MetricEntry {
+                labels: vec![
+                    "timer".to_string(),
+                    identity.owner().to_string(),
+                    identity.subsystem().to_string(),
+                    identity.name().to_string(),
+                    phase.to_string(),
+                ],
+                principal: None,
+                value: MetricValue::CountAndU64 {
+                    count: summary.samples(),
+                    value_u64: total,
+                },
+            })
         })
     }));
     entries

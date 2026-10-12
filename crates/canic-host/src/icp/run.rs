@@ -1,5 +1,9 @@
+//! Module: icp::run
+//!
+//! Responsibility: execute admitted ICP commands with bounded diagnostics.
+//! Boundary: shared process ownership handles output failures and child cleanup.
+
 use std::{
-    cell::Cell,
     io::{self, Write},
     path::Path,
     process::{Command, Stdio},
@@ -8,7 +12,7 @@ use std::{
 use ic_host_process::{
     child::OwnedChild,
     tool::{
-        ExecutionFailure, ExecutionOperation, OutputLimit, OutputLimits, SuccessfulExit, ToolError,
+        CompletedExecution, ExecutionFailure, OutputLimit, OutputLimits, SuccessfulExit, ToolError,
         communicate_child_with_observer,
     },
 };
@@ -137,9 +141,7 @@ fn run_status_inherit_to(
     let display = command_display(command);
     command.stdout(Stdio::inherit()).stderr(Stdio::piped());
     let mut child = with_executable_busy_retry(|| OwnedChild::spawn_direct(command))?;
-    let forwarding_failed = Cell::new(false);
-    let mut forwarding_error = None;
-    let result = communicate_child_with_observer(
+    communicate_child_with_observer(
         &mut child,
         None,
         OutputLimits {
@@ -149,29 +151,13 @@ fn run_status_inherit_to(
             timeout: None,
         },
         SuccessfulExit::Cleanup,
-        || forwarding_failed.get(),
-        |_, bytes| {
-            if let Err(source) = terminal.write_all(bytes) {
-                forwarding_error = Some(source);
-                forwarding_failed.set(true);
-            }
-        },
-    );
-    if let Some(source) = forwarding_error {
-        let kind = source.kind();
-        if let Err(ToolError::Execution(mut error)) = result {
-            error.failure = ExecutionFailure::Io {
-                operation: ExecutionOperation::ReadOutput,
-                source,
-            };
-            return Err(io::Error::new(kind, ToolError::Execution(error)).into());
-        }
-        return Err(source.into());
-    }
+        || false,
+        |_, bytes| terminal.write_all(bytes),
+    )
+    .and_then(CompletedExecution::require_success)
+    .map_err(|error| foreground_command_error(display, error))?;
     terminal.flush()?;
-    result
-        .map(|_| ())
-        .map_err(|error| foreground_command_error(display, error))
+    Ok(())
 }
 
 fn foreground_command_error(command: String, error: ToolError) -> IcpCommandError {
@@ -193,7 +179,9 @@ fn foreground_command_error(command: String, error: ToolError) -> IcpCommandErro
         return IcpCommandError::Failed { command, stderr };
     }
     let kind = match error.execution_error().map(|execution| &execution.failure) {
-        Some(ExecutionFailure::Io { source, .. }) => source.kind(),
+        Some(ExecutionFailure::Io { source, .. } | ExecutionFailure::Observer { source, .. }) => {
+            source.kind()
+        }
         _ => io::ErrorKind::Other,
     };
     IcpCommandError::Io(io::Error::new(kind, error))
@@ -383,7 +371,7 @@ mod tests {
             .expect("shared cleanup evidence");
         assert!(matches!(
             &execution.failure,
-            ExecutionFailure::Io { source, .. } if source.kind() == io::ErrorKind::BrokenPipe
+            ExecutionFailure::Observer { source, .. } if source.kind() == io::ErrorKind::BrokenPipe
         ));
         assert!(execution.cleanup.is_none());
         let pid = fs::read_to_string(pid_file)

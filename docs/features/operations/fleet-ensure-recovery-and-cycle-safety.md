@@ -403,6 +403,24 @@ can require additional work. Do not repeat a reinstall or edit the old journal
 to make its balance agree. Immediate replay with unchanged accounting remains
 effect-free.
 
+## Protected provisioning failures
+
+For a pending Root operation, the authorised Coordinator/Fleet observation carries
+its originating stage, target, operation, diagnostic code and observed retry
+category/deadline. When a dependency fails, `origin.dependency` also carries its
+exact target, method and substep, plus the raw platform rejection code and at most
+1024 UTF-8 bytes of rejection text when supplied by the platform. Missing platform
+evidence remains explicit; call arguments and initialization bytes are not retained.
+Public error envelopes still carry only their registered typed diagnostic.
+
+A transport outage remains bounded backoff on the same issued operation. A typed
+permanent Store binding refusal suspends retries for review. Once the dependency
+recovers, repeat the exact approved apply command; do not issue a new allocation,
+replace its retained Wasm or manually bypass Root status authority. The installed
+Root must contain this evidence path: a newer CLI cannot reconstruct detail an
+older Root discarded. A different release requires the governed cycle-safe clean
+reinstall procedure, retaining the outstanding operation's authority and evidence.
+
 ## Continue From Here
 
 - [Review and apply a Fleet plan](fleet-ensure-plan-and-apply.md)

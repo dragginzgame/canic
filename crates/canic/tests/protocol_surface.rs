@@ -756,6 +756,7 @@ fn provisioning_origin_preserves_explicit_deadline_presence() {
     };
     for retry_at_ns in [Some(u64::MAX), None] {
         let origin = ProvisioningFailureOrigin {
+            dependency: None,
             failed_at_ns: 123,
             retry_at_ns,
             stage: ProvisioningFailureStage::ComponentMembership,
@@ -1445,12 +1446,18 @@ fn fleet_funding_rotation_status_matches_canonical_candid_after_recovery_binding
 fn provisioning_failure_stage_matches_canonical_candid() {
     let did = read_text(&workspace_root().join("crates/canic/candid/fleet_coordinator.did"));
     let (mut env, _) = CandidSource::Text(&did).load().expect("Coordinator Candid");
-    let canonical = env.find_type("ProvisioningFailureStage").unwrap().clone();
     let mut rust = TypeContainer::new();
-    let ty = rust.add::<canic::dto::component_provisioning::ProvisioningFailureStage>();
-    let ty = env.merge_type(rust.env, ty);
-    candid::types::subtype::equal(&mut HashSet::default(), &env, &canonical, &ty)
-        .expect("protected provisioning stage equals the current Rust contract");
+    let types = [
+        ("ProvisioningFailureStage", rust.add::<canic::dto::component_provisioning::ProvisioningFailureStage>()),
+        ("ProvisioningFailureOrigin", rust.add::<canic::dto::component_provisioning::ProvisioningFailureOrigin>()),
+        ("ProvisioningDependencyFailure", rust.add::<canic_contracts::values::provisioning_failure::ProvisioningDependencyFailure>()),
+    ];
+    for (name, ty) in types {
+        let canonical = env.find_type(name).unwrap().clone();
+        let ty = env.merge_type(rust.env.clone(), ty);
+        candid::types::subtype::equal(&mut HashSet::default(), &env, &canonical, &ty)
+            .expect("protected provisioning evidence equals the current Rust contract");
+    }
 }
 
 #[cfg(any(feature = "control-plane", feature = "wasm-store-canister"))]

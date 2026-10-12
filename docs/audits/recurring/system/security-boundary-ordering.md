@@ -48,8 +48,7 @@ For endpoint delegated tokens, the required order is:
 1. decode token boundary material;
 2. verify token material;
 3. verify the configured root canister/root key and issuer canister-signature
-   proof chain, or rerun local identity checks after a positive proof-cache
-   hit;
+   proof chain against current policy on every invocation;
 4. enforce caller/subject binding;
 5. enforce stable audience and local-role grant scope;
 6. do not write verifier-local token-use state; replay-sensitive endpoint
@@ -123,7 +122,7 @@ Expected:
 ### 3. Delegated Token Material Verification
 
 ```bash
-rg -n 'verify_delegated_token|verify_claims|verify_audience|verify_scopes|auth_proof_verifier_config|verify_chain_key_batch_root_proof|verify_issuer_canister_signature_proof|positive_cache|record_verify' crates/canic-core/src/ops/auth -g '*.rs'
+rg -n 'verify_delegated_token|verify_claims|verify_audience|verify_scopes|auth_proof_verifier_config|verify_root_delegation_proof|verify_issuer_canister_signature_proof|record_verify' crates/canic-core/src/ops/auth -g '*.rs'
 ```
 
 Expected:
@@ -132,13 +131,10 @@ Expected:
 - explicit root canister/root-key config is resolved before embedded proof
   verification;
 - root certificate proof and issuer proof verify before token acceptance on
-  cache misses;
-- positive proof-cache hits rerun local canonical, audience, grant, subject,
-  and scope identity checks before success;
+  every invocation, including repeated presentations;
 - audience, grant, and required-scope checks complete before success is
   returned;
-- `DelegationAudience::{Canister, CanicSubnet, Project}` is the only accepted
-  delegated-token audience shape;
+- `DelegationAudience::Fleet` is the accepted delegated-token audience shape;
 - no role/principal or plural role audience DTO is accepted;
 - metrics record bounded outcomes but are not authorization inputs.
 

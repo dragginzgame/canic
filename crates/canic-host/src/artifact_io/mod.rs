@@ -3,7 +3,6 @@ mod wasm;
 use crate::{
     binaryen::BinaryenExecutable,
     build_toolchain::BuildToolchain,
-    candid_endpoints::parse_candid_service_endpoints,
     canister_build::{
         ArtifactTransformKind, ArtifactTransformOutcome, ArtifactTransformOutput,
         CanisterBuildProfile, WasmTransformMetrics,
@@ -16,6 +15,10 @@ use ic_host_artifacts::artifact::encode_gzip;
 use ic_host_fs::{
     durable::{PublicationMode, WriteOptions, write_bytes, write_named_with, write_with},
     read::read_file_no_follow,
+};
+use ic_host_tools::{
+    candid::service::{self, ServiceLimits},
+    interface,
 };
 use std::{
     collections::BTreeSet,
@@ -45,11 +48,6 @@ const BINARYEN_REPORTED_IC_WASM_FEATURE_FLAGS: &[&str] = &[
 
 const CANDID_POINTER_EXPORT: &str = "get_candid_pointer";
 const IC_CDK_INTERNAL_METHOD_PREFIX: &str = "<ic-cdk internal> ";
-const CANISTER_METHOD_EXPORT_PREFIXES: [&str; 3] = [
-    "canister_composite_query ",
-    "canister_query ",
-    "canister_update ",
-];
 
 /// Retain a type-erased qualification cause inside the shared publication error.
 #[derive(Debug, thiserror::Error)]
@@ -228,7 +226,7 @@ pub fn validate_sidecar_only_candid_artifact(
     let candid = fs::read_to_string(did_path)?;
     let snapshot = wasm::wasm_contract_snapshot(&wasm)?;
 
-    if snapshot.exports.contains_key(CANDID_POINTER_EXPORT) {
+    if snapshot.facts.exports.contains_key(CANDID_POINTER_EXPORT) {
         return Err(format!(
             "sidecar-only runtime {} still exports {CANDID_POINTER_EXPORT}",
             wasm_path.display()
@@ -249,7 +247,7 @@ pub fn validate_sidecar_only_candid_artifact(
 /// Verify that a Wasm exports exactly the application methods declared in its Candid.
 ///
 /// Lifecycle and IC CDK internal exports are outside the public method inventory.
-/// This compares endpoint names; release-bound Candid hashes retain the type authority.
+/// This compares endpoint names and modes; release-bound Candid hashes retain the type authority.
 pub fn validate_wasm_candid_endpoints(
     wasm_path: &Path,
     did_path: &Path,
@@ -263,28 +261,28 @@ pub fn validate_wasm_candid_endpoints(
 fn validate_candid_methods(
     wasm_path: &Path,
     did_path: &Path,
-    snapshot: &wasm::WasmContractSnapshot,
+    snapshot: &wasm::WasmContractSnapshot<'_>,
     candid: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let declared = parse_candid_service_endpoints(candid)?
-        .into_iter()
-        .map(|endpoint| endpoint.name)
+    // Retain input-sized admission; Host limits are not parser resource quotas.
+    let methods = service::inspect(
+        candid,
+        ServiceLimits {
+            source_bytes: candid.len(),
+            methods: candid.len(),
+        },
+    )?;
+    let declared = methods
+        .iter()
+        .map(|method| method.as_export())
         .collect::<BTreeSet<_>>();
-    let exported = snapshot
-        .exports
-        .keys()
-        .filter_map(|name| {
-            CANISTER_METHOD_EXPORT_PREFIXES
-                .iter()
-                .find_map(|prefix| name.strip_prefix(prefix))
-                .filter(|name| !name.starts_with(IC_CDK_INTERNAL_METHOD_PREFIX))
-                .map(str::to_string)
-        })
+    let exported = interface::exported_methods(&snapshot.facts)
+        .filter(|method| !method.name.starts_with(IC_CDK_INTERNAL_METHOD_PREFIX))
         .collect::<BTreeSet<_>>();
 
     if declared != exported {
-        let missing = declared.difference(&exported).cloned().collect::<Vec<_>>();
-        let undeclared = exported.difference(&declared).cloned().collect::<Vec<_>>();
+        let missing = declared.difference(&exported).copied().collect::<Vec<_>>();
+        let undeclared = exported.difference(&declared).copied().collect::<Vec<_>>();
         return Err(format!(
             "runtime endpoint exports for {} do not match {}: missing={missing:?}, undeclared={undeclared:?}",
             wasm_path.display(),
@@ -303,7 +301,7 @@ fn validate_embedded_public_candid(
     let candid = fs::read(did_path)?;
     let snapshot = wasm::wasm_contract_snapshot(&wasm)?;
     if snapshot.public_candid_metadata.len() != 1
-        || snapshot.public_candid_metadata[0].as_slice() != candid.as_slice()
+        || snapshot.public_candid_metadata[0] != candid.as_slice()
     {
         return Err(format!(
             "embedded public Candid metadata for {} does not exactly match {}",
@@ -548,7 +546,7 @@ fn validate_optimized_wasm(
     command_path: &Path,
     wasm_path: &Path,
     optimized_path: &Path,
-    before_contract: &wasm::WasmContractSnapshot,
+    before_contract: &wasm::WasmContractSnapshot<'_>,
     before_features: &[String],
     before_metrics: crate::canister_build::WasmArtifactMetrics,
 ) -> Result<WasmTransformMetrics, Box<dyn std::error::Error>> {
@@ -559,7 +557,18 @@ fn validate_optimized_wasm(
             wasm_path.display()
         )
     })?;
-    if after_contract.exports != before_contract.exports {
+    // Optimizers may renumber functions; compare names/kinds, not indices.
+    if !after_contract
+        .facts
+        .exports
+        .iter()
+        .map(|(name, export)| (name, export.kind))
+        .eq(before_contract
+            .facts
+            .exports
+            .iter()
+            .map(|(name, export)| (name, export.kind)))
+    {
         return Err(format!(
             "Binaryen optimization changed the export inventory for {}",
             wasm_path.display()

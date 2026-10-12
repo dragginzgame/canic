@@ -208,9 +208,12 @@ pub enum CurrentProtocolError {
     RegistryStoreControllerPrincipalMissing { store: String, controller: String },
 
     #[error(
-        "Root {root} provisioning suspended: stage={stage:?}, target={target}, operation={operation}, diagnostic={diagnostic_code}, retry=ReviewRequired, failed_at_ns={failed_at_ns}; preserve the retained plan and journal for activation recovery review; repeating apply does not repair a binding conflict"
+        "Root {root} provisioning suspended: stage={stage:?}, target={target}, operation={operation}, diagnostic={diagnostic_code}, dependency={dependency:?}, retry=ReviewRequired, failed_at_ns={failed_at_ns}; preserve the retained plan and journal for activation recovery review; repeating apply does not repair a binding conflict"
     )]
     ProvisioningReviewRequired {
+        dependency: Option<
+            Box<canic_contracts::values::provisioning_failure::ProvisioningDependencyFailure>,
+        >,
         failed_at_ns: u64,
         root: Principal,
         stage: canic_contracts::dto::component_provisioning::ProvisioningFailureStage,
@@ -1221,11 +1224,12 @@ fn component_provisioning_observation(
     applied: bool,
     status: &canic_contracts::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
 ) -> Result<EffectObservation, CurrentProtocolError> {
-    if let Some((failure, origin)) = status.pending_root_failure.and_then(|failure|
-        failure.origin.map(|origin| (failure, origin)))
+    if let Some((failure, origin)) = status.pending_root_failure.as_ref().and_then(|failure|
+        failure.origin.as_ref().map(|origin| (failure, origin)))
         .filter(|(_, origin)| origin.retry_category == canic_contracts::dto::component_provisioning::ProvisioningRetryCategory::ReviewRequired)
     {
         return Err(CurrentProtocolError::ProvisioningReviewRequired {
+            dependency: origin.dependency.clone().map(Box::new),
             failed_at_ns: origin.failed_at_ns,
             root: failure.fleet_subnet_root,
             stage: origin.stage,
@@ -1239,7 +1243,7 @@ fn component_provisioning_observation(
     let mut observation = observation(applied, &durable_progress)?;
     observation.provisioning_progress = Some(crate::fleet_ensure::dto::FleetProvisioningProgress {
         components: Vec::new(),
-        pending_root_failure: status.pending_root_failure,
+        pending_root_failure: status.pending_root_failure.clone().map(Box::new),
         phase: status.phase,
         root_batch_count: status.root_batch_count,
         accepted_root_count: status.accepted_root_count,
@@ -1249,7 +1253,9 @@ fn component_provisioning_observation(
         runtime_activated_root_count: status.runtime_activated_root_count,
         component_count: status.component_count,
     });
-    observation.provisioning_failure = status.pending_root_failure;
+    observation
+        .provisioning_failure
+        .clone_from(&status.pending_root_failure);
     observation
         .estate_funding_required
         .clone_from(&status.estate_funding_required);

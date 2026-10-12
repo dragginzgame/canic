@@ -7,6 +7,9 @@ use canic_contracts::ids::FleetKey;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct LocalApplicationSessionRecord {
+    /// Canonical bounded IC Auth session bytes; product fields are read-only projections.
+    #[serde(with = "serde_bytes")]
+    pub shared_session: Vec<u8>,
     pub transport_caller: Principal,
     pub authenticated_subject: Principal,
     pub issuer: Principal,
@@ -343,11 +346,8 @@ pub struct RootIssuerRenewalStateRecord {
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct LocalApplicationAuthorizationStateRecord {
-    pub application_sessions: Vec<LocalApplicationSessionRecord>,
-
-    pub application_replays: Vec<LocalApplicationReplayRecord>,
-
     pub application_authority_generation: u64,
 
     pub application_authority_binding: Option<LocalApplicationAuthorityBindingRecord>,
@@ -441,6 +441,7 @@ mod current_resource_contract {
         let mut proof_fingerprint = [0_u8; 32];
         proof_fingerprint[..8].copy_from_slice(&id.to_be_bytes());
         LocalApplicationSessionRecord {
+            shared_session: Vec::new(),
             transport_caller: principal(id),
             authenticated_subject: principal(id),
             issuer: principal(9_000),
@@ -469,6 +470,7 @@ mod current_resource_contract {
 
     fn maximum_scope_session(id: u64) -> LocalApplicationSessionRecord {
         let mut session = session(id);
+        session.shared_session = vec![0xff; 2_048];
         session.scopes = (0..16)
             .map(|scope| format!("app{scope:02}:{}", "x".repeat(58)))
             .collect();
@@ -493,20 +495,25 @@ mod current_resource_contract {
         };
 
         let empty = LocalApplicationAuthorizationStateRecord::default();
-        let one_session = LocalApplicationAuthorizationStateRecord {
-            application_sessions: vec![session(1)],
-            ..LocalApplicationAuthorizationStateRecord::default()
-        };
-        let one_replay = LocalApplicationAuthorizationStateRecord {
-            application_replays: vec![replay(1)],
-            ..LocalApplicationAuthorizationStateRecord::default()
-        };
-        let maximum = LocalApplicationAuthorizationStateRecord {
-            application_sessions: (0..2_048).map(maximum_scope_session).collect(),
-            application_replays: (0..4_096).map(replay).collect(),
+        let one_session = (
+            &empty,
+            vec![session(1)],
+            Vec::<LocalApplicationReplayRecord>::new(),
+        );
+        let one_replay = (
+            &empty,
+            Vec::<LocalApplicationSessionRecord>::new(),
+            vec![replay(1)],
+        );
+        let header = LocalApplicationAuthorizationStateRecord {
             application_authority_generation: 1,
             application_authority_binding: Some(maximum_authority_binding()),
         };
+        let maximum = (
+            header,
+            (0..2_048).map(maximum_scope_session).collect::<Vec<_>>(),
+            (0..4_096).map(replay).collect::<Vec<_>>(),
+        );
 
         let empty_bytes = encoded(&empty).len();
         let session_bytes = encoded(&session(1)).len();

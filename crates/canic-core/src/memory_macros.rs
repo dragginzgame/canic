@@ -29,18 +29,40 @@ macro_rules! ic_memory_key {
 /// Additional grants
 /// must name each linked component's permanent namespace. Exclusions protect
 /// actual unmanaged physical memory, never component partitions.
+/// Add `provider = name` to expose a checked, fallible builder in the invocation
+/// module. Registration calls that same builder; calling it later does not
+/// register, seal or bootstrap a runtime.
+///
+/// # Panics
+/// Invalid authored exclusion bounds panic, as with registration-only declarations.
+/// Namespace and pool validation errors are returned by the named provider.
 #[macro_export]
 macro_rules! memory_allocation_pool {
-    (authorities = [$(($owner:expr, $prefix:expr)),* $(,)?], exclusions = [$(($start:expr, $end:expr)),* $(,)?] $(,)?) => {
+    (provider = $provider:ident, authorities = [$(($owner:expr, $prefix:expr)),* $(,)?], exclusions = [$(($start:expr, $end:expr)),* $(,)?] $(,)?) => {
+        fn $provider() -> ::core::result::Result<
+            $crate::__reexports::ic_memory::MemoryAllocationPool,
+            $crate::__reexports::ic_memory::MemoryAllocationPoolError,
+        > {
+            $crate::memory::pool::framework_pool(
+                vec![$($crate::__reexports::ic_memory::MemoryAuthority::new($owner, $prefix)?),*],
+                vec![$($crate::__reexports::ic_memory::MemoryManagerIdRange::new($start, $end).expect("valid unmanaged exclusion")),*],
+            )
+        }
         const _: () = {
             #[$crate::__reexports::ctor::ctor(unsafe, anonymous, crate_path = $crate::__reexports::ctor)]
             fn __canic_register_memory_pool() {
-                let pool = $crate::memory::pool::framework_pool(
-                    vec![$($crate::__reexports::ic_memory::MemoryAuthority::new($owner, $prefix).expect("valid host memory grant")),*],
-                    vec![$($crate::__reexports::ic_memory::MemoryManagerIdRange::new($start, $end).expect("valid unmanaged exclusion")),*],
-                ).expect("disjoint host memory grants");
+                let pool = $provider().expect("valid host memory grants and unmanaged exclusions");
                 $crate::memory::pool::register(pool).expect("one host memory pool before bootstrap");
             }
+        };
+    };
+    (authorities = [$(($owner:expr, $prefix:expr)),* $(,)?], exclusions = [$(($start:expr, $end:expr)),* $(,)?] $(,)?) => {
+        const _: () = {
+            $crate::memory_allocation_pool!(
+                provider = __canic_memory_pool,
+                authorities = [$(($owner, $prefix)),*],
+                exclusions = [$(($start, $end)),*],
+            );
         };
     };
 }

@@ -20,13 +20,18 @@ macro_rules! registered {
         vec![$($crate::pic::cases::GovernedTestCase {
             name: $name,
             test: $test,
-            rust_path: std::any::type_name_of_val(&$test)
-                .strip_prefix("canic_testing_internal::")
-                .expect("crate-local governed function"),
+            rust_path: $crate::pic::cases::rust_test_path(&$test),
         }),*]
     };
 }
 pub(super) use registered;
+
+/// Derive the canonical libtest path of a crate-local function item.
+pub(super) fn rust_test_path<T>(test: &T) -> &'static str {
+    std::any::type_name_of_val(test)
+        .strip_prefix("canic_testing_internal::")
+        .expect("crate-local governed function")
+}
 
 // These native modules are also compiled and executed by ordinary discovery.
 const ORDINARY_NATIVE_MODULES: &[&str] = &[

@@ -123,7 +123,7 @@ impl RuntimeAuthWorkflow {
         crate::perf!("delegated_token_prepare_proof");
 
         let response = DelegatedTokenPrepareResponse {
-            claims: prepared.prepared.claims,
+            claims: prepared.claims,
             claims_hash: prepared.claims_hash,
             retrieval_expires_at_ns: prepared.retrieval_expires_at_ns,
         };

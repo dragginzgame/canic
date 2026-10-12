@@ -3,6 +3,8 @@
 mod artifacts;
 mod audit;
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
+mod blob_service;
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
 mod caller_authority;
 mod canic;
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
@@ -367,6 +369,7 @@ mod governed_suite {
         cases.extend(fleet_registry::governed_pocketic_cases());
         cases.extend(fleet_coordinator::governed_pocketic_cases());
         cases.extend(lifecycle::governed_support_cases());
+        cases.extend(blob_service::governed_cases());
         // Retain the recovery prefix and each worker's internal order; the
         // registry partition below owns concurrent execution, not case membership.
         cases.extend(fleet_registry::governed_fleet_journey_cases());

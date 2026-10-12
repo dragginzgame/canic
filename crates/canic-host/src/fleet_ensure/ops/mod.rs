@@ -14,6 +14,7 @@ pub(super) mod clean_reinstall;
 pub(super) mod continuation;
 mod current_inventory;
 pub(super) mod current_protocol;
+pub(super) mod effect_evidence;
 pub(super) mod effect_preparation;
 pub(super) mod funding;
 pub(super) mod funding_observation;

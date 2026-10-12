@@ -547,15 +547,11 @@ fn inherit_command_descriptor(command: &mut Command, handle: CommandLifetimeHand
         command.pre_exec(move || {
             // SAFETY: the runner retains the descriptor until command return.
             let fd = BorrowedFd::borrow_raw(raw_fd);
-            let mut flags = fcntl_getfd(fd).map_err(errno_to_io)?;
+            let mut flags = fcntl_getfd(fd).map_err(io::Error::from)?;
             flags.remove(FdFlags::CLOEXEC);
-            fcntl_setfd(fd, flags).map_err(errno_to_io)
+            fcntl_setfd(fd, flags).map_err(io::Error::from)
         });
     }
-}
-
-fn errno_to_io(error: rustix::io::Errno) -> io::Error {
-    io::Error::from_raw_os_error(error.raw_os_error())
 }
 
 fn snapshot() -> BackupRunnerSnapshot {

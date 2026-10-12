@@ -7,7 +7,6 @@
 pub mod artifacts;
 pub mod discovery;
 pub mod execution;
-mod hash;
 pub mod journal;
 pub mod manifest;
 #[cfg(test)]

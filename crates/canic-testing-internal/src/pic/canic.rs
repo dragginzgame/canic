@@ -47,13 +47,11 @@ use canic_contracts::{
 };
 use canic_core::cdk::utils::hash::wasm_hash;
 use canic_host::release_set::AppConfigSnapshot;
-use ic_testkit::{
-    artifacts::{test_target_dir, workspace_root_for},
-    pic::{
-        CandidCallError, CandidCallExt, CanisterDiagnosticsRequest, CanisterInstallExt,
-        InstallSpec, LabeledCanisterDiagnosticsRequest, PocketIc, PocketIcBuilder,
-        PocketIcDiagnosticsExt, StandaloneCanisterFixture,
-    },
+use ic_build::artifacts::{test_target_dir, workspace_root_for};
+use ic_testkit::pic::{
+    CandidCallError, CandidCallExt, CanisterDiagnosticsRequest, CanisterInstallExt, InstallSpec,
+    LabeledCanisterDiagnosticsRequest, PocketIc, PocketIcBuilder, PocketIcDiagnosticsExt,
+    StandaloneCanisterFixture,
 };
 use std::{
     collections::BTreeMap,

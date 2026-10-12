@@ -6,6 +6,12 @@
 
 use crate::{dto::error::Error, ops::config::ConfigOps};
 
+#[cfg(any(
+    feature = "auth-root-canister-sig-create",
+    feature = "auth-issuer-canister-sig-create"
+))]
+pub use ic_auth::signature_store::SignatureSibling;
+
 // Internal auth pipeline:
 // - `application_session` owns managed scoped-session command/status adapters.
 // - `attestation` owns role-attestation endpoint adapters.
@@ -26,6 +32,17 @@ mod token;
 pub struct AuthApi;
 
 impl AuthApi {
+    /// Publish trusted application sibling roots alongside Canic's one /sig tree.
+    /// Call synchronously after restoration and whenever an application branch changes.
+    /// Siblings are innermost first and must reserve /sig for Canic's shared store.
+    #[cfg(any(
+        feature = "auth-root-canister-sig-create",
+        feature = "auth-issuer-canister-sig-create"
+    ))]
+    pub fn set_canister_signature_siblings(siblings: Vec<SignatureSibling>) -> Result<(), Error> {
+        crate::ops::auth::signature_store::set_siblings(siblings).map_err(Self::map_auth_error)
+    }
+
     // Map internal auth failures onto public endpoint errors.
     fn map_auth_error(err: crate::InternalError) -> Error {
         Error::from(err)

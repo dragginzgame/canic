@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT_DIR"
+
+consumer_lock_paths="$(bash "$SCRIPT_DIR/../release/adapter.sh" consumer-locks)"
+[[ -n "$consumer_lock_paths" ]] || { echo 'Release consumer lock inventory is empty' >&2; exit 1; }
+CONSUMER_LOCKS=()
+while IFS= read -r path; do CONSUMER_LOCKS[${#CONSUMER_LOCKS[@]}]="$path"; done <<< "$consumer_lock_paths"
 
 STAGED_FILES=()
 while IFS= read -r value; do STAGED_FILES[${#STAGED_FILES[@]}]="$value"; done < <(git diff --cached --name-only --diff-filter=ACMRD)
@@ -38,6 +44,10 @@ is_release_file() {
       return 0
       ;;
     *)
+      local lock
+      for lock in "${CONSUMER_LOCKS[@]}"; do
+        [[ "$1" != "$lock" ]] || return 0
+      done
       return 1
       ;;
   esac

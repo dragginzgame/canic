@@ -16,8 +16,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use ic_host_artifacts::artifact::Sha256Digest;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 const REFERENCES_FILE: &str = "restore-references.json";
 
@@ -43,7 +43,7 @@ impl BackupLayoutGuard {
         let name = root
             .file_name()
             .ok_or_else(|| io::Error::from(io::ErrorKind::InvalidInput))?;
-        let key = format!("{:x}", Sha256::digest(name.as_encoded_bytes()));
+        let key = Sha256Digest::compute(name.as_encoded_bytes()).to_string();
         let lock = JournalLock::acquire(&parent.join(format!(".canic-backup-{key}")))?;
         // Prune may have won after canonicalization. Never recreate its removed root.
         if !fs::symlink_metadata(&root)?.is_dir() {

@@ -31,7 +31,7 @@ use canic_contracts::dto::wire::projection::fixture_root_topology::RootStatusRes
 #[must_use]
 pub fn setup_root_topology(
     spec: &RootBaselineSpec<'_>,
-    artifacts: &ic_testkit::artifacts::ArtifactCacheRecord,
+    artifacts: &ic_build::artifacts::ArtifactCacheRecord,
     root_wasm: Vec<u8>,
 ) -> InitializedRootTopology {
     let wasm_store_wasm = fs::read(crate::pic::artifacts::retained_artifact_path(

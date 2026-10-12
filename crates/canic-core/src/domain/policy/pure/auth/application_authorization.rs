@@ -9,11 +9,8 @@ use crate::model::auth::application_authorization::LocalApplicationAuthorityBind
 use crate::{
     domain::value::Principal,
     model::auth::application_authorization::{
-        ApplicationScopeRef, CanonicalApplicationScopes, LocalApplicationAuthoritySnapshot,
-        LocalApplicationSession, MAX_ACTIVE_APPLICATION_SESSIONS,
-        MAX_ACTIVE_APPLICATION_SESSIONS_PER_SUBJECT, MAX_APPLICATION_PROOF_LIFETIME_NS,
-        MAX_APPLICATION_REPLAY_RECORDS, MAX_APPLICATION_REPLAY_RECORDS_PER_SUBJECT,
-        MAX_LOCAL_APPLICATION_SESSION_TTL_NS, VerifiedApplicationAuthority,
+        ApplicationScopeRef, LocalApplicationAuthoritySnapshot, LocalApplicationSession,
+        MAX_LOCAL_APPLICATION_SESSION_TTL_NS,
     },
 };
 
@@ -186,57 +183,6 @@ pub fn authorize_local_application(
     })
 }
 
-/// Validate caller binding, current validity and the complete proof lifetime.
-pub fn validate_application_proof_eligibility(
-    authority: &VerifiedApplicationAuthority,
-    caller: Principal,
-    now_ns: u64,
-) -> Result<(), ApplicationProofEligibilityError> {
-    if authority.presenter() != caller || authority.subject() != caller {
-        return Err(ApplicationProofEligibilityError::CallerMismatch);
-    }
-    if now_ns < authority.proof_not_before_ns() || now_ns >= authority.proof_expires_at_ns() {
-        return Err(ApplicationProofEligibilityError::NotCurrentlyValid);
-    }
-    let lifetime_ns = authority
-        .proof_expires_at_ns()
-        .checked_sub(authority.proof_issued_at_ns())
-        .ok_or(ApplicationProofEligibilityError::InvalidWindow)?;
-    if lifetime_ns > MAX_APPLICATION_PROOF_LIFETIME_NS {
-        return Err(ApplicationProofEligibilityError::LifetimeTooLong {
-            lifetime_ns,
-            max_ns: MAX_APPLICATION_PROOF_LIFETIME_NS,
-        });
-    }
-    Ok(())
-}
-
-/// Typed application-session proof eligibility failure.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ApplicationProofEligibilityError {
-    CallerMismatch,
-    InvalidWindow,
-    LifetimeTooLong { lifetime_ns: u64, max_ns: u64 },
-    NotCurrentlyValid,
-}
-
-/// Require the requested canonical scopes to be a non-empty verified subset.
-pub fn narrow_application_session_scopes(
-    verified: &CanonicalApplicationScopes,
-    requested: CanonicalApplicationScopes,
-) -> Result<CanonicalApplicationScopes, ApplicationSessionAdmissionError> {
-    if let Some(scope) = requested
-        .as_slice()
-        .iter()
-        .find(|scope| !verified.contains(scope.as_scope_ref()))
-    {
-        return Err(ApplicationSessionAdmissionError::ScopeNotGranted {
-            scope: scope.to_string(),
-        });
-    }
-    Ok(requested)
-}
-
 /// Resolve one strict session expiry from protected and requested TTL values.
 pub fn resolve_application_session_expiry(
     established_at_ns: u64,
@@ -286,76 +232,6 @@ pub enum ApplicationSessionTtlError {
     RequestedZero,
 }
 
-/// Target-local post-cleanup occupancy used by pure admission policy.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ApplicationSessionCapacity {
-    pub active_global: usize,
-    pub active_for_subject: usize,
-    pub replay_global: usize,
-    pub replay_for_subject: usize,
-}
-
-/// Pure replacement and capacity decision input after replay resolution.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ApplicationSessionAdmissionInput {
-    pub replacing_existing_session: bool,
-    pub capacity: ApplicationSessionCapacity,
-}
-
-/// Pure admission result; commit remains an ops/workflow responsibility.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ApplicationSessionAdmissionDecision {
-    CommitNew,
-    CommitReplacement,
-}
-
-/// Typed admission failure that leaves existing state unchanged.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ApplicationSessionAdmissionError {
-    Capacity(ApplicationCapacityLimit),
-    ReplayConflict,
-    ScopeNotGranted { scope: String },
-}
-
-/// Exact target-local capacity bound that denied fresh growth.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ApplicationCapacityLimit {
-    ActiveGlobal,
-    ActiveSubject,
-    ReplayGlobal,
-    ReplaySubject,
-}
-
-/// Decide replacement and target-local capacity after the workflow resolves replay.
-pub const fn decide_application_session_admission(
-    input: ApplicationSessionAdmissionInput,
-) -> Result<ApplicationSessionAdmissionDecision, ApplicationSessionAdmissionError> {
-    if input.capacity.replay_for_subject >= MAX_APPLICATION_REPLAY_RECORDS_PER_SUBJECT {
-        return Err(ApplicationSessionAdmissionError::Capacity(
-            ApplicationCapacityLimit::ReplaySubject,
-        ));
-    }
-    if input.capacity.replay_global >= MAX_APPLICATION_REPLAY_RECORDS {
-        return Err(ApplicationSessionAdmissionError::Capacity(
-            ApplicationCapacityLimit::ReplayGlobal,
-        ));
-    }
-    if !input.replacing_existing_session {
-        if input.capacity.active_for_subject >= MAX_ACTIVE_APPLICATION_SESSIONS_PER_SUBJECT {
-            return Err(ApplicationSessionAdmissionError::Capacity(
-                ApplicationCapacityLimit::ActiveSubject,
-            ));
-        }
-        if input.capacity.active_global >= MAX_ACTIVE_APPLICATION_SESSIONS {
-            return Err(ApplicationSessionAdmissionError::Capacity(
-                ApplicationCapacityLimit::ActiveGlobal,
-            ));
-        }
-        return Ok(ApplicationSessionAdmissionDecision::CommitNew);
-    }
-    Ok(ApplicationSessionAdmissionDecision::CommitReplacement)
-}
-
 // -----------------------------------------------------------------------------
 // Tests
 // -----------------------------------------------------------------------------
@@ -363,6 +239,7 @@ pub const fn decide_application_session_admission(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::auth::application_authorization::CanonicalApplicationScopes;
     use crate::{
         model::auth::application_authorization::ApplicationScope, test::support::fleet_key,
     };
@@ -599,59 +476,6 @@ mod tests {
     }
 
     #[test]
-    fn proof_eligibility_accepts_exact_sixty_seconds_and_rejects_longer() {
-        let build_authority = |expires_at_ns| {
-            VerifiedApplicationAuthority::new(
-                p(1),
-                p(1),
-                p(2),
-                fleet_key(3),
-                CanisterRole::new("component"),
-                scopes(&["app:read"]),
-                10,
-                10,
-                expires_at_ns,
-                [5; 32],
-            )
-            .unwrap()
-        };
-        let exact = build_authority(10 + MAX_APPLICATION_PROOF_LIFETIME_NS);
-        assert_eq!(
-            validate_application_proof_eligibility(&exact, p(1), 20),
-            Ok(())
-        );
-
-        let too_long = build_authority(11 + MAX_APPLICATION_PROOF_LIFETIME_NS);
-        assert_eq!(
-            validate_application_proof_eligibility(&too_long, p(1), 20),
-            Err(ApplicationProofEligibilityError::LifetimeTooLong {
-                lifetime_ns: MAX_APPLICATION_PROOF_LIFETIME_NS + 1,
-                max_ns: MAX_APPLICATION_PROOF_LIFETIME_NS,
-            })
-        );
-        assert_eq!(
-            validate_application_proof_eligibility(&exact, p(9), 20),
-            Err(ApplicationProofEligibilityError::CallerMismatch)
-        );
-    }
-
-    #[test]
-    fn scope_narrowing_is_all_or_nothing() {
-        let verified = scopes(&["app:read", "app:write"]);
-        let requested = scopes(&["app:write"]);
-        assert_eq!(
-            narrow_application_session_scopes(&verified, requested.clone()),
-            Ok(requested)
-        );
-        assert_eq!(
-            narrow_application_session_scopes(&verified, scopes(&["app:admin"])),
-            Err(ApplicationSessionAdmissionError::ScopeNotGranted {
-                scope: "app:admin".to_string()
-            })
-        );
-    }
-
-    #[test]
     fn ttl_resolution_uses_independent_protected_session_clock() {
         assert_eq!(resolve_application_session_expiry(10, 20, 30, None), Ok(30));
         assert_eq!(
@@ -673,38 +497,6 @@ mod tests {
                 maximum_ttl_ns: MAX_LOCAL_APPLICATION_SESSION_TTL_NS + 1,
                 hard_limit_ns: MAX_LOCAL_APPLICATION_SESSION_TTL_NS,
             })
-        );
-    }
-
-    #[test]
-    fn capacity_policy_never_evicts_live_authority() {
-        let full = ApplicationSessionCapacity {
-            active_global: MAX_ACTIVE_APPLICATION_SESSIONS,
-            active_for_subject: MAX_ACTIVE_APPLICATION_SESSIONS_PER_SUBJECT,
-            replay_global: MAX_APPLICATION_REPLAY_RECORDS,
-            replay_for_subject: MAX_APPLICATION_REPLAY_RECORDS_PER_SUBJECT,
-        };
-        assert_eq!(
-            decide_application_session_admission(ApplicationSessionAdmissionInput {
-                replacing_existing_session: true,
-                capacity: full,
-            }),
-            Err(ApplicationSessionAdmissionError::Capacity(
-                ApplicationCapacityLimit::ReplaySubject
-            ))
-        );
-
-        let available_replay = ApplicationSessionCapacity {
-            replay_global: 0,
-            replay_for_subject: 0,
-            ..full
-        };
-        assert_eq!(
-            decide_application_session_admission(ApplicationSessionAdmissionInput {
-                replacing_existing_session: true,
-                capacity: available_replay,
-            }),
-            Ok(ApplicationSessionAdmissionDecision::CommitReplacement)
         );
     }
 }

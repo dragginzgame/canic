@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared companions: scripts/ci/test-tool-evidence.sh
+# Shared companions: scripts/ci/test-tool-evidence.sh scripts/ci/test-tool-store.sh
 set -euo pipefail
 
 ROOT="$0"
@@ -89,7 +89,10 @@ for tool in quill icp didc ic-wasm wasm-opt; do
     done
 done
 
-install() { bash "$ROOT/scripts/dev/install-ic-tools.sh" --consumer "$consumer" --pins "$selected_pins" "$@"; }
+install() {
+    export SHARED_TOOLING_STORE="${IC_SHARED_STORE:-$consumer/store}"
+    bash "$ROOT/scripts/dev/install-ic-tools.sh" --consumer "$consumer" --pins "$selected_pins" "$@"
+}
 expect_failure() {
     if "$@" > "$fixture/refusal.log" 2>&1; then echo 'IC tool rejection failed' >&2; exit 1; fi
 }
@@ -177,14 +180,15 @@ for host in Linux:x86_64 Darwin:x86_64 Darwin:arm64; do
     }
     cmp "$selected_pins" "$consumer/.tools/ic/pins.tsv"
     install --check > /dev/null 2>&1
-    # Even a receipt matching changed bytes must not bypass its version check.
+    # Even a receipt matching changed bytes must not bypass archive authentication.
     sed 's/wasm-opt version 132/wasm-opt version 133/' "$fixture/payload/wasm-opt" > "$consumer/.tools/ic/bin/wasm-opt"
     digest="$(shasum -a 256 "$consumer/.tools/ic/bin/wasm-opt")"
     awk -v hash="${digest%% *}" '$2 == "bin/wasm-opt" { printf "%s  %s\n", hash, $2; next } { print }' \
         "$consumer/.tools/ic/files.sha256" > "$fixture/changed-receipt"
     mv "$fixture/changed-receipt" "$consumer/.tools/ic/files.sha256"
+    : > "$fixture/executions"
     expect_failure install --check
-    rg -F 'wasm-opt version mismatch' "$fixture/refusal.log" > /dev/null
+    [[ ! -s "$fixture/executions" ]] || exit 1
 done
 export IC_TOOLS_TEST_OS=Linux IC_TOOLS_TEST_ARCH=x86_64
 consumer="$fixture/consumer Linux:x86_64"
@@ -250,7 +254,7 @@ awk -F '\t' 'BEGIN { OFS="\t" } $1 == "quill" && $3 == "linux-x86_64" { $4=sprin
 expect_failure install
 [[ ! -s "$fixture/executions" && "$(readlink "$consumer/.tools/ic")" == "$original" ]] || exit 1
 [[ ! -e "$consumer/.tools/.ic-tools.lock" ]] || exit 1
-rg -F 'Failed tool installation retained:' "$fixture/refusal.log" >/dev/null
+rg -F 'Failed ic tool installation retained:' "$fixture/refusal.log" >/dev/null
 
 # Failure after earlier tools succeeded also preserves the previous activation.
 awk -F '\t' 'BEGIN { OFS="\t" } $1 == "wasm-opt" && $3 == "linux-x86_64" { $4=sprintf("%064d",0) } { print }' "$pins" > "$selected_pins"
@@ -280,7 +284,7 @@ chmod +x "$fixture/bin/find"
 expect_failure install
 [[ "$(readlink "$consumer/.tools/ic")" == "$original" ]] || exit 1
 rg -F 'receipt traversal failed' "$fixture/refusal.log" >/dev/null
-rg -F 'Failed tool installation retained:' "$fixture/refusal.log" >/dev/null
+rg -F 'Failed ic tool installation retained:' "$fixture/refusal.log" >/dev/null
 rm "$fixture/bin/find"
 
 # Version prefix matches are not accepted, even with an authentic digest.
@@ -295,7 +299,7 @@ original="$(readlink "$consumer/.tools/ic")"
 IC_TOOLS_TEST_INTERRUPT=1 expect_failure install
 [[ "$(readlink "$consumer/.tools/ic")" == "$original" ]] || exit 1
 [[ ! -e "$consumer/.tools/.ic-tools.lock" ]] || exit 1
-rg -F 'Failed tool installation retained:' "$fixture/refusal.log" >/dev/null
+rg -F 'Failed ic tool installation retained:' "$fixture/refusal.log" >/dev/null
 
 # Invalid/incomplete matrices and unknown hosts fail without downloading.
 before="$(wc -l < "$fixture/downloads")"
@@ -314,4 +318,10 @@ ln -s "$fixture" "$consumer/.tools"
 expect_failure install
 
 echo 'IC tool installation, offline verification, retention and activation tests passed'
+export IC_TOOLS_TEST_OS=Linux IC_TOOLS_TEST_ARCH=x86_64
+selected_pins="$pins"
+cp "$fixture/payload/quill" "$fixture/assets/quill-linux-x86_64"
+store_test_kind=ic
+# shellcheck source=scripts/ci/test-tool-store.sh
+source "$ROOT/scripts/ci/test-tool-store.sh"
 fixture_complete=true

@@ -4,14 +4,16 @@ Endpoint, lifecycle and metrics composition for the independent IC Blob service.
 Applications own their Canic App configuration and canister artifacts. IC Blob
 owns storage, tenant policy, accounting and provider behavior.
 
-This package is prepared for its first registry publication. It belongs to the
-main Canic workspace and inherits its package version, Canic dependency and
-published Blob runtime/contracts `0.22` from the root catalog. Local paths
-support qualification in this checkout; Cargo removes them from the packaged
-manifest. Package preparation is not registry publication. The local facade uses
-Memory 0.35; an aligned published Canic graph is still required under
-[#33](https://github.com/dragginzgame/canic/issues/33) before registry-only managed
-qualification or adapter delivery.
+This package is published at 0.111.0 with the coherent Canic family
+([#33](https://github.com/dragginzgame/canic/issues/33)). It belongs to the main
+Canic workspace and inherits its package version, Canic dependency and published
+Blob runtime/contracts `0.22.11` or later from the root catalog. The upstream
+contracts macro owns service method signatures; the adapter supplies Canic
+authentication, bounded decoding, caller context and lifecycle composition.
+Local paths support
+qualification in this checkout; Cargo removes them from the packaged manifest.
+Application installation and provider acceptance remain tracked under
+[#444](https://github.com/dragginzgame/canic/issues/444).
 
 The coordinated release is owned by
 [#459](https://github.com/dragginzgame/canic/issues/459) and
@@ -25,8 +27,8 @@ make publish
 
 Run this from the Canic repository root after the governed release checks.
 Cargo's normal package verification must remain enabled.
-Observe the adapter version on crates.io before asking consumers to remove their
-Git dependency. Application acceptance follows in the consuming repository.
+Consumers can select the published adapter and matching Canic family from
+crates.io. Application acceptance follows in the consuming repository.
 
 The minimum supported Rust version is 1.91.0, including the checked-in dedicated
 and embedded managed consumers. Checkout maintenance uses the pinned Rust 1.99
@@ -55,7 +57,9 @@ service Principal. Bind the exact encoded bytes through Canic's production Root
 initializer before installation; retries retain those bytes and the member
 operation. A dependency change does not supply controller or provider authority.
 
-The checked-in dedicated and embedded consumer workspaces qualify this adapter's
-managed composition. They are private fixtures and are excluded from the registry
+The governed framework runner qualifies the checked-in dedicated and embedded
+consumer workspaces through their production CLI builds and finalized artifacts.
+Run the owning case with `make test-pocketic-case` and its exact registered Rust
+path under `pic::blob_service::tests`. They are private fixtures and are excluded from the registry
 package. Application installation, same-release recovery and provider acceptance
 remain the application's responsibility.

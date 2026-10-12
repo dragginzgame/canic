@@ -9,7 +9,7 @@ use super::{
     restore_operation_summary, restore_ordering_summary, restore_readiness_summary,
     restore_snapshot_summary, restore_verification_summary,
 };
-use crate::manifest::IdentityMode;
+use crate::{artifacts::ArtifactChecksum, manifest::IdentityMode};
 use candid::Principal;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -192,12 +192,8 @@ fn validate_principal(field: &'static str, value: &str) -> Result<(), RestorePla
 }
 
 fn validate_hash(field: &'static str, value: &str) -> Result<(), RestorePlanError> {
-    if value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        Ok(())
-    } else {
-        Err(RestorePlanError::InvalidHash {
-            field,
-            value: value.to_string(),
-        })
-    }
+    ArtifactChecksum::validate_hash(value).map_err(|_| RestorePlanError::InvalidHash {
+        field,
+        value: value.to_string(),
+    })
 }

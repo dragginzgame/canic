@@ -2,6 +2,21 @@ use super::*;
 
 const ROOT: Principal = Principal::from_slice(&[]);
 
+#[test]
+fn topology_hash_preserves_retained_byte_identity() {
+    assert_eq!(
+        TopologyHasher::hash(&[]).hash,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    );
+    let topology = TopologyHasher::hash(&[record(ROOT, None, "root")]);
+    assert_eq!(topology.algorithm, "sha256");
+    assert_eq!(topology.input, "sorted(pid,parent_pid,role,module_hash)");
+    assert_eq!(
+        topology.hash,
+        "efdc3797c0b70f93aa4f54b971706884fad12ce9aa88409cea5c8f66115240f4"
+    );
+}
+
 // Build a deterministic non-root principal for topology hash tests.
 fn p(id: u8) -> Principal {
     Principal::from_slice(&[id; 29])

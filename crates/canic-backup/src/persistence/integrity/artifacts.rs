@@ -140,7 +140,7 @@ fn validate_member_artifact_metadata(
         });
     }
     if let Some(manifest_hash) = member.source_snapshot.checksum.as_deref()
-        && manifest_hash != expected_hash
+        && !manifest_hash.eq_ignore_ascii_case(expected_hash)
     {
         return Err(PersistenceError::ManifestJournalChecksumMismatch {
             canister_id: entry.canister_id.clone(),

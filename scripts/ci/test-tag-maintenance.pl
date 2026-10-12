@@ -1,6 +1,7 @@
 #!/usr/bin/env perl
 use strict;
 use warnings;
+use Cwd qw(abs_path);
 use File::Temp qw(tempdir);
 use File::Path qw(make_path remove_tree);
 use FindBin;
@@ -9,6 +10,9 @@ use Test::More;
 
 # All Git commands are substituted. No real commits, tag changes or pushes.
 my $fixture = tempdir('tag-maintenance-test.XXXXXX', TMPDIR => 1, CLEANUP => 0);
+# The helper resolves --repo before invoking Git; the substitute must agree when
+# TMPDIR contains a symlink (including macOS's /var -> /private/var).
+$fixture = abs_path($fixture) // die "cannot resolve fixture root\n";
 my $passed;
 END {
     if ($passed) { remove_tree($fixture); }

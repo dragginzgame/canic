@@ -23,7 +23,7 @@ thread_local! {
     static ACTIVE_CONTEXT: RefCell<Option<Rc<RefCell<PerfContext>>>> = const { RefCell::new(None) };
 
     /// Aggregated perf counters keyed by kind (endpoint vs timer) and label.
-    static PERF_TABLE: RefCell<BTreeMap<PerfKey, PerfSlot>> = const { RefCell::new(BTreeMap::new()) };
+    static PERF_TABLE: RefCell<BTreeMap<PerfKey, ic_metrics::MeasurementAggregate>> = const { RefCell::new(BTreeMap::new()) };
 
 
 }
@@ -168,16 +168,6 @@ struct PerfFrame {
 }
 
 ///
-/// PerfSlot
-///
-
-#[derive(Default)]
-struct PerfSlot {
-    count: u64,
-    total_instructions: u64,
-}
-
-///
 /// PerfEntry
 /// Aggregated perf counters keyed by kind (endpoint vs timer) and label.
 ///
@@ -186,7 +176,7 @@ struct PerfSlot {
 pub struct PerfEntry {
     pub key: PerfKey,
     pub count: u64,
-    pub total_instructions: u64,
+    pub total_instructions: u128,
 }
 
 /// Record a counter under the provided key.
@@ -194,7 +184,7 @@ pub fn record(key: PerfKey, delta: u64) {
     PERF_TABLE.with(|table| {
         let mut table = table.borrow_mut();
         let slot = table.entry(key).or_default();
-        ic_metrics::record_sample(&mut slot.count, &mut slot.total_instructions, delta);
+        slot.record(delta);
     });
 }
 
@@ -219,7 +209,7 @@ fn record_borrowed(key: PerfKeyRef<'_>, delta: u64) {
         } else {
             table.entry(key.into_owned()).or_default()
         };
-        ic_metrics::record_sample(&mut slot.count, &mut slot.total_instructions, delta);
+        slot.record(delta);
     });
 }
 
@@ -380,8 +370,8 @@ pub fn entries() -> Vec<PerfEntry> {
             .iter()
             .map(|(key, slot)| PerfEntry {
                 key: key.clone(),
-                count: slot.count,
-                total_instructions: slot.total_instructions,
+                count: slot.samples(),
+                total_instructions: slot.total(),
             })
             .collect()
     })
@@ -409,8 +399,8 @@ pub(crate) fn bounded_entries(limit: usize) -> Result<Vec<PerfEntry>, crate::Int
                 }
                 Ok(PerfEntry {
                     key: key.clone(),
-                    count: slot.count,
-                    total_instructions: slot.total_instructions,
+                    count: slot.samples(),
+                    total_instructions: slot.total(),
                 })
             })
             .collect()
@@ -526,7 +516,7 @@ mod tests {
                 == expected
         );
         assert_eq!(observed[0].count, 2);
-        assert_eq!(observed[0].total_instructions, u64::MAX);
+        assert_eq!(observed[0].total_instructions, u128::from(u64::MAX) + 1);
         assert_eq!(observed[5].count, 2);
         assert_eq!(observed[5].total_instructions, 3);
         assert_eq!(observed[6].count, 1);

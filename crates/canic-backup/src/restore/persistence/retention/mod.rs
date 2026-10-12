@@ -14,8 +14,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use ic_host_artifacts::artifact::Sha256Digest;
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 
 pub(in crate::restore) fn lock_restore_layout(
     journal: &RestoreApplyJournal,
@@ -99,7 +99,7 @@ fn restore_authority(journal: &RestoreApplyJournal) -> Result<String, RestorePer
     };
     let bytes =
         serde_json::to_vec(&authority).map_err(crate::persistence::PersistenceError::from)?;
-    Ok(format!("{:x}", Sha256::digest(bytes)))
+    Ok(Sha256Digest::compute(&bytes).to_string())
 }
 
 ///

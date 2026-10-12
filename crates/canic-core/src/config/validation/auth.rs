@@ -13,8 +13,6 @@ use crate::{
 };
 use canic_contracts::ids::BuildNetwork;
 use ic_auth::canonical::chain_key_derivation_path_hash;
-#[cfg(any(feature = "auth-chain-key-ecdsa", test))]
-use k256::ecdsa::VerifyingKey as K256VerifyingKey;
 
 impl Validate for AuthConfig {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
@@ -210,7 +208,7 @@ fn validate_chain_key_public_key_hex(value: &str) -> Result<(), ConfigSchemaErro
 
 #[cfg(any(feature = "auth-chain-key-ecdsa", test))]
 fn validate_chain_key_public_key_bytes(public_key: &[u8]) -> Result<(), ConfigSchemaError> {
-    K256VerifyingKey::from_sec1_bytes(public_key).map_err(|err| {
+    ic_auth::chain_key_signature::validate_secp256k1_public_key(public_key).map_err(|err| {
         ConfigSchemaError::ValidationError(format!(
             "auth.delegated_tokens.chain_key_root_proof.public_key_hex must be a secp256k1 SEC1 public key: {err}"
         ))

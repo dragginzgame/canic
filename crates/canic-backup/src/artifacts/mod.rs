@@ -7,12 +7,12 @@
 #[cfg(test)]
 mod tests;
 
-use std::{io, path::Path};
 #[cfg(test)]
-use std::{io::Read, path::PathBuf};
+use std::io::Read;
+use std::{io, path::Path};
 
 use ic_backup::{
-    model::artifacts::ArtifactChecksumRecord,
+    model::artifacts::{ArtifactChecksumRecord, ChecksumError},
     ops::artifacts::{self, ArtifactError},
 };
 use serde::{Deserialize, Serialize};
@@ -79,38 +79,21 @@ impl ArtifactChecksum {
             .map_err(artifact_error)
     }
 
-    /// Compose the maintained directory checksum from relative file checksums.
-    #[cfg(test)]
-    pub(crate) fn from_relative_file_checksums(
-        files: Vec<(PathBuf, Self)>,
-    ) -> Result<Self, ArtifactChecksumError> {
-        let files = files
-            .into_iter()
-            .map(|(path, checksum)| {
-                checksum.validate()?;
-                ArtifactChecksumRecord::from_hash(&checksum.hash)
-                    .map(|record| (path, record))
-                    .map_err(|_| ArtifactChecksumError::InvalidHash(checksum.hash))
-            })
-            .collect::<Result<_, _>>()?;
-        artifacts::checksum_relative_files(files)
-            .map(Self::from_record)
-            .map_err(|error| artifact_error(error.into()))
-    }
-
     /// Verify that the checksum matches an expected SHA-256 hash.
     pub fn verify(&self, expected_hash: &str) -> Result<(), ArtifactChecksumError> {
-        self.validate()?;
-        Self::validate_hash(expected_hash)?;
-
-        if self.hash.eq_ignore_ascii_case(expected_hash) {
-            Ok(())
-        } else {
-            Err(ArtifactChecksumError::ChecksumMismatch {
-                expected: expected_hash.to_string(),
-                actual: self.hash.clone(),
+        Self::validate_algorithm(&self.algorithm)?;
+        ArtifactChecksumRecord::from_hash(&self.hash)
+            .and_then(|record| record.verify(expected_hash))
+            .map_err(|error| match error {
+                ChecksumError::ChecksumMismatch { .. } => ArtifactChecksumError::ChecksumMismatch {
+                    expected: expected_hash.to_string(),
+                    actual: self.hash.clone(),
+                },
+                ChecksumError::InvalidHash(hash) => ArtifactChecksumError::InvalidHash(hash),
+                ChecksumError::UnsupportedAlgorithm(algorithm) => {
+                    ArtifactChecksumError::UnsupportedAlgorithm(algorithm)
+                }
             })
-        }
     }
 
     /// Validate checksum metadata without comparing artifact bytes.
@@ -132,11 +115,9 @@ impl ArtifactChecksum {
 
     /// Validate one artifact-checksum hash representation.
     pub(crate) fn validate_hash(hash: &str) -> Result<(), ArtifactChecksumError> {
-        if hash.len() != 64 || !hash.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-            return Err(ArtifactChecksumError::InvalidHash(hash.to_string()));
-        }
-
-        Ok(())
+        ArtifactChecksumRecord::from_hash(hash)
+            .map(|_| ())
+            .map_err(|_| ArtifactChecksumError::InvalidHash(hash.to_string()))
     }
 
     pub(crate) fn from_relative_path_no_follow(

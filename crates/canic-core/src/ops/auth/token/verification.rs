@@ -1,15 +1,30 @@
 //! Module: ops::auth::token::verification
 //!
-//! Responsibility: execute cached and embedded-proof delegated-token verification.
+//! Responsibility: execute embedded-proof delegated-token verification.
 //! Does not own: endpoint authorization, verifier configuration storage, or token preparation.
-//! Boundary: runtime verification context, cache handling, proof callbacks, and typed metrics.
+//! Boundary: current runtime verification context, proof callbacks, and typed metrics.
 
-use super::{
-    error::{delegated_auth_reason_from_verify_error, map_verify_delegated_token_error},
-    verifier_config::{chain_key_policy_from_config, validate_build_network_root_key_pair},
-    *,
+#[cfg(test)]
+use crate::ops::auth::delegated::root_proof::{
+    RootDelegationProofError, VerifyRootDelegationProofInput, verify_root_delegation_proof,
+};
+#[cfg(test)]
+use crate::{
+    dto::auth::{DelegationCert, RootProof},
+    ops::auth::delegated::cert_rules::DelegatedAuthTtlLimits,
 };
 
+#[cfg(any(test, feature = "auth-delegated-token-verify"))]
+use super::verifier_config::validate_build_network_root_key_pair;
+use super::*;
+
+#[cfg_attr(
+    not(any(test, feature = "auth-delegated-token-verify")),
+    expect(
+        dead_code,
+        reason = "protected bindings are consumed by the enabled verifier"
+    )
+)]
 pub(super) struct DelegatedTokenLocalContext {
     local_fleet: FleetKey,
     local_role: CanisterRole,
@@ -86,44 +101,7 @@ pub(super) fn delegated_token_local_context() -> Result<DelegatedTokenLocalConte
     })
 }
 
-const fn delegated_token_verify_input<'a>(
-    input: &'a VerifyDelegatedTokenRuntimeInput<'a>,
-    ctx: &'a DelegatedTokenLocalContext,
-) -> VerifyDelegatedTokenInput<'a> {
-    VerifyDelegatedTokenInput {
-        token: input.token,
-        expected_presenter: input.caller,
-        local_fleet: ctx.local_fleet,
-        local_role: Some(&ctx.local_role),
-        ttl_limits: DelegatedAuthTtlLimits {
-            max_cert_ttl_ns: input.max_cert_ttl_ns,
-            max_token_ttl_ns: input.max_token_ttl_ns,
-        },
-        required_scopes: input.required_scopes,
-        now_ns: input.now_ns,
-    }
-}
-
-pub(super) fn verify_from_positive_cache<'a>(
-    input: &'a VerifyDelegatedTokenRuntimeInput<'a>,
-    ctx: &'a DelegatedTokenLocalContext,
-    cache_key: [u8; 32],
-) -> Result<Option<VerifiedApplicationAuthority>, InternalError> {
-    if positive_cache_get(cache_key, input.now_ns).is_none() {
-        return Ok(None);
-    }
-
-    verify_delegated_token_cached_proof_identity(delegated_token_verify_input(input, ctx))
-        .map(Some)
-        .map_err(|err| {
-            positive_cache_remove(cache_key);
-            DelegatedAuthMetrics::record_verify_failed(delegated_auth_reason_from_verify_error(
-                &err,
-            ));
-            map_verify_delegated_token_error(err)
-        })
-}
-
+#[cfg(any(feature = "auth-delegated-token-verify", test))]
 pub(super) fn verify_with_embedded_proofs<'a>(
     input: &'a VerifyDelegatedTokenRuntimeInput<'a>,
     ctx: &'a DelegatedTokenLocalContext,
@@ -133,32 +111,205 @@ pub(super) fn verify_with_embedded_proofs<'a>(
         verifier_cfg.build_network,
         &verifier_cfg.ic_root_public_key_raw,
     )?;
-    verify_delegated_token(
-        delegated_token_verify_input(input, ctx),
-        |cert, root_proof| {
-            AuthOps::verify_delegation_root_proof(cert, root_proof, verifier_cfg, input.now_ns)
-        },
-        |claims_hash, issuer_proof, issuer_pid| {
-            AuthOps::verify_issuer_canister_signature_proof(
-                claims_hash,
-                issuer_proof,
-                issuer_pid,
-                &verifier_cfg.ic_root_public_key_raw,
-            )
-        },
-    )
-    .map_err(|err| {
-        DelegatedAuthMetrics::record_verify_failed(delegated_auth_reason_from_verify_error(&err));
-        map_verify_delegated_token_error(err)
-    })
+    let authority = ResolvedTokenAuthority::new(ctx, verifier_cfg)?;
+    let token = protocol::token(input.token).map_err(|_| InternalError::invalid_input())?;
+    let context = authority.context(
+        input.caller,
+        input.required_scopes,
+        input.now_ns,
+        input.max_cert_ttl_ns,
+        input.max_token_ttl_ns,
+    );
+    let verified = ic_auth::token::verify_token(&token, &context).map_err(|err| {
+        DelegatedAuthMetrics::record_verify_failed(shared_verification_reason(&err));
+        map_shared_verification_error(err)
+    })?;
+    Ok(VerifiedApplicationAuthority::new(
+        verified.claims().issuer_pid,
+    ))
+}
+
+#[cfg(not(any(feature = "auth-delegated-token-verify", test)))]
+pub(super) fn verify_with_embedded_proofs(
+    _input: &VerifyDelegatedTokenRuntimeInput<'_>,
+    _ctx: &DelegatedTokenLocalContext,
+    _verifier_cfg: &AuthProofVerifierConfig,
+) -> Result<VerifiedApplicationAuthority, InternalError> {
+    Err(crate::ops::auth::AuthSignatureError::ProofUnavailable.into())
+}
+
+/// Host-resolved immutable authority; no field originates in a submitted token.
+#[cfg(any(feature = "auth-delegated-token-verify", test))]
+pub struct ResolvedTokenAuthority {
+    pub role: ic_auth_protocol_types::AuthRole,
+    pub audience: ic_auth_protocol_types::AudienceId,
+    pub allowed_scopes: Vec<String>,
+    pub root_key: ic_auth::token::RootKeyPolicy,
+    pub ic_root_public_key_raw: Vec<u8>,
+}
+
+#[cfg(any(feature = "auth-delegated-token-verify", test))]
+impl ResolvedTokenAuthority {
+    fn new(
+        ctx: &DelegatedTokenLocalContext,
+        verifier: &AuthProofVerifierConfig,
+    ) -> Result<Self, InternalError> {
+        Self::from_protected(
+            ctx,
+            verifier,
+            ConfigOps::current_canister()?.auth.allowed_token_scopes,
+        )
+    }
+
+    fn from_protected(
+        ctx: &DelegatedTokenLocalContext,
+        verifier: &AuthProofVerifierConfig,
+        allowed_scopes: Vec<String>,
+    ) -> Result<Self, InternalError> {
+        let policy = verifier
+            .chain_key_root
+            .as_ref()
+            .ok_or_else(InternalError::auth_material_stale)?;
+        let permitted = match policy.policy.build_network {
+            BuildNetwork::Ic => policy.policy.key_id.name == "key_1",
+            BuildNetwork::Local => {
+                policy.policy.key_id.name != "test_key_1" || policy.allow_test_chain_key
+            }
+        };
+        if !permitted {
+            return Err(InternalError::auth_material_stale());
+        }
+        let root_key = crate::ops::auth::delegated::root_proof::project_root_policy(&policy.policy);
+        Ok(Self {
+            role: protocol::role(&ctx.local_role).map_err(|_| InternalError::invalid_input())?,
+            audience: ic_auth_protocol_types::AudienceId {
+                canonical_network_id: ic_auth_protocol_types::CanonicalId::from_bytes(
+                    *ctx.local_fleet.canonical_network_id.as_bytes(),
+                ),
+                fleet_id: ic_auth_protocol_types::CanonicalId::from_bytes(
+                    *ctx.local_fleet.fleet_id.as_bytes(),
+                ),
+            },
+            allowed_scopes,
+            root_key,
+            ic_root_public_key_raw: verifier.ic_root_public_key_raw.clone(),
+        })
+    }
+
+    pub(crate) fn context<'a>(
+        &'a self,
+        caller: Principal,
+        required_scopes: &'a [String],
+        now_ns: u64,
+        max_cert_ttl_ns: u64,
+        max_token_ttl_ns: u64,
+    ) -> ic_auth::token::TokenVerificationContext<'a> {
+        ic_auth::token::TokenVerificationContext {
+            caller,
+            audience: self.audience,
+            role: &self.role,
+            allowed_scopes: &self.allowed_scopes,
+            required_scopes,
+            root_key: &self.root_key,
+            ic_root_public_key_raw: &self.ic_root_public_key_raw,
+            now_ns,
+            limits: ic_auth::token::TokenVerificationLimits {
+                max_cert_ttl_ns,
+                max_token_ttl_ns,
+                max_future_skew_ns: crate::ops::auth::AUTH_TIME_SKEW_ALLOWANCE_NS,
+                max_certificate_age_ns: 60_000_000_000,
+                max_variable_bytes: 64 * 1024,
+                max_issuer_signature_bytes: 128 * 1024,
+                max_witness_steps: 64,
+            },
+        }
+    }
+}
+
+#[cfg(any(feature = "auth-delegated-token-verify", test))]
+pub(in crate::ops::auth) fn map_shared_verification_error(
+    error: ic_auth::token::TokenVerificationError,
+) -> InternalError {
+    use ic_auth::token::TokenVerificationError as E;
+    match error {
+        E::Expired { target: "token" } => InternalError::auth_token_expired(),
+        E::Expired {
+            target: "root_key_policy",
+        } => InternalError::auth_material_stale(),
+        E::Expired { .. } => InternalError::auth_proof_expired(),
+        E::NotYetValid { .. } => InternalError::auth_proof_pending(),
+        E::PresenterMismatch | E::SubjectMismatch => {
+            InternalError::public(crate::diagnostics::codes::AUTHORITY_CONFLICT)
+        }
+        E::ScopeRejected { .. } | E::RoleRejected => {
+            InternalError::public(crate::diagnostics::codes::CONFIGURATION_INACTIVE)
+        }
+        E::AudienceRejected => InternalError::public(crate::diagnostics::codes::AUTHORITY_INACTIVE),
+        E::TtlExceeded { .. } => InternalError::public(crate::diagnostics::codes::TIME_CAPACITY),
+        cause => crate::ops::auth::delegated::root_proof::map_verification_error(cause),
+    }
+}
+
+#[cfg(any(feature = "auth-delegated-token-verify", test))]
+fn shared_verification_reason(
+    error: &ic_auth::token::TokenVerificationError,
+) -> DelegatedAuthMetricReason {
+    use ic_auth::token::TokenVerificationError as E;
+    match error {
+        E::ScopeRejected { .. } => DelegatedAuthMetricReason::ScopeRejected,
+        E::RoleRejected => DelegatedAuthMetricReason::TokenGrantRejected,
+        E::AudienceRejected => DelegatedAuthMetricReason::Audience,
+        E::Canonical(_) => DelegatedAuthMetricReason::Canonical,
+        E::Expired { target: "token" } => DelegatedAuthMetricReason::TokenExpired,
+        E::Expired {
+            target: "certificate",
+        } => DelegatedAuthMetricReason::CertExpired,
+        E::Expired { .. } | E::StaleAuthority { .. } | E::RootKeyPolicyBindingMismatch { .. } => {
+            DelegatedAuthMetricReason::RootKey
+        }
+        E::NotYetValid { target: "token" } => DelegatedAuthMetricReason::TokenNotYetValid,
+        E::NotYetValid { .. } => DelegatedAuthMetricReason::CertNotYetValid,
+        E::PresenterMismatch => DelegatedAuthMetricReason::PresenterCallerMismatch,
+        E::SubjectMismatch => DelegatedAuthMetricReason::PresenterSubjectMismatch,
+        E::BindingMismatch { field: "cert_hash" } => DelegatedAuthMetricReason::CertHashMismatch,
+        E::GrantsNotSubset => DelegatedAuthMetricReason::GrantsNotSubset,
+        E::TtlExceeded { .. } => DelegatedAuthMetricReason::TokenTtlExceeded,
+        E::InvalidWindow { .. } => DelegatedAuthMetricReason::TokenInvalidWindow,
+        E::IssuerSignature(_) => DelegatedAuthMetricReason::IssuerProofInvalid,
+        _ => DelegatedAuthMetricReason::RootProofInvalid,
+    }
 }
 
 impl AuthOps {
+    /// Resolve a complete live verifier context for the shared session workflow.
+    #[cfg(feature = "auth-local-application-authorization")]
+    pub(crate) fn resolve_token_authority(
+        authority: &crate::ops::auth::application_authorization::LocalApplicationAuthorizationAuthority,
+    ) -> Result<ResolvedTokenAuthority, InternalError> {
+        let cfg = delegated_tokens_config_for_verification()?;
+        let ctx = DelegatedTokenLocalContext {
+            local_fleet: authority.snapshot.fleet(),
+            local_role: authority.snapshot.role().clone(),
+        };
+        let verifier = auth_proof_verifier_config_for_verification(&cfg)?;
+        validate_build_network_root_key_pair(
+            verifier.build_network,
+            &verifier.ic_root_public_key_raw,
+        )?;
+        ResolvedTokenAuthority::from_protected(
+            &ctx,
+            &verifier,
+            authority.allowed_token_scopes.clone(),
+        )
+    }
+
+    #[cfg(test)]
     pub(crate) fn verify_delegation_root_proof(
         cert: &DelegationCert,
         root_proof: &RootProof,
         verifier_cfg: &AuthProofVerifierConfig,
         now_ns: u64,
+        ttl_limits: DelegatedAuthTtlLimits,
     ) -> Result<(), InternalError> {
         let root_pid = cert.root_pid;
         if root_pid != verifier_cfg.root_canister_id {
@@ -168,51 +319,25 @@ impl AuthOps {
         let Some(chain_key_root) = verifier_cfg.chain_key_root.as_ref() else {
             return Err(InternalError::auth_material_stale());
         };
-        let policy = chain_key_policy_from_config(chain_key_root);
-        verify_chain_key_batch_root_proof(
-            VerifyChainKeyBatchRootProofInput {
-                cert,
-                root_proof,
-                policy: &policy,
-                now_ns,
-            },
-            verify_chain_key_ecdsa_signature,
-        )
-        .map_err(map_chain_key_root_proof_error)
+        verify_root_delegation_proof(VerifyRootDelegationProofInput {
+            cert,
+            root_proof,
+            expected_issuer: cert.issuer_pid,
+            verifier: chain_key_root,
+            now_ns,
+            ttl_limits,
+        })
+        .map(|_evidence| ())
+        .map_err(map_root_delegation_proof_error)
     }
 }
 
-pub(super) fn map_chain_key_root_proof_error(err: ChainKeyRootProofError) -> InternalError {
-    match err {
-        _err @ (ChainKeyRootProofError::Expired {
-            target: "root_key_policy",
+#[cfg(test)]
+pub(super) fn map_root_delegation_proof_error(cause: RootDelegationProofError) -> InternalError {
+    match cause {
+        RootDelegationProofError::Verification(cause) => {
+            crate::ops::auth::delegated::root_proof::map_verification_error(cause)
         }
-        | ChainKeyRootProofError::PolicyMismatch { .. }
-        | ChainKeyRootProofError::ProofEpochTooOld { .. }
-        | ChainKeyRootProofError::KeyVersionTooOld { .. }
-        | ChainKeyRootProofError::RegistryEpochTooOld { .. }) => {
-            InternalError::auth_material_stale()
-        }
-        _err @ ChainKeyRootProofError::Expired { .. } => InternalError::auth_proof_expired(),
-        _err @ ChainKeyRootProofError::NotYetValid { .. } => InternalError::auth_proof_pending(),
-        _err => InternalError::invalid_input(),
+        _ => InternalError::invalid_input(),
     }
-}
-
-pub(super) fn insert_positive_verification_cache(
-    input: &VerifyDelegatedTokenRuntimeInput<'_>,
-    cache_key: [u8; 32],
-) {
-    let valid_until_ns = input
-        .token
-        .claims
-        .expires_at_ns
-        .min(input.token.proof.cert.expires_at_ns);
-    positive_cache_insert(
-        cache_key,
-        CachedDelegatedTokenProofValidity {
-            valid_until_ns,
-            verified_at_ns: input.now_ns,
-        },
-    );
 }

@@ -95,6 +95,18 @@ read -r _ _ _ _ total_test_fns total_inline_fns <<<"$total_row"
 [[ "$alpha_test_fns" -eq 2 && "$alpha_inline_fns" -eq 1 ]] || exit 1
 [[ "$beta_test_fns" -eq 1 && "$beta_inline_fns" -eq 1 ]] || exit 1
 [[ "$total_test_fns" -eq 3 && "$total_inline_fns" -eq 2 ]] || exit 1
+# JSON exposes the same numeric counts without display padding or percent signs.
+bash "$ROOT/scripts/dev/cloc.sh" --json --manifest "$FIXTURE/Cargo.toml" "$FIXTURE" > "$FIXTURE/report.json"
+read -r _ runtime tests pct fns inline <<< "$total_row"
+jq -e --argjson runtime "$runtime" --argjson tests "$tests" --argjson pct "${pct%%%}" \
+    --argjson fns "$fns" --argjson inline "$inline" '
+    (.crates | map(.crate)) == ["alpha", "beta"] and
+    .totals == {runtime_loc:$runtime,test_loc:$tests,test_pct:$pct,test_fns:$fns,inline_fns:$inline} and
+    ([.crates[].runtime_loc] | add) == .totals.runtime_loc and
+    ([.crates[].test_loc] | add) == .totals.test_loc and
+    ([.crates[].test_fns] | add) == .totals.test_fns and
+    ([.crates[].inline_fns] | add) == .totals.inline_fns
+' "$FIXTURE/report.json" >/dev/null
 
 # Build outputs never become maintained source, including a configured target
 # inside a member. Literal metacharacters must not prune a similarly named path.
@@ -199,5 +211,26 @@ selected_after="$(bash "$ROOT/scripts/dev/cloc.sh" --manifest "$independent/Carg
 [[ "$selected_before" == "$selected_after" ]] || exit 1
 [[ "$(printf '%s\n' "$selected_after" | awk '$1 == "independent-probe" { print $2,$3,$5,$6 }')" == '1 0 0 0' ]] || exit 1
 [[ "$(printf '%s\n' "$selected_after" | awk '$1 == "alpha" { print }')" == '' ]] || exit 1
+bash "$ROOT/scripts/dev/cloc.sh" --manifest "$independent/Cargo.toml" --json "$FIXTURE" > "$FIXTURE/independent.json"
+jq -e --arg manifest "$independent/Cargo.toml" '
+    .manifest == $manifest and (.crates | map(.crate)) == ["independent-probe"] and
+    .totals == {runtime_loc:1,test_loc:0,test_pct:0,test_fns:0,inline_fns:0}
+' "$FIXTURE/independent.json" >/dev/null
+
+# A later count failure preserves its status and cannot emit a partial JSON report.
+mkdir -p "$FIXTURE/reporter/scripts/dev" "$FIXTURE/failing-bin"
+cp "$ROOT/scripts/dev/cloc.sh" "$FIXTURE/reporter/scripts/dev/"
+cat > "$FIXTURE/failing-bin/cloc" <<'STUB'
+#!/usr/bin/env bash
+if [[ -e "$CLOC_FAILURE_MARKER" ]]; then exit 23; fi
+touch "$CLOC_FAILURE_MARKER"
+printf '{"Rust":{"code":1}}\n'
+STUB
+chmod +x "$FIXTURE/failing-bin/cloc"
+status=0
+CLOC_FAILURE_MARKER="$FIXTURE/count-started" PATH="$FIXTURE/failing-bin:$PATH" \
+    bash "$FIXTURE/reporter/scripts/dev/cloc.sh" --json --manifest "$independent/Cargo.toml" "$FIXTURE" \
+    > "$FIXTURE/failed.json" 2> "$FIXTURE/failed.err" || status=$?
+[[ "$status" == 23 && -e "$FIXTURE/count-started" && ! -s "$FIXTURE/failed.json" ]] || exit 1
 echo 'cloc tests, including independent workspace selection, passed'
 fixture_complete=true

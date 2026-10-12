@@ -23,6 +23,7 @@ canic	fleet_coordinator_surface	full	parallel	ordinary
 canic	ids_facade	full	parallel	ordinary
 canic	install_script_surface	fast	parallel	ordinary
 canic	managed_endpoint_gate	full	parallel	ordinary
+canic	memory_pool_provider	full	parallel	ordinary
 canic	metrics_facade	full	parallel	ordinary
 canic	pre_1_0_hard_cut	full	parallel	ordinary
 canic	protocol_surface	fast	parallel	ordinary

@@ -1,7 +1,10 @@
 # Shared Tooling adoption
 
 The [manifest](../../.shared-tooling.snapshot) records reviewed files from
-committed revision `34e5ad7aac3599306c9572bb547f2239d09df1a3` (committed 0.3.7).
+committed revision `c118062a070a2e238f1eb3989b6fd700f369ce1e` (0.9.2),
+with 110 selected files. Explicit entrypoints record the maintained selection;
+the exporter derives required companions and verifies ownership before retiring
+unused payloads. Refreshes reuse that selection without repeating file arguments.
 [AGENTS.md](../../AGENTS.md) retains the product overlay. Refresh only through
 the upstream distribution helper; verify exact snapshot bytes and executable
 modes before release validation. Dirty sibling source is never inherited. The
@@ -11,13 +14,13 @@ the checksum helper being verified. The committed governance file list is select
 with its linked guides. Canic's governance adapter first verifies snapshot bytes
 and exact file-list membership, then runs the shared link checker on a private
 export containing only those files. It enforces file/link closure, not prose.
-The canonical distribution fixture now isolates its own manifest while preserving
-the checkout's existing snapshot. Its focused consumer qualification passes;
-the earlier failure remains historical evidence in
-[Shared Tooling#28](https://github.com/dragginzgame/shared-tooling/issues/28#issuecomment-6032229331).
+Exporter integration tests run in Shared Tooling. Canic does not vendor that
+upstream test roster; its adoption checks cover actual refresh, snapshot integrity,
+governance closure and affected local adapters.
 
 The maintainer approved retaining Canic's framework fixtures and independent
-blob root-package workspaces as scoped exceptions in [AGENTS.md](../../AGENTS.md).
+private Blob consumer workspaces as scoped exceptions in [AGENTS.md](../../AGENTS.md).
+The Blob adapter belongs to the main workspace.
 Application packages already satisfy the standard `apps/` layout. Snapshot
 adoption does not move packages or merge independently selected managed graphs;
 [#473](https://github.com/dragginzgame/canic/issues/473) records this boundary.
@@ -26,8 +29,25 @@ adoption does not move packages or merge independently selected managed graphs;
 
 `make install-tools` explicitly provisions the complete pinned host, IC and common
 Rust toolsets through `make/tools.mk`, under `.tools/host/bin`, `.tools/ic/bin`
-and `.tools/rust/bin`. `make tools-check` verifies
-bytes and versions offline. Make and CI select these paths; direct shell use
+and `.tools/rust/common/bin`. Host and IC payloads now use the canonical per-user
+store shared across checkouts. Repository references bind exact verified bundle
+generations; matching pins reuse existing bundles without downloads. Contributors
+must rerun `make install-host-tools` and `make install-ic-tools`, then their
+offline checks. Prior physical checkout bundles remain retained. Use the same
+`SHARED_TOOLING_STORE` setting for setup, checks and failure evidence; see
+[local setup](../local-setup.md#shared-executable-storage).
+Cargo-built tools now share verified generations keyed by exact compiler, native
+environment, package and packaged-lock identities. The canonical build helper
+uses a standard tool environment; application build flags and wrappers remain
+local. The common Cargo set uses receipts and byte admission; selection activates
+only after all three tools pass. Interrupted setup retains completed generations
+and the previous complete selection. Contributors must rerun `make install-rust-tools`
+and `make rust-tools-check`, then `make install-testkit-server` and
+`make testkit-server-check`. Keep `.tools/rust/common/bin` on PATH and use the
+selected Testkit installer's returned path. Offline admission requires the managed
+source cache. Old local slots and failed attempts remain retained.
+`make tools-check` verifies bytes and versions offline.
+Make and CI select these paths; direct shell use
 needs the export in [INSTALLING.md](../../INSTALLING.md). Ordinary validation
 and PocketIC test entrypoints check prepared tools without downloading them.
 
@@ -42,6 +62,9 @@ The shared Cargo installer selects the published Testkit package directly from
 the root lock, validates its source and exact version, and refuses selection
 drift before admitting an installation. Canic supplies the package, binary,
 profile and lock path without a second parser or pin.
+Shared setup propagates lock, preparation, receipt, reference and activation
+failures even inside conditional command substitutions. A failed setup returns
+nonzero without publishing a success path or removing another owner's lock.
 Mandatory installer and fixture assertions explicitly stop on failure, including
 under Bash 3.2; failed checks retain their original evidence. Canic's custom hook
 and Make-recipe fixtures follow the same rule.
@@ -51,7 +74,7 @@ Standard release preflight prepares the admitted locked cache, then invokes
 `make install-tools` and the offline
 `make tools-check` admission before version preparation or
 complete validation. Standalone `make validate` also starts with those offline
-checks. Testkit selection follows the held root lock; setup preserves older slots.
+checks. Testkit selection follows the held root lock; setup preserves older installations.
 Host exact tool admission and packaged
 `canic toolchain install` remain product-owned. Shared setup is qualified on
 Linux; native macOS CI owns both architectures' actual execution evidence.
@@ -80,8 +103,14 @@ owns filesystem admission and explicitly selected diagnostic paths; CI supplies
 the workspace and Cargo cache paths without a second local scanner.
 
 
-Canic includes the canonical `make/execution.mk` and `make/release.mk`, binding
-their runtime root to this checkout. Make admission retains independent `MFLAGS`
+Canic includes `make/consumer.mk` once, binding its runtime root to this checkout.
+The common owner supplies setup, formatting, hook activation, snapshot verification
+and release routing. Paired formatter commands retain Canic's derive ordering and
+both private Blob consumer roots without replacing shared recipes. Canic's custom
+hook remains product-owned; its unused copy of the upstream Cargo installer test
+is retired, while the owning hook and adapter fixtures remain. The selected
+`cargo-sort-derives` 0.14.1 is installed and admitted offline.
+Make admission retains independent `MFLAGS`
 evidence when callers replace `MAKEFLAGS`. The canonical formatting reporter wraps
 Canic's formatter order and existing workspace catalog, printing one success line
 or a failure with its retained log. The CI evidence action retains those logs.
@@ -118,6 +147,12 @@ Shared host setup now owns ripgrep with PCRE2 and cloc; their duplicate Cargo/
 package-manager selections are removed. Shared Rust setup owns cargo-sort,
 cargo-sort-derives and candid-extractor; Canic's other Cargo/lint tools and
 packaged operator-tool admission remain product-owned.
+
+Sibling LOC and tooling inventories run from Shared Tooling. Canic does not
+select the optional fleet reporters or their dedicated regression; `make cloc`
+retains the local workspace report. The unchanged shared Make include explains
+the owner when `cloc-tooling` is requested without that optional selection
+([#500](https://github.com/dragginzgame/canic/issues/500)).
 
 The read-only `scripts/dev/gh-ci.sh` helper now comes from the snapshot. Explicit
 `--commit HEAD --all-workflows --limit 100` inspects the exact committed source;
@@ -156,11 +191,15 @@ successful/failed logs and tested compiler-cache failure fallback.
 
 Rerunning a normal target selects and reconciles unfinished intent before
 computing another increment. Preparation-free failures restart current-source
-preflight and validation; earlier evidence is retained. Prepared intent keeps
-its exact candidate, source, UTC date and destination. When newer descendant
-fixes or another increment are selected, the runner reconciles the older release
-first, then validates the next candidate separately. It stops on identity,
-payload, destination, unknown remote history and concurrency conflicts. Atomic
+preflight and validation; earlier evidence is retained. Direct preparation before
+staging can restart from a newer clean descendant commit with committed metadata
+at the saved previous or candidate version. The runner archives the exact old
+intent, selects the requested increment from current metadata and requires fresh
+preflight and complete validation. Canic's validation logger retains unique run
+directories; prior committed receipts and notes remain in Git. Explicit resume
+keeps its saved source and candidate. Staged or delivered intent still requires
+exact reconciliation. Identity, payload, destination, unknown remote history and
+concurrency conflicts stop the operation. Atomic
 push dispatch uses the captured push URL, with destination checks before intent
 and dispatch, rather than resolving the remote name again when pushing.
 Focused stub fixtures cover destination drift and lost-response recovery.

@@ -11,108 +11,20 @@ use crate::{
 use canic_contracts::ids::{CanisterRole, FleetKey};
 use thiserror::Error;
 
-/// Verified proof authority projected into the one application-authorization model.
-
+/// Issuer identity returned only after complete shared token verification.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VerifiedApplicationAuthority {
-    presenter: Principal,
-    subject: Principal,
     issuer: Principal,
-    fleet: FleetKey,
-    role: CanisterRole,
-    scopes: CanonicalApplicationScopes,
-    proof_issued_at_ns: u64,
-    proof_not_before_ns: u64,
-    proof_expires_at_ns: u64,
-    proof_fingerprint: [u8; 32],
 }
 
 impl VerifiedApplicationAuthority {
-    /// Construct authority after proof verification and protected-context acquisition.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "one constructor binds the complete authority tuple"
-    )]
-    pub fn new(
-        presenter: Principal,
-        subject: Principal,
-        issuer: Principal,
-        fleet: FleetKey,
-        role: CanisterRole,
-        scopes: CanonicalApplicationScopes,
-        proof_issued_at_ns: u64,
-        proof_not_before_ns: u64,
-        proof_expires_at_ns: u64,
-        proof_fingerprint: [u8; 32],
-    ) -> Result<Self, ApplicationAuthorityModelError> {
-        if presenter != subject {
-            return Err(ApplicationAuthorityModelError::PresenterSubjectMismatch);
-        }
-        if proof_expires_at_ns <= proof_issued_at_ns {
-            return Err(ApplicationAuthorityModelError::InvalidProofWindow);
-        }
-        Ok(Self {
-            presenter,
-            subject,
-            issuer,
-            fleet,
-            role,
-            scopes,
-            proof_issued_at_ns,
-            proof_not_before_ns,
-            proof_expires_at_ns,
-            proof_fingerprint,
-        })
+    #[cfg(any(test, feature = "auth-delegated-token-verify"))]
+    pub const fn new(issuer: Principal) -> Self {
+        Self { issuer }
     }
-
-    #[must_use]
-    pub const fn presenter(&self) -> Principal {
-        self.presenter
-    }
-
-    #[must_use]
-    pub const fn subject(&self) -> Principal {
-        self.subject
-    }
-
     #[must_use]
     pub const fn issuer(&self) -> Principal {
         self.issuer
-    }
-
-    #[must_use]
-    pub const fn fleet(&self) -> FleetKey {
-        self.fleet
-    }
-
-    #[must_use]
-    pub const fn role(&self) -> &CanisterRole {
-        &self.role
-    }
-
-    #[must_use]
-    pub const fn scopes(&self) -> &CanonicalApplicationScopes {
-        &self.scopes
-    }
-
-    #[must_use]
-    pub const fn proof_issued_at_ns(&self) -> u64 {
-        self.proof_issued_at_ns
-    }
-
-    #[must_use]
-    pub const fn proof_not_before_ns(&self) -> u64 {
-        self.proof_not_before_ns
-    }
-
-    #[must_use]
-    pub const fn proof_expires_at_ns(&self) -> u64 {
-        self.proof_expires_at_ns
-    }
-
-    #[must_use]
-    pub const fn proof_fingerprint(&self) -> [u8; 32] {
-        self.proof_fingerprint
     }
 }
 
@@ -189,6 +101,7 @@ impl LocalApplicationAuthorityBinding {
 /// Canonical active local application session inspected by pure policy.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalApplicationSession {
+    shared_session: Vec<u8>,
     transport_caller: Principal,
     authenticated_subject: Principal,
     issuer: Principal,
@@ -229,6 +142,7 @@ impl LocalApplicationSession {
         }
         Ok(Self {
             transport_caller,
+            shared_session: Vec::new(),
             authenticated_subject,
             issuer,
             fleet,
@@ -240,6 +154,17 @@ impl LocalApplicationSession {
             proof_fingerprint,
             establishment_request_hash,
         })
+    }
+
+    /// Attach the canonical shared session to its product-only view projection.
+    pub(crate) fn with_shared_session(mut self, bytes: Vec<u8>) -> Self {
+        self.shared_session = bytes;
+        self
+    }
+
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
+    pub(crate) fn shared_session_bytes(&self) -> &[u8] {
+        &self.shared_session
     }
 
     #[must_use]
@@ -293,6 +218,7 @@ impl LocalApplicationSession {
     }
 
     #[must_use]
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     pub const fn establishment_request_hash(&self) -> [u8; 32] {
         self.establishment_request_hash
     }
@@ -338,11 +264,6 @@ impl LocalApplicationReplay {
     }
 
     #[must_use]
-    pub const fn transport_caller(&self) -> Principal {
-        self.transport_caller
-    }
-
-    #[must_use]
     pub const fn authenticated_subject(&self) -> Principal {
         self.authenticated_subject
     }
@@ -350,11 +271,6 @@ impl LocalApplicationReplay {
     #[must_use]
     pub const fn authority_generation(&self) -> u64 {
         self.authority_generation
-    }
-
-    #[must_use]
-    pub const fn remove_at_ns(&self) -> u64 {
-        self.remove_at_ns
     }
 }
 
@@ -364,17 +280,11 @@ pub enum ApplicationAuthorityModelError {
     #[error("application session caller and subject differ")]
     CallerSubjectMismatch,
 
-    #[error("application proof expiry must be after issue time")]
-    InvalidProofWindow,
-
     #[error("application replay removal time must be nonzero")]
     InvalidReplayRemovalTime,
 
     #[error("application session expiry must be after establishment")]
     InvalidSessionWindow,
-
-    #[error("application proof presenter and subject differ")]
-    PresenterSubjectMismatch,
 
     #[error(transparent)]
     Scope(#[from] ApplicationScopeError),
@@ -396,27 +306,6 @@ mod tests {
     fn scopes() -> CanonicalApplicationScopes {
         CanonicalApplicationScopes::for_session(vec![ApplicationScope::parse("app:read").unwrap()])
             .unwrap()
-    }
-
-    #[test]
-    fn verified_authority_rejects_different_presenter_and_subject() {
-        let err = VerifiedApplicationAuthority::new(
-            p(1),
-            p(2),
-            p(3),
-            crate::test::support::fleet_key(1),
-            CanisterRole::new("component"),
-            scopes(),
-            10,
-            10,
-            20,
-            [5; 32],
-        )
-        .unwrap_err();
-        assert_eq!(
-            err,
-            ApplicationAuthorityModelError::PresenterSubjectMismatch
-        );
     }
 
     #[test]

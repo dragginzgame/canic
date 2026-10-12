@@ -10,7 +10,7 @@ mod serialization;
 mod tests;
 
 use super::{BuildReuseProgress, WorkspaceBuildContext};
-use ic_host_fs::durable::lock_file_with_progress;
+use ic_host_fs::durable::{lock_exclusive_with_wait, open_regular_lock_file_with_parents};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -26,6 +26,7 @@ pub use inspection::{
 };
 
 const OWNER_LIMIT: usize = 4096;
+const BUILD_LOCK_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 /// Last entered build phase; a timestamp is not a heartbeat or proof of forward progress.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -73,13 +74,13 @@ impl BuildLock {
             .icp_root
             .join(".canic/locks/complete-build-reuse.lock");
         let started = Instant::now();
-        let file = lock_file_with_progress(&lock_path, |file, elapsed| {
+        let file = open_regular_lock_file_with_parents(&lock_path).map_err(io::Error::from)?;
+        lock_exclusive_with_wait(&file, BUILD_LOCK_POLL_INTERVAL, |elapsed| {
             progress(BuildReuseProgress::WaitingForLock(BuildLockWait {
                 elapsed,
-                inspection: inspection::inspect_open_file(file, lock_path.clone()),
+                inspection: inspection::inspect_open_file(&file, lock_path.clone()),
             }))
-        })
-        .map_err(std::io::Error::from)?;
+        })?;
         // A pending cancellation must not start another build or clear another owner's metadata.
         progress(BuildReuseProgress::LockFinished(started.elapsed()))?;
         let now = unix_seconds();

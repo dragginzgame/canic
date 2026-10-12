@@ -3,13 +3,16 @@
 //! The caller supplies manifest-verified artifacts and owns the PocketIC server.
 //! These cases exercise local composition, not provider uploads or funding.
 
-use std::{fs, time::Duration};
+use std::time::Duration;
+
+use super::artifacts::{self, Composition};
 
 use candid::{CandidType, Principal};
 use canic::testing::{
     CandidCallExt, ManagedApplicationInit, ManagedComponentGroupQualificationInput,
     ManagedRoleQualificationArtifact, install_managed_component_group,
 };
+use canic_blob_service::__private::ic_blob_storage_contracts::identity::ProviderRootHash;
 use canic_blob_service::dto::{
     configuration::{
         HostConfigurationView, HostFailure, ServiceBillingInput, ServiceConfigurationInput,
@@ -24,7 +27,6 @@ use canic_blob_service::dto::{
         exposure::UploadExposureFailure,
     },
 };
-use ic_blob_storage_contracts::identity::ProviderRootHash;
 
 const NAMESPACE: u128 = 7;
 
@@ -105,7 +107,6 @@ fn embedded_init(service: Principal) -> Vec<u8> {
 struct ConsumerInput {
     role: &'static str,
     config: &'static str,
-    prefix: &'static str,
     encode: fn(Principal) -> Vec<u8>,
 }
 
@@ -114,32 +115,72 @@ struct ConsumerInput {
     reason = "one managed composition journey retains installation, fencing and exact restoration observations"
 )]
 fn qualify(embedded: bool) {
+    let composition = if embedded {
+        Composition::Embedded
+    } else {
+        Composition::Dedicated
+    };
+    if artifacts::write_worker_result(composition) {
+        return;
+    }
+    let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
     let ConsumerInput {
         role,
         config,
-        prefix,
         encode,
     } = if embedded {
         ConsumerInput {
             role: "backend",
-            config: include_str!("../embedded-consumer/canic.toml"),
-            prefix: "CANIC_BLOB_EMBEDDED",
+            config: include_str!(
+                "../../../../../integrations/blob-service/embedded-consumer/canic.toml"
+            ),
             encode: embedded_init,
         }
     } else {
         ConsumerInput {
             role: "blob",
-            config: include_str!("../consumer/canic.toml"),
-            prefix: "CANIC_BLOB_DEDICATED",
+            config: include_str!("../../../../../integrations/blob-service/consumer/canic.toml"),
             encode: dedicated_init,
         }
     };
-    let build_id = std::env::var(format!("{prefix}_RELEASE_BUILD_ID"))
-        .expect("complete managed release-build identity");
-    let wasm = fs::read(
-        std::env::var(format!("{prefix}_WASM_PATH")).expect("manifest-verified Wasm path"),
+    let rust_path = if embedded {
+        crate::pic::cases::rust_test_path(&managed_composition_embedded)
+    } else {
+        crate::pic::cases::rust_test_path(&managed_composition_dedicated)
+    };
+    let build = artifacts::release_build(rust_path);
+    let (consumer, config_path) = composition.paths();
+    let snapshot = canic_host::release_set::AppConfigSnapshot::load(&config_path).unwrap();
+    let current =
+        canic_host::release_set::load_persisted_current_release_set_manifest(&consumer, build)
+            .unwrap();
+    canic_host::release_build::validate_finalized_release_build_manifest(
+        &consumer,
+        build,
+        &current.path,
     )
-    .expect("read exact consumer Wasm");
+    .expect("complete managed artifact hashes and runtime identities");
+    let application = canic_host::release_set::load_persisted_application_artifact_union(
+        &consumer,
+        snapshot.component_topology(),
+        build,
+    )
+    .expect("managed application artifact manifest");
+    let entry = application
+        .union
+        .entries
+        .iter()
+        .find(|entry| entry.role.as_str() == role)
+        .expect("selected Blob role in application manifest");
+    let wasm_path = consumer.join(&entry.wasm_relative_path);
+    canic_host::canister_build::validate_wasm_candid_endpoints(
+        &wasm_path,
+        &wasm_path.with_extension("did"),
+    )
+    .expect("generated Candid includes every callable consumer endpoint");
+    let wasm = std::fs::read(wasm_path).expect("verified consumer Wasm");
+    let build_id = build.to_string();
+    let reinstall_wasm = wasm.clone();
     let mut artifact = ManagedRoleQualificationArtifact::new(role.parse().unwrap(), wasm);
     artifact.application_init_args = ManagedApplicationInit::ForCanister(encode);
     let input = ManagedComponentGroupQualificationInput::new(
@@ -175,8 +216,14 @@ fn qualify(embedded: bool) {
     };
     let installed = configuration();
     assert_eq!(installed.configuration, installation(service).configuration);
-    assert_eq!(installed.release, ic_blob_storage::LIBRARY_VERSION);
+    assert_eq!(
+        installed.release,
+        canic_blob_service::__private::ic_blob_storage_contracts::CONTRACT_VERSION
+    );
     assert!(!installed.fenced);
+    refuse_invalid_configuration(&fixture, service, &reinstall_wasm, embedded, &installed);
+    resume();
+    assert_eq!(configuration(), installed);
     let denied: Result<HostConfigurationView, HostFailure> = pic
         .query_candid_as(service, stranger, "blob_configuration", ())
         .expect("stranger query transport");
@@ -360,13 +407,99 @@ fn qualify(embedded: bool) {
 }
 
 #[test]
-#[ignore = "requires complete managed artifacts and a caller-owned PocketIC server"]
-fn managed_composition_dedicated() {
+pub(super) fn managed_composition_dedicated() {
     qualify(false);
 }
 
 #[test]
-#[ignore = "requires complete managed artifacts and a caller-owned PocketIC server"]
-fn managed_composition_embedded() {
+pub(super) fn managed_composition_embedded() {
     qualify(true);
+}
+
+#[derive(CandidType)]
+struct UnmodeledInstallationInput {
+    configuration: ServiceConfigurationInput,
+    project: String,
+    completion_verifier: Principal,
+    unmodeled: Principal,
+}
+
+#[derive(CandidType)]
+struct UnmodeledEmbeddedInput {
+    initial_count: u64,
+    blob: UnmodeledInstallationInput,
+}
+
+fn refuse_invalid_configuration(
+    fixture: &canic::testing::ManagedComponentGroupFixture,
+    service: Principal,
+    wasm: &[u8],
+    embedded: bool,
+    installed: &HostConfigurationView,
+) {
+    use canic::dto::abi::v1::CanisterInitPayload;
+    use canic::testing::CanisterInstallExt as _;
+    let pic = fixture.pic();
+    let (protected, application): (CanisterInitPayload, Option<Vec<u8>>) =
+        candid::decode_args(fixture.installation_arguments(service).unwrap()).unwrap();
+    let unmodeled = UnmodeledInstallationInput {
+        configuration: installation(service).configuration,
+        project: installation(service).project,
+        completion_verifier: installation(service).completion_verifier,
+        unmodeled: Principal::anonymous(),
+    };
+    let unknown_field = if embedded {
+        candid::encode_one(UnmodeledEmbeddedInput {
+            initial_count: 41,
+            blob: unmodeled,
+        })
+        .unwrap()
+    } else {
+        candid::encode_one(unmodeled).unwrap()
+    };
+    let extra_argument = if embedded {
+        candid::encode_args((
+            EmbeddedInput {
+                initial_count: 41,
+                blob: installation(service),
+            },
+            "extra",
+        ))
+        .unwrap()
+    } else {
+        candid::encode_args((installation(service), "extra")).unwrap()
+    };
+    let stable = pic.get_stable_memory(service);
+    for invalid in [unknown_field, extra_argument] {
+        assert!(invalid.len() < canic_blob_service::lifecycle::CONFIGURATION_LIMITS.max_bytes);
+        let args = candid::encode_args((protected.clone(), Some(invalid))).unwrap();
+        pic.wait_out_install_code_rate_limit(Duration::from_secs(300));
+        let refusal = pic
+            .reinstall_canister(service, wasm.to_vec(), args, Some(fixture.root()))
+            .unwrap_err();
+        assert_eq!(
+            refusal.reject_code,
+            ic_testkit::pic::RejectCode::CanisterError
+        );
+        assert_eq!(pic.get_stable_memory(service), stable);
+        let current: Result<HostConfigurationView, HostFailure> = pic
+            .query_candid_as(service, principal(7), "blob_configuration", ())
+            .unwrap();
+        // Failed management installation preserves bytes but must not silently
+        // activate the reopened Blob stores. Recovery remains operator-owned.
+        assert_eq!(
+            current.unwrap(),
+            HostConfigurationView {
+                fenced: true,
+                ..installed.clone()
+            }
+        );
+        if embedded {
+            let count: u64 = pic.query_candid(service, "application_count", ()).unwrap();
+            assert_eq!(count, 41);
+        }
+    }
+    // The exact original nested arguments remain unchanged, not re-encoded as a
+    // permissive DTO after rejection. No successful reinstall is attempted.
+    assert!(application.is_some());
 }

@@ -168,8 +168,11 @@ pub struct RootComponentProvisioningRecord {
 }
 
 /// One bounded failure retained with the provisioning operation across interruption.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentProvisioningFailureRecord {
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
+    pub dependency:
+        Option<canic_contracts::values::provisioning_failure::ProvisioningDependencyFailure>,
     pub stage: canic_contracts::dto::component_provisioning::ProvisioningFailureStage,
     pub target: candid::Principal,
     pub operation_id: [u8; 32],

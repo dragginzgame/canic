@@ -221,6 +221,11 @@ fn initialize_local_nonroot(
 
 fn initialize_nonroot_base(canister_role: &CanisterRole) -> Result<(), InternalError> {
     MemoryRegistryOps::bootstrap_registry().map_err(|_err| InternalError::invariant())?;
+    #[cfg(any(
+        feature = "auth-root-canister-sig-create",
+        feature = "auth-issuer-canister-sig-create"
+    ))]
+    crate::ops::auth::signature_store::reset()?;
     rebuild_derived_storage_indexes()?;
     crate::log::set_ready();
     crate::log!(Topic::Init, Info, "🏁 init: {}", canister_role);
@@ -382,6 +387,11 @@ fn restore_local_nonroot(canister_role: CanisterRole) -> Result<(), InternalErro
 }
 
 fn restore_nonroot_after_upgrade(canister_role: CanisterRole) -> Result<(), InternalError> {
+    #[cfg(any(
+        feature = "auth-root-canister-sig-create",
+        feature = "auth-issuer-canister-sig-create"
+    ))]
+    crate::ops::auth::signature_store::reset()?;
     rebuild_derived_storage_indexes()?;
     crate::log::set_ready();
     crate::log!(

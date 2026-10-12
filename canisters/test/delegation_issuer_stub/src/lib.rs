@@ -71,7 +71,19 @@ impl LocalAuthorizationDenialProbe {
     }
 }
 
-canic::start!();
+canic::start!(lifecycle_participant(
+    init = compose_application_certification,
+    post_upgrade = compose_application_certification
+),);
+
+// A trusted application branch shares the actual IC certification root with /sig.
+// Both install and same-release restoration reapply it before deferred work.
+fn compose_application_certification() {
+    AuthApi::set_canister_signature_siblings(vec![canic::api::auth::SignatureSibling::Left(
+        [0x3c; 32],
+    )])
+    .expect("compose application certification with Canic signatures");
+}
 
 /// Run no-op setup for the delegation issuer stub.
 async fn canic_setup() {}

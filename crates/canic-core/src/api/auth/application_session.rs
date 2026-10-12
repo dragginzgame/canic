@@ -11,9 +11,7 @@ use crate::{
     config::schema::LocalApplicationAuthorizationConfig,
     diagnostics::codes,
     domain::policy::pure::auth::application_authorization::{
-        ApplicationCapacityLimit, ApplicationProofEligibilityError,
-        ApplicationSessionAdmissionError, ApplicationSessionTtlError,
-        resolve_application_session_expiry,
+        ApplicationSessionTtlError, resolve_application_session_expiry,
     },
     dto::{
         auth::{
@@ -31,10 +29,7 @@ use crate::{
         LocalApplicationSession, MAX_APPLICATION_PROOF_LIFETIME_NS,
     },
     ops::{
-        auth::{
-            AuthOps, VerifyDelegatedTokenRuntimeInput,
-            application_authorization::LocalApplicationAuthorizationAuthority,
-        },
+        auth::{AuthOps, application_authorization::LocalApplicationAuthorizationAuthority},
         ic::IcOps,
         runtime::metrics::auth::{
             AuthMetricReason, record_application_session_clear, record_application_session_created,
@@ -44,13 +39,13 @@ use crate::{
         },
         storage::auth::{
             LocalApplicationAuthorizationStateOps,
-            application_sessions::{ApplicationReplayResolution, ApplicationSessionStateError},
+            application_sessions::ApplicationSessionStateError,
         },
     },
     workflow::{
         auth::application_sessions::{
             ApplicationSessionEstablishInput, ApplicationSessionEstablishResult,
-            ApplicationSessionWorkflow, ApplicationSessionWorkflowError,
+            ApplicationSessionWorkflow,
         },
         runtime::intent::IntentCleanupWorkflow,
     },
@@ -81,63 +76,17 @@ impl AuthApi {
         let requested_ttl_secs = request.requested_ttl_secs;
         let requested_scopes = canonical_requested_scopes(request.requested_scopes)?;
         require_configured_scopes(&authority.config, &requested_scopes)?;
-        let expires_at_ns = session_expiry(now_ns, requested_ttl_secs, &authority.config)?;
-        let proof_fingerprint =
-            AuthOps::delegated_token_claims_fingerprint(&request.delegated_token)
-                .map_err(Error::from)?;
-        let request_hash = ApplicationSessionWorkflow::establishment_request_hash(
-            &requested_scopes,
+        // Preserve configured request diagnostics before shared proof/replay admission.
+        session_expiry(now_ns, requested_ttl_secs, &authority.config)?;
+        let established = ApplicationSessionWorkflow::establish(ApplicationSessionEstablishInput {
+            token: request.delegated_token,
+            caller,
+            requested_scopes,
             requested_ttl_secs,
-        );
-
-        match ApplicationSessionWorkflow::resolve_retry(
-            proof_fingerprint,
-            caller,
-            request_hash,
-            now_ns,
-        )
-        .map_err(map_state_error)?
-        {
-            ApplicationReplayResolution::ExactActive(session) => {
-                require_current_session(&session, &authority.snapshot, now_ns)?;
-                record_application_session_idempotent();
-                IntentCleanupWorkflow::reconcile_after_terminal();
-                return Ok(ApplicationSessionCommandResponse::Established(
-                    session_view(&session),
-                ));
-            }
-            ApplicationReplayResolution::Conflict => {
-                return Err(Error::from_registered(codes::STATE_CONFLICT));
-            }
-            ApplicationReplayResolution::Absent => {}
-        }
-
-        let max_ttl_ns = AuthOps::delegated_token_max_ttl_ns().map_err(Error::from)?;
-        let verified = AuthOps::verify_token(VerifyDelegatedTokenRuntimeInput {
-            token: &request.delegated_token,
-            caller,
-            max_cert_ttl_ns: max_ttl_ns,
-            max_token_ttl_ns: max_ttl_ns,
-            required_scopes: &[],
+            authority,
             now_ns,
         })
         .map_err(Error::from)?;
-        if verified.fleet() != authority.snapshot.fleet()
-            || verified.role() != authority.snapshot.role()
-        {
-            return Err(Error::from_registered(codes::AUTHORITY_CONFLICT));
-        }
-
-        let established =
-            ApplicationSessionWorkflow::establish_verified(ApplicationSessionEstablishInput {
-                authority: verified,
-                requested_scopes,
-                authority_generation: authority.snapshot.generation(),
-                established_at_ns: now_ns,
-                expires_at_ns,
-                establishment_request_hash: request_hash,
-            })
-            .map_err(map_workflow_error)?;
         let session = match established {
             ApplicationSessionEstablishResult::Created(session) => {
                 record_application_session_created();
@@ -183,14 +132,7 @@ impl AuthApi {
             ));
         };
         let now_ns = IcOps::now_nanos();
-        let inactive = classify_inactive_session(&session, &authority.snapshot, now_ns);
-        if matches!(inactive, Some(InactiveApplicationSession::Expired { .. })) {
-            record_application_session_expired_observation();
-        }
-        Ok(match inactive {
-            Some(reason) => ApplicationSessionStatus::Inactive(reason),
-            None => ApplicationSessionStatus::Active(session_view(&session)),
-        })
+        current_session_status(&session, &authority, now_ns)
     }
 
     /// Return one root-authorized bounded audit page of retained application sessions.
@@ -208,14 +150,13 @@ impl AuthApi {
         let entries = sessions
             .entries
             .into_iter()
-            .map(|session| ApplicationSessionAuditEntry {
-                transport_caller: session.transport_caller(),
-                status: match classify_inactive_session(&session, &authority.snapshot, now_ns) {
-                    Some(reason) => ApplicationSessionStatus::Inactive(reason),
-                    None => ApplicationSessionStatus::Active(session_view(&session)),
-                },
+            .map(|session| {
+                Ok(ApplicationSessionAuditEntry {
+                    transport_caller: session.transport_caller(),
+                    status: current_session_status(&session, &authority, now_ns)?,
+                })
             })
-            .collect();
+            .collect::<Result<Vec<_>, Error>>()?;
         let minimum_accepted_registry_epoch = verifier
             .chain_key_root
             .as_ref()
@@ -240,6 +181,37 @@ impl AuthApi {
             },
         })
     }
+}
+
+fn current_session_status(
+    session: &LocalApplicationSession,
+    authority: &crate::ops::auth::application_authorization::LocalApplicationAuthorizationAuthority,
+    now_ns: u64,
+) -> Result<ApplicationSessionStatus, Error> {
+    let inactive = classify_inactive_session(session, &authority.snapshot, now_ns);
+    #[cfg(feature = "auth-local-application-authorization")]
+    if inactive.is_none() {
+        ApplicationSessionWorkflow::authorize(
+            session.transport_caller(),
+            None,
+            now_ns,
+            authority,
+            validate_application_subject(session.transport_caller()).is_ok(),
+        )
+        .map_err(AuthOps::map_application_session_error)
+        .map_err(Error::from)?;
+    }
+    #[cfg(not(feature = "auth-local-application-authorization"))]
+    if inactive.is_none() {
+        return Err(Error::from_registered(codes::CONFIGURATION_INACTIVE));
+    }
+    if matches!(inactive, Some(InactiveApplicationSession::Expired { .. })) {
+        record_application_session_expired_observation();
+    }
+    Ok(match inactive {
+        Some(reason) => ApplicationSessionStatus::Inactive(reason),
+        None => ApplicationSessionStatus::Active(session_view(session)),
+    })
 }
 
 fn classify_inactive_session(
@@ -328,17 +300,6 @@ fn session_expiry(
         .map_err(map_ttl_error)
 }
 
-fn require_current_session(
-    session: &LocalApplicationSession,
-    authority: &LocalApplicationAuthoritySnapshot,
-    now_ns: u64,
-) -> Result<(), Error> {
-    if classify_inactive_session(session, authority, now_ns).is_some() {
-        return Err(Error::from_registered(codes::STATE_CONFLICT));
-    }
-    Ok(())
-}
-
 fn session_view(session: &LocalApplicationSession) -> ApplicationSessionView {
     ApplicationSessionView {
         authenticated_subject: session.authenticated_subject(),
@@ -394,38 +355,6 @@ const fn map_ttl_error(error: ApplicationSessionTtlError) -> Error {
     }
 }
 
-fn map_workflow_error(error: ApplicationSessionWorkflowError) -> Error {
-    match error {
-        ApplicationSessionWorkflowError::ProofIneligible(error) => match error {
-            ApplicationProofEligibilityError::LifetimeTooLong { .. } => {
-                Error::from_registered(codes::TIME_CAPACITY)
-            }
-            ApplicationProofEligibilityError::CallerMismatch
-            | ApplicationProofEligibilityError::InvalidWindow
-            | ApplicationProofEligibilityError::NotCurrentlyValid => {
-                Error::from_registered(codes::SECURITY_INVALID)
-            }
-        },
-        ApplicationSessionWorkflowError::AdmissionDenied(error) => match error {
-            ApplicationSessionAdmissionError::Capacity(limit) => map_capacity_error(limit),
-            ApplicationSessionAdmissionError::ReplayConflict => {
-                Error::from_registered(codes::STATE_CONFLICT)
-            }
-            ApplicationSessionAdmissionError::ScopeNotGranted { .. } => {
-                Error::from_registered(codes::AUTHORITY_CONFLICT)
-            }
-        },
-        ApplicationSessionWorkflowError::ModelInvalid(_) => {
-            Error::from_registered(codes::REQUEST_INVALID)
-        }
-        ApplicationSessionWorkflowError::State(error) => map_state_error(error),
-    }
-}
-
-const fn map_capacity_error(_limit: ApplicationCapacityLimit) -> Error {
-    Error::from_registered(codes::CAPACITY_LIMIT)
-}
-
 fn map_state_error(error: ApplicationSessionStateError) -> Error {
     match error {
         ApplicationSessionStateError::ActiveGlobalCapacity
@@ -436,10 +365,6 @@ fn map_state_error(error: ApplicationSessionStateError) -> Error {
         | ApplicationSessionStateError::StableStateTooLarge
         | ApplicationSessionStateError::IndexStateTooLarge => {
             Error::from_registered(codes::CAPACITY_LIMIT)
-        }
-        ApplicationSessionStateError::AuthorityGenerationMismatch
-        | ApplicationSessionStateError::ReplayAlreadyExists => {
-            Error::from_registered(codes::STATE_CONFLICT)
         }
         #[cfg(any(test, feature = "auth-local-application-authorization"))]
         ApplicationSessionStateError::AuthorityGenerationExhausted => {

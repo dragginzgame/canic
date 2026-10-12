@@ -278,6 +278,112 @@ fn apply_journal_upload_receipt_binds_artifact_checksum() {
     );
 }
 
+#[test]
+fn apply_journal_upload_receipt_accepts_equivalent_checksum_case_without_rewriting() {
+    for operation_upper in [false, true] {
+        for receipt_upper in [false, true] {
+            let mut journal =
+                command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None);
+            if operation_upper {
+                journal.operations[0]
+                    .artifact_checksum
+                    .as_mut()
+                    .expect("operation checksum")
+                    .hash
+                    .make_ascii_uppercase();
+            }
+            let mut load = journal.operations[0].clone();
+            load.sequence = 1;
+            load.operation = RestoreApplyOperationKind::LoadSnapshot;
+            load.artifact_checksum.as_mut().expect("load checksum").hash = if receipt_upper {
+                HASH.to_ascii_lowercase()
+            } else {
+                HASH.to_ascii_uppercase()
+            };
+            journal.operations.push(load);
+            journal.operation_count = journal.operations.len();
+            journal.operation_counts =
+                RestoreApplyOperationKindCounts::from_operations(&journal.operations);
+            journal.ready_operations = journal.operations.len();
+            bind_upload_inventory(&mut journal, 0);
+            journal
+                .mark_operation_completed_at(0, Some("unix:1".to_string()))
+                .expect("mark upload completed");
+            let mut receipt = completed_upload_receipt(&journal.operations[0], 1);
+            let hash = &mut receipt
+                .artifact_checksum
+                .as_mut()
+                .expect("receipt checksum")
+                .hash;
+            if receipt_upper {
+                hash.make_ascii_uppercase();
+            } else {
+                hash.make_ascii_lowercase();
+            }
+            let operation_bytes =
+                serde_json::to_vec(&journal.operations).expect("serialize operations");
+            let receipt_bytes = serde_json::to_vec(&receipt).expect("serialize receipt");
+            journal
+                .record_operation_receipt(receipt)
+                .expect("equivalent digest identity");
+            journal.validate().expect("validate retained receipt");
+            let command = journal
+                .next_command_preview_with_config(&RestoreApplyCommandConfig::default())
+                .command
+                .expect("load binds equivalent receipt digest");
+            assert_eq!(
+                command.args.last().map(String::as_str),
+                Some("target-snap-root")
+            );
+            assert_eq!(
+                serde_json::to_vec(&journal.operations).unwrap(),
+                operation_bytes
+            );
+            assert_eq!(
+                serde_json::to_vec(&journal.operation_receipts[0]).unwrap(),
+                receipt_bytes
+            );
+            let mut different_digest = journal.clone();
+            different_digest.operations[1]
+                .artifact_checksum
+                .as_mut()
+                .expect("load checksum")
+                .hash = "f".repeat(64);
+            assert!(
+                different_digest
+                    .next_command_preview_with_config(&RestoreApplyCommandConfig::default())
+                    .command
+                    .is_none()
+            );
+        }
+    }
+}
+
+#[test]
+fn apply_journal_upload_receipt_rejects_malformed_or_unsupported_checksums() {
+    for (algorithm, hash) in [
+        ("sha256", "x".repeat(64)),
+        ("sha256", "a".repeat(63)),
+        ("SHA256", HASH.to_string()),
+    ] {
+        let mut journal = command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None);
+        bind_upload_inventory(&mut journal, 0);
+        journal
+            .mark_operation_completed_at(0, Some("unix:1".to_string()))
+            .unwrap();
+        let mut receipt = completed_upload_receipt(&journal.operations[0], 1);
+        receipt.artifact_checksum = Some(ArtifactChecksum {
+            algorithm: algorithm.to_string(),
+            hash,
+        });
+        std::assert_matches!(
+            journal.record_operation_receipt(receipt),
+            Err(RestoreApplyJournalError::OperationReceiptMismatch { sequence: 0 })
+        );
+        assert!(journal.operation_receipts.is_empty());
+    }
+}
+
 fn assert_receipt_missing_field(
     journal: &mut RestoreApplyJournal,
     receipt: RestoreApplyOperationReceipt,

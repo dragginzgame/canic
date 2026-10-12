@@ -4,7 +4,10 @@
 //! Does not own: section-level validation, topology binding, or persistence.
 //! Boundary: returns typed manifest validation errors for primitive fields.
 
-use crate::manifest::{ManifestValidationError, validation::SUPPORTED_MANIFEST_VERSION};
+use crate::{
+    artifacts::ArtifactChecksum,
+    manifest::{ManifestValidationError, validation::SUPPORTED_MANIFEST_VERSION},
+};
 
 use std::{collections::BTreeSet, str::FromStr};
 
@@ -85,13 +88,8 @@ pub(super) fn validate_hash(
     field: &'static str,
     value: &str,
 ) -> Result<(), ManifestValidationError> {
-    const SHA256_HEX_LEN: usize = 64;
     validate_nonempty(field, value)?;
-    if value.len() == SHA256_HEX_LEN && value.bytes().all(|b| b.is_ascii_hexdigit()) {
-        Ok(())
-    } else {
-        Err(ManifestValidationError::InvalidHash(field))
-    }
+    ArtifactChecksum::validate_hash(value).map_err(|_| ManifestValidationError::InvalidHash(field))
 }
 
 pub(super) fn validate_optional_hash(

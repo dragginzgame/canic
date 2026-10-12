@@ -11,6 +11,8 @@ mod measurement;
 mod predicates;
 mod token;
 
+#[cfg(feature = "auth-local-application-authorization")]
+use crate::ops::storage::auth::LocalApplicationAuthorizationStateOps;
 use crate::{
     access::AccessError,
     cdk::types::Principal,
@@ -18,7 +20,7 @@ use crate::{
         LocalApplicationAuthorizationPolicyInput,
         authorize_local_application as authorize_local_application_policy,
     },
-    ops::{auth::AuthOps, ic::IcOps, storage::auth::LocalApplicationAuthorizationStateOps},
+    ops::{auth::AuthOps, ic::IcOps},
 };
 use std::fmt;
 
@@ -64,22 +66,54 @@ pub fn authorize_local_application(
             return authorize_with_values(request, actual_caller, now_ns, true, None, None, false);
         }
     };
-    let Ok(session) = LocalApplicationAuthorizationStateOps::application_session(actual_caller)
-    else {
-        return authorize_with_values(request, actual_caller, now_ns, true, None, None, false);
-    };
-    let subject_admissible = session.as_ref().is_some_and(|session| {
-        validate_application_subject(session.authenticated_subject()).is_ok()
-    });
-    authorize_with_values(
-        request,
-        actual_caller,
-        now_ns,
-        true,
-        Some(&authority.snapshot),
-        session.as_ref(),
-        subject_admissible,
-    )
+    #[cfg(feature = "auth-local-application-authorization")]
+    {
+        use ic_auth::session::SessionError;
+        let subject_admissible = validate_application_subject(actual_caller).is_ok();
+        // SDK live checks precede the host's subject/scope denial classification.
+        let result =
+            crate::workflow::auth::application_sessions::ApplicationSessionWorkflow::authorize(
+                actual_caller,
+                Some(request.required_scope.as_str()),
+                now_ns,
+                &authority,
+                true,
+            );
+        let reason = match result {
+            Ok(session) if subject_admissible => {
+                return LocalApplicationAuthorizationDecision::Allow(
+                    AuthorizedApplicationSubject {
+                        subject: session.subject(),
+                        expires_at_ns: session.expires_at_ns(),
+                    },
+                );
+            }
+            Ok(_) => LocalApplicationAuthorizationDenial::InadmissibleSubject,
+            Err(SessionError::MissingOrExpired) => {
+                match LocalApplicationAuthorizationStateOps::has_application_session(actual_caller)
+                {
+                    Ok(false) => LocalApplicationAuthorizationDenial::MissingSession,
+                    Ok(true) => LocalApplicationAuthorizationDenial::Expired,
+                    Err(_) => LocalApplicationAuthorizationDenial::AuthorityUnavailable,
+                }
+            }
+            Err(SessionError::StaleAuthority) => {
+                LocalApplicationAuthorizationDenial::StaleAuthority
+            }
+            Err(SessionError::ScopeRejected) if !subject_admissible => {
+                LocalApplicationAuthorizationDenial::InadmissibleSubject
+            }
+            Err(SessionError::ScopeRejected) => LocalApplicationAuthorizationDenial::MissingScope,
+            Err(SessionError::Disabled) => LocalApplicationAuthorizationDenial::Disabled,
+            Err(_) => LocalApplicationAuthorizationDenial::AuthorityUnavailable,
+        };
+        LocalApplicationAuthorizationDecision::Deny(reason)
+    }
+    #[cfg(not(feature = "auth-local-application-authorization"))]
+    {
+        let _ = authority;
+        LocalApplicationAuthorizationDecision::Deny(LocalApplicationAuthorizationDenial::Disabled)
+    }
 }
 
 fn authorize_with_values(

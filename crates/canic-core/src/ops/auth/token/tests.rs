@@ -1,10 +1,13 @@
 //! Tests for delegated-token preparation, verification, configuration, and typed errors.
 
-use super::*;
+use super::{verification::map_shared_verification_error, *};
 use crate::{
     config::schema::{CanisterAuthConfig, CanisterKind, ChainKeyRootProofConfig},
     domain::auth::MAINNET_IC_ROOT_PUBLIC_KEY_RAW,
-    ops::auth::delegated::chain_key::ChainKeySignatureVerificationInput,
+    ops::auth::delegated::{
+        chain_key::{ChainKeySignatureVerificationInput, verify_chain_key_ecdsa_signature},
+        root_proof::RootDelegationProofError,
+    },
     storage::stable::env::{Env, EnvData, EnvRecord},
     test::config::{ConfigTestBuilder, install_model_for_role},
 };
@@ -128,6 +131,31 @@ fn active_delegation_proof_unavailable_maps_to_security_unavailable() {
 }
 
 #[test]
+fn token_prepare_shape_refusals_keep_security_invalid() {
+    let role = "project_instance".parse().unwrap();
+    let cases = [
+        PrepareDelegatedTokenError::GrantsEmpty,
+        PrepareDelegatedTokenError::TooManyGrants { found: 17, max: 16 },
+        PrepareDelegatedTokenError::EmptyGrantScopes { role },
+        PrepareDelegatedTokenError::TooManyGrantScopes {
+            role: "project_instance".parse().unwrap(),
+            found: 33,
+            max: 32,
+        },
+        PrepareDelegatedTokenError::Canonical(
+            ic_auth::canonical::CanonicalAuthError::NonCanonicalRoles,
+        ),
+    ];
+    for cause in cases {
+        let error = map_prepare_delegated_token_error(cause);
+        assert_eq!(
+            error.public_error().code(),
+            crate::diagnostics::codes::SECURITY_INVALID.raw_code()
+        );
+    }
+}
+
+#[test]
 fn token_prepare_outliving_active_proof_maps_to_security_ordering() {
     let err = map_prepare_delegated_token_error(PrepareDelegatedTokenError::TokenOutlivesCert);
     let public = err.public_error();
@@ -152,80 +180,85 @@ fn token_prepare_expired_active_proof_maps_to_auth_proof_expired() {
 #[test]
 fn delegated_token_verify_expiry_preserves_machine_readable_codes() {
     let cases: [(
-        VerifyDelegatedTokenError,
+        ic_auth::token::TokenVerificationError,
         crate::diagnostics::DiagnosticCode,
     ); 2] = [
         (
-            VerifyDelegatedTokenError::TokenExpired,
+            ic_auth::token::TokenVerificationError::Expired { target: "token" },
             crate::diagnostics::codes::AUTH_TOKEN_EXPIRED.raw_code(),
         ),
         (
-            VerifyDelegatedTokenError::CertExpired,
+            ic_auth::token::TokenVerificationError::Expired {
+                target: "certificate",
+            },
             crate::diagnostics::codes::AUTH_CERT_EXPIRED.raw_code(),
         ),
     ];
 
     for (err, expected) in cases {
-        let internal = map_verify_delegated_token_error(err);
+        let internal = map_shared_verification_error(err);
         let public = internal.public_error();
         assert_eq!(public.code(), expected);
     }
 }
 
 #[test]
-fn delegated_token_verify_preserves_typed_proof_callback_causes() {
-    let root = map_verify_delegated_token_error(VerifyDelegatedTokenError::<
-        InternalError,
-        InternalError,
-    >::RootProofInvalid(
-        InternalError::auth_material_stale()
-    ));
-    let issuer = map_verify_delegated_token_error(VerifyDelegatedTokenError::<
-        InternalError,
-        InternalError,
-    >::IssuerProofInvalid(
-        InternalError::invalid_input()
-    ));
-
-    assert_eq!(
-        root.public_error().code(),
-        crate::diagnostics::codes::SECURITY_CONFLICT.raw_code()
-    );
-    assert_eq!(
-        issuer.public_error().code(),
-        crate::diagnostics::codes::REQUEST_INVALID.raw_code()
-    );
-}
-
-#[test]
 fn chain_key_root_proof_failures_keep_boundary_specific_codes() {
     let cases = [
         (
-            ChainKeyRootProofError::Expired { target: "batch" },
+            RootDelegationProofError::Verification(
+                ic_auth::token::TokenVerificationError::Expired { target: "batch" },
+            ),
             crate::diagnostics::codes::AUTH_CERT_EXPIRED.raw_code(),
         ),
         (
-            ChainKeyRootProofError::NotYetValid { target: "batch" },
+            RootDelegationProofError::Verification(
+                ic_auth::token::TokenVerificationError::NotYetValid { target: "batch" },
+            ),
             crate::diagnostics::codes::SECURITY_UNAVAILABLE.raw_code(),
         ),
         (
-            ChainKeyRootProofError::Expired {
-                target: "root_key_policy",
-            },
+            RootDelegationProofError::Verification(
+                ic_auth::token::TokenVerificationError::Expired {
+                    target: "root_key_policy",
+                },
+            ),
             crate::diagnostics::codes::SECURITY_CONFLICT.raw_code(),
         ),
         (
-            ChainKeyRootProofError::ProofEpochTooOld { min: 8, found: 7 },
+            RootDelegationProofError::Verification(
+                ic_auth::token::TokenVerificationError::StaleAuthority {
+                    field: "proof_epoch",
+                },
+            ),
             crate::diagnostics::codes::SECURITY_CONFLICT.raw_code(),
         ),
         (
-            ChainKeyRootProofError::InvalidSignatureLength { len: 3 },
+            RootDelegationProofError::Verification(
+                ic_auth::token::TokenVerificationError::RootSignatureInvalid,
+            ),
             crate::diagnostics::codes::REQUEST_INVALID.raw_code(),
+        ),
+        (
+            RootDelegationProofError::Verification(
+                ic_auth::token::TokenVerificationError::RootSignatureBindingMismatch {
+                    field: "key_id",
+                },
+            ),
+            crate::diagnostics::codes::REQUEST_INVALID.raw_code(),
+        ),
+        (
+            RootDelegationProofError::Verification(
+                ic_auth::token::TokenVerificationError::RootKeyPolicyBindingMismatch {
+                    field: "key_id",
+                },
+            ),
+            crate::diagnostics::codes::SECURITY_CONFLICT.raw_code(),
         ),
     ];
 
     for (err, expected) in cases {
-        let mapped = map_chain_key_root_proof_error(err);
+        let mapped = map_root_delegation_proof_error(err);
         assert_eq!(mapped.public_error().code(), expected);
     }
 }
@@ -385,6 +418,7 @@ fn install_verifier_test_config(
     canister_cfg.auth = CanisterAuthConfig {
         delegated_token_issuer,
         delegated_token_verifier,
+        allowed_token_scopes: Vec::new(),
         local_application_authorization: None,
         role_attestation_cache,
     };

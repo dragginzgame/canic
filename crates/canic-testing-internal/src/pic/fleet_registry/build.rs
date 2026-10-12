@@ -1,6 +1,6 @@
 //! Test-Wasm and PocketIC builders for the prepared-root Registry journey.
 
-use ic_testkit::artifacts::{
+use ic_build::artifacts::{
     ArtifactCacheOutcome, ArtifactCachePreparation, ArtifactCacheSpec, WasmBuildSpec,
     prepare_artifact_cache, resolve_cargo_build_inputs,
 };

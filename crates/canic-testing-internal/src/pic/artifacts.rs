@@ -3,7 +3,7 @@ use canic_contracts::ids::BuildNetwork;
 use canic_host::role_contract::{
     CargoFeatureSelection, PackageValidationMode, RolePackageValidation,
 };
-use ic_testkit::artifacts::{
+use ic_build::artifacts::{
     ArtifactCacheMaintenance, ArtifactCachePrunePolicy, ArtifactCacheSpec, LabeledWasmBuildSpec,
     SharedIncrementalTargetMaintenanceConfig, SharedIncrementalTargetMaintenanceFailureMode,
     SharedIncrementalTargetMaintenanceOutcome, SharedIncrementalTargetPrunePolicy,
@@ -16,9 +16,7 @@ use ic_testkit::artifacts::{
     feature = "pocketic-fixtures",
     any(not(test), feature = "governed-pocketic-tests")
 ))]
-use ic_testkit::artifacts::{
-    ArtifactCacheOutcome, ArtifactCachePreparation, prepare_artifact_cache,
-};
+use ic_build::artifacts::{ArtifactCacheOutcome, ArtifactCachePreparation, prepare_artifact_cache};
 #[cfg(all(
     feature = "pocketic-fixtures",
     any(not(test), feature = "governed-pocketic-tests")
@@ -156,7 +154,7 @@ pub(super) fn build_canonical_fleet_coordinator_wasm(workspace_root: &Path) -> V
 
 /// Borrow one named immutable cache artifact while its record owns retention.
 pub(super) fn retained_artifact_path<'a>(
-    record: &'a ic_testkit::artifacts::ArtifactCacheRecord,
+    record: &'a ic_build::artifacts::ArtifactCacheRecord,
     name: &str,
 ) -> &'a Path {
     record
@@ -680,7 +678,7 @@ fn report_shared_target_maintenance(
         progress::event("CACHE", ProgressStatus::Warn, &description);
     } else if outcome
         .maintenance()
-        .is_some_and(ic_testkit::artifacts::SharedIncrementalTargetMaintenance::was_cleared)
+        .is_some_and(ic_build::artifacts::SharedIncrementalTargetMaintenance::was_cleared)
     {
         progress::event("CACHE", ProgressStatus::Info, &description);
     } else {
@@ -775,11 +773,11 @@ fn build_ci_wasm_artifacts_script(workspace_root: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ic_testkit::artifacts::maintain_shared_incremental_target_at_most_every;
+    use ic_build::artifacts::maintain_shared_incremental_target_at_most_every;
 
     #[test]
     fn retained_artifact_handoff_survives_replacement_and_pruning() {
-        use ic_testkit::artifacts::{
+        use ic_build::artifacts::{
             ArtifactCacheOutcome, ArtifactCachePreparation, prepare_artifact_cache,
             prune_artifact_cache,
         };

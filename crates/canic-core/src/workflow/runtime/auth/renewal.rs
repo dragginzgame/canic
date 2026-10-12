@@ -30,8 +30,8 @@ use crate::{
     },
 };
 use ic_timers::{
-    DeclarationLifetime, OnceContext, OnceDecision, OnceRegistration, OnceRunResult,
-    TimerCompletion, TimerIdentity, TimerSchedule, register_once,
+    OnceContext, OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion, TimerIdentity,
+    TimerSchedule, TimerStart, register_once,
 };
 use std::{cell::RefCell, time::Duration};
 
@@ -338,7 +338,7 @@ impl RootIssuerRenewalWorkflow {
         }
         let registration = register_once(
             Self::timer_identity()?,
-            DeclarationLifetime::Retained,
+            TimerStart::Retained { initial: None },
             |_context: OnceContext| crate::perf::with_async_context(Self::run_registered()),
         )?;
         retain_owned_once(&RENEWAL_TIMER, registration)

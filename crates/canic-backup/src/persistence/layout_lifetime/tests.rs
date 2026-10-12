@@ -13,6 +13,10 @@ fn removed_and_recreated_layout_keeps_the_same_lock_identity() {
     let root = parent.join("backup");
     fs::create_dir_all(&root).expect("create backup");
     let guard = BackupLayoutGuard::acquire(&root).expect("own deletion");
+    let sidecar = parent.join(
+        ".canic-backup-54d00d867758cef816bc4685f58e327b949712b07ebd17c3485f3ffc9e9f5133.lock",
+    );
+    assert!(sidecar.is_file());
     fs::remove_dir_all(&root).expect("remove backup");
     fs::create_dir(&root).expect("recreate backup");
     std::assert_matches!(

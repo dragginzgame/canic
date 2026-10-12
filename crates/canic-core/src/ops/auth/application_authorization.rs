@@ -23,11 +23,85 @@ use canic_contracts::ids::{CanisterRole, FleetKey, ManagedCanisterBinding};
 /// Protected configuration and exact current identity for local application authorization.
 
 pub struct LocalApplicationAuthorizationAuthority {
+    #[cfg_attr(
+        not(feature = "auth-local-application-authorization"),
+        expect(
+            dead_code,
+            reason = "the scope ceiling is consumed by the enabled SDK session engine"
+        )
+    )]
+    pub allowed_token_scopes: Vec<String>,
     pub config: LocalApplicationAuthorizationConfig,
     pub snapshot: LocalApplicationAuthoritySnapshot,
 }
 
 impl AuthOps {
+    /// Project a submitted token into the shared engine's current contract.
+    #[cfg(feature = "auth-local-application-authorization")]
+    pub(crate) fn application_session_token(
+        token: &crate::dto::auth::DelegatedToken,
+    ) -> Result<ic_auth_protocol_types::DelegatedToken, InternalError> {
+        super::delegated::protocol::token(token).map_err(|_| InternalError::invalid_input())
+    }
+
+    /// Convert the canonical narrowing request without selecting lease policy.
+    #[cfg(feature = "auth-local-application-authorization")]
+    pub(crate) fn shared_application_session_request(
+        scopes: &CanonicalApplicationScopes,
+        ttl: Option<u64>,
+    ) -> Result<ic_auth::session_request::SessionRequest, InternalError> {
+        ic_auth::session_request::SessionRequest::new(
+            scopes
+                .as_slice()
+                .iter()
+                .map(|scope| scope.as_str().to_owned())
+                .collect(),
+            ttl,
+        )
+        .map_err(|_| InternalError::invalid_input())
+    }
+
+    /// Bind admission to current host generation and configured lease limits.
+    #[cfg(feature = "auth-local-application-authorization")]
+    pub(crate) const fn shared_application_session_policy(
+        authority: &LocalApplicationAuthorizationAuthority,
+        subject_admissible: bool,
+    ) -> ic_auth::session::SessionPolicy {
+        ic_auth::session::SessionPolicy {
+            generation: authority.snapshot.generation(),
+            enabled: true,
+            subject_admissible,
+            default_ttl_secs: authority.config.default_session_ttl_secs,
+            max_ttl_secs: authority.config.maximum_session_ttl_secs,
+            max_proof_ttl_ns:
+                crate::model::auth::application_authorization::MAX_APPLICATION_PROOF_LIFETIME_NS,
+        }
+    }
+
+    /// Preserve typed endpoint diagnostics while delegating session decisions.
+    #[cfg(feature = "auth-local-application-authorization")]
+    pub(crate) fn map_application_session_error(
+        error: ic_auth::session::SessionError,
+    ) -> InternalError {
+        use crate::diagnostics::codes;
+        use ic_auth::session::SessionError as E;
+        match error {
+            E::Token(cause) => super::token::verification::map_shared_verification_error(cause),
+            E::ReplayConflict => InternalError::public(codes::STATE_CONFLICT),
+            E::Capacity | E::ByteCapacity => InternalError::public(codes::CAPACITY_LIMIT),
+            E::GenerationExhausted => InternalError::public(codes::VERSION_CAPACITY),
+            E::Disabled => InternalError::public(codes::CONFIGURATION_INACTIVE),
+            E::StaleAuthority | E::ScopeRejected => {
+                InternalError::public(codes::AUTHORITY_CONFLICT)
+            }
+            E::ProofIneligible | E::MissingOrExpired => {
+                InternalError::public(codes::SECURITY_INVALID)
+            }
+            E::StorageFailure => InternalError::unavailable(),
+            E::Canonical(_) | E::InvalidPolicyOrRecord => InternalError::invalid_input(),
+        }
+    }
+
     /// Project the one protected local application authority, or `None` when disabled.
     pub(crate) fn local_application_authorization_authority()
     -> Result<Option<LocalApplicationAuthorizationAuthority>, InternalError> {
@@ -41,6 +115,7 @@ impl AuthOps {
         let binding = EnvOps::managed_binding()?;
         let (fleet, role) = managed_authority(&binding);
         Ok(Some(LocalApplicationAuthorizationAuthority {
+            allowed_token_scopes: canister.auth.allowed_token_scopes,
             config,
             snapshot: LocalApplicationAuthoritySnapshot::new(
                 fleet,

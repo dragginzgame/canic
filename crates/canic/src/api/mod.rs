@@ -9,6 +9,11 @@
 /// Authentication workflow helpers
 pub mod auth {
     pub use crate::__internal::core::api::auth::AuthApi;
+    #[cfg(any(
+        feature = "auth-root-canister-sig-create",
+        feature = "auth-issuer-canister-sig-create"
+    ))]
+    pub use crate::__internal::core::api::auth::SignatureSibling;
 }
 
 /// Local and receipt-backed reservation helpers.

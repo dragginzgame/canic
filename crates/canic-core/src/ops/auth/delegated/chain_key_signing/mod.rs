@@ -8,7 +8,7 @@ use super::{
     canonical::{CanonicalAuthError, chain_key_batch_header_hash, chain_key_derivation_path_hash},
     chain_key::{
         ChainKeySignatureVerificationInput, verify_chain_key_ecdsa_public_key_shape,
-        verify_chain_key_ecdsa_signature, verify_chain_key_ecdsa_signature_shape,
+        verify_chain_key_ecdsa_signature,
     },
 };
 use crate::{
@@ -22,7 +22,7 @@ use crate::{
     },
 };
 use canic_contracts::ids::BuildNetwork;
-#[cfg(any(feature = "auth-chain-key-ecdsa", test))]
+#[cfg(test)]
 use k256::ecdsa::Signature as K256EcdsaSignature;
 use std::{future::Future, pin::Pin};
 use thiserror::Error;
@@ -189,8 +189,6 @@ where
 
     let signature_bytes = normalize_chain_key_ecdsa_signature(&signature.signature)?;
 
-    verify_chain_key_ecdsa_signature_shape(&signature_bytes)
-        .map_err(|err| ChainKeySignerError::SignatureVerification(err.to_string()))?;
     verify_chain_key_ecdsa_signature(ChainKeySignatureVerificationInput {
         algorithm: input.policy.algorithm,
         public_key: &input.policy.public_key,
@@ -216,12 +214,9 @@ fn normalize_chain_key_ecdsa_signature(signature: &[u8]) -> Result<Vec<u8>, Chai
 fn normalize_chain_key_ecdsa_signature_enabled(
     signature: &[u8],
 ) -> Result<Vec<u8>, ChainKeySignerError> {
-    let parsed = K256EcdsaSignature::from_slice(signature).map_err(|err| {
-        ChainKeySignerError::SignatureVerification(format!(
-            "invalid chain-key ECDSA signature encoding: {err}"
-        ))
-    })?;
-    Ok(parsed.normalize_s().unwrap_or(parsed).to_bytes().to_vec())
+    ic_auth::chain_key_signature::normalize_secp256k1_signature(signature)
+        .map(|signature| signature.to_vec())
+        .map_err(|error| ChainKeySignerError::SignatureVerification(error.to_string()))
 }
 
 #[cfg(not(any(feature = "auth-chain-key-ecdsa", test)))]
@@ -625,7 +620,10 @@ mod tests {
         let mut signer = MockSigner::valid(&header);
         signer.signature = high_s_signature(&header);
         assert!(
-            verify_chain_key_ecdsa_signature_shape(&signer.signature).is_err(),
+            K256EcdsaSignature::from_slice(&signer.signature)
+                .unwrap()
+                .normalize_s()
+                .is_some(),
             "test fixture must start in high-s form",
         );
 
@@ -638,8 +636,12 @@ mod tests {
         ))
         .expect("high-s management signature should normalize before proof storage");
 
-        verify_chain_key_ecdsa_signature_shape(&signature.signature)
-            .expect("stored signature should be low-s");
+        assert!(
+            K256EcdsaSignature::from_slice(&signature.signature)
+                .unwrap()
+                .normalize_s()
+                .is_none()
+        );
         assert_eq!(signer.sign_calls, 1);
     }
 }

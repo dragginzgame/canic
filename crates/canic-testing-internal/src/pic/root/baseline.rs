@@ -192,7 +192,7 @@ impl StdError for RootBaselineRecipeError {
 #[must_use]
 pub fn build_root_cached_baseline(
     spec: &RootBaselineSpec<'_>,
-    artifacts: &ic_testkit::artifacts::ArtifactCacheRecord,
+    artifacts: &ic_build::artifacts::ArtifactCacheRecord,
     root_wasm: Vec<u8>,
 ) -> CachedPocketIcBaseline<RootBaselineMetadata> {
     let initialized = super::topology::setup_root_topology(spec, artifacts, root_wasm);

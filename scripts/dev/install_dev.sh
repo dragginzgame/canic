@@ -116,7 +116,7 @@ install_or_update_shellcheck() {
 install_repository_tools() {
     yellow "Repository JSON/YAML and IC tools:"
     make -C "$ROOT_DIR" --no-print-directory install-tools
-    export PATH="$ROOT_DIR/.tools/host/bin:$ROOT_DIR/.tools/ic/bin:$ROOT_DIR/.tools/rust/bin:$PATH"
+    export PATH="$ROOT_DIR/.tools/host/bin:$ROOT_DIR/.tools/ic/bin:$ROOT_DIR/.tools/rust/common/bin:$PATH"
     hash -r 2>/dev/null || true
 }
 

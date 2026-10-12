@@ -30,7 +30,16 @@ application token never becomes controller or Fleet authority.
   permissions
 
 Cargo features and `canic.toml` settings are both explicit. Issuer and verifier
-roles must opt into the runtime capabilities they use.
+roles must opt into the runtime capabilities they use. Verifiers declare
+`auth.allowed_token_scopes`; an omitted ceiling accepts no grant. Local session
+scopes must be a subset of that ceiling.
+
+IC Auth owns full token verification, session admission, exact retries and live
+session checks. Canic supplies protected Fleet/role/Root authority and commits
+one session/replay pair synchronously. Same-release restoration retains the
+original lease and proof consumption; retry never extends the lease. Status and
+audit reads check current authority before reporting an active session. Across
+releases, rebuild and cleanly reinstall the maintained family.
 
 ## Boundary
 

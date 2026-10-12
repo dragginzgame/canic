@@ -7,9 +7,7 @@ mod source;
 mod tests;
 
 use canic_core::cdk::utils::hash::sha256_hex;
-use ic_testkit::artifacts::{
-    WasmBuildSpec, build_wasm_canisters_cached, resolve_cargo_build_inputs,
-};
+use ic_build::artifacts::{WasmBuildSpec, build_wasm_canisters_cached, resolve_cargo_build_inputs};
 use serde::{Deserialize, Serialize};
 use std::{error::Error, fs, io, path::Path, process::Command};
 

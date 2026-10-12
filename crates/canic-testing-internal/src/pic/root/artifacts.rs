@@ -20,13 +20,11 @@ use canic_contracts::{
 };
 use canic_core::cdk::utils::hash::wasm_hash;
 use canic_host::release_set::AppConfigSnapshot;
-use ic_testkit::{
-    artifacts::{
-        ArtifactCacheOutcome, ArtifactCachePreparation, ArtifactCacheRecord, ArtifactCacheSpec,
-        WasmBuildSpec, prepare_artifact_cache, resolve_cargo_build_inputs,
-    },
-    pic::{CandidCallExt, PocketIc, PocketIcTimeExt},
+use ic_build::artifacts::{
+    ArtifactCacheOutcome, ArtifactCachePreparation, ArtifactCacheRecord, ArtifactCacheSpec,
+    WasmBuildSpec, prepare_artifact_cache, resolve_cargo_build_inputs,
 };
+use ic_testkit::pic::{CandidCallExt, PocketIc, PocketIcTimeExt};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs, io,

@@ -6,6 +6,51 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.112.0]
+
+Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
+
+- **Breaking public contracts:** align consumers with Auth protocol-types 0.5,
+  Backup 0.21, Query 0.55 and Host 0.15, initialize the new protected provisioning failure
+  field, rebuild the family and cleanly reinstall across releases
+  ([#517](https://github.com/dragginzgame/canic/issues/517)).
+  Preserve exact dependency/rejection evidence and approved provisioning resume
+  commands ([#516](https://github.com/dragginzgame/canic/issues/516)).
+  Align Backup with the shared Host/Metrics graph, checksum validation and private
+  sidecar admission, adopt Blob 0.22.11's shared endpoint owner,
+  qualify Root-driven managed Blob installation and both governed consumer
+  compositions, retain wide timer totals, reuse its
+  upstream memory-grant container, align consumers, reuse upstream Auth
+  request hashing, certificate rules, crypto preparation, complete proof checks,
+  session admission and shared signature storage with explicit scope ceilings,
+  adopt published Testkit 0.35, Query's asynchronous catalog API,
+  atomic timer registration and wide instruction totals,
+  compare artifact Candid/Wasm names and modes through Host 0.15,
+  use published IC Build 0.1.1 for Cargo grouping/cache consumers with retained
+  failure evidence and pre-effect package-list admission,
+  remove duplicate upstream preparation tests
+  and unused test-only checksum composition,
+  adopt Shared Tooling 0.9.2's consumer Make interface and verified Cargo/host/IC tools with
+  retained failure evidence, fail-closed setup and committed-preparation restart,
+  reduce tooling/memory-pool duplication, and correct
+  exact Blob installation decoding and managed recovery fencing, token verification, restore receipt matching, release payload admission,
+  oversized ICP configuration reads, macOS worker fixture cleanup, canonical
+  tool-resolution expectations and the refreshed embedded allocation peer
+  ([#450](https://github.com/dragginzgame/canic/issues/450))
+  ([#513](https://github.com/dragginzgame/canic/issues/513),
+  [Host #64](https://github.com/dragginzgame/ic-host-tooling/issues/64),
+  [#491](https://github.com/dragginzgame/canic/issues/491),
+  [#444](https://github.com/dragginzgame/canic/issues/444),
+  [#458](https://github.com/dragginzgame/canic/issues/458),
+  [#452](https://github.com/dragginzgame/canic/issues/452),
+  [#500](https://github.com/dragginzgame/canic/issues/500),
+  [#461](https://github.com/dragginzgame/canic/issues/461),
+  [#512](https://github.com/dragginzgame/canic/issues/512),
+  [#509](https://github.com/dragginzgame/canic/issues/509),
+  [#474](https://github.com/dragginzgame/canic/issues/474),
+  [#514](https://github.com/dragginzgame/canic/issues/514),
+  [#524](https://github.com/dragginzgame/canic/issues/524)).
+
 ## [0.111.0] - 2026-10-10
 
 Detailed notes: [docs/changelog/0.111.md](docs/changelog/0.111.md)

@@ -5,8 +5,8 @@
 //! Boundary: Canic bootstraps once before the lifecycle participant opens the grants.
 
 use ic_blob_storage::ops::service::{
-    installation::{self, INSTALLATION_MEMORY_KEY},
-    stores::{ServiceMemories, grants},
+    installation::{self, INSTALLATION_MEMORY_KEY, ServiceInstallationMemories},
+    stores::grants,
 };
 use ic_memory::{RuntimeMemory, ic_stable_structures::DefaultMemoryImpl};
 
@@ -23,13 +23,9 @@ pub fn register() {
     }
 }
 
-pub(super) struct Grants {
-    pub(super) configuration: Memory,
-    pub(super) stores: ServiceMemories<Memory>,
-}
-pub(super) fn open() -> Grants {
+pub(super) fn open() -> ServiceInstallationMemories<Memory> {
     let lookup = ic_memory::open_default_memory_manager_memory;
-    Grants {
+    ServiceInstallationMemories {
         configuration: lookup(INSTALLATION_MEMORY_KEY).expect("configuration grant"),
         stores: grants::open(lookup).expect("service grants"),
     }

@@ -1,6 +1,6 @@
 use canic::ids::BuildNetwork;
 use canic_testing_internal::pic::{CanicWasmBuildProfile, RootBaselineSpec};
-use ic_testkit::artifacts::workspace_root_for;
+use ic_build::artifacts::workspace_root_for;
 use std::path::{Path, PathBuf};
 
 const ROOT_TOPOLOGY_RELEASE_ROLES: &[&str] = &[

@@ -15,7 +15,7 @@ use canic::{
         page::{Page, PageRequest},
         role::MetricsStatusRequest,
     },
-    ids::{CanisterRole, FleetKey, cap},
+    ids::cap,
     protocol,
 };
 use canic_contracts::dto::wire::projection::admission::RemoteRootStatusRequest as FleetAdmissionManagedStatusRequest;
@@ -29,7 +29,7 @@ use canic_contracts::dto::wire::projection::fixture_native_delegation::CanisterC
 use canic_contracts::dto::wire::projection::fixture_native_delegation::CanisterStatusRequest;
 use canic_contracts::dto::wire::projection::fixture_native_delegation::CanisterStatusResponse;
 use canic_core::cdk::structures::{
-    VectorMemory,
+    Vec as StableVec, VectorMemory,
     cell::Cell,
     memory::{MemoryId, MemoryManager},
 };
@@ -41,7 +41,6 @@ use canic_testing_internal::pic::{
 use ic_agent::{Agent, Identity, identity::Secp256k1Identity};
 use ic_testkit::pic::{CandidCallExt, CanisterInstallExt, PocketIcTimeExt, RetryPolicy};
 use ic_testkit::pocket_ic::{PocketIc, common::rest::BlobCompression};
-use serde::Serialize;
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
 const MAX_ACTIVE_APPLICATION_SESSIONS: usize = 2_048;
@@ -113,28 +112,23 @@ impl LocalAuthorizationDenialProbe {
     }
 }
 
-#[derive(Serialize)]
-struct ApplicationSessionRecordFixture {
-    transport_caller: candid::Principal,
-    authenticated_subject: candid::Principal,
-    issuer: candid::Principal,
-    fleet: FleetKey,
-    role: CanisterRole,
-    scopes: Vec<String>,
-    authority_generation: u64,
-    established_at_ns: u64,
-    expires_at_ns: u64,
-    proof_fingerprint: [u8; 32],
-    establishment_request_hash: [u8; 32],
-}
-
-#[derive(Serialize)]
-struct ApplicationReplayRecordFixture {
-    proof_fingerprint: [u8; 32],
-    transport_caller: candid::Principal,
-    authenticated_subject: candid::Principal,
-    authority_generation: u64,
-    remove_at_ns: u64,
+// Raw current-contract bytes for trusted stable-memory resource qualification.
+struct FixtureRecord<const MAX: u32>(Vec<u8>);
+impl<const MAX: u32> canic_core::cdk::structures::storable::Storable for FixtureRecord<MAX> {
+    const BOUND: canic_core::cdk::structures::storable::Bound =
+        canic_core::cdk::structures::storable::Bound::Bounded {
+            max_size: MAX,
+            is_fixed_size: false,
+        };
+    fn to_bytes(&self) -> std::borrow::Cow<'_, [u8]> {
+        std::borrow::Cow::Borrowed(&self.0)
+    }
+    fn into_bytes(self) -> Vec<u8> {
+        self.0
+    }
+    fn from_bytes(bytes: std::borrow::Cow<'_, [u8]>) -> Self {
+        Self(bytes.into_owned())
+    }
 }
 
 // Acquire the shared snapshot baseline only for cases whose mutations remain
@@ -638,25 +632,15 @@ fn fleet_admission_probe_as(
 }
 
 #[test]
-#[expect(
-    clippy::too_many_lines,
-    reason = "one ordered PocketIC journey records the complete maximum-state resource boundary"
-)]
 fn maximum_application_session_resource_contract_is_bounded() {
-    let fixture = setup_snapshot_resettable_active_component_registry();
+    let mut fixture = setup_fresh_active_component_registry();
     let verifier_wasm = fixture.verifier_wasm();
     let verifier = fixture.verifier.canister_id;
     let subject = native_agent_subject();
-    let now_ns = fixture.pic().current_time_nanos();
 
     let stable_bytes_before = fixture.pic().get_stable_memory(verifier).len();
     let auth_state_bytes = inject_application_authorization_state(
-        fixture.pic(),
-        verifier,
-        fixture.issuer.canister_id,
-        fixture.verifier.role.clone(),
-        subject,
-        now_ns,
+        &mut fixture,
         MAX_ACTIVE_APPLICATION_SESSIONS,
         MAX_APPLICATION_REPLAY_RECORDS,
     );
@@ -747,7 +731,7 @@ fn maximum_application_session_resource_contract_is_bounded() {
     );
 
     eprintln!(
-        "0.105 B6 maximum resource observation: auth_state_bytes={auth_state_bytes} stable_memory_before={stable_bytes_before} stable_memory_at_maximum={stable_bytes_at_maximum} restore_instructions={} authorization_instructions={} cleanup_instructions={}",
+        "application-session maximum resource observation: auth_state_bytes={auth_state_bytes} stable_memory_before={stable_bytes_before} stable_memory_at_maximum={stable_bytes_at_maximum} restore_instructions={} authorization_instructions={} cleanup_instructions={}",
         restore.1, authorized.local_instructions, cleanup.1,
     );
     drop(fixture);
@@ -762,26 +746,18 @@ fn local_application_authorization_lookup_is_bounded_at_one_and_median_state() {
             MAX_APPLICATION_REPLAY_RECORDS / 2,
         ),
     ];
-    eprintln!("0.105 B6 lookup observations: {observations:?}");
+    eprintln!("application-session lookup observations: {observations:?}");
 }
 
 fn measure_application_authorization_at_state(
     session_count: usize,
     replay_count: usize,
 ) -> (usize, u64) {
-    let fixture = setup_snapshot_resettable_active_component_registry();
+    let mut fixture = setup_fresh_active_component_registry();
     let verifier = fixture.verifier.canister_id;
     let subject = native_agent_subject();
-    let auth_state_bytes = inject_application_authorization_state(
-        fixture.pic(),
-        verifier,
-        fixture.issuer.canister_id,
-        fixture.verifier.role.clone(),
-        subject,
-        fixture.pic().current_time_nanos(),
-        session_count,
-        replay_count,
-    );
+    let auth_state_bytes =
+        inject_application_authorization_state(&mut fixture, session_count, replay_count);
     assert!(auth_state_bytes <= MAX_APPLICATION_SESSION_STABLE_BYTES);
     retry_same_release_upgrade(
         fixture.pic(),
@@ -874,37 +850,37 @@ async fn run_native_agent_journey(
         .expect("decode delegated-token presentation response");
     presented.expect("the same authenticated native agent must pass verification");
 
-    let (first_view, _, warm_establishment_instructions) =
+    let (first_view, _, reused_establishment_instructions) =
         exercise_application_session(fixture, &agent, subject, token).await;
     assert_eq!(first_view.authenticated_subject, subject);
 
-    let cold_token = prepare_native_delegated_token(fixture, &agent, 43).await;
-    let cold_request = ApplicationSessionRequest {
-        delegated_token: cold_token,
+    let fresh_token = prepare_native_delegated_token(fixture, &agent, 43).await;
+    let fresh_request = ApplicationSessionRequest {
+        delegated_token: fresh_token,
         requested_scopes: maximum_application_scopes(),
         requested_ttl_secs: Some(1_799),
     };
-    let before_cold = native_runtime_metrics(&agent, fixture.verifier.canister_id).await;
-    let cold_established = application_session_command(
+    let before_fresh = native_runtime_metrics(&agent, fixture.verifier.canister_id).await;
+    let fresh_established = application_session_command(
         &agent,
         fixture.verifier.canister_id,
-        ApplicationSessionCommand::Establish(cold_request.clone()),
+        ApplicationSessionCommand::Establish(fresh_request.clone()),
     )
     .await
-    .expect("cold-proof application session must replace the first session");
-    let after_cold = native_runtime_metrics(&agent, fixture.verifier.canister_id).await;
-    let ApplicationSessionCommandResponse::Established(cold_view) = cold_established else {
-        panic!("unexpected cold application-session response")
+    .expect("fresh-token application session must replace the first session");
+    let after_fresh = native_runtime_metrics(&agent, fixture.verifier.canister_id).await;
+    let ApplicationSessionCommandResponse::Established(fresh_view) = fresh_established else {
+        panic!("unexpected fresh-token application-session response")
     };
-    let cold_establishment = metric_delta(
-        &before_cold,
-        &after_cold,
+    let fresh_establishment = metric_delta(
+        &before_fresh,
+        &after_fresh,
         &["perf", "endpoint", "update", protocol::CANIC_COMMAND],
     );
-    assert_eq!(cold_establishment.0, 1);
-    let cold_verification = metric_delta(
-        &before_cold,
-        &after_cold,
+    assert_eq!(fresh_establishment.0, 1);
+    let fresh_verification = metric_delta(
+        &before_fresh,
+        &after_fresh,
         &[
             "perf",
             "checkpoint",
@@ -912,13 +888,13 @@ async fn run_native_agent_journey(
             "delegated_token_verify_embedded_proofs",
         ],
     );
-    assert_eq!(cold_verification.0, 1);
+    assert_eq!(fresh_verification.0, 1);
     eprintln!(
-        "0.105 B6 establishment observation: warm_instructions={warm_establishment_instructions} cold_instructions={} cold_embedded_proof_instructions={}",
-        cold_establishment.1, cold_verification.1,
+        "application-session establishment observation: reused_instructions={reused_establishment_instructions} fresh_instructions={} fresh_embedded_proof_instructions={}",
+        fresh_establishment.1, fresh_verification.1,
     );
 
-    (subject, cold_view, cold_request)
+    (subject, fresh_view, fresh_request)
 }
 
 async fn prepare_native_delegated_token(
@@ -998,7 +974,7 @@ async fn exercise_application_session(
         requested_scopes: maximum_application_scopes(),
         requested_ttl_secs: Some(1_800),
     };
-    let before_warm = native_runtime_metrics(agent, fixture.verifier.canister_id).await;
+    let before_reused = native_runtime_metrics(agent, fixture.verifier.canister_id).await;
     let established = application_session_command(
         agent,
         fixture.verifier.canister_id,
@@ -1006,27 +982,27 @@ async fn exercise_application_session(
     )
     .await
     .expect("caller-bound application session must establish");
-    let after_warm = native_runtime_metrics(agent, fixture.verifier.canister_id).await;
+    let after_reused = native_runtime_metrics(agent, fixture.verifier.canister_id).await;
     let ApplicationSessionCommandResponse::Established(first_view) = established else {
         panic!("unexpected application-session response")
     };
-    let warm_establishment = metric_delta(
-        &before_warm,
-        &after_warm,
+    let reused_establishment = metric_delta(
+        &before_reused,
+        &after_reused,
         &["perf", "endpoint", "update", protocol::CANIC_COMMAND],
     );
-    assert_eq!(warm_establishment.0, 1);
-    let warm_verification = metric_delta(
-        &before_warm,
-        &after_warm,
+    assert_eq!(reused_establishment.0, 1);
+    let reused_verification = metric_delta(
+        &before_reused,
+        &after_reused,
         &[
             "perf",
             "checkpoint",
             "canic_core::ops::auth::token",
-            "delegated_token_verify_cached",
+            "delegated_token_verify_embedded_proofs",
         ],
     );
-    assert_eq!(warm_verification.0, 1);
+    assert_eq!(reused_verification.0, 1);
     assert_eq!(first_view.authenticated_subject, subject);
     assert_eq!(first_view.scopes, maximum_application_scopes());
     assert_eq!(
@@ -1060,7 +1036,7 @@ async fn exercise_application_session(
         ApplicationSessionCommandResponse::Established(first_view.clone())
     );
 
-    (first_view, establish_request, warm_establishment.1)
+    (first_view, establish_request, reused_establishment.1)
 }
 
 async fn clear_application_session_journey(
@@ -1259,106 +1235,170 @@ fn native_agent_subject() -> candid::Principal {
         .expect("test identity must have a sender")
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the fixture injector names every exact canonical state and authority input"
-)]
+// Resource qualification changes trusted physical storage, not the ingress protocol.
+// Start from a real admitted session so its protected SDK Root authority stays exact.
 fn inject_application_authorization_state(
-    pic: &PocketIc,
-    canister_id: candid::Principal,
-    issuer: candid::Principal,
-    role: CanisterRole,
-    native_subject: candid::Principal,
-    now_ns: u64,
+    fixture: &mut ActiveComponentRegistryFixture,
     session_count: usize,
     replay_count: usize,
 ) -> usize {
-    let fleet = managed_test_init_identity().fleet.fleet;
-    let session_expiry_ns = now_ns
-        .checked_add(1_800_000_000_000)
-        .expect("session expiry must fit");
-    let replay_expiry_ns = now_ns
-        .checked_add(60_000_000_000)
-        .expect("replay expiry must fit");
-    let sessions = (0..session_count)
-        .map(|index| {
-            let subject = if index == 0 {
-                native_subject
-            } else {
-                fixture_principal(index as u64)
-            };
-            ApplicationSessionRecordFixture {
-                transport_caller: subject,
-                authenticated_subject: subject,
-                issuer,
-                fleet,
-                role: role.clone(),
-                scopes: maximum_application_scopes(),
-                authority_generation: 0,
-                established_at_ns: now_ns,
-                expires_at_ns: session_expiry_ns,
-                proof_fingerprint: fixture_hash(index as u64),
-                establishment_request_hash: fixture_hash((replay_count + index) as u64),
-            }
-        })
-        .collect::<Vec<_>>();
-    let replays = (0..replay_count)
-        .map(|index| {
-            let subject = if index == 0 {
-                native_subject
-            } else {
-                fixture_principal(index as u64)
-            };
-            ApplicationReplayRecordFixture {
-                proof_fingerprint: fixture_hash(index as u64),
-                transport_caller: subject,
-                authenticated_subject: subject,
-                authority_generation: 0,
-                remove_at_ns: replay_expiry_ns,
-            }
-        })
-        .collect::<Vec<_>>();
-
+    establish_resource_session(fixture);
+    let pic = fixture.pic();
+    let canister_id = fixture.verifier.canister_id;
     let stable_memory: VectorMemory = Rc::new(RefCell::new(pic.get_stable_memory(canister_id)));
     let manager = MemoryManager::init(stable_memory.clone());
-    let auth_memory = manager.get(MemoryId::new(allocated_memory_id(
-        &manager,
-        "canic.core.auth.local_application_authorization.state.v1",
-    )));
-    let mut auth_cell = Cell::<Vec<u8>, _>::init(auth_memory, Vec::new());
-    let mut auth_state: ciborium::Value =
-        ciborium::from_reader(auth_cell.get().as_slice()).expect("decode current auth-state CBOR");
-    replace_cbor_field(
-        &mut auth_state,
-        "application_sessions",
-        ciborium::Value::serialized(&sessions).expect("encode maximum application sessions"),
-    );
-    replace_cbor_field(
-        &mut auth_state,
-        "application_replays",
-        ciborium::Value::serialized(&replays).expect("encode maximum application replays"),
-    );
-    replace_cbor_field(
-        &mut auth_state,
-        "application_authority_generation",
-        ciborium::Value::Integer(0.into()),
-    );
-    replace_cbor_field(
-        &mut auth_state,
-        "application_authority_binding",
-        ciborium::Value::Null,
-    );
-    let mut auth_state_bytes = Vec::new();
-    ciborium::into_writer(&auth_state, &mut auth_state_bytes)
-        .expect("encode maximum auth-state CBOR");
-    auth_cell.set(auth_state_bytes.clone());
-    drop(auth_cell);
+    let session_map =
+        StableVec::<FixtureRecord<4096>, _>::init(manager.get(MemoryId::new(allocated_memory_id(
+            &manager,
+            "canic.core.auth.local_application_authorization.sessions.v1",
+        ))));
+    let replay_map =
+        StableVec::<FixtureRecord<512>, _>::init(manager.get(MemoryId::new(allocated_memory_id(
+            &manager,
+            "canic.core.auth.local_application_authorization.replays.v1",
+        ))));
+    let current_session_bytes = session_map.get(0).expect("real SDK session row").0;
+    let current_session: ciborium::Value =
+        ciborium::from_reader(current_session_bytes.as_slice()).unwrap();
+    let current_replay = replay_map.get(0).expect("real consumed proof row").0;
+    let replay: ciborium::Value = ciborium::from_reader(current_replay.as_slice()).unwrap();
+    while session_map.pop().is_some() {}
+    while replay_map.pop().is_some() {}
+    let mut encoded_bytes = 0;
+    for index in 0..session_count {
+        let bytes = if index == 0 {
+            current_session_bytes.clone()
+        } else {
+            resource_session_record(&current_session, index, replay_count)
+        };
+        encoded_bytes += bytes.len();
+        session_map.push(&FixtureRecord(bytes));
+    }
+    for index in 0..replay_count {
+        let bytes = if index == 0 {
+            current_replay.clone()
+        } else {
+            resource_replay_record(&replay, index)
+        };
+        encoded_bytes += bytes.len();
+        replay_map.push(&FixtureRecord(bytes));
+    }
+    drop(session_map);
+    drop(replay_map);
     drop(manager);
     let stable_memory = Rc::try_unwrap(stable_memory)
         .expect("stable-memory editor must own the final reference")
         .into_inner();
     pic.set_stable_memory(canister_id, stable_memory, BlobCompression::NoCompression);
-    auth_state_bytes.len()
+    encoded_bytes
+}
+
+fn establish_resource_session(fixture: &mut ActiveComponentRegistryFixture) {
+    let gateway_url = fixture.start_http_gateway();
+    configure_issuer(fixture);
+    provision_delegation_proof(fixture);
+    let identity = Secp256k1Identity::from_pem(TEST_IDENTITY_PEM.as_bytes()).unwrap();
+    let agent = Agent::builder()
+        .with_url(gateway_url)
+        .with_identity(identity)
+        .build()
+        .unwrap();
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        agent.fetch_root_key().await.unwrap();
+        let token = prepare_native_delegated_token(fixture, &agent, 91).await;
+        establish_application_session(
+            &agent,
+            fixture.verifier.canister_id,
+            ApplicationSessionRequest {
+                delegated_token: token,
+                requested_scopes: maximum_application_scopes(),
+                requested_ttl_secs: Some(1_800),
+            },
+        )
+        .await;
+    });
+}
+
+// Clone trusted storage solely for physical capacity qualification. The tested
+// native caller's original SDK bytes and consumed proof remain untouched.
+fn resource_session_record(
+    template: &ciborium::Value,
+    index: usize,
+    replay_count: usize,
+) -> Vec<u8> {
+    let subject = fixture_principal(index as u64);
+    let fingerprint = ciborium::Value::serialized(&fixture_hash(index as u64)).unwrap();
+    let request_hash =
+        ciborium::Value::serialized(&fixture_hash((replay_count + index) as u64)).unwrap();
+    let principal = ciborium::Value::serialized(&subject).unwrap();
+    let mut row = template.clone();
+    for (field, value) in [
+        ("transport_caller", principal.clone()),
+        ("authenticated_subject", principal.clone()),
+        ("proof_fingerprint", fingerprint.clone()),
+        ("establishment_request_hash", request_hash.clone()),
+    ] {
+        replace_cbor_field(&mut row, field, value);
+    }
+    let mut shared: ciborium::Value = ciborium::from_reader(
+        cbor_field(template, "shared_session")
+            .as_bytes()
+            .unwrap()
+            .as_slice(),
+    )
+    .unwrap();
+    for (field, value) in [
+        ("caller", principal.clone()),
+        ("subject", principal),
+        ("fingerprint", fingerprint),
+        ("request_hash", request_hash),
+    ] {
+        replace_cbor_field(&mut shared, field, value);
+    }
+    let mut payload = Vec::new();
+    ciborium::into_writer(&shared, &mut payload).unwrap();
+    replace_cbor_field(&mut row, "shared_session", ciborium::Value::Bytes(payload));
+    let mut bytes = Vec::new();
+    ciborium::into_writer(&row, &mut bytes).unwrap();
+    bytes
+}
+
+fn resource_replay_record(template: &ciborium::Value, index: usize) -> Vec<u8> {
+    let subject = fixture_principal(index as u64);
+    let mut row = template.clone();
+    for (field, value) in [
+        (
+            "transport_caller",
+            ciborium::Value::serialized(&subject).unwrap(),
+        ),
+        (
+            "authenticated_subject",
+            ciborium::Value::serialized(&subject).unwrap(),
+        ),
+        (
+            "proof_fingerprint",
+            ciborium::Value::serialized(&fixture_hash(index as u64)).unwrap(),
+        ),
+    ] {
+        replace_cbor_field(&mut row, field, value);
+    }
+    let mut bytes = Vec::new();
+    ciborium::into_writer(&row, &mut bytes).unwrap();
+    bytes
+}
+
+fn cbor_field<'a>(state: &'a ciborium::Value, field: &str) -> &'a ciborium::Value {
+    state
+        .as_map()
+        .unwrap()
+        .iter()
+        .find(|(key, _)| key.as_text() == Some(field))
+        .map(|(_, value)| value)
+        .unwrap()
 }
 
 fn issuer_stable_authority(pic: &PocketIc, issuer: Principal) -> ciborium::Value {

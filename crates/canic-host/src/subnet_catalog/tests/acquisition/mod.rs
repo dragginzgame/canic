@@ -84,12 +84,13 @@ impl SubnetCatalogSource for PendingSource {
     }
 }
 
-#[test]
-fn timeout_drops_collection_preserves_cache_releases_lock_and_allows_exact_retry() {
+#[tokio::test]
+async fn timeout_drops_collection_preserves_cache_releases_lock_and_allows_exact_retry() {
     let root = temp_dir("canic-catalog-timeout");
     let mut request = mainnet_subnet_catalog_load_request(&root, NOW);
     let first =
         load_subnet_catalog_detailed_with_source(&request, &Source::new(Reply::Matching, 10))
+            .await
             .unwrap();
     let bytes = fs::read(&first.path).unwrap();
     request.now_unix_secs += MAINNET_CATALOG_MAX_AGE_SECONDS + 1;
@@ -150,9 +151,16 @@ fn timeout_drops_collection_preserves_cache_releases_lock_and_allows_exact_retry
 fn cache_hit_reports_completion_without_source_calls_inside_an_existing_runtime() {
     let root = temp_dir("canic-catalog-progress-hit");
     let request = mainnet_subnet_catalog_load_request(&root, NOW);
-    let first =
-        load_subnet_catalog_detailed_with_source(&request, &Source::new(Reply::Matching, 10))
-            .unwrap();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let first = runtime
+        .block_on(load_subnet_catalog_detailed_with_source(
+            &request,
+            &Source::new(Reply::Matching, 10),
+        ))
+        .unwrap();
     let source = PendingSource {
         inner: Source::new(Reply::Matching, 11),
         dropped: AtomicBool::new(false),
@@ -161,10 +169,6 @@ fn cache_hit_reports_completion_without_source_calls_inside_an_existing_runtime(
     let progress = |event: &crate::subnet_catalog::view::CatalogAcquisitionProgress| {
         events.lock().unwrap().push(event.clone());
     };
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap();
     let hit = runtime.block_on(async {
         acquisition::load(&request, &source, Some(&progress), Duration::from_secs(2)).unwrap()
     });

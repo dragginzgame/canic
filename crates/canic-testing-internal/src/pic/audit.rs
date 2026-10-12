@@ -1,9 +1,7 @@
 use crate::canister::{APP, SCALE_HUB};
 use candid::Principal;
-use ic_testkit::{
-    artifacts::{test_target_dir, workspace_root_for},
-    pic::{PocketIc, PocketIcBuilder, StandaloneCanisterFixture},
-};
+use ic_build::artifacts::{test_target_dir, workspace_root_for};
+use ic_testkit::pic::{PocketIc, PocketIcBuilder, StandaloneCanisterFixture};
 use std::path::{Path, PathBuf};
 
 use super::{

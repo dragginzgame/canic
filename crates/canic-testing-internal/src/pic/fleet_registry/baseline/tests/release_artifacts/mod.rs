@@ -38,7 +38,7 @@ use canic_host::{
     },
 };
 use ciborium::Value;
-use ic_testkit::artifacts::{
+use ic_build::artifacts::{
     ArtifactCacheOutcome, ArtifactCachePreparation, ArtifactCacheSpec, WasmBuildSpec,
     prepare_artifact_cache, resolve_cargo_build_inputs,
 };
@@ -643,7 +643,7 @@ pub(super) fn persist_internal_test_release_build_plan(
 
 // Stage from immutable retained inputs into this invocation's private release root.
 pub(super) fn stage_retained_release_artifacts(
-    record: &ic_testkit::artifacts::ArtifactCacheRecord,
+    record: &ic_build::artifacts::ArtifactCacheRecord,
     outputs: &BTreeMap<String, PathBuf>,
 ) {
     assert_eq!(record.artifacts().len(), outputs.len());

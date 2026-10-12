@@ -37,6 +37,11 @@ thread_local! {
         const { RefCell::new(None) };
 }
 
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
+mod shared;
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
+pub use shared::ApplicationSessionStore;
+
 #[derive(Clone, Debug, Default)]
 struct ApplicationSessionIndexes {
     session_by_caller: BTreeMap<Principal, usize>,
@@ -44,21 +49,7 @@ struct ApplicationSessionIndexes {
     session_count_by_subject: BTreeMap<Principal, usize>,
     replay_count_by_subject: BTreeMap<Principal, usize>,
     estimated_bytes: usize,
-}
-
-/// Result of resolving one consumed proof before proof verification.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ApplicationReplayResolution {
-    Absent,
-    Conflict,
-    ExactActive(Box<LocalApplicationSession>),
-}
-
-/// Outcome of one atomic active-session and replay commit.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ApplicationSessionCommitResult {
-    Created,
-    Replaced,
+    encoded_bytes: usize,
 }
 
 /// Bounded cleanup result split by canonical record owner.
@@ -96,6 +87,7 @@ pub struct ApplicationSessionPage {
 }
 
 /// Current physical occupancy projected from the reconstructed storage indexes.
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ApplicationSessionOccupancy {
     pub active_global: usize,
@@ -149,15 +141,9 @@ pub enum ApplicationSessionStateError {
     #[error("application-session generation is newer than local authority")]
     FutureAuthorityGeneration,
 
-    #[error("application-session generation does not match current local authority")]
-    AuthorityGenerationMismatch,
-
     #[error("application authority generation is exhausted")]
     #[cfg(any(test, feature = "auth-local-application-authorization"))]
     AuthorityGenerationExhausted,
-
-    #[error("application replay already exists")]
-    ReplayAlreadyExists,
 
     #[error("application-session record cannot be encoded")]
     EncodingFailed,
@@ -172,6 +158,7 @@ impl LocalApplicationAuthorizationStateOps {
     pub fn restore_application_session_state()
     -> Result<ApplicationSessionRestoreStats, ApplicationSessionStateError> {
         let state = LocalApplicationAuthorizationState::application_authorization_state();
+        invalidate_indexes();
         let (indexes, restore_report) = build_indexes(&state)?;
         install_indexes(indexes);
         Ok(restore_report)
@@ -237,6 +224,14 @@ impl LocalApplicationAuthorizationStateOps {
         Ok(Some(session))
     }
 
+    /// Observe presence without decoding a second copy of the retained authority.
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
+    pub fn has_application_session(
+        caller: Principal,
+    ) -> Result<bool, ApplicationSessionStateError> {
+        with_indexes(|indexes| indexes.session_by_caller.contains_key(&caller))
+    }
+
     /// Return a deterministic bounded page of retained sessions without mutation.
     pub fn application_session_page(
         offset: u64,
@@ -268,57 +263,8 @@ impl LocalApplicationAuthorizationStateOps {
         Ok(ApplicationSessionPage { entries, total })
     }
 
-    /// Classify exact retry or conflicting reuse before expensive proof verification.
-    pub fn resolve_application_replay(
-        proof_fingerprint: [u8; 32],
-        caller: Principal,
-        subject: Principal,
-        establishment_request_hash: [u8; 32],
-        now_ns: u64,
-    ) -> Result<ApplicationReplayResolution, ApplicationSessionStateError> {
-        let session_index =
-            with_indexes(|indexes| indexes.session_by_caller.get(&caller).copied())?;
-        if let Some(session_index) = session_index {
-            let session = session_from_record(
-                &LocalApplicationAuthorizationState::application_session_record(session_index)
-                    .ok_or(ApplicationSessionStateError::InvalidSessionRecord)?,
-            )?;
-            if session.proof_fingerprint() == proof_fingerprint {
-                let exact = session.authenticated_subject() == subject
-                    && session.establishment_request_hash() == establishment_request_hash
-                    && session.authority_generation()
-                        == LocalApplicationAuthorizationState::application_authority_generation()
-                    && now_ns < session.expires_at_ns();
-                return if exact {
-                    Ok(ApplicationReplayResolution::ExactActive(Box::new(session)))
-                } else {
-                    Ok(ApplicationReplayResolution::Conflict)
-                };
-            }
-        }
-
-        let replay_index = with_indexes(|indexes| {
-            indexes
-                .replay_by_fingerprint
-                .get(&proof_fingerprint)
-                .copied()
-        })?;
-        let Some(replay_index) = replay_index else {
-            return Ok(ApplicationReplayResolution::Absent);
-        };
-
-        let replay = replay_from_record(
-            &LocalApplicationAuthorizationState::application_replay_record(replay_index)
-                .ok_or(ApplicationSessionStateError::InvalidReplayRecord)?,
-        )?;
-        if replay.transport_caller() != caller || replay.authenticated_subject() != subject {
-            return Ok(ApplicationReplayResolution::Conflict);
-        }
-
-        Ok(ApplicationReplayResolution::Conflict)
-    }
-
     /// Return current physical occupancy used by target-local admission policy.
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     pub fn application_session_occupancy(
         subject: Principal,
     ) -> Result<ApplicationSessionOccupancy, ApplicationSessionStateError> {
@@ -336,64 +282,6 @@ impl LocalApplicationAuthorizationStateOps {
                 .copied()
                 .unwrap_or(0),
         })
-    }
-
-    /// Atomically commit one new replay tombstone and its active session replacement.
-    pub fn commit_application_session(
-        session: LocalApplicationSession,
-        replay: LocalApplicationReplay,
-    ) -> Result<ApplicationSessionCommitResult, ApplicationSessionStateError> {
-        require_exact_binding(&session, &replay)?;
-        let mut state = LocalApplicationAuthorizationState::application_authorization_state();
-        if session.authority_generation() != state.authority_generation
-            || replay.authority_generation() != state.authority_generation
-        {
-            return Err(ApplicationSessionStateError::AuthorityGenerationMismatch);
-        }
-
-        let existing_session = with_indexes(|indexes| {
-            indexes
-                .session_by_caller
-                .get(&session.transport_caller())
-                .copied()
-        })?;
-        let replay_exists = with_indexes(|indexes| {
-            indexes
-                .replay_by_fingerprint
-                .contains_key(&replay.proof_fingerprint())
-        })?;
-        if replay_exists {
-            return Err(ApplicationSessionStateError::ReplayAlreadyExists);
-        }
-
-        let capacity = Self::application_session_occupancy(session.authenticated_subject())?;
-        if capacity.replay_for_subject >= MAX_APPLICATION_REPLAY_RECORDS_PER_SUBJECT {
-            return Err(ApplicationSessionStateError::ReplaySubjectCapacity);
-        }
-        if capacity.replay_global >= MAX_APPLICATION_REPLAY_RECORDS {
-            return Err(ApplicationSessionStateError::ReplayGlobalCapacity);
-        }
-        if existing_session.is_none()
-            && capacity.active_for_subject >= MAX_ACTIVE_APPLICATION_SESSIONS_PER_SUBJECT
-        {
-            return Err(ApplicationSessionStateError::ActiveSubjectCapacity);
-        }
-        if existing_session.is_none() && capacity.active_global >= MAX_ACTIVE_APPLICATION_SESSIONS {
-            return Err(ApplicationSessionStateError::ActiveGlobalCapacity);
-        }
-
-        let session_record = session_to_record(&session);
-        let replay_record = replay_to_record(replay);
-        let result = if let Some(index) = existing_session {
-            state.sessions[index] = session_record;
-            ApplicationSessionCommitResult::Replaced
-        } else {
-            state.sessions.push(session_record);
-            ApplicationSessionCommitResult::Created
-        };
-        state.replays.push(replay_record);
-        commit_validated_state(state)?;
-        Ok(result)
     }
 
     /// Remove only the exact caller's retained session and preserve all replay tombstones.
@@ -457,29 +345,6 @@ impl LocalApplicationAuthorizationStateOps {
     }
 }
 
-fn require_exact_binding(
-    session: &LocalApplicationSession,
-    replay: &LocalApplicationReplay,
-) -> Result<(), ApplicationSessionStateError> {
-    let session_authority = ApplicationSessionReplayAuthority {
-        proof_fingerprint: session.proof_fingerprint(),
-        transport_caller: session.transport_caller(),
-        authenticated_subject: session.authenticated_subject(),
-        authority_generation: session.authority_generation(),
-    };
-    let replay_authority = ApplicationSessionReplayAuthority {
-        proof_fingerprint: replay.proof_fingerprint(),
-        transport_caller: replay.transport_caller(),
-        authenticated_subject: replay.authenticated_subject(),
-        authority_generation: replay.authority_generation(),
-    };
-    let replay_outlives_establishment = replay.remove_at_ns() > session.established_at_ns();
-    if session_authority != replay_authority || !replay_outlives_establishment {
-        return Err(ApplicationSessionStateError::SessionReplayMismatch);
-    }
-    Ok(())
-}
-
 #[derive(Eq, PartialEq)]
 struct ApplicationSessionReplayAuthority {
     proof_fingerprint: [u8; 32],
@@ -535,6 +400,7 @@ fn build_indexes(
     validate_overlapping_session_replay_bindings(state, &indexes)?;
 
     indexes.estimated_bytes = estimate_index_bytes(&indexes);
+    indexes.encoded_bytes = encoded_state_len(state)?;
     if indexes.estimated_bytes > MAX_APPLICATION_SESSION_INDEX_BYTES {
         return Err(ApplicationSessionStateError::IndexStateTooLarge);
     }
@@ -543,7 +409,7 @@ fn build_indexes(
         replays: indexes.replay_by_fingerprint.len(),
         session_subjects: indexes.session_count_by_subject.len(),
         replay_subjects: indexes.replay_count_by_subject.len(),
-        stable_bytes: encoded_state_len(state)?,
+        stable_bytes: indexes.encoded_bytes,
         estimated_index_bytes: indexes.estimated_bytes,
     };
     Ok((indexes, restore_report))
@@ -687,11 +553,14 @@ fn session_from_record(
         record.proof_fingerprint,
         record.establishment_request_hash,
     )
+    .map(|session| session.with_shared_session(record.shared_session.clone()))
     .map_err(|_| ApplicationSessionStateError::InvalidSessionRecord)
 }
 
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
 fn session_to_record(session: &LocalApplicationSession) -> LocalApplicationSessionRecord {
     LocalApplicationSessionRecord {
+        shared_session: session.shared_session_bytes().to_vec(),
         transport_caller: session.transport_caller(),
         authenticated_subject: session.authenticated_subject(),
         issuer: session.issuer(),
@@ -802,25 +671,20 @@ fn replay_from_record(
     .map_err(|_| ApplicationSessionStateError::InvalidReplayRecord)
 }
 
-const fn replay_to_record(replay: LocalApplicationReplay) -> LocalApplicationReplayRecord {
-    LocalApplicationReplayRecord {
-        proof_fingerprint: replay.proof_fingerprint(),
-        transport_caller: replay.transport_caller(),
-        authenticated_subject: replay.authenticated_subject(),
-        authority_generation: replay.authority_generation(),
-        remove_at_ns: replay.remove_at_ns(),
-    }
-}
-
 fn encoded_state_len(
     state: &LocalApplicationAuthorizationStateData,
 ) -> Result<usize, ApplicationSessionStateError> {
-    encoded_len(&(
-        &state.sessions,
-        &state.replays,
-        state.authority_generation,
-        &state.authority_binding,
-    ))
+    let header = encoded_len(&(state.authority_generation, &state.authority_binding))?;
+    state
+        .sessions
+        .iter()
+        .map(encoded_len)
+        .chain(state.replays.iter().map(encoded_len))
+        .try_fold(header + 64, |total, bytes| {
+            total
+                .checked_add(bytes?)
+                .ok_or(ApplicationSessionStateError::StableStateTooLarge)
+        })
 }
 
 fn encoded_len(value: &impl serde::Serialize) -> Result<usize, ApplicationSessionStateError> {
@@ -831,11 +695,24 @@ fn encoded_len(value: &impl serde::Serialize) -> Result<usize, ApplicationSessio
 }
 
 fn estimate_index_bytes(indexes: &ApplicationSessionIndexes) -> usize {
+    index_bytes_for_counts(
+        indexes.session_by_caller.len(),
+        indexes.replay_by_fingerprint.len(),
+        indexes.session_count_by_subject.len(),
+        indexes.replay_count_by_subject.len(),
+    )
+}
+
+const fn index_bytes_for_counts(
+    sessions: usize,
+    replays: usize,
+    session_subjects: usize,
+    replay_subjects: usize,
+) -> usize {
     const BTREE_ENTRY_OVERHEAD: usize = 128;
-    indexes.session_by_caller.len() * (29 + size_of::<usize>() + BTREE_ENTRY_OVERHEAD)
-        + indexes.replay_by_fingerprint.len() * (32 + size_of::<usize>() + BTREE_ENTRY_OVERHEAD)
-        + indexes.session_count_by_subject.len() * (29 + size_of::<usize>() + BTREE_ENTRY_OVERHEAD)
-        + indexes.replay_count_by_subject.len() * (29 + size_of::<usize>() + BTREE_ENTRY_OVERHEAD)
+    (sessions + session_subjects + replay_subjects)
+        * (29 + size_of::<usize>() + BTREE_ENTRY_OVERHEAD)
+        + replays * (32 + size_of::<usize>() + BTREE_ENTRY_OVERHEAD)
 }
 
 /// Test-only owner for resetting and restoring application authorization state.
@@ -894,7 +771,7 @@ impl Drop for ApplicationSessionTestStateGuard {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
 pub fn invalidate_indexes() {
     APPLICATION_SESSION_INDEXES.with_borrow_mut(|indexes| *indexes = None);
 }
@@ -956,8 +833,23 @@ mod tests {
         .unwrap()
     }
 
-    fn replay(caller: u8, proof: u8, remove_at: u64) -> LocalApplicationReplay {
-        LocalApplicationReplay::new([proof; 32], p(caller), p(caller), 0, remove_at).unwrap()
+    fn replay(caller: u8, proof: u8, remove_at: u64) -> LocalApplicationReplayRecord {
+        LocalApplicationReplayRecord {
+            proof_fingerprint: [proof; 32],
+            transport_caller: p(caller),
+            authenticated_subject: p(caller),
+            authority_generation: 0,
+            remove_at_ns: remove_at,
+        }
+    }
+
+    // Seed product storage projections only; admission and retry belong to IC Auth.
+    fn seed(session: LocalApplicationSession, replay: LocalApplicationReplayRecord) {
+        let mut state = LocalApplicationAuthorizationState::export();
+        state.sessions.push(session_to_record(&session));
+        state.replays.push(replay);
+        LocalApplicationAuthorizationState::import(state);
+        LocalApplicationAuthorizationStateOps::restore_application_session_state().unwrap();
     }
 
     fn maximum_state_principal(id: u32) -> Principal {
@@ -997,91 +889,10 @@ mod tests {
     }
 
     #[test]
-    fn proof_expiry_does_not_expire_the_committed_session_or_exact_retry() {
-        let _lock = seams::lock();
-        let _state = StateGuard::empty();
-        let current = session(1, 2, 3, 10);
-        assert_eq!(
-            LocalApplicationAuthorizationStateOps::commit_application_session(
-                current.clone(),
-                replay(1, 2, 70)
-            ),
-            Ok(ApplicationSessionCommitResult::Created)
-        );
-
-        assert_eq!(
-            LocalApplicationAuthorizationStateOps::application_session(p(1)),
-            Ok(Some(current.clone()))
-        );
-        assert_eq!(
-            LocalApplicationAuthorizationStateOps::resolve_application_replay(
-                [2; 32],
-                p(1),
-                p(1),
-                [3; 32],
-                80
-            ),
-            Ok(ApplicationReplayResolution::ExactActive(Box::new(
-                current.clone()
-            )))
-        );
-        assert_eq!(
-            LocalApplicationAuthorizationStateOps::cleanup_application_sessions(80),
-            Ok(ApplicationSessionCleanupResult {
-                sessions_removed: 0,
-                replays_removed: 1,
-            })
-        );
-        assert_eq!(
-            LocalApplicationAuthorizationStateOps::application_session_cleanup_due_at_ns(),
-            Some(current.expires_at_ns())
-        );
-        invalidate_indexes();
-        assert_eq!(
-            LocalApplicationAuthorizationStateOps::restore_application_session_state()
-                .map(|report| (report.sessions, report.replays)),
-            Ok((1, 0))
-        );
-        assert_eq!(
-            LocalApplicationAuthorizationStateOps::application_session(p(1)),
-            Ok(Some(current.clone()))
-        );
-        assert_eq!(
-            LocalApplicationAuthorizationStateOps::resolve_application_replay(
-                [2; 32],
-                p(1),
-                p(1),
-                [3; 32],
-                80
-            ),
-            Ok(ApplicationReplayResolution::ExactActive(Box::new(
-                current.clone()
-            )))
-        );
-        assert_eq!(
-            LocalApplicationAuthorizationStateOps::cleanup_application_sessions(
-                current.expires_at_ns()
-            ),
-            Ok(ApplicationSessionCleanupResult {
-                sessions_removed: 1,
-                replays_removed: 0,
-            })
-        );
-        assert_eq!(
-            LocalApplicationAuthorizationStateOps::application_session_cleanup_due_at_ns(),
-            None
-        );
-    }
-
-    #[test]
     fn clear_retains_the_consumed_proof_tombstone() {
         let _lock = seams::lock();
         let _state = StateGuard::empty();
-        LocalApplicationAuthorizationStateOps::commit_application_session(
-            session(1, 2, 3, 10),
-            replay(1, 2, 70),
-        )
-        .unwrap();
+        seed(session(1, 2, 3, 10), replay(1, 2, 70));
 
         assert_eq!(
             LocalApplicationAuthorizationStateOps::clear_application_session(p(1)),
@@ -1091,55 +902,8 @@ mod tests {
             LocalApplicationAuthorizationStateOps::application_session(p(1)),
             Ok(None)
         );
-        assert_eq!(
-            LocalApplicationAuthorizationStateOps::resolve_application_replay(
-                [2; 32],
-                p(1),
-                p(1),
-                [3; 32],
-                20
-            ),
-            Ok(ApplicationReplayResolution::Conflict)
-        );
-    }
-
-    #[test]
-    fn different_proof_atomically_replaces_without_erasing_old_replay() {
-        let _lock = seams::lock();
-        let _state = StateGuard::empty();
-        LocalApplicationAuthorizationStateOps::commit_application_session(
-            session(1, 2, 3, 10),
-            replay(1, 2, 70),
-        )
-        .unwrap();
-        let replacement = session(1, 4, 5, 20);
-        assert_eq!(
-            LocalApplicationAuthorizationStateOps::commit_application_session(
-                replacement.clone(),
-                replay(1, 4, 80)
-            ),
-            Ok(ApplicationSessionCommitResult::Replaced)
-        );
-        assert_eq!(
-            LocalApplicationAuthorizationStateOps::application_session(p(1)),
-            Ok(Some(replacement))
-        );
-        assert_eq!(
-            LocalApplicationAuthorizationStateOps::resolve_application_replay(
-                [2; 32],
-                p(1),
-                p(1),
-                [3; 32],
-                30
-            ),
-            Ok(ApplicationReplayResolution::Conflict)
-        );
-        assert_eq!(
-            LocalApplicationAuthorizationStateOps::application_session_occupancy(p(1))
-                .unwrap()
-                .replay_global,
-            2
-        );
+        let retained = LocalApplicationAuthorizationState::export();
+        assert_eq!(retained.replays, vec![replay(1, 2, 70)]);
     }
 
     #[test]
@@ -1147,11 +911,7 @@ mod tests {
         let _lock = seams::lock();
         let _state = StateGuard::empty();
         let current = session(1, 2, 3, 10);
-        LocalApplicationAuthorizationStateOps::commit_application_session(
-            current.clone(),
-            replay(1, 2, 70),
-        )
-        .unwrap();
+        seed(current.clone(), replay(1, 2, 70));
         invalidate_indexes();
         assert_eq!(
             LocalApplicationAuthorizationStateOps::application_session(p(1)),
@@ -1172,11 +932,10 @@ mod tests {
         let _lock = seams::lock();
         let _state = StateGuard::empty();
         for caller in [3, 1, 2] {
-            LocalApplicationAuthorizationStateOps::commit_application_session(
+            seed(
                 session(caller, caller, caller, 10),
                 replay(caller, caller, 70),
-            )
-            .unwrap();
+            );
         }
 
         let page = LocalApplicationAuthorizationStateOps::application_session_page(1, 2).unwrap();
@@ -1200,11 +959,7 @@ mod tests {
     fn authority_binding_mutations_preserve_or_advance_generation_explicitly() {
         let _lock = seams::lock();
         let _state = StateGuard::empty();
-        LocalApplicationAuthorizationStateOps::commit_application_session(
-            session(1, 2, 3, 10),
-            replay(1, 2, 70),
-        )
-        .unwrap();
+        seed(session(1, 2, 3, 10), replay(1, 2, 70));
         let original = binding(&["app:read", "app:write"], 900);
         assert_eq!(
             LocalApplicationAuthorizationStateOps::application_authority_binding(),
@@ -1239,14 +994,11 @@ mod tests {
             1
         );
         assert_eq!(
-            LocalApplicationAuthorizationStateOps::resolve_application_replay(
-                [2; 32],
-                p(1),
-                p(1),
-                [3; 32],
-                20
-            ),
-            Ok(ApplicationReplayResolution::Conflict)
+            LocalApplicationAuthorizationStateOps::application_session(p(1))
+                .unwrap()
+                .unwrap()
+                .authority_generation(),
+            0
         );
     }
 
@@ -1284,7 +1036,7 @@ mod tests {
         let _lock = seams::lock();
         let _state = StateGuard::empty();
         let session_record = session_to_record(&session(1, 2, 3, 10));
-        let replay = replay_to_record(replay(1, 2, 70));
+        let replay = replay(1, 2, 70);
         let mut noncanonical = session_record.clone();
         noncanonical.scopes = vec!["app:write".to_string(), "app:read".to_string()];
         LocalApplicationAuthorizationState::replace_application_authorization_state(
@@ -1370,45 +1122,6 @@ mod tests {
     }
 
     #[test]
-    fn replay_subject_capacity_rejects_without_mutating_existing_state() {
-        let _lock = seams::lock();
-        let _state = StateGuard::empty();
-        let mut state = LocalApplicationAuthorizationStateData::default();
-        let retained = session(1, 0, 3, 10);
-        state.sessions.push(session_to_record(&retained));
-        for id in 0..256_u16 {
-            let mut fingerprint = [0_u8; 32];
-            fingerprint[..2].copy_from_slice(&id.to_be_bytes());
-            state.replays.push(LocalApplicationReplayRecord {
-                proof_fingerprint: fingerprint,
-                transport_caller: p(1),
-                authenticated_subject: p(1),
-                authority_generation: 0,
-                remove_at_ns: 100,
-            });
-        }
-        LocalApplicationAuthorizationState::replace_application_authorization_state(state);
-        invalidate_indexes();
-        LocalApplicationAuthorizationStateOps::restore_application_session_state().unwrap();
-
-        assert_eq!(
-            LocalApplicationAuthorizationStateOps::commit_application_session(
-                session(1, 9, 8, 10),
-                replay(1, 9, 70)
-            ),
-            Err(ApplicationSessionStateError::ReplaySubjectCapacity)
-        );
-        assert_eq!(
-            LocalApplicationAuthorizationStateOps::application_session(p(1)),
-            Ok(Some(retained))
-        );
-        let capacity =
-            LocalApplicationAuthorizationStateOps::application_session_occupancy(p(1)).unwrap();
-        assert_eq!(capacity.replay_global, 256);
-        assert_eq!(capacity.replay_for_subject, 256);
-    }
-
-    #[test]
     fn restore_rejects_global_over_capacity_before_admitting_records() {
         let _lock = seams::lock();
         let _state = StateGuard::empty();
@@ -1427,10 +1140,7 @@ mod tests {
 
         LocalApplicationAuthorizationState::replace_application_authorization_state(
             LocalApplicationAuthorizationStateData {
-                replays: vec![
-                    replay_to_record(replay(1, 2, 70));
-                    MAX_APPLICATION_REPLAY_RECORDS + 1
-                ],
+                replays: vec![replay(1, 2, 70); MAX_APPLICATION_REPLAY_RECORDS + 1],
                 ..LocalApplicationAuthorizationStateData::default()
             },
         );
@@ -1447,6 +1157,7 @@ mod tests {
         let _state = StateGuard::empty();
         let sessions = (0..u32::try_from(MAX_ACTIVE_APPLICATION_SESSIONS).unwrap())
             .map(|id| LocalApplicationSessionRecord {
+                shared_session: Vec::new(),
                 transport_caller: maximum_state_principal(id),
                 authenticated_subject: maximum_state_principal(id),
                 issuer: maximum_state_principal(9_000),
@@ -1491,8 +1202,6 @@ mod tests {
         assert_eq!(stats.replays, MAX_APPLICATION_REPLAY_RECORDS);
         assert_eq!(stats.session_subjects, MAX_ACTIVE_APPLICATION_SESSIONS);
         assert_eq!(stats.replay_subjects, MAX_APPLICATION_REPLAY_RECORDS);
-        assert_eq!(stats.stable_bytes, 4_025_139);
-        assert_eq!(stats.estimated_index_bytes, 2_039_808);
         assert!(stats.stable_bytes <= MAX_APPLICATION_SESSION_STABLE_BYTES);
         assert!(stats.estimated_index_bytes <= MAX_APPLICATION_SESSION_INDEX_BYTES);
     }

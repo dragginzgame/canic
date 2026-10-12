@@ -10,9 +10,7 @@ use crate::{
             CurrentFleetProtocolAction, EffectRecord, EffectState, EnsureAction,
             MAX_INDEPENDENT_EFFECTS_IN_FLIGHT,
         },
-        ops::{
-            EffectObservation, EffectOutcome, action_sha256, current_protocol::CurrentProtocolError,
-        },
+        ops::{EffectOutcome, action_sha256, current_protocol::CurrentProtocolError},
     },
     icp::IcpCli,
 };
@@ -81,20 +79,6 @@ pub(in crate::fleet_ensure) fn retain_outcome(
     record.receipt = outcome.receipt;
     record.state = EffectState::Issued;
     true
-}
-
-pub(in crate::fleet_ensure) fn retain_observation(
-    record: &mut EffectRecord,
-    observed: EffectObservation,
-    source: Option<u128>,
-    destination: Option<u128>,
-) {
-    record.post_cycles = source.or(record.post_cycles);
-    record.destination_post_cycles = destination.or(record.destination_post_cycles);
-    record.progress_identity = Some(observed.progress_identity);
-    if observed.applied {
-        record.state = EffectState::Applied;
-    }
 }
 
 #[cfg(test)]

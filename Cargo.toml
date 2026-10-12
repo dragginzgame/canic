@@ -84,28 +84,29 @@ futures = "0.3"
 getrandom = "0.4"
 hmac = "0.13.0"
 ic-agent = "=0.49.2"
-ic-auth = { version = "0.3", default-features = false }
-ic-auth-protocol-types = "0.3"
-ic-backup = { version = "0.15", default-features = false }
-ic-blob-storage = "0.22.2"
-ic-blob-storage-contracts = "0.22.2"
+ic-auth = { version = "0.5", default-features = false }
+ic-auth-protocol-types = "0.5"
+ic-backup = { version = "0.21", default-features = false }
+ic-blob-storage = "0.22.11"
+ic-blob-storage-contracts = "0.22.11"
+ic-build = { version = "0.1.1" }
 ic-canister-sig-creation = "1.3.1"
 ic-cdk = "0.20.3"
 ic-certification = "3.0"
-ic-host-artifacts = { version = "0.12", default-features = false }
-ic-host-fs = { version = "0.12", default-features = false }
-ic-host-process = { version = "0.12", default-features = false }
-ic-host-tools = "0.12"
+ic-host-artifacts = { version = "0.15", default-features = false }
+ic-host-fs = { version = "0.15", default-features = false }
+ic-host-process = { version = "0.15", default-features = false }
+ic-host-tools = "0.15"
 ic-management-canister-types = "0.11"
 ic-memory = "0.35"
-ic-metrics = "0.5"
-ic-query = { version = "0.54", default-features = false, features = [
+ic-metrics = "0.8"
+ic-query = { version = "0.55", default-features = false, features = [
     "subnet-catalog-host",
 ] }
 ic-secp256k1 = "=0.3.0"
 ic-signature-verification = "0.3.0"
-ic-testkit = "0.33"
-ic-timers = "0.17"
+ic-testkit = { version = "0.35" }
+ic-timers = "0.21"
 ic-verify-bls-signature = { version = "0.6.0", default-features = false, features = [
     "alloc",
 ] }

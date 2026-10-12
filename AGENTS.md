@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Apply [DRAGGINZGAME.md](DRAGGINZGAME.md), recorded at `67285b28a98b7c4211ad32de726709d4e87edea4` in [.shared-tooling.snapshot](.shared-tooling.snapshot). This file is the local product overlay.
+Apply [DRAGGINZGAME.md](DRAGGINZGAME.md), whose reviewed revision is recorded in [.shared-tooling.snapshot](.shared-tooling.snapshot). This file is the local product overlay.
 
 This file is normative for automated agents and contributors. If code conflicts
 with this file, the code is wrong.
@@ -9,39 +9,17 @@ with this file, the code is wrong.
 - At the start of a new session, read `docs/status/current.md` first. Treat it
   as the compact handoff and avoid replaying old chat history unless needed.
 
-## Issue and Feedback Tracking
-- GitHub issues are the sole tracker for bugs, feature requests, review findings,
-  upstream feedback and follow-up work. Create or update the issue in the relevant
-  GitHub repository and reference its URL or `owner/repo#number`.
-- Do not create or continue `CANIC-xxx` identifiers, local issue lists, feedback
-  files or any other parallel tracking system.
-- Handoffs, design documents and changelogs may link to GitHub issues and describe
-  implementation or validation status. Keep feedback, triage and tracking
-  decisions in the issues themselves instead of duplicating them in those files.
+## Scope and contribution authority
 
-## Repository Scope
-- Automated edits are restricted to this Canic repository. Do not modify,
-  format, generate files in, or otherwise mutate sibling or external
-  repositories, even when a Canic design names a downstream integration.
-- Treat every repository outside the Canic repository root as read-only unless
-  the maintainer explicitly authorizes creation of a named new repository at an
-  exact target path. That exception permits creating and bootstrapping only the
-  named repository for the stated task; if the target already contains
-  meaningful repository state, stop and request confirmation before modifying
-  it.
-- A request to inspect, review, audit, diagnose, design for, or give feedback
-  about another repository never authorizes edits there. Record or report
-  downstream work that remains instead of implementing it unless the
-  maintainer separately gives explicit mutation authority for that existing
-  repository.
+Follow the shared [contribution rules](rules/contributions.md) and baseline
+for repository scope and owning-repository issue tracking. Ordinary work leaves
+staging, commits, versions and releases to the user. An explicitly requested PR
+includes its scoped branch, commits, branch push and PR; merges, integration-branch
+pushes and releases retain separate authority. Inspection never authorizes sibling
+edits. Creating a named new repository does not authorize overwriting existing
+repository state.
 
 ## CI, Git, and Deployment
-- Automated agents must never create or amend Git commits, including through
-  scripts, Make targets or release commands that commit indirectly. The
-  maintainer owns the commit flow; leave changes uncommitted for their review.
-  Push-readiness questions such as "push here?" request a readiness assessment,
-  not staging, committing or pushing. This restriction takes precedence over
-  broader Git and release authorization in the governance documents below.
 - Follow `docs/governance/ci-deployment.md`; it is the authoritative policy for
   commands, git boundaries, versioning, release, network selection, and
   automation language rules. Do not duplicate its rules here.
@@ -57,42 +35,14 @@ with this file, the code is wrong.
 - Release artifacts are retained for package publication. Explicit cleanup follows
   the authoritative CI/deployment policy after intended package work is complete.
 
-## Delivery Cadence
-- Follow `docs/governance/delivery-cadence.md`; it is the authoritative policy
-  for implementation slices, release batches, continuation and push-readiness
-  handoffs.
-- Ordinary continuation wording such as `continue`, `keep going` or `next` is
-  sufficient authority to finish the current accepted in-repository batch and,
-  once it is complete, begin the next already accepted and sequenced
-  in-repository batch. Do not require a batch identifier, exact phrase or
-  separate mutation ceremony. This does not authorize broad validation,
-  versioning, Git publication, deployment, destructive actions or external
-  effects; those boundaries retain their own rules.
-- An unambiguous maintainer instruction in the current conversation is the
-  authority for the exact Git, version, release, publication or deployment
-  action it names, subject to the agent commit prohibition above. Ordinary
-  language is sufficient; never require a magic
-  phrase, a second confirmation, or the maintainer to run the command by hand.
-  Use the active repository, release and environment context when it identifies
-  the target uniquely. Ask once only when the target or effect is genuinely
-  ambiguous. Generic continuation and push-readiness wording still do not
-  authorize those effects.
-- Minor boundaries are the exception: after the final batch, stop at
-  closeout-audit readiness. Do not begin the next minor until the human
-  maintainer explicitly requests that exact minor's closeout audit and accepts
-  its verdict. Passing tests, agent review or generic continuation cannot
-  substitute for that human-owned gate.
-- A focused implementation slice is not a patch release. Continue the current
-  planned release batch until its direct implementation, adversarial/recovery
-  evidence, propagation and cleanup are complete.
-- Do not recommend a push merely because one focused test or CI repair passes.
-  There is no minimum release count for a minor line. As a soft guideline, keep
-  each minor to no more than 12 published releases; if another release would
-  exceed that count, reassess the minor boundary and record the decision. The
-  guideline governs planned design cadence, not necessary correctness,
-  security, recovery or operator-regression follow-ups to an already-published
-  minor; those fixes may exceed 12 rather than strand the affected release
-  line.
+## Delivery cadence
+
+Read [delivery cadence](docs/governance/delivery-cadence.md) before planning,
+continuation or push-readiness work. It owns coherent release batches, the soft
+12-release guideline and its correctness/recovery exceptions. Minor boundaries
+remain human-owned: do not start the next minor before the maintainer requests
+and accepts the exact current minor’s closeout audit. Ordinary continuation
+never delegates broad validation, Git publication or deployment.
 
 ## Changelog
 - Follow `docs/governance/changelog.md`; it is the authoritative changelog
@@ -264,6 +214,13 @@ policy and ops independently; ops may call model. Policy never calls ops.
   Rust's normal module discovery works.
 
 ## Testing
+
+The established local validation exception is retained: focused checks during
+development, broad gates only when explicitly selected or run by configured CI.
+The owning [CI/deployment policy](docs/governance/ci-deployment.md) defines that
+cadence and the eligible non-runtime fast release lane. This cleanup does not
+activate the common automatic full-delivery gate or any release command.
+
 - Canic validation owns its framework and Canic-only fixtures. Consumer-specific
   database composition tests belong to downstream repositories. Do not add IcyDB
   dependencies, local Cargo overrides or consumer release-alignment requirements

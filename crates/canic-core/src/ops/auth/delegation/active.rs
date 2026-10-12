@@ -12,17 +12,24 @@ use crate::{
         DelegationProof, RootProof,
     },
     ops::{
-        auth::delegated::{
-            active_proof::{
-                InstallActiveDelegationProofInput,
-                install_active_delegation_proof as build_active_delegation_proof,
-            },
-            chain_key::ChainKeyRootProofError,
+        auth::delegated::active_proof::{
+            InstallActiveDelegationProofInput,
+            install_active_delegation_proof as build_active_delegation_proof,
         },
         ic::IcOps,
         storage::auth::DelegatedTokenIssuerStateOps,
     },
 };
+use thiserror::Error;
+
+/// Retained issuer material below the currently enrolled epoch floors.
+#[derive(Debug, Eq, Error, PartialEq)]
+enum ActiveProofEpochError {
+    #[error("proof epoch {found} is below verifier minimum {min}")]
+    ProofEpochTooOld { min: u64, found: u64 },
+    #[error("registry epoch {found} is below verifier minimum {min}")]
+    RegistryEpochTooOld { min: u64, found: u64 },
+}
 
 pub(super) fn install_active_delegation_proof(
     proof: DelegationProof,
@@ -93,16 +100,16 @@ const fn validate_root_proof_epoch_floors(
     proof: &RootProof,
     min_proof_epoch: u64,
     min_registry_epoch: u64,
-) -> Result<(), ChainKeyRootProofError> {
+) -> Result<(), ActiveProofEpochError> {
     let RootProof::IcChainKeyBatchSignatureV1(root_proof) = proof;
     if root_proof.header.proof_epoch < min_proof_epoch {
-        return Err(ChainKeyRootProofError::ProofEpochTooOld {
+        return Err(ActiveProofEpochError::ProofEpochTooOld {
             min: min_proof_epoch,
             found: root_proof.header.proof_epoch,
         });
     }
     if root_proof.header.registry_epoch < min_registry_epoch {
-        return Err(ChainKeyRootProofError::RegistryEpochTooOld {
+        return Err(ActiveProofEpochError::RegistryEpochTooOld {
             min: min_registry_epoch,
             found: root_proof.header.registry_epoch,
         });
@@ -158,11 +165,11 @@ mod tests {
 
         assert_eq!(
             validate_root_proof_epoch_floors(&proof, 10, 1),
-            Err(ChainKeyRootProofError::ProofEpochTooOld { min: 10, found: 9 })
+            Err(ActiveProofEpochError::ProofEpochTooOld { min: 10, found: 9 })
         );
         assert_eq!(
             validate_root_proof_epoch_floors(&proof, 1, 11),
-            Err(ChainKeyRootProofError::RegistryEpochTooOld { min: 11, found: 10 })
+            Err(ActiveProofEpochError::RegistryEpochTooOld { min: 11, found: 10 })
         );
         assert_eq!(validate_root_proof_epoch_floors(&proof, 9, 10), Ok(()));
     }

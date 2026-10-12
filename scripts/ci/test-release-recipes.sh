@@ -9,7 +9,7 @@ cp "$ROOT/tool-versions.env" "$fixture/"
 mkdir -p "$fixture/ci" "$fixture/scripts/ci"
 cp "$ROOT/ci/ic-tools.tsv" "$ROOT/ci/tool-versions.env" "$fixture/ci/"
 mkdir -p "$fixture/make"
-cp "$ROOT/make/tools.mk" "$ROOT/make/execution.mk" "$ROOT/make/release.mk" "$fixture/make/"
+cp "$ROOT/make/tools.mk" "$ROOT/make/execution.mk" "$ROOT/make/release.mk" "$ROOT/make/consumer.mk" "$ROOT/make/rust-format.mk" "$fixture/make/"
 cp "$ROOT/scripts/ci/check-make-execution.sh" "$fixture/scripts/ci/"
 cp "$ROOT/scripts/ci/ic-tool-pins.sh" "$fixture/scripts/ci/"
 cat >"$fixture/bin/record" <<'SH'

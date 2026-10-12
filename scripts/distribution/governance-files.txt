@@ -10,6 +10,7 @@ tasks/README.md
 tasks/cargo-machete.md
 tasks/msrv.md
 tasks/rust-toolchain.md
+tasks/cargo-tool-versions.md
 tasks/ci-health.md
 tasks/snapshot-drift.md
 tasks/dependency-security.md
@@ -47,6 +48,7 @@ docs/provenance.md
 docs/verification-helpers.md
 docs/ic-tools.md
 docs/local-setup.md
+docs/make-interface.md
 ci/ic-tools.tsv
 ci/tool-versions.env
 docs/supported-hosts.md

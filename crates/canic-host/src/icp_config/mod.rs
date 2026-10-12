@@ -20,7 +20,6 @@ use canic_contracts::ids::BuildNetwork;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
-    io::Read as _,
     path::{Path, PathBuf},
 };
 use thiserror::Error as ThisError;
@@ -28,6 +27,7 @@ use thiserror::Error as ThisError;
 pub use manifest::IcpManifestError;
 
 const ICP_CONFIG_FILE: &str = "icp.yaml";
+const MAX_ICP_CONFIG_BYTES: usize = 1024 * 1024;
 pub const DEFAULT_LOCAL_GATEWAY_PORT: u16 = 8000;
 
 ///
@@ -212,8 +212,10 @@ pub fn inspect_canic_icp_yaml_from_root(
 fn read_optional_icp_yaml(path: &Path) -> Result<(String, bool), IcpConfigError> {
     match fs::File::open(path) {
         Ok(file) => {
-            let mut source = String::new();
-            file.take(1024 * 1024 + 1).read_to_string(&mut source)?;
+            let bytes = ic_host_fs::read::read_opened_file(file, MAX_ICP_CONFIG_BYTES)
+                .map_err(std::io::Error::from)?;
+            let source = String::from_utf8(bytes)
+                .map_err(|source| std::io::Error::new(std::io::ErrorKind::InvalidData, source))?;
             Ok((source, true))
         }
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok((String::new(), false)),

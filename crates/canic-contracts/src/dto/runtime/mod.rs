@@ -178,7 +178,7 @@ pub struct TimerCallbackPerformanceStatus {
     pub instruction_samples_since_runtime_start: u64,
     pub instructions_latest: Option<u64>,
     pub instructions_maximum: Option<u64>,
-    pub instructions_total_since_runtime_start: u64,
+    pub instructions_total_since_runtime_start: u128,
     pub memory_page_samples_since_runtime_start: u64,
     pub memory_pages_latest: Option<TimerMemoryPageSampleStatus>,
     pub maximum_wasm_memory_growth_pages: Option<u64>,
@@ -296,6 +296,30 @@ mod tests {
     use serde::Serialize;
     use serde::de::DeserializeOwned;
     use std::fmt::Debug;
+
+    #[test]
+    fn timer_status_retains_instruction_totals_above_u64() {
+        let status = TimerCallbackPerformanceStatus {
+            instruction_samples_since_runtime_start: 2,
+            instructions_latest: Some(1),
+            instructions_maximum: Some(u64::MAX),
+            instructions_total_since_runtime_start: u128::from(u64::MAX) + 1,
+            memory_page_samples_since_runtime_start: 0,
+            memory_pages_latest: None,
+            maximum_wasm_memory_growth_pages: None,
+            maximum_stable_memory_growth_pages: None,
+        };
+        let bytes = candid::encode_one(&status).unwrap();
+        assert_eq!(
+            candid::decode_one::<TimerCallbackPerformanceStatus>(&bytes).unwrap(),
+            status
+        );
+        let json = serde_json::to_string(&status).unwrap();
+        assert_eq!(
+            serde_json::from_str::<TimerCallbackPerformanceStatus>(&json).unwrap(),
+            status
+        );
+    }
 
     #[test]
     fn runtime_enums_roundtrip_candid_with_canonical_variant_labels() {

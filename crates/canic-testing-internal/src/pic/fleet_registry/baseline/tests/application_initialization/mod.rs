@@ -1,11 +1,15 @@
 //! Actual Root/Store/Coordinator installation with opaque, target-bound app bytes.
 
+mod blob;
+
 use super::*;
 use canic::dto::component_registry::{
     ComponentApplicationInitialization, RootComponentInitializationRequest,
 };
 
 use canic_contracts::dto::wire::projection::fixture_baseline_application_initialization::Command;
+
+pub(super) use blob::production_blob_initialization_recovers_target_binding;
 
 #[test]
 #[expect(

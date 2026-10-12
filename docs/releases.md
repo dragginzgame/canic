@@ -9,6 +9,13 @@ a publishable package, must provide these Make targets:
 | `make release-minor` | Increment minor; reset patch | `0.2.0` |
 | `make release-major` | Increment major; reset minor and patch | `1.0.0` |
 
+These are user-operated commands. Preparing code or notes for a named release
+does not authorize an agent to invoke them, their recovery target or mutating
+adapters, or to perform their staging, commit, version or tag effects manually.
+Follow the [user-owned Git and release boundary](../rules/contributions.md#user-owned-git-and-release-flow)
+and any approved local maintainer-only restriction. Only an express delegation
+of execution permits an agent to run a release within that policy.
+
 The names, version arithmetic and recovery contract are shared across repositories.
 Each repository supplies its canonical version source, metadata file set,
 validation gate, branch, remote and explicit delivery policy. Direct delivery is
@@ -76,6 +83,10 @@ The proposal does not bump package metadata or execute a release. Select the
 matching release kind when invoking the explicitly authorized command; its computed
 candidate must agree with the pending heading and the complete batch's
 compatibility impact before finalization.
+Assess that impact at the released package's own boundary under the
+[package-impact rules](../rules/changelogs.md#classify-the-released-packages-own-impact).
+An upstream tooling hard cut does not by itself select `release-minor` for a
+consumer library; compatible internal tooling adoption uses patch notes.
 
 ## Artifact retention and exact push scope
 
@@ -146,8 +157,8 @@ earlier evidence.
 
 ## Makefile example
 
-Use the optional `make/release.mk` include to keep standard command
-routing and conflicting-goal admission at their shared owner:
+Use the [consumer Make entrypoint](make-interface.md) to keep standard command
+routing and conflicting-goal admission at their shared owner (`make/release.mk`):
 
 ```makefile
 .DEFAULT_GOAL := help
@@ -155,7 +166,7 @@ RELEASE_REMOTE ?= origin
 RELEASE_BRANCH ?= main
 export RELEASE_DELIVERY ?= direct
 
-include make/release.mk
+include make/consumer.mk
 
 .PHONY: help
 
@@ -164,6 +175,7 @@ help:
 
 ```
 
+Non-Rust repositories set `SHARED_TOOLING_RUST := 0` before the include.
 The include preserves the default goal and supplies `release-resume VERSION=X.Y.Z`.
 Its adjacent `make/execution.mk` companion rejects Make ignore-errors and
 non-executing modes before recipes run, using the existing execution probe.
@@ -227,6 +239,50 @@ indicates possible preparation effects. It retains that plan unchanged in a uniq
 validation. Exact resume of an early plan remains bound to its saved source and
 also repeats both gates; use the normal target after committing source fixes.
 
+### Source changes after saved preparation intent
+
+Normal direct release targets automatically restart a saved `prepare` attempt
+when HEAD is a newer descendant commit and the index, worktree and untracked
+source inventory are clean. The saved index tree must be empty, no preparation
+file set (`PLAN.files`, including symlinks) may exist, and the recorded branch,
+remote and exact push destination must still agree. Current canonical metadata
+must read either the saved previous version or the saved candidate.
+
+The runner archives the original plan unchanged under
+`release-state/X.Y.Z.attempt.*/`, while holding the release lock, then reads the
+**current** canonical version and applies the **requested** increment. It repeats
+preflight and the complete validation gate against current HEAD before saving
+another preparation intent. Earlier logs, receipts and build artifacts remain
+bound to their original attempt; adapters must preserve them on revalidation.
+The archived intent is superseded local preparation, not proof of successful
+release, delivery or publication.
+
+For example, a stale `0.6.3 -> 0.6.4` prepare plan must not block a clean newer
+commit whose Cargo workspace already reads `0.6.4`. `make release-patch` archives
+that intent, validates the current checkout, and prepares `0.6.5`. If committed
+metadata still reads `0.6.3`, it validates and prepares `0.6.4` instead. Patch,
+minor and major use this same restart behavior; the saved kind does not override
+the current request after committed preparation has been superseded.
+
+This boundary depends on the consumer adapter contract: preparation changes
+**local release metadata only**. It may retain local backups, journals and
+receipts, but must not stage, commit, create tags, publish, deploy or dispatch
+other external effects. The newer clean commit records the disposition of those
+metadata changes; the runner does not claim preparation never ran or discard
+consumer transaction evidence. Consumers must reconcile any outstanding local
+transaction in preflight before permitting fresh preparation.
+
+At unchanged HEAD, interrupted preparation still resumes its exact saved version.
+`make release-resume VERSION=X.Y.Z` also retains exact-source recovery and never
+selects another version. Changed source during a running gate/preparation, dirty
+or divergent history, conflicting identities, staging evidence and occupied
+locks still stop the command. Plans stopped at `stage` or later retain exact
+payload and effect reconciliation. PR delivery retains its review-branch,
+worktree and external-effect recovery; it does not use this direct-only restart.
+Ordinary agent repair does not authorize executing a real release or recovery.
+
+### Consumer adapters
+
 Consumer Make targets provide these adapters:
 
 | Target | Contract |
@@ -235,7 +291,7 @@ Consumer Make targets provide these adapters:
 | `release-preflight` | Check candidate/changelog agreement; admit only declared release metadata as dirty work; inspect staged and unstaged paths separately, reject unrelated untracked paths, and prepare the selected cache and executable tools. |
 | `release-verify` | Run the same complete gate for every release kind, with offline tool admission before expensive checks. |
 | `release-merged-preflight` | Required for PR delivery: check finalized candidate metadata and prepare the exact merged checkout's dependencies/cache and selected executable tools before repeating the complete gate. Do not bump or require the previous version. |
-| `release-prepare-version` | Apply exactly the saved candidate and finalize notes; preserve dependency selection and verify all directly owned metadata. |
+| `release-prepare-version` | Apply exactly the saved candidate to local metadata and finalize notes; preserve dependency selection and verify all directly owned metadata. No staging, commits, tags or external effects. |
 | `release-prepared-check` | Check the candidate and prepared metadata without another bump. |
 | `release-files` | Print the explicit relative release paths, each terminated by NUL, and no explanatory output. |
 | `release-commit-check` | Admit the entire exact release index, ensure it matches prepared metadata, and check source-bound validation evidence. |
@@ -532,14 +588,19 @@ not a deletion target. Existing adoption work is tracked in
 
 ### Authorized release effects
 
-The maintainer may invoke a one-shot command or explicitly ask an agent to run
-the selected release for the identified repository and destination. That request
+The maintainer owns execution. Where local policy permits delegation, they may
+explicitly ask an agent to run the selected release for the identified repository
+and destination. Naming a version, preparing a release, completing validation or
+asking for push readiness is not that delegation. An explicit execution request
 covers the documented complete gate, version preparation, release commit, tag
 and selected delivery effects. Direct delivery includes the atomic branch/tag
 push; PR delivery includes its branch/PR, fresh validation after an independently
 authorized merge, and exact tag push. Permission to fix code, create a commit, open a PR,
 push a topic branch or change a version alone is not permission to run this flow.
-Agents may use separate read-only or preparation phases within existing scope.
+Agents may inspect release state and prepare source, dependencies and changelog
+notes within existing scope. Mutating version preparation, staging and saved
+release recovery require their own explicit execution authority; calling a
+helper directly does not bypass the boundary.
 
 Ordinary contributions follow the [PR rules](../rules/contributions.md). The
 runner defaults to direct delivery and supports explicit PR delivery under
@@ -552,7 +613,11 @@ automatically reconcile the unfinished release at its saved version. The runner
 selects that intent before computing a new candidate, including when metadata
 has already been bumped. It retains the source/commit identity, UTC date,
 destination, completed phases and evidence. Uncommitted preparation remains bound
-to its saved source and kind. After the release commit exists, newer commits are
+to its saved source and kind at unchanged HEAD. A newer clean descendant commit
+can supersede direct `prepare` intent under
+[the restart contract](#source-changes-after-saved-preparation-intent), with current
+metadata selection and fresh complete validation. After the release commit exists,
+newer commits are
 allowed only on its direct descendant history, with the exact staged tree, sole
 source parent and release subject still verified. A dirty tree, changed release
 payload, competing unfinished identities, conflicting tag or destination, or an

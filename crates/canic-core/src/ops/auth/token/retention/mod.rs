@@ -8,13 +8,9 @@
 mod tests;
 
 use crate::{
-    InternalError,
-    cdk::types::Principal,
-    ops::{
-        auth::delegated::prepare::PreparedDelegatedToken,
-        replay::receipt::ReplayReceiptRetentionLimits,
-    },
+    InternalError, cdk::types::Principal, ops::replay::receipt::ReplayReceiptRetentionLimits,
 };
+use ic_auth::token_preparation::PreparedDelegatedToken;
 use std::{cell::RefCell, collections::BTreeMap};
 use thiserror::Error as ThisError;
 

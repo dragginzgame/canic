@@ -987,7 +987,6 @@ mod tests {
             "delegated_token_prepare_proof",
             "delegated_token_commit_replay",
             "delegated_token_fetch_root_proof",
-            "delegated_token_verify_cached",
             "delegated_token_verify_embedded_proofs",
         ] {
             assert!(

@@ -30,6 +30,35 @@ calls by `claims.subject` until `claims.expires_at_ns`. A user token is not an
 on-behalf-of credential and intentionally fails if a forwarding canister
 presents it downstream.
 
+## Current verification and session owners
+
+IC Auth verifies the complete token against host-resolved caller, Fleet, role,
+Root key policy, IC public key, finite proof limits and current time. Each
+receiving role declares `auth.allowed_token_scopes`; omission accepts no scopes.
+The submitted token cannot supply that ceiling. Endpoint scopes must be present
+in the accepted local-role grant.
+
+Optional local application sessions use IC Auth's admission and authorization
+engine. Configured session scopes must belong to the token ceiling. Canic owns
+protected generation/binding state and a synchronous durable transaction over
+separate bounded session and consumed-proof vectors. All codec and resource checks precede
+both writes; a refusal leaves the records and indexes unchanged. Restoration
+checks bounded canonical projections before rebuilding the lookup indexes.
+SDK bytes remain the session authority; projected fields cannot increase grants.
+
+An exact active retry returns the original lease even after proof expiry.
+Replacement and caller-local clear preserve consumed-proof tombstones. Live
+access, status and audit checks use current Root policy. Same-release recovery
+retains these properties; across releases, rebuild and cleanly reinstall the
+family. The maintained header accepts only its current fields and does not read
+predecessor session layouts.
+
+Root and issuer signatures share one SDK signature store and one Canic
+certification-root publisher. Application certification branches use
+`AuthApi::set_canister_signature_siblings` synchronously after restoration and
+whenever their roots change. Reapply those branches through a synchronous
+lifecycle participant before deferred work; Canic reserves `/sig`.
+
 ## Canonical Payloads
 
 Source: `crates/canic-contracts/src/dto/auth/`.
@@ -354,15 +383,34 @@ typed auth classification.
 Management-canister ECDSA is limited to root renewal and lazy-repair batch
 boundaries. `prepare_delegated_token` and delegated-token endpoint verification
 must not call management-canister signing. Root proofs and delegated tokens are
-reused for their TTL. Endpoint verification may use a bounded positive cache
-for the expensive root chain-key and issuer canister-signature checks, but
-endpoint-specific authorization still runs after cache hits.
+reused for their TTL. Every endpoint verification checks the complete root
+chain-key and issuer canister-signature proofs against current verifier policy.
+Endpoint-specific authorization runs after proof verification.
 
 ## Verification Contract
 
 Verification entrypoint:
 
 - `access::auth::authenticated(required_scope)`
+
+Active-proof installation and token presentation use the same
+`ic_auth::token::verify_delegation_proof` verifier through Canic's protected
+context adapter. Canic supplies network/key enrollment, expected issuer, time,
+TTL ceilings and a 64 KiB variable-material / 64-step witness budget. IC Auth
+owns Root-proof structure, canonical certificate binding, Merkle verification
+and ECDSA acceptance. Canic retains issuer-proof verification and endpoint
+authorization. IC Auth 0.4 supplies separate typed signature/header and
+header/enrolled-policy mismatch causes. Canic projects those causes without
+recomparing submitted metadata or rehashing paths. Token presentation distinguishes
+invalid submitted metadata from stale enrollment; installation retains its
+existing enrollment-retry refusal code. Proof acceptance does not change
+the independent committed-session TTL or signed-token replay-retention clock.
+
+Issuer and role-attestation canister signatures use IC Auth's complete verifier.
+Canic supplies the protected signer, seed, domain, payload, IC root key, current
+time and configured certificate-age ceiling. IC Auth owns canonical DER admission,
+domain framing, certificate freshness, witness and signature verification. Core
+does not depend directly on the underlying signature crates.
 
 Checks before authorization:
 

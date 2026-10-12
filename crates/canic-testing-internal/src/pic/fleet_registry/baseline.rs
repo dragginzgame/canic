@@ -350,10 +350,10 @@ mod tests {
         },
     };
     #[cfg(test)]
-    use ic_testkit::artifacts::{
+    use ic_build::artifacts::{
         ArtifactCacheOutcome, ArtifactCachePreparation, ArtifactCacheSpec, prepare_artifact_cache,
     };
-    use ic_testkit::artifacts::{test_target_dir, workspace_root_for};
+    use ic_build::artifacts::{test_target_dir, workspace_root_for};
     #[cfg(test)]
     use ic_testkit::pic::PocketIcSnapshotExt;
     use ic_testkit::pic::{
@@ -5872,15 +5872,28 @@ exec icp "$@"
             else {
                 panic!("exact Coordinator provisioning operation");
             };
-            if let Some(failure) = root_status.last_failure
-                && failure.stage == ProvisioningFailureStage::Provisioning
-                && let Some(observed) = coordinator_status.pending_root_failure
-                && observed.origin.is_some_and(|origin| {
+            if let Some(failure) = root_status.last_failure.as_ref()
+                && failure.stage == ProvisioningFailureStage::StoreStatus
+                && let Some(observed) = coordinator_status.pending_root_failure.as_ref()
+                && observed.origin.as_ref().is_some_and(|origin| {
                     origin.failed_at_ns == failure.failed_at_ns && origin.stage == failure.stage
                 })
             {
                 assert_eq!(root_status.phase, RootComponentProvisioningPhase::Accepted);
-                assert_eq!(failure.target, root);
+                let dependency = failure
+                    .dependency
+                    .as_ref()
+                    .expect("precise Store dependency");
+                assert_eq!(dependency.target, failure.target);
+                assert_eq!(dependency.method, canic::protocol::CANIC_WASM_STORE_COMMAND);
+                assert_eq!(dependency.step, "inspect_template");
+                assert!(dependency.rejection_code.is_some());
+                assert!(
+                    dependency
+                        .rejection_detail
+                        .as_ref()
+                        .is_some_and(|detail| !detail.is_empty())
+                );
                 assert_eq!(failure.operation_id, operation_id);
                 assert_eq!(
                     failure.diagnostic_code,
@@ -5899,6 +5912,7 @@ exec icp "$@"
                 assert_eq!(
                     observed.origin,
                     Some(ProvisioningFailureOrigin {
+                        dependency: failure.dependency.clone(),
                         failed_at_ns: failure.failed_at_ns,
                         retry_at_ns: failure.retry_at_ns,
                         stage: failure.stage,
@@ -5908,7 +5922,7 @@ exec icp "$@"
                         retry_category: failure.retry_category,
                     })
                 );
-                println!("CANIC-159 Accepted Root failure retained by Coordinator: {observed:?}");
+                println!("Accepted Root failure retained by Coordinator: {observed:?}");
                 return;
             }
             last_observation = Some((root_status, coordinator_status));
@@ -6188,6 +6202,7 @@ exec icp "$@"
                     |status| {
                         status
                             .last_failure
+                            .as_ref()
                             .is_some_and(|failure| failure.stage == expected_stage)
                     },
                 );
@@ -6220,7 +6235,7 @@ exec icp "$@"
                     let suspended =
                         observed_root_provisioning(&pic, installed.root_id, request.operation_id)
                             .unwrap();
-                    assert_eq!(suspended.last_failure, Some(first));
+                    assert_eq!(suspended.last_failure, Some(first.clone()));
                     assert_eq!(suspended.receipt_content_hash, failed.receipt_content_hash);
                     assert!(!suspended.root_runtime_active);
                     let CoordinatorOperationReadResponse::Operation(
@@ -6254,7 +6269,7 @@ exec icp "$@"
                     installed.root_id,
                     request.operation_id,
                     |status| {
-                        status.last_failure.is_some_and(|failure| {
+                        status.last_failure.as_ref().is_some_and(|failure| {
                             failure.consecutive_failures >= first.consecutive_failures + 3
                         })
                     },
@@ -16895,6 +16910,7 @@ cycles = "80T"
             .expect("encode exact root authority");
         let mut init_args =
             decode_one::<FleetSubnetRootInitArgs>(&init_bytes).expect("decode root init authority");
+        rebind_fixture_release_build_id(&mut init_args, manifest.release_build_id);
         let pool = &mut init_args.authority.binding.limits.canister_pool;
         if let Some(maximum_size) = placement.canister_pool_maximum_size {
             pool.maximum_size = maximum_size;
@@ -16971,7 +16987,6 @@ cycles = "80T"
             .fleet_id = fleet_id;
     }
 
-    #[cfg(test)]
     const fn rebind_fixture_release_build_id(
         init_args: &mut FleetSubnetRootInitArgs,
         release_build_id: ReleaseBuildId,
@@ -17737,6 +17752,10 @@ cycles = "80T"
             (
                 "production application initialization retains target bytes and lost replies",
                 application_initialization::production_initialization_recovers_exact_target_bytes,
+            ),
+            (
+                "production Blob initialization retains target binding and lost replies",
+                application_initialization::production_blob_initialization_recovers_target_binding,
             ),
             (
                 "inactive Root preserves and suspends permanent activation failure",

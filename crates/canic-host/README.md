@@ -9,7 +9,7 @@ Normal operators use the installed `canic` binary. Direct Rust consumers may
 use the build and `fleet_ensure` modules when embedding the same current
 contract.
 
-Generic host mechanics use the published IC Host Tooling 0.10 packages:
+Generic host mechanics use the published IC Host Tooling 0.14 packages:
 `ic-host-artifacts` owns Wasm inspection, gzip encoding/decoding and bounded
 stream reads, copying and hashing; `ic-host-fs` owns regular/private reads,
 path observations, durable publication and descriptor locks,
@@ -18,6 +18,12 @@ path observations, durable publication and descriptor locks,
 Direct consumers import reads from `ic_host_fs::read` and publication/locks from
 `ic_host_fs::durable`. Canic retains schemas, authority, byte budgets, tool pins,
 transaction ordering and interruption recovery.
+
+Rust callers passing shared types into public Canic APIs must select the same
+upstream family. In particular, `publication::ops::io_error` takes the
+`ic-host-fs` 0.14 `NamedWriteError`; a 0.12 value has a different Rust identity.
+Rebuild direct consumers against the aligned family; see
+[#517](https://github.com/dragginzgame/canic/issues/517).
 
 Canic's `publication::ops::io_error` projects the shared typed publication failure
 into existing Host and CLI I/O boundaries, retaining its phase, native cause and

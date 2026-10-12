@@ -1,8 +1,8 @@
 mod records;
 
 use crate::{
-    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
-    impl_storable_unbounded,
+    cdk::structures::{DefaultMemoryImpl, Vec as StableVec, cell::Cell, memory::RuntimeMemory},
+    impl_storable_bounded, impl_storable_unbounded,
     storage::prelude::*,
 };
 use std::cell::RefCell;
@@ -25,6 +25,15 @@ pub use records::{
 thread_local! {
     pub(super) static LOCAL_APPLICATION_AUTHORIZATION_STATE: RefCell<Cell<LocalApplicationAuthorizationStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(init_local_application_authorization_state());
+}
+
+thread_local! {
+    static APPLICATION_SESSIONS: RefCell<StableVec<LocalApplicationSessionRecord, RuntimeMemory<DefaultMemoryImpl>>> = RefCell::new(StableVec::init(
+        crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.auth.local_application_authorization.sessions.v1")
+    ));
+    static APPLICATION_REPLAYS: RefCell<StableVec<LocalApplicationReplayRecord, RuntimeMemory<DefaultMemoryImpl>>> = RefCell::new(StableVec::init(
+        crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.auth.local_application_authorization.replays.v1")
+    ));
 }
 
 thread_local! {
@@ -89,6 +98,8 @@ fn init_root_delegation_state() -> Cell<RootDelegationStateRecord, RuntimeMemory
 }
 
 impl_storable_unbounded!(LocalApplicationAuthorizationStateRecord);
+impl_storable_bounded!(LocalApplicationSessionRecord, 4096, false);
+impl_storable_bounded!(LocalApplicationReplayRecord, 512, false);
 impl_storable_unbounded!(DelegatedTokenIssuerStateRecord);
 impl_storable_unbounded!(RootDelegationStateRecord);
 
@@ -116,8 +127,8 @@ impl LocalApplicationAuthorizationState {
         LOCAL_APPLICATION_AUTHORIZATION_STATE.with_borrow(|cell| {
             let data = cell.get();
             LocalApplicationAuthorizationStateData {
-                sessions: data.application_sessions.clone(),
-                replays: data.application_replays.clone(),
+                sessions: APPLICATION_SESSIONS.with_borrow(|rows| rows.iter().collect()),
+                replays: APPLICATION_REPLAYS.with_borrow(|rows| rows.iter().collect()),
                 authority_generation: data.application_authority_generation,
                 authority_binding: data.application_authority_binding.clone(),
             }
@@ -129,28 +140,68 @@ impl LocalApplicationAuthorizationState {
     pub(crate) fn application_session_record(
         index: usize,
     ) -> Option<LocalApplicationSessionRecord> {
-        LOCAL_APPLICATION_AUTHORIZATION_STATE
-            .with_borrow(|cell| cell.get().application_sessions.get(index).cloned())
+        APPLICATION_SESSIONS
+            .with_borrow(|map| map.get(u64::try_from(index).expect("bounded session index")))
     }
 
-    // Resolve one canonical replay record by its derived index.
-    #[must_use]
-    pub(crate) fn application_replay_record(index: usize) -> Option<LocalApplicationReplayRecord> {
-        LOCAL_APPLICATION_AUTHORIZATION_STATE
-            .with_borrow(|cell| cell.get().application_replays.get(index).copied())
-    }
-
-    // Replace local application session and replay state in one stable-cell commit.
+    // Replace the header and both vectors in one synchronous IC message.
     pub(crate) fn replace_application_authorization_state(
         state: LocalApplicationAuthorizationStateData,
     ) {
         LOCAL_APPLICATION_AUTHORIZATION_STATE.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
-            data.application_sessions = state.sessions;
-            data.application_replays = state.replays;
             data.application_authority_generation = state.authority_generation;
             data.application_authority_binding = state.authority_binding;
             cell.set(data);
+        });
+        APPLICATION_SESSIONS.with_borrow(|rows| {
+            for (index, record) in state.sessions.iter().enumerate() {
+                let index = u64::try_from(index).expect("bounded index");
+                if index < rows.len() {
+                    rows.set(index, record);
+                } else {
+                    rows.push(record);
+                }
+            }
+            while rows.len() > state.sessions.len() as u64 {
+                rows.pop();
+            }
+        });
+        APPLICATION_REPLAYS.with_borrow(|rows| {
+            for (index, record) in state.replays.iter().enumerate() {
+                let index = u64::try_from(index).expect("bounded index");
+                if index < rows.len() {
+                    rows.set(index, record);
+                } else {
+                    rows.push(record);
+                }
+            }
+            while rows.len() > state.replays.len() as u64 {
+                rows.pop();
+            }
+        });
+    }
+
+    /// Commit one fully validated pair in the current synchronous IC message.
+    /// No fallible work or asynchronous boundary may separate these writes.
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
+    pub(crate) fn commit_shared_session_pair(
+        session_index: usize,
+        session: LocalApplicationSessionRecord,
+        replay_index: usize,
+        replay: LocalApplicationReplayRecord,
+    ) {
+        APPLICATION_SESSIONS.with_borrow(|rows| {
+            let index = u64::try_from(session_index).expect("bounded index");
+            if index < rows.len() {
+                rows.set(index, &session);
+            } else {
+                rows.push(&session);
+            }
+        });
+        APPLICATION_REPLAYS.with_borrow(|rows| {
+            assert_eq!(rows.len(), replay_index as u64, "admitted replay append");
+            rows.push(&replay);
         });
     }
 

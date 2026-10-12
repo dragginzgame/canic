@@ -32,9 +32,9 @@ use canic_core::shared_support::fleet_admission_policy::{
     compile_fleet_admission_projection, compile_installed_fleet_admission_policy,
 };
 use canic_host::release_set::AppConfigSnapshot;
+use ic_build::artifacts::{test_target_dir, workspace_root_for};
 use ic_testkit::{
     Fake,
-    artifacts::{test_target_dir, workspace_root_for},
     pic::{PocketIc, PocketIcBuilder},
 };
 use std::{

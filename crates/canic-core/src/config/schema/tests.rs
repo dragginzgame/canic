@@ -111,6 +111,7 @@ maximum_instances = 1
 
 [component_specs.default.auth]
 delegated_token_verifier = true
+allowed_token_scopes = ["my_app:read", "my_app:write"]
 
 [component_specs.default.auth.local_application_authorization]
 allowed_scopes = ["my_app:write", "my_app:read"]
@@ -155,6 +156,11 @@ fn local_application_authorization_requires_verifier_and_bounded_policy() {
         .unwrap()
         .auth
         .delegated_token_verifier = true;
+    cfg.component_specs
+        .get_mut(&default_component_spec_id())
+        .unwrap()
+        .auth
+        .allowed_token_scopes = vec!["my_app:read".to_owned()];
     cfg.validate().expect("exact 1,800-second maximum");
 
     cfg.component_specs
@@ -186,6 +192,41 @@ fn local_application_authorization_requires_verifier_and_bounded_policy() {
         .unwrap()
         .default_session_ttl_secs = 0;
     assert!(cfg.validate().is_err(), "zero default must reject");
+}
+
+#[test]
+fn local_application_scopes_cannot_exceed_the_protected_token_ceiling() {
+    let mut cfg = ConfigModel::test_default();
+    let auth = &mut cfg
+        .component_specs
+        .get_mut(&default_component_spec_id())
+        .unwrap()
+        .auth;
+    auth.delegated_token_verifier = true;
+    auth.local_application_authorization = Some(local_application_authorization());
+    assert!(matches!(
+        cfg.validate(),
+        Err(ConfigSchemaError::ValidationError(_))
+    ));
+    cfg.component_specs
+        .get_mut(&default_component_spec_id())
+        .unwrap()
+        .auth
+        .allowed_token_scopes = vec!["my_app:read".to_owned()];
+    cfg.validate().unwrap();
+    cfg.component_specs
+        .get_mut(&default_component_spec_id())
+        .unwrap()
+        .auth
+        .local_application_authorization
+        .as_mut()
+        .unwrap()
+        .allowed_scopes
+        .push("my_app:write".to_owned());
+    assert!(matches!(
+        cfg.validate(),
+        Err(ConfigSchemaError::ValidationError(_))
+    ));
 }
 
 #[test]

@@ -53,11 +53,9 @@ mod tests {
             fleet_registry::FleetRegistryOps,
         },
     };
-    use ic_testkit::{
-        artifacts::workspace_root_for,
-        pic::{
-            CandidCallExt, PocketIc, PocketIcBuilder, PocketIcSnapshotExt, SnapshotRestoreFunding,
-        },
+    use ic_build::artifacts::workspace_root_for;
+    use ic_testkit::pic::{
+        CandidCallExt, PocketIc, PocketIcBuilder, PocketIcSnapshotExt, SnapshotRestoreFunding,
     };
 
     const INSTALL_CYCLES: u128 = 500_000_000_000_000;

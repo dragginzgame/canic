@@ -187,6 +187,28 @@ before commitment. Omitted, reserved and retired ledger keys retain their IDs;
 removing a component never frees its slots. Current grants determine diagnostic
 owner labels, which are not durable allocation identity.
 
+For a generated database that requires a pool-provider function, name that
+function in the same declaration:
+
+```rust
+canic::memory::memory_allocation_pool!(
+    provider = icydb_memory_pool,
+    authorities = [("icydb.app", "icydb.app.")],
+    exclusions = [],
+);
+```
+
+This emits the checked `icydb_memory_pool()` builder in the invocation module and
+uses it for Canic's registration. Do not author a second grant/exclusion list.
+The builder returns the upstream `MemoryAllocationPool`/`MemoryAllocationPoolError`
+result, without reading a sealed runtime or registering, sealing or bootstrapping
+again. It is available before bootstrap and after warm adoption. Declare it at
+the crate root when generated IcyDB code requires `crate::icydb_memory_pool`.
+Canic still owns the composed admission and lifecycle ordering; the provider
+does not replace the database's preparation or restoration participant.
+Authored exclusion bounds retain their existing static-configuration admission:
+invalid ranges panic; namespace/pool failures return the upstream typed error.
+
 Protected allocation observations expose `pool_eligible`, independently of a
 current or retained ledger binding. Protected ledger observations include the
 selected `allocation_pool` grants and exclusions. Static role manifests use
@@ -333,7 +355,9 @@ and publication authority before application hooks.
 | `canic.core.runtime.bindings.v1` | Cell |
 | `canic.core.fleet.state.v1` | Cell |
 | `canic.core.fleet.activation.v1` | Bounded optional cell |
-| `canic.core.auth.local_application_authorization.state.v1` | Cell |
+| `canic.core.auth.local_application_authorization.state.v1` | Cell (generation and protected binding) |
+| `canic.core.auth.local_application_authorization.sessions.v1` | Bounded vector (4 KiB rows; SDK session and read-only projection) |
+| `canic.core.auth.local_application_authorization.replays.v1` | Bounded vector (512-byte consumed-proof tombstones) |
 | `canic.core.replay.receipts.v1` | B-tree |
 | `canic.core.cycles.tracker.v1` | B-tree |
 | `canic.core.cycles.topup_events.v1` | B-tree |

@@ -274,6 +274,25 @@ fn sidecar_only_runtime_matches_declared_methods_without_candid_payload() {
 }
 
 #[test]
+fn sidecar_only_runtime_compares_modes_and_projects_oneway() {
+    let root = unique_temp_dir("canic-sidecar-method-modes");
+    fs::create_dir_all(&root).unwrap();
+    let wasm_path = root.join("test.wasm");
+    let did_path = root.join("test.did");
+    fs::write(
+        &wasm_path,
+        minimal_wasm_with_exports(&["canister_update read"]),
+    )
+    .unwrap();
+    fs::write(&did_path, b"service : { read : () -> () query }").unwrap();
+    validate_sidecar_only_candid_artifact(&wasm_path, &did_path).expect_err("mode mismatch");
+    fs::write(&did_path, b"service : { read : () -> () oneway }").unwrap();
+    validate_sidecar_only_candid_artifact(&wasm_path, &did_path)
+        .expect("oneway uses update exports");
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn sidecar_only_runtime_rejects_embedded_or_mismatched_candid() {
     let root = unique_temp_dir("canic-sidecar-only-candid-reject");
     fs::create_dir_all(&root).expect("create temp dir");

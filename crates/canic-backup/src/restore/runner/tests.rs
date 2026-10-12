@@ -2252,15 +2252,11 @@ mod command_in_flight {
             command.pre_exec(move || {
                 // SAFETY: the runner retains the descriptor through spawn.
                 let fd = BorrowedFd::borrow_raw(raw_fd);
-                let mut flags = fcntl_getfd(fd).map_err(errno_to_io)?;
+                let mut flags = fcntl_getfd(fd).map_err(io::Error::from)?;
                 flags.remove(FdFlags::CLOEXEC);
-                fcntl_setfd(fd, flags).map_err(errno_to_io)
+                fcntl_setfd(fd, flags).map_err(io::Error::from)
             });
         }
-    }
-
-    fn errno_to_io(error: rustix::io::Errno) -> io::Error {
-        io::Error::from_raw_os_error(error.raw_os_error())
     }
 
     fn required_operation() -> RestoreApplyOperationKind {

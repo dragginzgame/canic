@@ -1528,6 +1528,7 @@ fn pending_root_retry_failure_is_typed_bounded_and_restart_safe() {
     assert_eq!(failure.origin, None);
 
     let root_failure = canic_contracts::dto::component_provisioning::RootComponentProvisioningFailure {
+        dependency: None,
         stage:
             canic_contracts::dto::component_provisioning::ProvisioningFailureStage::ComponentMembership,
         target: principal(8),
@@ -1541,6 +1542,7 @@ fn pending_root_retry_failure_is_typed_bounded_and_restart_safe() {
     for retry_at_ns in [root_failure.retry_at_ns, Some(2_000_000_160), None] {
         let observed = FleetCoordinatorOps::observed_failure_error(
             canic_contracts::dto::component_provisioning::RootComponentProvisioningFailure {
+                dependency: None,
                 retry_at_ns,
                 ..root_failure
             },
@@ -1552,7 +1554,13 @@ fn pending_root_retry_failure_is_typed_bounded_and_restart_safe() {
             163,
         )
         .unwrap();
-        let origin = status.pending_root_failure.unwrap().origin.unwrap();
+        let origin = status
+            .pending_root_failure
+            .as_ref()
+            .unwrap()
+            .origin
+            .as_ref()
+            .unwrap();
         assert_eq!(origin.retry_at_ns, retry_at_ns);
         assert_eq!(origin.failed_at_ns, root_failure.failed_at_ns);
         assert_eq!(origin.target, root_failure.target);
@@ -7050,6 +7058,15 @@ fn provisioning_wait_does_not_block_coordinator_publication() {
         ProvisioningFailureStage, ProvisioningRetryCategory, RootComponentProvisioningFailure,
     };
     let failure = RootComponentProvisioningFailure {
+        dependency: Some(
+            canic_contracts::values::provisioning_failure::ProvisioningDependencyFailure {
+                target: candid::Principal::from_slice(&[8]),
+                method: canic_contracts::protocol::CANIC_WASM_STORE_COMMAND.into(),
+                step: "inspect_template".into(),
+                rejection_code: Some(5),
+                rejection_detail: Some("Store stopped".into()),
+            },
+        ),
         stage: ProvisioningFailureStage::StoreStatus,
         target: candid::Principal::from_slice(&[8]),
         operation_id: [9; 32],
@@ -7061,7 +7078,7 @@ fn provisioning_wait_does_not_block_coordinator_publication() {
     };
     let error = FleetCoordinatorOps::observed_root_failure(
         RootComponentProvisioningPhase::Published,
-        Some(failure),
+        Some(failure.clone()),
     )
     .expect("specific activation failure remains actionable");
     assert_eq!(error.provisioning_failure().unwrap().target, failure.target);
@@ -7076,7 +7093,10 @@ fn provisioning_wait_does_not_block_coordinator_publication() {
         assert!(
             FleetCoordinatorOps::observed_root_failure(
                 RootComponentProvisioningPhase::Published,
-                Some(RootComponentProvisioningFailure { stage, ..failure }),
+                Some(RootComponentProvisioningFailure {
+                    stage,
+                    ..failure.clone()
+                }),
             )
             .is_none()
         );
@@ -7088,7 +7108,7 @@ fn provisioning_wait_does_not_block_coordinator_publication() {
     };
     let error = FleetCoordinatorOps::observed_root_failure(
         RootComponentProvisioningPhase::Accepted,
-        Some(provisioning_failure),
+        Some(provisioning_failure.clone()),
     )
     .expect("failed provisioning must retain its origin before publication can advance");
     let origin = error.provisioning_failure().unwrap();
@@ -7101,4 +7121,5 @@ fn provisioning_wait_does_not_block_coordinator_publication() {
     );
     assert_eq!(origin.retry_category, provisioning_failure.retry_category);
     assert_eq!(origin.retry_at_ns, provisioning_failure.retry_at_ns);
+    assert_eq!(origin.dependency, provisioning_failure.dependency);
 }

@@ -7,12 +7,18 @@ use crate::{
         IssuerProofAlgorithm, IssuerProofBinding,
     },
     ops::auth::{
-        delegated::prepare::{PrepareDelegatedTokenInput, prepare_delegated_token},
+        delegated::{
+            audience::{MAX_DELEGATED_ROLE_GRANTS, MAX_SCOPES_PER_ROLE_GRANT},
+            protocol,
+        },
         issuer_canister_sig::issuer_canister_sig_seed_hash,
         test_fixtures::chain_key_root_proof,
     },
 };
 use canic_contracts::ids::CanisterRole;
+use ic_auth::token_preparation::{
+    PrepareDelegatedTokenInput, TokenPreparationLimits, prepare_delegated_token,
+};
 
 fn p(byte: u8) -> Principal {
     Principal::from_slice(&[byte; 29])
@@ -42,16 +48,23 @@ fn prepared_token(prepared_by: Principal, operation: u8) -> PreparedDelegatedTok
         root_proof: chain_key_root_proof(4),
     };
 
+    let proof = protocol::proof(&proof).unwrap();
     prepare_delegated_token(PrepareDelegatedTokenInput {
         authority_expires_at_ns: proof.cert.expires_at_ns,
         proof: &proof,
         operation_id: [operation; 32],
         prepared_by,
-        audience: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
-        grants: vec![grant],
+        audience: protocol::audience(&DelegationAudience::Fleet(crate::test::support::fleet_key(
+            1,
+        ))),
+        grants: protocol::grants(&[grant]).unwrap(),
         ttl_ns: 50,
         ext: None,
         now_ns: 100,
+        limits: TokenPreparationLimits {
+            max_grants: MAX_DELEGATED_ROLE_GRANTS,
+            max_scopes_per_grant: MAX_SCOPES_PER_ROLE_GRANT,
+        },
     })
     .expect("retention fixture should prepare")
 }
@@ -63,7 +76,7 @@ fn reset() {
 fn retain(prepared_by: Principal, operation: u8, retrieval_expires_at_ns: u64) {
     let prepared = prepared_token(prepared_by, operation);
     insert(
-        RetainedDelegatedTokenKey::new(prepared.claims_hash, prepared_by),
+        RetainedDelegatedTokenKey::new(prepared.claims_hash(), prepared_by),
         RetainedDelegatedToken {
             prepared,
             retrieval_expires_at_ns,
@@ -136,7 +149,7 @@ fn retrieval_rejects_at_exact_expiry_boundary() {
     reset();
     let caller = p(9);
     let prepared = prepared_token(caller, 1);
-    let key = RetainedDelegatedTokenKey::new(prepared.claims_hash, caller);
+    let key = RetainedDelegatedTokenKey::new(prepared.claims_hash(), caller);
     insert(
         key.clone(),
         RetainedDelegatedToken {

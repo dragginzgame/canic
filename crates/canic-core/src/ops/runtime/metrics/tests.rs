@@ -5,6 +5,7 @@
 //! Boundary: test-only coverage for ops-layer metrics projection.
 
 use super::*;
+
 #[cfg(feature = "sharding")]
 use crate::ops::runtime::metrics::sharding::{
     ShardingMetricOperation, ShardingMetricOutcome, ShardingMetricReason, ShardingMetrics,
@@ -66,6 +67,24 @@ fn endpoint_call(name: &'static str, kind: EndpointCallKind) -> EndpointCall {
     }
 }
 
+#[test]
+fn perf_projection_keeps_exact_u64_cap_and_omits_unrepresentable_wide_totals() {
+    let snapshot = [u128::from(u64::MAX), u128::from(u64::MAX) + 1]
+        .into_iter()
+        .enumerate()
+        .map(|(index, total_instructions)| perf::PerfEntry {
+            key: PerfKey::Checkpoint {
+                scope: "wide-total".into(),
+                label: index.to_string(),
+            },
+            count: 2,
+            total_instructions,
+        })
+        .collect();
+    let entries = perf_entries_from(snapshot, &[]);
+    assert_eq!(entries.len(), 1);
+    assert_metric_count_and_u64(&entries, &["checkpoint", "wide-total", "0"], 2, u64::MAX);
+}
 #[test]
 fn auth_metrics_are_exposed_with_stable_labels() {
     reset_for_tests();
