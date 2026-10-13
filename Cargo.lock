@@ -2407,9 +2407,9 @@ dependencies = [
 
 [[package]]
 name = "ic-host-artifacts"
-version = "0.17.4"
+version = "0.17.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb0a3ecb1a07f6cff1b66a80f5a77def62f527765de5f99600e6683b257e8507"
+checksum = "f13a4c0040a76c9615d9676e5be21dbd162078c4b53f55791fb644eb26a46cee"
 dependencies = [
  "flate2",
  "sha2 0.10.9",
@@ -2419,9 +2419,9 @@ dependencies = [
 
 [[package]]
 name = "ic-host-fs"
-version = "0.17.4"
+version = "0.17.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75610e0e14bc03b5072c7d2031f17297178cdca6b1d2ebba33f16e1efc3392e2"
+checksum = "c8e41e014ad525cde28ff124095fbfe1d9f91423a15ee2c19425024ddf123f14"
 dependencies = [
  "ic-host-artifacts",
  "rustix",
@@ -2429,9 +2429,9 @@ dependencies = [
 
 [[package]]
 name = "ic-host-process"
-version = "0.17.4"
+version = "0.17.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "718c782454284b0239cf99e641f87a428ed957d02e06871b5e9c285f4ddfeb2a"
+checksum = "958cfc0840f924a52f74b892ba7ea7fb08dcb95ca55acbd254cc519022305b05"
 dependencies = [
  "ic-host-artifacts",
  "ic-host-fs",
@@ -2441,9 +2441,9 @@ dependencies = [
 
 [[package]]
 name = "ic-host-tools"
-version = "0.17.4"
+version = "0.17.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c94b4f9eafad8cb473de46da5fc37fc419b1b300f9fecb5f6f248e8751e6d0d"
+checksum = "952c66f24d26b564f9f1eb3225801434a870745e51616008adc69d95d2485ab4"
 dependencies = [
  "candid_parser",
  "ic-host-artifacts",
@@ -2487,9 +2487,9 @@ dependencies = [
 
 [[package]]
 name = "ic-metrics"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f37740e17c25ed7792cad59abf4f72670ca29b85b2ae9d1f8cd022ff1b6a7e18"
+checksum = "59af3d107a6b06bee0a31b56d9ec014ed77b8f2cd69c96b419561efd57aee812"
 
 [[package]]
 name = "ic-query"
@@ -3315,9 +3315,9 @@ dependencies = [
 
 [[package]]
 name = "num-modular"
-version = "0.6.6"
+version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26ac76200f74e658124f95fa63e1a82b2fd2181c5b2fdde80b3d89d2d3f905e7"
+checksum = "bd8e500409e6cd603b03e477c26a6caecdc27ac58979a53e881c75eafc079f44"
 
 [[package]]
 name = "num-order"
