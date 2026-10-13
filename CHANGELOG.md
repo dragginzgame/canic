@@ -14,7 +14,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
-- Repair native-agent fixture allocation lookup for Memory 0.36.2's public diagnostics.
+- Repair native-agent fixture allocation lookup for Memory 0.36.2's public diagnostics
+  and keep minimal control-plane builds free of unused role-only declarations.
 
 - Repair Host 0.17 Candid feature selection, test-app Memory composition and
   the authorization probe's scope declaration; remove the obsolete upstream

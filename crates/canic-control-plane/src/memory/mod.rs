@@ -1,6 +1,11 @@
 //! Explicit requests for the selected control-plane roles.
 pub(crate) mod keys;
 use canic_core::__reexports::ic_memory;
+#[cfg(any(
+    feature = "fleet-coordinator-canister",
+    feature = "root-control-plane",
+    feature = "wasm-store-canister"
+))]
 const MEMORY_AUTHORITY: &str = canic_core::memory::CANIC_CONTROL_PLANE_MEMORY_AUTHORITY;
 /// Complete selected control-plane store requests.
 pub fn requests() -> Result<Vec<ic_memory::MemoryRequest>, ic_memory::MemoryDeclarationError> {

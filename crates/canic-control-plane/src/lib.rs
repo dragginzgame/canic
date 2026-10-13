@@ -4,6 +4,11 @@
 //! managed-store workflows on top of `canic-core`. The `canic` facade
 //! re-exports each role-specific surface through its matching feature.
 
+#[cfg(any(
+    feature = "fleet-coordinator-canister",
+    feature = "root-control-plane",
+    feature = "wasm-store-canister"
+))]
 use canic_contracts::dto;
 #[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
 use canic_contracts::ids;
