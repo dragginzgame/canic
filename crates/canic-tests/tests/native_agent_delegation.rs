@@ -164,7 +164,7 @@ fn selected_issuer_corruption_rejects_same_release_restore() {
     let manager = MemoryManager::init(stable_memory.clone());
     let mut issuer_cell = Cell::<Vec<u8>, _>::init(
         manager.get(MemoryId::new(allocated_memory_id(
-            &manager,
+            &stable_memory,
             "canic.core.auth.delegated_token_issuer.state.v1",
         ))),
         Vec::new(),
@@ -1249,12 +1249,12 @@ fn inject_application_authorization_state(
     let manager = MemoryManager::init(stable_memory.clone());
     let session_map =
         StableVec::<FixtureRecord<4096>, _>::init(manager.get(MemoryId::new(allocated_memory_id(
-            &manager,
+            &stable_memory,
             "canic.core.auth.local_application_authorization.sessions.v1",
         ))));
     let replay_map =
         StableVec::<FixtureRecord<512>, _>::init(manager.get(MemoryId::new(allocated_memory_id(
-            &manager,
+            &stable_memory,
             "canic.core.auth.local_application_authorization.replays.v1",
         ))));
     let current_session_bytes = session_map.get(0).expect("real SDK session row").0;
@@ -1403,10 +1403,10 @@ fn cbor_field<'a>(state: &'a ciborium::Value, field: &str) -> &'a ciborium::Valu
 
 fn issuer_stable_authority(pic: &PocketIc, issuer: Principal) -> ciborium::Value {
     let memory: VectorMemory = Rc::new(RefCell::new(pic.get_stable_memory(issuer)));
-    let manager = MemoryManager::init(memory);
+    let manager = MemoryManager::init(memory.clone());
     let cell = Cell::<Vec<u8>, _>::init(
         manager.get(MemoryId::new(allocated_memory_id(
-            &manager,
+            &memory,
             "canic.core.auth.delegated_token_issuer.state.v1",
         ))),
         Vec::new(),
@@ -1622,21 +1622,45 @@ fn report_proof_provisioning_diagnostics(
 }
 
 // Stable editors follow protected current ledger bindings, never assumed IDs.
-fn allocated_memory_id(manager: &MemoryManager<VectorMemory>, key: &str) -> u8 {
-    let record = ic_memory::decode_stable_cell_ledger_record_from_memory(
-        &manager.get(MemoryId::new(ic_memory::MEMORY_MANAGER_LEDGER_ID)),
-    )
-    .expect("current protected ledger envelope");
-    let recovered = record
-        .store()
-        .recover()
-        .expect("current committed allocation authority");
-    recovered
-        .ledger()
-        .records()
+fn allocated_memory_id(memory: &VectorMemory, key: &str) -> u8 {
+    let runtime = ic_memory::MemoryRuntime::new(memory.clone()).expect("existing memory layout");
+    // Only inspect recovered bindings. Empty proposed inputs do not grant bootstrap authority.
+    let declarations = ic_memory::SealedDeclarationSnapshot::new(Vec::new()).unwrap();
+    let pool = ic_memory::MemoryAllocationPool::new(Vec::new(), Vec::new()).unwrap();
+    let report = runtime.doctor_report(&declarations, &pool, &ic_memory::GenericAllocationPolicy);
+    report
+        .ledger
+        .expect("current committed allocation authority")
+        .records
         .iter()
-        .find(|record| record.stable_key().as_str() == key)
+        .find(|record| record.allocation.stable_key().as_str() == key)
         .expect("fixture allocation exists")
+        .allocation
         .slot()
         .id()
+}
+
+#[test]
+fn allocation_lookup_preserves_stable_bytes() {
+    let memory = VectorMemory::default();
+    let key = "fixture.lookup.v1";
+    let declarations = ic_memory::SealedDeclarationSnapshot::new(vec![
+        ic_memory::MemoryRequest::new("fixture", key, ic_memory::SchemaMetadata::default())
+            .unwrap(),
+    ])
+    .unwrap();
+    let pool = ic_memory::MemoryAllocationPool::new(
+        vec![ic_memory::MemoryAuthority::new("fixture", "fixture.").unwrap()],
+        Vec::new(),
+    )
+    .unwrap();
+    let mut runtime = ic_memory::MemoryRuntime::new(memory.clone()).unwrap();
+    runtime
+        .bootstrap(&declarations, &pool, &ic_memory::GenericAllocationPolicy)
+        .unwrap();
+    let slot = runtime.memory_id(key).unwrap();
+    drop(runtime);
+    let before = memory.borrow().clone();
+    assert_eq!(allocated_memory_id(&memory, key), slot);
+    assert_eq!(*memory.borrow(), before);
 }

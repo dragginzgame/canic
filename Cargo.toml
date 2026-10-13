@@ -87,7 +87,7 @@ hmac = "0.13.0"
 ic-agent = "=0.49.2"
 ic-auth = { version = "0.5", default-features = false }
 ic-auth-protocol-types = "0.5"
-ic-backup = { version = "0.22", default-features = false }
+ic-backup = { version = "0.24", default-features = false }
 ic-blob-storage = "0.23"
 ic-blob-storage-contracts = "0.23"
 ic-build = { version = "0.2" }
@@ -100,14 +100,14 @@ ic-host-process = { version = "0.17", default-features = false }
 ic-host-tools = "0.17"
 ic-management-canister-types = "0.11"
 ic-memory = "0.36"
-ic-metrics = "0.8"
+ic-metrics = "0.9"
 ic-query = { version = "0.55", default-features = false, features = [
     "subnet-catalog-host",
 ] }
 ic-secp256k1 = "=0.3.0"
 ic-signature-verification = "0.3.0"
 ic-testkit = { version = "0.37" }
-ic-timers = "0.21"
+ic-timers = "0.22"
 ic-verify-bls-signature = { version = "0.6.0", default-features = false, features = [
     "alloc",
 ] }

@@ -10,6 +10,19 @@ classified under the existing **0.112.0** changelog entry. Own package versions
 remain **0.111.0**. The objective is to delete duplicate mechanisms in favor of
 upstream owners; moving declarations alone does not demonstrate faster builds.
 
+## Native-agent Memory diagnostics repair — 2026-10-13
+
+The native-agent integration fixture no longer accesses Memory 0.36.2's private
+commit store. It reopens the existing memory geometry and reads recovered ledger
+bindings from the public doctor report, without bootstrapping or treating its
+empty diagnostic inputs as admission authority. All four fixture lookups use the
+raw stable-memory snapshot. The focused byte-preservation regression passes;
+strict Clippy for the native-agent target passes. The initial regression used an
+invalid key without `.v1`; that test input is corrected and its failure retained.
+Evidence: `/tmp/canic-native-agent-memory-clippy.log` and
+`/tmp/canic-native-agent-memory-test-final.log`. No broad or PocketIC suite ran.
+This compile blocker is cleared; the complete integration batch remains open.
+
 ## Published Build 0.2 and Shared Tooling 0.10 adoption — 2026-10-13
 
 The real Canic graph now selects registry IC Build 0.2.0, clearing the Host 0.17
