@@ -82,9 +82,9 @@ pub mod rpc {
     pub use crate::__internal::core::api::rpc::RpcApi;
 }
 
-/// Runtime bootstrap helpers
+/// Runtime readiness helpers
 pub mod runtime {
-    pub use crate::__internal::core::api::{ready::ReadyApi, runtime::MemoryRuntimeApi};
+    pub use crate::__internal::core::api::ready::ReadyApi;
 }
 
 /// Protocol runtime helpers

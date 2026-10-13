@@ -60,7 +60,7 @@ fn measured_nondefault_buckets_cover_every_usable_id_without_growth() {
     .unwrap();
     runtime
         .bootstrap(
-            &ic_memory::SealedDeclarationSnapshot::new(&[]).unwrap(),
+            &ic_memory::SealedDeclarationSnapshot::new(Vec::new()).unwrap(),
             &ic_memory::MemoryAllocationPool::new(
                 Vec::new(),
                 vec![ic_memory::MemoryManagerIdRange::new(10, 254).unwrap()],

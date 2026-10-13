@@ -128,25 +128,45 @@ fn composite_query_expansion_forwards_cdk_attr_and_call_kind() {
 }
 
 #[test]
-fn default_fleet_guard_keeps_sync_wrapper_sync() {
-    let sig: Signature = syn::parse_quote!(fn ping() -> Result<(), ::canic::Error>);
-    let args = make_args(Vec::new());
-    let plan = build_access_plan(EndpointKind::Update, &args, &sig).expect("access plan");
-
-    assert!(!plan.requires_async());
-    assert!(!(sig.asyncness.is_some() || plan.requires_async()));
-}
-
-#[test]
-fn explicit_requires_forces_async_wrapper() {
-    let sig: Signature = syn::parse_quote!(fn ping() -> Result<(), ::canic::Error>);
-    let args = make_args(vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
-        BuiltinPredicate::CallerIsController,
-    ))]);
-    let plan = build_access_plan(EndpointKind::Update, &args, &sig).expect("access plan");
-
-    assert!(plan.requires_async());
-    assert!(sig.asyncness.is_some() || plan.requires_async());
+fn access_checks_preserve_handler_synchrony() {
+    for kind in [EndpointKind::Query, EndpointKind::Update] {
+        for guarded in [false, true] {
+            for asynchronous in [false, true] {
+                for bounded in [false, true] {
+                    let requires = if guarded {
+                        vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
+                            BuiltinPredicate::CallerIsController,
+                        ))]
+                    } else {
+                        Vec::new()
+                    };
+                    let mut args = make_args(requires);
+                    if bounded {
+                        args.payload_max_bytes = Some(quote!(1024));
+                    }
+                    let mut function: ItemFn = syn::parse_quote!(
+                        fn ping() -> Result<(), ::canic::Error> {
+                            Ok(())
+                        }
+                    );
+                    if asynchronous {
+                        function.sig.asyncness = Some(syn::token::Async::default());
+                    }
+                    let output: syn::File =
+                        syn::parse2(expand(kind, args, function)).expect("valid expanded items");
+                    let wrapper = output
+                        .items
+                        .iter()
+                        .find_map(|item| match item {
+                            syn::Item::Fn(item) if item.sig.ident == "ping" => Some(item),
+                            _ => None,
+                        })
+                        .expect("endpoint wrapper");
+                    assert_eq!(wrapper.sig.asyncness.is_some(), asynchronous);
+                }
+            }
+        }
+    }
 }
 
 #[test]

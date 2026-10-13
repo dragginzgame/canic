@@ -212,6 +212,7 @@ dependencies = [
  "candid",
  "canic-contracts",
  "ciborium",
+ "ctor",
  "ic-auth",
  "ic-auth-protocol-types",
  "ic-cdk",
@@ -612,9 +613,9 @@ dependencies = [
 
 [[package]]
 name = "ic-blob-storage"
-version = "0.22.14"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbe89acfa313259c1687352fb3cc776f7bf207d50c07943e3ec92f4660b4f400"
+checksum = "b689d5109d3845502224b0af548a3606169c5d4e5cc04e6f769948451823688a"
 dependencies = [
  "candid",
  "ic-blob-storage-contracts",
@@ -628,9 +629,9 @@ dependencies = [
 
 [[package]]
 name = "ic-blob-storage-contracts"
-version = "0.22.14"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c688e891ed78d8a62fdb40c71d2087228080c046949f00e9f08994f1da26892a"
+checksum = "dc8d70d7351c02e814960d3c08eeabd201112999c4c5cdf858bb1c03ca49c789"
 dependencies = [
  "candid",
  "serde",
@@ -714,12 +715,11 @@ dependencies = [
 
 [[package]]
 name = "ic-memory"
-version = "0.35.14"
+version = "0.36.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d87e55b5c70919c8d162854e1d68ea3b6bd3ed5921523951443cb1002fbebc3"
+checksum = "ea52e4f1c8497bafa9eb97be01994a2d7f1a1659ec607fcea2fa92b6a3b3b8d0"
 dependencies = [
  "ciborium",
- "ctor",
  "ic-stable-structures",
  "serde",
  "thiserror 2.0.18",

@@ -194,13 +194,13 @@ pub(crate) fn delegated_token_verified(
 
 /// Require that the caller controls the current canister.
 /// Allows controller-only maintenance calls.
-pub async fn is_controller(caller: Principal) -> Result<(), AccessError> {
-    predicates::is_controller(caller).await
+pub fn is_controller(caller: Principal) -> Result<(), AccessError> {
+    predicates::is_controller(caller)
 }
 
 /// Require the actual caller to be a controller or the exact stable Root.
-pub async fn is_controller_or_root(caller: Principal) -> Result<(), AccessError> {
-    predicates::is_controller_or_root(caller).await
+pub fn is_controller_or_root(caller: Principal) -> Result<(), AccessError> {
+    predicates::is_controller_or_root(caller)
 }
 
 /// Require that the caller appears in the exact open Fleet projection.
@@ -217,28 +217,28 @@ pub fn require_fleet_admitted_caller() -> Result<Principal, AccessError> {
 }
 
 /// Require that the caller is a direct child of the current canister.
-pub async fn is_child(caller: Principal) -> Result<(), AccessError> {
-    predicates::is_child(caller).await
+pub fn is_child(caller: Principal) -> Result<(), AccessError> {
+    predicates::is_child(caller)
 }
 
 /// Require that the caller is the configured parent canister.
-pub async fn is_parent(caller: Principal) -> Result<(), AccessError> {
-    predicates::is_parent(caller).await
+pub fn is_parent(caller: Principal) -> Result<(), AccessError> {
+    predicates::is_parent(caller)
 }
 
 /// Require that the caller equals the configured root canister.
-pub async fn is_root(caller: Principal) -> Result<(), AccessError> {
-    predicates::is_root(caller).await
+pub fn is_root(caller: Principal) -> Result<(), AccessError> {
+    predicates::is_root(caller)
 }
 
 /// Require that the caller is the currently executing canister.
-pub async fn is_same_canister(caller: Principal) -> Result<(), AccessError> {
-    predicates::is_same_canister(caller).await
+pub fn is_same_canister(caller: Principal) -> Result<(), AccessError> {
+    predicates::is_same_canister(caller)
 }
 
 /// Require a root-signed caller attestation bound to this canister's live Subnet.
-pub async fn is_attested_local_subnet(caller: Principal) -> Result<(), AccessError> {
-    attestation::is_attested_local_subnet(caller).await
+pub fn is_attested_local_subnet(caller: Principal) -> Result<(), AccessError> {
+    attestation::is_attested_local_subnet(caller)
 }
 
 pub(crate) fn verify_decoded_token(
@@ -249,11 +249,11 @@ pub(crate) fn verify_decoded_token(
     token::verify_token(token, caller, IcOps::now_nanos(), required_scope)
 }
 
-pub(crate) async fn verify_decoded_attestation(
+pub(crate) fn verify_decoded_attestation(
     attestation: &crate::dto::auth::SignedRoleAttestation,
     caller: Principal,
 ) -> Result<(), AccessError> {
-    attestation::verify_attestation(attestation, caller).await
+    attestation::verify_attestation(attestation, caller)
 }
 
 const fn dependency_unavailable(error: crate::InternalError) -> AccessError {

@@ -38,9 +38,7 @@ use canic_contracts::dto::{
     },
     state::{SetCyclesFundingRequest, SetStateResponse},
 };
-use canic_core::{
-    api::runtime::MemoryRuntimeApi, control_plane_support::ops::runtime::env::EnvOps,
-};
+use canic_core::control_plane_support::ops::runtime::env::EnvOps;
 use ic_cdk::api::{canister_self, is_controller, msg_caller};
 
 ///
@@ -54,13 +52,12 @@ pub struct FleetCoordinatorApi;
 /// Existing Registry authority exposed as one endpoint-wide access predicate.
 pub struct FleetCoordinatorRegistryCallerPredicate;
 
-#[async_trait::async_trait]
-impl canic_core::access::expr::AsyncAccessPredicate for FleetCoordinatorRegistryCallerPredicate {
+impl canic_core::access::expr::AccessCheck for FleetCoordinatorRegistryCallerPredicate {
     fn name(&self) -> &'static str {
         "fleet_coordinator::registry_caller"
     }
 
-    async fn eval(
+    fn eval(
         &self,
         context: &canic_core::access::expr::AccessContext,
     ) -> Result<(), canic_core::access::AccessError> {
@@ -84,7 +81,7 @@ impl FleetCoordinatorApi {
     /// Restore memory invariants and synchronously commit fresh genesis during install.
     pub fn init(args: FleetCoordinatorInitArgs) {
         canic_core::api::timer::TimerApi::initialize_shared_runtime_required();
-        MemoryRuntimeApi::bootstrap_registry()
+        canic_core::memory::bootstrap(crate::memory::framework())
             .unwrap_or_else(|error| ic_cdk::trap(format!("memory bootstrap failed: {error}")));
         EnvOps::initialize_fleet_coordinator_runtime();
         canic_core::api::authority_restore::AuthorityRestoreApi::initialize(canister_self())

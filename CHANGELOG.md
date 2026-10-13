@@ -11,29 +11,39 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
 - **Breaking public contracts:** align consumers with Auth protocol-types 0.5,
-  Backup 0.21, Query 0.55 and Host 0.15, initialize the new protected provisioning failure
+  Backup 0.21, Memory 0.36, Query 0.55 and Host 0.16, initialize the new protected provisioning failure
   field, rebuild the family and cleanly reinstall across releases
   ([#517](https://github.com/dragginzgame/canic/issues/517)).
   Preserve exact dependency/rejection evidence and approved provisioning resume
   commands ([#516](https://github.com/dragginzgame/canic/issues/516)).
   Align Backup with the shared Host/Metrics graph, checksum validation and private
-  sidecar admission, adopt Blob 0.22.11's shared endpoint owner,
+  sidecar admission, adopt Blob 0.23's shared endpoint and explicit memory owners,
   qualify Root-driven managed Blob installation and both governed consumer
   compositions, retain wide timer totals, reuse its
   upstream memory-grant container, align consumers, reuse upstream Auth
   request hashing, certificate rules, crypto preparation, complete proof checks,
   session admission and shared signature storage with explicit scope ceilings,
-  adopt published Testkit 0.35, Query's asynchronous catalog API,
+  adopt published Testkit 0.36, Query's asynchronous catalog API,
   atomic timer registration and wide instruction totals,
+  share async performance accounting across handlers to reduce Wasm code size,
+  make endpoint admission and custom access checks synchronous,
   compare artifact Candid/Wasm names and modes through Host 0.15,
-  use published IC Build 0.1.1 for Cargo grouping/cache consumers with retained
+  use published IC Build 0.1.3 for Cargo grouping/cache consumers with retained
   failure evidence and pre-effect package-list admission,
+  replace private declaration-cache persistence with IC Build transactions while
+  retaining optional-cache fallback and bounded workers
+  ([#528](https://github.com/dragginzgame/canic/issues/528)),
+  delegate temporary artifact capture and staging to IC Build while retaining
+  qualification-first publication ([#529](https://github.com/dragginzgame/canic/issues/529)),
   remove duplicate upstream preparation tests
   and unused test-only checksum composition,
   adopt Shared Tooling 0.9.2's consumer Make interface and verified Cargo/host/IC tools with
   retained failure evidence, fail-closed setup and committed-preparation restart,
-  reduce tooling/memory-pool duplication, and correct
-  exact Blob installation decoding and managed recovery fencing, token verification, restore receipt matching, release payload admission,
+  replace memory constructor registries with explicit component requests and host
+  composition ([#527](https://github.com/dragginzgame/canic/issues/527)),
+  decode funding Registry replies once ([#436](https://github.com/dragginzgame/canic/issues/436)), and correct
+  exact Blob installation decoding and managed recovery fencing, token verification,
+  restore receipt matching and command exclusion through reference release, release payload admission,
   oversized ICP configuration reads, macOS worker fixture cleanup, canonical
   tool-resolution expectations and the refreshed embedded allocation peer
   ([#450](https://github.com/dragginzgame/canic/issues/450))

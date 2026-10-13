@@ -11,7 +11,12 @@ use ic_memory::{
 const KEY: &str = "embedded_app.counter.v1";
 type Counter = Cell<u64, RuntimeMemory<DefaultMemoryImpl>>;
 
-ic_memory::ic_memory_declaration!(authority = "embedded-app", key = "embedded_app.counter.v1");
+pub(super) fn memory_requests() -> Vec<ic_memory::MemoryRequest> {
+    vec![
+        ic_memory::MemoryRequest::new("embedded-app", KEY, ic_memory::SchemaMetadata::default())
+            .unwrap(),
+    ]
+}
 
 thread_local! {
     static COUNTER: RefCell<Option<Counter>> = const { RefCell::new(None) };

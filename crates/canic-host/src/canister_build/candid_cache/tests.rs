@@ -1,5 +1,7 @@
 use super::*;
 use crate::test_support::temp_dir;
+use canic_core::cdk::utils::hash::hex_bytes;
+use sha2_host::{Digest, Sha256};
 use std::{collections::BTreeMap, env, fs, io::Write as _, process::Command};
 
 #[test]
@@ -72,8 +74,16 @@ fn batch_extraction_drains_successes_before_first_error_and_stops_scheduling() {
     for input in &inputs[2..MAX_EXTRACTORS] {
         assert!(cache.extract(&input.wasm).unwrap().1);
     }
-    let unissued = file_hash(&inputs[MAX_EXTRACTORS].wasm).unwrap();
-    assert!(!cache.record_path(&unissued).exists());
+    assert!(
+        !cache
+            .directory
+            .join("materialized")
+            .join(format!(
+                "{}.did",
+                file_hash(&inputs[MAX_EXTRACTORS].wasm).unwrap()
+            ))
+            .exists()
+    );
     fs::remove_dir_all(root).unwrap();
 }
 
@@ -300,7 +310,7 @@ fn changed_role_and_shared_input_reuse_only_unchanged_compiled_declarations() {
 }
 
 #[test]
-fn corrupt_or_misbound_cache_records_reextract_current_candid() {
+fn corrupt_shared_evidence_reextracts_current_candid() {
     let root = temp_dir("candid-cache-corrupt");
     fs::create_dir_all(&root).unwrap();
     let wasm = root.join("role.wasm");
@@ -312,20 +322,67 @@ fn corrupt_or_misbound_cache_records_reextract_current_candid() {
     let cache = cache_fixture(&root);
     let (expected, hit) = cache.extract(&wasm).unwrap();
     assert!(!hit);
-    let path = cache.record_path(&file_hash(&wasm).unwrap());
-    for field in ["identity", "wasm_sha256", "candid_sha256", "candid"] {
-        let mut record: serde_json::Value =
-            serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-        record[field] = "corrupted".into();
-        fs::write(&path, serde_json::to_vec(&record).unwrap()).unwrap();
+    let output = cached_output(&cache, &wasm);
+    let manifest = output
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("manifest.ic-testkit");
+    for (path, bytes) in [
+        (output.clone(), b"corrupted".to_vec()),
+        (manifest.clone(), b"invalid shared manifest".to_vec()),
+        (manifest, vec![b' '; CACHE_CANDID_LIMIT + 1]),
+        (output, vec![b' '; CACHE_CANDID_LIMIT + 1]),
+    ] {
+        fs::write(path, bytes).unwrap();
         assert_eq!(cache.extract(&wasm).unwrap(), (expected.clone(), false));
         assert_eq!(cache.extract(&wasm).unwrap(), (expected.clone(), true));
     }
-    fs::write(&path, b"{").unwrap();
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn optional_cache_io_failure_does_not_block_normal_extraction() {
+    let root = temp_dir("candid-cache-io-failure");
+    fs::create_dir_all(&root).unwrap();
+    let wasm = root.join("role.wasm");
+    fs::write(&wasm, declaration_module("service : {} ")).unwrap();
+    let cache = cache_fixture(&root);
+    let expected = extract_candid_with_tool(&wasm, &cache.extractor).unwrap();
+    fs::create_dir_all(&cache.directory).unwrap();
+    fs::write(cache.directory.join("ic-build"), b"unavailable cache root").unwrap();
     assert_eq!(cache.extract(&wasm).unwrap(), (expected.clone(), false));
-    fs::write(&path, vec![b' '; CACHE_RECORD_LIMIT + 1]).unwrap();
     assert_eq!(cache.extract(&wasm).unwrap(), (expected, false));
     fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn oversized_candid_is_returned_without_publishing_a_cache_entry() {
+    let root = temp_dir("candid-cache-large-candid");
+    fs::create_dir_all(&root).unwrap();
+    let cache = cache_fixture(&root);
+    let wasm = root.join("role.wasm");
+    // The native fixture reads a literal declaration; no production parser is substituted.
+    let text = format!("service : {{ /*{}*/ }}", "x".repeat(CACHE_CANDID_LIMIT));
+    let mut bytes = b"\0asm".to_vec();
+    bytes.extend(text.as_bytes());
+    bytes.push(0);
+    fs::write(&wasm, bytes).unwrap();
+    let expected = extract_candid_with_tool(&wasm, &cache.extractor).unwrap();
+    assert!(expected.len() > CACHE_CANDID_LIMIT);
+    assert_eq!(cache.extract(&wasm).unwrap(), (expected.clone(), false));
+    assert_eq!(cache.extract(&wasm).unwrap(), (expected, false));
+    assert!(!cache.directory.join("materialized").exists());
+    fs::remove_dir_all(root).unwrap();
+}
+
+fn cached_output(cache: &CandidExtractionCache, wasm: &Path) -> PathBuf {
+    let spec = cache.spec(wasm, &file_hash(wasm).unwrap());
+    match prepare_artifact_cache(&spec).unwrap() {
+        ArtifactCachePreparation::Reused(record) => record.artifacts()[0].path().to_path_buf(),
+        ArtifactCachePreparation::Build(_) => panic!("expected shared cached declaration"),
+    }
 }
 
 #[test]
@@ -350,7 +407,6 @@ fn changed_extractor_refuses_even_a_cached_result() {
         matches!(error.downcast_ref::<BuildReuseError>(), Some(BuildReuseError::ChangedInput(path)) if path == &tool)
     );
     let changed = CandidExtractionCache::with_extractor(root.join("cache"), tool).unwrap();
-    assert_ne!(changed.identity, cache.identity);
     assert_eq!(changed.extract(&wasm).unwrap(), (expected, false));
     fs::remove_dir_all(root).unwrap();
 }
@@ -363,7 +419,7 @@ fn failed_extraction_does_not_create_a_cache_record() {
     fs::write(&wasm, b"not a Wasm module").unwrap();
     let cache = cache_fixture(&root);
     assert!(cache.extract(&wasm).is_err());
-    assert!(!cache.record_path(&file_hash(&wasm).unwrap()).exists());
+    assert!(!cache.directory.join("materialized").exists());
     fs::write(&wasm, declaration_module("service : {} ")).unwrap();
     assert!(!cache.extract(&wasm).unwrap().1);
     assert!(cache.extract(&wasm).unwrap().1);
@@ -385,7 +441,7 @@ fn symlink_inputs_are_refused_and_cache_symlinks_do_not_modify_their_target() {
     assert!(
         matches!(error.downcast_ref::<BuildReuseError>(), Some(BuildReuseError::Unsupported(path)) if path == &redirected)
     );
-    let record = cache.record_path(&file_hash(&wasm).unwrap());
+    let record = cached_output(&cache, &wasm);
     fs::remove_file(&record).unwrap();
     let foreign = root.join("foreign.json");
     fs::write(&foreign, b"untouched").unwrap();
@@ -530,4 +586,68 @@ fn section(wasm: &mut Vec<u8>, id: u8, bytes: &[u8]) {
     assert!(bytes.len() < 128);
     wasm.extend([id, u8::try_from(bytes.len()).unwrap()]);
     wasm.extend(bytes);
+}
+
+#[cfg(unix)]
+#[test]
+fn changed_declaration_is_fatal_even_when_optional_cache_is_unavailable() {
+    let root = temp_dir("candid-cache-input-drift");
+    fs::create_dir_all(&root).unwrap();
+    let extractor = root.join("extractor");
+    fs::copy("/bin/sh", &extractor).unwrap();
+    for available in [true, false] {
+        let cache = CandidExtractionCache::with_extractor(
+            root.join(format!("cache-{available}")),
+            extractor.clone(),
+        )
+        .unwrap();
+        if !available {
+            fs::create_dir_all(&cache.directory).unwrap();
+            fs::write(cache.directory.join("ic-build"), b"unavailable cache root").unwrap();
+        }
+        let wasm = root.join("role.wasm");
+        // The native shell is an admitted extractor fixture; its input mutates before it returns.
+        fs::write(&wasm, "printf changed > \"$0\"\nprintf 'service : {}'\n").unwrap();
+        let error = cache.extract(&wasm).unwrap_err();
+        assert!(
+            matches!(error.downcast_ref::<BuildReuseError>(), Some(BuildReuseError::ChangedInput(path)) if path == &wasm)
+        );
+        assert!(!cache.directory.join("materialized").exists());
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn optional_materialization_failure_returns_fresh_candid_and_preserves_shared_evidence() {
+    let root = temp_dir("candid-cache-publication-io-failure");
+    fs::create_dir_all(&root).unwrap();
+    let extractor = root.join("extractor");
+    fs::copy("/bin/sh", &extractor).unwrap();
+    let cache = CandidExtractionCache::with_extractor(root.join("cache"), extractor).unwrap();
+    let wasm = root.join("role.wasm");
+    // A file blocks only destination materialization after the shared commit.
+    fs::create_dir_all(&cache.directory).unwrap();
+    fs::write(
+        &wasm,
+        format!(
+            "printf blocked > '{}'\nprintf 'service : {{}}'\n",
+            cache.directory.join("materialized").display()
+        ),
+    )
+    .unwrap();
+    assert_eq!(
+        cache.extract(&wasm).unwrap(),
+        (b"service : {}\n".to_vec(), false)
+    );
+    assert_eq!(
+        cache.extract(&wasm).unwrap(),
+        (b"service : {}\n".to_vec(), false)
+    );
+    fs::remove_file(cache.directory.join("materialized")).unwrap();
+    assert_eq!(
+        cache.extract(&wasm).unwrap(),
+        (b"service : {}\n".to_vec(), true)
+    );
+    fs::remove_dir_all(root).unwrap();
 }

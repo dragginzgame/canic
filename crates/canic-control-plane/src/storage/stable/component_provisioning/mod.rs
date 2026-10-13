@@ -53,9 +53,7 @@ std::thread_local! {
             RuntimeMemory<DefaultMemoryImpl>,
         >,
     > = RefCell::new(StableBtreeMap::init(
-        canic_core::ic_memory_key!(
-            authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-            key = "canic.control_plane.root.component_provisioning.operations.v1"),
+        canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_PROVISIONING_OPERATIONS_V1),
     ));
 }
 
@@ -67,9 +65,7 @@ std::thread_local! {
             RuntimeMemory<DefaultMemoryImpl>,
         >,
     > = RefCell::new(StableBtreeMap::init(
-        canic_core::ic_memory_key!(
-            authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-            key = "canic.control_plane.root.component_provisioning.placements.v1"),
+        canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_PROVISIONING_PLACEMENTS_V1),
     ));
 }
 
@@ -77,9 +73,7 @@ std::thread_local! {
     static ROOT_COMPONENT_PROVISIONING_STATE: RefCell<
         Cell<RootComponentProvisioningStateRecord, RuntimeMemory<DefaultMemoryImpl>>,
     > = RefCell::new(Cell::init(
-        canic_core::ic_memory_key!(
-            authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-            key = "canic.control_plane.root.component_provisioning.state.v1"),
+        canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_PROVISIONING_STATE_V1),
         RootComponentProvisioningStateRecord::default(),
     ));
 }

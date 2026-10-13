@@ -79,9 +79,7 @@ std::thread_local! {
     static ROOT_COMPONENT_REGISTRY:
         RefCell<Cell<RootComponentRegistryStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            canic_core::ic_memory_key!(
-                authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-                key = "canic.control_plane.root.component.registry_state.v1"),
+            canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_REGISTRY_STATE_V1),
             RootComponentRegistryStateRecord::default(),
         ));
 }
@@ -95,9 +93,7 @@ std::thread_local! {
             RuntimeMemory<DefaultMemoryImpl>,
         >,
     > = RefCell::new(StableBtreeMap::init(
-        canic_core::ic_memory_key!(
-            authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-            key = "canic.control_plane.root.component.draining.v1"),
+        canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_DRAINING_V1),
     ));
 }
 
@@ -110,9 +106,7 @@ std::thread_local! {
             RuntimeMemory<DefaultMemoryImpl>,
         >,
     > = RefCell::new(StableBtreeMap::init(
-        canic_core::ic_memory_key!(
-            authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-            key = "canic.control_plane.root.component.subtree_removal_history.v1"),
+        canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_V1),
     ));
 }
 
@@ -125,9 +119,7 @@ std::thread_local! {
             RuntimeMemory<DefaultMemoryImpl>,
         >,
     > = RefCell::new(StableBtreeMap::init(
-        canic_core::ic_memory_key!(
-            authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-            key = "canic.control_plane.root.component.registry_entries.v1"),
+        canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_REGISTRY_ENTRIES_V1),
     ));
 }
 
@@ -140,9 +132,7 @@ std::thread_local! {
             RuntimeMemory<DefaultMemoryImpl>,
         >,
     > = RefCell::new(StableBtreeMap::init(
-        canic_core::ic_memory_key!(
-            authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-            key = "canic.control_plane.root.component.principal_index.v1"),
+        canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_PRINCIPAL_INDEX_V1),
     ));
 }
 
@@ -155,9 +145,7 @@ std::thread_local! {
             RuntimeMemory<DefaultMemoryImpl>,
         >,
     > = RefCell::new(StableBtreeMap::init(
-        canic_core::ic_memory_key!(
-            authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-            key = "canic.control_plane.root.component.allocations.v1"),
+        canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_ALLOCATIONS_V1),
     ));
 }
 

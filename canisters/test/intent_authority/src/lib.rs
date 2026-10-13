@@ -226,7 +226,7 @@ fn settle_receipt(
 }
 
 fn init_memory() {
-    canic::api::runtime::MemoryRuntimeApi::bootstrap_registry()
+    canic::memory::bootstrap(canic::memory::framework())
         .expect("memory registry init should succeed");
 }
 

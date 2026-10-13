@@ -40,6 +40,7 @@ async-trait = { workspace = true }
 candid = { workspace = true }
 canic-contracts.workspace = true
 ciborium = { workspace = true }
+ctor = { workspace = true }
 ic-auth = { workspace = true }
 ic-auth-protocol-types = { workspace = true }
 ic-cdk = { workspace = true }

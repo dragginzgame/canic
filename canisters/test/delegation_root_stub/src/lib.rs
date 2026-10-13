@@ -7,11 +7,11 @@ use canic::{Error, api::auth::AuthApi, dto::auth::SignedRoleAttestation, prelude
 canic::start_fleet_root!();
 
 #[canic_update(public)]
-async fn root_verify_role_attestation(
+fn root_verify_role_attestation(
     attestation: SignedRoleAttestation,
     min_accepted_epoch: u64,
 ) -> Result<(), Error> {
-    AuthApi::verify_role_attestation(&attestation, min_accepted_epoch).await
+    AuthApi::verify_role_attestation(&attestation, min_accepted_epoch)
 }
 
 #[canic_query(public)]

@@ -1920,7 +1920,7 @@ fn provisioning_failure_rejects_unbounded_or_incomplete_dependency_without_mutat
     oversized.rejection_detail = Some("x".repeat(MAX_PROVISIONING_REJECTION_BYTES + 1));
     let mut incomplete = valid.clone();
     incomplete.rejection_code = None;
-    let mut anonymous = valid.clone();
+    let mut anonymous = valid;
     anonymous.target = candid::Principal::anonymous();
     for dependency in [oversized, incomplete, anonymous] {
         let result = RootComponentProvisioningOps::record_failure(
@@ -2021,7 +2021,7 @@ fn provisioning_failure_backoff_survives_restart_without_changing_work_receipts(
     let replay = RootComponentProvisioningOps::acceptance_replay(&fixture.request)
         .unwrap()
         .unwrap();
-    assert_eq!(replay.last_failure, Some(failure.clone()));
+    assert_eq!(replay.last_failure, Some(failure));
     assert!(RootComponentProvisioningOps::clear_failure(accepted.operation_id, [88; 32]).is_err());
     RootComponentProvisioningOps::clear_failure(accepted.operation_id, accepted.plan_hash).unwrap();
     let reset = RootComponentProvisioningOps::record_failure(

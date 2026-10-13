@@ -21,6 +21,19 @@ fn bootstrap_retains_declarations_and_opens_only_the_accessed_store() {
         .filter(|entry| matches!(entry.binding, MemoryAllocationBinding::Current { .. }))
         .collect::<Vec<_>>();
     assert!(!declared.is_empty());
+    let requested = memory::requests()
+        .unwrap()
+        .into_iter()
+        .map(|request| request.stable_key().as_str().to_owned())
+        .collect::<std::collections::BTreeSet<_>>();
+    let committed = declared
+        .iter()
+        .filter_map(|entry| match &entry.binding {
+            MemoryAllocationBinding::Current { stable_key, .. } => Some(stable_key.clone()),
+            _ => None,
+        })
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(committed, requested);
     assert!(
         declared
             .iter()
@@ -326,7 +339,8 @@ fn early_default_access_preserves_configured_bootstrap_and_authority() {
     std::thread::spawn(|| {
         use ic_memory::{RuntimeAdoptionError, RuntimeDiagnosticError, RuntimeOpenError};
         let key = "canic.core.runtime.bindings.v1";
-        let declarations = ic_memory::sealed_declaration_snapshot().unwrap();
+        let declarations =
+            ic_memory::SealedDeclarationSnapshot::new(memory::requests().unwrap()).unwrap();
         assert!(matches!(
             ic_memory::open_default_memory_manager_memory(key),
             Err(RuntimeOpenError::NotBootstrapped)
@@ -351,6 +365,7 @@ fn early_default_access_preserves_configured_bootstrap_and_authority() {
         assert!(!MemoryRegistryOps::is_initialized().unwrap());
         let pool = memory::pool::framework_pool(Vec::new(), Vec::new()).unwrap();
         ic_memory::bootstrap_default_memory_manager_with_config(
+            &declarations,
             ic_memory::MemoryManagerConfig::new(1).unwrap(),
             &pool,
             &memory::CanicMemoryManagerPolicy::new(),
@@ -379,7 +394,8 @@ fn ledger_growth_refusal_publishes_no_authority_and_retries_canic_bootstrap() {
         ic_memory::MemoryManagerConfig::new(1).unwrap(),
     )
     .unwrap();
-    let declarations = ic_memory::sealed_declaration_snapshot().unwrap();
+    let declarations =
+        ic_memory::SealedDeclarationSnapshot::new(memory::requests().unwrap()).unwrap();
     let policy = memory::CanicMemoryManagerPolicy::new();
     let pool = memory::pool::framework_pool(Vec::new(), Vec::new()).unwrap();
     let before = backing.bytes.borrow().clone();
@@ -419,7 +435,7 @@ fn application_growth_refusal_preserves_shared_extents_and_retry() {
     .unwrap();
     runtime
         .bootstrap(
-            &ic_memory::sealed_declaration_snapshot().unwrap(),
+            &ic_memory::SealedDeclarationSnapshot::new(memory::requests().unwrap()).unwrap(),
             &memory::pool::framework_pool(Vec::new(), Vec::new()).unwrap(),
             &memory::CanicMemoryManagerPolicy::new(),
         )

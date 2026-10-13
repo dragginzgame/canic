@@ -63,7 +63,7 @@ pub(super) enum BuiltinFailure {
     Unselected,
 }
 
-pub(super) async fn evaluate<const FLEET_ADMISSION: bool>(
+pub(super) fn evaluate<const FLEET_ADMISSION: bool>(
     pred: &BuiltinPredicate,
     ctx: &AccessContext,
 ) -> Result<(), BuiltinFailure> {
@@ -82,7 +82,7 @@ pub(super) async fn evaluate<const FLEET_ADMISSION: bool>(
             .and_then(|admission| admission.map_err(AccessError::CallerAuthority))
         }
         BuiltinPredicate::Caller(CallerPredicate::IsController) => {
-            access::auth::is_controller(ctx.caller).await
+            access::auth::is_controller(ctx.caller)
         }
         BuiltinPredicate::Caller(CallerPredicate::IsFleetAdmitted) => {
             if !FLEET_ADMISSION {
@@ -91,16 +91,16 @@ pub(super) async fn evaluate<const FLEET_ADMISSION: bool>(
             access::auth::is_fleet_admitted(ctx.caller)
         }
         BuiltinPredicate::Caller(CallerPredicate::IsParent) => {
-            access::auth::is_parent(ctx.caller).await
+            access::auth::is_parent(ctx.caller)
         }
         BuiltinPredicate::Caller(CallerPredicate::IsChild) => {
-            access::auth::is_child(ctx.caller).await
+            access::auth::is_child(ctx.caller)
         }
         BuiltinPredicate::Caller(CallerPredicate::IsRoot) => {
-            access::auth::is_root(ctx.caller).await
+            access::auth::is_root(ctx.caller)
         }
         BuiltinPredicate::Caller(CallerPredicate::IsSameCanister) => {
-            access::auth::is_same_canister(ctx.caller).await
+            access::auth::is_same_canister(ctx.caller)
         }
         BuiltinPredicate::Environment(EnvironmentPredicate::SelfIsFleetSubnetRoot) => {
             access::env::is_fleet_subnet_root()
@@ -118,7 +118,7 @@ pub(super) async fn evaluate<const FLEET_ADMISSION: bool>(
             Ok(())
         }
         BuiltinPredicate::AttestedLocalSubnet => {
-            access::auth::is_attested_local_subnet(ctx.caller).await
+            access::auth::is_attested_local_subnet(ctx.caller)
         }
         BuiltinPredicate::AuthenticatedArgument {
             token,
@@ -130,7 +130,7 @@ pub(super) async fn evaluate<const FLEET_ADMISSION: bool>(
             Ok(())
         }
         BuiltinPredicate::AttestedLocalSubnetArgument(attestation) => {
-            access::auth::verify_decoded_attestation(attestation, ctx.caller).await
+            access::auth::verify_decoded_attestation(attestation, ctx.caller)
         }
         BuiltinPredicate::ServiceAuthority { service } => {
             access::deployment::require_service_authority(service)

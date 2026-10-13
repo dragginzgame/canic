@@ -25,7 +25,7 @@ std::thread_local! {
     static CANISTER_CHILDREN: RefCell<
         StableBtreeMap<Principal, CanisterChildRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.runtime.canister_children.v1")),
+        StableBtreeMap::init(crate::memory::open(crate::memory::keys::RUNTIME_CANISTER_CHILDREN_V1)),
     );
 }
 

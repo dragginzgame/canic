@@ -18,13 +18,19 @@ pub const LIMITS: ArgumentLimits = ArgumentLimits {
 };
 
 canic::memory::memory_allocation_pool!(
+    provider = memory_pool,
     authorities = [("managed-probe", "managed_probe.")],
     exclusions = []
 );
-ic_memory::ic_memory_declaration!(
-    authority = "managed-probe",
-    key = "managed_probe.initialization.v1"
-);
+pub fn memory() -> canic::memory::MemoryBootstrap {
+    let mut input = canic::memory::framework();
+    input.pool = memory_pool().expect("fixture grants");
+    input.requests.push(
+        ic_memory::MemoryRequest::new("managed-probe", KEY, ic_memory::SchemaMetadata::default())
+            .unwrap(),
+    );
+    input
+}
 
 thread_local! {
     static EVIDENCE: RefCell<Option<Evidence>> = const { RefCell::new(None) };

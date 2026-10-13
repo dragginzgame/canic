@@ -11,6 +11,7 @@ use crate::{
     output_with_executable_busy_retry,
 };
 use canic_contracts::ids::BuildNetwork;
+use ic_build::artifacts::ArtifactStagingDirectory;
 use ic_host_artifacts::artifact::encode_gzip;
 use ic_host_fs::{
     durable::{PublicationMode, WriteOptions, write_bytes, write_named_with, write_with},
@@ -24,15 +25,12 @@ use std::{
     collections::BTreeSet,
     fs,
     path::{Path, PathBuf},
-    sync::atomic::{AtomicU64, Ordering},
     time::Instant,
 };
 
 pub use wasm::enforce_wasm_install_limits;
 pub use wasm::wasm_artifact_metrics;
 
-const ARTIFACT_STAGE_ATTEMPTS: usize = 64;
-static ARTIFACT_STAGE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 const IC_WASM_FEATURE_FLAGS: &[&str] = &[
     "--enable-bulk-memory",
     "--enable-sign-ext",
@@ -149,31 +147,10 @@ fn stage_and_publish_artifact_set<T>(
 }
 
 struct StagedArtifactSet {
-    root: PathBuf,
+    _staging: ArtifactStagingDirectory,
     wasm_path: PathBuf,
     did_path: PathBuf,
     wasm_gz_path: PathBuf,
-}
-
-/// Private copy of one completed Cargo output, retained across later compilations.
-pub struct CapturedWasmArtifact {
-    staged: StagedArtifactSet,
-}
-
-impl CapturedWasmArtifact {
-    /// Copy the selected output before another Cargo command can replace it.
-    pub(crate) fn capture(
-        source: &Path,
-        destination: &Path,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
-        let staged = StagedArtifactSet::create(destination)?;
-        write_wasm_artifact(source, &staged.wasm_path)?;
-        Ok(Self { staged })
-    }
-
-    pub(crate) fn path(&self) -> &Path {
-        &self.staged.wasm_path
-    }
 }
 
 impl StagedArtifactSet {
@@ -184,36 +161,13 @@ impl StagedArtifactSet {
                 final_wasm_path.display()
             )
         })?;
-        for _ in 0..ARTIFACT_STAGE_ATTEMPTS {
-            let sequence = ARTIFACT_STAGE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-            let root = parent.join(format!(
-                ".canic-artifact-stage-{}-{sequence}",
-                std::process::id()
-            ));
-            match fs::create_dir(&root) {
-                Ok(()) => {
-                    return Ok(Self {
-                        wasm_path: root.join("candidate.wasm"),
-                        did_path: root.join("candidate.did"),
-                        wasm_gz_path: root.join("candidate.wasm.gz"),
-                        root,
-                    });
-                }
-                Err(source) if source.kind() == std::io::ErrorKind::AlreadyExists => {}
-                Err(source) => return Err(source.into()),
-            }
-        }
-        Err(format!(
-            "failed to allocate an artifact staging directory beneath {}",
-            parent.display()
-        )
-        .into())
-    }
-}
-
-impl Drop for StagedArtifactSet {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.root);
+        let staging = ArtifactStagingDirectory::new(parent)?;
+        Ok(Self {
+            wasm_path: staging.path().join("candidate.wasm"),
+            did_path: staging.path().join("candidate.did"),
+            wasm_gz_path: staging.path().join("candidate.wasm.gz"),
+            _staging: staging,
+        })
     }
 }
 

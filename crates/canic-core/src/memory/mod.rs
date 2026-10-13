@@ -6,19 +6,22 @@
 //! Boundary: lifecycle initializes this before stable structures are accessed.
 
 pub mod admission;
+pub(crate) mod keys;
 pub(crate) mod ledger;
 mod policy;
 pub mod pool;
 pub mod registry;
 pub mod runtime;
 
-pub use crate::{ic_memory_key, memory_allocation_pool, memory_bootstrap_admission};
+pub use crate::memory_allocation_pool;
 pub use policy::CanicMemoryManagerPolicy;
 
 /// Stable allocation-policy authority for Canic core memory declarations.
 pub const CANIC_CORE_MEMORY_AUTHORITY: &str = "canic-core";
 /// Stable allocation-policy authority for Canic control-plane memory declarations.
 pub const CANIC_CONTROL_PLANE_MEMORY_AUTHORITY: &str = "canic-control-plane";
+
+const MEMORY_AUTHORITY: &str = CANIC_CORE_MEMORY_AUTHORITY;
 
 /// Bucket size compiled into this artifact, in 64 KiB Wasm pages.
 ///
@@ -37,20 +40,65 @@ pub(crate) fn stable_extent_bytes() -> u64 {
     ic_cdk::api::stable_size().saturating_mul(65_536)
 }
 
-pub(crate) fn bootstrap_default_memory_manager()
--> Result<(), ic_memory::RuntimeBootstrapError<registry::MemoryRegistryError>> {
+/// Complete framework requests, including stores whose lazy initializers have not run.
+pub fn requests() -> Result<Vec<ic_memory::MemoryRequest>, ic_memory::MemoryDeclarationError> {
+    keys::requests()
+}
+
+/// Open a key already committed by the host's explicit bootstrap.
+///
+/// # Panics
+/// Panics if the host has not bootstrapped or omitted this key.
+#[must_use]
+pub fn open(
+    key: &str,
+) -> ic_memory::RuntimeMemory<ic_memory::ic_stable_structures::DefaultMemoryImpl> {
+    runtime::assert_memory_bootstrap_ready(key);
+    ic_memory::open_default_memory_manager_memory(key).expect("committed stable key")
+}
+
+/// Host-owned component requests, grants and optional pre-commit admission.
+pub struct MemoryBootstrap {
+    /// Complete component requests, including the selected framework.
+    pub requests: Vec<ic_memory::MemoryRequest>,
+    /// Exact namespace grants and unmanaged physical exclusions.
+    pub pool: ic_memory::MemoryAllocationPool,
+    /// One composed pre-commit callback with a stable semantic identity.
+    pub admission: Option<admission::MemoryBootstrapAdmission>,
+}
+
+/// Bootstrap exactly the supplied host composition before any store opens.
+pub fn bootstrap(
+    input: MemoryBootstrap,
+) -> Result<(), ic_memory::RuntimeBootstrapError<registry::MemoryRegistryError>> {
+    let declarations = ic_memory::SealedDeclarationSnapshot::new(input.requests)
+        .map_err(ic_memory::RuntimeBootstrapError::Declarations)?;
     let config = ic_memory::MemoryManagerConfig::new(configured_bucket_pages())
         .map_err(ic_memory::RuntimeStateError::from)?;
     let mut policy = policy::CanicMemoryManagerPolicy::new();
-    if let Some(participant) =
-        admission::seal().map_err(ic_memory::RuntimeBootstrapError::AdmissionPolicy)?
-    {
+    if let Some(participant) = input.admission {
         policy = policy.with_admission(participant);
     }
     ic_memory::bootstrap_default_memory_manager_with_config(
+        &declarations,
         config,
-        &pool::seal().map_err(ic_memory::RuntimeBootstrapError::AdmissionPolicy)?,
+        &input.pool,
         &policy,
-    )
-    .map(|_| ())
+    )?;
+    pool::remember(input.pool);
+    Ok(())
+}
+
+pub(crate) fn bootstrap_default_memory_manager()
+-> Result<(), ic_memory::RuntimeBootstrapError<registry::MemoryRegistryError>> {
+    if runtime::is_memory_bootstrap_ready()? {
+        return Ok(());
+    }
+    bootstrap(MemoryBootstrap {
+        requests: requests().map_err(ic_memory::RuntimeBootstrapError::Declarations)?,
+        pool: pool::framework_pool(Vec::new(), Vec::new())
+            .map_err(registry::MemoryRegistryError::from)
+            .map_err(ic_memory::RuntimeBootstrapError::AdmissionPolicy)?,
+        admission: None,
+    })
 }

@@ -41,6 +41,12 @@ original lease and proof consumption; retry never extends the lease. Status and
 audit reads check current authority before reporting an active session. Across
 releases, rebuild and cleanly reinstall the maintained family.
 
+Endpoint authentication and authorization run synchronously using local state
+and supplied signature proofs. Custom guards implement
+`canic::access::AccessCheck`; neither builtin nor custom admission awaits a
+remote authority. Use synchronous handlers when their application work does
+not await. Proof issuance and renewal retain async calls where needed.
+
 ## Boundary
 
 Delegated subject identity is for application endpoints. Framework-owned

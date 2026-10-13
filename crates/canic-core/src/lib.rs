@@ -72,8 +72,8 @@ pub(crate) use error::InternalError;
 /// Not part of the public API.
 #[doc(hidden)]
 pub mod __reexports {
+    pub use ::ctor;
     pub use ::ic_memory;
-    pub use ::ic_memory::__reexports::ctor;
 }
 
 ///
@@ -90,8 +90,7 @@ pub const CANIC_WASM_CHUNK_REQUEST_MAX_BYTES: usize = CANIC_WASM_CHUNK_BYTES + 6
 #[cfg(test)]
 const _: () = {
     fn __canic_memory_test_bootstrap() {
-        crate::api::runtime::MemoryRuntimeApi::bootstrap_registry()
-            .expect("test stable-memory bootstrap");
+        crate::memory::bootstrap_default_memory_manager().expect("test stable-memory bootstrap");
     }
 
     #[crate::__reexports::ctor::ctor(

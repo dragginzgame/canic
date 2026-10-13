@@ -82,7 +82,7 @@ pub(super) fn access_stage(plan: &AccessPlan, call: &syn::Ident) -> TokenStream2
                     call: #call,
                 };
                 let #expr_ident = #expr;
-                if let Err(err) = ::canic::__internal::core::access::expr::eval_access_selected::<#fleet_admission>(&#expr_ident, &#ctx).await {
+                if let Err(err) = ::canic::__internal::core::access::expr::eval_access_selected::<#fleet_admission>(&#expr_ident, &#ctx) {
                     #deny
                 }
             }
@@ -112,12 +112,6 @@ pub(super) enum AccessPlan {
         expr: TokenStream2,
         fleet_admission: bool,
     },
-}
-
-impl AccessPlan {
-    pub(super) const fn requires_async(&self) -> bool {
-        matches!(self, Self::Expr { .. })
-    }
 }
 
 fn guard_tokens(guard: DefaultFleetGuard) -> TokenStream2 {

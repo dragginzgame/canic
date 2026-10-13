@@ -37,19 +37,17 @@ macro_rules! __canic_blob_endpoint {
     };
 }
 
-/// Mount blob endpoints and memory declarations inside an application canister.
+/// Mount blob endpoints inside an application canister.
 ///
 /// Invoke once at crate root after selecting the service namespace in the host
-/// allocation pool. The application retains its sole `canic::start!`
+/// allocation pool and adding [`crate::memory_requests`] to its explicit host
+/// composition. The application retains its sole `canic::start!`
 /// and `canic::finish!`, composes synchronous [`crate::lifecycle`] functions and
 /// includes [`crate::metrics::sample`] in its application sampler. This macro
 /// neither installs the service nor registers a lifecycle or sampler.
 #[macro_export]
 macro_rules! mount {
     () => {
-        $crate::__private::ic_memory::eager_init!({
-            $crate::__private::memory::register();
-        });
 
         mod __canic_blob_endpoints {
             pub(super) use $crate::__private::{ic_blob_storage_contracts, ic_cdk};
@@ -82,12 +80,9 @@ macro_rules! mount {
 #[macro_export]
 macro_rules! canister {
     () => {
-        canic::memory::memory_allocation_pool!(
-            authorities = [($crate::MEMORY_AUTHORITY, $crate::MEMORY_KEY_PREFIX)],
-            exclusions = [],
-        );
         $crate::mount!();
         canic::start!(
+            memory = $crate::__private::memory::host(),
             argument_limits = $crate::lifecycle::ENVELOPE_LIMITS,
             lifecycle_participant(
                 init = $crate::lifecycle::install_from_args,

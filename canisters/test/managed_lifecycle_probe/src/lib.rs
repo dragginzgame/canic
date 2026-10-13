@@ -18,6 +18,7 @@ thread_local! {
 }
 
 canic::start!(
+    memory = initialization::memory(),
     argument_limits = initialization::LIMITS,
     lifecycle_participant(
         init = initialization::install,

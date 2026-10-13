@@ -95,13 +95,13 @@ async fn canic_install(_args: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
 
 #[canic_update(requires(auth::authenticated(cap::VERIFY)))]
-async fn issuer_verify_token(token: DelegatedToken) -> Result<(), Error> {
+fn issuer_verify_token(token: DelegatedToken) -> Result<(), Error> {
     let _ = token;
     Ok(())
 }
 
 #[canic_update(requires(auth::authenticated()))]
-async fn issuer_verify_token_any(token: DelegatedToken) -> Result<(), Error> {
+fn issuer_verify_token_any(token: DelegatedToken) -> Result<(), Error> {
     let _ = token;
     Ok(())
 }
@@ -170,33 +170,31 @@ fn application_subject() -> Result<Principal, Error> {
 }
 
 #[canic_update(public)]
-async fn issuer_verify_role_attestation(
+fn issuer_verify_role_attestation(
     attestation: SignedRoleAttestation,
     min_accepted_epoch: u64,
 ) -> Result<(), Error> {
-    AuthApi::verify_role_attestation(&attestation, min_accepted_epoch).await
+    AuthApi::verify_role_attestation(&attestation, min_accepted_epoch)
 }
 
 #[canic_update(requires(auth::attested_local_subnet()))]
-async fn issuer_require_attested_local_subnet(
-    attestation: SignedRoleAttestation,
-) -> Result<(), Error> {
+fn issuer_require_attested_local_subnet(attestation: SignedRoleAttestation) -> Result<(), Error> {
     let _ = attestation;
     Ok(())
 }
 
 #[canic_update(requires(caller::is_root()))]
-async fn issuer_guard_is_root() -> Result<(), Error> {
+fn issuer_guard_is_root() -> Result<(), Error> {
     Ok(())
 }
 
 #[canic_update(requires(caller::is_controller()))]
-async fn issuer_guard_is_controller() -> Result<(), Error> {
+fn issuer_guard_is_controller() -> Result<(), Error> {
     Ok(())
 }
 
 #[canic_update(requires(caller::is_parent()))]
-async fn issuer_guard_is_parent() -> Result<(), Error> {
+fn issuer_guard_is_parent() -> Result<(), Error> {
     Ok(())
 }
 

@@ -21,26 +21,20 @@ use std::cell::RefCell;
 std::thread_local! {
     static CANISTER_POOL: RefCell<
         StableBtreeMap<Principal, CanisterPoolAssetRecord, RuntimeMemory<DefaultMemoryImpl>>
-    > = RefCell::new(StableBtreeMap::init(canic_core::ic_memory_key!(
-        authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-        key = "canic.control_plane.root.canister_inventory.assets.v1")));
+    > = RefCell::new(StableBtreeMap::init(canic_core::memory::open(crate::memory::keys::ROOT_CANISTER_INVENTORY_ASSETS_V1)));
 }
 
 std::thread_local! {
     static CANISTER_POOL_HANDOFF_RECEIPTS: RefCell<
         StableBtreeMap<Principal, CanisterPoolHandoffReceiptRecord, RuntimeMemory<DefaultMemoryImpl>>
-    > = RefCell::new(StableBtreeMap::init(canic_core::ic_memory_key!(
-        authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-        key = "canic.control_plane.root.canister_pool.handoff_receipts.v1")));
+    > = RefCell::new(StableBtreeMap::init(canic_core::memory::open(crate::memory::keys::ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_V1)));
 }
 
 std::thread_local! {
     static CANISTER_POOL_STATE: RefCell<
         Cell<CanisterPoolStateRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(Cell::init(
-        canic_core::ic_memory_key!(
-            authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-            key = "canic.control_plane.root.canister_pool.state.v1"),
+        canic_core::memory::open(crate::memory::keys::ROOT_CANISTER_POOL_STATE_V1),
         CanisterPoolStateRecord::default(),
     ));
 }

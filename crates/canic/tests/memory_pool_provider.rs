@@ -1,6 +1,6 @@
 //! Qualify one authored pool as both an artifact registration and a pure provider.
 
-use canic::api::runtime::MemoryRuntimeApi;
+use canic::__internal::core::__reexports::ic_memory;
 
 canic::memory::memory_allocation_pool!(
     provider = application_memory_pool,
@@ -9,7 +9,7 @@ canic::memory::memory_allocation_pool!(
 );
 
 fn grow_application_memory() -> u64 {
-    canic::memory::ic_memory_key!(authority = "provider-test", key = "provider_test.rows.v1",)
+    canic::memory::open("provider_test.rows.v1")
         .grow(1)
         .unwrap()
 }
@@ -31,10 +31,71 @@ fn checked_provider_is_available_before_bootstrap_and_after_warm_adoption() {
 
     // Provider reads neither a sealed host registry nor the committed runtime.
     assert_eq!(application_memory_pool().unwrap(), before);
-    MemoryRuntimeApi::bootstrap_registry().unwrap();
+    let mut input = canic::memory::framework();
+    input.pool = application_memory_pool().unwrap();
+    input.requests.push(
+        ic_memory::MemoryRequest::new(
+            "provider-test",
+            "provider_test.rows.v1",
+            ic_memory::SchemaMetadata::default(),
+        )
+        .unwrap(),
+    );
+    canic::memory::bootstrap(input).unwrap();
     assert_eq!(grow_application_memory(), 0);
     assert_eq!(application_memory_pool().unwrap(), before);
-    MemoryRuntimeApi::bootstrap_registry().unwrap();
+    let mut input = canic::memory::framework();
+    input.pool = application_memory_pool().unwrap();
+    input.requests.push(
+        ic_memory::MemoryRequest::new(
+            "provider-test",
+            "provider_test.rows.v1",
+            ic_memory::SchemaMetadata::default(),
+        )
+        .unwrap(),
+    );
+    canic::memory::bootstrap(input).unwrap();
     assert_eq!(grow_application_memory(), 1);
     assert_eq!(application_memory_pool().unwrap(), before);
+}
+
+#[test]
+fn explicit_composition_refuses_duplicates_and_admission_before_publication() {
+    std::thread::spawn(|| {
+        use canic::memory::{
+            admission::{MemoryBootstrapAdmission, PolicyIdentity},
+            registry::MemoryRegistryError,
+        };
+        let mut duplicated = canic::memory::framework();
+        duplicated.requests.push(duplicated.requests[0].clone());
+        assert!(matches!(
+            canic::memory::bootstrap(duplicated),
+            Err(ic_memory::RuntimeBootstrapError::Declarations(
+                ic_memory::MemoryDeclarationError::DuplicateRequest { .. }
+            ))
+        ));
+        assert!(!ic_memory::is_default_memory_manager_bootstrapped().unwrap());
+
+        let mut rejected = canic::memory::framework();
+        rejected.admission = Some(MemoryBootstrapAdmission::new(
+            PolicyIdentity::new("test.host-admission", 1).unwrap(),
+            |_| {
+                Err(MemoryRegistryError::InvalidDeclaration {
+                    stable_key: "test.refused.v1".to_string(),
+                    reason: "host admission refusal",
+                })
+            },
+        ));
+        assert!(matches!(
+            canic::memory::bootstrap(rejected),
+            Err(ic_memory::RuntimeBootstrapError::AdmissionPolicy(
+                MemoryRegistryError::InvalidDeclaration { .. }
+            ))
+        ));
+        assert!(!ic_memory::is_default_memory_manager_bootstrapped().unwrap());
+        canic::memory::bootstrap(canic::memory::framework()).unwrap();
+        assert!(ic_memory::is_default_memory_manager_bootstrapped().unwrap());
+    })
+    .join()
+    .unwrap();
 }

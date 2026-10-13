@@ -59,6 +59,16 @@ fn fresh_issuer_fetches_proof_and_configuration_retries_preserve_it() {
     assert_eq!(replay.claims, token.claims);
     let next = prepare_and_get(&fixture, 52);
     assert_eq!(next.proof, token.proof);
+    let wrong_caller = fixture
+        .pic()
+        .update_candid_as_or_panic::<Result<(), Error>, _>(
+            fixture.verifier.canister_id,
+            Principal::self_authenticating([52; 32]),
+            "issuer_verify_token",
+            (next.clone(),),
+        )
+        .expect_err("synchronous verification must retain presenter binding");
+    assert_eq!(wrong_caller.code(), codes::AUTHORITY_CONFLICT.raw_code());
     fixture
         .pic()
         .update_candid_as_or_panic::<Result<(), Error>, _>(
@@ -82,7 +92,7 @@ fn audience() -> DelegationAudience {
 fn grants(fixture: &ActiveComponentRegistryFixture) -> Vec<DelegatedRoleGrant> {
     vec![role_grant(
         fixture.verifier.role.clone(),
-        vec![cap::SESSION.to_string(), cap::VERIFY.to_string()],
+        vec![cap::VERIFY.to_string()],
     )]
 }
 

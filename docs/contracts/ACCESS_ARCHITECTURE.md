@@ -73,10 +73,12 @@ env -u ICP_NETWORK icp canister call <shard> public_assign_project \
 - Both modes use the same short-circuit evaluator and default Fleet guards.
   `public` keeps the Fleet guard; application endpoints must not select `internal`
   to obtain a plain reply. Refusal prevents handler execution.
-- A synchronous handler is supported with either mode. Predicates may await
-  before dispatch; once a synchronous handler starts, the wrapper introduces no
-  await between its durable effects and reply. Custom predicates should remain
-  free of application effects.
+- Endpoint admission is synchronous in both modes. Builtin and custom checks
+  use local authority and supplied proofs; they cannot await network I/O. Custom
+  checks implement `canic::access::AccessCheck` with synchronous `eval` and
+  remain free of application effects. Generated wrappers are async only when
+  the handler is async. Proof issuance, provisioning and renewal may still await
+  external calls outside admission.
 
 See [endpoint argument and reply controls](../features/runtime/update-payload-limits.md#bounded-decoding-and-plain-replies)
 for the public API.

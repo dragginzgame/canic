@@ -19,7 +19,7 @@ std::thread_local! {
     static TEMPLATE_MANIFESTS: RefCell<
         StableBtreeMap<TemplateReleaseKeyRecord, TemplateManifestRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.template.manifests.v1")),
+        StableBtreeMap::init(canic_core::memory::open(crate::memory::keys::TEMPLATE_MANIFESTS_V1)),
     );
 }
 

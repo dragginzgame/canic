@@ -20,7 +20,7 @@ std::thread_local! {
     //
     static CYCLE_TRACKER: RefCell<CycleTracker> =
         RefCell::new(CycleTracker::new(StableBtreeMap::init(
-            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.cycles.tracker.v1"),
+            crate::memory::open(crate::memory::keys::CYCLES_TRACKER_V1),
         )));
 }
 
@@ -30,7 +30,7 @@ std::thread_local! {
     //
     static CYCLE_TOPUP_EVENTS: RefCell<CycleTopupEvents> =
         RefCell::new(CycleTopupEvents::new(StableBtreeMap::init(
-            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.cycles.topup_events.v1"),
+            crate::memory::open(crate::memory::keys::CYCLES_TOPUP_EVENTS_V1),
         )));
 }
 
@@ -40,7 +40,7 @@ std::thread_local! {
     //
     static CYCLES_FUNDING_LEDGER: RefCell<CyclesFundingLedger> =
         RefCell::new(CyclesFundingLedger::new(StableBtreeMap::init(
-            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.cycles.funding_ledger.v1"),
+            crate::memory::open(crate::memory::keys::CYCLES_FUNDING_LEDGER_V1),
         )));
 }
 

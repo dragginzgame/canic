@@ -12,18 +12,15 @@ use super::{
     candid::{extract_candid_bytes, extract_candid_with_tool},
     reuse::{BuildReuseError, file_hash, require_native_tool, resolve_tool},
 };
-use canic_core::cdk::utils::hash::hex_bytes;
+use ic_build::artifacts::{
+    ArtifactCacheError, ArtifactCachePreparation, ArtifactCacheSpec, prepare_artifact_cache,
+};
 use ic_host_fs::durable::write_bytes;
 use ic_host_fs::read::read_file_no_follow;
-use serde::{Deserialize, Serialize};
-use sha2_host::{Digest, Sha256};
-use std::{
-    io,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
-// This bounds optional cache I/O, not accepted Candid size. Larger results are extracted normally.
-const CACHE_RECORD_LIMIT: usize = 4 * 1024 * 1024;
+// This bounds optional cached Candid reads and writes, not accepted Candid size. Larger results are extracted normally.
+const CACHE_CANDID_LIMIT: usize = 4 * 1024 * 1024;
 const MAX_EXTRACTORS: usize = 4;
 
 /// One role's completed declaration, ready for independent extraction.
@@ -86,18 +83,6 @@ pub(super) struct CandidExtractionCache {
     directory: PathBuf,
     extractor: PathBuf,
     extractor_sha256: String,
-    identity: String,
-}
-
-/// Optional host cache evidence for one normalized extraction result.
-#[derive(Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct CandidExtractionRecord {
-    schema_version: u8,
-    identity: String,
-    wasm_sha256: String,
-    candid_sha256: String,
-    candid: String,
 }
 
 impl CandidExtractionCache {
@@ -119,68 +104,107 @@ impl CandidExtractionCache {
     fn with_extractor(directory: PathBuf, extractor: PathBuf) -> Result<Self, BuildReuseError> {
         require_native_tool(&extractor)?;
         let extractor_sha256 = file_hash(&extractor)?;
-        let mut identity = Sha256::new();
-        identity.update(b"canic.candid-extraction.v1");
-        identity.update(include_bytes!("../../build_environment/mod.rs"));
-        identity.update(extractor_sha256.as_bytes());
-        // Bind the compiled extraction implementation without rehashing a large host binary.
-        identity.update(env!("CARGO_PKG_VERSION").as_bytes());
-        identity.update(include_bytes!("../candid.rs"));
-        identity.update(include_bytes!("mod.rs"));
-        let mut environment = crate::build_environment::inputs();
-        environment.sort();
-        for pair in environment {
-            for field in <[_; 2]>::from(pair) {
-                let bytes = field.as_encoded_bytes();
-                identity.update((bytes.len() as u64).to_be_bytes());
-                identity.update(bytes);
-            }
-        }
         Ok(Self {
             directory,
             extractor,
             extractor_sha256,
-            identity: hex_bytes(identity.finalize()),
         })
     }
 
-    fn record_path(&self, wasm_sha256: &str) -> PathBuf {
-        self.directory
-            .join(&self.identity)
-            .join(format!("{wasm_sha256}.json"))
+    fn spec(&self, wasm: &Path, wasm_sha256: &str) -> ArtifactCacheSpec {
+        // This distinct store is owned by IC Build. Existing Canic JSON evidence
+        // is retained but neither read nor rewritten; no cache migration or pruning.
+        ArtifactCacheSpec::new(
+            &self.directory.join("ic-build"),
+            "canic-candid-extraction",
+            "canic.candid-extraction.v1",
+        )
+        .with_coordination_scope(&format!("canic.candid-extraction.{wasm_sha256}"))
+        .with_input("declaration", wasm)
+        .with_tool("extractor", &self.extractor)
+        .with_environment(crate::build_environment::inputs())
+        .with_identity_bytes("version", env!("CARGO_PKG_VERSION").as_bytes())
+        .with_identity_bytes(
+            "environment-recipe",
+            include_bytes!("../../build_environment/mod.rs"),
+        )
+        .with_identity_bytes("extraction-recipe", include_bytes!("../candid.rs"))
+        .with_identity_bytes("cache-recipe", include_bytes!("mod.rs"))
+        .with_output(
+            "candid",
+            &self
+                .directory
+                .join("materialized")
+                .join(format!("{wasm_sha256}.did")),
+        )
     }
 
     fn extract(&self, wasm: &Path) -> Result<(Vec<u8>, bool), Box<dyn std::error::Error>> {
+        // Invocation custody applies even when optional cache I/O is unavailable.
         self.require_current_extractor()?;
         let wasm_sha256 = file_hash(wasm)?;
-        let path = self.record_path(&wasm_sha256);
-        match self.load(&path, &wasm_sha256) {
-            Ok(Some(candid)) => return Ok((candid, true)),
-            Ok(None) => {}
-            Err(error) => eprintln!("Declaration cache rejected for {}: {error}", wasm.display()),
-        }
+        let transaction = match prepare_artifact_cache(&self.spec(wasm, &wasm_sha256)) {
+            Ok(ArtifactCachePreparation::Reused(record)) => {
+                // Hold the shared retention record through the bounded byte read.
+                match read_file_no_follow(record.artifacts()[0].path(), CACHE_CANDID_LIMIT) {
+                    Ok(candid) => {
+                        self.require_current_inputs(wasm, &wasm_sha256)?;
+                        return Ok((candid, true));
+                    }
+                    Err(error) => {
+                        eprintln!("Declaration cache not read for {}: {error}", wasm.display());
+                    }
+                }
+                None
+            }
+            Ok(ArtifactCachePreparation::Build(transaction)) => Some(transaction),
+            Err(error) => {
+                optional_cache_failure(wasm, error)?;
+                None
+            }
+        };
         let candid = extract_candid_with_tool(wasm, &self.extractor)?;
+        self.require_current_inputs(wasm, &wasm_sha256)?;
+        if let Some(transaction) = transaction {
+            if candid.len() > CACHE_CANDID_LIMIT {
+                // The cache budget never reduces the extractor's admitted output.
+                if let Err(error) = transaction.abort() {
+                    optional_cache_failure(wasm, error)?;
+                }
+            } else {
+                let path = transaction.output_path("candid")?;
+                match write_bytes(&path, &candid) {
+                    Ok(()) => {
+                        if let Err(error) = transaction.commit() {
+                            optional_cache_failure(wasm, error)?;
+                        }
+                    }
+                    Err(error) => {
+                        eprintln!(
+                            "Declaration cache not staged for {}: {error}",
+                            wasm.display()
+                        );
+                        if let Err(error) = transaction.abort() {
+                            optional_cache_failure(wasm, error)?;
+                        }
+                    }
+                }
+            }
+        }
+        self.require_current_inputs(wasm, &wasm_sha256)?;
+        Ok((candid, false))
+    }
+
+    fn require_current_inputs(
+        &self,
+        wasm: &Path,
+        wasm_sha256: &str,
+    ) -> Result<(), BuildReuseError> {
         self.require_current_extractor()?;
         if file_hash(wasm)? != wasm_sha256 {
-            return Err(BuildReuseError::ChangedInput(wasm.into()).into());
+            return Err(BuildReuseError::ChangedInput(wasm.into()));
         }
-        let record = CandidExtractionRecord {
-            schema_version: 1,
-            identity: self.identity.clone(),
-            wasm_sha256,
-            candid_sha256: hex_bytes(Sha256::digest(&candid)),
-            candid: String::from_utf8(candid.clone())?,
-        };
-        let bytes = serde_json::to_vec(&record)?;
-        if bytes.len() <= CACHE_RECORD_LIMIT
-            && let Err(error) = write_bytes(&path, &bytes)
-        {
-            eprintln!(
-                "Declaration cache not recorded for {}: {error}",
-                wasm.display()
-            );
-        }
-        Ok((candid, false))
+        Ok(())
     }
 
     fn require_current_extractor(&self) -> Result<(), BuildReuseError> {
@@ -189,26 +213,31 @@ impl CandidExtractionCache {
         }
         Ok(())
     }
+}
 
-    fn load(&self, path: &Path, wasm_sha256: &str) -> Result<Option<Vec<u8>>, BuildReuseError> {
-        let bytes =
-            match read_file_no_follow(path, CACHE_RECORD_LIMIT).map_err(std::io::Error::from) {
-                Ok(bytes) => bytes,
-                Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
-                Err(error) => return Err(error.into()),
-            };
-        let record: CandidExtractionRecord = serde_json::from_slice(&bytes)?;
-        if record.schema_version != 1
-            || record.identity != self.identity
-            || record.wasm_sha256 != wasm_sha256
-            || record.candid_sha256 != hex_bytes(Sha256::digest(record.candid.as_bytes()))
-        {
-            return Err(BuildReuseError::Evidence(
-                "Candid extraction binding differs".into(),
-            ));
+// Input mutation is never an optional-cache failure, including cleanup wrappers.
+fn optional_cache_failure(
+    wasm: &Path,
+    error: ArtifactCacheError,
+) -> Result<(), Box<dyn std::error::Error>> {
+    fn changed(error: &ArtifactCacheError) -> bool {
+        match error {
+            ArtifactCacheError::InputsChangedDuringPreparation { .. }
+            | ArtifactCacheError::InputsChangedDuringAcquisition { .. } => true,
+            ArtifactCacheError::FailedTransactionCleanup {
+                transaction_error, ..
+            } => changed(transaction_error),
+            _ => false,
         }
-        Ok(Some(record.candid.into_bytes()))
     }
+    if changed(&error) {
+        return Err(error.into());
+    }
+    eprintln!(
+        "Declaration cache unavailable for {}: {error}",
+        wasm.display()
+    );
+    Ok(())
 }
 
 /// Reuse only a compiled declaration result; derive current role profiles and runtimes afterward.

@@ -37,12 +37,11 @@ impl AuthApi {
     ///
     /// `min_accepted_epoch` can tighten the configured per-role epoch floor;
     /// the effective floor is the greater of the application and configured values.
-    pub async fn verify_role_attestation(
+    pub fn verify_role_attestation(
         attestation: &SignedRoleAttestation,
         min_accepted_epoch: u64,
     ) -> Result<(), Error> {
         RuntimeAuthWorkflow::verify_role_attestation(attestation, min_accepted_epoch)
-            .await
             .map_err(Self::map_auth_error)
     }
 
@@ -50,12 +49,11 @@ impl AuthApi {
     ///
     /// `min_accepted_epoch` can tighten the configured per-role epoch floor;
     /// the effective floor is the greater of the application and configured values.
-    pub async fn verify_local_subnet_role_attestation(
+    pub fn verify_local_subnet_role_attestation(
         attestation: &SignedRoleAttestation,
         min_accepted_epoch: u64,
     ) -> Result<(), Error> {
         RuntimeAuthWorkflow::verify_local_subnet_role_attestation(attestation, min_accepted_epoch)
-            .await
             .map_err(Self::map_auth_error)
     }
 }

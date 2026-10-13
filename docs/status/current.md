@@ -10,6 +10,180 @@ classified under the existing **0.112.0** changelog entry. Own package versions
 remain **0.111.0**. The objective is to delete duplicate mechanisms in favor of
 upstream owners; moving declarations alone does not demonstrate faster builds.
 
+## Artifact staging owner convergence — 2026-10-13
+
+The authorized [#529](https://github.com/dragginzgame/canic/issues/529) replacement
+is applied. Configured-role and infrastructure producers capture completed Cargo
+outputs with registry IC Build 0.1.3; temporary allocation and cleanup use its
+shared staging owner. Canic keeps product paths, transform/tool selections,
+source/output admission policy, release binding, qualification and durable
+publication under its build lock. Publication still replaces gzip, Candid and
+Wasm in that order after qualifying the complete candidate set. Source capture
+retains the existing unbounded read policy; staging is not release/cache admission.
+Role-facing size diagnostics recognize the current temporary owner.
+
+The published archive checksum is
+`1527d2dfe308fc7c1236b6db42c8c6883635f0d60d1dbbabd28462648058caec`.
+The qualified graph selects Host 0.16.0, Memory 0.36.1, Testkit 0.36.0,
+Blob/contracts 0.23.0 and Timers 0.21.4. Its lockfile SHA-256 is
+`62547e79b68f73a3e6eb3e83b7b92fdea4e58f8ad8ed4ee8fba2a5f4fed9bf94`.
+Concurrent catalog updates were preserved; this migration did not rewrite them.
+
+A frozen current-graph checkout at `/tmp/canic-529-registry-qualification/`
+uses the registry package without an override and a separate target. All 45
+focused checks pass: 23 artifact tests, two actual Cargo-output tests, three
+release-binding tests and 17 declaration/extraction tests, including the real
+extractor 0.1.6 case. The governed PocketIC binding case remains ignored.
+Warning-denied Host all-target/all-feature Clippy and changed-file formatting
+pass. Final source custody matches 1,592 owning-package Rust/manifest/config
+inputs to the live checkout. Receipts are `/tmp/canic-529-registry-*.log`;
+the snapshot and final custody log retain their exact inputs. The earlier
+uncached-Timers refusal and its scratch remain retained.
+
+Three production adapters shrink from 1,506 to 1,481 code lines (Cloc 2.10,
+comments/blanks excluded). There is one staging/capture engine and no parallel
+compatibility flow. The open 0.112 draft covers this change; own versions remain
+0.111.0 and Git delivery is user-owned. Native macOS and application acceptance
+remain on #529/#528; these scoped proofs do not close the wider integration batch.
+
+## Funding decoder and explicit Memory adoption — 2026-10-13
+
+The local #436 repair decodes the canonical Registry endpoint result once through
+the shared query client. All three funding tests pass on published IC Build 0.1.3,
+Testkit 0.36.0, Host 0.16 and Memory 0.36.1, including the actual query path,
+canonical request decoding and typed remote rejection. This is native codec
+evidence, not live funding acceptance. Build's required minimum is now 0.1.3;
+the earlier Host public-type mismatch is cleared. The internal testing library
+also checks successfully against Testkit 0.36.0. Locked source preparation ran
+separately; no dependency downgrade or sibling override was introduced.
+
+The local #527 implementation replaces global memory declarations with explicit
+Core/Control Plane requests composed by the lifecycle owner. Store opens and
+request factories share unchanged named keys and role/feature selection. Remove
+`ic_memory_key!`, `memory_bootstrap_admission!`, the no-argument `MemoryRuntimeApi`
+and declaration/pool/admission registration. The pool macro requires a named
+pure provider; applications pass their composition to `start!`. Independent
+ingress constructors now have a direct Canic-owned `ctor` dependency.
+
+Earlier focused proofs on Memory 0.36.0 pass: 28 Core memory cases, the Control
+Plane lazy-store allocation case, two composition cases, strict Core/Control
+Plane library/test Clippy and Root/Coordinator/Wasm Store feature checks.
+On the latest Memory 0.36.1 graph, both composition tests and all three metrics
+facade tests also pass.
+
+Published Blob/contracts 0.23.0 now clear the former Memory-type blocker. Root
+and both isolated consumer locks select one Memory 0.36.1 each, without a source
+override. Warning-denied adapter Clippy passes. The selected published Testkit
+0.36 runner is prepared, and both focused managed Blob cases pass: dedicated
+permissions/recovery and embedded application-state retention/recovery. Their
+checks include exact installation decoding, endpoint parity and restore fencing.
+Root selects Auth 0.5.8 and Timers 0.21.4 for these managed checks; consumer locks
+retain their own compatible published selections. The root manifest and all
+three locks stayed fixed during both runs.
+
+Dedicated artifacts are retained at build
+`39021f01483ac31d8be5ca364ca32605ce38d382c13ad0ee0ae7315d6a5069e8`;
+embedded artifacts at
+`b6bbcd1b93783b92f3f4325e00f416976495ce228c29f4e783e4551ea52bf6d0`.
+Fast-profile code sections are 4.56 MiB (dedicated Blob), 4.57 MiB (embedded),
+8.97 MiB (Root), 4.47 MiB (Coordinator) and 3.02 MiB (Wasm Store), all below
+12 MiB. These are current fixture measurements, not a before/after reduction or
+Toko release acceptance. The first runner took 424s including harness compilation;
+the second reused those outputs and took 51s. Logs, input hashes and the former
+failed check remain under `.tmp/memory-036/`.
+
+The Blob/Memory dependency blocker is cleared and this scoped adoption is
+qualified. The wider Auth/Backup release batch remains separately open; these
+results alone do not qualify that whole batch as ready to push. The open 0.112
+draft includes the changes; package versions remain 0.111.0. No broad gate,
+commit, push, publication or sibling edit ran.
+
+## Async instrumentation size reduction — 2026-10-13
+
+The scoped local [#526](https://github.com/dragginzgame/canic/issues/526) change
+shares async accounting across handler types, retaining safe pinned references,
+per-poll context restoration and completed-handler destruction inside its scope.
+Eleven Core accounting tests and warning-denied all-features library/test Clippy
+pass. The exact held-HTTP overlap PocketIC case passes on both baseline and final
+source, including both completion orders. Default-feature native tests remain
+blocked by untouched Auth dead-code checks; this does not qualify that graph.
+
+The runtime probe's `fast` code body falls from 3,349,506 to 3,338,038 bytes.
+After identical `ic-wasm shrink` and Binaryen 133 `-Oz` processing it falls from
+2,652,013 to 2,643,053 bytes (8,960 saved), with equal export names/kinds. These
+thin-LTO probe measurements are not Toko release headroom. Source/artifact hashes,
+commands and logs remain in `.tmp/perf-wasm-headroom/measurement.json` and adjacent
+files. No dependencies, package versions, Git refs or sibling files changed.
+The open 0.112 draft covers this slice; publication and exact Toko release
+remeasurement remain outstanding. The wider integration batch is still open.
+
+The follow-up [#531](https://github.com/dragginzgame/canic/issues/531) experiment
+confirmed that baseline explicit access expressions forced async wrappers even for sync
+handlers with local-only authentication. Six compiled query/update expansion
+scenarios confirm the distinction. Separately making seven public or seven
+guarded non-awaiting probe handlers sync saves 1,875 or 3,757 optimized code-body
+bytes against the same baseline; the guarded wrappers remain async. Each variant
+passes all ten owning timer/observability PocketIC tests. These are independent
+`fast`-profile experiments, not a combined or Toko release measurement. Temporary
+fixture and macro-test edits were restored byte-for-byte. Evidence and hashes
+remain in `.tmp/endpoint-async-audit/measurement.json`; the #526 fix is unchanged.
+
+## Declaration cache owner convergence — 2026-10-13
+
+The maintainer authorized [#528](https://github.com/dragginzgame/canic/issues/528).
+Configured-role and infrastructure extraction now use the existing IC Build
+0.1.1 artifact transaction API through the same Canic recipe adapter. Generic
+key/environment framing, manifests, verification, staging and retained output
+ownership have one engine. The private JSON cache reader/writer is retired;
+existing files remain untouched. The new store is beneath
+`.canic/build-reuse/declarations/ic-build`, with independently materialized outputs
+beside it. No dual reader, migration, implicit pruning or package-version change.
+
+Canic retains native extractor admission and invocation custody, normalization,
+its output budget, four-worker scheduling/order/draining, and optional-cache
+fallback. Cached Candid reads/writes are capped at 4 MiB; larger valid extraction
+results are returned without cache publication. Changed declarations or tools
+remain fatal even when cache preparation/publication fails.
+
+All 17 scoped extraction/cache tests pass on Linux, including the explicitly
+selected real `candid-extractor` 0.1.6 cold/reuse/fresh-byte parity case. Strict
+Host all-target/all-feature Clippy and changed-file formatting pass. Test receipts
+are `/tmp/canic-528-candid-final.log` and `/tmp/canic-528-clippy-final.log`; earlier
+focused receipts and the corrected Clippy finding are retained. These tiny-tool
+fixtures do not establish a speed-up or application release acceptance. Root
+manifest and lock bytes are unchanged. Source remains uncommitted; native macOS
+Intel/Apple Silicon qualification remains on the issue. Other concurrent dirty
+work is preserved, and the wider integration batch remains unfinished.
+
+## Synchronous endpoint admission — 2026-10-13
+
+The maintainer authorized implementing [#531](https://github.com/dragginzgame/canic/issues/531).
+Builtin caller guards, role-attestation verification, composed access evaluation
+and custom predicates are synchronous. The public custom contract is now
+`AccessCheck`; remove `AsyncAccessPredicate`, its async-trait imports/attributes
+and awaits on local helpers. There is no compatibility alias. Generated wrappers
+follow handler synchrony; 25 non-awaiting framework handler definitions are now
+sync. Proof issuance, provisioning and renewal keep actual external awaits.
+Consuming applications still need to remove auth-only async from their handlers.
+
+Validation passes: 51 endpoint macro tests, 28 Core access tests, two facade
+tests, warning-denied Clippy for the four changed libraries, ten timer/authority
+PocketIC cases, six payload/denial cases, the exact Registry role-attestation
+case and the fresh-issuer token case including wrong-presenter rejection.
+The token test had a stale `session` grant outside its configured scope ceiling;
+it now requests `verify`, without widening production authorization.
+Including Control Plane tests in Clippy still finds unrelated redundant clones
+at `ops/component_provisioning/tests.rs:1923` and `:2024`.
+
+Against the unchanged #526 probe baseline, raw code body falls from 3,338,038
+to 3,318,649 bytes; identical shrink/Oz processing gives 2,643,053 to 2,630,180
+bytes (12,873 saved). Export names/kinds, Cargo inputs and the #526 source hash
+match. This is a fast-profile probe, not Toko release headroom. Evidence,
+source/artifact hashes, original files and logs are retained under
+`.tmp/auth-sync-implementation/`. The open 0.112 draft covers the hard cut;
+this scoped change is validated, but the wider integration release batch remains
+open. No package version, Git publication or sibling edit was performed.
+
 ## Published Testkit selection — current graph
 
 The maintainer removed the Testkit sibling link. Root now selects published
@@ -178,12 +352,28 @@ No second memory/timer runtime or compatibility wrapper was added.
 
 Backup owns checksums/staging, checked digest validation, journal locks and
 private sidecar admission. Canic retains command/descendant custody, original
-restore authority and terminal reference release. Published 0.19.2 adds
-capture-only settlement qualification but does not supply guarded terminal
-reference release. [Backup #29](https://github.com/dragginzgame/ic-backup/issues/29#issuecomment-6120465396)
-and [#513](https://github.com/dragginzgame/canic/issues/513) retain that prerequisite;
+restore authority and terminal reference release. Root selects published 0.21.1;
+the authorized sibling implementation now adds guarded reference release to the
+existing 0.21.3 draft, with product terminal admission and exact existing command
+custody. Six new native process/filesystem cases and strict Clippy pass on its
+held latest graph. Qualification now covers every configured Backup gate target,
+including native/PocketIC tests, docs, Rust 1.88 consumers and both archives.
+Unchanged tooling/release/hook evidence was reused; all affected checks were rerun
+after correcting directory-shaped generic lock admission. Exact Testkit 0.35.1
+setup and the original failures remain retained. Publication and Canic
+adoption remain separate under [Backup #29](https://github.com/dragginzgame/ic-backup/issues/29)
+and [#513](https://github.com/dragginzgame/canic/issues/513);
 [#394](https://github.com/dragginzgame/canic/issues/394) owns live Fleet backup.
 Do not substitute unrestricted deletion or all-Applied accounting.
+
+The current Canic runner now holds every command guard through reference
+publication rather than dropping each before the write. Its existing retention,
+lost-final-response replay and active-command regressions pass, together with
+strict package library/test Clippy. Evidence remains in
+`/tmp/ic-backup-guarded-release/`. This scoped correction does not adopt upstream
+custody records or enable live creation; fresh Fleet routing, application
+consistency and original paid-effect recovery remain required. The whole
+integration batch remains unfinished; no versions or Git effects were performed.
 
 Blob schemas, storage, policy, accounting and installation-memory grants already
 belong upstream. The dedicated and embedded hosts retain one Canic memory and

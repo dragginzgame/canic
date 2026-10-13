@@ -29,10 +29,10 @@ thread_local! {
 
 thread_local! {
     static APPLICATION_SESSIONS: RefCell<StableVec<LocalApplicationSessionRecord, RuntimeMemory<DefaultMemoryImpl>>> = RefCell::new(StableVec::init(
-        crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.auth.local_application_authorization.sessions.v1")
+        crate::memory::open(crate::memory::keys::AUTH_LOCAL_APPLICATION_AUTHORIZATION_SESSIONS_V1)
     ));
     static APPLICATION_REPLAYS: RefCell<StableVec<LocalApplicationReplayRecord, RuntimeMemory<DefaultMemoryImpl>>> = RefCell::new(StableVec::init(
-        crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.auth.local_application_authorization.replays.v1")
+        crate::memory::open(crate::memory::keys::AUTH_LOCAL_APPLICATION_AUTHORIZATION_REPLAYS_V1)
     ));
 }
 
@@ -51,10 +51,7 @@ fn init_local_application_authorization_state()
     #[cfg(any(test, feature = "auth-local-application-authorization"))]
     {
         Cell::init(
-            crate::ic_memory_key!(
-                authority = CANIC_CORE_MEMORY_AUTHORITY,
-                key = "canic.core.auth.local_application_authorization.state.v1"
-            ),
+            crate::memory::open(crate::memory::keys::AUTH_LOCAL_APPLICATION_AUTHORIZATION_STATE_V1),
             LocalApplicationAuthorizationStateRecord::default(),
         )
     }
@@ -68,10 +65,7 @@ fn init_delegated_token_issuer_state()
     #[cfg(any(test, feature = "auth-delegated-token-issuer-state"))]
     {
         Cell::init(
-            crate::ic_memory_key!(
-                authority = CANIC_CORE_MEMORY_AUTHORITY,
-                key = "canic.core.auth.delegated_token_issuer.state.v1"
-            ),
+            crate::memory::open(crate::memory::keys::AUTH_DELEGATED_TOKEN_ISSUER_STATE_V1),
             DelegatedTokenIssuerStateRecord::default(),
         )
     }
@@ -85,10 +79,7 @@ fn init_root_delegation_state() -> Cell<RootDelegationStateRecord, RuntimeMemory
     #[cfg(any(test, feature = "auth-root-delegation-state"))]
     {
         Cell::init(
-            crate::ic_memory_key!(
-                authority = CANIC_CORE_MEMORY_AUTHORITY,
-                key = "canic.core.auth.root_delegation.state.v1"
-            ),
+            crate::memory::open(crate::memory::keys::AUTH_ROOT_DELEGATION_STATE_V1),
             RootDelegationStateRecord::default(),
         )
     }

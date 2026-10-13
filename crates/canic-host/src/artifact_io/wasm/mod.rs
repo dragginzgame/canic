@@ -104,9 +104,10 @@ fn compact_wasm_artifact_name(wasm_path: &Path) -> String {
     let Some(staging_directory) = wasm_path.parent() else {
         return file_name;
     };
-    let is_staged_artifact = staging_directory
-        .file_name()
-        .is_some_and(|name| name.to_string_lossy().starts_with(".canic-artifact-stage-"));
+    let is_staged_artifact = staging_directory.file_name().is_some_and(|name| {
+        name.to_string_lossy()
+            .starts_with(".ic-build-artifact-stage-")
+    });
     if !is_staged_artifact {
         return file_name;
     }
@@ -232,8 +233,9 @@ mod tests {
 
     #[test]
     fn staged_wasm_diagnostics_hide_disposable_paths_but_retain_the_role() {
-        let path =
-            Path::new("/tmp/operator/artifacts/root/.canic-artifact-stage-19197-2/candidate.wasm");
+        let path = Path::new(
+            "/tmp/operator/artifacts/root/.ic-build-artifact-stage-19197-2/candidate.wasm",
+        );
 
         assert_eq!(compact_wasm_artifact_name(path), "root/candidate.wasm");
         assert_eq!(format_byte_count(8_713_911), "8.31 MiB (8713911 B)");

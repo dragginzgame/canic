@@ -4,7 +4,6 @@
 //! Does not own: authority resolution, capability replay, or Component Registry persistence.
 //! Boundary: endpoint admission delegates immediately to control-plane workflow.
 
-use async_trait::async_trait;
 use canic_contracts::dto::{
     capability::{RootCapabilityEnvelopeV1, RootCapabilityResponseV1},
     error::Error,
@@ -12,7 +11,7 @@ use canic_contracts::dto::{
 use canic_core::{
     access::{
         AccessError,
-        expr::{AccessContext, AsyncAccessPredicate},
+        expr::{AccessCheck, AccessContext},
     },
     control_plane_support::ops::ic::IcOps,
 };
@@ -25,9 +24,8 @@ use canic_core::{
 
 pub struct RootCapabilityCallerPredicate;
 
-#[async_trait]
-impl AsyncAccessPredicate for RootCapabilityCallerPredicate {
-    async fn eval(&self, ctx: &AccessContext) -> Result<(), AccessError> {
+impl AccessCheck for RootCapabilityCallerPredicate {
+    fn eval(&self, ctx: &AccessContext) -> Result<(), AccessError> {
         if ctx.transport_caller() == IcOps::canister_self() {
             return crate::workflow::component_auth::require_active_fleet_subnet_root_internal()
                 .map_err(AccessError::Internal);

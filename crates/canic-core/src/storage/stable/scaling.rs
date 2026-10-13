@@ -16,7 +16,7 @@ std::thread_local! {
     static SCALING_REGISTRY: RefCell<
         StableBtreeMap<Principal, WorkerEntryRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.placement.scaling_registry.v1")),
+        StableBtreeMap::init(crate::memory::open(crate::memory::keys::PLACEMENT_SCALING_REGISTRY_V1)),
     );
 }
 

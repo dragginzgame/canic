@@ -1,7 +1,7 @@
 //! Cargo-selected custom targets remain exact across collisions and stale uplifted files.
 
 use super::*;
-use crate::artifact_io::CapturedWasmArtifact;
+use ic_build::artifacts::CapturedArtifact;
 use std::fs;
 
 #[test]
@@ -84,11 +84,8 @@ fn cargo_custom_lib_outputs_are_captured_before_another_workspace_overwrites_the
         let path = select(&built.stdout, &manifest).unwrap();
         assert_eq!(path.file_name().unwrap(), "custom_library.wasm");
         let bytes = fs::read(&path).unwrap();
-        let captured = CapturedWasmArtifact::capture(
-            &path,
-            &root.join("artifacts").join(format!("{workspace}.wasm")),
-        )
-        .unwrap();
+        let captured =
+            CapturedArtifact::capture(&path, &root.join("artifacts"), usize::MAX).unwrap();
         retained.push((path, bytes, captured));
     }
     assert_eq!(retained[0].0, retained[1].0);

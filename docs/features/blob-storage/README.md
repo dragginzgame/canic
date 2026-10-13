@@ -83,12 +83,14 @@ terabyte capacity or provider qualification.
 ## Embed in an application
 
 Invoke `canic_blob_service::mount!();` once at the application's crate root.
-It mounts endpoints and registers seventeen permanent memory requests. The
+It mounts endpoints. Add the seventeen permanent requests returned by
+`canic_blob_service::memory_requests()` to the host composition. The
 artifact owns one pool with the service namespace and every other application's
 namespace explicitly granted, for example:
 
 ```rust
 canic::memory::memory_allocation_pool!(
+    provider = application_memory_pool,
     authorities = [
         ("embedded-app", "embedded_app."),
         (canic_blob_service::MEMORY_AUTHORITY, canic_blob_service::MEMORY_KEY_PREFIX),
@@ -96,6 +98,15 @@ canic::memory::memory_allocation_pool!(
     exclusions = [],
 );
 canic_blob_service::mount!();
+
+fn application_memory() -> canic::memory::MemoryBootstrap {
+    let mut input = canic::memory::framework();
+    input.pool = application_memory_pool().expect("host grants");
+    input.requests.extend(canic_blob_service::memory_requests().expect("Blob requests"));
+    // Extend with the application's complete request factory too.
+    input
+}
+// Pass memory = application_memory(), first in canic::start!(...).
 ```
 
 Core and Control Plane grants are included by Canic. All owners share eligible

@@ -98,13 +98,16 @@ fn restore_run_execute_result_with_terminal_writer(
             restore_run_max_steps_reached(config, executed_operations.len(), &report);
         if report.complete || max_steps_reached {
             if report.complete {
-                // Prove inherited command descriptors are quiescent before releasing artifacts.
-                for operation in &journal.operations {
-                    let _command_lock = restore_command_lock(config, operation)?;
-                }
+                // Keep every command excluded through durable reference publication.
+                let command_guards = journal
+                    .operations
+                    .iter()
+                    .map(|operation| restore_command_lock(config, operation))
+                    .collect::<Result<Vec<_>, _>>()?;
                 if let Some(layout) = &layout {
                     release_restore(layout, &config.journal, &journal)?;
                 }
+                drop(command_guards);
             }
             return Ok(RestoreRunnerOutcome::ok(restore_run_execute_summary(
                 &journal,

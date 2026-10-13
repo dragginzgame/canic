@@ -89,7 +89,6 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
                     | StoreCommand::RunGc(_)
             ) {
                 $crate::__internal::core::access::auth::is_root(caller)
-                    .await
                     .map_err(::canic::Error::from)?;
             }
             if matches!(
@@ -97,14 +96,13 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
                 StoreCommand::SynchronizeState(_) | StoreCommand::SynchronizeTopology(_)
             ) {
                 $crate::__internal::core::access::auth::is_parent(caller)
-                    .await
                     .map_err(::canic::Error::from)?;
             }
             if matches!(
                 &command,
                 StoreCommand::PrepareChunkSet(_) | StoreCommand::StageManifest(_)
             ) {
-                use $crate::__internal::core::access::expr::AsyncAccessPredicate as _;
+                use $crate::__internal::core::access::expr::AccessCheck as _;
                 let context = $crate::__internal::core::access::expr::AccessContext {
                     caller,
                     call: $crate::__internal::contracts::ids::EndpointCall {
@@ -116,7 +114,6 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
                 };
                 $crate::__internal::control_plane::api::template::WasmStoreMutationCallerPredicate
                     .eval(&context)
-                    .await
                     .map_err(::canic::Error::from)?;
             }
 
@@ -211,7 +208,7 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
         }
 
         #[$crate::canic_query(public)]
-        async fn canic_public_status(
+        fn canic_public_status(
             request: PublicStatusRequest,
         ) -> Result<PublicStatusResponse, ::canic::Error> {
             match request {
@@ -248,7 +245,7 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
 
 
         #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_observability(
+        fn canic_observability(
             request: StoreObservabilityRequest,
         ) -> Result<StoreObservabilityResponse, ::canic::Error> {
             match request {
@@ -265,7 +262,7 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
 
 
         #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_wasm_store_status(
+        fn canic_wasm_store_status(
             request: StoreStatusRequest,
         ) -> Result<StoreStatusResponse, ::canic::Error> {
             match request {
@@ -286,7 +283,7 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
         #[$crate::canic_query(requires(custom(
             ::canic::__internal::control_plane::api::template::WasmStoreMutationCallerPredicate
         )))]
-        async fn canic_wasm_store_catalog(
+        fn canic_wasm_store_catalog(
             request: StoreCatalogRequest,
         ) -> Result<StoreCatalogResponse, ::canic::Error> {
             match request {
@@ -312,21 +309,21 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
         }
 
         #[$crate::canic_update(internal, requires(custom(::canic::__internal::control_plane::api::template::WasmStoreMutationCallerPredicate)), payload(max_bytes = ::canic::__internal::core::CANIC_WASM_CHUNK_REQUEST_MAX_BYTES))]
-        async fn canic_wasm_store_publish_chunk(
+        fn canic_wasm_store_publish_chunk(
             request: ::canic::dto::template::TemplateChunkInput,
         ) -> Result<(), ::canic::Error> {
             ::canic::api::canister::template::WasmStoreCanisterApi::publish_chunk(request)
         }
 
         #[$crate::canic_update(internal, requires(custom(::canic::__internal::control_plane::api::template::WasmStoreMutationCallerPredicate)), payload(max_bytes = ::canic::__internal::core::CANIC_WASM_CHUNK_REQUEST_MAX_BYTES))]
-        async fn canic_wasm_store_publish_fixture(
+        fn canic_wasm_store_publish_fixture(
             request: ::canic::dto::fixture_provisioning::FixtureChunkUpload,
         ) -> Result<Result<::canic::dto::fixture_provisioning::FixtureSourceStatus, ::canic::dto::fixture_provisioning::FixtureStoreError>, ::canic::Error> {
             $crate::__internal::control_plane::api::fixture_store::FixtureStoreApi::upload(request)
         }
 
         #[$crate::canic_update(internal, public)]
-        async fn canic_wasm_store_fixture_chunk(
+        fn canic_wasm_store_fixture_chunk(
             request: ::canic::dto::fixture_provisioning::FixtureChunkRead,
         ) -> Result<Result<Vec<u8>, ::canic::dto::fixture_provisioning::FixtureStoreError>, ::canic::Error> {
             let caller = $crate::__internal::cdk::api::msg_caller();
@@ -343,7 +340,7 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
         }
 
         #[$crate::canic_update(internal, requires(caller::is_root()))]
-        async fn canic_wasm_store_chunk(
+        fn canic_wasm_store_chunk(
             request: ::canic::dto::template::TemplateChunkRequest,
         ) -> Result<::canic::dto::template::TemplateChunkResponse, ::canic::Error> {
             ::canic::api::canister::template::WasmStoreCanisterApi::chunk(

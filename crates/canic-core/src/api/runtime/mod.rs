@@ -10,16 +10,13 @@ use crate::{
         FailureSeverity, HealthStatus, ReadinessStatus, RuntimeCheckStatus,
         RuntimeDiagnosticSeverity, RuntimeFieldVisibility, RuntimeStateDomainStatus, RuntimeStatus,
     },
-    dto::{
-        error::Error,
-        runtime::{
-            CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, CanisterTimerStatus,
-            RUNTIME_INTROSPECTION_SCHEMA_VERSION, RuntimeAuthStatusSummary, RuntimeBuildInfo,
-            RuntimeCheck, RuntimeDiagnostic, RuntimeFeatureStatus, RuntimeReceiptCapacityStatus,
-            RuntimeStateDomainSummary, RuntimeStateSummary, RuntimeTopologyStatus,
-            RuntimeVisibilityEntry, TimerCallbackPerformanceStatus, TimerMemoryPageExtentStatus,
-            TimerMemoryPageSampleStatus,
-        },
+    dto::runtime::{
+        CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, CanisterTimerStatus,
+        RUNTIME_INTROSPECTION_SCHEMA_VERSION, RuntimeAuthStatusSummary, RuntimeBuildInfo,
+        RuntimeCheck, RuntimeDiagnostic, RuntimeFeatureStatus, RuntimeReceiptCapacityStatus,
+        RuntimeStateDomainSummary, RuntimeStateSummary, RuntimeTopologyStatus,
+        RuntimeVisibilityEntry, TimerCallbackPerformanceStatus, TimerMemoryPageExtentStatus,
+        TimerMemoryPageSampleStatus,
     },
     ops::{
         ic::{IcOps, build_network::BuildNetworkOps},
@@ -71,21 +68,6 @@ const RUNTIME_FEATURE_FLAGS: &[(&str, bool)] = &[
     ),
     ("sharding", cfg!(feature = "sharding")),
 ];
-
-///
-/// MemoryRuntimeApi
-///
-
-pub struct MemoryRuntimeApi;
-
-impl MemoryRuntimeApi {
-    /// Bootstrap Canic's stable-memory declaration snapshot.
-    pub fn bootstrap_registry() -> Result<(), Error> {
-        MemoryRegistryOps::bootstrap_registry().map_err(Error::from)?;
-
-        Ok(())
-    }
-}
 
 ///
 /// RuntimeIntrospectionApi

@@ -23,7 +23,7 @@ use super::{
     },
 };
 use crate::{
-    artifact_io::{CapturedWasmArtifact, WasmArtifactFinalization, finalize_wasm_artifact},
+    artifact_io::{WasmArtifactFinalization, finalize_wasm_artifact},
     bootstrap_coordinator::{
         build_bootstrap_fleet_coordinator_artifact, compile_bootstrap_fleet_coordinator_artifact,
     },
@@ -39,6 +39,7 @@ use crate::{
     },
     should_embed_candid_metadata,
 };
+use ic_build::artifacts::CapturedArtifact;
 use std::{
     collections::BTreeMap,
     env, fmt,
@@ -416,7 +417,13 @@ fn build_workspace_canister_artifacts_from_specs_with_toolchain(
             let wasm = output::select(&messages, &spec.package_manifest_path)?;
             captured.insert(
                 spec.role.clone(),
-                CapturedWasmArtifact::capture(&wasm, &spec.wasm_path)?,
+                CapturedArtifact::capture(
+                    &wasm,
+                    spec.wasm_path
+                        .parent()
+                        .ok_or("artifact output has no parent")?,
+                    usize::MAX,
+                )?,
             );
         }
     }

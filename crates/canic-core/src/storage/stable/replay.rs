@@ -33,7 +33,7 @@ std::thread_local! {
     static REPLAY_RECEIPTS: RefCell<
         StableBtreeMap<ReplayReceiptSlotKey, ReplayReceiptRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.replay.receipts.v1")),
+        StableBtreeMap::init(crate::memory::open(crate::memory::keys::REPLAY_RECEIPTS_V1)),
     );
 }
 

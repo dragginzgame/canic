@@ -47,7 +47,8 @@ canic_blob_service::canister!();
 ```
 
 For an embedded service, grant `MEMORY_AUTHORITY` / `MEMORY_KEY_PREFIX` in
-the artifact’s `canic::memory::memory_allocation_pool!`, invoke `mount!()`, and
+the artifact’s explicit `canic::memory::MemoryBootstrap`, extend its requests
+with `canic_blob_service::memory_requests()`, invoke `mount!()`, and
 compose the synchronous lifecycle participant and metrics sampler into the
 application's sole Canic lifecycle. See the
 [composition guide](https://github.com/dragginzgame/canic/blob/main/docs/features/blob-storage/README.md).

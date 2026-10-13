@@ -1,6 +1,6 @@
 //! Module: blob_service::ops::memory
 //!
-//! Responsibility: register application grants and open the existing default runtime.
+//! Responsibility: contribute service requests and open the existing default runtime.
 //! Does not own: memory bootstrap, placement policy or storage schemas.
 //! Boundary: Canic bootstraps once before the lifecycle participant opens the grants.
 
@@ -12,15 +12,28 @@ use ic_memory::{RuntimeMemory, ic_stable_structures::DefaultMemoryImpl};
 
 pub(super) type Memory = RuntimeMemory<DefaultMemoryImpl>;
 
-/// Register only in the artifact that explicitly mounts the service.
+/// Complete service requests for the composing host; no registration or bootstrap.
+pub fn requests() -> Result<Vec<ic_memory::MemoryRequest>, ic_memory::MemoryDeclarationError> {
+    installation::requests(crate::MEMORY_AUTHORITY)
+}
+
+/// Dedicated service composition, including the selected Canic framework.
 ///
 /// # Panics
-/// Panics if static service requests are invalid or registration is already sealed.
-pub fn register() {
-    for request in installation::requests(crate::MEMORY_AUTHORITY).expect("service memory requests")
-    {
-        ic_memory::register_memory_request(request).expect("register service request");
-    }
+/// Panics if authored service requests or grants are invalid.
+#[must_use]
+pub fn host() -> canic::memory::MemoryBootstrap {
+    let mut input = canic::memory::framework();
+    input.requests.extend(requests().expect("service requests"));
+    input.pool = canic::memory::pool::framework_pool(
+        vec![
+            ic_memory::MemoryAuthority::new(crate::MEMORY_AUTHORITY, crate::MEMORY_KEY_PREFIX)
+                .expect("service authority"),
+        ],
+        Vec::new(),
+    )
+    .expect("service grants");
+    input
 }
 
 pub(super) fn open() -> ServiceInstallationMemories<Memory> {

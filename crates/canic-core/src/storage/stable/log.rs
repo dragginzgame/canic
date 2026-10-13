@@ -17,9 +17,7 @@ use std::cell::RefCell;
 
 std::thread_local! {
     static LOG: RefCell<LogStore<RuntimeMemory<DefaultMemoryImpl>>> = RefCell::new(
-        LogStore::new(StableBtreeMap::init(crate::ic_memory_key!(
-            authority = CANIC_CORE_MEMORY_AUTHORITY,
-            key = "canic.core.log.entries.v1")))
+        LogStore::new(StableBtreeMap::init(crate::memory::open(crate::memory::keys::LOG_ENTRIES_V1)))
     );
 }
 
