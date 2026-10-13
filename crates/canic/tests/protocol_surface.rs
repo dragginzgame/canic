@@ -554,8 +554,10 @@ fn icrc21_dispatcher_uses_the_registered_typed_handler() {
 fn preceding_attribute<'a>(source: &'a str, signature: &str) -> &'a str {
     source
         .split_once(signature)
-        .map(|(preceding, _)| preceding)
-        .unwrap_or_else(|| panic!("source should contain {signature}"))
+        .map_or_else(
+            || panic!("source should contain {signature}"),
+            |(preceding, _)| preceding,
+        )
         .lines()
         .rev()
         .find(|line| line.trim_start().starts_with("#["))
