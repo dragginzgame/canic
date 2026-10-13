@@ -39,7 +39,7 @@ thread_local! {
 
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
 mod shared;
-#[cfg(any(test, feature = "auth-local-application-authorization"))]
+#[cfg(feature = "auth-local-application-authorization")]
 pub use shared::ApplicationSessionStore;
 
 #[derive(Clone, Debug, Default)]
@@ -225,7 +225,7 @@ impl LocalApplicationAuthorizationStateOps {
     }
 
     /// Observe presence without decoding a second copy of the retained authority.
-    #[cfg(any(test, feature = "auth-local-application-authorization"))]
+    #[cfg(feature = "auth-local-application-authorization")]
     pub fn has_application_session(
         caller: Principal,
     ) -> Result<bool, ApplicationSessionStateError> {

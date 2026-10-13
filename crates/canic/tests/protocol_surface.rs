@@ -525,7 +525,7 @@ fn application_session_audit_is_bounded_protected_and_secret_free() {
 
     let role_surface =
         read_text(&workspace_root().join("crates/canic/src/macros/endpoints/role.rs"));
-    let authorization = preceding_attribute(&role_surface, "async fn canic_control_status");
+    let authorization = preceding_attribute(&role_surface, "fn canic_control_status");
     assert!(authorization.contains("requires(caller::is_root())"));
     assert!(role_surface.contains("ControlStatusRequest::ApplicationSessionAudit"));
 }
@@ -553,8 +553,8 @@ fn icrc21_dispatcher_uses_the_registered_typed_handler() {
 
 fn preceding_attribute<'a>(source: &'a str, signature: &str) -> &'a str {
     source
-        .split(signature)
-        .next()
+        .split_once(signature)
+        .map(|(preceding, _)| preceding)
         .unwrap_or_else(|| panic!("source should contain {signature}"))
         .lines()
         .rev()

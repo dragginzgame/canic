@@ -27,6 +27,7 @@ impl ApplicationSessionStore {
             role: authority.role().clone(),
         }
     }
+    #[cfg(feature = "auth-local-application-authorization")]
     pub fn project_committed(
         caller: Principal,
     ) -> Result<LocalApplicationSession, crate::InternalError> {

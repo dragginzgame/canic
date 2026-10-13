@@ -13,6 +13,7 @@ use crate::role_contract::{
         async_job_recovery::ASYNC_JOB_RECOVERY_KEY,
         auth::{
             DELEGATED_TOKEN_ISSUER_STATE_KEY, LOCAL_APPLICATION_AUTHORIZATION_STATE_KEY,
+            LOCAL_APPLICATION_REPLAYS_KEY, LOCAL_APPLICATION_SESSIONS_KEY,
             ROOT_DELEGATION_STATE_KEY,
         },
         authority_restore::AUTHORITY_RESTORE_FENCE_KEY,
@@ -357,16 +358,35 @@ fn fleet_state_domains() -> Vec<StateDomainManifest> {
 fn local_application_authorization_state_domains() -> Vec<StateDomainManifest> {
     use crate::storage::stable::auth::{
         LocalApplicationAuthorizationStateData, LocalApplicationAuthorizationStateRecord,
+        LocalApplicationReplayRecord, LocalApplicationSessionRecord,
     };
 
-    vec![state_domain(
-        "local_application_authorization",
-        LOCAL_APPLICATION_AUTHORIZATION_STATE_KEY,
-        LocalApplicationAuthorizationStateRecord::STATE_CONTRACT_NAME,
-        LocalApplicationAuthorizationStateData::STATE_CONTRACT_NAME,
-        60,
-        "application_sessions_match_the_current_local_authority_generation",
-    )]
+    vec![
+        state_domain(
+            "local_application_authorization",
+            LOCAL_APPLICATION_AUTHORIZATION_STATE_KEY,
+            LocalApplicationAuthorizationStateRecord::STATE_CONTRACT_NAME,
+            LocalApplicationAuthorizationStateData::STATE_CONTRACT_NAME,
+            60,
+            "application_authority_generation_restores_before_session_admission",
+        ),
+        state_domain(
+            "local_application_sessions",
+            LOCAL_APPLICATION_SESSIONS_KEY,
+            LocalApplicationSessionRecord::STATE_CONTRACT_NAME,
+            LocalApplicationAuthorizationStateData::STATE_CONTRACT_NAME,
+            63,
+            "application_sessions_match_the_current_local_authority_generation",
+        ),
+        state_domain(
+            "local_application_replays",
+            LOCAL_APPLICATION_REPLAYS_KEY,
+            LocalApplicationReplayRecord::STATE_CONTRACT_NAME,
+            LocalApplicationAuthorizationStateData::STATE_CONTRACT_NAME,
+            64,
+            "application_replays_retain_exact_proof_consumption_until_expiry",
+        ),
+    ]
 }
 
 fn delegated_token_issuer_state_domains() -> Vec<StateDomainManifest> {
@@ -812,6 +832,7 @@ mod tests {
             auth::{
                 DelegatedTokenIssuerStateData, DelegatedTokenIssuerStateRecord,
                 LocalApplicationAuthorizationStateData, LocalApplicationAuthorizationStateRecord,
+                LocalApplicationReplayRecord, LocalApplicationSessionRecord,
                 RootDelegationStateData, RootDelegationStateRecord,
             },
             replay::{ReplayReceiptRecord, ReplayReceiptsData},
@@ -824,6 +845,18 @@ mod tests {
                 StateAllocationKey::CoreLocalApplicationAuthorizationState,
                 "local_application_authorization",
                 LocalApplicationAuthorizationStateRecord::STATE_CONTRACT_NAME,
+                LocalApplicationAuthorizationStateData::STATE_CONTRACT_NAME,
+            ),
+            (
+                StateAllocationKey::CoreLocalApplicationAuthorizationState,
+                "local_application_sessions",
+                LocalApplicationSessionRecord::STATE_CONTRACT_NAME,
+                LocalApplicationAuthorizationStateData::STATE_CONTRACT_NAME,
+            ),
+            (
+                StateAllocationKey::CoreLocalApplicationAuthorizationState,
+                "local_application_replays",
+                LocalApplicationReplayRecord::STATE_CONTRACT_NAME,
                 LocalApplicationAuthorizationStateData::STATE_CONTRACT_NAME,
             ),
             (

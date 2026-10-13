@@ -227,6 +227,7 @@ fn coordinator_cargo_build_command(
         .current_dir(&context.workspace_root)
         .args([
             cargo_subcommand,
+            "--lib",
             "--locked",
             "--manifest-path",
             &manifest_path.display().to_string(),
@@ -239,7 +240,6 @@ fn coordinator_cargo_build_command(
     if force_candid_export {
         configure_declaration_command(&mut command, context);
         command.args([
-            "--lib",
             "--",
             "--cfg",
             "canic_export_candid",

@@ -23,6 +23,10 @@ pub struct LocalApplicationSessionRecord {
     pub establishment_request_hash: [u8; 32],
 }
 
+impl LocalApplicationSessionRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "LocalApplicationSessionRecord";
+}
+
 ///
 /// LocalApplicationReplayRecord
 ///
@@ -34,6 +38,10 @@ pub struct LocalApplicationReplayRecord {
     pub authenticated_subject: Principal,
     pub authority_generation: u64,
     pub remove_at_ns: u64,
+}
+
+impl LocalApplicationReplayRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "LocalApplicationReplayRecord";
 }
 
 /// Last locally activated protected binding used only for generation transitions.

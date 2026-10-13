@@ -18,6 +18,8 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
   and keep minimal control-plane builds free of unused role-only declarations;
   refresh the embedded allocation peer against the current producer inputs
   and include Blob composition proofs in the governed worker partition.
+  Complete Auth session/replay state descriptors and align native ownership guards
+  with synchronous endpoints and the central memory request catalog.
 
 - Repair Host 0.17 Candid feature selection, test-app Memory composition and
   the authorization probe's scope declaration; remove the obsolete upstream

@@ -2281,9 +2281,9 @@ dependencies = [
 
 [[package]]
 name = "ic-build"
-version = "0.2.3"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f5baf0449153f28de324d37dc9787298d77788940e0bce88f3d0c252b018ca5"
+checksum = "68c9379fb1224f483d1896cb91448d0bf17f46a2c98277c1402d71867adb0a23"
 dependencies = [
  "fs2",
  "ic-host-artifacts",
