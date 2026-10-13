@@ -16,6 +16,8 @@ use ic_memory::{
 };
 use std::cell::RefCell;
 
+pub const MEMORY_KEY: &str = "test.fixture_import.v1";
+
 const PAYLOAD: &[u8] = b"reviewed fixture source";
 
 #[derive(candid::CandidType, canic::__internal::serde::Deserialize)]
@@ -28,7 +30,7 @@ struct ImportRecord {
 
 thread_local! {
     static IMPORT: RefCell<Cell<Vec<u8>, RuntimeMemory<DefaultMemoryImpl>>> = RefCell::new(Cell::init(
-        canic::memory::ic_memory_key!(authority = "test", key = "test.fixture_import.v1"),
+        canic::memory::open(MEMORY_KEY),
         Vec::new(),
     ));
 }

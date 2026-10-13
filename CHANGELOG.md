@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
+- Repair Host 0.17 Candid feature selection, test-app Memory composition and
+  the authorization probe's scope declaration; remove the obsolete upstream
+  crypto microbenchmark while retaining Canic serialization benchmarks.
+
 - **Breaking public contracts:** align consumers with Auth protocol-types 0.5,
   Backup 0.21, Memory 0.36, Query 0.55 and Host 0.16, initialize the new protected provisioning failure
   field, rebuild the family and cleanly reinstall across releases

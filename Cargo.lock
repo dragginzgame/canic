@@ -2497,6 +2497,7 @@ version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba791f6e82091eb29218cb3b56b407fc5c79f16066f926b3bcd9b9100ee71d36"
 dependencies = [
+ "candid_parser",
  "ic-host-artifacts 0.17.0",
  "serde",
  "serde_json",

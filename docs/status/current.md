@@ -10,6 +10,30 @@ classified under the existing **0.112.0** changelog entry. Own package versions
 remain **0.111.0**. The objective is to delete duplicate mechanisms in favor of
 upstream owners; moving declarations alone does not demonstrate faster builds.
 
+## Validation fallout after Host 0.17 selection — 2026-10-13
+
+The reported validation exposed missed bench/app paths and the newly selected
+Host 0.17 feature split. Host now enables `candid-service`; the lock adds its
+`candid_parser` edge without changing versions. Both disposable Hub/Shard apps
+provide explicit Memory composition for their rows and fixture-import cells,
+using the same named keys for requests and opens. The authorization probe now
+declares its existing `probe:read` scope in its component token allowlist.
+Remove the upstream crypto microbenchmark, `CanisterSignatureCbor`,
+`root_canister_sig_verification_message`, `self_describing_cbor` and its private
+domain constant; retain Canic token serialization benchmarks.
+
+Warning-denied Clippy passes for the serialization bench with all Core features
+and for the three repaired fixture libraries. The initial fixture visibility
+lint was corrected; evidence is retained in `.tmp/memory-036/` under
+`serialize-clippy.log` and `fixtures-fallout-clippy-final.log`. No managed runtime
+proof was rerun for these fixture repairs, and no broad suite ran.
+
+**The current graph is not push-ready:** the focused Host check now reaches
+`canister_build/batch/mod.rs` and fails because IC Build 0.1.3 accepts Host 0.16
+`OutputLimits` while Canic selects Host 0.17. The published Build version is
+still 0.1.3. Its sibling remains unedited pending maintainer coordination.
+Earlier Host 0.16 and Blob managed proofs below retain their exact graph scope.
+
 ## Artifact staging owner convergence — 2026-10-13
 
 The authorized [#529](https://github.com/dragginzgame/canic/issues/529) replacement
