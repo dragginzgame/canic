@@ -212,7 +212,7 @@ source_status="$(git -C "$SOURCE_ROOT" status --porcelain --untracked-files=all)
 [[ -z "$source_status" ]] || fail "source checkout must be clean so its revision identifies every copied byte"
 
 source_revision="$(git -C "$SOURCE_ROOT" rev-parse HEAD)"
-[[ "$source_revision" =~ ^[0-9a-f]{40,64}$ ]] || fail "source revision is malformed"
+[[ "$source_revision" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]] || fail "source revision is malformed"
 # Read the display version from the same immutable source as the payload, never
 # the working tree or the consumer's own VERSION. Preserve invalid extra lines.
 committed_mode "$source_revision" VERSION >/dev/null || fail "source VERSION must be a committed regular file"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared companions: scripts/ci/verify-file-checksum.sh scripts/dev/tool-store.sh
+# Shared companions: scripts/ci/verify-file-checksum.sh scripts/dev/tool-store.sh ci/tool-versions.env
 set -euo pipefail
 
 # Explicit local provisioning of the complete common host-tool set.
@@ -27,7 +27,7 @@ case "$consumer" in *$'\n'*|*$'\r'*) echo 'consumer path contains CR/LF' >&2; ex
 consumer="$(cd -P "$consumer" && printf '%s/.' "$PWD")"
 consumer="${consumer%/.}"
 case "$consumer" in *$'\n'*|*$'\r'*) echo 'resolved consumer path contains CR/LF' >&2; exit 1 ;; esac
-versions="${versions:-$consumer/ci/tool-versions.env}"
+versions="${versions:-$ROOT/ci/tool-versions.env}"
 # This reviewed shell file is code, just like the consumer's Makefile.
 # shellcheck disable=SC1090
 source "$versions"
@@ -160,17 +160,14 @@ for tool in jq yq; do
         jq) url="https://github.com/jqlang/jq/releases/download/jq-$SHARED_TOOLING_JQ_VERSION/jq-$jq_platform" ;;
         yq) url="https://github.com/mikefarah/yq/releases/download/v$SHARED_TOOLING_YQ_VERSION/yq_$yq_platform" ;;
     esac
-    curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL \
-        --connect-timeout 15 --max-time 300 -o "$stage/bin/$tool" "$url"
+    tool_store_download "$url" "$stage/bin/$tool"
     chmod 0755 "$stage/bin/$tool"
 done
-curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL \
-    --connect-timeout 15 --max-time 300 -o "$stage/bin/cloc" \
-    "https://github.com/AlDanial/cloc/releases/download/v$SHARED_TOOLING_CLOC_VERSION/cloc-$SHARED_TOOLING_CLOC_VERSION.pl"
+tool_store_download \
+    "https://github.com/AlDanial/cloc/releases/download/v$SHARED_TOOLING_CLOC_VERSION/cloc-$SHARED_TOOLING_CLOC_VERSION.pl" "$stage/bin/cloc"
 chmod 0755 "$stage/bin/cloc"
-curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL \
-    --connect-timeout 15 --max-time 300 -o "$stage/ripgrep.tar.gz" \
-    "https://github.com/BurntSushi/ripgrep/releases/download/$SHARED_TOOLING_RIPGREP_VERSION/ripgrep-$SHARED_TOOLING_RIPGREP_VERSION-$rg_target.tar.gz"
+tool_store_download \
+    "https://github.com/BurntSushi/ripgrep/releases/download/$SHARED_TOOLING_RIPGREP_VERSION/ripgrep-$SHARED_TOOLING_RIPGREP_VERSION-$rg_target.tar.gz" "$stage/ripgrep.tar.gz"
 bash "$ROOT/scripts/ci/verify-file-checksum.sh" sha256 "${!rg_digest_key}" "$stage/ripgrep.tar.gz"
 tar -xOzf "$stage/ripgrep.tar.gz" "$rg_member" > "$stage/bin/rg"
 chmod 0755 "$stage/bin/rg"

@@ -120,6 +120,18 @@ for host in Linux:x86_64 Linux:arm64 Darwin:x86_64 Darwin:arm64; do
     [[ "$(wc -l < "$fixture/downloads")" == "$before" ]] || exit 1
 done
 original="$(readlink "$consumer/.tools/host")"
+# The direct installer uses its snapshot even with an obsolete consumer catalog.
+snapshot="$fixture/snapshot"
+mkdir -p "$snapshot/scripts/dev" "$snapshot/scripts/ci" "$snapshot/ci" "$consumer/ci"
+cp "$ROOT/scripts/dev/install-host-tools.sh" "$ROOT/scripts/dev/tool-store.sh" "$snapshot/scripts/dev/"
+cp "$ROOT/scripts/ci/verify-file-checksum.sh" "$snapshot/scripts/ci/"
+cp "$pins" "$snapshot/ci/tool-versions.env"
+printf 'exit 99\n' > "$consumer/ci/tool-versions.env"
+bash "$snapshot/scripts/dev/install-host-tools.sh" --consumer "$consumer" --check
+mv "$snapshot/ci/tool-versions.env" "$snapshot/ci/exception.env"
+refuse bash "$snapshot/scripts/dev/install-host-tools.sh" --consumer "$consumer" --check
+bash "$snapshot/scripts/dev/install-host-tools.sh" --consumer "$consumer" --versions "$pins" --check
+[[ "$(wc -l < "$fixture/downloads")" == "$before" && "$(readlink "$consumer/.tools/host")" == "$original" ]] || exit 1
 # Successful capability probes stay quiet; failures below retain diagnostics.
 if grep -F 'PCRE2 available' "$fixture/install.log"; then exit 1; fi
 # Harmless stderr does not change the established stdout version comparison.

@@ -97,6 +97,12 @@ expect_failure() {
     if "$@" > "$fixture/refusal.log" 2>&1; then echo 'IC tool rejection failed' >&2; exit 1; fi
 }
 selected_pins="$pins"
+snapshot="$fixture/snapshot"
+mkdir -p "$snapshot/scripts/dev" "$snapshot/scripts/ci" "$snapshot/ci"
+cp "$ROOT/scripts/dev/install-ic-tools.sh" "$ROOT/scripts/dev/tool-store.sh" "$snapshot/scripts/dev/"
+cp "$ROOT/scripts/ci/verify-file-checksum.sh" "$ROOT/scripts/ci/verify-evidence-checksums.sh" \
+    "$ROOT/scripts/ci/ic-tool-pins.awk" "$snapshot/scripts/ci/"
+cp "$pins" "$snapshot/ci/ic-tools.tsv"
 for host in Linux:x86_64 Darwin:x86_64 Darwin:arm64; do
     export IC_TOOLS_TEST_OS="${host%:*}" IC_TOOLS_TEST_ARCH="${host#*:}"
     consumer="$fixture/consumer $host"
@@ -107,6 +113,13 @@ for host in Linux:x86_64 Darwin:x86_64 Darwin:arm64; do
     [[ -f "$consumer/.tools/ic/lib/libbinaryen.dylib" ]] || exit 1
     before="$(wc -l < "$fixture/downloads")"
     install --check > /dev/null 2>&1
+    mkdir "$consumer/ci"
+    printf 'obsolete consumer pins\n' > "$consumer/ci/ic-tools.tsv"
+    bash "$snapshot/scripts/dev/install-ic-tools.sh" --consumer "$consumer" --check > /dev/null
+    mv "$snapshot/ci/ic-tools.tsv" "$snapshot/ci/exception.tsv"
+    expect_failure bash "$snapshot/scripts/dev/install-ic-tools.sh" --consumer "$consumer" --check
+    bash "$snapshot/scripts/dev/install-ic-tools.sh" --consumer "$consumer" --pins "$pins" --check > /dev/null
+    mv "$snapshot/ci/exception.tsv" "$snapshot/ci/ic-tools.tsv"
     install > /dev/null 2>&1
     [[ "$(wc -l < "$fixture/downloads")" == "$before" ]] || exit 1
     (cd "$fixture"; CDPATH="$fixture" bash "$ROOT/scripts/dev/install-ic-tools.sh" \

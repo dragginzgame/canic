@@ -10,6 +10,30 @@ classified under the existing **0.112.0** changelog entry. Own package versions
 remain **0.111.0**. The objective is to delete duplicate mechanisms in favor of
 upstream owners; moving declarations alone does not demonstrate faster builds.
 
+## Published Build 0.2 and Shared Tooling 0.10 adoption — 2026-10-13
+
+The real Canic graph now selects registry IC Build 0.2.0, clearing the Host 0.17
+`OutputLimits` mismatch. Strict Host library/test Clippy with all features passes
+against the published package; no source override is present. The root requirement
+was already 0.2 when this adoption began; the scoped lock update selected 0.2.0
+and removed the obsolete Host process 0.16 entry. Other incoming updates remain.
+
+Shared Tooling 0.10.0 is adopted at
+`ed9c26f015691859f67b50b512a94709dcdc0c6c`, with 111 verified payloads.
+Common host/IC/Rust versions and digests match the previous catalogs. Remove
+redundant Canic Make defaults and use snapshot-owned catalogs; retain product
+compiler and Testkit selections. Explicit tool setup and all offline tool checks
+pass, including the selected Testkit runner. Snapshot governance/link checks,
+dependency pins, formatting and both local tool/formatter adapter fixtures pass.
+The tool fixture now expects the snapshot's absolute catalog paths; its original
+failure is retained. The newly referenced reporting rule is an explicit entrypoint.
+
+Evidence: `/tmp/canic-build020-host-clippy.log` and `/tmp/canic-shared010-*`.
+These are focused Linux checks, not the full workspace or native macOS gate.
+The reported compile blocker is resolved; the wider integration batch remains
+open. The existing 0.112 draft reflects these selections; package versions and
+Git refs were not changed by this task. Earlier blocked evidence below is historical.
+
 ## Validation fallout after Host 0.17 selection — 2026-10-13
 
 The reported validation exposed missed bench/app paths and the newly selected
@@ -28,7 +52,7 @@ lint was corrected; evidence is retained in `.tmp/memory-036/` under
 `serialize-clippy.log` and `fixtures-fallout-clippy-final.log`. No managed runtime
 proof was rerun for these fixture repairs, and no broad suite ran.
 
-**The current graph is not push-ready:** the focused Host check now reaches
+Before the published adoption above, the focused Host check reached
 `canister_build/batch/mod.rs` and fails because IC Build 0.1.3 accepts Host 0.16
 `OutputLimits` while Canic selects Host 0.17. Published Build 0.1.4 was also
 inspected after the repeated validation failure: its registry manifest and public
@@ -39,8 +63,8 @@ metadata. Its Linux delivery checks pass, including the corrected release
 fixture. Canic Host compilation and strict all-feature library/test Clippy pass
 against a frozen producer in `/tmp/canic-host017-proof.oEVphD`; the source
 override exists only in that disposable copy. See `/tmp/ic-build-host017-*`
-and `/tmp/canic-host017-consumer-*.log` for evidence. Publish the aligned Build
-release, then adopt it in this real registry graph before rerunning validation.
+and `/tmp/canic-host017-consumer-*.log` for evidence. The published adoption above
+supersedes this dependency blocker without relabeling the earlier proof.
 Earlier Host 0.16 and Blob managed proofs below retain their exact graph scope.
 
 ## Artifact staging owner convergence — 2026-10-13

@@ -54,7 +54,17 @@ state_root="$(git rev-parse --git-path release-state)"
 if [[ "$delivery" == pr ]]; then state_root="$(git rev-parse --git-common-dir)/release-state"; fi
 [[ ! -L "$state_root" ]] || fail 'release state directory is symlinked'
 mkdir -p "$state_root"
-mkdir "$state_root/lock" 2>/dev/null || fail 'release lock is occupied; inspect its owner before clearing a stale lock'
+if mkdir "$state_root/lock"; then
+    :
+else
+    lock_status=$?
+    if [[ -e "$state_root/lock" || -L "$state_root/lock" ]]; then
+        echo 'release refused: release lock is occupied; inspect its owner before clearing a stale lock' >&2
+    else
+        echo 'release refused: unable to acquire release lock' >&2
+    fi
+    exit "$lock_status"
+fi
 trap 'rmdir "$state_root/lock"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
@@ -97,7 +107,7 @@ read_plan() {
         *) fail 'release plan identity is invalid' ;;
     esac
     [[ "$saved_candidate" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ && "$1" == "$state_root/$saved_candidate.plan" ]] || fail 'release plan identity is invalid'
-    [[ "$saved_source" =~ ^[0-9a-f]{40,64}$ && "$saved_date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ && "$saved_destination" =~ ^[0-9a-f]{40,64}$ ]] || fail 'release plan source/date/destination is invalid'
+    [[ "$saved_source" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ && "$saved_date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ && "$saved_destination" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]] || fail 'release plan source/date/destination is invalid'
     [[ "$(bash "$(dirname "${BASH_SOURCE[0]}")/next-release-version.sh" "$saved_previous" "$saved_kind")" == "$saved_candidate" ]] || fail 'release plan increment is invalid'
     case "$saved_phase" in
         preflight|validate|prepare|stage|commit|complete) ;;
@@ -249,8 +259,8 @@ assert_release_commit() {
         history="$(git rev-list --first-parent --reverse "$source..HEAD")"
         release_commit="${history%%$'\n'*}"
     fi
-    [[ "$release_commit" =~ ^[0-9a-f]{40,64}$ && "$(git log -1 --format=%P "$release_commit")" == "$source" && "$(git log -1 --format=%s "$release_commit")" == "Release $candidate" ]] || fail 'release commit does not match the saved source/version'
-    [[ "$index_tree" =~ ^[0-9a-f]{40,64}$ && "$(git rev-parse "$release_commit^{tree}")" == "$index_tree" ]] || fail 'release commit tree differs from the exact staged release'
+    [[ "$release_commit" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ && "$(git log -1 --format=%P "$release_commit")" == "$source" && "$(git log -1 --format=%s "$release_commit")" == "Release $candidate" ]] || fail 'release commit does not match the saved source/version'
+    [[ "$index_tree" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ && "$(git rev-parse "$release_commit^{tree}")" == "$index_tree" ]] || fail 'release commit tree differs from the exact staged release'
     git merge-base --is-ancestor "$release_commit" HEAD || fail 'release commit is not an ancestor of the selected branch'
     [[ "$("$make_bin" --no-print-directory -s release-version)" == "$candidate" ]] || fail 'release metadata no longer matches the candidate'
     git diff --cached --quiet HEAD -- || fail 'release index differs from the committed payload'
@@ -268,7 +278,7 @@ read_remote_refs() {
     remote_tag=""
     while read -r sha ref extra; do
         [[ -n "$sha" || -n "$ref" ]] || continue
-        [[ "$sha" =~ ^[0-9a-f]{40,64}$ && -z "$extra" ]] || fail 'remote ref output is malformed'
+        [[ "$sha" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ && -z "$extra" ]] || fail 'remote ref output is malformed'
         case "$ref" in
             "refs/heads/$branch") [[ -z "$remote_head" ]] || fail 'remote branch is duplicated'; remote_head="$sha" ;;
             "refs/tags/v$candidate") [[ -z "$remote_tag" ]] || fail 'remote tag is duplicated'; remote_tag="$sha" ;;

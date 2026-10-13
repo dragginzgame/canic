@@ -87,9 +87,18 @@ inspect an already-selected run using
 `GH_REPO="$repository" bash scripts/dev/gh-ci.sh --run RUN_ID --logs` when available.
 Its `--failed` option finds a historical failed run; use the run listing above to
 establish whether that failure is still current.
+Without an explicit branch, commit or run, the helper requires an observable
+current branch. Detached HEAD or a failed Git observation stops inspection;
+choose `--commit HEAD`, `--branch NAME` or `--run ID` explicitly. An explicit run
+skips branch discovery and can be inspected outside a checkout with `GH_REPO` set.
 When `--logs` cannot obtain failed-step evidence, it reports the gap and retains
-the observation directory. An empty log is normal only for a completed successful,
-neutral or skipped run; do not treat missing failure logs as a completed diagnosis.
+the observation directory. It pins the repository, run and attempt before fetching
+logs. If a completed failed or timed-out attempt returns empty failed-step logs,
+it retrieves full logs only for that attempt's failed or timed-out jobs, labels
+each job and retains both the original observation and recovered logs. API errors,
+partial downloads and missing job logs remain failures; it never switches attempts
+or reruns CI. An empty log is normal only for a completed successful, neutral or
+skipped run; do not treat missing failure logs as a completed diagnosis.
 
 ## Issue review and repair
 

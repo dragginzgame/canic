@@ -4,6 +4,34 @@ CI and release behavior must not depend on a sibling checkout, a moving Git
 branch, or network availability. Consumers vendor a reviewed file set and
 record its exact Shared Tooling source revision.
 
+## Common catalog ownership in 0.10.0
+
+Common installers now bring their reviewed pin catalogs as required snapshot
+companions. Make, standalone setup, formatting, freshness checks and the evidence
+action use the executing snapshot's defaults. Consumer-local catalog discovery
+and implicit host-to-Rust override inheritance are removed. See
+[catalog selection](local-setup.md#catalog-selection) for explicit exceptions.
+
+Before adoption, compare existing host/Cargo versions and IC versions/digests
+against the selected source commit. Qualify differences or retain an explicitly
+selected consumer exception; do not silently replace a product requirement.
+Review direct script calls, CI cache inputs, formatter adapters and evidence
+action inputs as well as Make. Product/compiler/PocketIC selections stay local.
+
+For root-layout snapshots, existing consumer-owned `ci/tool-versions.env` or
+`ci/ic-tools.tsv` may occupy the new payload paths. Move any still-needed local
+selections to a distinct exception/workflow file and update their callers before
+refresh. The exporter must retain its normal ownership and collision refusals;
+never force an overwrite or hand-edit snapshot ownership. With a nested snapshot,
+remove obsolete consumer copies only after all callers use the new defaults or
+explicit exceptions. Do not delete catalogs still used by local CI tools.
+
+Preview the full entrypoint closure, adopt the reviewed commit, explicitly run
+`make install-tools` and `make tools-check`, then qualify formatting and the
+consumer gate on its supported native hosts. Existing installations, failed logs
+and release plans remain retained. This is a Shared Tooling breaking selection
+change; a library consumer assesses its own published API impact independently.
+
 ## Entrypoint selection in 0.7.0
 
 Select the commands and documents the consumer uses with `--entrypoint`; the
@@ -606,8 +634,8 @@ boundary; it does not itself require a library minor release.
 
 Select `make/tools.mk`, the baseline and setup guidance from a reviewed committed
 revision; the Make entrypoint derives the common installers and their companions.
-Update consumer-owned pin catalogs and refresh selected fixtures and evidence
-collectors in the same adoption; the selector calls the complete host check too.
+Adopt the common snapshot catalogs (or explicit qualified exceptions) and refresh
+selected fixtures and evidence collectors together; the selector calls the complete host check too.
 The current contract has no parser-only host mode or optional ripgrep/cloc flags.
 Remove `--with-ripgrep`/`--with-cloc` from direct callers, including custom CI and
 evidence checks. Retain historical documents as historical evidence.
@@ -650,11 +678,12 @@ completion as well as a successful exit, preserving evidence and failing on
 early exits, including Bash 3.2 nounset errors. Native consumer qualification
 remains separate from upstream source acceptance.
 
-Defaults use scripts and pins at the checkout root. For a snapshot stored below
+Defaults use scripts and pins from the reviewed snapshot. For a snapshot stored below
 that root, set `SHARED_TOOLING_ROOT` to its reviewed local directory before the
-include, and include its `make/consumer.mk`. `HOST_TOOL_VERSIONS` and `IC_TOOL_PINS`
-select consumer-owned pin exceptions; their defaults remain the checkout's
-`ci/tool-versions.env` and `ci/ic-tools.tsv`. Command selections target the
+include, and include its `make/consumer.mk`. `HOST_TOOL_VERSIONS`,
+`RUST_TOOL_VERSIONS` and `IC_TOOL_PINS` independently select consumer-owned pin
+exceptions; their defaults use the snapshot's `ci/tool-versions.env` and
+`ci/ic-tools.tsv`. Command selections target the
 consumer checkout; host/IC payloads use the [shared per-user store](local-setup.md#shared-executable-storage).
 The [consumer Make interface](make-interface.md) selects the setup, release and
 Rust formatting modules and supplies hook installation and snapshot checking.

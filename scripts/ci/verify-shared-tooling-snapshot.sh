@@ -154,7 +154,7 @@ while IFS= read -r manifest_line || [[ -n "$manifest_line" ]]; do
         source_count=$((source_count + 1))
         ;;
     revision)
-        [[ "$first" =~ ^[0-9a-f]{40,64}$ && "$manifest_line" == "$record"$'\t'"$first" ]] ||
+        [[ "$first" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ && "$manifest_line" == "$record"$'\t'"$first" ]] ||
             fail "malformed revision record"
         revision_count=$((revision_count + 1))
         snapshot_revision="$first"

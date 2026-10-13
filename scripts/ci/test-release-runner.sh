@@ -829,6 +829,33 @@ cp .release-state/0.1.1.plan earlier-plan
 expect_failure patch origin main
 cmp earlier-plan .release-state/0.1.1.plan
 [[ ! -e events && ! -e tag ]] || exit 1
+[[ -d .release-state/lock ]] || exit 1
+grep -F 'release lock is occupied' output >/dev/null
+
+# Inject a non-occupancy error even on hosts where chmod cannot deny writes.
+new_fixture lock-permission
+early_plan patch validate
+cp .release-state/0.1.1.plan earlier-plan
+export RELEASE_FIXTURE_REAL_MKDIR
+RELEASE_FIXTURE_REAL_MKDIR="$(command -v mkdir)"
+cat > "$FIXTURE_ROOT/bin/mkdir" <<'STUB'
+#!/usr/bin/env bash
+if [[ "$*" == .release-state/lock ]]; then
+    echo 'mkdir: fixture permission denied' >&2
+    exit 37
+fi
+exec "$RELEASE_FIXTURE_REAL_MKDIR" "$@"
+STUB
+chmod +x "$FIXTURE_ROOT/bin/mkdir"
+status=0
+bash "$ROOT/scripts/ci/run-release.sh" patch origin main > output 2>&1 || status=$?
+[[ "$status" == 37 ]] || exit 1
+grep -F 'mkdir: fixture permission denied' output >/dev/null
+grep -F 'unable to acquire release lock' output >/dev/null
+if grep -F 'lock is occupied' output >/dev/null; then exit 1; fi
+cmp earlier-plan .release-state/0.1.1.plan
+[[ ! -e events && ! -e tag && ! -e .release-state/lock ]] || exit 1
+rm "$FIXTURE_ROOT/bin/mkdir"
 
 new_fixture corrupt-plan
 early_plan patch validate
@@ -836,6 +863,20 @@ printf 'unexpected record\n' >> .release-state/0.1.1.plan
 expect_failure resume 0.1.1 origin main
 expect_failure patch origin main
 [[ ! -e events ]] || exit 1
+
+# Malformed saved source identities cannot be archived as restartable early
+# intent and silently replaced by the current source before validation.
+for width in 39 41 63 65; do
+    new_fixture "source-width-$width"
+    early_plan patch validate
+    identity="$(printf "%0${width}d" 1)"
+    awk -v identity="$identity" 'NR==6 {$0=identity} {print}' .release-state/0.1.1.plan > changed-plan
+    mv changed-plan .release-state/0.1.1.plan
+    cp .release-state/0.1.1.plan saved-plan
+    expect_failure patch origin main
+    cmp saved-plan .release-state/0.1.1.plan
+    [[ ! -e events && ! -e tag && ! -e .release-state/lock ]] || exit 1
+done
 
 new_fixture concurrent-reconciliation
 export FIXTURE_FAIL_TARGET=release-prepared-check

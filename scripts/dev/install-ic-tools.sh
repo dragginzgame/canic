@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared companions: scripts/ci/verify-file-checksum.sh scripts/ci/verify-evidence-checksums.sh scripts/ci/ic-tool-pins.awk scripts/dev/tool-store.sh
+# Shared companions: scripts/ci/verify-file-checksum.sh scripts/ci/verify-evidence-checksums.sh scripts/ci/ic-tool-pins.awk scripts/dev/tool-store.sh ci/ic-tools.tsv
 set -euo pipefail
 
 ROOT="${BASH_SOURCE[0]}"
@@ -31,7 +31,7 @@ case "$consumer" in *$'\n'*|*$'\r'*) echo 'consumer path contains CR/LF' >&2; ex
 consumer="$(cd -P "$consumer" && printf '%s/.' "$PWD")"
 consumer="${consumer%/.}"
 case "$consumer" in *$'\n'*|*$'\r'*) echo 'resolved consumer path contains CR/LF' >&2; exit 1 ;; esac
-pins="${pins:-$consumer/ci/ic-tools.tsv}"
+pins="${pins:-$ROOT/ci/ic-tools.tsv}"
 [[ -f "$pins" ]] || { echo "missing IC tool pins: $pins" >&2; exit 1; }
 [[ "$pins" == /* ]] || pins="$PWD/$pins"
 pins_name="${pins##*/}"
@@ -180,9 +180,7 @@ while IFS=$'\t' read -r tool version selected_host digest || [[ -n "$tool" ]]; d
     ic_asset
     archive="$scratch/$asset"
     echo "Installing $tool $version ($host)" >&2
-    curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL \
-        --connect-timeout 15 --max-time 300 -o "$archive" \
-        "https://github.com/$repo/releases/download/$tag/$asset"
+    tool_store_download "https://github.com/$repo/releases/download/$tag/$asset" "$archive"
     bash "$ROOT/scripts/ci/verify-file-checksum.sh" sha256 "$digest" "$archive"
     case "$format" in
         raw) cp "$archive" "$stage/bin/$tool" ;;

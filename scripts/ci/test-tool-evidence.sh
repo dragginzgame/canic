@@ -130,6 +130,21 @@ EVIDENCE_TEMP_ROOT="$fixture/action-temp" EVIDENCE_REPOSITORY_ROOT="$consumer" \
     GITHUB_OUTPUT="$fixture/action-output" RUNNER_TEMP="$fixture/action-temp" \
     "$BASH" --noprofile --norc -e -o pipefail "$fixture/collector.sh"
 output="$(sed -n 's/^path=//p' "$fixture/action-output")"
+# With no exception inputs, the actual collector uses catalogs beside its action,
+# even when the inspected repository carries different or missing catalogs.
+snapshot="$fixture/snapshot"
+mkdir -p "$snapshot/.github/actions/retain-failure-evidence" "$snapshot/ci" "$fixture/default-temp"
+ln -s "$ROOT/scripts" "$snapshot/scripts"
+cp "$pins" "$snapshot/ci/tool-versions.env"
+cp "$pins" "$snapshot/ci/ic-tools.tsv"
+EVIDENCE_TEMP_ROOT="$fixture/default-temp" EVIDENCE_REPOSITORY_ROOT="$consumer" \
+    EVIDENCE_ACTION_ROOT="$snapshot/.github/actions/retain-failure-evidence" \
+    EVIDENCE_COMPACT=true EVIDENCE_HOST_VERSIONS='' EVIDENCE_IC_PINS='' \
+    GITHUB_OUTPUT="$fixture/default-output" RUNNER_TEMP="$fixture/default-temp" \
+    "$BASH" --noprofile --norc -e -o pipefail "$fixture/collector.sh"
+default_details=("$fixture/default-temp"/tool-evidence.*/"$kind")
+[[ ${#default_details[@]} == 1 && -f "${default_details[0]}/selection.txt" ]] || exit 1
+cmp "$pins" "${default_details[0]}/caller-pins"
 mkdir "$fixture/action-unpacked"
 tar -xzf "$output" -C "$fixture/action-unpacked"
 cmp "$fixture/action-temp/portable-regression.log" "$fixture/action-unpacked/portable-regression.log"

@@ -32,7 +32,7 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
   share async performance accounting across handlers to reduce Wasm code size,
   make endpoint admission and custom access checks synchronous,
   compare artifact Candid/Wasm names and modes through Host 0.15,
-  use published IC Build 0.1.3 for Cargo grouping/cache consumers with retained
+  use published IC Build 0.2.0 for Cargo grouping/cache consumers with retained
   failure evidence and pre-effect package-list admission,
   replace private declaration-cache persistence with IC Build transactions while
   retaining optional-cache fallback and bounded workers
@@ -41,7 +41,7 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
   qualification-first publication ([#529](https://github.com/dragginzgame/canic/issues/529)),
   remove duplicate upstream preparation tests
   and unused test-only checksum composition,
-  adopt Shared Tooling 0.9.2's consumer Make interface and verified Cargo/host/IC tools with
+  adopt Shared Tooling 0.10.0's consumer Make interface and verified Cargo/host/IC tools with
   retained failure evidence, fail-closed setup and committed-preparation restart,
   replace memory constructor registries with explicit component requests and host
   composition ([#527](https://github.com/dragginzgame/canic/issues/527)),

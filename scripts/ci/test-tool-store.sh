@@ -83,10 +83,93 @@ diagnostic="$fixture/store-refusal.log"
 grep -F "tool store installation locked: $first_slot/install.lock" "$diagnostic"
 consumer="$fixture/sharing-locked"
 store_refuse install
+grep -F "tool installation lock path already exists: $first_slot/install.lock" "$diagnostic" >/dev/null
 [[ -d "$first_slot/install.lock" && ! -e "$consumer/.tools/$store_test_kind" &&
    ! -e "$consumer/.tools/.$store_test_kind-tools.lock" &&
    "$(wc -l < "$fixture/downloads")" == "$before" ]] || exit 1
 rmdir "$first_slot/install.lock"
+
+# Existing non-directory lock paths are occupied too, never an acquired lock.
+for obstruction in file dangling-link; do
+    if [[ "$obstruction" == file ]]; then
+        printf 'foreign lock evidence\n' > "$first_slot/install.lock"
+    else
+        ln -s "$fixture/absent-lock-target" "$first_slot/install.lock"
+    fi
+    store_refuse install
+    grep -F "tool installation lock path already exists: $first_slot/install.lock" "$diagnostic" >/dev/null
+    [[ ! -e "$consumer/.tools/.$store_test_kind-tools.lock" &&
+       ! -e "$consumer/.tools/$store_test_kind" &&
+       ! -e "$fixture/absent-lock-target" &&
+       "$(wc -l < "$fixture/downloads")" == "$before" ]] || exit 1
+    if [[ "$obstruction" == file ]]; then
+        [[ "$(cat "$first_slot/install.lock")" == 'foreign lock evidence' ]] || exit 1
+    else
+        [[ -L "$first_slot/install.lock" && "$(readlink "$first_slot/install.lock")" == "$fixture/absent-lock-target" ]] || exit 1
+    fi
+    rm "$first_slot/install.lock"
+done
+
+# Inject mkdir failures independently of UID: chmod-only denial can succeed when
+# the fixture runs privileged. The real installers/cleanup still own every effect.
+mkdir "$fixture/lock-errors-bin"
+export STORE_TEST_REAL_MKDIR STORE_TEST_MKDIR_PATH STORE_TEST_MKDIR_MESSAGE STORE_TEST_MKDIR_STATUS STORE_TEST_MKDIR_CALLS
+STORE_TEST_REAL_MKDIR="$(command -v mkdir)"
+STORE_TEST_MKDIR_CALLS="$fixture/lock-mkdir-calls"
+cat > "$fixture/lock-errors-bin/mkdir" <<'SCRIPT'
+#!/usr/bin/env bash
+if [[ "${!#}" == "$STORE_TEST_MKDIR_PATH" ]]; then
+    printf 'attempt\n' >> "$STORE_TEST_MKDIR_CALLS"
+    printf '%s\n' "$STORE_TEST_MKDIR_MESSAGE" >&2
+    exit "$STORE_TEST_MKDIR_STATUS"
+fi
+exec "$STORE_TEST_REAL_MKDIR" "$@"
+SCRIPT
+chmod +x "$fixture/lock-errors-bin/mkdir"
+find "$first_slot" -print | sort > "$fixture/lock-store-before"
+for boundary in checkout store slot; do
+    for reason in permission read-only; do
+        consumer="$fixture/lock-$boundary-$reason"
+        mkdir -p "$consumer/.tools"
+        printf 'retained consumer evidence\n' > "$consumer/.tools/evidence"
+        case "$boundary" in
+            checkout) STORE_TEST_MKDIR_PATH="$consumer/.tools/.$store_test_kind-tools.lock" ;;
+            store) STORE_TEST_MKDIR_PATH="$first_slot/install.lock" ;;
+            slot) STORE_TEST_MKDIR_PATH="$first_slot" ;;
+        esac
+        STORE_TEST_MKDIR_STATUS=13
+        [[ "$reason" != read-only ]] || STORE_TEST_MKDIR_STATUS=30
+        STORE_TEST_MKDIR_MESSAGE="mkdir: $reason filesystem refusal at $STORE_TEST_MKDIR_PATH"
+        : > "$STORE_TEST_MKDIR_CALLS"
+        log_start=0
+        [[ ! -f "$fixture/install.log" ]] || log_start="$(wc -l < "$fixture/install.log")"
+        diagnostic="$fixture/lock-$boundary-$reason.log"
+        status=0
+        PATH="$fixture/lock-errors-bin:$PATH" install > "$diagnostic" 2>&1 || status=$?
+        if [[ "$store_test_kind" == host ]]; then
+            tail -n "+$((log_start + 1))" "$fixture/install.log" >> "$diagnostic"
+        fi
+        [[ "$status" == "$STORE_TEST_MKDIR_STATUS" && "$(wc -l < "$STORE_TEST_MKDIR_CALLS")" -eq 1 ]] || exit 1
+        grep -Fx "$STORE_TEST_MKDIR_MESSAGE" "$diagnostic" >/dev/null
+        if grep -E 'already exists|already locked|installation locked' "$diagnostic"; then exit 1; fi
+        if [[ "$boundary" != slot ]]; then
+            grep -F "unable to acquire tool installation lock: $STORE_TEST_MKDIR_PATH" "$diagnostic" >/dev/null
+        fi
+        [[ ! -e "$first_slot/install.lock" && ! -e "$consumer/.tools/.$store_test_kind-tools.lock" &&
+           ! -e "$consumer/.tools/$store_test_kind" &&
+           "$(cat "$consumer/.tools/evidence")" == 'retained consumer evidence' &&
+           "$(cd "$first_consumer/.tools/$store_test_kind" && pwd -P)" == "$first_bundle" &&
+           "$(wc -l < "$fixture/downloads")" == "$before" ]] || exit 1
+        find "$first_slot" -print | sort > "$fixture/lock-store-after"
+        cmp "$fixture/lock-store-before" "$fixture/lock-store-after"
+        diff -r "$first_bundle" "$fixture/local-adoption/.tools/$store_test_kind-set.previous"
+        # A later explicit attempt succeeds; the failed command never retries.
+        install
+        [[ ! -e "$first_slot/install.lock" && ! -e "$consumer/.tools/.$store_test_kind-tools.lock" &&
+           "$(cd "$consumer/.tools/$store_test_kind" && pwd -P)" == "$first_bundle" &&
+           "$(wc -l < "$fixture/downloads")" == "$before" ]] || exit 1
+    done
+done
 
 # Corruption is rejected before probes. Explicit setup creates a fresh retained
 # generation; it never overwrites the one still selected by another checkout.
@@ -166,6 +249,32 @@ HOST_SHARED_STORE="$fixture/failed-store" IC_SHARED_STORE="$fixture/failed-store
 [[ -d "$failed_bundle" && ! -e "${failed_bundle%/*}/install.lock" &&
    ! -e "$STORE_TEST_CHECKOUT_LOCK" &&
    "$(cd "$consumer/.tools/$store_test_kind" && pwd -P)" != "$failed_bundle" ]] || exit 1
+
+# Curl owns retries; a final HTTP error must not restart setup, alter the old
+# selection or remove its failed candidate. Exercise both real installer callers.
+cat > "$fixture/lifecycle-bin/curl" <<'SCRIPT'
+#!/usr/bin/env bash
+echo called >> "$STORE_TEST_DOWNLOAD_CALLS"
+exit 22
+SCRIPT
+export STORE_TEST_DOWNLOAD_CALLS="$fixture/http-download-calls"
+consumer="$fixture/http-failure"; mkdir -p "$consumer/.tools"
+ln -s "$first_bundle" "$consumer/.tools/$store_test_kind-set.previous"
+ln -s "$store_test_kind-set.previous" "$consumer/.tools/$store_test_kind"
+status=0
+HOST_SHARED_STORE="$fixture/http-failure-store" IC_SHARED_STORE="$fixture/http-failure-store" \
+    PATH="$fixture/lifecycle-bin:$PATH" install || status=$?
+[[ "$status" == 22 && "$(wc -l < "$STORE_TEST_DOWNLOAD_CALLS")" -eq 1 &&
+   ! -e "$consumer/.tools/.$store_test_kind-tools.lock" &&
+   "$(cd "$consumer/.tools/$store_test_kind" && pwd -P)" == "$first_bundle" ]] || exit 1
+retained_candidates=0
+for reference in "$consumer/.tools/$store_test_kind-set."*; do
+    [[ "$reference" != *-set.previous ]] || continue
+    failed_bundle="$(cd "$reference" && pwd -P)"
+    [[ -d "$failed_bundle" && ! -e "${failed_bundle%/*}/install.lock" ]] || exit 1
+    retained_candidates=$((retained_candidates + 1))
+done
+[[ "$retained_candidates" == 1 ]] || exit 1
 consumer="$first_consumer"
 install --check
 printf 'Shared %s storage reuse, isolated selections, corruption, locks and offline refusal passed\n' "$store_test_kind"

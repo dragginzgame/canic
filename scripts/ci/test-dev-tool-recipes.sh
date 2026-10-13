@@ -102,12 +102,12 @@ for target in install-tools tools-check; do
     run_recipe -j8 "$target"
     {
         if [[ "$target" == install-tools ]]; then
-            printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-ic-tools.sh --consumer $fixture --pins ci/ic-tools.tsv --preflight"
-            printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-rust-tools.sh --consumer $fixture --versions ci/tool-versions.env --preflight"
+            printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-ic-tools.sh --consumer $fixture --pins $fixture/ci/ic-tools.tsv --preflight"
+            printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-rust-tools.sh --consumer $fixture --versions $fixture/ci/tool-versions.env --preflight"
         fi
-        printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-host-tools.sh --consumer $fixture --versions ci/tool-versions.env$suffix"
-        printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-ic-tools.sh --consumer $fixture --pins ci/ic-tools.tsv$suffix"
-        printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-rust-tools.sh --consumer $fixture --versions ci/tool-versions.env$suffix"
+        printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-host-tools.sh --consumer $fixture --versions $fixture/ci/tool-versions.env$suffix"
+        printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-ic-tools.sh --consumer $fixture --pins $fixture/ci/ic-tools.tsv$suffix"
+        printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-rust-tools.sh --consumer $fixture --versions $fixture/ci/tool-versions.env$suffix"
         printf '%s\t%s\n' "$fixture/bin/bash" "scripts/ci/testkit-server.sh$suffix"
         printf '%s\t%s\n' "$fixture/.tools/rust/fixture-testkit/installed/bin/testkit-runner" "$action"
     } > "$fixture/aggregate-expected"
