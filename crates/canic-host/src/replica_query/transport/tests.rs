@@ -1,6 +1,6 @@
 use super::{
     LOCAL_HTTP_TIMEOUT, get_http_status, http_request, local_query_with_endpoint,
-    local_replica_endpoint_with_port,
+    local_query_with_timeout, local_replica_endpoint_with_port,
 };
 use crate::replica_query::ReplicaQueryError;
 use reqwest::Method;
@@ -71,7 +71,7 @@ fn query_posts_anonymous_cbor_and_decodes_a_chunked_reply() {
     );
     let request = server.join().unwrap();
     assert!(request.headers.starts_with(&format!(
-        "POST /api/v2/canister/{canister}/query HTTP/1.1\r\n"
+        "POST /api/v3/canister/{canister}/query HTTP/1.1\r\n"
     )));
     assert!(
         request
@@ -103,6 +103,104 @@ fn query_posts_anonymous_cbor_and_decodes_a_chunked_reply() {
     assert_eq!(
         field(content, "method_name"),
         &ciborium::value::Value::Text("canic_public_status".into())
+    );
+}
+
+#[test]
+fn query_preserves_replica_rejection_without_another_request() {
+    let reply = b"\xa3\x66status\x68rejected\x6breject_code\x05\x6ereject_message\x67blocked";
+    let (endpoint, server) = serve(move |stream| {
+        write!(
+            stream,
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n",
+            reply.len()
+        )
+        .unwrap();
+        stream.write_all(reply).unwrap();
+    });
+    let result = local_query_with_endpoint(
+        &candid::Principal::from_slice(&[1, 2, 3]).to_text(),
+        "canic_public_status",
+        b"DIDL",
+        endpoint,
+    );
+    assert!(
+        matches!(result, Err(ReplicaQueryError::Rejected { code: 5, message }) if message == "blocked")
+    );
+    server.join().unwrap();
+}
+
+#[test]
+fn query_http_refusal_does_not_retry_or_follow_redirects() {
+    for (status, response) in [
+        (
+            503,
+            b"HTTP/1.1 503 Unavailable\r\nContent-Length: 0\r\n\r\n".as_slice(),
+        ),
+        (
+            302,
+            b"HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:1/\r\nContent-Length: 0\r\n\r\n"
+                .as_slice(),
+        ),
+    ] {
+        let (endpoint, server) = serve(move |stream| stream.write_all(response).unwrap());
+        let result = local_query_with_endpoint(
+            &candid::Principal::from_slice(&[1, 2, 3]).to_text(),
+            "canic_public_status",
+            b"DIDL",
+            endpoint,
+        );
+        let Err(ReplicaQueryError::Agent(error)) = result else {
+            panic!("expected an upstream HTTP refusal")
+        };
+        assert!(match (status, *error) {
+            (503, ic_agent::AgentError::HttpError(response)) => response.status == 503,
+            (302, ic_agent::AgentError::InvalidHttpResponse(_)) => true,
+            _ => false,
+        });
+        server.join().unwrap();
+    }
+}
+
+#[test]
+fn malformed_query_reply_preserves_the_agent_codec_failure() {
+    let (endpoint, server) = serve(|stream| {
+        stream
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\n\xff")
+            .unwrap();
+    });
+    let result = local_query_with_endpoint(
+        &candid::Principal::from_slice(&[1, 2, 3]).to_text(),
+        "canic_public_status",
+        b"DIDL",
+        endpoint,
+    );
+    assert!(
+        matches!(result, Err(ReplicaQueryError::Agent(error)) if matches!(*error, ic_agent::AgentError::InvalidCborData(_)))
+    );
+    server.join().unwrap();
+}
+
+#[test]
+fn query_deadline_retains_a_typed_timeout() {
+    let (release, wait) = mpsc::channel();
+    let (endpoint, server) = serve(move |stream| {
+        stream
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\n")
+            .unwrap();
+        let _ = wait.recv_timeout(Duration::from_secs(5));
+    });
+    let result = local_query_with_timeout(
+        &candid::Principal::from_slice(&[1, 2, 3]).to_text(),
+        "canic_public_status",
+        b"DIDL",
+        &endpoint,
+        Duration::from_secs(1),
+    );
+    release.send(()).unwrap();
+    server.join().unwrap();
+    assert!(
+        matches!(result, Err(ReplicaQueryError::Io(error)) if error.kind() == std::io::ErrorKind::TimedOut)
     );
 }
 
@@ -236,6 +334,11 @@ fn serve(
 }
 
 fn field<'a>(value: &'a ciborium::value::Value, name: &str) -> &'a ciborium::value::Value {
+    let value = if let ciborium::value::Value::Tag(_, value) = value {
+        value.as_ref()
+    } else {
+        value
+    };
     value
         .as_map()
         .unwrap()

@@ -1,6 +1,6 @@
 use super::*;
 use crate::test_support::temp_dir;
-use std::{collections::BTreeMap, env, fs};
+use std::{env, fs};
 
 #[test]
 fn isolated_invocations_report_a_synthetic_environment_change_and_repeat_exactly() {
@@ -161,7 +161,8 @@ fn missing_corrupt_and_unsafe_diagnostics_remain_bounded_and_optional() {
 
 #[test]
 fn source_and_configuration_changes_are_separately_attributed() {
-    let root = PathBuf::from("/synthetic-reuse");
+    let root = temp_dir("reuse-source-config-diagnostics");
+    fs::create_dir_all(root.join("src")).unwrap();
     let context = WorkspaceBuildContext {
         role: "root".into(),
         profile: crate::canister_build::CanisterBuildProfile::Fast,
@@ -174,17 +175,16 @@ fn source_and_configuration_changes_are_separately_attributed() {
         refresh_canonical_infrastructure_did: false,
         release_build_id: None,
     };
-    let mut inputs = BuildInputSnapshot {
-        identity: "unchanged-authority".into(),
-        files: BTreeMap::from([
-            ("/synthetic-reuse/src/lib.rs".into(), "old-source".into()),
-            ("/synthetic-reuse/canic.toml".into(), "old-config".into()),
-        ]),
-    };
+    let source_path = root.join("src/lib.rs");
+    fs::write(&source_path, "old-source").unwrap();
+    fs::write(&context.config_path, "old-config").unwrap();
+    let spec = ic_build::artifacts::InputEvidenceSpec::new("unchanged-authority")
+        .with_input(&source_path)
+        .with_input(&context.config_path);
+    let inputs = InputEvidence::capture(&spec).unwrap();
     let previous = InputDiagnostics::capture(&context, &[], &inputs);
-    inputs
-        .files
-        .insert("/synthetic-reuse/src/lib.rs".into(), "new-source".into());
+    fs::write(&source_path, "new-source").unwrap();
+    let inputs = InputEvidence::capture(&spec).unwrap();
     let source = InputDiagnostics::capture(&context, &[], &inputs);
     assert!(
         source
@@ -196,9 +196,8 @@ fn source_and_configuration_changes_are_separately_attributed() {
             .compare(&previous)
             .contains("toolchain/configuration")
     );
-    inputs
-        .files
-        .insert("/synthetic-reuse/canic.toml".into(), "new-config".into());
+    fs::write(&context.config_path, "new-config").unwrap();
+    let inputs = InputEvidence::capture(&spec).unwrap();
     let configuration = InputDiagnostics::capture(&context, &[], &inputs);
     assert!(
         configuration
@@ -206,4 +205,5 @@ fn source_and_configuration_changes_are_separately_attributed() {
             .contains("toolchain/configuration inputs changed")
     );
     assert!(!configuration.compare(&source).contains("source/dependency"));
+    fs::remove_dir_all(root).unwrap();
 }

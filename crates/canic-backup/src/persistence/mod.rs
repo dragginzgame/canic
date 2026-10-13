@@ -8,7 +8,6 @@ mod command_lifetime_lock;
 mod error;
 mod file_lock;
 mod integrity;
-mod journal_lock;
 mod json;
 mod layout;
 mod layout_lifetime;
@@ -17,12 +16,12 @@ pub use command_lifetime_lock::CommandLifetimeHandle;
 pub(crate) use command_lifetime_lock::{CommandLifetimeLock, CommandLifetimeLockError};
 pub use error::PersistenceError;
 pub(crate) use ic_backup::ops::persistence::commit_artifact_directory;
+pub use ic_backup::ops::persistence::{JournalLock, JournalLockError};
 pub(crate) use integrity::verify_durable_artifact;
 pub use integrity::{
     ArtifactIntegrityReport, BackupExecutionIntegrityReport, BackupIntegrityReport,
     resolve_backup_artifact_path,
 };
-pub use journal_lock::{JournalLock, JournalLockError};
 #[cfg(test)]
 pub(crate) use json::{
     DurableWriteBarrier, create_json_durable_at_barriers, write_json_durable_at_barriers,

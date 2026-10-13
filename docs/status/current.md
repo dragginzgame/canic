@@ -10,6 +10,97 @@ classified under the existing **0.112.0** changelog entry. Own package versions
 remain **0.111.0**. The objective is to delete duplicate mechanisms in favor of
 upstream owners; moving declarations alone does not demonstrate faster builds.
 
+## 0.112 duplication-removal plan and Query extraction — 2026-10-13
+
+The maintainer requested the existing 0.112 design's duplication-removal plan
+and implementation, then separately authorized scoped IC Build/Query work.
+The [design](../design/0.112-standalone-blob-service-extraction/0.112-design.md)
+and [batch status](../design/0.112-standalone-blob-service-extraction/status.md)
+record Backup custody, Build input evidence, read-only evidence and Auth owners.
+The concurrent published Build adoption below is preserved rather than repeated.
+
+Canic local replica queries now use IC Agent's envelope/response owner. Delete
+the private CBOR codec and golden codec tests; retain environment/readiness
+projection, anonymous selected-origin HTTP, no proxies/redirects, one request
+on HTTP refusal, typed rejection and the 30-second overall timeout. All 13
+owning HTTP/projection tests and strict all-feature Host library/test Clippy pass.
+Logs: `/tmp/canic-112-replica-tests-final-pass.log` and
+`/tmp/canic-112-host-clippy.log`. Earlier source-race, sandbox and fixture failures
+remain retained and are superseded only for their corrected source/command.
+
+IC Query's uncommitted 0.55.5 draft now owns bounded certificate/witness/tip
+authentication and immutable bounded generic block-chain validation. Nine new
+cases, 18 directly affected report/certificate regressions and scoped strict
+library/test lint pass. The default library remains free of the optional host
+engines. A frozen Canic candidate replacing its certificate/value-budget/chain
+engines passes all 30 receipt cases and strict Host library/test lint, preserving
+network/account/memo/fee/amount binding, Candid structure and original mint
+authority. Its source override exists only under
+`/tmp/canic-112-certificate-consumer-02/`; the real Canic graph remains registry-only.
+
+Query publication and actual registry adoption are still required before deleting
+those remaining Canic receipt engines. Backup's original-command/terminal custody
+integration and Auth's published validation adoption remain open. The complete
+0.112 batch is not ready to push; source counts establish no build-time or Wasm
+improvement. Own package versions, Git refs, releases and live/paid effects were
+not changed by this task; independent maintainer work retains its own authority.
+
+## Published IC Build input-engine adoption — 2026-10-13
+
+The maintainer authorized Canic integration after publishing IC Build 0.2.2.
+The catalog now requires that registry API; the incoming lock already selected
+0.2.2 and remains unchanged. Its archive checksum is
+`d408281094f1ae6928f02102131a904b8edcf5693b6c8f01b105e6488d0c4d82`, with
+VCS receipt `e9be97fa356c14cb5431b879e304a0f8cc5077c3`.
+
+[#530](https://github.com/dragginzgame/canic/issues/530) now delegates per-path
+input capture/digests and before/after mutation guards directly to IC Build's
+`InputEvidence`; selected retained Cargo records use its strict discovery API.
+The private scanner, snapshot module and parser are removed. Two remaining
+generic regressions move to IC Build, whose complete Linux gates pass; Canic
+keeps product recipes, required toolchain admission, generated export/fixture
+selection, source custody, complete-release format/namespace, finalized release
+bindings, output projection and diagnostic serialization. There is one generic
+traversal owner and no compatibility reader or incidental cleanup.
+
+The targeted Host reuse suite passes 40 cases, including real Cargo generation,
+external/disappearing input evidence, cold/repeat release reuse, environment/tool
+changes, tampered outputs, rejection diagnostics and cancellation. Its opt-in
+synthetic-sealing performance case remains ignored. Evidence and task-owned
+before-images are under `/tmp/ic-build-canic-022/`; `canic-final-reuse-tests.log`
+owns this pass and `canic-final-clippy.log` owns the strict Host library/test
+Clippy pass. The incoming graph selects Host 0.17.3/Query 0.55.4; locked cache
+preparation is explicit, with lock SHA-256
+`0b30060e6d39ff08ac2c54b2d07de74b21f10863e19426ebba89a5630d78bc10`
+unchanged through final checks. The query owner resolves the earlier duration
+lint; initial receipts remain retained. Required tool absence still yields the
+original NotFound failure rather than optional source evidence. This is focused
+Linux evidence, not broad workspace or native consumer acceptance.
+
+IC Build 0.2.1's exact release CI passes Linux and both native macOS hosts;
+the newer 0.2.2 Intel CI fails an inadmissible invalid-byte filename in its new
+test fixture. IC Build #15 owns the local repair and exact native acceptance;
+Apple Silicon remains queued. Complete Canic native/application acceptance remains
+outstanding. The wider Auth/Backup/Blob integration batch stays open under 0.112.0.
+No package version, staging, commit, push, release, publication or broad gate ran.
+
+## Backup lock adoption and pending Auth/Build APIs — 2026-10-13
+
+Canic Backup now uses the published IC Backup 0.24 journal lock/error directly.
+The redundant wrapper and generic lock tests are removed; upstream retains
+contention, unsafe-entry and process-death coverage. Canic's restore-reference
+retention and completed-restore lost-response replay cases pass, with strict
+package library/test Clippy. Evidence: `/tmp/canic-backup-shared-lock-*.log`.
+This prepares guarded reference-release adoption but does not complete #513 or
+enable live backup creation (#394). Product journal and command custody remain.
+
+The selected Auth 0.5.10 and Build 0.2.1 lack the next shared APIs: scope/grant
+validation (Auth #50) and standalone input evidence/depfile discovery (Build #12).
+Their sibling checkouts contain uncommitted implementations for 0.5.11 and 0.2.2;
+no sibling edits or local dependency overrides were made. Adopt published APIs
+before retiring the corresponding Canic implementations. The release batch stays
+open; package versions and Git refs are unchanged.
+
 ## Native-agent Memory diagnostics repair — 2026-10-13
 
 The native-agent integration fixture no longer accesses Memory 0.36.2's private

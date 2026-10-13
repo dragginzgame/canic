@@ -9,10 +9,8 @@ mod rejection;
 #[cfg(test)]
 mod tests;
 
-use crate::canister_build::{
-    WorkspaceBuildContext,
-    reuse::{hash_field, snapshot::BuildInputSnapshot},
-};
+use crate::canister_build::{WorkspaceBuildContext, reuse::hash_field};
+use ic_build::artifacts::{InputEvidence, InputEvidenceValue};
 use ic_host_fs::durable::write_bytes;
 use ic_host_fs::read::read_file_no_follow;
 
@@ -54,7 +52,7 @@ impl InputDiagnostics {
     pub(super) fn capture(
         context: &WorkspaceBuildContext,
         tools: &[PathBuf],
-        inputs: &BuildInputSnapshot,
+        inputs: &InputEvidence,
     ) -> Self {
         let mut source = Sha256::new();
         let mut configuration = Sha256::new();
@@ -70,8 +68,14 @@ impl InputDiagnostics {
             &mut configuration,
             context.config_path.as_os_str().as_encoded_bytes(),
         );
-        for (path, hash) in &inputs.files {
-            let path_ref = Path::new(path);
+        let mut entries = inputs.entries().iter().collect::<Vec<_>>();
+        entries.sort_unstable_by(|(left, _), (right, _)| {
+            left.as_os_str()
+                .as_encoded_bytes()
+                .cmp(right.as_os_str().as_encoded_bytes())
+        });
+        for (path, value) in entries {
+            let path_ref = path.as_path();
             let is_configuration = path_ref == context.config_path
                 || tools.iter().any(|tool| tool == path_ref)
                 || path_ref
@@ -93,8 +97,8 @@ impl InputDiagnostics {
             } else {
                 &mut source
             };
-            hash_field(digest, path.as_bytes());
-            hash_field(digest, hash.as_bytes());
+            hash_field(digest, path.as_os_str().as_encoded_bytes());
+            hash_field(digest, value_text(value).as_bytes());
         }
         let values = crate::build_environment::inputs();
         let value_comparison =
@@ -208,4 +212,12 @@ fn environment_evidence(mut environment: Vec<(OsString, OsString)>) -> (String, 
         }
     }
     (hex_bytes(digest.finalize()), keys)
+}
+
+fn value_text(value: &InputEvidenceValue) -> String {
+    match value {
+        InputEvidenceValue::Missing => "absent".into(),
+        InputEvidenceValue::Directory => "directory".into(),
+        InputEvidenceValue::File { sha256 } => sha256.to_hex(),
+    }
 }

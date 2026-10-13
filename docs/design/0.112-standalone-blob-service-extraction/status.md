@@ -1,4 +1,38 @@
-# Blob Extraction Implementation Status
+# Upstream Integration Implementation Status
+
+## Duplication-removal batches — 2026-10-13
+
+The maintainer requested the [duplication-removal plan](0.112-design.md#duplication-removal-plan--2026-10-13)
+and its in-repository implementation. Published dependencies and product authority
+remain the boundary. The maintainer separately authorized scoped IC Build and
+IC Query implementation; publication remains separate.
+
+| Batch | Outcome/owner | Included evidence | Targeted validation | Status |
+| --- | --- | --- | --- | --- |
+| B1 | IC Backup custody; Canic retains original/terminal authority (#513) | Exact command custody, descendant exclusion, retained references and terminal replay | Backup library/test lint, owning custody/restore cases and affected CLI/Host callers | Journal lock already adopted; command/layout integration pending |
+| B2 | IC Build input evidence (#530, Build #12) | External/new/removed inputs, cold/reuse, mutation refusal and finalized release admission | Host owning reuse tests/lint; native host qualification | Concurrent published 0.2.2 adoption passes 39 owning reuse cases; private scanner/snapshot/parser removed. Host library/test lint also passes with the query change. Native/application acceptance remains open |
+| B3 | Agent local query codec; IC Query bounded ledger evidence | Actual selected-origin HTTP, rejection, timeout and receipt budget/authority boundaries | Host replica-query and receipt tests/library lint | Local query codec removed; 13 HTTP/projection cases and strict Host library/test lint pass. Query certificate/tip and immutable bounded block-chain APIs prepared in its 0.55.5 draft; nine new cases, 18 certificate/report regressions and strict scoped lint pass. A frozen actual Canic replacement passes 30 receipt cases and strict Host library/test lint. Publication and real registry adoption remain pending |
+| B4 | IC Auth protocol and validation (#491, Auth #50) | Canonical structure/hash, Fleet binding and non-issuing refusal | Contracts/Core owning auth tests/lint | Shared scope/grant API awaits publication; selective passive-type review pending |
+
+The complete 0.112 integration batch remains open. No full-suite, native macOS,
+deployment or performance improvement is implied by these source changes.
+
+B3 logs: `/tmp/canic-112-replica-tests-final-pass.log`,
+`/tmp/canic-112-host-clippy.log`, `/tmp/canic-112-query-certificate-typed.log`
+and `/tmp/canic-112-query-clippy-final.log`. Earlier failed attempts remain
+retained; the frozen actual receipt consumer proof has a separate source graph.
+
+The full ledger candidate is `/tmp/canic-112-certificate-consumer-02/`.
+It archives the earlier certificate-only source, retains a source override only
+inside that disposable checkout, and replaces the local generic value budget,
+hash-chain and certificate decoders with IC Query. Canic keeps deposit schema,
+exact network/account/memo/fee/amount binding and original mint authority. The
+actual ledger-block Candid projection remains equal. The candidate does not
+qualify the real registry graph or live payment effects. Receipts:
+`/tmp/canic-112-full-ledger-consumer.log`,
+`/tmp/canic-112-ledger-consumer-clippy-final.log`,
+`/tmp/canic-112-query-chain-tests.log` and
+`/tmp/canic-112-query-report-regressions.log`.
 
 ## Current planning identity — 2026-10-10
 

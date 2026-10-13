@@ -5,19 +5,14 @@
 //! Boundary: exact selected-origin requests and typed transport failure projection.
 
 use super::ReplicaQueryError;
-use super::cbor::{QueryOutcome, decode_query_response, encode_anonymous_query};
 use crate::icp_config::{
     DEFAULT_LOCAL_GATEWAY_PORT, configured_local_gateway_port,
     configured_local_gateway_port_from_root,
 };
 use candid::Principal;
+use ic_agent::{Agent, AgentError, agent::agent_error::TransportError};
 use reqwest::{Method, Url, blocking::Client, redirect::Policy};
-use std::{
-    error::Error,
-    io,
-    path::Path,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
+use std::{error::Error, io, path::Path, sync::Arc, time::Duration};
 
 const LOCAL_HTTP_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -59,23 +54,52 @@ fn local_query_with_endpoint(
     arg: &[u8],
     endpoint: String,
 ) -> Result<Vec<u8>, ReplicaQueryError> {
+    local_query_with_timeout(canister, method, arg, &endpoint, LOCAL_HTTP_TIMEOUT)
+}
+
+fn local_query_with_timeout(
+    canister: &str,
+    method: &str,
+    arg: &[u8],
+    endpoint: &str,
+    timeout: Duration,
+) -> Result<Vec<u8>, ReplicaQueryError> {
     let canister_id =
         Principal::from_text(canister).map_err(|err| ReplicaQueryError::Query(err.to_string()))?;
-    let body =
-        encode_anonymous_query(canister_id.as_slice(), method, arg, ingress_expiry_nanos()?)?;
-    let response = http_request(
-        &endpoint,
-        &format!("/api/v2/canister/{canister}/query"),
-        Method::POST,
-        Some(body),
-        LOCAL_HTTP_TIMEOUT,
-    )?;
-    match decode_query_response(&response)? {
-        QueryOutcome::Replied(arg) => Ok(arg),
-        QueryOutcome::Rejected { code, message } => {
-            Err(ReplicaQueryError::Rejected { code, message })
-        }
-    }
+    let endpoint = local_http_url(endpoint, "/")?;
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .thread_name("canic-local-query")
+        .enable_all()
+        .build()?;
+    let result = runtime.block_on(async {
+        let client = reqwest::Client::builder()
+            .no_proxy()
+            .redirect(Policy::none())
+            .build()
+            .map_err(transport_error)?;
+        let agent = Agent::builder()
+            .with_url(endpoint.as_str())
+            .with_arc_http_middleware(Arc::new(client))
+            .with_max_tcp_error_retries(0)
+            .with_verify_query_signatures(false)
+            .build()
+            .map_err(agent_error)?;
+        tokio::time::timeout(
+            timeout,
+            agent
+                .query(&canister_id, method)
+                .with_arg(arg)
+                .expire_after(Duration::from_mins(5))
+                .call(),
+        )
+        .await
+        .map_err(|error| ReplicaQueryError::Io(io::Error::new(io::ErrorKind::TimedOut, error)))?
+        .map_err(agent_error)
+    });
+    // A synchronous caller can itself run on another runtime; do not block its shutdown.
+    runtime.shutdown_background();
+    result
 }
 
 fn local_replica_endpoint(environment: Option<&str>) -> String {
@@ -95,17 +119,6 @@ fn local_replica_endpoint_with_port(
     format!("http://127.0.0.1:{port}")
 }
 
-fn ingress_expiry_nanos() -> Result<u64, ReplicaQueryError> {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|err| ReplicaQueryError::Query(err.to_string()))?;
-    let expiry = now
-        .as_nanos()
-        .saturating_add(5 * 60 * 1_000_000_000)
-        .min(u128::from(u64::MAX));
-    u64::try_from(expiry).map_err(|err| ReplicaQueryError::Query(err.to_string()))
-}
-
 /// Keep anonymous local reads on the selected origin, without redirects or proxies.
 fn http_request(
     endpoint: &str,
@@ -114,16 +127,7 @@ fn http_request(
     body: Option<Vec<u8>>,
     timeout: Duration,
 ) -> Result<Vec<u8>, ReplicaQueryError> {
-    let mut url =
-        Url::parse(endpoint).map_err(|error| ReplicaQueryError::Query(error.to_string()))?;
-    if url.scheme() != "http" || !url.username().is_empty() || url.password().is_some() {
-        return Err(ReplicaQueryError::Query(
-            "local replica endpoint must use anonymous HTTP".to_string(),
-        ));
-    }
-    url.set_path(path);
-    url.set_query(None);
-    url.set_fragment(None);
+    let url = local_http_url(endpoint, path)?;
     let client = Client::builder()
         .no_proxy()
         .redirect(Policy::none())
@@ -147,6 +151,31 @@ fn http_request(
         .bytes()
         .map(|body| body.to_vec())
         .map_err(transport_error)
+}
+
+fn local_http_url(endpoint: &str, path: &str) -> Result<Url, ReplicaQueryError> {
+    let mut url =
+        Url::parse(endpoint).map_err(|error| ReplicaQueryError::Query(error.to_string()))?;
+    if url.scheme() != "http" || !url.username().is_empty() || url.password().is_some() {
+        return Err(ReplicaQueryError::Query(
+            "local replica endpoint must use anonymous HTTP".to_string(),
+        ));
+    }
+    url.set_path(path);
+    url.set_query(None);
+    url.set_fragment(None);
+    Ok(url)
+}
+
+fn agent_error(error: AgentError) -> ReplicaQueryError {
+    match error {
+        AgentError::UncertifiedReject { reject, .. } => ReplicaQueryError::Rejected {
+            code: reject.reject_code as u64,
+            message: reject.reject_message,
+        },
+        AgentError::TransportError(TransportError::Reqwest(error)) => transport_error(error),
+        other => ReplicaQueryError::Agent(Box::new(other)),
+    }
 }
 
 /// Retain the HTTP failure and the native I/O kind when one is supplied.

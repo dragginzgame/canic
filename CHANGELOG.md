@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Use IC Backup's journal lock and typed failures directly, removing the local
+  wrapper and repeated generic locking tests while retaining restore custody checks.
+  Use IC Agent for anonymous local replica queries and their wire codec.
+
 Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
 - Repair native-agent fixture allocation lookup for Memory 0.36.2's public diagnostics.
@@ -34,13 +38,15 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
   share async performance accounting across handlers to reduce Wasm code size,
   make endpoint admission and custom access checks synchronous,
   compare artifact Candid/Wasm names and modes through Host 0.15,
-  use published IC Build 0.2.0 for Cargo grouping/cache consumers with retained
+  use published IC Build 0.2.2 for Cargo grouping/cache consumers with retained
   failure evidence and pre-effect package-list admission,
   replace private declaration-cache persistence with IC Build transactions while
   retaining optional-cache fallback and bounded workers
   ([#528](https://github.com/dragginzgame/canic/issues/528)),
   delegate temporary artifact capture and staging to IC Build while retaining
   qualification-first publication ([#529](https://github.com/dragginzgame/canic/issues/529)),
+  delegate complete-build input evidence and depfile discovery to IC Build while
+  retaining Canic release admission ([#530](https://github.com/dragginzgame/canic/issues/530)),
   remove duplicate upstream preparation tests
   and unused test-only checksum composition,
   adopt Shared Tooling 0.10.0's consumer Make interface and verified Cargo/host/IC tools with
