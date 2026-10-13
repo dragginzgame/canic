@@ -16,7 +16,8 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
 - Repair native-agent fixture allocation lookup for Memory 0.36.2's public diagnostics
   and keep minimal control-plane builds free of unused role-only declarations;
-  refresh the embedded allocation peer against the current producer inputs.
+  refresh the embedded allocation peer against the current producer inputs
+  and include Blob composition proofs in the governed worker partition.
 
 - Repair Host 0.17 Candid feature selection, test-app Memory composition and
   the authorization probe's scope declaration; remove the obsolete upstream

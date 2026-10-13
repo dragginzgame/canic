@@ -310,6 +310,7 @@ mod governed_suite {
         // The retained timing baseline leaves this worker about 350s shorter.
         // Move the two independent support estates (~200s) without adding workers.
         let mut journeys = lifecycle::governed_support_cases();
+        journeys.extend(blob_service::governed_cases());
         journeys.extend(fleet_registry::governed_fleet_journey_cases());
         [regular, journeys]
     }
