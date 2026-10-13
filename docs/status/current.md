@@ -30,8 +30,17 @@ proof was rerun for these fixture repairs, and no broad suite ran.
 
 **The current graph is not push-ready:** the focused Host check now reaches
 `canister_build/batch/mod.rs` and fails because IC Build 0.1.3 accepts Host 0.16
-`OutputLimits` while Canic selects Host 0.17. The published Build version is
-still 0.1.3. Its sibling remains unedited pending maintainer coordination.
+`OutputLimits` while Canic selects Host 0.17. Published Build 0.1.4 was also
+inspected after the repeated validation failure: its registry manifest and public
+grouping API still use Host 0.16, so updating to that patch cannot clear this
+error. The maintainer subsequently authorized the sibling fix: IC Build now
+selects Host 0.17, with a breaking 0.2.0 draft and unchanged 0.1.4 package
+metadata. Its Linux delivery checks pass, including the corrected release
+fixture. Canic Host compilation and strict all-feature library/test Clippy pass
+against a frozen producer in `/tmp/canic-host017-proof.oEVphD`; the source
+override exists only in that disposable copy. See `/tmp/ic-build-host017-*`
+and `/tmp/canic-host017-consumer-*.log` for evidence. Publish the aligned Build
+release, then adopt it in this real registry graph before rerunning validation.
 Earlier Host 0.16 and Blob managed proofs below retain their exact graph scope.
 
 ## Artifact staging owner convergence — 2026-10-13
