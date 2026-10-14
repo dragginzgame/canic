@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 Detailed notes: [docs/changelog/0.111.md](docs/changelog/0.111.md)
 
 - Correct native fixture path identity and bind embedded-peer compilation to
-  its selected compiler. Refresh peer provenance while preserving preflight
+  its selected compiler without dropping the remap and fixture environment.
+  Refresh peer provenance while preserving preflight
   verification before server startup
   ([#474 — Retain complete PocketIC evidence](https://github.com/dragginzgame/canic/issues/474),
   [#551 — Refresh embedded allocation peer](https://github.com/dragginzgame/canic/issues/551)).
