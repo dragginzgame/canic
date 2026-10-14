@@ -11,7 +11,12 @@ use ic_testkit::artifacts::{
     WasmBuildSpec, build_wasm_canisters_cached, resolve_cargo_build_inputs,
 };
 use serde::{Deserialize, Serialize};
-use std::{error::Error, fs, io, path::Path, process::Command};
+use std::{
+    error::Error,
+    fs, io,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 const ARTIFACT: &str =
     "crates/canic/src/testing/managed_component_group/fixture/sharding_root_stub.wasm";
@@ -38,6 +43,40 @@ struct FixtureEvidence {
     rustc: String,
 }
 
+#[derive(Debug)]
+struct PeerMismatch {
+    expected: String,
+    built: String,
+    retained: io::Result<PathBuf>,
+}
+
+impl std::fmt::Display for PeerMismatch {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "embedded allocation peer differs from current source (expected {}, built {}); run cargo run --locked --offline -p canic-testing-internal --example refresh_embedded_root",
+            self.expected, self.built
+        )?;
+        match &self.retained {
+            Ok(path) => write!(
+                formatter,
+                "; mismatch Wasm and provenance retained at {}",
+                path.display()
+            ),
+            Err(error) => write!(formatter, "; retaining mismatch evidence failed: {error}"),
+        }
+    }
+}
+
+impl Error for PeerMismatch {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        self.retained
+            .as_ref()
+            .err()
+            .map(|error| error as &dyn Error)
+    }
+}
+
 /// Check recorded identity or compare a freshly qualified cached build after inputs change.
 /// Normal qualification never updates the checked-in artifact or evidence.
 pub fn verify(workspace: &Path) -> Result<(), Box<dyn Error>> {
@@ -52,12 +91,36 @@ pub fn verify(workspace: &Path) -> Result<(), Box<dyn Error>> {
     }
     // A metadata-only change may select the same executable. Prove that fact
     // through the content-addressed build rather than demanding a source rewrite.
-    let (built, _) = build(&workspace, &spec)?;
+    let (built, provenance) = build(&workspace, &spec)?;
     if built != embedded {
-        return Err(io::Error::new(io::ErrorKind::InvalidData,
-            format!("embedded allocation peer differs from current source (expected {}, built {}); run cargo run --locked --offline -p canic-testing-internal --example refresh_embedded_root", sha256_hex(&embedded), sha256_hex(&built))).into());
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            PeerMismatch {
+                expected: sha256_hex(&embedded),
+                built: provenance.artifact_sha256.clone(),
+                retained: retain_peer_mismatch(&workspace, &built, &provenance),
+            },
+        )
+        .into());
     }
     Ok(())
+}
+
+fn retain_peer_mismatch(
+    workspace: &Path,
+    bytes: &[u8],
+    provenance: &FixtureEvidence,
+) -> io::Result<PathBuf> {
+    let parent = workspace.join("target/embedded-root/mismatches");
+    fs::create_dir_all(&parent)?;
+    let path = parent.join(format!("{}.wasm", provenance.artifact_sha256));
+    ic_host_fs::durable::write_bytes(&path, bytes).map_err(io::Error::other)?;
+    ic_host_fs::durable::write_bytes(
+        &path.with_extension("json"),
+        &serde_json::to_vec_pretty(provenance).map_err(io::Error::other)?,
+    )
+    .map_err(io::Error::other)?;
+    Ok(path)
 }
 
 /// Explicit maintainer refresh of the peer and its structured source/tool/lock evidence.
