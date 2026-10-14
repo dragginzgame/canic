@@ -197,6 +197,7 @@ fn wasm_store_cargo_build_command(
         )
         .args([
             "build",
+            crate::canister_build::cache::CANISTER_CARGO_TARGET,
             "--locked",
             "--manifest-path",
             &manifest_path.display().to_string(),

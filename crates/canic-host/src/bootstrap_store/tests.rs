@@ -91,6 +91,7 @@ fn wasm_store_build_uses_the_locked_resolver() {
         false,
     );
     assert!(command.get_args().any(|argument| argument == "--locked"));
+    assert!(command.get_args().any(|argument| argument == "--lib"));
 }
 
 #[test]

@@ -6,6 +6,29 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.112.0]
+
+Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
+
+- Normalize installed standard-library source locations to the selected
+  compiler's virtual source root so rust-src availability preserves peer bytes
+  ([#551 — Qualify embedded allocation peer](https://github.com/dragginzgame/canic/issues/551)).
+- Retain mismatching embedded-peer Wasm and its actual build provenance in CI
+  while preserving strict preflight refusal and evidence-write errors
+  ([#551 — Qualify embedded allocation peer](https://github.com/dragginzgame/canic/issues/551)).
+- Select patched rustls 0.23.46 in the integration graph while retaining the
+  dependency-risk gate and refreshing embedded-peer provenance
+  ([#560 — Repair vulnerable rustls selection](https://github.com/dragginzgame/canic/issues/560)).
+- Replace the newly yanked transitive num-modular selection with its compatible
+  nonyanked release, preserving dependency-risk refusal
+  ([#556 — Repair yanked dependency selection](https://github.com/dragginzgame/canic/issues/556)).
+- Select only canister libraries and bind their Cargo target into complete-build
+  reuse identity. Correct native fixture path identity and bind embedded-peer
+  compilation to its selected compiler
+  ([#542 — Bind Cargo library selection into reuse identity](https://github.com/dragginzgame/canic/issues/542),
+  [#474 — Retain complete PocketIC evidence](https://github.com/dragginzgame/canic/issues/474),
+  [#551 — Refresh embedded allocation peer](https://github.com/dragginzgame/canic/issues/551)).
+
 ## [0.111.0] - 2026-10-10
 
 Detailed notes: [docs/changelog/0.111.md](docs/changelog/0.111.md)

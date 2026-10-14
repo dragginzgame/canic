@@ -109,6 +109,7 @@ fn configured_batch_command_selects_every_group_package_once() {
         args,
         [
             "build",
+            "--lib",
             "--locked",
             "--keep-going",
             "--message-format=json-render-diagnostics",
