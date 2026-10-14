@@ -39,7 +39,7 @@ use canic_testing_internal::pic::{
     upgrade_args,
 };
 use ic_agent::{Agent, Identity, identity::Secp256k1Identity};
-use ic_testkit::pic::{CandidCallExt, CanisterInstallExt, PocketIcTimeExt, RetryPolicy};
+use ic_testkit::pic::{CandidCallExt, CanisterInstallExt, RetryPolicy};
 use ic_testkit::pocket_ic::{PocketIc, common::rest::BlobCompression};
 use serde::Serialize;
 use std::{cell::RefCell, rc::Rc, time::Duration};
@@ -453,7 +453,7 @@ fn multi_target_sessions_preserve_controller_separation_and_same_release_recover
         0
     );
 
-    let now_ns = fixture.pic().current_time_nanos();
+    let now_ns = fixture.pic().get_time().as_nanos_since_unix_epoch();
     assert!(now_ns < issuer_view.expires_at_ns);
     fixture.pic().advance_time(
         Duration::from_nanos(issuer_view.expires_at_ns - now_ns) + Duration::from_secs(1),
@@ -647,7 +647,7 @@ fn maximum_application_session_resource_contract_is_bounded() {
     let verifier_wasm = fixture.verifier_wasm();
     let verifier = fixture.verifier.canister_id;
     let subject = native_agent_subject();
-    let now_ns = fixture.pic().current_time_nanos();
+    let now_ns = fixture.pic().get_time().as_nanos_since_unix_epoch();
 
     let stable_bytes_before = fixture.pic().get_stable_memory(verifier).len();
     let auth_state_bytes = inject_application_authorization_state(
@@ -778,7 +778,7 @@ fn measure_application_authorization_at_state(
         fixture.issuer.canister_id,
         fixture.verifier.role.clone(),
         subject,
-        fixture.pic().current_time_nanos(),
+        fixture.pic().get_time().as_nanos_since_unix_epoch(),
         session_count,
         replay_count,
     );
