@@ -221,6 +221,22 @@ fn embedded_peer_reproduces_across_paths_and_release_versions() {
             .windows(workspace.as_os_str().len())
             .any(|window| window == workspace.as_os_str().as_encoded_bytes())
     );
+    let cargo_home = std::env::var_os("CARGO_HOME")
+        .map_or_else(
+            || std::path::PathBuf::from(std::env::var_os("HOME").unwrap()).join(".cargo"),
+            std::path::PathBuf::from,
+        )
+        .canonicalize()
+        .unwrap();
+    for root in [cargo_home, source::compiler_sysroot().unwrap()] {
+        assert!(
+            !first_bytes
+                .windows(root.as_os_str().len())
+                .any(|window| window == root.as_os_str().as_encoded_bytes()),
+            "fixture embeds an unremapped build root: {}",
+            root.display(),
+        );
+    }
     let producer = second
         .root
         .join("canisters/test/sharding_root_stub/src/lib.rs");

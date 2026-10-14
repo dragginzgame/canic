@@ -98,17 +98,16 @@ fn build_spec(workspace: &Path, source: &Path) -> io::Result<WasmBuildSpec> {
     .with_additional_inputs(["crates/canic-testing-internal/src/embedded_root"])
     .with_cargo_profile_args(["--profile", PROFILE, "--locked", "--offline"])
     .with_extra_env([
-        ("CARGO_INCREMENTAL", "0".to_owned()),
-        ("ICP_ENVIRONMENT", "local".to_owned()),
-        ("CANIC_MEMORY_BUCKET_PAGES", "16".to_owned()),
+        ("CARGO_INCREMENTAL", "0".into()),
+        ("ICP_ENVIRONMENT", "local".into()),
+        ("CANIC_MEMORY_BUCKET_PAGES", "16".into()),
         (
             "CARGO_ENCODED_RUSTFLAGS",
-            source::rustflags(source, &sysroot)?,
+            source::rustflags(source, &sysroot)?.into(),
         ),
-    ])
-    // Bind Cargo and identity probes to the compiler whose sysroot is remapped.
-    // A rustup proxy may otherwise reselect from the normalized snapshot.
-    .with_extra_env([("RUSTC", sysroot.join("bin/rustc"))]))
+        // Select the compiler in the same map: with_extra_env replaces prior entries.
+        ("RUSTC", sysroot.join("bin/rustc").into_os_string()),
+    ]))
 }
 
 fn build(
