@@ -25,7 +25,7 @@ use ic_testkit::{
         ArtifactCacheOutcome, ArtifactCachePreparation, ArtifactCacheRecord, ArtifactCacheSpec,
         WasmBuildSpec, prepare_artifact_cache, resolve_cargo_build_inputs,
     },
-    pic::{CandidCallExt, PocketIc, PocketIcTimeExt},
+    pic::{CandidCallExt, PocketIc},
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -401,5 +401,5 @@ fn publish_chunk(
 
 // Read the current PocketIC wall clock in whole seconds.
 fn root_time_secs(pic: &PocketIc, _root_id: Principal) -> u64 {
-    pic.current_time_nanos() / 1_000_000_000
+    pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000
 }

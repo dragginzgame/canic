@@ -613,7 +613,7 @@ fn root_capability_response_as(
 // Read one canister's current time in nanoseconds for capability metadata issuance.
 fn target_now_ns(setup: &root::harness::RootSetup, canister_id: Principal) -> u64 {
     let _ = canister_id;
-    setup.pic.current_time_nanos()
+    setup.pic.get_time().as_nanos_since_unix_epoch()
 }
 
 // Rebuild the capability metadata tuple that the structural envelope expects.

@@ -6,6 +6,14 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.111.1]
+
+- Read PocketIC nanoseconds through its native timestamp API in fixture and
+  replay tests, removing the redundant Testkit clock-trait dependency while
+  preserving deadlines and simulated-time progression.
+
+Detailed notes: [docs/changelog/0.111.md](docs/changelog/0.111.md)
+
 ## [0.111.0] - 2026-10-10
 
 Detailed notes: [docs/changelog/0.111.md](docs/changelog/0.111.md)
