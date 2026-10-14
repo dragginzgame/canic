@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed notes: [docs/changelog/0.111.md](docs/changelog/0.111.md)
 
+- Select patched rustls 0.23.46 in the integration graph while retaining the
+  dependency-risk gate and refreshing embedded-peer provenance
+  ([#560 — Repair vulnerable rustls selection](https://github.com/dragginzgame/canic/issues/560)).
 - Replace the newly yanked transitive num-modular selection with its compatible
   nonyanked release, preserving dependency-risk refusal
   ([#556 — Repair yanked dependency selection](https://github.com/dragginzgame/canic/issues/556)).
