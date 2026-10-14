@@ -3,6 +3,46 @@
 use super::*;
 
 #[test]
+fn registry_cache_names_remap_to_the_same_compiled_source_location() {
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let fixture = source::FixtureSource {
+        root: Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/embedded-root")
+            .join(format!("registry-remaps-{}-{nonce}", std::process::id())),
+    };
+    fs::create_dir_all(&fixture.root).unwrap();
+    let sysroot = source::compiler_sysroot().unwrap();
+    for name in ["index.crates.io-local", "index.crates.io-ci"] {
+        let cargo_home = fixture.root.join(name);
+        let package = cargo_home
+            .join("registry/src")
+            .join(name)
+            .join("sample/src");
+        fs::create_dir_all(&package).unwrap();
+        let input = package.join("main.rs");
+        fs::write(&input, "fn main() { println!(\"{}\", file!()); }").unwrap();
+        let executable = fixture.root.join(name).join("compiled-location");
+        let flags = source::rustflags_for_paths(&fixture.root, &sysroot, &cargo_home).unwrap();
+        source::output(
+            Command::new(sysroot.join("bin/rustc"))
+                .args(flags.split('\u{1f}'))
+                .args(["--crate-name", "registry_remap_fixture"])
+                .arg(&input)
+                .arg("-o")
+                .arg(&executable),
+        )
+        .unwrap();
+        assert_eq!(
+            source::output(&mut Command::new(executable)).unwrap(),
+            b"/cargo/registry/src/sample/src/main.rs\n",
+        );
+    }
+}
+
+#[test]
 fn relocated_fixture_preserves_internal_and_external_dependency_owners() {
     let nonce = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

@@ -15,6 +15,7 @@ Detailed notes: [docs/changelog/0.111.md](docs/changelog/0.111.md)
   ([#556 — Repair yanked dependency selection](https://github.com/dragginzgame/canic/issues/556)).
 - Correct native fixture path identity and bind embedded-peer compilation to
   its selected compiler without dropping the remap and fixture environment.
+  Normalize Cargo registry cache names during peer compilation.
   Refresh peer provenance while preserving preflight
   verification before server startup
   ([#474 — Retain complete PocketIC evidence](https://github.com/dragginzgame/canic/issues/474),
