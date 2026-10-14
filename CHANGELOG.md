@@ -10,8 +10,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed notes: [docs/changelog/0.111.md](docs/changelog/0.111.md)
 
-- Correct macOS worker fixture cleanup for equivalent temporary-directory paths
-  ([#474](https://github.com/dragginzgame/canic/issues/474)).
+- Correct worker cleanup and executable-resolution fixture expectations for
+  equivalent macOS temporary-directory paths
+  ([#474 — Retain complete PocketIC evidence](https://github.com/dragginzgame/canic/issues/474)).
+- Bind embedded-peer compilation to its selected compiler and refresh its
+  source provenance; retain ordinary preflight verification before server startup
+  ([#551 — Refresh embedded allocation peer](https://github.com/dragginzgame/canic/issues/551)).
 
 ## [0.111.0] - 2026-10-10
 

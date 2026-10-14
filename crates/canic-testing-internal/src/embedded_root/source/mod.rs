@@ -284,20 +284,26 @@ pub(super) fn output(command: &mut Command) -> io::Result<Vec<u8>> {
     Ok(result.stdout)
 }
 
+/// Read the caller-selected compiler's physical sysroot.
+pub(super) fn compiler_sysroot() -> io::Result<PathBuf> {
+    let compiler = std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into());
+    let sysroot = String::from_utf8(output(Command::new(compiler).args(["--print", "sysroot"]))?)
+        .map_err(io::Error::other)?;
+    Path::new(sysroot.trim()).canonicalize()
+}
+
 /// Remap source names before code generation, including panic-location strings.
-pub(super) fn rustflags(source: &Path) -> io::Result<String> {
+pub(super) fn rustflags(source: &Path, sysroot: &Path) -> io::Result<String> {
     let cargo_home = std::env::var_os("CARGO_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cargo")))
         .ok_or_else(|| io::Error::other("Cargo home is unavailable"))?
         .canonicalize()?;
-    let sysroot = String::from_utf8(output(Command::new("rustc").args(["--print", "sysroot"]))?)
-        .map_err(io::Error::other)?;
     let mut flags = Vec::new();
     for (path, name) in [
         (source, "/canic-fixture"),
         (cargo_home.as_path(), "/cargo"),
-        (Path::new(sysroot.trim()), "/rust-toolchain"),
+        (sysroot, "/rust-toolchain"),
     ] {
         flags.push(format!("--remap-path-prefix={}={name}", path.display()));
     }

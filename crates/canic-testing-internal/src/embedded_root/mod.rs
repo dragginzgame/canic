@@ -87,6 +87,7 @@ pub fn refresh(workspace: &Path) -> Result<(), Box<dyn Error>> {
 }
 
 fn build_spec(workspace: &Path, source: &Path) -> io::Result<WasmBuildSpec> {
+    let sysroot = source::compiler_sysroot()?;
     Ok(WasmBuildSpec::new(
         source,
         &workspace.join("target/embedded-root/cache"),
@@ -100,8 +101,14 @@ fn build_spec(workspace: &Path, source: &Path) -> io::Result<WasmBuildSpec> {
         ("CARGO_INCREMENTAL", "0".to_owned()),
         ("ICP_ENVIRONMENT", "local".to_owned()),
         ("CANIC_MEMORY_BUCKET_PAGES", "16".to_owned()),
-        ("CARGO_ENCODED_RUSTFLAGS", source::rustflags(source)?),
-    ]))
+        (
+            "CARGO_ENCODED_RUSTFLAGS",
+            source::rustflags(source, &sysroot)?,
+        ),
+    ])
+    // Bind Cargo and identity probes to the compiler whose sysroot is remapped.
+    // A rustup proxy may otherwise reselect from the normalized snapshot.
+    .with_extra_env([("RUSTC", sysroot.join("bin/rustc"))]))
 }
 
 fn build(
