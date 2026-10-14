@@ -10,8 +10,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
-- Select only canister libraries and bind their Cargo target selection into
-  complete-build reuse identity ([#542](https://github.com/dragginzgame/canic/issues/542)).
+- Select only canister libraries and bind their Cargo target into complete-build
+  reuse identity. Correct native fixture path identity and bind embedded-peer
+  compilation to its selected compiler
+  ([#542 — Bind Cargo library selection into reuse identity](https://github.com/dragginzgame/canic/issues/542),
+  [#474 — Retain complete PocketIC evidence](https://github.com/dragginzgame/canic/issues/474),
+  [#551 — Refresh embedded allocation peer](https://github.com/dragginzgame/canic/issues/551)).
 
 ## [0.111.0] - 2026-10-10
 
