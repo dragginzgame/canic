@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
+- Replace the newly yanked transitive num-modular selection with its compatible
+  nonyanked release, preserving dependency-risk refusal
+  ([#556 — Repair yanked dependency selection](https://github.com/dragginzgame/canic/issues/556)).
 - Select only canister libraries and bind their Cargo target into complete-build
   reuse identity. Correct native fixture path identity and bind embedded-peer
   compilation to its selected compiler
