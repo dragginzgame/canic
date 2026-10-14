@@ -334,6 +334,13 @@ fn embedded_peer_reproduces_across_paths_and_release_versions() {
     let (second_bytes, _) = build(&workspace, &second_spec).unwrap();
     assert_eq!(sha256_hex(&first_bytes), sha256_hex(&second_bytes));
     assert_eq!(first_bytes, fs::read(workspace.join(ARTIFACT)).unwrap());
+    let installed_stdlib = b"/rust-toolchain/lib/rustlib/src/rust/library/";
+    assert!(
+        !first_bytes
+            .windows(installed_stdlib.len())
+            .any(|window| window == installed_stdlib),
+        "fixture retains an installed-rust-src-dependent standard-library location"
+    );
     assert!(
         !first_bytes
             .windows(workspace.as_os_str().len())

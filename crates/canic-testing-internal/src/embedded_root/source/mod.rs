@@ -315,6 +315,27 @@ pub(super) fn rustflags_for_paths(
     ] {
         flags.push(format!("--remap-path-prefix={}={name}", path.display()));
     }
+    // Installed rust-src makes rustc resolve some inlined standard-library
+    // locations physically; without it the same compiler uses /rustc/<commit>.
+    // Keep those locations identical to the distribution's virtual source root.
+    let identity = String::from_utf8(output(Command::new(sysroot.join("bin/rustc")).arg("-vV"))?)
+        .map_err(io::Error::other)?;
+    let commits = identity
+        .lines()
+        .filter_map(|line| line.strip_prefix("commit-hash: "))
+        .collect::<Vec<_>>();
+    let [commit] = commits.as_slice() else {
+        return Err(io::Error::other(
+            "compiler identity has no unique commit hash",
+        ));
+    };
+    if commit.len() != 40 || !commit.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(io::Error::other("compiler commit hash is invalid"));
+    }
+    flags.push(format!(
+        "--remap-path-prefix={}=/rustc/{commit}/library",
+        sysroot.join("lib/rustlib/src/rust/library").display(),
+    ));
     // Cargo's registry directory hash can differ across prepared Cargo homes.
     // Keep package-relative source names stable, not that cache-local identity.
     let roots = match fs::read_dir(cargo_home.join("registry/src")) {

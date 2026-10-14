@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
+- Normalize installed standard-library source locations to the selected
+  compiler's virtual source root so rust-src availability preserves peer bytes
+  ([#551 — Qualify embedded allocation peer](https://github.com/dragginzgame/canic/issues/551)).
 - Retain mismatching embedded-peer Wasm and its actual build provenance in CI
   while preserving strict preflight refusal and evidence-write errors
   ([#551 — Qualify embedded allocation peer](https://github.com/dragginzgame/canic/issues/551)).
