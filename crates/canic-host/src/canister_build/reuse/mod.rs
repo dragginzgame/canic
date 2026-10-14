@@ -497,6 +497,7 @@ fn append_fixture_inputs(
 fn input_identity(context: &WorkspaceBuildContext) -> Result<String, BuildReuseError> {
     let mut digest = Sha256::new();
     hash_field(&mut digest, b"canic.complete-build-inputs.v1");
+    hash_field(&mut digest, super::cache::CANISTER_CARGO_TARGET.as_bytes());
     hash_field(
         &mut digest,
         include_bytes!("../../build_environment/mod.rs"),

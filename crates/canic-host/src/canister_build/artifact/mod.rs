@@ -896,15 +896,6 @@ pub(super) fn canister_cargo_build_command(
     manifest_path: &Path,
     profile: CanisterBuildProfile,
 ) -> Command {
-    canister_cargo_command(context, manifest_path, profile, "build")
-}
-
-fn canister_cargo_command(
-    context: &WorkspaceBuildContext,
-    manifest_path: &Path,
-    profile: CanisterBuildProfile,
-    cargo_subcommand: &str,
-) -> Command {
     let build_context = context.with_profile(profile);
     let mut command = cargo_command();
     build_context.apply_to_command(&mut command);
@@ -917,7 +908,8 @@ fn canister_cargo_command(
             canic_core::role_contract::CANONICAL_BUILD_MARKER_VALUE,
         )
         .args([
-            cargo_subcommand,
+            "build",
+            crate::canister_build::cache::CANISTER_CARGO_TARGET,
             "--locked",
             "--keep-going",
             "--message-format=json-render-diagnostics",

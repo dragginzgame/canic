@@ -17,6 +17,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// Library target selection shared by canister commands and complete-build identity.
+pub const CANISTER_CARGO_TARGET: &str = "--lib";
+
 const DEFAULT_WASM_TARGET_RELATIVE: &str = "target/canic-wasm";
 const CANISTER_BUILD_LOCK_RELATIVE: &str = ".canic/locks/canister-artifact-build.lock";
 
