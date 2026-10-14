@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed notes: [docs/changelog/0.111.md](docs/changelog/0.111.md)
 
+- Retain mismatching embedded-peer Wasm and its actual build provenance in CI
+  while preserving strict preflight refusal and evidence-write errors
+  ([#551 — Qualify embedded allocation peer](https://github.com/dragginzgame/canic/issues/551)).
 - Select patched rustls 0.23.46 in the integration graph while retaining the
   dependency-risk gate and refreshing embedded-peer provenance
   ([#560 — Repair vulnerable rustls selection](https://github.com/dragginzgame/canic/issues/560)).
