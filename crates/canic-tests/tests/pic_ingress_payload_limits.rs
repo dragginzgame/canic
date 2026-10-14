@@ -406,8 +406,8 @@ fn assert_rejected(fixture: &StandaloneCanisterFixture, method: &str, len: usize
         .update_candid::<Result<usize, Error>, _>(method, (payload,))
         .expect_err("transport should reject oversized ingress");
 
-    assert_eq!(err.kind(), CandidCallErrorKind::CanisterReject);
-    assert!(err.reject_response().is_some());
+    assert_eq!(err.kind, CandidCallErrorKind::CanisterReject);
+    assert!(err.reject_response.is_some());
 }
 
 // Build one ASCII string payload with exact byte length.

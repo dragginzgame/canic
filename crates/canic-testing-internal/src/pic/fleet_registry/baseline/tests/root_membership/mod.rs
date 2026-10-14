@@ -47,9 +47,9 @@ pub(super) fn assert_prepared_root_refuses_discovery(pic: &PocketIc, root: Princ
             },),
         )
         .expect_err("Prepared Root must keep the lookup behind its Fleet fence");
-    assert_eq!(rejected.kind(), CandidCallErrorKind::CanisterReject);
+    assert_eq!(rejected.kind, CandidCallErrorKind::CanisterReject);
     assert_eq!(
-        rejected.reject_response().unwrap().error_code,
+        rejected.reject_response.as_deref().unwrap().error_code,
         ErrorCode::CanisterCalledTrap,
     );
 }
