@@ -55,7 +55,7 @@ pub fn verify(workspace: &Path) -> Result<(), Box<dyn Error>> {
     let (built, _) = build(&workspace, &spec)?;
     if built != embedded {
         return Err(io::Error::new(io::ErrorKind::InvalidData,
-            "embedded allocation peer differs from current source; run cargo run --locked --offline -p canic-testing-internal --example refresh_embedded_root").into());
+            format!("embedded allocation peer differs from current source (expected {}, built {}); run cargo run --locked --offline -p canic-testing-internal --example refresh_embedded_root", sha256_hex(&embedded), sha256_hex(&built))).into());
     }
     Ok(())
 }

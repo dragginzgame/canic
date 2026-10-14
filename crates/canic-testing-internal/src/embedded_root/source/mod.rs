@@ -299,13 +299,41 @@ pub(super) fn rustflags(source: &Path, sysroot: &Path) -> io::Result<String> {
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cargo")))
         .ok_or_else(|| io::Error::other("Cargo home is unavailable"))?
         .canonicalize()?;
+    rustflags_for_paths(source, sysroot, &cargo_home)
+}
+
+pub(super) fn rustflags_for_paths(
+    source: &Path,
+    sysroot: &Path,
+    cargo_home: &Path,
+) -> io::Result<String> {
     let mut flags = Vec::new();
     for (path, name) in [
         (source, "/canic-fixture"),
-        (cargo_home.as_path(), "/cargo"),
+        (cargo_home, "/cargo"),
         (sysroot, "/rust-toolchain"),
     ] {
         flags.push(format!("--remap-path-prefix={}={name}", path.display()));
+    }
+    // Cargo's registry directory hash can differ across prepared Cargo homes.
+    // Keep package-relative source names stable, not that cache-local identity.
+    let roots = match fs::read_dir(cargo_home.join("registry/src")) {
+        Ok(entries) => entries
+            .map(|entry| {
+                let entry = entry?;
+                Ok(entry.file_type()?.is_dir().then(|| entry.path()))
+            })
+            .collect::<io::Result<Vec<_>>>()?,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Vec::new(),
+        Err(error) => return Err(error),
+    };
+    let mut roots = roots.into_iter().flatten().collect::<Vec<_>>();
+    roots.sort();
+    for root in roots {
+        flags.push(format!(
+            "--remap-path-prefix={}=/cargo/registry/src",
+            root.display()
+        ));
     }
     Ok(flags.join("\u{1f}"))
 }
