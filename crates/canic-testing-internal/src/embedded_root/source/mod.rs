@@ -284,22 +284,77 @@ pub(super) fn output(command: &mut Command) -> io::Result<Vec<u8>> {
     Ok(result.stdout)
 }
 
+/// Read the caller-selected compiler's physical sysroot.
+pub(super) fn compiler_sysroot() -> io::Result<PathBuf> {
+    let compiler = std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into());
+    let sysroot = String::from_utf8(output(Command::new(compiler).args(["--print", "sysroot"]))?)
+        .map_err(io::Error::other)?;
+    Path::new(sysroot.trim()).canonicalize()
+}
+
 /// Remap source names before code generation, including panic-location strings.
-pub(super) fn rustflags(source: &Path) -> io::Result<String> {
+pub(super) fn rustflags(source: &Path, sysroot: &Path) -> io::Result<String> {
     let cargo_home = std::env::var_os("CARGO_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cargo")))
         .ok_or_else(|| io::Error::other("Cargo home is unavailable"))?
         .canonicalize()?;
-    let sysroot = String::from_utf8(output(Command::new("rustc").args(["--print", "sysroot"]))?)
-        .map_err(io::Error::other)?;
+    rustflags_for_paths(source, sysroot, &cargo_home)
+}
+
+pub(super) fn rustflags_for_paths(
+    source: &Path,
+    sysroot: &Path,
+    cargo_home: &Path,
+) -> io::Result<String> {
     let mut flags = Vec::new();
     for (path, name) in [
         (source, "/canic-fixture"),
-        (cargo_home.as_path(), "/cargo"),
-        (Path::new(sysroot.trim()), "/rust-toolchain"),
+        (cargo_home, "/cargo"),
+        (sysroot, "/rust-toolchain"),
     ] {
         flags.push(format!("--remap-path-prefix={}={name}", path.display()));
+    }
+    // Installed rust-src makes rustc resolve some inlined standard-library
+    // locations physically; without it the same compiler uses /rustc/<commit>.
+    // Keep those locations identical to the distribution's virtual source root.
+    let identity = String::from_utf8(output(Command::new(sysroot.join("bin/rustc")).arg("-vV"))?)
+        .map_err(io::Error::other)?;
+    let commits = identity
+        .lines()
+        .filter_map(|line| line.strip_prefix("commit-hash: "))
+        .collect::<Vec<_>>();
+    let [commit] = commits.as_slice() else {
+        return Err(io::Error::other(
+            "compiler identity has no unique commit hash",
+        ));
+    };
+    if commit.len() != 40 || !commit.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(io::Error::other("compiler commit hash is invalid"));
+    }
+    flags.push(format!(
+        "--remap-path-prefix={}=/rustc/{commit}/library",
+        sysroot.join("lib/rustlib/src/rust/library").display(),
+    ));
+    // Cargo's registry directory hash can differ across prepared Cargo homes.
+    // Keep package-relative source names stable, not that cache-local identity.
+    let roots = match fs::read_dir(cargo_home.join("registry/src")) {
+        Ok(entries) => entries
+            .map(|entry| {
+                let entry = entry?;
+                Ok(entry.file_type()?.is_dir().then(|| entry.path()))
+            })
+            .collect::<io::Result<Vec<_>>>()?,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Vec::new(),
+        Err(error) => return Err(error),
+    };
+    let mut roots = roots.into_iter().flatten().collect::<Vec<_>>();
+    roots.sort();
+    for root in roots {
+        flags.push(format!(
+            "--remap-path-prefix={}=/cargo/registry/src",
+            root.display()
+        ));
     }
     Ok(flags.join("\u{1f}"))
 }
