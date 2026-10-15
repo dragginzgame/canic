@@ -130,8 +130,9 @@ team while the repository is prepared for wider use.
 
 ## License
 
-Source-available under the [Dragginz No Cloud Engines license](LICENSE).
-Cloud Engine use is prohibited, including self-hosted equivalents and using
-Canic host tools or services to operate them. Burning ICP creates no exception.
-Ordinary shared public IC subnets and isolated local development remain permitted.
-Earlier MIT grants remain valid for the material they cover.
+Source-available under the [Dragginz Verifiable ICP Burn license](LICENSE).
+Third-party Live Deployments require verifiable mainnet ICP burning: 100% of
+ordinary protocol resource funding, or at least 20% of Cloud Engine infrastructure
+value. Private and self-hosted deployments are included; zero-price arrangements
+do not waive the requirement. Toko Studios Ltd has the express operational
+exception in section 5. Earlier grants and third-party rights remain intact.
