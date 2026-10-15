@@ -56,7 +56,8 @@ mod tests {
     use ic_testkit::{
         artifacts::workspace_root_for,
         pic::{
-            CandidCallExt, PocketIc, PocketIcBuilder, PocketIcSnapshotExt, SnapshotRestoreFunding,
+            CandidCallExt, CanisterSnapshotTarget, PocketIc, PocketIcBuilder, PocketIcSnapshotExt,
+            SnapshotRestoreFunding,
         },
     };
 
@@ -337,7 +338,7 @@ placement.minimum_distinct_roots = 2
         assert_eq!(sealed.operation_id, Some(request.operation_id));
 
         let snapshots = pic
-            .capture_controller_snapshots(coordinator, [coordinator])
+            .capture_snapshots([CanisterSnapshotTarget::new(coordinator, None)])
             .expect("Coordinator snapshot capture");
         let CoordinatorCommandResponse::ResumeAuthoritySnapshot(resumed) = command(
             pic,
@@ -349,7 +350,7 @@ placement.minimum_distinct_roots = 2
         };
         assert_eq!(resumed.phase, AuthorityRestoreFencePhase::Open);
 
-        pic.restore_snapshots_with_captured_senders_and_funding(
+        pic.restore_snapshots(
             &snapshots,
             SnapshotRestoreFunding::TopUpTo {
                 minimum_cycles: crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,

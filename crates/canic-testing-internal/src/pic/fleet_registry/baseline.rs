@@ -1451,19 +1451,24 @@ mod tests {
                 CanisterSnapshotTarget::new(metadata.issuer.canister_id, Some(metadata.root)),
                 CanisterSnapshotTarget::new(metadata.verifier.canister_id, Some(metadata.root)),
             ];
-            CachedPocketIcBaseline::capture_with_senders(*pic, snapshot_targets, metadata)
-                .map_err(Into::into)
+            CachedPocketIcBaseline::capture(
+                ic_testkit::pic::PocketIcInstance {
+                    instance: *pic,
+                    server: None,
+                },
+                snapshot_targets,
+                metadata,
+            )
+            .map_err(Into::into)
         }
 
         fn restore_canisters(
             &self,
             baseline: &CachedPocketIcBaseline<Self::Metadata>,
         ) -> Result<CanisterRestoreReceipt, Self::Error> {
-            baseline.restore_with_captured_senders_and_funding(
-                SnapshotRestoreFunding::TopUpTo {
-                    minimum_cycles: crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,
-                },
-            )?;
+            baseline.restore(SnapshotRestoreFunding::TopUpTo {
+                minimum_cycles: crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,
+            })?;
             CanisterRestoreReceipt::try_from_baseline(
                 baseline,
                 CycleResetPolicy::TopUpTo(crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES),
@@ -14823,7 +14828,7 @@ cycles = "80T"
         );
         let snapshots = fixture
             .pic()
-            .capture_controller_snapshots(fixture.root, [fixture.root])
+            .capture_snapshots([CanisterSnapshotTarget::new(fixture.root, None)])
             .expect("root authority snapshot capture");
         let RootCommandResponseFragment::ResumeAuthoritySnapshot(resumed) = root_command(
             fixture.pic(),
@@ -14864,7 +14869,7 @@ cycles = "80T"
 
         fixture
             .pic()
-            .restore_snapshots_with_captured_senders_and_funding(
+            .restore_snapshots(
                 &snapshots,
                 SnapshotRestoreFunding::TopUpTo {
                     minimum_cycles: crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,
