@@ -3,7 +3,7 @@
 use super::*;
 use candid::types::{Function, TypeInner, internal::TypeContainer, subtype};
 use canic::dto::component_registry::{RootMembershipRequest, RootMembershipResponse};
-use ic_testkit::{pic::CandidCallErrorKind, pocket_ic::ErrorCode};
+use ic_testkit::{pic::CandidCallError, pocket_ic::ErrorCode};
 
 pub(super) fn assert_candid_contract(candid: &[u8]) {
     let source = std::str::from_utf8(candid).expect("Root Candid UTF-8");
@@ -47,11 +47,10 @@ pub(super) fn assert_prepared_root_refuses_discovery(pic: &PocketIc, root: Princ
             },),
         )
         .expect_err("Prepared Root must keep the lookup behind its Fleet fence");
-    assert_eq!(rejected.kind, CandidCallErrorKind::CanisterReject);
-    assert_eq!(
-        rejected.reject_response.as_deref().unwrap().error_code,
-        ErrorCode::CanisterCalledTrap,
-    );
+    let CandidCallError::CanisterReject { response, .. } = rejected else {
+        panic!("expected canister rejection: {rejected}");
+    };
+    assert_eq!(response.error_code, ErrorCode::CanisterCalledTrap,);
 }
 
 pub(super) fn assert_removed_child_absent(

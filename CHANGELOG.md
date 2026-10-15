@@ -10,8 +10,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed notes: [docs/changelog/0.111.md](docs/changelog/0.111.md#01111)
 
-- Read Testkit Candid rejection fields directly in ingress and registry
-  qualification, preparing for removal of the redundant accessor methods.
+- Match Testkit 0.47 Candid rejection variants in ingress and registry
+  qualification, preserving rejection assertions. Normal adoption awaits the
+  published Testkit release.
 
 ## [0.111.0] - 2026-10-10
 
