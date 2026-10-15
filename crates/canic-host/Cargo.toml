@@ -3,7 +3,7 @@ name = "canic-host"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
-license = { workspace = true }
+license-file = { workspace = true }
 description = "Host-side App build and desired-state Fleet reconciliation library for Canic workspaces"
 readme = "README.md"
 documentation = "https://docs.rs/canic-host"

@@ -6,6 +6,15 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.112.0]
+
+- **Breaking license change:** adopt source-available Verifiable ICP Burn
+  terms for new grants. Third-party Live Deployments require audited mainnet
+  ICP burning, including private and self-hosted engines; the named organization
+  has an express operational exception. Prior MIT grants remain valid.
+
+Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
+
 ## [0.111.0] - 2026-10-10
 
 Detailed notes: [docs/changelog/0.111.md](docs/changelog/0.111.md)

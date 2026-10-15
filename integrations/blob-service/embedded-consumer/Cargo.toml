@@ -1,3 +1,15 @@
+
+[package]
+name = "blob-service-embedded-consumer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+publish = false
+
+[package.metadata.canic]
+app = "embedded-app"
+role = "backend"
 [workspace]
 members = ["."]
 resolver = "3"
@@ -6,7 +18,7 @@ resolver = "3"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.91.0"
-license = "MIT"
+license-file = "../../../LICENSE"
 
 [workspace.dependencies]
 candid = "0.10.36"
@@ -15,18 +27,6 @@ canic-blob-service = { path = ".." }
 ic-cdk = "0.20.3"
 ic-memory = "0.35"
 serde = { version = "1.0", features = ["derive"] }
-
-[package]
-name = "blob-service-embedded-consumer"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
-license.workspace = true
-publish = false
-
-[package.metadata.canic]
-app = "embedded-app"
-role = "backend"
 
 [lib]
 crate-type = ["cdylib"]

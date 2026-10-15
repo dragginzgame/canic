@@ -3,7 +3,7 @@ name = "canic-testing-internal"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
-license = { workspace = true }
+license-file = { workspace = true }
 description = "Workspace-only internal test support for Canic self-tests"
 readme = "README.md"
 publish = false

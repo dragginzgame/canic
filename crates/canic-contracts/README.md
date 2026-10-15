@@ -32,3 +32,12 @@ The `canic` facade exposes these types to applications. Direct users of the
 former Core/Control Plane DTO and shared-ID paths must use this package. The
 maintainer authorized this Rust API cut within 0.110 for
 [#354](https://github.com/dragginzgame/canic/issues/354).
+
+## License
+
+Source-available under the Dragginz Verifiable ICP Burn license (packaged as `LICENSE`).
+Third-party Live Deployments require verifiable mainnet ICP burning: 100% of
+ordinary protocol resource funding, or at least 20% of Cloud Engine infrastructure
+value. Private and self-hosted deployments are included; zero-price arrangements
+do not waive the requirement. Toko Studios Ltd has the express operational
+exception in section 5. Earlier grants and third-party rights remain intact.

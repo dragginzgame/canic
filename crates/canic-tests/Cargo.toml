@@ -3,7 +3,7 @@ name = "canic-tests"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
-license = { workspace = true }
+license-file = { workspace = true }
 description = "Workspace-only integration tests for Canic"
 readme = false
 publish = false

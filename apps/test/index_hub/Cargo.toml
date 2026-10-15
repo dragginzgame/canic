@@ -1,4 +1,5 @@
 [package]
+license-file.workspace = true
 name = "canister_index_hub"
 edition = { workspace = true }
 rust-version = { workspace = true }

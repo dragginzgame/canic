@@ -26,7 +26,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/canic.svg)](https://crates.io/crates/canic)
 [![Docs.rs](https://docs.rs/canic/badge.svg)](https://docs.rs/canic)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-source--available-orange.svg)](LICENSE)
 [![MSRV](https://img.shields.io/badge/MSRV-1.91.0-blue.svg)](Cargo.toml)
 [![Internal Rust](https://img.shields.io/badge/internal%20rust-1.99.0-orange.svg)](rust-toolchain.toml)
 
@@ -130,4 +130,9 @@ team while the repository is prepared for wider use.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+Source-available under the [Dragginz Verifiable ICP Burn license](LICENSE).
+Third-party Live Deployments require verifiable mainnet ICP burning: 100% of
+ordinary protocol resource funding, or at least 20% of Cloud Engine infrastructure
+value. Private and self-hosted deployments are included; zero-price arrangements
+do not waive the requirement. Toko Studios Ltd has the express operational
+exception in section 5. Earlier grants and third-party rights remain intact.

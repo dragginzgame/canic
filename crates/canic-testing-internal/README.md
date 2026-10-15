@@ -34,3 +34,12 @@ each worker. Exact single-case selection stays serial. See the
 - [Browse the test canisters](../../canisters/README.md)
 - [Browse all documentation](../../docs/README.md)
 - [Back to the main README](../../README.md)
+
+## License
+
+Source-available under the Dragginz Verifiable ICP Burn license (packaged as `LICENSE`).
+Third-party Live Deployments require verifiable mainnet ICP burning: 100% of
+ordinary protocol resource funding, or at least 20% of Cloud Engine infrastructure
+value. Private and self-hosted deployments are included; zero-price arrangements
+do not waive the requirement. Toko Studios Ltd has the express operational
+exception in section 5. Earlier grants and third-party rights remain intact.
