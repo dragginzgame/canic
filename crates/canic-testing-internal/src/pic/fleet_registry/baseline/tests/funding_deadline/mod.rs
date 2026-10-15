@@ -72,12 +72,14 @@ pub(super) fn child_grant_refreshes_root_funding_deadline_without_repeating_cred
         .unwrap();
     assert!(denied.is_err());
     funding(&pic, root, false);
-    let burned: u128 = pic.update_candid_as_or_panic(
-        root,
-        Principal::anonymous(),
-        "audit_recovery_balance",
-        (11_000_000_000_000_u128,),
-    );
+    let burned: u128 = pic
+        .update_candid_as(
+            root,
+            Principal::anonymous(),
+            "audit_recovery_balance",
+            (11_000_000_000_000_u128,),
+        )
+        .expect("update Candid harness call");
     assert!(burned > 0);
     // The unchanged pause records the prepared sample. Restoration therefore
     // schedules from stable headroom, not from the audit-only burn itself.
@@ -186,14 +188,16 @@ fn child_usage(pic: &PocketIc, parent: Principal, child: Principal) -> ChildFund
 }
 
 fn funding(pic: &PocketIc, root: Principal, enabled: bool) {
-    let response: Result<Response, Error> = pic.update_candid_as_or_panic(
-        root,
-        Principal::anonymous(),
-        canic::protocol::CANIC_ROOT_COMMAND,
-        (Command::SetCyclesFunding(SetCyclesFundingRequest {
-            enabled,
-        }),),
-    );
+    let response: Result<Response, Error> = pic
+        .update_candid_as(
+            root,
+            Principal::anonymous(),
+            canic::protocol::CANIC_ROOT_COMMAND,
+            (Command::SetCyclesFunding(SetCyclesFundingRequest {
+                enabled,
+            }),),
+        )
+        .expect("update Candid harness call");
     let Response::SetCyclesFunding(response) = response.unwrap();
     assert_eq!(response.change.current, enabled);
     assert!(response.reconciliation_error.is_none());

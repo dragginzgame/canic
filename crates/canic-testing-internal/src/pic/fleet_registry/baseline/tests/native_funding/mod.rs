@@ -288,12 +288,15 @@ pub(super) fn assert_issued_native_funding(input: &AutonomousFundingJourney<'_>)
 }
 
 fn burn_to(input: &AutonomousFundingJourney<'_>, retain: u128) {
-    let burned: u128 = input.pic.update_candid_as_or_panic(
-        input.root,
-        input.operator,
-        "audit_recovery_balance",
-        (retain,),
-    );
+    let burned: u128 = input
+        .pic
+        .update_candid_as(
+            input.root,
+            input.operator,
+            "audit_recovery_balance",
+            (retain,),
+        )
+        .expect("update Candid harness call");
     assert!(burned > 0);
 }
 

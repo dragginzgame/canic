@@ -153,8 +153,11 @@ fn retry_same_release_upgrade(
     sender: Principal,
 ) {
     let args = upgrade_args();
-    let policy = RetryPolicy::try_new(INSTALL_CODE_RETRY_LIMIT, INSTALL_CODE_COOLDOWN)
-        .expect("install retry policy");
+    let policy = RetryPolicy::new(
+        std::num::NonZeroUsize::new(INSTALL_CODE_RETRY_LIMIT)
+            .expect("non-zero install attempt limit"),
+        INSTALL_CODE_COOLDOWN,
+    );
     pic.retry_install_code(policy, || {
         pic.upgrade_canister(canister_id, wasm.clone(), args.clone(), Some(sender))
     })
@@ -364,7 +367,8 @@ fn multi_target_sessions_preserve_controller_separation_and_same_release_recover
     for target in [fixture.issuer.canister_id, fixture.verifier.canister_id] {
         let controller_result: Result<candid::Principal, Error> = fixture
             .pic()
-            .query_candid_as_or_panic(target, fixture.root, "issuer_application_subject", ());
+            .query_candid_as(target, fixture.root, "issuer_application_subject", ())
+            .expect("query Candid harness call");
         assert!(
             controller_result.is_err(),
             "controllership must not imply local application authority"
@@ -562,12 +566,15 @@ fn application_session_command_as(
     caller: candid::Principal,
     command: ApplicationSessionCommand,
 ) -> Result<ApplicationSessionCommandResponse, Error> {
-    let response: Result<CanisterCommandResponse, Error> = fixture.pic().update_candid_as_or_panic(
-        canister_id,
-        caller,
-        protocol::CANIC_COMMAND,
-        (CanisterCommand::ApplicationSession(command),),
-    );
+    let response: Result<CanisterCommandResponse, Error> = fixture
+        .pic()
+        .update_candid_as(
+            canister_id,
+            caller,
+            protocol::CANIC_COMMAND,
+            (CanisterCommand::ApplicationSession(command),),
+        )
+        .expect("update Candid harness call");
     response.map(|response| match response {
         CanisterCommandResponse::ApplicationSession(response) => response,
         CanisterCommandResponse::PrepareDelegatedToken(_) => {
@@ -581,12 +588,15 @@ fn application_session_status_as(
     canister_id: candid::Principal,
     caller: candid::Principal,
 ) -> ApplicationSessionStatus {
-    let response: Result<CanisterStatusResponse, Error> = fixture.pic().query_candid_as_or_panic(
-        canister_id,
-        caller,
-        protocol::CANIC_AUTH_STATUS,
-        (CanisterStatusRequest::ApplicationSession,),
-    );
+    let response: Result<CanisterStatusResponse, Error> = fixture
+        .pic()
+        .query_candid_as(
+            canister_id,
+            caller,
+            protocol::CANIC_AUTH_STATUS,
+            (CanisterStatusRequest::ApplicationSession,),
+        )
+        .expect("query Candid harness call");
     match response.expect("application-session status must succeed") {
         CanisterStatusResponse::ApplicationSession(status) => status,
         CanisterStatusResponse::ApplicationSessionAudit(_) => {
@@ -604,7 +614,8 @@ fn generic_application_subject_as(
 ) -> Result<candid::Principal, Error> {
     fixture
         .pic()
-        .query_candid_as_or_panic(canister_id, caller, "issuer_application_subject", ())
+        .query_candid_as(canister_id, caller, "issuer_application_subject", ())
+        .expect("query Candid harness call")
 }
 
 fn fleet_admission_status_as(
@@ -612,8 +623,9 @@ fn fleet_admission_status_as(
     canister_id: candid::Principal,
     caller: candid::Principal,
 ) -> Result<FleetAdmissionProjectionStatusResponse, Error> {
-    let response: Result<FleetAdmissionManagedStatusResponse, Error> =
-        fixture.pic().query_candid_as_or_panic(
+    let response: Result<FleetAdmissionManagedStatusResponse, Error> = fixture
+        .pic()
+        .query_candid_as(
             canister_id,
             caller,
             protocol::CANIC_ADMISSION_STATUS,
@@ -621,7 +633,8 @@ fn fleet_admission_status_as(
                 offset: 0,
                 limit: u64::MAX,
             }),),
-        );
+        )
+        .expect("query Candid harness call");
     response.map(|response| match response {
         FleetAdmissionManagedStatusResponse::Admission(response) => response,
     })
@@ -634,7 +647,8 @@ fn fleet_admission_probe_as(
 ) -> Result<(), Error> {
     fixture
         .pic()
-        .query_candid_as_or_panic(canister_id, caller, "issuer_fleet_admission_probe", ())
+        .query_candid_as(canister_id, caller, "issuer_fleet_admission_probe", ())
+        .expect("query Candid harness call")
 }
 
 #[test]
@@ -688,7 +702,8 @@ fn maximum_application_session_resource_contract_is_bounded() {
 
     let authorized: Result<QueryPerfSample<Result<candid::Principal, Error>>, Error> = fixture
         .pic()
-        .query_candid_as_or_panic(verifier, subject, "issuer_application_subject_perf", ());
+        .query_candid_as(verifier, subject, "issuer_application_subject_perf", ())
+        .expect("query Candid harness call");
     let authorized = authorized.expect("performance probe ingress must be admitted");
     assert_eq!(
         authorized
@@ -796,7 +811,8 @@ fn measure_application_authorization_at_state(
 
     let authorized: Result<QueryPerfSample<Result<candid::Principal, Error>>, Error> = fixture
         .pic()
-        .query_candid_as_or_panic(verifier, subject, "issuer_application_subject_perf", ());
+        .query_candid_as(verifier, subject, "issuer_application_subject_perf", ())
+        .expect("query Candid harness call");
     let authorized = authorized.expect("performance probe ingress must be admitted");
     assert_eq!(
         authorized
@@ -819,13 +835,15 @@ fn closed_local_authorization_denial_partition_is_bounded() {
     let fixture = setup_snapshot_resettable_active_component_registry();
     let caller = native_agent_subject();
     let observations = LocalAuthorizationDenialProbe::ALL.map(|probe| {
-        let sample: Result<QueryPerfSample<String>, Error> =
-            fixture.pic().query_candid_as_or_panic(
+        let sample: Result<QueryPerfSample<String>, Error> = fixture
+            .pic()
+            .query_candid_as(
                 fixture.verifier.canister_id,
                 caller,
                 "issuer_application_denial_perf",
                 (probe,),
-            );
+            )
+            .expect("query Candid harness call");
         let sample = sample.expect("denial performance probe must succeed");
         assert_eq!(sample.value, probe.label());
         assert!(
@@ -1231,17 +1249,20 @@ fn root_application_session_audit_for(
     fixture: &canic_testing_internal::pic::ActiveComponentRegistryFixture,
     canister_id: candid::Principal,
 ) -> ApplicationSessionAuditResponse {
-    let response: Result<CanisterStatusResponse, Error> = fixture.pic().query_candid_as_or_panic(
-        canister_id,
-        fixture.root,
-        protocol::CANIC_CONTROL_STATUS,
-        (CanisterStatusRequest::ApplicationSessionAudit(
-            PageRequest {
-                offset: 0,
-                limit: 1,
-            },
-        ),),
-    );
+    let response: Result<CanisterStatusResponse, Error> = fixture
+        .pic()
+        .query_candid_as(
+            canister_id,
+            fixture.root,
+            protocol::CANIC_CONTROL_STATUS,
+            (CanisterStatusRequest::ApplicationSessionAudit(
+                PageRequest {
+                    offset: 0,
+                    limit: 1,
+                },
+            ),),
+        )
+        .expect("query Candid harness call");
     match response.expect("Root-authorized application-session audit must succeed") {
         CanisterStatusResponse::ApplicationSessionAudit(audit) => audit,
         CanisterStatusResponse::ApplicationSession(_)
@@ -1413,18 +1434,21 @@ fn role_metrics(
     fixture: &canic_testing_internal::pic::ActiveComponentRegistryFixture,
     kind: MetricsKind,
 ) -> Vec<MetricEntry> {
-    let response: Result<CanisterStatusResponse, Error> = fixture.pic().query_candid_as_or_panic(
-        fixture.verifier.canister_id,
-        fixture.root,
-        protocol::CANIC_OBSERVABILITY,
-        (CanisterStatusRequest::Metrics(MetricsStatusRequest {
-            kind,
-            page: PageRequest {
-                offset: 0,
-                limit: 1_000,
-            },
-        }),),
-    );
+    let response: Result<CanisterStatusResponse, Error> = fixture
+        .pic()
+        .query_candid_as(
+            fixture.verifier.canister_id,
+            fixture.root,
+            protocol::CANIC_OBSERVABILITY,
+            (CanisterStatusRequest::Metrics(MetricsStatusRequest {
+                kind,
+                page: PageRequest {
+                    offset: 0,
+                    limit: 1_000,
+                },
+            }),),
+        )
+        .expect("query Candid harness call");
     match response.expect("Root-authorized metrics status must succeed") {
         CanisterStatusResponse::Metrics(page) => page.entries,
         CanisterStatusResponse::ApplicationSession(_)
@@ -1491,18 +1515,21 @@ fn configure_issuer(fixture: &canic_testing_internal::pic::ActiveComponentRegist
         fixture.verifier.role.clone(),
         delegated_grant_scopes(),
     )];
-    let configured: Result<RootCommandResponse, Error> = fixture.pic().update_candid_or_panic(
-        fixture.root,
-        protocol::CANIC_ROOT_COMMAND,
-        (RootCommand::ConfigureIssuer(RootIssuerConfigureRequest {
-            issuer_pid: fixture.issuer.canister_id,
-            enabled: true,
-            aud: audience,
-            grants,
-            cert_ttl_ns: 60_000_000_000,
-            refresh_after_ratio_bps: 8_000,
-        }),),
-    );
+    let configured: Result<RootCommandResponse, Error> = fixture
+        .pic()
+        .update_candid(
+            fixture.root,
+            protocol::CANIC_ROOT_COMMAND,
+            (RootCommand::ConfigureIssuer(RootIssuerConfigureRequest {
+                issuer_pid: fixture.issuer.canister_id,
+                enabled: true,
+                aud: audience,
+                grants,
+                cert_ttl_ns: 60_000_000_000,
+                refresh_after_ratio_bps: 8_000,
+            }),),
+        )
+        .expect("update Candid harness call");
     let RootCommandResponse::ConfigureIssuer(configuration) =
         configured.expect("root issuer configuration must be accepted");
     assert_eq!(configuration.issuer.issuer_pid, fixture.issuer.canister_id);
@@ -1516,11 +1543,14 @@ fn provision_delegation_proof(
     fixture: &canic_testing_internal::pic::ActiveComponentRegistryFixture,
 ) {
     for _ in 0..ROOT_PROOF_PROVISION_ATTEMPTS {
-        let provisioned: Result<(), Error> = fixture.pic().update_candid_or_panic(
-            fixture.root,
-            "test_provision_chain_key_delegation_proof_for_issuer",
-            (fixture.issuer.canister_id,),
-        );
+        let provisioned: Result<(), Error> = fixture
+            .pic()
+            .update_candid(
+                fixture.root,
+                "test_provision_chain_key_delegation_proof_for_issuer",
+                (fixture.issuer.canister_id,),
+            )
+            .expect("update Candid harness call");
         match provisioned {
             Ok(()) => return,
             Err(err)
@@ -1547,15 +1577,18 @@ fn provision_delegation_proof(
 fn root_issuer_proof_is_installed(
     fixture: &canic_testing_internal::pic::ActiveComponentRegistryFixture,
 ) -> bool {
-    let status: Result<RootStatusResponse, Error> = fixture.pic().query_candid_or_panic(
-        fixture.root,
-        protocol::CANIC_ROOT_STATUS,
-        (RootStatusRequest::IssuerRenewal(
-            RootIssuerRenewalStatusRequest {
-                issuer_pid: fixture.issuer.canister_id,
-            },
-        ),),
-    );
+    let status: Result<RootStatusResponse, Error> = fixture
+        .pic()
+        .query_candid(
+            fixture.root,
+            protocol::CANIC_ROOT_STATUS,
+            (RootStatusRequest::IssuerRenewal(
+                RootIssuerRenewalStatusRequest {
+                    issuer_pid: fixture.issuer.canister_id,
+                },
+            ),),
+        )
+        .expect("query Candid harness call");
     let RootStatusResponse::IssuerRenewal(status) =
         status.expect("root issuer renewal status must be available");
 
