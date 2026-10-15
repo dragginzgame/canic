@@ -6,6 +6,14 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.111.1]
+
+Detailed notes: [docs/changelog/0.111.md](docs/changelog/0.111.md#01111)
+
+- Match Testkit 0.47 Candid rejection variants in ingress and registry
+  qualification, preserving rejection assertions. Normal adoption awaits the
+  published Testkit release.
+
 ## [0.111.0] - 2026-10-10
 
 Detailed notes: [docs/changelog/0.111.md](docs/changelog/0.111.md)

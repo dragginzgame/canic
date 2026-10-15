@@ -10,7 +10,7 @@ use canic_testing_internal::pic::{
     standalone_canister_wasm,
 };
 use ic_testkit::pic::{
-    CachedStandaloneCanisterFixtureGuard, CachedStandaloneCanisterFixturePool, CandidCallErrorKind,
+    CachedStandaloneCanisterFixtureGuard, CachedStandaloneCanisterFixturePool, CandidCallError,
     CandidCallExt, CanisterInstallExt, ErrorCode, RejectCode, RetryPolicy, SnapshotRestoreFunding,
     StandaloneCanisterFixture,
 };
@@ -406,8 +406,7 @@ fn assert_rejected(fixture: &StandaloneCanisterFixture, method: &str, len: usize
         .update_candid::<Result<usize, Error>, _>(method, (payload,))
         .expect_err("transport should reject oversized ingress");
 
-    assert_eq!(err.kind(), CandidCallErrorKind::CanisterReject);
-    assert!(err.reject_response().is_some());
+    assert!(matches!(err, CandidCallError::CanisterReject { .. }));
 }
 
 // Build one ASCII string payload with exact byte length.
