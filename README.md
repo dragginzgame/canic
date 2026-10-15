@@ -26,7 +26,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/canic.svg)](https://crates.io/crates/canic)
 [![Docs.rs](https://docs.rs/canic/badge.svg)](https://docs.rs/canic)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-source--available-orange.svg)](LICENSE)
 [![MSRV](https://img.shields.io/badge/MSRV-1.91.0-blue.svg)](Cargo.toml)
 [![Internal Rust](https://img.shields.io/badge/internal%20rust-1.99.0-orange.svg)](rust-toolchain.toml)
 
@@ -130,4 +130,8 @@ team while the repository is prepared for wider use.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+Source-available under the [Dragginz No Cloud Engines license](LICENSE).
+Cloud Engine use is prohibited, including self-hosted equivalents and using
+Canic host tools or services to operate them. Burning ICP creates no exception.
+Ordinary shared public IC subnets and isolated local development remain permitted.
+Earlier MIT grants remain valid for the material they cover.

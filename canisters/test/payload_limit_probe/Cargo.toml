@@ -1,4 +1,5 @@
 [package]
+license-file.workspace = true
 name = "payload_limit_probe"
 edition = { workspace = true }
 rust-version = { workspace = true }

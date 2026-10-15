@@ -1,4 +1,5 @@
 [package]
+license-file.workspace = true
 name = "leaf_probe"
 edition = { workspace = true }
 rust-version = { workspace = true }

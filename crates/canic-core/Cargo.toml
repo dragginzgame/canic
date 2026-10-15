@@ -3,7 +3,7 @@ name = "canic-core"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
-license = { workspace = true }
+license-file = { workspace = true }
 description = { workspace = true }
 readme = "README.md"
 documentation = "https://docs.rs/canic-core"

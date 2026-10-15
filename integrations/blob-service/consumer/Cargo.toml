@@ -1,3 +1,15 @@
+
+[package]
+name = "blob-service-consumer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+publish = false
+
+[package.metadata.canic]
+app = "consumer-app"
+role = "blob"
 [workspace]
 members = ["."]
 resolver = "3"
@@ -6,25 +18,13 @@ resolver = "3"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.91.0"
-license = "MIT"
+license-file = "../../../LICENSE"
 
 [workspace.dependencies]
 candid = "0.10.36"
 canic = { path = "../../../crates/canic", default-features = false }
 canic-blob-service = { path = ".." }
 ic-cdk = "0.20.3"
-
-[package]
-name = "blob-service-consumer"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
-license.workspace = true
-publish = false
-
-[package.metadata.canic]
-app = "consumer-app"
-role = "blob"
 
 [lib]
 crate-type = ["cdylib"]

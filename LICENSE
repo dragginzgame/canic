@@ -1,3 +1,104 @@
+Dragginz Source Available License — No Cloud Engines, Version 1.0
+
+Copyright (c) 2024 Canic contributors
+
+1. Scope and permission
+
+"Software" means the copyrightable code and documentation offered under this
+license, including copies, modifications and derivative works of that material
+in source, object, WebAssembly or other form. "You" means the person or legal
+entity exercising the permissions granted here. Each copyright holder grants
+permissions only to the extent of the rights that holder controls.
+
+Subject to every condition below, you may use, reproduce, study, modify, create
+derivative works of, distribute and sell the Software, including for commercial
+purposes. You may combine it with other software and keep your own application
+code private. This is a source-available license, not the MIT License or an
+OSI-approved open-source license.
+
+2. Cloud Engine definition
+
+"Cloud Engine" means either:
+(a) an Internet Computer subnet or execution environment offered, designated,
+marketed or operated as a Cloud Engine, including through Open Cloud; or
+(b) an equivalent private, sovereign, dedicated or permissioned subnet or
+execution environment running the Internet Computer Protocol or a fork or
+adaptation of it, whose capacity or node set is reserved for, selected by, or
+controlled by a customer, tenant, enterprise or affiliated group rather than
+operated as an ordinary shared public Internet Computer subnet.
+
+This definition applies regardless of branding, provider, owner, hosting
+location, payment method, profit, connection to mainnet or governance mechanism.
+It includes self-hosted and third-party-hosted environments and renamed or
+modified implementations. Ordinary shared public Internet Computer subnets are
+not Cloud Engines merely because individual canisters have private data or
+controllers. An isolated local development replica or simulator used solely for
+development or testing, with no operational workloads or service to third
+parties, is not a Cloud Engine. Testing on an actual Cloud Engine is not exempt.
+
+3. No Cloud Engine use
+
+You must not deploy, install, execute or otherwise use the Software, in whole
+or in part, on a Cloud Engine. You must not use the Software from another
+environment to provision, deploy to, administer, operate, or provide relay or
+other runtime services for a Cloud Engine or workloads running on one.
+
+You must not cause, authorize or knowingly facilitate those prohibited uses
+through a contractor, affiliate, intermediary, hosted service, wrapper, proxy
+or modified version. Splitting components across environments, changing names,
+removing checks, or modifying the Software does not remove this condition.
+Burning ICP or cycles, including burning 100%, creates no exception.
+
+This section is an express condition of every permission granted by this
+license. No permission for a prohibited use is granted. There is no automatic
+conversion to an unrestricted license after a period of time.
+
+4. Distribution and notices
+
+Include this complete license and all applicable copyright, attribution and
+third-party notices with every copy or substantial portion of the Software,
+including binary distributions. Identify your modifications prominently.
+Every recipient receives permissions for the covered Software directly from
+its copyright holders under this license. You may license your own separate
+material differently, but must not sublicense, relicense or represent the
+covered Software as permitting Cloud Engine use under this grant.
+
+5. Earlier grants and third-party material
+
+This license does not revoke or restrict rights already granted under another
+license for previously released material. Independently licensed third-party
+material remains governed by its own terms; preserve its notices. Those grants
+do not grant rights to later material offered only under this license.
+No trademark rights are granted. Rights not expressly granted are reserved.
+
+6. Termination
+
+Your permissions under this license terminate automatically upon violation.
+You must stop exercising the terminated permissions. Reinstatement requires
+express written permission from the relevant copyright holders; later
+compliance alone does not reinstate them. Termination does not affect a
+recipient who independently complies with this license, earlier accrued
+claims, or independently granted third-party rights.
+
+The Cloud Engine prohibition is an essential limitation of the grant. If that
+limitation cannot be enforced for a particular use under applicable law, this
+license grants no permission for that use to the extent permitted by law.
+No provision limits rights that applicable law does not permit to be limited.
+
+7. Disclaimer
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE,
+TITLE AND NONINFRINGEMENT. TO THE MAXIMUM EXTENT PERMITTED BY LAW, NO
+COPYRIGHT HOLDER OR CONTRIBUTOR IS LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY ARISING FROM THE SOFTWARE OR ITS USE, WHETHER IN CONTRACT, TORT
+OR OTHERWISE.
+
+Prior-material notice (not an alternative grant for new material)
+
+The following notice is retained for material previously offered under MIT.
+It does not offer later, exclusively source-available contributions under MIT.
+
 MIT License
 
 Copyright (c) 2024 Canic contributors

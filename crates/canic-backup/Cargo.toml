@@ -3,7 +3,7 @@ name = "canic-backup"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
-license = { workspace = true }
+license-file = { workspace = true }
 description = "Manifest and orchestration primitives for Canic deployment backup and restore"
 readme = "README.md"
 documentation = "https://docs.rs/canic-backup"

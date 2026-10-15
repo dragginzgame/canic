@@ -1,4 +1,5 @@
 [package]
+license-file.workspace = true
 name = "delegation_issuer_stub"
 edition = { workspace = true }
 version = { workspace = true }

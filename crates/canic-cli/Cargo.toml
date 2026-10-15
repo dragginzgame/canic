@@ -3,7 +3,7 @@ name = "canic-cli"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
-license = { workspace = true }
+license-file = { workspace = true }
 description = "Operator CLI for Canic fleet setup, builds, evidence, catalog, backup, and restore workflows"
 readme = "README.md"
 documentation = "https://docs.rs/canic-cli"

@@ -1,4 +1,5 @@
 [package]
+license-file.workspace = true
 name = "demo_fleet_user_hub"
 edition = { workspace = true }
 rust-version = { workspace = true }

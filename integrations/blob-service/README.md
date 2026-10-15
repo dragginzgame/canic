@@ -59,3 +59,10 @@ The checked-in dedicated and embedded consumer workspaces qualify this adapter's
 managed composition. They are private fixtures and are excluded from the registry
 package. Application installation, same-release recovery and provider acceptance
 remain the application's responsibility.
+
+## License
+
+Source-available under the Dragginz No Cloud Engines license, included in the
+package as `LICENSE`. Cloud Engine deployment and use to operate or serve Cloud
+Engines are prohibited, including self-hosted equivalents, regardless of ICP burn.
+Earlier MIT grants remain valid for the material they cover.

@@ -32,3 +32,10 @@ The `canic` facade exposes these types to applications. Direct users of the
 former Core/Control Plane DTO and shared-ID paths must use this package. The
 maintainer authorized this Rust API cut within 0.110 for
 [#354](https://github.com/dragginzgame/canic/issues/354).
+
+## License
+
+Source-available under the Dragginz No Cloud Engines license, included in the
+package as `LICENSE`. Cloud Engine deployment and use to operate or serve Cloud
+Engines are prohibited, including self-hosted equivalents, regardless of ICP burn.
+Earlier MIT grants remain valid for the material they cover.

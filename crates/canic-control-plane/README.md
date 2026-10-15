@@ -54,3 +54,10 @@ default public entry surface unless you specifically need this crate.
 - [Browse the public Canic crate](../canic/README.md)
 - [Browse all documentation](../../docs/README.md)
 - [Back to the main README](../../README.md)
+
+## License
+
+Source-available under the Dragginz No Cloud Engines license, included in the
+package as `LICENSE`. Cloud Engine deployment and use to operate or serve Cloud
+Engines are prohibited, including self-hosted equivalents, regardless of ICP burn.
+Earlier MIT grants remain valid for the material they cover.
