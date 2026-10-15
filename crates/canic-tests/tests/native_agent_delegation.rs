@@ -153,8 +153,11 @@ fn retry_same_release_upgrade(
     sender: Principal,
 ) {
     let args = upgrade_args();
-    let policy = RetryPolicy::try_new(INSTALL_CODE_RETRY_LIMIT, INSTALL_CODE_COOLDOWN)
-        .expect("install retry policy");
+    let policy = RetryPolicy::new(
+        std::num::NonZeroUsize::new(INSTALL_CODE_RETRY_LIMIT)
+            .expect("non-zero install attempt limit"),
+        INSTALL_CODE_COOLDOWN,
+    );
     pic.retry_install_code(policy, || {
         pic.upgrade_canister(canister_id, wasm.clone(), args.clone(), Some(sender))
     })

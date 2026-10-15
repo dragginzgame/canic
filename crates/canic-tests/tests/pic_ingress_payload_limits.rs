@@ -245,7 +245,10 @@ fn lifecycle_bounds_run_before_init_and_post_upgrade_participants() {
         before > 0,
         "successful init must emit the participant witness"
     );
-    let retry = RetryPolicy::try_new(4, std::time::Duration::from_mins(5)).unwrap();
+    let retry = RetryPolicy::new(
+        std::num::NonZeroUsize::new(4).expect("non-zero install attempt limit"),
+        std::time::Duration::from_mins(5),
+    );
     let witness = fixture
         .pocket_ic()
         .retry_install_code(retry, || {

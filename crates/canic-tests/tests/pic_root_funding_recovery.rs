@@ -548,10 +548,11 @@ fn assert_and_report_headroom(prepared: &GrantIntent, balance: BalanceObservatio
 }
 
 fn install_probe(pic: &PocketIc, wasm: Vec<u8>, init: ProbeInit, cycles: u128) -> Principal {
-    pic.create_and_install(
+    pic.try_create_and_install(
         InstallSpec::new(wasm, encode_one(init).expect("encode probe init"), cycles)
             .label("root_funding_probe"),
     )
+    .expect("install test canister")
 }
 
 fn prepare(pic: &PocketIc, coordinator: Principal, root: Principal) -> GrantIntent {

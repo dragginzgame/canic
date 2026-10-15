@@ -577,10 +577,11 @@ pub fn install_standalone_canister(
     let label = format!("standalone:{crate_name}:{role}");
     let wasm = standalone_canister_wasm(crate_name, profile);
     let pocket_ic = start_pocket_ic(PocketIcBuilder::new().with_application_subnet());
-    let fixture = StandaloneCanisterFixture::install(
+    let fixture = StandaloneCanisterFixture::try_install(
         pocket_ic,
         InstallSpec::new(wasm, local_init_args(), 0).label(label),
-    );
+    )
+    .expect("install test canister");
     let canister_id = fixture.canister_id();
     let pic = fixture.pocket_ic();
     pic.wait_for_ready(
@@ -615,7 +616,10 @@ pub fn install_standalone_canister_on_pic(
 
     let wasm = standalone_canister_wasm(crate_name, profile);
     let canister_id = pic
-        .create_and_install(InstallSpec::new(wasm, local_init_args(), 0).label(label.to_string()));
+        .try_create_and_install(
+            InstallSpec::new(wasm, local_init_args(), 0).label(label.to_string()),
+        )
+        .expect("install test canister");
     pic.wait_for_ready(
         canister_id,
         Principal::anonymous(),

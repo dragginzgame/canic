@@ -6,6 +6,15 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.111.1]
+
+- Prepare test fixtures for Testkit 0.45's fallible-only installation APIs and
+  non-zero retry attempt counts. Keep installation failures at the existing
+  caller-owned panic boundaries. Normal adoption awaits Testkit publication and
+  the pending time, rejection-field and snapshot migrations.
+
+[Detailed notes](docs/changelog/0.111.md)
+
 ## [0.111.0] - 2026-10-10
 
 Detailed notes: [docs/changelog/0.111.md](docs/changelog/0.111.md)

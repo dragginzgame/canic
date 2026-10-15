@@ -914,9 +914,12 @@ fn wait_for_fixture_ready(pic: &PocketIc, canister_id: Principal, context: &str)
     );
 }
 
-fn install_retry_policy() -> RetryPolicy {
-    RetryPolicy::try_new(INSTALL_CODE_RETRY_LIMIT, INSTALL_CODE_COOLDOWN)
-        .expect("install retry policy")
+const fn install_retry_policy() -> RetryPolicy {
+    RetryPolicy::new(
+        std::num::NonZeroUsize::new(INSTALL_CODE_RETRY_LIMIT)
+            .expect("non-zero install attempt limit"),
+        INSTALL_CODE_COOLDOWN,
+    )
 }
 
 #[test]
