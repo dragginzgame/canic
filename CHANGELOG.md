@@ -6,6 +6,16 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.111.1]
+
+- Return Testkit 0.47 restore receipts directly from cached Root and registry
+  recipes, preserving exact senders and the selected cycle top-up policy.
+
+Detailed notes: [docs/changelog/0.111.md](docs/changelog/0.111.md#01111)
+
+- Prepare exact snapshot senders and explicit restore funding for Testkit 0.44
+  in Coordinator fences and cached Root/registry fixtures.
+
 ## [0.111.0] - 2026-10-10
 
 Detailed notes: [docs/changelog/0.111.md](docs/changelog/0.111.md)
