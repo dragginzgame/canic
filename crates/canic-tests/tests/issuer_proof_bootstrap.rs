@@ -61,12 +61,13 @@ fn fresh_issuer_fetches_proof_and_configuration_retries_preserve_it() {
     assert_eq!(next.proof, token.proof);
     fixture
         .pic()
-        .update_candid_as_or_panic::<Result<(), Error>, _>(
+        .update_candid_as::<Result<(), Error>, _>(
             fixture.verifier.canister_id,
             subject(),
             "issuer_verify_token",
             (next,),
         )
+        .expect("update Candid harness call")
         .expect("verifier must accept the automatically fetched proof");
     drop(fixture);
 }
@@ -90,23 +91,26 @@ fn prepare(
     fixture: &ActiveComponentRegistryFixture,
     request_id: u8,
 ) -> Result<DelegatedTokenPrepareResponse, Error> {
-    let response: Result<IssuerCommandResponse, Error> = fixture.pic().update_candid_as_or_panic(
-        fixture.issuer.canister_id,
-        subject(),
-        protocol::CANIC_COMMAND,
-        (IssuerCommand::PrepareDelegatedToken(
-            DelegatedTokenPrepareRequest {
-                metadata: Some(AuthRequestMetadata {
-                    request_id: [request_id; 32],
-                    ttl_ns: 60_000_000_000,
-                }),
-                aud: audience(),
-                grants: grants(fixture),
-                ttl_ns: 10_000_000_000,
-                ext: None,
-            },
-        ),),
-    );
+    let response: Result<IssuerCommandResponse, Error> = fixture
+        .pic()
+        .update_candid_as(
+            fixture.issuer.canister_id,
+            subject(),
+            protocol::CANIC_COMMAND,
+            (IssuerCommand::PrepareDelegatedToken(
+                DelegatedTokenPrepareRequest {
+                    metadata: Some(AuthRequestMetadata {
+                        request_id: [request_id; 32],
+                        ttl_ns: 60_000_000_000,
+                    }),
+                    aud: audience(),
+                    grants: grants(fixture),
+                    ttl_ns: 10_000_000_000,
+                    ext: None,
+                },
+            ),),
+        )
+        .expect("update Candid harness call");
     let IssuerCommandResponse::PrepareDelegatedToken(response) = response?;
     Ok(response)
 }
@@ -115,8 +119,9 @@ fn prepare_and_get(fixture: &ActiveComponentRegistryFixture, request_id: u8) -> 
     for _ in 0..5 {
         match prepare(fixture, request_id) {
             Ok(prepared) => {
-                let response: Result<IssuerStatusResponse, Error> =
-                    fixture.pic().query_candid_as_or_panic(
+                let response: Result<IssuerStatusResponse, Error> = fixture
+                    .pic()
+                    .query_candid_as(
                         fixture.issuer.canister_id,
                         subject(),
                         protocol::CANIC_AUTH_STATUS,
@@ -125,7 +130,8 @@ fn prepare_and_get(fixture: &ActiveComponentRegistryFixture, request_id: u8) -> 
                                 claims_hash: prepared.claims_hash,
                             },
                         ),),
-                    );
+                    )
+                    .expect("query Candid harness call");
                 let IssuerStatusResponse::DelegatedToken(token) = response.unwrap() else {
                     panic!("unexpected issuer token response");
                 };
@@ -160,12 +166,15 @@ fn prepare_and_get(fixture: &ActiveComponentRegistryFixture, request_id: u8) -> 
 fn active_proof_status(
     fixture: &ActiveComponentRegistryFixture,
 ) -> ActiveDelegationProofStatusResponse {
-    let response: Result<IssuerStatusResponse, Error> = fixture.pic().query_candid_as_or_panic(
-        fixture.issuer.canister_id,
-        fixture.root,
-        protocol::CANIC_AUTH_STATUS,
-        (IssuerStatusRequest::ActiveDelegationProof,),
-    );
+    let response: Result<IssuerStatusResponse, Error> = fixture
+        .pic()
+        .query_candid_as(
+            fixture.issuer.canister_id,
+            fixture.root,
+            protocol::CANIC_AUTH_STATUS,
+            (IssuerStatusRequest::ActiveDelegationProof,),
+        )
+        .expect("query Candid harness call");
     let IssuerStatusResponse::ActiveDelegationProof(status) = response.unwrap() else {
         panic!("unexpected issuer proof response");
     };
@@ -173,32 +182,38 @@ fn active_proof_status(
 }
 
 fn renewal_status(fixture: &ActiveComponentRegistryFixture) -> RootIssuerRenewalStatusResponse {
-    let response: Result<RootStatusResponse, Error> = fixture.pic().query_candid_or_panic(
-        fixture.root,
-        protocol::CANIC_ROOT_STATUS,
-        (RootStatusRequest::IssuerRenewal(
-            RootIssuerRenewalStatusRequest {
-                issuer_pid: fixture.issuer.canister_id,
-            },
-        ),),
-    );
+    let response: Result<RootStatusResponse, Error> = fixture
+        .pic()
+        .query_candid(
+            fixture.root,
+            protocol::CANIC_ROOT_STATUS,
+            (RootStatusRequest::IssuerRenewal(
+                RootIssuerRenewalStatusRequest {
+                    issuer_pid: fixture.issuer.canister_id,
+                },
+            ),),
+        )
+        .expect("query Candid harness call");
     let RootStatusResponse::IssuerRenewal(status) = response.unwrap();
     status
 }
 
 fn configure_issuer(fixture: &ActiveComponentRegistryFixture) {
-    let response: Result<RootCommandResponse, Error> = fixture.pic().update_candid_or_panic(
-        fixture.root,
-        protocol::CANIC_ROOT_COMMAND,
-        (RootCommand::ConfigureIssuer(RootIssuerConfigureRequest {
-            issuer_pid: fixture.issuer.canister_id,
-            enabled: true,
-            aud: audience(),
-            grants: grants(fixture),
-            cert_ttl_ns: 60_000_000_000,
-            refresh_after_ratio_bps: 8_000,
-        }),),
-    );
+    let response: Result<RootCommandResponse, Error> = fixture
+        .pic()
+        .update_candid(
+            fixture.root,
+            protocol::CANIC_ROOT_COMMAND,
+            (RootCommand::ConfigureIssuer(RootIssuerConfigureRequest {
+                issuer_pid: fixture.issuer.canister_id,
+                enabled: true,
+                aud: audience(),
+                grants: grants(fixture),
+                cert_ttl_ns: 60_000_000_000,
+                refresh_after_ratio_bps: 8_000,
+            }),),
+        )
+        .expect("update Candid harness call");
     let RootCommandResponse::ConfigureIssuer(configuration) = response.unwrap();
     assert_eq!(configuration.issuer.issuer_pid, fixture.issuer.canister_id);
     assert_eq!(

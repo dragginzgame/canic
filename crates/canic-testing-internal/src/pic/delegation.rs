@@ -31,8 +31,9 @@ pub fn create_user_shard(
     user_hub_pid: Principal,
     user_pid: Principal,
 ) -> Principal {
-    let created: Result<Principal, Error> =
-        pic.update_candid_or_panic(user_hub_pid, "create_account", (user_pid,));
+    let created: Result<Principal, Error> = pic
+        .update_candid(user_hub_pid, "create_account", (user_pid,))
+        .expect("update Candid harness call");
     created.expect("create_account application failed")
 }
 
@@ -92,24 +93,28 @@ pub fn issue_delegated_token_from_active_proof_with_request_nonce(
         ttl_ns: token_ttl_ns,
         ext: None,
     };
-    let prepared: Result<CanisterCommandResponse, Error> = pic.update_candid_as_or_panic(
-        issuer_pid,
-        subject,
-        protocol::CANIC_COMMAND,
-        (CanisterCommand::PrepareDelegatedToken(request),),
-    );
+    let prepared: Result<CanisterCommandResponse, Error> = pic
+        .update_candid_as(
+            issuer_pid,
+            subject,
+            protocol::CANIC_COMMAND,
+            (CanisterCommand::PrepareDelegatedToken(request),),
+        )
+        .expect("update Candid harness call");
     let CanisterCommandResponse::PrepareDelegatedToken(prepared) =
         prepared.expect("delegated-token command application failed");
-    let issued: Result<CanisterStatusResponse, Error> = pic.query_candid_as_or_panic(
-        issuer_pid,
-        subject,
-        protocol::CANIC_AUTH_STATUS,
-        (CanisterStatusRequest::DelegatedToken(
-            DelegatedTokenGetRequest {
-                claims_hash: prepared.claims_hash,
-            },
-        ),),
-    );
+    let issued: Result<CanisterStatusResponse, Error> = pic
+        .query_candid_as(
+            issuer_pid,
+            subject,
+            protocol::CANIC_AUTH_STATUS,
+            (CanisterStatusRequest::DelegatedToken(
+                DelegatedTokenGetRequest {
+                    claims_hash: prepared.claims_hash,
+                },
+            ),),
+        )
+        .expect("query Candid harness call");
     let CanisterStatusResponse::DelegatedToken(token) =
         issued.expect("delegated-token status application failed");
     token

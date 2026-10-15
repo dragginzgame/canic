@@ -33,7 +33,7 @@ const INSTALL_CODE_COOLDOWN: Duration = Duration::from_mins(5);
 const SAMPLING_INSTRUCTION_REFERENCE: u64 = 20_000_000;
 
 #[test]
-fn public_snapshots_preserve_observer_authority() {
+fn public_snapshots_preserve_observer_authority() -> Result<(), ic_testkit::pic::CandidCallError> {
     use canic::dto::public_status::{
         PublicMetricFamily, PublicMetricsRequest, PublicSnapshotState,
     };
@@ -42,30 +42,33 @@ fn public_snapshots_preserve_observer_authority() {
     let restricted = fixture.install_canic_canister();
     let outsider = fixture.root;
     let query = |canister_id, family| {
-        let response: Result<PublicStatusResponse, Error> = fixture.pic.query_candid_as_or_panic(
-            canister_id,
-            outsider,
-            protocol::CANIC_PUBLIC_STATUS,
-            (PublicStatusRequest::Metrics(PublicMetricsRequest {
-                family,
-                page: PageRequest {
-                    limit: 256,
-                    offset: 0,
-                },
-            }),),
-        );
+        let response: Result<PublicStatusResponse, Error> = fixture
+            .pic
+            .query_candid_as(
+                canister_id,
+                outsider,
+                protocol::CANIC_PUBLIC_STATUS,
+                (PublicStatusRequest::Metrics(PublicMetricsRequest {
+                    family,
+                    page: PageRequest {
+                        limit: 256,
+                        offset: 0,
+                    },
+                }),),
+            )
+            .expect("query Candid harness call");
         let PublicStatusResponse::Metrics(snapshot) = response.expect("public snapshot read")
         else {
             panic!("expected metrics snapshot");
         };
         snapshot
     };
-    let health: Result<PublicStatusResponse, Error> = fixture.pic.query_candid_as_or_panic(
+    let health: Result<PublicStatusResponse, Error> = fixture.pic.query_candid_as(
         published,
         outsider,
         protocol::CANIC_PUBLIC_STATUS,
         (PublicStatusRequest::Health,),
-    );
+    )?;
     let PublicStatusResponse::Health(health) = health.expect("public health") else {
         panic!("expected summary health");
     };
@@ -113,12 +116,12 @@ fn public_snapshots_preserve_observer_authority() {
             .any(|row| row.name == "timer.events.scheduler_started")
     );
     for request in sensitive_observability_requests(false) {
-        let denied: Result<RoleStatusResponse, Error> = fixture.pic.query_candid_as_or_panic(
+        let denied: Result<RoleStatusResponse, Error> = fixture.pic.query_candid_as(
             published,
             outsider,
             protocol::CANIC_OBSERVABILITY,
             (request,),
-        );
+        )?;
         assert!(
             matches!(denied, Err(error) if error.code() == canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code())
         );
@@ -130,6 +133,7 @@ fn public_snapshots_preserve_observer_authority() {
     assert_eq!(stale.sampled_at_ns, snapshot.sampled_at_ns);
     assert_eq!(stale.metrics.entries, snapshot.metrics.entries);
     assert_timer_registration_continuity(&fixture.pic, published);
+    Ok(())
 }
 
 fn assert_timer_phase_measurements(rows: &[canic::dto::public_status::PublicMetric]) {
@@ -330,18 +334,21 @@ fn optional_sampling_is_bounded_and_rejected_performance_preserves_cycle_trackin
     let fixture = install_lifecycle_boundary_fixture();
     let canister = fixture.install_runtime_probe_canister();
     let query = |family| {
-        let response: Result<PublicStatusResponse, Error> = fixture.pic.query_candid_as_or_panic(
-            canister,
-            fixture.root,
-            protocol::CANIC_PUBLIC_STATUS,
-            (PublicStatusRequest::Metrics(PublicMetricsRequest {
-                family,
-                page: PageRequest {
-                    limit: 1000,
-                    offset: 0,
-                },
-            }),),
-        );
+        let response: Result<PublicStatusResponse, Error> = fixture
+            .pic
+            .query_candid_as(
+                canister,
+                fixture.root,
+                protocol::CANIC_PUBLIC_STATUS,
+                (PublicStatusRequest::Metrics(PublicMetricsRequest {
+                    family,
+                    page: PageRequest {
+                        limit: 1000,
+                        offset: 0,
+                    },
+                }),),
+            )
+            .expect("query Candid harness call");
         let PublicStatusResponse::Metrics(snapshot) = response.expect("public cache") else {
             panic!("metrics response")
         };
@@ -433,12 +440,15 @@ fn exact_cycles_and_runtime_metrics_require_controller() {
         (automatic_topup, true),
     ] {
         for request in sensitive_observability_requests(supports_topups) {
-            let denied: Result<RoleStatusResponse, Error> = fixture.pic.query_candid_as_or_panic(
-                canister_id,
-                fixture.root,
-                protocol::CANIC_OBSERVABILITY,
-                (request.clone(),),
-            );
+            let denied: Result<RoleStatusResponse, Error> = fixture
+                .pic
+                .query_candid_as(
+                    canister_id,
+                    fixture.root,
+                    protocol::CANIC_OBSERVABILITY,
+                    (request.clone(),),
+                )
+                .expect("query Candid harness call");
             assert!(matches!(
                 denied,
                 Err(error)
@@ -1062,20 +1072,22 @@ fn cached_cycle_history(
 ) -> canic::dto::public_status::PublicHistorySnapshot {
     use canic::dto::public_status::{PublicHistoryRequest, PublicMetricFamily};
 
-    let response: Result<PublicStatusResponse, Error> = pic.query_candid_as_or_panic(
-        canister,
-        caller,
-        protocol::CANIC_PUBLIC_STATUS,
-        (PublicStatusRequest::History(PublicHistoryRequest {
-            family: PublicMetricFamily::Cycles,
-            name: "balance".into(),
-            canister_id: Some(canister),
-            page: PageRequest {
-                offset: 0,
-                limit: u64::MAX,
-            },
-        }),),
-    );
+    let response: Result<PublicStatusResponse, Error> = pic
+        .query_candid_as(
+            canister,
+            caller,
+            protocol::CANIC_PUBLIC_STATUS,
+            (PublicStatusRequest::History(PublicHistoryRequest {
+                family: PublicMetricFamily::Cycles,
+                name: "balance".into(),
+                canister_id: Some(canister),
+                page: PageRequest {
+                    offset: 0,
+                    limit: u64::MAX,
+                },
+            }),),
+        )
+        .expect("query Candid harness call");
     let PublicStatusResponse::History(history) = response.unwrap() else {
         panic!("history response")
     };
@@ -1089,20 +1101,22 @@ fn cached_application_metrics(
 ) -> canic::dto::public_status::PublicMetricsSnapshot {
     use canic::dto::public_status::PublicMetricFamily;
 
-    let response: Result<PublicStatusResponse, Error> = pic.query_candid_as_or_panic(
-        canister,
-        caller,
-        protocol::CANIC_PUBLIC_STATUS,
-        (PublicStatusRequest::Metrics(
-            canic::dto::public_status::PublicMetricsRequest {
-                family: PublicMetricFamily::Application,
-                page: PageRequest {
-                    offset: 0,
-                    limit: 256,
+    let response: Result<PublicStatusResponse, Error> = pic
+        .query_candid_as(
+            canister,
+            caller,
+            protocol::CANIC_PUBLIC_STATUS,
+            (PublicStatusRequest::Metrics(
+                canic::dto::public_status::PublicMetricsRequest {
+                    family: PublicMetricFamily::Application,
+                    page: PageRequest {
+                        offset: 0,
+                        limit: 256,
+                    },
                 },
-            },
-        ),),
-    );
+            ),),
+        )
+        .expect("query Candid harness call");
     let PublicStatusResponse::Metrics(snapshot) = response.unwrap() else {
         panic!("application snapshot")
     };
@@ -1151,20 +1165,24 @@ fn report_sampling_cost(label: &str, instructions: u64) {
 fn assert_anonymous_public_boundary(pic: &PocketIc, published: Principal, controller: Principal) {
     pic.set_controllers(published, None, vec![controller])
         .unwrap();
-    let anonymous_public: Result<PublicStatusResponse, Error> = pic.query_candid_as_or_panic(
-        published,
-        Principal::anonymous(),
-        protocol::CANIC_PUBLIC_STATUS,
-        (PublicStatusRequest::Health,),
-    );
-    assert!(anonymous_public.is_ok());
-    for request in sensitive_observability_requests(false) {
-        let denied: Result<RoleStatusResponse, Error> = pic.query_candid_as_or_panic(
+    let anonymous_public: Result<PublicStatusResponse, Error> = pic
+        .query_candid_as(
             published,
             Principal::anonymous(),
-            protocol::CANIC_OBSERVABILITY,
-            (request,),
-        );
+            protocol::CANIC_PUBLIC_STATUS,
+            (PublicStatusRequest::Health,),
+        )
+        .expect("query Candid harness call");
+    assert!(anonymous_public.is_ok());
+    for request in sensitive_observability_requests(false) {
+        let denied: Result<RoleStatusResponse, Error> = pic
+            .query_candid_as(
+                published,
+                Principal::anonymous(),
+                protocol::CANIC_OBSERVABILITY,
+                (request,),
+            )
+            .expect("query Candid harness call");
         assert!(
             matches!(denied, Err(error) if error.code() == canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code())
         );

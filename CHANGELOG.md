@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.111.1]
 
+- Use fallible Testkit Candid calls with explicit fixture assertions, preparing
+  the 0.45 hard cut without unwrapping application-level results.
+
 - Prepare test fixtures for Testkit 0.45's fallible-only installation APIs and
   non-zero retry attempt counts. Keep installation failures at the existing
   caller-owned panic boundaries. Normal adoption awaits Testkit publication and
