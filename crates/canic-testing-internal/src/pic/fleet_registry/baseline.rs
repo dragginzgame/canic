@@ -1466,14 +1466,11 @@ mod tests {
             &self,
             baseline: &CachedPocketIcBaseline<Self::Metadata>,
         ) -> Result<CanisterRestoreReceipt, Self::Error> {
-            baseline.restore(SnapshotRestoreFunding::TopUpTo {
-                minimum_cycles: crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,
-            })?;
-            CanisterRestoreReceipt::try_from_baseline(
-                baseline,
-                CycleResetPolicy::TopUpTo(crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES),
-            )
-            .map_err(Into::into)
+            baseline
+                .restore(SnapshotRestoreFunding::TopUpTo {
+                    minimum_cycles: crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,
+                })
+                .map_err(Into::into)
         }
 
         fn reset_non_snapshot_state(
