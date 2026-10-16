@@ -348,6 +348,7 @@ fn stage_manifest(
             installation_controller,
             protocol::CANIC_WASM_STORE_COMMAND,
             (StoreCommand::StageManifest(manifest),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .expect("Store manifest transport");
     let StoreCommandResponse::StageManifest = result.expect("stage release manifest application")
@@ -369,6 +370,7 @@ fn prepare_chunk_set(
             installation_controller,
             protocol::CANIC_WASM_STORE_COMMAND,
             (StoreCommand::PrepareChunkSet(prepare),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .expect("Store prepare transport");
     let StoreCommandResponse::PrepareChunkSet(_) =
@@ -391,6 +393,7 @@ fn publish_chunk(
             installation_controller,
             protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
             (chunk,),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .expect("Store chunk transport");
     result.expect("publish release chunk application");

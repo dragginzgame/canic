@@ -205,7 +205,13 @@ fn generic_application_subject_as(
 ) -> Result<candid::Principal, Error> {
     fixture
         .pic()
-        .query_candid_as(canister_id, caller, "issuer_application_subject", ())
+        .query_candid_as(
+            canister_id,
+            caller,
+            "issuer_application_subject",
+            (),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
         .expect("query Candid harness call")
 }
 
@@ -224,6 +230,7 @@ fn fleet_admission_status_as(
                 offset: 0,
                 limit: u64::MAX,
             }),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .expect("query Candid harness call");
     response.map(|response| match response {
@@ -238,7 +245,13 @@ fn fleet_admission_probe_as(
 ) -> Result<(), Error> {
     fixture
         .pic()
-        .query_candid_as(canister_id, caller, "issuer_fleet_admission_probe", ())
+        .query_candid_as(
+            canister_id,
+            caller,
+            "issuer_fleet_admission_probe",
+            (),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
         .expect("query Candid harness call")
 }
 
@@ -254,6 +267,7 @@ fn closed_local_authorization_denial_partition_is_bounded() {
                 caller,
                 "issuer_application_denial_perf",
                 (probe,),
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .expect("query Candid harness call");
         let sample = sample.expect("denial performance probe must succeed");

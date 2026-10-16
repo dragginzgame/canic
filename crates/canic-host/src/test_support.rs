@@ -137,3 +137,12 @@ pub fn synthetic_identity_pem(seed: u8) -> String {
     }
     format!("-----BEGIN PRIVATE KEY-----\n{body}\n-----END PRIVATE KEY-----\n")
 }
+
+/// Finite reply budgets for small mint, withdrawal and fee fixture responses.
+pub const CANDID_REPLY_LIMITS: ic_testkit_candid::DecodeLimits = ic_testkit_candid::DecodeLimits {
+    reply_bytes: 64 * 1024,
+    decoding_quota: 1_000_000,
+    skipping_quota: 100_000,
+    type_entries: 256,
+    header_bytes: 16 * 1024,
+};

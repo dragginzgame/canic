@@ -258,7 +258,12 @@ pub(super) fn assert_issued_native_funding(input: &AutonomousFundingJourney<'_>)
     }
     let requests: u64 = input
         .pic
-        .query_candid(input.cycles_ledger, "request_count", ())
+        .query_candid(
+            input.cycles_ledger,
+            "request_count",
+            (),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
         .unwrap();
     let mut replay_adapter = platform();
     let replay = apply(&planned.plan.plan_sha256, &mut replay_adapter).unwrap();
@@ -271,7 +276,12 @@ pub(super) fn assert_issued_native_funding(input: &AutonomousFundingJourney<'_>)
     );
     let replay_requests: u64 = input
         .pic
-        .query_candid(input.cycles_ledger, "request_count", ())
+        .query_candid(
+            input.cycles_ledger,
+            "request_count",
+            (),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
         .unwrap();
     assert_eq!(requests, replay_requests);
     assert_eq!(read_journal(&paths).unwrap().unwrap(), terminal);
@@ -295,6 +305,7 @@ fn burn_to(input: &AutonomousFundingJourney<'_>, retain: u128) {
             input.operator,
             "audit_recovery_balance",
             (retain,),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .expect("update Candid harness call");
     assert!(burned > 0);
@@ -313,6 +324,7 @@ fn child_status(
             (RootStatusRequestFragment::Operation(
                 OperationStatusRequest { operation_id },
             ),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .unwrap();
     let RootStatusResponseFragment::Operation(RootOperationStatusResponse::ProvisionChild(status)) =
@@ -355,6 +367,7 @@ fn block_initial_child(
                         operation_id: request.operation_id,
                     },
                 ),),
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .unwrap();
         if let Ok(RootStatusResponseFragment::Operation(
@@ -386,6 +399,7 @@ fn block_initial_child(
                         operation_id: request.operation_id,
                     },
                 ),),
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .unwrap();
         let CoordinatorOperationReadResponse::Operation(
@@ -416,7 +430,12 @@ fn block_initial_child(
 fn withdrawals(input: &AutonomousFundingJourney<'_>) -> u64 {
     input
         .pic
-        .query_candid(input.cycles_ledger, "withdrawal_count", ())
+        .query_candid(
+            input.cycles_ledger,
+            "withdrawal_count",
+            (),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
         .unwrap()
 }
 

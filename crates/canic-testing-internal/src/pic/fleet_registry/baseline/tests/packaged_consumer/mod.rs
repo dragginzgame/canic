@@ -133,7 +133,14 @@ fn installed_package_build_deploy_recover_and_replay() {
     verify_installed_artifacts(&consumer, &pic, operator, &desired, &infrastructure);
     verify_workload(&consumer, &pic, root, operator, &desired);
     let ledger = Principal::from_text(&desired.cycles_ledger).unwrap();
-    let requests: u64 = pic.query_candid(ledger, "request_count", ()).unwrap();
+    let requests: u64 = pic
+        .query_candid(
+            ledger,
+            "request_count",
+            (),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .unwrap();
     let mutations = mutation_counts(&consumer.root);
     let mut offline_replay = replay_args;
     offline_replay[3] = "/missing/packaged-replay-icp".into();
@@ -142,8 +149,13 @@ fn installed_package_build_deploy_recover_and_replay() {
     assert_eq!(replay["effects_applied"], 0);
     assert_eq!(mutation_counts(&consumer.root), mutations);
     assert_eq!(
-        pic.query_candid::<u64, ()>(ledger, "request_count", ())
-            .unwrap(),
+        pic.query_candid::<u64, ()>(
+            ledger,
+            "request_count",
+            (),
+            canic::testing::CANDID_REPLY_LIMITS
+        )
+        .unwrap(),
         requests
     );
     println!(
@@ -462,7 +474,13 @@ fn verify_workload(
         artifact.wasm_gz_sha256_hex
     );
     let reply: Result<u64, Error> = pic
-        .query_candid_as(workload.canister_id, root, "packaged_probe", ())
+        .query_candid_as(
+            workload.canister_id,
+            root,
+            "packaged_probe",
+            (),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
         .unwrap();
     assert_eq!(reply.unwrap(), 7);
 }

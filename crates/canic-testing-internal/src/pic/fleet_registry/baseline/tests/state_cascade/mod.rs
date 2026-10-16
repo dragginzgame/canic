@@ -76,6 +76,7 @@ pub(super) fn live_state_cascade_preserves_partial_outcomes_and_retry() {
                         cycles_funding_enabled: false,
                     }),
                 }),),
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .expect("update Candid harness call");
         assert_error(
@@ -174,6 +175,7 @@ fn assert_mode_recovery(
                     operation_id: [0x77; 32],
                     target: WasmStoreGcTarget::Prepared,
                 }),),
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .expect("update Candid harness call");
         assert_error(store_response, code);
@@ -190,6 +192,7 @@ fn assert_mode_recovery(
                         projection_digest: [2; 32],
                     },
                 ),),
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .expect("update Candid harness call");
         assert_error(managed_response, code);
@@ -256,6 +259,7 @@ fn command(
         caller,
         canic::protocol::CANIC_ROOT_COMMAND,
         (command,),
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .expect("update Candid harness call")
 }
@@ -280,6 +284,7 @@ fn state(pic: &PocketIc, root: Principal) -> FleetStateResponse {
             Principal::anonymous(),
             canic::protocol::CANIC_ROOT_STATUS,
             (StateQuery::FleetState,),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .expect("query Candid harness call");
     let StateQueryResponse::FleetState(state) = response.unwrap();

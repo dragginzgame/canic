@@ -303,6 +303,7 @@ fn emergency_refill_recovery_floor_covers_transfer_and_notify_response_loss() {
         root,
         "root_funding_probe_emergency_refill_transfer_then_trap",
         (),
+        canic::testing::CANDID_REPLY_LIMITS,
     );
     assert!(transfer_loss.is_err());
     let prepared = emergency_operation(&pic, root).expect("prepared emergency operation");
@@ -312,6 +313,7 @@ fn emergency_refill_recovery_floor_covers_transfer_and_notify_response_loss() {
         root,
         "root_funding_probe_emergency_refill_notify_then_trap",
         (),
+        canic::testing::CANDID_REPLY_LIMITS,
     );
     assert!(notify_loss.is_err());
     let transferred = emergency_operation(&pic, root).expect("transferred emergency operation");
@@ -321,7 +323,12 @@ fn emergency_refill_recovery_floor_covers_transfer_and_notify_response_loss() {
     );
 
     let completed: EmergencyRefillOperation = pic
-        .update_candid(root, "root_funding_probe_emergency_refill", ())
+        .update_candid(
+            root,
+            "root_funding_probe_emergency_refill",
+            (),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
         .expect("update Candid harness call");
     assert_eq!(
         completed.phase,
@@ -411,8 +418,12 @@ fn attached_cycles_recover_across_intent_call_and_receipt_boundaries() {
 
     let coordinator_before_fresh = pic.cycle_balance(coordinator);
     let root_before_fresh = pic.cycle_balance(root);
-    let trapped: Result<IssueResult, _> =
-        pic.update_candid(coordinator, "root_funding_probe_issue_then_trap", ());
+    let trapped: Result<IssueResult, _> = pic.update_candid(
+        coordinator,
+        "root_funding_probe_issue_then_trap",
+        (),
+        canic::testing::CANDID_REPLY_LIMITS,
+    );
     assert!(trapped.is_err(), "receipt-boundary callback must trap");
 
     let expected_receipt = GrantReceipt {
@@ -558,13 +569,19 @@ fn prepare(pic: &PocketIc, coordinator: Principal, root: Principal) -> GrantInte
         coordinator,
         "root_funding_probe_prepare",
         (root, OPERATION_ID, GRANT_CYCLES),
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .expect("update Candid harness call")
 }
 
 fn issue(pic: &PocketIc, coordinator: Principal) -> IssueResult {
-    pic.update_candid(coordinator, "root_funding_probe_issue", ())
-        .expect("update Candid harness call")
+    pic.update_candid(
+        coordinator,
+        "root_funding_probe_issue",
+        (),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .expect("update Candid harness call")
 }
 
 fn issue_root_accept_then_trap(pic: &PocketIc, coordinator: Principal) -> IssueResult {
@@ -572,33 +589,59 @@ fn issue_root_accept_then_trap(pic: &PocketIc, coordinator: Principal) -> IssueR
         coordinator,
         "root_funding_probe_issue_root_accept_then_trap",
         (),
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .expect("update Candid harness call")
 }
 
 fn request_from_root(pic: &PocketIc, root: Principal) -> RootRequestObservation {
-    pic.update_candid(root, "root_funding_probe_request", ())
-        .expect("update Candid harness call")
+    pic.update_candid(
+        root,
+        "root_funding_probe_request",
+        (),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .expect("update Candid harness call")
 }
 
 fn intent(pic: &PocketIc, coordinator: Principal) -> Option<GrantIntent> {
-    pic.query_candid(coordinator, "root_funding_probe_intent", ())
-        .expect("query Candid harness call")
+    pic.query_candid(
+        coordinator,
+        "root_funding_probe_intent",
+        (),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .expect("query Candid harness call")
 }
 
 fn receipt(pic: &PocketIc, root: Principal) -> Option<GrantReceipt> {
-    pic.query_candid(root, "root_funding_probe_receipt", ())
-        .expect("query Candid harness call")
+    pic.query_candid(
+        root,
+        "root_funding_probe_receipt",
+        (),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .expect("query Candid harness call")
 }
 
 fn acceptance_observation(pic: &PocketIc, root: Principal) -> Option<AcceptanceObservation> {
-    pic.query_candid(root, "root_funding_probe_acceptance_observation", ())
-        .expect("query Candid harness call")
+    pic.query_candid(
+        root,
+        "root_funding_probe_acceptance_observation",
+        (),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .expect("query Candid harness call")
 }
 
 fn emergency_operation(pic: &PocketIc, root: Principal) -> Option<EmergencyRefillOperation> {
-    pic.query_candid(root, "root_funding_probe_emergency_operation", ())
-        .expect("query Candid harness call")
+    pic.query_candid(
+        root,
+        "root_funding_probe_emergency_operation",
+        (),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .expect("query Candid harness call")
 }
 
 fn build_canisters(workspace_root: &Path) -> &'static InternalTestWasms {

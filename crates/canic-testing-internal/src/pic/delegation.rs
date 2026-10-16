@@ -18,7 +18,12 @@ pub fn create_user_shard(
     user_pid: Principal,
 ) -> Principal {
     let created: Result<Principal, Error> = pic
-        .update_candid(user_hub_pid, "create_account", (user_pid,))
+        .update_candid(
+            user_hub_pid,
+            "create_account",
+            (user_pid,),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
         .expect("update Candid harness call");
     created.expect("create_account application failed")
 }

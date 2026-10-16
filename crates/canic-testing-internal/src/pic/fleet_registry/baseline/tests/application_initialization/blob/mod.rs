@@ -99,6 +99,7 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn production_blob_initializ
             service,
             canic::protocol::CANIC_ROOT_COMMAND,
             (Command::BindComponentInitialization(request.clone()),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .unwrap();
     assert_eq!(
@@ -113,6 +114,7 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn production_blob_initializ
             Principal::anonymous(),
             canic::protocol::CANIC_ROOT_COMMAND,
             (Command::BindComponentInitialization(wrong_target),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .unwrap();
     assert_eq!(
@@ -155,6 +157,7 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn production_blob_initializ
             Principal::anonymous(),
             canic::protocol::CANIC_ROOT_COMMAND,
             (Command::BindComponentInitialization(conflicting),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .unwrap();
     assert_eq!(
@@ -170,6 +173,7 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn production_blob_initializ
             input.configuration.operator,
             "blob_configuration",
             (),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .unwrap();
     let installed = installed.expect("Root-installed service configuration");
@@ -188,6 +192,7 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn production_blob_initializ
             Principal::anonymous(),
             canic::protocol::CANIC_ROOT_COMMAND,
             (Command::BindComponentInitialization(request.clone()),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .unwrap();
     replay.unwrap();

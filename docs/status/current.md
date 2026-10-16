@@ -11,6 +11,26 @@ remain **0.111.0**. The objective is to delete duplicate mechanisms in favor of
 upstream owners; moving declarations alone does not demonstrate faster builds.
 
 
+## Testkit 0.50 caller adoption — 2026-10-16
+
+Typed Candid calls in the published qualification helpers, Host funding fixtures,
+internal fixture library and runtime tests now pass explicit finite decode limits.
+Framework fixture replies use a 4 MiB wire ceiling with bounded work/type/header
+budgets; small Host ledger replies use 64 KiB. HTTP fixtures use Host Process
+capture with their existing header/body/time limits. Baseline outcomes use current
+fields, and rejection tests match the typed canister-rejection variant. Repeated
+metrics queries and bounded-query admission assertions were extracted for clarity.
+The two direct Candid dependency edges are locked; package versions did not change.
+
+Passing evidence in `/tmp/canic-testkit50/`: Host/published-helper compilation and
+strict lint, internal fixture library compilation/lint with all features, runtime
+test-target compilation/lint, and 17 native HTTP regressions. No PocketIC suite or
+broad gate ran. Incoming source is retained in `before/`; open 0.112 changelogs are
+updated. Full internal dev/test compilation remains blocked by Blob 0.30 returning
+Memory 0.44 requests into Canic's Memory 0.45 boundary (`fixtures.log`). That path
+still needs qualification after dependency alignment. Portable Auth admission and
+installed qualification remain incomplete, so the whole batch is not push-ready.
+
 ## Memory 0.45 adoption — 2026-10-16
 
 Current requests and allocation declarations omit removed schema metadata;
@@ -26,9 +46,8 @@ ledger-shape regression, strict Core library/test lint, and native lifecycle-pro
 compilation. Evidence is in `/tmp/canic-memory45/`; incoming source is retained in
 its `before/` directory. No dependency selections, versions or Git refs changed.
 
-The full batch remains blocked. The native agent fixture compile exposes 15
-Canic testing-helper calls that need Testkit 0.50's explicit Candid decode limits
-(`native-agent.log`). Blob 0.30 still returns Memory 0.44 requests while Canic
+The full batch remains blocked. The Testkit caller failure recorded in `native-agent.log` is addressed above.
+Blob 0.30 still returns Memory 0.44 requests while Canic
 selects Memory 0.45, so the adapter fails at its request boundary (`blob.log`).
 Portable Auth admission and installed qualification also remain unfinished.
 No broad validation or release ran.

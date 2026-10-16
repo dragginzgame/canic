@@ -49,6 +49,7 @@ pub(super) fn initial_child_failure_reaches_coordinator_and_recovers_same_claim(
             Principal::anonymous(),
             "audit_recovery_balance",
             (800_000_000_000_u128,),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .expect("update Candid harness call");
     assert!(burned > 0);
@@ -393,6 +394,7 @@ fn pause_and_reduce_reserve(pic: &PocketIc, root: Principal) {
             (Command::SetCyclesFunding(
                 canic::dto::state::SetCyclesFundingRequest { enabled: false },
             ),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .expect("update Candid harness call");
     let Response::SetCyclesFunding(paused) = paused.unwrap() else {
@@ -406,6 +408,7 @@ fn pause_and_reduce_reserve(pic: &PocketIc, root: Principal) {
             Principal::anonymous(),
             "audit_recovery_balance",
             (800_000_000_000_u128,),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .expect("update Candid harness call");
     assert!(burned > 0);
@@ -424,6 +427,7 @@ fn provision(
             parent,
             canic::protocol::CANIC_ROOT_COMMAND,
             (Command::ProvisionChild(request.clone()),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .expect("update Candid harness call");
     let Response::OperationAccepted(receipt) = response.unwrap() else {

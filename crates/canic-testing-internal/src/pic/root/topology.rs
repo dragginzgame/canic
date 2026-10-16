@@ -215,6 +215,7 @@ fn fetch_root_children(pic: &PocketIc, root_id: Principal) -> Vec<CanisterInfo> 
                     limit: PAGE_LIMIT,
                     offset,
                 }),),
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .expect("query root children transport");
         let page = match page.expect("query root children application") {
@@ -240,6 +241,7 @@ fn fetch_managed_store_pids(pic: &PocketIc, root_id: Principal) -> Vec<Principal
             root_id,
             canic::protocol::CANIC_ROOT_STATUS,
             (RootStatusRequest::StoreOverview,),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .expect("query wasm_store overview transport");
 

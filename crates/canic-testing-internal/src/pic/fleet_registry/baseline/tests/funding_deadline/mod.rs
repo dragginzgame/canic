@@ -68,6 +68,7 @@ pub(super) fn child_grant_refreshes_root_funding_deadline_without_repeating_cred
             Principal::from_slice(&[99; 29]),
             canic::protocol::CANIC_OBSERVABILITY,
             (CanisterObservabilityRequest::ChildFunding(child),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .unwrap();
     assert!(denied.is_err());
@@ -78,6 +79,7 @@ pub(super) fn child_grant_refreshes_root_funding_deadline_without_repeating_cred
             Principal::anonymous(),
             "audit_recovery_balance",
             (11_000_000_000_000_u128,),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .expect("update Candid harness call");
     assert!(burned > 0);
@@ -178,6 +180,7 @@ fn child_usage(pic: &PocketIc, parent: Principal, child: Principal) -> ChildFund
             Principal::anonymous(),
             canic::protocol::CANIC_OBSERVABILITY,
             (CanisterObservabilityRequest::ChildFunding(child),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .unwrap();
     let CanisterObservabilityResponse::ChildFunding(value) = response.unwrap() else {
@@ -196,6 +199,7 @@ fn funding(pic: &PocketIc, root: Principal, enabled: bool) {
             (Command::SetCyclesFunding(SetCyclesFundingRequest {
                 enabled,
             }),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .expect("update Candid harness call");
     let Response::SetCyclesFunding(response) = response.unwrap();

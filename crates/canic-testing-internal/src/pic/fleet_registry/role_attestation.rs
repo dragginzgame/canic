@@ -218,6 +218,7 @@ fn assert_role_prepare_forbidden(
             caller,
             CANIC_ROOT_COMMAND,
             (RootCommand::PrepareRoleAttestation(request),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .expect("role attestation rejection transport");
     assert_eq!(
@@ -256,6 +257,7 @@ fn issue_requested_role_attestation(
             issuer.canister_id,
             CANIC_ROOT_COMMAND,
             (RootCommand::PrepareRoleAttestation(request),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .expect("role attestation prepare transport");
     let RootCommandResponse::PrepareRoleAttestation(prepared) =
@@ -270,6 +272,7 @@ fn issue_requested_role_attestation(
                     payload_hash: prepared.payload_hash,
                 },
             ),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .expect("role attestation retrieval transport");
     let RootStatusResponse::RoleAttestation(attestation) =
@@ -288,6 +291,7 @@ fn require_attested_local_subnet(
         caller,
         "issuer_require_attested_local_subnet",
         (attestation,),
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .expect("attested local-Subnet access transport")
 }
@@ -304,6 +308,7 @@ fn verify_role_attestation(
         caller,
         "issuer_verify_role_attestation",
         (attestation, minimum_epoch),
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .expect("role attestation verification transport")
 }
@@ -313,7 +318,13 @@ fn assert_issuer_guard_metrics(pic: &PocketIc, root: Principal, issuer: Principa
     let before_denial =
         metric_count_for_labels(pic, root, issuer, MetricsKind::Security, &denial_labels);
     let denied: Result<(), Error> = pic
-        .update_candid_as(issuer, Principal::anonymous(), "issuer_guard_is_root", ())
+        .update_candid_as(
+            issuer,
+            Principal::anonymous(),
+            "issuer_guard_is_root",
+            (),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
         .expect("issuer root-guard denial transport");
     assert_eq!(
         denied.expect_err("anonymous root guard").code(),
@@ -328,7 +339,13 @@ fn assert_issuer_guard_metrics(pic: &PocketIc, root: Principal, issuer: Principa
     let before_success =
         metric_count_for_labels(pic, root, issuer, MetricsKind::Runtime, &success_labels);
     let allowed: Result<(), Error> = pic
-        .update_candid_as(issuer, root, "issuer_guard_is_root", ())
+        .update_candid_as(
+            issuer,
+            root,
+            "issuer_guard_is_root",
+            (),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
         .expect("issuer root-guard success transport");
     allowed.expect("Fleet Subnet Root caller must satisfy issuer root guard");
     assert_eq!(
@@ -379,6 +396,7 @@ fn query_metric_entries(
                     offset: 0,
                 },
             }),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .expect("controller-authenticated metrics query transport");
     let ManagedStatusResponse::Metrics(page) =

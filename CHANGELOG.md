@@ -39,6 +39,9 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
 ### 🔧 Changed
 
+- **Fixture decoding:** select finite Candid reply budgets explicitly; native HTTP
+  fixtures use Host Process capture with bounded headers and bodies.
+
 - **Release checks:** include the shared version validator in isolated release
   fixtures so preflight and failure-recovery checks can run after tooling updates.
   Align record-export checks with the crate-private storage boundary.
@@ -82,7 +85,7 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
   resume inputs ([#516 — Expose failed provisioning dependencies](https://github.com/dragginzgame/canic/issues/516)).
 - **Funding replies:** decode the Registry response once, preserving typed remote
   rejection ([#436 — Fix Registry reply decoding in cycles funding](https://github.com/dragginzgame/canic/issues/436)).
-- **Contributor tools:** adopt Shared Tooling 0.15.0, Host 0.19 and Testkit 0.46;
+- **Contributor tools:** adopt Shared Tooling 0.15.0, Host 0.24 and Testkit 0.50;
   repair CI/dev installer callers after shared wrapper retirement
   ([#563 — Converge CI and maintainer setup](https://github.com/dragginzgame/canic/issues/563)).
 

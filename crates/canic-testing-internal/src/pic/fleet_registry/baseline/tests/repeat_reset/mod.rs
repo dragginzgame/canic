@@ -129,7 +129,12 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, previous_operation: &s
         .count();
     let withdrawals: u64 = input
         .pic
-        .query_candid(ledger, "withdrawal_count", ())
+        .query_candid(
+            ledger,
+            "withdrawal_count",
+            (),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
         .unwrap();
     let funding_lost = root.join("lost-funding-response");
     if funding_count > 0 {
@@ -159,7 +164,12 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, previous_operation: &s
             assert_eq!(
                 input
                     .pic
-                    .query_candid::<u64, _>(ledger, "withdrawal_count", ())
+                    .query_candid::<u64, _>(
+                        ledger,
+                        "withdrawal_count",
+                        (),
+                        canic::testing::CANDID_REPLY_LIMITS
+                    )
                     .unwrap(),
                 withdrawals + 1
             );
@@ -178,7 +188,12 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, previous_operation: &s
     assert_eq!(
         input
             .pic
-            .query_candid::<u64, _>(ledger, "withdrawal_count", ())
+            .query_candid::<u64, _>(
+                ledger,
+                "withdrawal_count",
+                (),
+                canic::testing::CANDID_REPLY_LIMITS
+            )
             .unwrap(),
         withdrawals + u64::try_from(funding_count).unwrap()
     );

@@ -65,8 +65,13 @@ mod tests {
         coordinator: Principal,
         command: CoordinatorCommand,
     ) -> Result<CoordinatorCommandResponse, Error> {
-        pic.update_candid(coordinator, protocol::CANIC_COORDINATOR_COMMAND, (command,))
-            .expect("Coordinator command transport")
+        pic.update_candid(
+            coordinator,
+            protocol::CANIC_COORDINATOR_COMMAND,
+            (command,),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .expect("Coordinator command transport")
     }
 
     fn command_as(
@@ -80,6 +85,7 @@ mod tests {
             caller,
             protocol::CANIC_COORDINATOR_COMMAND,
             (command,),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .expect("Coordinator command transport")
     }
@@ -89,8 +95,13 @@ mod tests {
         coordinator: Principal,
         request: R,
     ) -> Result<R::Response, Error> {
-        pic.query_candid(coordinator, R::METHOD, (request,))
-            .expect("Coordinator status transport")
+        pic.query_candid(
+            coordinator,
+            R::METHOD,
+            (request,),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .expect("Coordinator status transport")
     }
 
     fn status_as<R: crate::pic::canic::CoordinatorRead>(
@@ -99,8 +110,14 @@ mod tests {
         caller: Principal,
         request: R,
     ) -> Result<R::Response, Error> {
-        pic.query_candid_as(coordinator, caller, R::METHOD, (request,))
-            .expect("Coordinator status transport")
+        pic.query_candid_as(
+            coordinator,
+            caller,
+            R::METHOD,
+            (request,),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .expect("Coordinator status transport")
     }
 
     fn command_error(

@@ -65,6 +65,7 @@ rustix = { workspace = true }
 flate2 = { workspace = true }
 ic-host-process = { workspace = true, features = ["test-support"] }
 ic-testkit = { workspace = true }
+ic-testkit-candid.workspace = true
 ic-verify-bls-signature = { workspace = true }
 
 [[example]]

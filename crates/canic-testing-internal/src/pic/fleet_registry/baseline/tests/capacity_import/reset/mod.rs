@@ -39,6 +39,7 @@ pub(in crate::pic::fleet_registry::baseline) fn running_application_import_clear
                         canister_id: source,
                     },
                 ),),
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .unwrap();
         assert!(

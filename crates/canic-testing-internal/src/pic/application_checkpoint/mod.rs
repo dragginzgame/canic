@@ -37,6 +37,7 @@ pub(super) fn qualify(fixture: &super::ManagedLifecycleFixture, target: Principa
             (StatusRequest::CallerAuthority(OperationStatusRequest {
                 operation_id: [0; 32],
             }),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .unwrap();
     let StatusResponse::CallerAuthority(status) = response.unwrap();
@@ -171,14 +172,24 @@ fn verify_restore_release(
 }
 
 fn view(pic: &PocketIc, target: Principal) -> CheckpointView {
-    pic.query_candid::<Result<CheckpointView, Error>, _>(target, "checkpoint_view", ())
-        .unwrap()
-        .unwrap()
+    pic.query_candid::<Result<CheckpointView, Error>, _>(
+        target,
+        "checkpoint_view",
+        (),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .unwrap()
+    .unwrap()
 }
 
 fn increment(pic: &PocketIc, target: Principal) -> Result<u64, Error> {
-    pic.update_candid(target, "checkpoint_increment", ())
-        .unwrap()
+    pic.update_candid(
+        target,
+        "checkpoint_increment",
+        (),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .unwrap()
 }
 
 fn transition(
@@ -188,8 +199,14 @@ fn transition(
     binding: &Binding,
     phase: Phase,
 ) -> Result<Phase, Error> {
-    pic.update_candid_as(target, root, "checkpoint_transition", (binding, phase))
-        .unwrap()
+    pic.update_candid_as(
+        target,
+        root,
+        "checkpoint_transition",
+        (binding, phase),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .unwrap()
 }
 
 fn release(pic: &PocketIc, target: Principal, root: Principal, binding: &Binding) {
@@ -210,6 +227,12 @@ fn restore(
     captured: &Binding,
     fresh: &Binding,
 ) -> Result<Phase, Error> {
-    pic.update_candid_as(target, root, "checkpoint_restore", (captured, fresh))
-        .unwrap()
+    pic.update_candid_as(
+        target,
+        root,
+        "checkpoint_restore",
+        (captured, fresh),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .unwrap()
 }

@@ -147,6 +147,7 @@ impl ManagedAppFixture {
             (ManagedCommand::ConfigureRuntime(Box::new(
                 self.directory.clone(),
             )),),
+            crate::testing::CANDID_REPLY_LIMITS,
         )?;
         let response = response.map_err(ManagedAppQualificationError::Canic)?;
         let ManagedCommandResponse::OperationAccepted(receipt) = response else {
@@ -210,6 +211,7 @@ impl ManagedAppFixture {
                 limit: DEFAULT_STATUS_PAGE_LIMIT,
                 offset: 0,
             }),),
+            crate::testing::CANDID_REPLY_LIMITS,
         )?;
         let response = response.map_err(ManagedAppQualificationError::Canic)?;
         let ManagedStatusResponse::Admission(status) = response else {
@@ -251,6 +253,7 @@ impl ManagedAppFixture {
             self.root,
             CANIC_COMMAND,
             (ManagedCommand::PrepareFleetAdmission(Box::new(request)),),
+            crate::testing::CANDID_REPLY_LIMITS,
         )?;
         let response = response.map_err(ManagedAppQualificationError::Canic)?;
         let ManagedCommandResponse::PrepareFleetAdmission(receipt) = response else {
@@ -287,6 +290,7 @@ impl ManagedAppFixture {
             (ManagedStatusRequest::Operation(OperationStatusRequest {
                 operation_id: self.directory.operation_id,
             }),),
+            crate::testing::CANDID_REPLY_LIMITS,
         )?;
         let response = response.map_err(ManagedAppQualificationError::Canic)?;
         let ManagedStatusResponse::Operation(status) = response else {

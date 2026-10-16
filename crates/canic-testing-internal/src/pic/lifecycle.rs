@@ -741,7 +741,12 @@ mod tests {
         canister: Principal,
     ) -> canic::dto::memory::MemoryAllocationsResponse {
         let result: Result<canic::dto::memory::MemoryAllocationsResponse, Error> = pic
-            .query_candid(canister, "memory_allocations_probe", ())
+            .query_candid(
+                canister,
+                "memory_allocations_probe",
+                (),
+                canic::testing::CANDID_REPLY_LIMITS,
+            )
             .expect("query Candid harness call");
         result.expect("admitted memory observation")
     }
@@ -847,12 +852,22 @@ mod tests {
             assert_eq!(held.len(), 2);
             let entered: Vec<bool> = fixture
                 .pic
-                .query_candid(canister, "perf_context_entered", ())
+                .query_candid(
+                    canister,
+                    "perf_context_entered",
+                    (),
+                    canic::testing::CANDID_REPLY_LIMITS,
+                )
                 .expect("query Candid harness call");
             assert_eq!(entered, [true, true]);
             let completed: Vec<u8> = fixture
                 .pic
-                .query_candid(canister, "perf_context_completed", ())
+                .query_candid(
+                    canister,
+                    "perf_context_completed",
+                    (),
+                    canic::testing::CANDID_REPLY_LIMITS,
+                )
                 .expect("query Candid harness call");
             assert!(
                 completed.is_empty(),
@@ -884,18 +899,33 @@ mod tests {
                 let observed = observed.expect("admitted generated endpoint");
                 let metrics: Vec<PerfProbeMetric> = fixture
                     .pic
-                    .query_candid(canister, "perf_context_metrics", ())
+                    .query_candid(
+                        canister,
+                        "perf_context_metrics",
+                        (),
+                        canic::testing::CANDID_REPLY_LIMITS,
+                    )
                     .expect("query Candid harness call");
                 assert_perf_observation(&metrics, which, &observed);
                 let completed: Vec<u8> = fixture
                     .pic
-                    .query_candid(canister, "perf_context_completed", ())
+                    .query_candid(
+                        canister,
+                        "perf_context_completed",
+                        (),
+                        canic::testing::CANDID_REPLY_LIMITS,
+                    )
                     .expect("query Candid harness call");
                 assert_eq!(completed, order[..=position]);
             }
             let metrics: Vec<PerfProbeMetric> = fixture
                 .pic
-                .query_candid(canister, "perf_context_metrics", ())
+                .query_candid(
+                    canister,
+                    "perf_context_metrics",
+                    (),
+                    canic::testing::CANDID_REPLY_LIMITS,
+                )
                 .expect("query Candid harness call");
             assert_eq!(
                 metrics
@@ -917,7 +947,12 @@ mod tests {
             .wait_for_ready(canister, Principal::anonymous(), 120, "standalone install");
         let first: Result<u64, Error> = fixture
             .pic
-            .update_candid(canister, "begin_timer_probe_intent", (211_u8, None::<u64>))
+            .update_candid(
+                canister,
+                "begin_timer_probe_intent",
+                (211_u8, None::<u64>),
+                canic::testing::CANDID_REPLY_LIMITS,
+            )
             .expect("update Candid harness call");
         let first = first.expect("initial retained TTL-free reservation");
         let baseline = standalone_memory_allocations(&fixture.pic, canister);
@@ -953,7 +988,12 @@ mod tests {
                 .wait_for_ready(canister, Principal::anonymous(), 120, "standalone upgrade");
             let duplicate: Result<u64, Error> = fixture
                 .pic
-                .update_candid(canister, "begin_timer_probe_intent", (211_u8, None::<u64>))
+                .update_candid(
+                    canister,
+                    "begin_timer_probe_intent",
+                    (211_u8, None::<u64>),
+                    canic::testing::CANDID_REPLY_LIMITS,
+                )
                 .expect("update Candid harness call");
             assert_eq!(
                 duplicate
@@ -967,6 +1007,7 @@ mod tests {
                     canister,
                     "begin_timer_probe_intent",
                     (211_u8 + attempt, None::<u64>),
+                    canic::testing::CANDID_REPLY_LIMITS,
                 )
                 .expect("update Candid harness call");
             assert_eq!(
@@ -1036,10 +1077,13 @@ mod tests {
             prepared.projection_digest,
             second_prepared.projection_digest
         );
-        let denied: Result<Result<(), Error>, _> =
-            fixture
-                .pic
-                .query_candid_as(canister, admitted, "test_fleet_admission_probe", ());
+        let denied: Result<Result<(), Error>, _> = fixture.pic.query_candid_as(
+            canister,
+            admitted,
+            "test_fleet_admission_probe",
+            (),
+            canic::testing::CANDID_REPLY_LIMITS,
+        );
         assert!(denied.is_err());
 
         activate_projection(&fixture.pic, canister, fixture.root, &directory);
@@ -1084,21 +1128,38 @@ mod tests {
         let admitted = Fake::principal(15);
         let unlisted = Fake::principal(16);
 
-        let prepared_call: Result<Result<ManagedGuardReceipt, Error>, _> = fixture
-            .pic
-            .update_candid_as(canister, admitted, "managed_guard_admission_probe", ());
+        let prepared_call: Result<Result<ManagedGuardReceipt, Error>, _> =
+            fixture.pic.update_candid_as(
+                canister,
+                admitted,
+                "managed_guard_admission_probe",
+                (),
+                canic::testing::CANDID_REPLY_LIMITS,
+            );
         assert!(prepared_call.is_err());
         activate_projection(&fixture.pic, canister, fixture.root, &directory);
 
         let public_caller: Result<Principal, Error> = fixture
             .pic
-            .query_candid_as(canister, unlisted, "managed_guard_public_probe", ())
+            .query_candid_as(
+                canister,
+                unlisted,
+                "managed_guard_public_probe",
+                (),
+                canic::testing::CANDID_REPLY_LIMITS,
+            )
             .expect("query Candid harness call");
         assert_eq!(public_caller, Ok(unlisted));
 
         let guarded: Result<ManagedGuardReceipt, Error> = fixture
             .pic
-            .update_candid_as(canister, admitted, "managed_guard_admission_probe", ())
+            .update_candid_as(
+                canister,
+                admitted,
+                "managed_guard_admission_probe",
+                (),
+                canic::testing::CANDID_REPLY_LIMITS,
+            )
             .expect("update Candid harness call");
         assert_eq!(
             guarded.expect("admitted explicit admission guard caller"),
@@ -1111,13 +1172,25 @@ mod tests {
 
         let canic: Result<Principal, Error> = fixture
             .pic
-            .query_candid_as(canister, admitted, "canic_fleet_admission_parity_probe", ())
+            .query_candid_as(
+                canister,
+                admitted,
+                "canic_fleet_admission_parity_probe",
+                (),
+                canic::testing::CANDID_REPLY_LIMITS,
+            )
             .expect("query Candid harness call");
         assert_eq!(canic.expect("admitted Canic endpoint caller"), admitted);
 
         let application_owned: Result<Principal, Error> = fixture
             .pic
-            .update_candid_as(canister, admitted, "managed_guard_owned_probe", ())
+            .update_candid_as(
+                canister,
+                admitted,
+                "managed_guard_owned_probe",
+                (),
+                canic::testing::CANDID_REPLY_LIMITS,
+            )
             .expect("update Candid harness call");
         assert_eq!(
             application_owned
@@ -1128,7 +1201,13 @@ mod tests {
 
         let denied: Result<ManagedGuardReceipt, Error> = fixture
             .pic
-            .update_candid_as(canister, unlisted, "managed_guard_admission_probe", ())
+            .update_candid_as(
+                canister,
+                unlisted,
+                "managed_guard_admission_probe",
+                (),
+                canic::testing::CANDID_REPLY_LIMITS,
+            )
             .expect("update Candid harness call");
         assert!(denied.is_err());
         assert_eq!(managed_guard_workflow_runs(&fixture.pic, canister), 1);
@@ -1138,6 +1217,7 @@ mod tests {
             unlisted,
             "canic_fleet_admission_parity_probe",
             (),
+            canic::testing::CANDID_REPLY_LIMITS,
         );
         assert!(matches!(canic_denied, Ok(Err(_))));
 
@@ -1165,12 +1245,24 @@ mod tests {
         );
         let fenced_public: Result<Principal, Error> = fixture
             .pic
-            .query_candid_as(canister, unlisted, "managed_guard_public_probe", ())
+            .query_candid_as(
+                canister,
+                unlisted,
+                "managed_guard_public_probe",
+                (),
+                canic::testing::CANDID_REPLY_LIMITS,
+            )
             .expect("query Candid harness call");
         assert_eq!(fenced_public, Ok(unlisted));
         let fenced: Result<ManagedGuardReceipt, Error> = fixture
             .pic
-            .update_candid_as(canister, admitted, "managed_guard_admission_probe", ())
+            .update_candid_as(
+                canister,
+                admitted,
+                "managed_guard_admission_probe",
+                (),
+                canic::testing::CANDID_REPLY_LIMITS,
+            )
             .expect("update Candid harness call");
         assert!(fenced.is_err());
         assert_eq!(managed_guard_workflow_runs(&fixture.pic, canister), 1);
@@ -1455,9 +1547,14 @@ mod tests {
                 .phase,
             FleetAdmissionProjectionPhase::Fenced
         );
-        let prepared: Result<Result<ManagedGuardReceipt, Error>, _> = fixture
-            .pic()
-            .update_candid_as(fixture.app(), admitted, "managed_guard_admission_probe", ());
+        let prepared: Result<Result<ManagedGuardReceipt, Error>, _> =
+            fixture.pic().update_candid_as(
+                fixture.app(),
+                admitted,
+                "managed_guard_admission_probe",
+                (),
+                canic::testing::CANDID_REPLY_LIMITS,
+            );
         assert!(prepared.is_err());
 
         fixture
@@ -1472,7 +1569,13 @@ mod tests {
         );
         let admitted_result: Result<ManagedGuardReceipt, Error> = fixture
             .pic()
-            .update_candid_as(fixture.app(), admitted, "managed_guard_admission_probe", ())
+            .update_candid_as(
+                fixture.app(),
+                admitted,
+                "managed_guard_admission_probe",
+                (),
+                canic::testing::CANDID_REPLY_LIMITS,
+            )
             .expect("update Candid harness call");
         assert_eq!(
             admitted_result.expect("admitted explicit admission guard caller"),
@@ -1508,7 +1611,13 @@ mod tests {
             canic::testing::install_standalone_app(wasms.wasm("runtime_probe"), INSTALL_CYCLES);
         let before_upgrade: Result<(), Error> = standalone
             .pic()
-            .update_candid_as(standalone.app(), admitted, "test", ())
+            .update_candid_as(
+                standalone.app(),
+                admitted,
+                "test",
+                (),
+                canic::testing::CANDID_REPLY_LIMITS,
+            )
             .expect("update Candid harness call");
         assert!(before_upgrade.is_ok());
         standalone
@@ -1516,7 +1625,13 @@ mod tests {
             .expect("same-release standalone-local upgrade");
         let after_upgrade: Result<(), Error> = standalone
             .pic()
-            .update_candid_as(standalone.app(), admitted, "test", ())
+            .update_candid_as(
+                standalone.app(),
+                admitted,
+                "test",
+                (),
+                canic::testing::CANDID_REPLY_LIMITS,
+            )
             .expect("update Candid harness call");
         assert!(after_upgrade.is_ok());
     }
@@ -1624,13 +1739,22 @@ mod tests {
 
         let admitted_probe: Result<Principal, Error> = fixture
             .pic()
-            .query_candid_as(user_shard, admitted, "test_fleet_admission_probe", ())
+            .query_candid_as(
+                user_shard,
+                admitted,
+                "test_fleet_admission_probe",
+                (),
+                canic::testing::CANDID_REPLY_LIMITS,
+            )
             .expect("query Candid harness call");
         assert_eq!(admitted_probe, Ok(admitted));
-        let denied_probe: Result<Result<Principal, Error>, _> =
-            fixture
-                .pic()
-                .query_candid_as(user_shard, unlisted, "test_fleet_admission_probe", ());
+        let denied_probe: Result<Result<Principal, Error>, _> = fixture.pic().query_candid_as(
+            user_shard,
+            unlisted,
+            "test_fleet_admission_probe",
+            (),
+            canic::testing::CANDID_REPLY_LIMITS,
+        );
         let denied = denied_probe
             .expect("denied child ingress returns its typed Canic result")
             .expect_err("unlisted caller must not enter a managed child");
@@ -1641,7 +1765,13 @@ mod tests {
 
         let assigned: Result<Principal, Error> = fixture
             .pic()
-            .update_candid_as(user_hub, admitted, "create_account", (Fake::principal(17),))
+            .update_candid_as(
+                user_hub,
+                admitted,
+                "create_account",
+                (Fake::principal(17),),
+                canic::testing::CANDID_REPLY_LIMITS,
+            )
             .expect("update Candid harness call");
         assert_eq!(assigned, Ok(user_shard));
 
@@ -1685,7 +1815,13 @@ mod tests {
         assert_eq!(indexed_node.role.as_str(), "index_child");
         let indexed_probe: Result<Principal, Error> = fixture
             .pic()
-            .query_candid_as(indexed, admitted, "test_fleet_admission_probe", ())
+            .query_candid_as(
+                indexed,
+                admitted,
+                "test_fleet_admission_probe",
+                (),
+                canic::testing::CANDID_REPLY_LIMITS,
+            )
             .expect("query Candid harness call");
         assert_eq!(indexed_probe, Ok(admitted));
 
@@ -1777,10 +1913,13 @@ mod tests {
                 .phase,
             FleetAdmissionProjectionPhase::Fenced
         );
-        let fenced_probe: Result<Result<Principal, Error>, _> =
-            fixture
-                .pic()
-                .query_candid_as(user_shard, admitted, "test_fleet_admission_probe", ());
+        let fenced_probe: Result<Result<Principal, Error>, _> = fixture.pic().query_candid_as(
+            user_shard,
+            admitted,
+            "test_fleet_admission_probe",
+            (),
+            canic::testing::CANDID_REPLY_LIMITS,
+        );
         let fenced = fenced_probe
             .expect("fenced child ingress returns its typed Canic result")
             .expect_err("a prepared successor must fence admitted callers");
@@ -1804,6 +1943,7 @@ mod tests {
                 (ManagedCommand::ConfigureRuntime(Box::new(
                     directory.clone(),
                 )),),
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .expect("update Candid harness call");
         let ManagedCommandResponse::OperationAccepted(receipt) =
@@ -1830,6 +1970,7 @@ mod tests {
                         operation_id: [0xa1; 32],
                     },
                 ),),
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .expect("query Candid harness call");
         let ManagedControlStatusResponse::CallerAuthority(status) =
@@ -1918,6 +2059,7 @@ mod tests {
                     offset: 0,
                     limit: u64::MAX,
                 }),),
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .expect("query Candid harness call");
         let ManagedStatusResponse::Admission(status) =
@@ -1930,8 +2072,14 @@ mod tests {
         canister: Principal,
         caller: Principal,
     ) -> Result<(), Error> {
-        pic.query_candid_as(canister, caller, "test_fleet_admission_probe", ())
-            .expect("query Candid harness call")
+        pic.query_candid_as(
+            canister,
+            caller,
+            "test_fleet_admission_probe",
+            (),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .expect("query Candid harness call")
     }
 
     fn managed_admission_probe(
@@ -1939,8 +2087,14 @@ mod tests {
         canister: Principal,
         caller: Principal,
     ) -> Result<Principal, Error> {
-        pic.query_candid_as(canister, caller, "canic_fleet_admission_parity_probe", ())
-            .expect("query Candid harness call")
+        pic.query_candid_as(
+            canister,
+            caller,
+            "canic_fleet_admission_parity_probe",
+            (),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .expect("query Candid harness call")
     }
 
     fn transition_target(
@@ -1950,7 +2104,13 @@ mod tests {
         command: ManagedCommand,
     ) -> ManagedCommandResponse {
         let response: Result<ManagedCommandResponse, Error> = pic
-            .update_candid_as(canister, root, CANIC_COMMAND, (command,))
+            .update_candid_as(
+                canister,
+                root,
+                CANIC_COMMAND,
+                (command,),
+                canic::testing::CANDID_REPLY_LIMITS,
+            )
             .expect("update Candid harness call");
         response.expect("accepted target admission transition")
     }
@@ -1961,13 +2121,24 @@ mod tests {
         root: Principal,
         command: ManagedCommand,
     ) -> Result<ManagedCommandResponse, Error> {
-        pic.update_candid_as(canister, root, CANIC_COMMAND, (command,))
-            .expect("update Candid harness call")
+        pic.update_candid_as(
+            canister,
+            root,
+            CANIC_COMMAND,
+            (command,),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .expect("update Candid harness call")
     }
 
     fn managed_guard_workflow_runs(pic: &PocketIc, canister: Principal) -> u32 {
         let result: Result<u32, Error> = pic
-            .query_candid(canister, "managed_guard_workflow_runs", ())
+            .query_candid(
+                canister,
+                "managed_guard_workflow_runs",
+                (),
+                canic::testing::CANDID_REPLY_LIMITS,
+            )
             .expect("query Candid harness call");
         result.expect("public workflow-run observation")
     }

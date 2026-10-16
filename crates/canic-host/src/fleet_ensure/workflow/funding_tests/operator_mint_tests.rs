@@ -492,6 +492,7 @@ pub(super) fn funded_operator() -> (ic_testkit::pocket_ic::PocketIc, OperatorMin
                 memo: None,
                 created_at_time: None,
             },),
+            crate::test_support::CANDID_REPLY_LIMITS,
         )
         .unwrap();
     result.unwrap();

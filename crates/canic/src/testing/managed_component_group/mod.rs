@@ -252,6 +252,7 @@ impl ManagedComponentGroupFixture {
                 limit: DEFAULT_STATUS_PAGE_LIMIT,
                 offset: 0,
             }),),
+            crate::testing::CANDID_REPLY_LIMITS,
         )?;
         let response = response.map_err(ManagedComponentGroupQualificationError::Canic)?;
         let ManagedStatusResponse::Admission(status) = response else {
@@ -299,6 +300,7 @@ impl ManagedComponentGroupFixture {
             self.root(),
             CANIC_COMMAND,
             (ManagedCommand::PrepareFleetAdmission(Box::new(request)),),
+            crate::testing::CANDID_REPLY_LIMITS,
         )?;
         let response = response.map_err(ManagedComponentGroupQualificationError::Canic)?;
         let ManagedCommandResponse::PrepareFleetAdmission(receipt) = response else {
@@ -319,6 +321,7 @@ impl ManagedComponentGroupFixture {
             self.root(),
             CANIC_OBSERVABILITY,
             (ManagedStatusRequest::Binding,),
+            crate::testing::CANDID_REPLY_LIMITS,
         )?;
         let response = response.map_err(ManagedComponentGroupQualificationError::Canic)?;
         let ManagedStatusResponse::Binding(binding) = response else {
@@ -342,6 +345,7 @@ impl ManagedComponentGroupFixture {
             (ManagedStatusRequest::Operation(OperationStatusRequest {
                 operation_id: node.directory.operation_id,
             }),),
+            crate::testing::CANDID_REPLY_LIMITS,
         )?;
         let response = response.map_err(ManagedComponentGroupQualificationError::Canic)?;
         let ManagedStatusResponse::Operation(status) = response else {
@@ -363,6 +367,7 @@ impl ManagedComponentGroupFixture {
             self.root(),
             CANIC_OBSERVABILITY,
             (ManagedStatusRequest::Runtime,),
+            crate::testing::CANDID_REPLY_LIMITS,
         )?;
         let response = response.map_err(ManagedComponentGroupQualificationError::Canic)?;
         let ManagedStatusResponse::Runtime(status) = response else {
@@ -402,9 +407,12 @@ impl ManagedComponentGroupFixture {
     fn install_unsettled_allocations(
         &mut self,
     ) -> Result<usize, ManagedComponentGroupQualificationError> {
-        let allocations: Vec<FixtureChildAllocation> =
-            self.pic
-                .query_candid(self.root(), "testing_component_child_allocations", ())?;
+        let allocations: Vec<FixtureChildAllocation> = self.pic.query_candid(
+            self.root(),
+            "testing_component_child_allocations",
+            (),
+            crate::testing::CANDID_REPLY_LIMITS,
+        )?;
         let allocation_count = allocations.len();
         for allocation in allocations {
             if self
@@ -559,9 +567,12 @@ impl ManagedComponentGroupFixture {
         &self,
         request_id: [u8; 32],
     ) -> Result<(), ManagedComponentGroupQualificationError> {
-        let settled: Result<(), Error> =
-            self.pic
-                .update_candid(self.root(), "testing_settle_component_child", (request_id,))?;
+        let settled: Result<(), Error> = self.pic.update_candid(
+            self.root(),
+            "testing_settle_component_child",
+            (request_id,),
+            crate::testing::CANDID_REPLY_LIMITS,
+        )?;
         settled.map_err(ManagedComponentGroupQualificationError::Canic)
     }
 
@@ -1353,6 +1364,7 @@ fn configure_runtime(
         (ManagedCommand::ConfigureRuntime(Box::new(
             directory.clone(),
         )),),
+        crate::testing::CANDID_REPLY_LIMITS,
     )?;
     let response = response.map_err(ManagedComponentGroupQualificationError::Canic)?;
     let ManagedCommandResponse::OperationAccepted(receipt) = response else {
@@ -1376,6 +1388,7 @@ fn overview(
         target,
         CANIC_PUBLIC_STATUS,
         (ManagedStatusRequest::Overview,),
+        crate::testing::CANDID_REPLY_LIMITS,
     )?;
     let response = response.map_err(ManagedComponentGroupQualificationError::Canic)?;
     let ManagedStatusResponse::Overview(status) = response else {

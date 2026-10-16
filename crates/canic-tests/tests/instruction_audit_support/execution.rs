@@ -240,7 +240,12 @@ fn execute_scenario(
         "scale:request_cycles_from_parent:fresh" => {
             let response: Result<u128, Error> = setup
                 .pic
-                .update_candid(target_pid, "request_cycles_from_parent", (999u128,))
+                .update_candid(
+                    target_pid,
+                    "request_cycles_from_parent",
+                    (999u128,),
+                    canic::testing::CANDID_REPLY_LIMITS,
+                )
                 .expect("scale request_cycles_from_parent transport failed");
             assert_eq!(
                 response.expect("scale request_cycles_from_parent application failed"),
@@ -258,6 +263,7 @@ fn execute_scenario(
                     target_pid,
                     "create_account",
                     (Principal::from_slice(&[51; 29]),),
+                    canic::testing::CANDID_REPLY_LIMITS,
                 )
                 .expect("create_account transport failed");
             created.expect("create_account application failed");
@@ -265,7 +271,12 @@ fn execute_scenario(
         "scale_hub:create_worker:empty-pool" => {
             let created: Result<Principal, Error> = setup
                 .pic
-                .update_candid(target_pid, "create_worker", ())
+                .update_candid(
+                    target_pid,
+                    "create_worker",
+                    (),
+                    canic::testing::CANDID_REPLY_LIMITS,
+                )
                 .expect("create_worker transport failed");
             created.expect("create_worker application failed");
         }
@@ -279,6 +290,7 @@ fn provision_delegation_proof(pic: &PocketIc, root: Principal, issuer_pid: Princ
             root,
             "test_provision_chain_key_delegation_proof_for_issuer",
             (issuer_pid,),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .expect("root proof provisioning transport failed");
     provisioned.expect("root proof provisioning application failed");
@@ -305,6 +317,7 @@ fn configure_delegation_issuer(
                 cert_ttl_ns: 60_000_000_000,
                 refresh_after_ratio_bps: 8_000,
             }),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .expect("root issuer registration transport failed");
     let RootCommandResponse::ConfigureIssuer(registered) =
@@ -348,6 +361,7 @@ fn perf_entries(pic: &PocketIc, canister_id: Principal) -> Vec<MetricEntry> {
                     offset: 0,
                 },
             }),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .expect("perf metrics transport query failed");
 
@@ -499,6 +513,7 @@ fn root_capability_response_as(
         caller,
         protocol::CANIC_ROOT_COMMAND,
         (RootCommand::RespondCapability(envelope),),
+        canic::testing::CANDID_REPLY_LIMITS,
     );
     let response = result.expect("root capability transport call failed")?;
     let RootCommandResponse::RespondCapability(response) = response else {

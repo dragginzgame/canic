@@ -457,6 +457,7 @@ pub(super) fn command(
             caller,
             canic::protocol::CANIC_ROOT_COMMAND,
             (Command::ImportPoolCapacity(action),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .unwrap();
     response.map(|Response::ImportPoolCapacity(status)| status)
@@ -469,6 +470,7 @@ pub(super) fn context(pic: &PocketIc, root: Principal, caller: Principal) -> Poo
             caller,
             canic::protocol::CANIC_ROOT_STATUS,
             (StatusRequest::PoolImportContext,),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .unwrap();
     let StatusResponse::PoolImportContext(context) = response.unwrap() else {
@@ -489,6 +491,7 @@ pub(super) fn status(
             caller,
             canic::protocol::CANIC_ROOT_STATUS,
             (StatusRequest::PoolImport(identity),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .unwrap();
     let StatusResponse::PoolImport(status) = response.unwrap() else {

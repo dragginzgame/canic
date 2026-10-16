@@ -21,6 +21,7 @@ pub(super) fn assert_census(
             caller,
             canic::protocol::CANIC_ROOT_STATUS,
             (StatusRequest::PoolRelease,),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .unwrap()
     };

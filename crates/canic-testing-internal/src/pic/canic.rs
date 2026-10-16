@@ -66,8 +66,13 @@ fn root_command(
     root: Principal,
     command: RootCommandFragment,
 ) -> Result<RootCommandResponseFragment, Error> {
-    pic.update_candid(root, protocol::CANIC_ROOT_COMMAND, (command,))
-        .expect("Root command transport")
+    pic.update_candid(
+        root,
+        protocol::CANIC_ROOT_COMMAND,
+        (command,),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .expect("Root command transport")
 }
 
 fn root_status(
@@ -82,6 +87,7 @@ fn root_status(
             RootStatusRequestFragment::Operation(_) => protocol::CANIC_ROOT_OPERATION_STATUS,
         },
         (request,),
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .expect("Root status transport")
 }
@@ -503,6 +509,7 @@ pub(super) fn activate_managed_fleet(
                     operation_id: managed_test_store_install_id(),
                 },
             ),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .expect("Store activation status transport");
     let StoreStatusResponseFragment::Operation(StoreOperationStatusFragment::FleetActivation(
@@ -534,6 +541,7 @@ pub fn wait_until_ready(pic: &PocketIc, canister_id: Principal, tick_limit: usiz
                 Principal::anonymous(),
                 protocol::CANIC_OBSERVABILITY,
                 (RootStatusRequestFragment::Readiness,),
+                canic::testing::CANDID_REPLY_LIMITS
             ),
             Ok(Ok(RootStatusResponseFragment::Readiness(
                 CanicReadinessStatus {
@@ -635,6 +643,7 @@ fn fetch_ready(pic: &PocketIc, canister_id: Principal) -> Result<bool, CandidCal
         canister_id,
         protocol::CANIC_OBSERVABILITY,
         (CanisterStatusRequestFragment::Readiness,),
+        canic::testing::CANDID_REPLY_LIMITS,
     ) {
         Ok(Ok(CanisterStatusResponseFragment::Readiness(readiness))) => {
             Ok(readiness.status == ReadinessStatus::Ready)
@@ -649,6 +658,7 @@ fn fetch_root_ready(pic: &PocketIc, canister_id: Principal) -> Result<bool, Cand
         canister_id,
         protocol::CANIC_OBSERVABILITY,
         (RootStatusRequestFragment::Readiness,),
+        canic::testing::CANDID_REPLY_LIMITS,
     ) {
         Ok(Ok(RootStatusResponseFragment::Readiness(readiness))) => {
             Ok(readiness.status == ReadinessStatus::Ready)

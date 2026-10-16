@@ -500,6 +500,7 @@ dependencies = [
  "canic-macros",
  "ic-cdk",
  "ic-testkit",
+ "ic-testkit-candid 0.50.0",
  "ic0",
  "serde",
  "syn 3.0.9",
@@ -603,7 +604,7 @@ dependencies = [
  "ic-cdk",
  "ic-certification",
  "ic-memory 0.45.0",
- "ic-metrics",
+ "ic-metrics 0.12.0",
  "ic-secp256k1",
  "ic-timers",
  "k256",
@@ -643,6 +644,7 @@ dependencies = [
  "ic-host-tools 0.24.0",
  "ic-query",
  "ic-testkit",
+ "ic-testkit-candid 0.50.0",
  "ic-verify-bls-signature",
  "icrc-ledger-types",
  "prost",
@@ -2303,7 +2305,7 @@ dependencies = [
  "ic-host-fs 0.23.1",
  "ic-host-process 0.23.1",
  "ic-management-canister-types 0.11.0",
- "ic-metrics",
+ "ic-metrics 0.11.8",
  "ic_principal",
  "rustix",
  "serde",
@@ -2642,6 +2644,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be80caab63d3384a0b46e58d92720095b49099cd9a0026514da0860eb5b0626b"
 
 [[package]]
+name = "ic-metrics"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c30a384477a9783da95cd991e576f6f6a76c5d3691299fffe294f95affae3fd7"
+
+[[package]]
 name = "ic-query"
 version = "0.59.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2657,7 +2665,7 @@ dependencies = [
  "ic-host-fs 0.22.1",
  "ic-host-text 0.22.1",
  "ic-host-tools 0.22.1",
- "ic-metrics",
+ "ic-metrics 0.11.8",
  "ic-testkit-candid 0.49.0",
  "icrc-ledger-types",
  "prost",
@@ -2734,7 +2742,7 @@ dependencies = [
  "ic-host-artifacts 0.23.1",
  "ic-host-fs 0.23.1",
  "ic-host-process 0.23.1",
- "ic-metrics",
+ "ic-metrics 0.11.8",
  "ic-testkit-candid 0.50.0",
  "libc",
  "pocket-ic",
@@ -2771,7 +2779,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99dfa8019ad6e224f064098bf868780b87865d9ff31c91e0822523bc9fcd5aca"
 dependencies = [
  "ic-cdk-executor",
- "ic-metrics",
+ "ic-metrics 0.11.8",
  "ic0",
  "thiserror 2.0.18",
 ]

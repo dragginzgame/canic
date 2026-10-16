@@ -1,3 +1,4 @@
+use canic::testing::CANDID_REPLY_LIMITS as REPLY_LIMITS;
 use std::{num::NonZeroUsize, sync::LazyLock};
 
 use candid::{CandidType, Deserialize, Principal, encode_args, encode_one};
@@ -11,7 +12,7 @@ use canic_testing_internal::pic::{
 };
 use ic_testkit::pic::{
     CachedPocketIcBaseline, CachedPocketIcBaselinePool, CachedPocketIcBaselinePoolGuard,
-    CandidCallErrorKind, CandidCallExt, CanisterInstallExt, ErrorCode, FixtureRecipeId, RejectCode,
+    CandidCallError, CandidCallExt, CanisterInstallExt, ErrorCode, FixtureRecipeId, RejectCode,
     RetryPolicy, SnapshotRestoreFunding, StandaloneCanisterFixture, StandaloneCanisterRecipe,
 };
 
@@ -29,14 +30,14 @@ struct PlainReply {
 fn counts(fixture: &CachedPocketIcBaseline<Principal>) -> PlainReply {
     fixture
         .pocket_ic()
-        .query_candid(*fixture.metadata(), "dispatch_counts", ())
+        .query_candid(*fixture.metadata(), "dispatch_counts", (), REPLY_LIMITS)
         .expect("Candid harness call")
 }
 
 fn denied_count(fixture: &CachedPocketIcBaseline<Principal>, method: &str) -> u64 {
     let metrics: Result<Vec<canic::dto::metrics::MetricEntry>, Error> = fixture
         .pocket_ic()
-        .query_candid(*fixture.metadata(), "access_counts", ())
+        .query_candid(*fixture.metadata(), "access_counts", (), REPLY_LIMITS)
         .expect("Candid harness call");
     metrics
         .unwrap()
@@ -101,7 +102,7 @@ fn guarded_plain_reply_and_result_reply_keep_denial_metrics_and_short_circuiting
 
     let accepted: Result<PlainReply, Error> = fixture
         .pocket_ic()
-        .update_candid(*fixture.metadata(), "result_commit", (true,))
+        .update_candid(*fixture.metadata(), "result_commit", (true,), REPLY_LIMITS)
         .expect("Candid harness call");
     assert_eq!(
         accepted.unwrap(),
@@ -113,7 +114,7 @@ fn guarded_plain_reply_and_result_reply_keep_denial_metrics_and_short_circuiting
     assert_eq!(denied_count(&fixture, "result_commit"), 0);
     let denied: Result<PlainReply, Error> = fixture
         .pocket_ic()
-        .update_candid(*fixture.metadata(), "result_commit", (false,))
+        .update_candid(*fixture.metadata(), "result_commit", (false,), REPLY_LIMITS)
         .expect("Candid harness call");
     assert!(denied.is_err());
     assert_eq!(
@@ -147,29 +148,7 @@ fn bounded_queries_and_inter_canister_updates_refuse_before_dispatch() {
         CanicWasmBuildProfile::Fast,
         "bounded-relay",
     );
-    let query: PlainReply = fixture
-        .pocket_ic()
-        .query_candid(*fixture.metadata(), "bounded_query", ("valid",))
-        .expect("Candid harness call");
-    assert_eq!(query.committed, 1);
-    let before = handler_log_count(&fixture);
-    for bytes in [
-        encode_args(("x".repeat(1024),)).unwrap(),
-        b"invalid".to_vec(),
-    ] {
-        let error = fixture
-            .pocket_ic()
-            .query_call(
-                *fixture.metadata(),
-                Principal::anonymous(),
-                "bounded_query",
-                bytes,
-            )
-            .unwrap_err();
-        assert_eq!(error.reject_code, RejectCode::CanisterError, "{error:?}");
-        assert_eq!(error.error_code, ErrorCode::CanisterCalledTrap);
-    }
-    assert_eq!(handler_log_count(&fixture), before);
+    assert_bounded_query_admission(&fixture);
     let accepted: Result<bool, Error> = fixture
         .pocket_ic()
         .update_candid(
@@ -180,6 +159,7 @@ fn bounded_queries_and_inter_canister_updates_refuse_before_dispatch() {
                 "bounded_update",
                 encode_args(("valid",)).unwrap(),
             ),
+            REPLY_LIMITS,
         )
         .expect("Candid harness call");
     assert!(accepted.unwrap());
@@ -191,7 +171,12 @@ fn bounded_queries_and_inter_canister_updates_refuse_before_dispatch() {
     ] {
         let accepted: Result<bool, Error> = fixture
             .pocket_ic()
-            .update_candid(relay, "relay_bounded", (*fixture.metadata(), method, bytes))
+            .update_candid(
+                relay,
+                "relay_bounded",
+                (*fixture.metadata(), method, bytes),
+                REPLY_LIMITS,
+            )
             .expect("Candid harness call");
         assert!(
             accepted.unwrap(),
@@ -220,7 +205,12 @@ fn bounded_queries_and_inter_canister_updates_refuse_before_dispatch() {
     ] {
         let refused: Result<bool, Error> = fixture
             .pocket_ic()
-            .update_candid(relay, "relay_bounded", (*fixture.metadata(), method, bytes))
+            .update_candid(
+                relay,
+                "relay_bounded",
+                (*fixture.metadata(), method, bytes),
+                REPLY_LIMITS,
+            )
             .expect("Candid harness call");
         assert!(refused.is_err(), "{method} must refuse the bounded input");
         assert_eq!(counts(&fixture), initial);
@@ -402,6 +392,7 @@ fn raw_update_adapter_rejects_oversized_inter_canister_payload_before_decode() {
             relay,
             "relay_explicit_echo",
             (*target.metadata(), exact_payload_len),
+            REPLY_LIMITS,
         )
         .expect("Candid harness call");
     assert_eq!(
@@ -415,6 +406,7 @@ fn raw_update_adapter_rejects_oversized_inter_canister_payload_before_decode() {
             relay,
             "relay_explicit_echo",
             (*target.metadata(), exact_payload_len + 1),
+            REPLY_LIMITS,
         )
         .expect("Candid harness call");
     drop(target);
@@ -437,7 +429,7 @@ fn assert_echo_ok(fixture: &CachedPocketIcBaseline<Principal>, method: &str, len
     let payload = payload(len);
     let response: Result<usize, Error> = fixture
         .pocket_ic()
-        .update_candid(*fixture.metadata(), method, (payload,))
+        .update_candid(*fixture.metadata(), method, (payload,), REPLY_LIMITS)
         .expect("Candid harness call");
 
     assert_eq!(response.expect("endpoint should accept payload"), len);
@@ -448,11 +440,15 @@ fn assert_rejected(fixture: &CachedPocketIcBaseline<Principal>, method: &str, le
     let payload = payload(len);
     let err = fixture
         .pocket_ic()
-        .update_candid::<Result<usize, Error>, _>(*fixture.metadata(), method, (payload,))
+        .update_candid::<Result<usize, Error>, _>(
+            *fixture.metadata(),
+            method,
+            (payload,),
+            REPLY_LIMITS,
+        )
         .expect_err("transport should reject oversized ingress");
 
-    assert_eq!(err.kind, CandidCallErrorKind::CanisterReject);
-    assert!(err.reject_response.is_some());
+    assert!(matches!(err, CandidCallError::CanisterReject { .. }));
 }
 
 // Build one ASCII string payload with exact byte length.
@@ -528,7 +524,12 @@ fn compiled_payload_contract_matches_actual_ingress_boundaries() {
         if method == "bare_echo" {
             let result: usize = fixture
                 .pocket_ic()
-                .update_candid(*fixture.metadata(), method, (payload(length),))
+                .update_candid(
+                    *fixture.metadata(),
+                    method,
+                    (payload(length),),
+                    REPLY_LIMITS,
+                )
                 .expect("Candid harness call");
             assert_eq!(result, length);
         } else {
@@ -547,4 +548,35 @@ fn resolve_type(ty: &EndpointType) -> &EndpointType {
         } => resolve_type(inner),
         _ => ty,
     }
+}
+
+fn assert_bounded_query_admission(fixture: &CachedPocketIcBaseline<Principal>) {
+    let query: PlainReply = fixture
+        .pocket_ic()
+        .query_candid(
+            *fixture.metadata(),
+            "bounded_query",
+            ("valid",),
+            REPLY_LIMITS,
+        )
+        .expect("Candid harness call");
+    assert_eq!(query.committed, 1);
+    let before = handler_log_count(fixture);
+    for bytes in [
+        encode_args(("x".repeat(1024),)).unwrap(),
+        b"invalid".to_vec(),
+    ] {
+        let error = fixture
+            .pocket_ic()
+            .query_call(
+                *fixture.metadata(),
+                Principal::anonymous(),
+                "bounded_query",
+                bytes,
+            )
+            .unwrap_err();
+        assert_eq!(error.reject_code, RejectCode::CanisterError, "{error:?}");
+        assert_eq!(error.error_code, ErrorCode::CanisterCalledTrap);
+    }
+    assert_eq!(handler_log_count(fixture), before);
 }

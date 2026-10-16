@@ -100,6 +100,7 @@ fn status(
         (StatusRequest::CallerAuthority(OperationStatusRequest {
             operation_id,
         }),),
+        crate::testing::CANDID_REPLY_LIMITS,
     )?;
     let StatusResponse::CallerAuthority(status) = response.map_err(FixtureError::Canic)?;
     if status.authority != *authority {
@@ -160,7 +161,12 @@ fn command(
     target: Principal,
     command: Command,
 ) -> Result<Response, FixtureError> {
-    let response: Result<Response, Error> =
-        pic.update_candid_as(target, root, CANIC_COMMAND, (command,))?;
+    let response: Result<Response, Error> = pic.update_candid_as(
+        target,
+        root,
+        CANIC_COMMAND,
+        (command,),
+        crate::testing::CANDID_REPLY_LIMITS,
+    )?;
     response.map_err(FixtureError::Canic)
 }

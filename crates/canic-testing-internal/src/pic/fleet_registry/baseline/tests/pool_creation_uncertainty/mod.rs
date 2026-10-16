@@ -20,7 +20,12 @@ pub(super) fn set_refusal(
     refusal: Option<CreationRetryRefusal>,
 ) {
     let (): () = pic
-        .update_candid(ledger, "set_creation_retry_refusal", (refusal,))
+        .update_candid(
+            ledger,
+            "set_creation_retry_refusal",
+            (refusal,),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
         .unwrap();
 }
 
@@ -94,7 +99,12 @@ pub(super) fn uncertain_creation_retains_custody_across_retry_refusals() {
         assert_eq!(retained.placement_subnet, original.placement_subnet);
         let amounts: Vec<Nat> = fixture
             .pic
-            .query_candid(fixture.cycles_ledger, "requested_amounts", ())
+            .query_candid(
+                fixture.cycles_ledger,
+                "requested_amounts",
+                (),
+                canic::testing::CANDID_REPLY_LIMITS,
+            )
             .unwrap();
         assert_eq!(amounts, vec![Nat::from(original.ledger_amount.to_u128())]);
     }
@@ -107,7 +117,12 @@ pub(super) fn uncertain_creation_retains_custody_across_retry_refusals() {
     );
     let requests: u64 = fixture
         .pic
-        .query_candid(fixture.cycles_ledger, "request_count", ())
+        .query_candid(
+            fixture.cycles_ledger,
+            "request_count",
+            (),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
         .unwrap();
     assert_mainnet_refill_result(&fixture, 1, requests);
 }

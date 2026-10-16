@@ -555,6 +555,7 @@ fn begin_receipt(
             quantity,
             replay_deadline_ns,
         ),
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .expect("begin receipt transport")
     .expect("begin receipt application")
@@ -582,6 +583,7 @@ fn settle_receipt(
             source_canister,
             evidence_seed,
         ),
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .expect("settle receipt transport")
 }
@@ -595,6 +597,7 @@ fn load_receipt(
         authority_id,
         "load_receipt",
         (operation_seed,),
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .expect("load receipt transport")
     .expect("load receipt application")

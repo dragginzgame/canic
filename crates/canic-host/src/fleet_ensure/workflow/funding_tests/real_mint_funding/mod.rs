@@ -205,6 +205,7 @@ impl EnsurePlatform for FundedCanister {
                     from_subaccount: None,
                     to: self.destination,
                 },),
+                crate::test_support::CANDID_REPLY_LIMITS,
             )
             .unwrap();
         let block = match reply {
@@ -238,7 +239,14 @@ fn governed_pocketic_mint_credit_resumes_original_native_withdrawal() {
     let (pic, transport) = funded_operator();
     let operator = transport.operator().unwrap();
     let ledger = Principal::from_text(LEDGER).unwrap();
-    let fee: Nat = pic.query_candid(ledger, "icrc1_fee", ()).unwrap();
+    let fee: Nat = pic
+        .query_candid(
+            ledger,
+            "icrc1_fee",
+            (),
+            crate::test_support::CANDID_REPLY_LIMITS,
+        )
+        .unwrap();
     let fee: u128 = fee.0.try_into().unwrap();
     let destination = pic
         .create_canister_with_params(

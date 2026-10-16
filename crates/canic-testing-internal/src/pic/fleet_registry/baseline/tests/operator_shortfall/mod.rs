@@ -28,7 +28,12 @@ pub(super) fn assert_fresh_reinstall_rejection(
     let before = snapshot();
     let withdrawals: u64 = input
         .pic
-        .query_candid(ledger, "withdrawal_count", ())
+        .query_candid(
+            ledger,
+            "withdrawal_count",
+            (),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
         .unwrap();
     assert!(plan.conservation.maximum_operator_debit_cycles > 0);
 
@@ -65,7 +70,12 @@ pub(super) fn assert_fresh_reinstall_rejection(
     assert_eq!(
         input
             .pic
-            .query_candid::<u64, _>(ledger, "withdrawal_count", ())
+            .query_candid::<u64, _>(
+                ledger,
+                "withdrawal_count",
+                (),
+                canic::testing::CANDID_REPLY_LIMITS
+            )
             .unwrap(),
         withdrawals
     );
@@ -87,6 +97,7 @@ fn move_fixture_balance(
             ledger,
             "set_transfer_fee_override",
             (Some(Nat::from(0_u8)),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .unwrap();
     let receipt: Result<Nat, QualificationIcrc1TransferError> = pic
@@ -105,10 +116,16 @@ fn move_fixture_balance(
                 memo: Some(b"fresh funding admission fixture".to_vec()),
                 amount,
             },),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .unwrap();
     receipt.unwrap();
     let _: () = pic
-        .update_candid(ledger, "set_transfer_fee_override", (None::<Nat>,))
+        .update_candid(
+            ledger,
+            "set_transfer_fee_override",
+            (None::<Nat>,),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
         .unwrap();
 }

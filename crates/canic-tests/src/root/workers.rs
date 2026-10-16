@@ -22,7 +22,12 @@ pub fn create_worker(
     hub_pid: Principal,
 ) -> Result<Principal, Error> {
     let worker_pid: Result<Principal, Error> = pic
-        .update_candid(hub_pid, "create_worker", ())
+        .update_candid(
+            hub_pid,
+            "create_worker",
+            (),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
         .expect("update Candid harness call");
     let worker_pid = worker_pid?;
     wait_for_worker_sync(pic, root_pid, hub_pid, worker_pid);
@@ -57,6 +62,7 @@ fn wait_for_worker_sync(
                     limit: 100,
                     offset: 0,
                 }),),
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .expect("query Candid harness call");
 

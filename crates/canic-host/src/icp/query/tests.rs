@@ -292,12 +292,14 @@ fn read_request(connection: &mut TcpStream) -> (String, Vec<u8>) {
     connection
         .set_write_timeout(Some(Duration::from_secs(3)))
         .unwrap();
-    let request = ic_testkit::testing::read_http_request(
+    let request = ic_host_process::testing::http::capture_http_request(
         connection,
         Duration::from_secs(3),
         16 * 1024,
         4 * 1024 * 1024,
+        ic_host_process::testing::http::HttpContentLength::Optional,
     )
+    .into_result()
     .unwrap();
     let body_offset = request
         .windows(4)

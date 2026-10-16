@@ -120,6 +120,7 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
                     operation_id: member_operation,
                 },
             ),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .unwrap();
     assert_eq!(
@@ -137,6 +138,7 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
             Principal::anonymous(),
             canic::protocol::CANIC_ROOT_COMMAND,
             (Command::BindComponentInitialization(wrong),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .unwrap();
     assert_eq!(
@@ -149,6 +151,7 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
             target,
             canic::protocol::CANIC_ROOT_COMMAND,
             (Command::BindComponentInitialization(request.clone()),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .unwrap();
     assert_eq!(
@@ -197,6 +200,7 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
             Principal::anonymous(),
             canic::protocol::CANIC_ROOT_COMMAND,
             (Command::BindComponentInitialization(request.clone()),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .unwrap();
     replay.unwrap();
@@ -217,6 +221,7 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
             Principal::anonymous(),
             "managed_initialization_bytes",
             (),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .unwrap();
     assert_eq!(delivered.unwrap(), request.initialization.arguments);
@@ -230,6 +235,7 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
             Principal::anonymous(),
             canic::protocol::CANIC_ROOT_COMMAND,
             (Command::BindComponentInitialization(request.clone()),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .unwrap();
     replay.unwrap();
@@ -252,6 +258,7 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
             Principal::anonymous(),
             "managed_initialization_bytes",
             (),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .unwrap();
     assert_eq!(restored.unwrap(), request.initialization.arguments);

@@ -39,6 +39,7 @@ pub(super) fn review(
             operator,
             canic::protocol::CANIC_COORDINATOR_REGISTRY,
             (CoordinatorRegistryRequest::Registry,),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .unwrap();
     let CoordinatorRegistryResponse::Registry(registry) = registry.unwrap();

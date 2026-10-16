@@ -242,6 +242,7 @@ fn command(
             caller,
             canic::protocol::CANIC_COMMAND,
             (Command::CallerAuthority(request),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .unwrap();
     response.map(|Response::CallerAuthority(receipt)| receipt)
@@ -261,6 +262,7 @@ fn status(
             (StatusRequest::CallerAuthority(OperationStatusRequest {
                 operation_id,
             }),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .unwrap();
     let StatusResponse::CallerAuthority(status) = response.unwrap();
@@ -268,8 +270,14 @@ fn status(
 }
 
 fn probe(pic: &PocketIc, hub: Principal, shard: Principal) -> Result<Principal, Error> {
-    pic.update_candid_as(hub, shard, "test_caller_probe", ())
-        .unwrap()
+    pic.update_candid_as(
+        hub,
+        shard,
+        "test_caller_probe",
+        (),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .unwrap()
 }
 
 const fn inactive() -> Result<Principal, Error> {

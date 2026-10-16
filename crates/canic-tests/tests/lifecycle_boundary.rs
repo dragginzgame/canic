@@ -286,6 +286,7 @@ fn assert_prepared_and_not_ready(pic: &PocketIc, canister_id: Principal, root: P
             (CanisterStatusRequest::Operation(OperationStatusRequest {
                 operation_id: [0x43; 32],
             }),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .expect("query Prepared Fleet activation status");
     let CanisterStatusResponse::Operation(operation) = status.expect("Prepared activation status")
@@ -302,6 +303,7 @@ fn assert_prepared_and_not_ready(pic: &PocketIc, canister_id: Principal, root: P
             canister_id,
             canic_contracts::protocol::CANIC_OBSERVABILITY,
             (CanisterStatusRequest::Readiness,),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .expect("query managed Canister readiness");
     let CanisterStatusResponse::Readiness(readiness) =

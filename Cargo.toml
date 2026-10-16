@@ -102,13 +102,14 @@ ic-host-text = "0.24"
 ic-host-tools = "0.24"
 ic-management-canister-types = "0.11"
 ic-memory = "0.45"
-ic-metrics = "0.11"
+ic-metrics = "0.12"
 ic-query = { version = "0.59", default-features = false, features = [
     "subnet-catalog-host",
 ] }
 ic-secp256k1 = "=0.3.0"
 ic-signature-verification = "0.3.0"
 ic-testkit = { version = "0.50" }
+ic-testkit-candid = "0.50"
 ic-timers = "0.26"
 ic-verify-bls-signature = { version = "0.6.0", default-features = false, features = [
     "alloc",

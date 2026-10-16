@@ -34,3 +34,13 @@ fn build_pocketic() -> Result<PocketIc, String> {
         .map(|owned| owned.instance)
         .map_err(|error| error.to_string())
 }
+
+/// Finite reply budgets for framework qualification, including paged fleet views.
+/// Transport and canister execution budgets remain independently caller-owned.
+pub const CANDID_REPLY_LIMITS: ic_testkit_candid::DecodeLimits = ic_testkit_candid::DecodeLimits {
+    reply_bytes: 4 * 1024 * 1024,
+    decoding_quota: 100_000_000,
+    skipping_quota: 10_000_000,
+    type_entries: 10_000,
+    header_bytes: 256 * 1024,
+};

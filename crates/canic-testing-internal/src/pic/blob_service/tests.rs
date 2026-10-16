@@ -203,14 +203,26 @@ fn qualify(embedded: bool) {
     let stranger = principal(9);
     let resume = || {
         let result: Result<(), canic_blob_service::dto::recovery::CurrentInstanceRecoveryFailure> =
-            pic.update_candid_as(service, operator, "blob_resume_current_instance", ())
-                .expect("recovery transport");
+            pic.update_candid_as(
+                service,
+                operator,
+                "blob_resume_current_instance",
+                (),
+                canic::testing::CANDID_REPLY_LIMITS,
+            )
+            .expect("recovery transport");
         assert_eq!(result, Ok(()));
     };
     resume();
     let configuration = || {
         let result: Result<HostConfigurationView, HostFailure> = pic
-            .query_candid_as(service, operator, "blob_configuration", ())
+            .query_candid_as(
+                service,
+                operator,
+                "blob_configuration",
+                (),
+                canic::testing::CANDID_REPLY_LIMITS,
+            )
             .expect("configuration transport");
         result.expect("operator configuration")
     };
@@ -225,7 +237,13 @@ fn qualify(embedded: bool) {
     resume();
     assert_eq!(configuration(), installed);
     let denied: Result<HostConfigurationView, HostFailure> = pic
-        .query_candid_as(service, stranger, "blob_configuration", ())
+        .query_candid_as(
+            service,
+            stranger,
+            "blob_configuration",
+            (),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
         .expect("stranger query transport");
     assert_eq!(denied, Err(HostFailure::Denied));
 
@@ -236,7 +254,13 @@ fn qualify(embedded: bool) {
     };
     let capacity = || {
         let result: Result<UploadCapacityResponse, UploadCapacityFailure> = pic
-            .query_candid_as(service, tenant, "blob_upload_capacity", (scope,))
+            .query_candid_as(
+                service,
+                tenant,
+                "blob_upload_capacity",
+                (scope,),
+                canic::testing::CANDID_REPLY_LIMITS,
+            )
             .expect("tenant capacity transport");
         result
     };
@@ -247,7 +271,13 @@ fn qualify(embedded: bool) {
         active: true,
     };
     let denied: Result<TenantEnrollmentResponse, TenantFailure> = pic
-        .update_candid_as(service, stranger, "blob_update_tenant", (request,))
+        .update_candid_as(
+            service,
+            stranger,
+            "blob_update_tenant",
+            (request,),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
         .expect("stranger mutation transport");
     assert_eq!(denied, Err(TenantFailure::Denied));
     let wrong = TenantScope {
@@ -255,16 +285,34 @@ fn qualify(embedded: bool) {
         ..scope
     };
     let invalid: Result<TenantEnrollmentResponse, TenantFailure> = pic
-        .query_candid_as(service, operator, "blob_tenant", (wrong,))
+        .query_candid_as(
+            service,
+            operator,
+            "blob_tenant",
+            (wrong,),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
         .expect("wrong-service query transport");
     assert_eq!(invalid, Err(TenantFailure::Binding));
 
     // Discard the mutation result, then reconcile from authenticated current state.
     let _: Result<TenantEnrollmentResponse, TenantFailure> = pic
-        .update_candid_as(service, operator, "blob_update_tenant", (request,))
+        .update_candid_as(
+            service,
+            operator,
+            "blob_update_tenant",
+            (request,),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
         .expect("accepted mutation transport");
     let enrolled: Result<TenantEnrollmentResponse, TenantFailure> = pic
-        .query_candid_as(service, tenant, "blob_tenant", (scope,))
+        .query_candid_as(
+            service,
+            tenant,
+            "blob_tenant",
+            (scope,),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
         .expect("tenant reconciliation transport");
     let enrolled = enrolled.expect("retained enrollment after discarded result");
     assert!(enrolled.enrollment.expect("enrollment").active);
@@ -273,7 +321,13 @@ fn qualify(embedded: bool) {
         ..request
     };
     let replayed: Result<TenantEnrollmentResponse, TenantFailure> = pic
-        .update_candid_as(service, operator, "blob_update_tenant", (replay,))
+        .update_candid_as(
+            service,
+            operator,
+            "blob_update_tenant",
+            (replay,),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
         .expect("exact current-state retry transport");
     assert_eq!(replayed.unwrap().enrollment, enrolled.enrollment);
     let initial_capacity = capacity().expect("enrolled tenant capacity");
@@ -285,7 +339,13 @@ fn qualify(embedded: bool) {
     assert_eq!(initial_capacity.remaining_bytes, 10_000);
     assert!(!initial_capacity.fenced);
     let denied: Result<UploadCapacityResponse, UploadCapacityFailure> = pic
-        .query_candid_as(service, stranger, "blob_upload_capacity", (scope,))
+        .query_candid_as(
+            service,
+            stranger,
+            "blob_upload_capacity",
+            (scope,),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
         .expect("stranger capacity transport");
     assert_eq!(denied, Err(UploadCapacityFailure::Denied));
 
@@ -321,11 +381,18 @@ fn qualify(embedded: bool) {
                 permission.uploader,
                 "blob_admit_upload",
                 (*permission,),
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .expect("uploader cannot grant tenant authority");
         assert_eq!(denied, Err(UploadAdmissionFailure::Denied));
         let granted: Result<UploadAdmissionMutation, UploadAdmissionFailure> = pic
-            .update_candid_as(service, tenant, "blob_admit_upload", (*permission,))
+            .update_candid_as(
+                service,
+                tenant,
+                "blob_admit_upload",
+                (*permission,),
+                canic::testing::CANDID_REPLY_LIMITS,
+            )
             .expect("tenant permission transport");
         let granted = granted.expect("tenant grants uploader permission");
         assert_eq!(granted.admission.permission, *permission);
@@ -340,6 +407,7 @@ fn qualify(embedded: bool) {
                     actor,
                     "blob_upload_certificate_assessment",
                     (root.clone(),),
+                    canic::testing::CANDID_REPLY_LIMITS,
                 )
                 .expect("certificate assessment transport");
             let expected = if actor == permission.uploader {
@@ -367,7 +435,12 @@ fn qualify(embedded: bool) {
     );
     if embedded {
         let count: u64 = pic
-            .update_candid(service, "application_increment", ())
+            .update_candid(
+                service,
+                "application_increment",
+                (),
+                canic::testing::CANDID_REPLY_LIMITS,
+            )
             .expect("application mutation");
         assert_eq!(count, 42);
     }
@@ -387,12 +460,24 @@ fn qualify(embedded: bool) {
     assert!(!configuration().fenced);
     assert_eq!(capacity().unwrap(), admitted_capacity);
     let restored: Result<TenantEnrollmentResponse, TenantFailure> = pic
-        .query_candid_as(service, tenant, "blob_tenant", (scope,))
+        .query_candid_as(
+            service,
+            tenant,
+            "blob_tenant",
+            (scope,),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
         .expect("restored tenant transport");
     assert_eq!(restored.unwrap().enrollment, enrolled.enrollment);
     for permission in permissions {
         let replayed: Result<UploadAdmissionMutation, UploadAdmissionFailure> = pic
-            .update_candid_as(service, tenant, "blob_admit_upload", (permission,))
+            .update_candid_as(
+                service,
+                tenant,
+                "blob_admit_upload",
+                (permission,),
+                canic::testing::CANDID_REPLY_LIMITS,
+            )
             .expect("restored uploader permission transport");
         let replayed = replayed.expect("retained exact permission after restoration");
         assert!(replayed.replayed);
@@ -400,7 +485,12 @@ fn qualify(embedded: bool) {
     }
     if embedded {
         let count: u64 = pic
-            .query_candid(service, "application_count", ())
+            .query_candid(
+                service,
+                "application_count",
+                (),
+                canic::testing::CANDID_REPLY_LIMITS,
+            )
             .expect("restored application counter");
         assert_eq!(count, 42);
     }
@@ -483,7 +573,13 @@ fn refuse_invalid_configuration(
         );
         assert_eq!(pic.get_stable_memory(service), stable);
         let current: Result<HostConfigurationView, HostFailure> = pic
-            .query_candid_as(service, principal(7), "blob_configuration", ())
+            .query_candid_as(
+                service,
+                principal(7),
+                "blob_configuration",
+                (),
+                canic::testing::CANDID_REPLY_LIMITS,
+            )
             .unwrap();
         // Failed management installation preserves bytes but must not silently
         // activate the reopened Blob stores. Recovery remains operator-owned.
@@ -495,7 +591,14 @@ fn refuse_invalid_configuration(
             }
         );
         if embedded {
-            let count: u64 = pic.query_candid(service, "application_count", ()).unwrap();
+            let count: u64 = pic
+                .query_candid(
+                    service,
+                    "application_count",
+                    (),
+                    canic::testing::CANDID_REPLY_LIMITS,
+                )
+                .unwrap();
             assert_eq!(count, 41);
         }
     }

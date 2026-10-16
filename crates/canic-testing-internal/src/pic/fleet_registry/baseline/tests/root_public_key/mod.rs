@@ -21,6 +21,7 @@ pub(super) fn assert_controller_key_discovery(pic: &PocketIc, root: Principal) {
                     derivation_path: path,
                 },
             ),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .expect("Root public-key command transport")
     };

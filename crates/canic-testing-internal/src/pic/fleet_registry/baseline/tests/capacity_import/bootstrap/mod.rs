@@ -52,6 +52,7 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn supplied_capacity_fences_
             operator,
             canic::protocol::CANIC_ROOT_STATUS,
             (StatusRequest::PoolImportContext,),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .unwrap();
     assert!(matches!(unregistered, Err(error) if error == InternalError::unavailable().into()));

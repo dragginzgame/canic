@@ -200,6 +200,7 @@ fn retain_source(input: &ReinstallJourney<'_>) -> FleetEnsurePlan {
                 (RootStatusRequestFragment::Operation(
                     OperationStatusRequest { operation_id },
                 ),),
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .unwrap();
         if let Ok(RootStatusResponseFragment::Operation(
