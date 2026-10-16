@@ -16,8 +16,9 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
   component handles. Allocation reports derive byte totals from measured pages
   and buckets; the storage-format hard cut requires a clean reinstall.
 
-- **Host filesystem APIs:** adopt Host 0.22's explicit publication options,
-  preserving atomic replacement, create-only writes and private-key permissions.
+- **Host filesystem APIs:** adopt Host 0.23's explicit publication, path-resolution
+  and lock-acquisition APIs, preserving write permissions and operation exclusion.
+  Candid normalization uses Host Text directly.
 
 - **Application Auth hard cut:** remove delegated-token issuance/retrieval,
   `auth::authenticated(...)` guards, and delegated-token session commands/status.

@@ -7,7 +7,7 @@ use crate::component_operation::{
     ops::{self, ComponentTransport},
     policy,
 };
-use ic_host_fs::durable::lock_regular_file_with_parents;
+use ic_host_fs::durable::{lock_exclusive, open_regular_lock_file_with_parents};
 
 use std::path::Path;
 
@@ -30,8 +30,9 @@ pub fn plan<T: ComponentTransport>(
 ) -> Result<ComponentOperationRecord, ComponentOperationError> {
     let path = ops::record_path(root, &authority.environment, &authority.fleet, name)?;
     let _fleet_lock = fleet_lock(root, &authority.environment, &authority.fleet)?;
-    let _lock = lock_regular_file_with_parents(&path.with_extension("lock"))
+    let lock = open_regular_lock_file_with_parents(&path.with_extension("lock"))
         .map_err(std::io::Error::from)?;
+    lock_exclusive(&lock)?;
     let record = match ops::read(&path)? {
         Some(record) => {
             if record.plan.name != name {
@@ -63,8 +64,9 @@ pub fn apply<T: ComponentTransport>(
 ) -> Result<ComponentOperationRecord, ComponentOperationError> {
     let path = ops::record_path(root, environment, fleet, name)?;
     let _fleet_lock = fleet_lock(root, environment, fleet)?;
-    let _lock = lock_regular_file_with_parents(&path.with_extension("lock"))
+    let lock = open_regular_lock_file_with_parents(&path.with_extension("lock"))
         .map_err(std::io::Error::from)?;
+    lock_exclusive(&lock)?;
     let mut record = ops::read(&path)?.ok_or(ComponentOperationError::Missing)?;
     if record.plan.name != name
         || record.plan.authority.environment != environment
@@ -120,8 +122,9 @@ pub fn status<T: ComponentTransport>(
 ) -> Result<ComponentOperationRecord, ComponentOperationError> {
     let path = ops::record_path(root, environment, fleet, name)?;
     let _fleet_lock = fleet_lock(root, environment, fleet)?;
-    let _lock = lock_regular_file_with_parents(&path.with_extension("lock"))
+    let lock = open_regular_lock_file_with_parents(&path.with_extension("lock"))
         .map_err(std::io::Error::from)?;
+    lock_exclusive(&lock)?;
     let mut record = ops::read(&path)?.ok_or(ComponentOperationError::Missing)?;
     if record.plan.name != name
         || record.plan.authority.environment != environment

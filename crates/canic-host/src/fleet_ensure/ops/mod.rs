@@ -49,8 +49,8 @@ use canic_core::cdk::utils::hash::sha256_hex;
 use ic_host_artifacts::artifact::ArtifactError;
 use ic_host_fs::{
     durable::{
-        PublicationMode, RegularFileLockError, WriteOptions, lock_regular_file_with_parents,
-        write_bytes,
+        PublicationMode, RegularFileLockError, WriteOptions, lock_exclusive,
+        open_regular_lock_file_with_parents, write_bytes,
     },
     read::read_optional_file_no_follow,
 };
@@ -677,7 +677,7 @@ fn lock_fleet_file(paths: &EnsurePaths) -> Result<File, EnsureStateError> {
 pub(in crate::fleet_ensure::ops) fn lock_fleet_file_without_recovery(
     paths: &EnsurePaths,
 ) -> Result<File, EnsureStateError> {
-    let lock = lock_regular_file_with_parents(&paths.lock).map_err(|error| match error {
+    let lock = open_regular_lock_file_with_parents(&paths.lock).map_err(|error| match error {
         RegularFileLockError::Io(source) => EnsureStateError::Io {
             path: paths.lock.clone(),
             source,
@@ -693,6 +693,10 @@ pub(in crate::fleet_ensure::ops) fn lock_fleet_file_without_recovery(
         RegularFileLockError::UnsupportedPlatform => EnsureStateError::Lock {
             path: paths.lock.clone(),
         },
+    })?;
+    lock_exclusive(&lock).map_err(|source| EnsureStateError::Io {
+        path: paths.lock.clone(),
+        source,
     })?;
     Ok(lock)
 }

@@ -152,6 +152,25 @@ fn reserve_inner(
         return Err(InfrastructureBootstrapError::Integrity);
     }
     validate_effect_counters(&record)?;
+    spend_inspection(&mut record, phase, action, extended_rounds)?;
+    write_bytes(
+        &path,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &serde_json::to_vec(&record)?,
+    )
+    .map_err(crate::publication::ops::io_error)?;
+    Ok(())
+}
+
+fn spend_inspection(
+    record: &mut InfrastructureBootstrapInspectionRecord,
+    phase: InspectionPhase,
+    action: Option<&str>,
+    extended_rounds: u32,
+) -> Result<(), InfrastructureBootstrapError> {
     let resource = match phase {
         InspectionPhase::Review => "review".to_owned(),
         InspectionPhase::Apply => "apply".to_owned(),
@@ -167,7 +186,7 @@ fn reserve_inner(
         InspectionPhase::Registration | InspectionPhase::Terminal => extended_rounds,
         _ => BOOTSTRAP_PHASE_INSPECTION_ROUNDS,
     };
-    let maximum = maximum(&record, &resource, base)?;
+    let maximum = maximum(record, &resource, base)?;
     let counter = match phase {
         InspectionPhase::Review => &mut record.review_attempts,
         InspectionPhase::Apply => &mut record.apply_attempts,
@@ -182,15 +201,6 @@ fn reserve_inner(
         return Err(InfrastructureBootstrapError::InspectionBudget);
     }
     *counter += 1;
-    write_bytes(
-        &path,
-        WriteOptions {
-            mode: PublicationMode::Replace,
-            permissions: 0o666,
-        },
-        &serde_json::to_vec(&record)?,
-    )
-    .map_err(crate::publication::ops::io_error)?;
     Ok(())
 }
 

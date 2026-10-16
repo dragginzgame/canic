@@ -34,7 +34,7 @@ pub(super) fn extract_candid_with_tool(
     // Normalization can add one terminal newline, but never expands the
     // admitted capture beyond that. Process admission remains Canic-owned.
     let limit = crate::MAX_DOCUMENT_READ_BYTES + 1;
-    Ok(ic_host_tools::candid::text::normalize(&output.stdout, limit)?.into_bytes())
+    Ok(ic_host_text::normalize::normalize_lines(&output.stdout, limit)?.into_bytes())
 }
 
 // Remove stale ICP-generated Candid sidecars so surface scans match the exact
@@ -62,12 +62,12 @@ mod tests {
     use super::*;
     use crate::test_support::temp_dir;
     use ic_host_process::tool::{ExecutionFailure, OutputStream, ToolError};
-    use ic_host_tools::candid::text::normalize;
+    use ic_host_text::normalize::normalize_lines;
 
     #[test]
     fn extracted_candid_has_one_terminal_newline_and_no_trailing_whitespace() {
         assert_eq!(
-            normalize(b"//  \nservice : {  \n  method : () -> ();\t\n}", 1024).unwrap(),
+            normalize_lines(b"//  \nservice : {  \n  method : () -> ();\t\n}", 1024).unwrap(),
             "//\nservice : {\n  method : () -> ();\n}\n"
         );
     }
@@ -132,8 +132,8 @@ mod tests {
         );
         let error = run_extractor_script("printf '\\377'").unwrap_err();
         assert!(matches!(
-            error.downcast_ref::<ic_host_tools::candid::text::NormalizationError>(),
-            Some(ic_host_tools::candid::text::NormalizationError::Utf8(_))
+            error.downcast_ref::<ic_host_text::normalize::NormalizationError>(),
+            Some(ic_host_text::normalize::NormalizationError::Utf8(_))
         ));
     }
 }

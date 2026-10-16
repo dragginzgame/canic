@@ -79,7 +79,7 @@ fn publish_bytes_at_barriers(
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     let name = path.file_name().ok_or(io::ErrorKind::InvalidInput)?;
     // Resolve selected directory aliases without following the publication leaf.
-    let parent = canonicalize_allow_missing(parent, &std::env::current_dir()?)?;
+    let parent = canonicalize_allow_missing(parent, &std::env::current_dir()?, usize::MAX)?;
     let destination = parent.join(name);
     // Preserve the existing umask-governed mode; layout custody remains local.
     write_with(

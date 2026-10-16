@@ -11,6 +11,28 @@ remain **0.111.0**. The objective is to delete duplicate mechanisms in favor of
 upstream owners; moving declarations alone does not demonstrate faster builds.
 
 
+## Host 0.23 caller alignment — 2026-10-16
+
+Host/Backup/CLI compile with Host 0.23.1. Missing-path resolution explicitly
+preserves its existing depth policy; regular-file opening and exclusive acquisition
+are separate, with locks acquired before protected work. Candid normalization now
+uses a direct Host Text dependency. The only task-owned lockfile change adds that
+Host dependency edge; selected package versions were retained.
+
+All 36 focused native regressions pass across JSON persistence, Candid extraction,
+output roots, build/CLI locks, component operations, bootstrap inspection and
+reinstall handoff. Strict all-target lint for Host, Backup and CLI passes. Two
+existing overlong functions were split along inspection spending and interrupted
+handoff boundaries. Evidence: `/tmp/canic-host023-*.log`; incoming content:
+`/tmp/canic-host023-before/`. A concurrent Cargo update interrupted the check sequence;
+checks resumed after it ended with the selected dependency graph unchanged.
+
+The open 0.112 changelogs include this adoption. The complete batch is not ready
+to push: portable Root-managed Auth admission and installed recovery/fixture
+qualification remain unfinished. Own versions remain 0.111.0. No broad validation,
+Git publication or release ran.
+
+
 ## Invariant gate repairs — 2026-10-16
 
 The layering guard now passes: checkpoint DTO round-trip qualification lives in
@@ -20,14 +42,13 @@ validation-lane fixture now copies the shared version-input validator required b
 checkpoint round-trip regression passes. Evidence: `/tmp/canic-release-lane-fix.log`
 and `/tmp/canic-checkpoint-wire-fix.log`.
 
-The crypto closure check still fails on `delegation_root_stub`, `canister_test`
-and `canister_user_shard`: Auth 0.7.3 selects k256 0.14 / SHA-2 0.11 alongside its
-SHA-2 0.10 IC signature stack. This is a dependency policy failure, not the earlier
-Build/Memory type mismatch. [IC Auth #65](https://github.com/dragginzgame/ic-auth/issues/65)
-tracks alignment; `/tmp/canic-crypto-closure-recheck.log` confirms the failure.
-The gate was not weakened. Complete 0.112 readiness still requires this resolution,
-portable Auth admission and installed qualification. No broad gate, commit,
-version change or release ran.
+Auth 0.7.5 now clears the crypto closure check: all 12 canonical roles pass,
+with no duplicate crypto package versions and no signature stack in the nine
+zero-auth roles. This resolves the local dependency evidence for
+[IC Auth #65](https://github.com/dragginzgame/ic-auth/issues/65).
+Evidence: `/tmp/canic-auth075-crypto.log`. The gate was not weakened.
+Complete 0.112 readiness still requires portable Auth admission and installed
+qualification. No broad gate, commit, version change or release ran.
 
 ## Memory 0.44 integration — 2026-10-16
 

@@ -639,6 +639,7 @@ dependencies = [
  "ic-host-artifacts 0.23.1",
  "ic-host-fs 0.23.1",
  "ic-host-process 0.23.1",
+ "ic-host-text 0.23.1",
  "ic-host-tools 0.23.1",
  "ic-query",
  "ic-testkit",

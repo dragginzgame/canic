@@ -153,6 +153,14 @@ fn assert_handoff(paths: &EnsurePaths, plan: FleetEnsurePlan) {
             before[index]
         );
     }
+    assert_interrupted_handoff(paths, &completed, &before);
+}
+
+fn assert_interrupted_handoff(
+    paths: &EnsurePaths,
+    completed: &ActivationResetAdoptionRecord,
+    before: &[Vec<u8>; 3],
+) {
     // Every crash boundary after durable intent converges to the same replacement pair.
     let after = [
         fs::read(&paths.plan).unwrap(),
