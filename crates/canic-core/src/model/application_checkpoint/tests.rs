@@ -282,23 +282,3 @@ fn durable_decode_validates_original_identity_and_restore_source_binding() {
     invalid.captured.as_mut().unwrap().unit_digest = [9; 32];
     assert!(roundtrip(&invalid).is_err());
 }
-
-#[test]
-fn wire_acknowledgements_share_the_retained_participant_phase() {
-    use canic_contracts::dto::application_checkpoint::ApplicationCheckpointParticipantStatus;
-
-    let binding = binding(1);
-    let preparing = changed(Record::prepare(None, binding.clone()));
-    let prepared = preparing.acknowledge_prepared(&binding).unwrap();
-    let releasing = changed(Record::release(Some(&prepared), binding.clone()));
-    let released = releasing.acknowledge_released(&binding).unwrap();
-    for record in [preparing, prepared, releasing, released] {
-        let acknowledgement = ApplicationCheckpointParticipantStatus {
-            binding: record.binding().clone(),
-            phase: record.phase(),
-        };
-        let bytes = candid::encode_one(&acknowledgement).unwrap();
-        let decoded: ApplicationCheckpointParticipantStatus = candid::decode_one(&bytes).unwrap();
-        assert_eq!(decoded, acknowledgement);
-    }
-}

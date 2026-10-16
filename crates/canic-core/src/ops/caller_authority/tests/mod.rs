@@ -7,11 +7,19 @@ use crate::{
     config::caller_authority::{
         CallerAuthorityConfig, CallerPermission, CallerScope, CallerSourceSelector,
     },
+    model::application_checkpoint::{
+        ApplicationCheckpointRecord as CheckpointRecord,
+        ApplicationCheckpointTransition as CheckpointTransition,
+        tests::binding as checkpoint_binding,
+    },
     workflow::caller_authority::admission::CallerAdmissionWorkflow,
 };
-use canic_contracts::ids::{
-    CallerComponentInstallation, CallerInstallation, CallerRootAuthority, CanisterRole,
-    ComponentChildBinding, ManagedCanisterBinding,
+use canic_contracts::{
+    dto::application_checkpoint::ApplicationCheckpointParticipantStatus,
+    ids::{
+        CallerComponentInstallation, CallerInstallation, CallerRootAuthority, CanisterRole,
+        ComponentChildBinding, ManagedCanisterBinding,
+    },
 };
 use std::collections::BTreeMap;
 
@@ -499,5 +507,31 @@ fn undeclared_source_cannot_reserve_publication_authority() {
         assert_eq!(CallerAuthorityOps::receiver().unwrap(), before);
         assert!(CallerAuthorityOps::receipt(operation).is_none());
         assert!(CallerRowStore::rows().is_empty());
+    }
+}
+
+#[test]
+fn wire_acknowledgements_share_the_retained_participant_phase() {
+    let binding = checkpoint_binding(1);
+    let CheckpointTransition::Changed(preparing) =
+        CheckpointRecord::prepare(None, binding.clone()).unwrap()
+    else {
+        panic!("fresh preparation must change state")
+    };
+    let prepared = preparing.acknowledge_prepared(&binding).unwrap();
+    let CheckpointTransition::Changed(releasing) =
+        CheckpointRecord::release(Some(&prepared), binding.clone()).unwrap()
+    else {
+        panic!("prepared release must change state")
+    };
+    let released = releasing.acknowledge_released(&binding).unwrap();
+    for record in [preparing, prepared, releasing, released] {
+        let acknowledgement = ApplicationCheckpointParticipantStatus {
+            binding: record.binding().clone(),
+            phase: record.phase(),
+        };
+        let bytes = candid::encode_one(&acknowledgement).unwrap();
+        let decoded: ApplicationCheckpointParticipantStatus = candid::decode_one(&bytes).unwrap();
+        assert_eq!(decoded, acknowledgement);
     }
 }

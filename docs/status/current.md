@@ -11,6 +11,24 @@ remain **0.111.0**. The objective is to delete duplicate mechanisms in favor of
 upstream owners; moving declarations alone does not demonstrate faster builds.
 
 
+## Invariant gate repairs — 2026-10-16
+
+The layering guard now passes: checkpoint DTO round-trip qualification lives in
+ops tests, and the two Auth record reexports are crate-visible. The release
+validation-lane fixture now copies the shared version-input validator required by
+`next-release-version.sh`; its own rejection/reuse/failure cases pass. The relocated
+checkpoint round-trip regression passes. Evidence: `/tmp/canic-release-lane-fix.log`
+and `/tmp/canic-checkpoint-wire-fix.log`.
+
+The crypto closure check still fails on `delegation_root_stub`, `canister_test`
+and `canister_user_shard`: Auth 0.7.3 selects k256 0.14 / SHA-2 0.11 alongside its
+SHA-2 0.10 IC signature stack. This is a dependency policy failure, not the earlier
+Build/Memory type mismatch. [IC Auth #65](https://github.com/dragginzgame/ic-auth/issues/65)
+tracks alignment; `/tmp/canic-crypto-closure-recheck.log` confirms the failure.
+The gate was not weakened. Complete 0.112 readiness still requires this resolution,
+portable Auth admission and installed qualification. No broad gate, commit,
+version change or release ran.
+
 ## Memory 0.44 integration — 2026-10-16
 
 Canic now owns one explicit thread-local Memory runtime. Lifecycle bootstrap
