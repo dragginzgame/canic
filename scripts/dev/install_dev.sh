@@ -135,8 +135,8 @@ configure_git_formatting_hook_if_present() {
     fi
 
     yellow "Git formatting hook:"
-    cyan_command "bash scripts/dev/install-git-hooks.sh"
-    bash "$hook_installer"
+    cyan_command "bash scripts/dev/install-git-hooks.sh --consumer $ROOT_DIR"
+    bash "$hook_installer" --consumer "$ROOT_DIR"
 }
 
 main() {
