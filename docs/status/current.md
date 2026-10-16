@@ -11,6 +11,19 @@ remain **0.111.0**. The objective is to delete duplicate mechanisms in favor of
 upstream owners; moving declarations alone does not demonstrate faster builds.
 
 
+## Auth status capability emission — 2026-10-16
+
+Managed Auth status types and their endpoint now require delegation-proof issuer
+capability. Local authorization alone previously emitted two empty Candid enums,
+whose derives failed strict unreachable-code lint. The redundant local-auth macro
+attribute parameter is removed; no placeholder variant or lint suppression remains.
+Independent locked/offline strict library lint passes for `local_authorization_probe`
+and `delegation_root_stub`, avoiding cross-fixture feature unification. Evidence:
+`/tmp/canic-auth-empty-local-clippy.log` and `/tmp/canic-auth-empty-root-clippy.log`.
+Incoming source: `/tmp/canic-auth-empty-before/`. The 0.112 changelogs are updated;
+portable Auth admission and installed qualification still block the complete batch.
+
+
 ## Auth storage visibility lint — 2026-10-16
 
 The two conditional Auth record reexports now use `pub` inside the existing

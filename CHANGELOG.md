@@ -45,6 +45,9 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 - **Diagnostic lookup:** distinguish out-of-range numbers from malformed codes
   ([#547](https://github.com/dragginzgame/canic/issues/547)).
 
+- **Auth status:** emit delegation-proof status only for issuer-capable canisters,
+  avoiding empty Candid types in local-authorization-only applications.
+
 - **Auth enrollment:** adopt Auth 0.7, introduce the Root-managed enrollment
   contract and separate transport callers from account identity in session/replay
   projections. Persist login denial atomically with session admission/logout

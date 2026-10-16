@@ -110,7 +110,6 @@ macro_rules! __canic_emit_managed_status_endpoint {
             automatic_topup_attributes = [#[cfg(canic_capability_automatic_topup)]],
             logs_attributes = [#[cfg(canic_capability_observability_logs)]],
             diagnostics_attributes = [#[cfg(canic_capability_observability_diagnostics)]],
-            local_auth_attributes = [#[cfg(any( canic_capability_delegated_token_issuer, canic_capability_local_application_authorization ))]],
             token_issuer_attributes = [#[cfg(canic_capability_delegated_token_issuer)]],
             caller_authority_attributes = [#[cfg(canic_capability_caller_authority)]],
             fleet_admission_attributes = [#[cfg(canic_capability_fleet_admission_projection)]],
@@ -226,10 +225,7 @@ macro_rules! __canic_emit_managed_status_endpoint {
         }
 
 
-        #[cfg(any(
-            canic_capability_delegated_token_issuer,
-            canic_capability_local_application_authorization
-        ))]
+        #[cfg(canic_capability_delegated_token_issuer)]
         #[$crate::canic_query(public)]
         fn canic_auth_status(
             request: AuthStatusRequest,
