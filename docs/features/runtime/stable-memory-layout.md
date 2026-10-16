@@ -218,12 +218,14 @@ again. It is available before bootstrap and after warm adoption. Declare it at
 the crate root when generated IcyDB code requires `crate::icydb_memory_pool`.
 Canic still owns the composed admission and lifecycle ordering; the provider
 does not replace the database's preparation or restoration participant.
-Authored exclusion bounds retain their existing static-configuration admission:
-invalid ranges panic; namespace/pool failures return the upstream typed error.
+Authored exclusions list individual numeric IDs, for example
+`exclusions = [240, 241, 242]`. Invalid IDs and namespace/pool failures return
+the upstream typed error.
 
 Protected allocation observations expose `pool_eligible`, independently of a
 current or retained ledger binding. Protected ledger observations include the
-selected `allocation_pool` grants and exclusions. Static role manifests use
+selected `allocation_pool` grants and `excluded_ids`. Allocation records report
+key, slot, state and measured size; application schemas remain component-owned. Static role manifests use
 `memory_key`; public runtime state summaries resolve their numeric `memory_id`
 from the current protected ledger. A pool cannot change after selection or replace
 an established runtime binding. Release transitions remain clean reinstall;

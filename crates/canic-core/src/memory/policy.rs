@@ -44,11 +44,7 @@ impl CanicMemoryManagerPolicy {
 impl RuntimeBootstrapPolicy for CanicMemoryManagerPolicy {
     type Error = MemoryRegistryError;
 
-    fn validate_key(&self, _key: &StableKey) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn validate_slot(
+    fn validate_allocation(
         &self,
         _key: &StableKey,
         _slot: &MemoryManagerSlot,

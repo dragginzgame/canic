@@ -16,11 +16,7 @@ struct FixturePolicy;
 impl ic_memory::RuntimeBootstrapPolicy for FixturePolicy {
     type Error = Infallible;
 
-    fn validate_key(&self, _: &ic_memory::StableKey) -> Result<(), Infallible> {
-        Ok(())
-    }
-
-    fn validate_slot(
+    fn validate_allocation(
         &self,
         _: &ic_memory::StableKey,
         _: &ic_memory::MemoryManagerSlot,
@@ -51,11 +47,7 @@ fn measured_nondefault_buckets_cover_every_usable_id_without_growth() {
     runtime
         .bootstrap(
             &ic_memory::SealedDeclarationSnapshot::new(Vec::new()).unwrap(),
-            &ic_memory::MemoryAllocationPool::new(
-                Vec::new(),
-                vec![ic_memory::MemoryManagerIdRange::new(10, 254).unwrap()],
-            )
-            .unwrap(),
+            &ic_memory::MemoryAllocationPool::new(Vec::new(), (10..=254).collect()).unwrap(),
             &FixturePolicy,
         )
         .unwrap();

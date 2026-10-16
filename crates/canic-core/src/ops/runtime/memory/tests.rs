@@ -3,7 +3,7 @@
 use super::*;
 use crate::storage::stable::env::{Env, EnvData, EnvRecord};
 use ic_memory::{
-    AllocationDeclaration, MemoryManagerSlot, SchemaMetadata,
+    AllocationDeclaration, MemoryManagerSlot,
     ic_stable_structures::{
         Memory, VectorMemory,
         memory_manager::{MemoryId, MemoryManager},
@@ -228,8 +228,7 @@ fn commit_snapshot_response_maps_runtime_variants_exactly() {
 
 #[test]
 fn commit_recovery_response_maps_invalid_snapshot_without_unknown_fallback() {
-    let response =
-        commit_recovery_response(Some(CommitSnapshotDiagnostic::Invalid { generation: 3 }));
+    let response = commit_recovery_response(CommitSnapshotDiagnostic::Invalid { generation: 3 });
 
     assert_eq!(response.authoritative_generation, None);
     assert_eq!(
@@ -243,7 +242,6 @@ fn memory_allocation_record_response_includes_live_backing_memory_size() {
     let declaration = AllocationDeclaration::new(
         "app.users.v1",
         MemoryManagerSlot::new(100).expect("usable slot"),
-        SchemaMetadata::new(Some(7)).expect("current schema"),
     )
     .expect("declaration");
     let record = DiagnosticRecord {
@@ -253,7 +251,6 @@ fn memory_allocation_record_response_includes_live_backing_memory_size() {
 
     let response = memory_allocation_record_response(record);
 
-    assert_eq!(response.schema_version, Some(7));
     assert_eq!(
         response.memory_size,
         Some(MemoryAllocationSizeEntry {
@@ -280,7 +277,6 @@ fn memory_allocation_record_response_omits_unmeasured_sizes() {
     let declaration = AllocationDeclaration::new(
         "app.users.v1",
         MemoryManagerSlot::new(100).expect("usable slot"),
-        SchemaMetadata::default(),
     )
     .expect("declaration");
     let record = DiagnosticRecord {
@@ -496,7 +492,7 @@ fn receipt_capacity_growth_exhaustion_preserves_store_and_typed_ops_failure() {
 }
 
 #[test]
-fn ledger_snapshot_preserves_anchor_commit_evidence_and_current_schema_over_candid() {
+fn ledger_snapshot_preserves_anchor_commit_evidence_over_candid() {
     MemoryRegistryOps::init_registry().expect("bootstrap canonical memory runtime");
     let source = ledger::try_snapshot().unwrap();
     let response = MemoryRegistryOps::ledger_snapshot().unwrap();
@@ -505,7 +501,7 @@ fn ledger_snapshot_preserves_anchor_commit_evidence_and_current_schema_over_cand
     assert_eq!(decoded.current_generation, source.export.current_generation);
     assert_eq!(
         decoded.ledger_memory_manager_id,
-        source.export.ledger_anchor.id()
+        ic_memory::MEMORY_MANAGER_LEDGER_ID
     );
     assert_eq!(
         decoded.commit_recovery.authoritative_generation,
@@ -515,19 +511,14 @@ fn ledger_snapshot_preserves_anchor_commit_evidence_and_current_schema_over_cand
     for (row, original) in decoded.records.iter().zip(source.export.records) {
         assert_eq!(row.memory_manager_id, Some(original.allocation.slot().id()));
         assert_eq!(row.stable_key, original.allocation.stable_key().as_str());
-        assert_eq!(
-            row.schema_version,
-            original.allocation.schema().schema_version()
-        );
     }
 }
 
 #[test]
-fn retired_allocation_projection_keeps_its_slot_and_latest_schema() {
+fn retired_allocation_projection_keeps_its_slot_and_state() {
     let slot = MemoryManagerSlot::new(100).unwrap();
     let key = "app.users.v1";
-    let declaration =
-        AllocationDeclaration::new(key, slot, SchemaMetadata::new(Some(7)).unwrap()).unwrap();
+    let declaration = AllocationDeclaration::new(key, slot).unwrap();
     let response = memory_allocation_record_response(DiagnosticRecord {
         allocation: allocation_record(&declaration, AllocationState::Retired),
         memory_size: None,
@@ -535,5 +526,4 @@ fn retired_allocation_projection_keeps_its_slot_and_latest_schema() {
     assert_eq!(response.memory_manager_id, Some(100));
     assert_eq!(response.stable_key, key);
     assert_eq!(response.state, MemoryAllocationState::Retired);
-    assert_eq!(response.schema_version, Some(7));
 }

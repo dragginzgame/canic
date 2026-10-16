@@ -300,8 +300,7 @@ fn allocation_lookup_preserves_stable_bytes() {
     let memory = VectorMemory::default();
     let key = "fixture.lookup.v1";
     let declarations = ic_memory::SealedDeclarationSnapshot::new(vec![
-        ic_memory::MemoryRequest::new("fixture", key, ic_memory::SchemaMetadata::default())
-            .unwrap(),
+        ic_memory::MemoryRequest::new("fixture", key).unwrap(),
     ])
     .unwrap();
     let pool = ic_memory::MemoryAllocationPool::new(

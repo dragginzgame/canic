@@ -11,6 +11,28 @@ remain **0.111.0**. The objective is to delete duplicate mechanisms in favor of
 upstream owners; moving declarations alone does not demonstrate faster builds.
 
 
+## Memory 0.45 adoption — 2026-10-16
+
+Current requests and allocation declarations omit removed schema metadata;
+bootstrap policy validates key/slot together. The host pool and macro accept
+explicit excluded IDs. Ledger diagnostics expose `excluded_ids`, remove allocation
+`schema_version`, and acquire commit evidence through the runtime diagnostic API.
+Core/control-plane requests, public composition, and root-workspace fixtures use
+the current contract. Independent Blob consumer workspaces retain their own graphs.
+The memory guide and open 0.112 changelogs document the public hard cut.
+
+Passing evidence: 33 Core Memory tests, two public pool-provider tests, the Candid
+ledger-shape regression, strict Core library/test lint, and native lifecycle-probe
+compilation. Evidence is in `/tmp/canic-memory45/`; incoming source is retained in
+its `before/` directory. No dependency selections, versions or Git refs changed.
+
+The full batch remains blocked. The native agent fixture compile exposes 15
+Canic testing-helper calls that need Testkit 0.50's explicit Candid decode limits
+(`native-agent.log`). Blob 0.30 still returns Memory 0.44 requests while Canic
+selects Memory 0.45, so the adapter fails at its request boundary (`blob.log`).
+Portable Auth admission and installed qualification also remain unfinished.
+No broad validation or release ran.
+
 ## Auth status capability emission — 2026-10-16
 
 Managed Auth status types and their endpoint now require delegation-proof issuer

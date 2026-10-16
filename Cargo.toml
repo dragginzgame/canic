@@ -91,7 +91,7 @@ ic-auth-protocol-types = "0.7"
 ic-backup = { version = "0.27", default-features = false }
 ic-blob-storage = "0.30"
 ic-blob-storage-contracts = "0.30"
-ic-build = { version = "0.11" }
+ic-build = { version = "0.12" }
 ic-canister-sig-creation = "1.3.1"
 ic-cdk = "0.20.3"
 ic-certification = "3.0"

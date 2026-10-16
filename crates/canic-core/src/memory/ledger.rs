@@ -19,6 +19,7 @@ pub const MEMORY_PHYSICAL_FORMAT_ID: u32 = 1;
 
 pub struct NativeMemoryLedgerSnapshot {
     pub export: DiagnosticExport,
+    pub commit_recovery: ic_memory::CommitSnapshotDiagnostic,
     pub allocation_pool: MemoryAllocationPool,
 }
 
@@ -26,6 +27,9 @@ pub struct NativeMemoryLedgerSnapshot {
 pub fn try_snapshot() -> Result<NativeMemoryLedgerSnapshot, MemoryLedgerError> {
     Ok(NativeMemoryLedgerSnapshot {
         export: super::runtime::with_runtime(ic_memory::MemoryRuntime::diagnostic_export)?,
+        commit_recovery: super::runtime::with_runtime(
+            ic_memory::MemoryRuntime::commit_recovery_diagnostic,
+        )?,
         allocation_pool: pool::selected()?,
     })
 }

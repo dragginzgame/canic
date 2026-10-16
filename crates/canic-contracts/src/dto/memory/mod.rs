@@ -99,7 +99,7 @@ pub struct MemoryCommitSnapshotResponse {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct MemoryAllocationPoolEntry {
     pub authorities: Vec<MemoryAuthorityEntry>,
-    pub excluded_ranges: Vec<MemoryExcludedRangeEntry>,
+    pub excluded_ids: Vec<u8>,
 }
 
 /// One admitted linked-code owner and its permanent key namespace.
@@ -107,13 +107,6 @@ pub struct MemoryAllocationPoolEntry {
 pub struct MemoryAuthorityEntry {
     pub owner: String,
     pub key_prefix: String,
-}
-
-/// Physical IDs excluded from the shared application pool.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-pub struct MemoryExcludedRangeEntry {
-    pub start: u8,
-    pub end: u8,
 }
 
 ///
@@ -138,8 +131,6 @@ pub struct MemoryAllocationRecordEntry {
     pub stable_key: String,
     pub state: MemoryAllocationState,
     pub memory_size: Option<MemoryAllocationSizeEntry>,
-    /// Latest declared metadata; the substrate does not retain a schema history.
-    pub schema_version: Option<u32>,
 }
 
 ///

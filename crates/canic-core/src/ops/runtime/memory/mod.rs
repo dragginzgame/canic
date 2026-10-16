@@ -15,8 +15,8 @@ use crate::{
     dto::memory::{
         MemoryAllocationEntry, MemoryAllocationPoolEntry, MemoryAllocationRecordEntry,
         MemoryAllocationSizeEntry, MemoryAllocationsResponse, MemoryAuthorityEntry,
-        MemoryCommitRecoveryResponse, MemoryCommitSnapshotResponse, MemoryExcludedRangeEntry,
-        MemoryLedgerMemoryEntry, MemoryLedgerResponse,
+        MemoryCommitRecoveryResponse, MemoryCommitSnapshotResponse, MemoryLedgerMemoryEntry,
+        MemoryLedgerResponse,
     },
     memory::{self, ledger, registry::MemoryRegistryError},
 };
@@ -136,8 +136,8 @@ impl MemoryRegistryOps {
             ledger_schema_version: crate::memory::ledger::MEMORY_LEDGER_SCHEMA_VERSION,
             physical_format_id: crate::memory::ledger::MEMORY_PHYSICAL_FORMAT_ID,
             current_generation: snapshot.export.current_generation,
-            ledger_memory_manager_id: snapshot.export.ledger_anchor.id(),
-            commit_recovery: commit_recovery_response(snapshot.export.commit_recovery),
+            ledger_memory_manager_id: ic_memory::MEMORY_MANAGER_LEDGER_ID,
+            commit_recovery: commit_recovery_response(snapshot.commit_recovery),
             allocation_pool,
             memories,
             records,
@@ -208,10 +208,9 @@ fn memory_allocation_entry_response(
     }
 }
 
-fn commit_recovery_response(
-    diagnostic: Option<CommitSnapshotDiagnostic>,
+const fn commit_recovery_response(
+    diagnostic: CommitSnapshotDiagnostic,
 ) -> MemoryCommitRecoveryResponse {
-    let diagnostic = diagnostic.unwrap_or(CommitSnapshotDiagnostic::Empty);
     let (authoritative_generation, recovery_error) = match diagnostic {
         CommitSnapshotDiagnostic::Valid { generation } => (Some(generation), None),
         CommitSnapshotDiagnostic::Empty => (
@@ -239,7 +238,6 @@ fn memory_allocation_record_response(record: DiagnosticRecord) -> MemoryAllocati
         stable_key: allocation.stable_key().as_str().to_string(),
         state: memory_allocation_state_response(allocation_state),
         memory_size,
-        schema_version: allocation.schema().schema_version(),
     }
 }
 
@@ -275,14 +273,7 @@ fn memory_allocation_pool_response(
                 key_prefix: grant.key_prefix().to_string(),
             })
             .collect(),
-        excluded_ranges: pool
-            .excluded_ranges()
-            .iter()
-            .map(|range| MemoryExcludedRangeEntry {
-                start: range.start(),
-                end: range.end(),
-            })
-            .collect(),
+        excluded_ids: pool.excluded_ids().collect(),
     }
 }
 

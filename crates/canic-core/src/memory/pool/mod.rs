@@ -5,15 +5,13 @@
 //! Boundary: the artifact supplies explicit component grants at bootstrap.
 
 use crate::memory::{CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, CANIC_CORE_MEMORY_AUTHORITY};
-use ic_memory::{
-    MemoryAllocationPool, MemoryAllocationPoolError, MemoryAuthority, MemoryManagerIdRange,
-};
+use ic_memory::{MemoryAllocationPool, MemoryAllocationPoolError, MemoryAuthority};
 
 /// Add mandatory framework grants to the artifact's explicit component grants.
 /// Exclusions are physical unmanaged custody, never per-component partitions.
 pub fn framework_pool(
     mut authorities: Vec<MemoryAuthority>,
-    exclusions: Vec<MemoryManagerIdRange>,
+    exclusions: Vec<u8>,
 ) -> Result<MemoryAllocationPool, MemoryAllocationPoolError> {
     authorities.push(MemoryAuthority::new(
         CANIC_CORE_MEMORY_AUTHORITY,
@@ -45,7 +43,7 @@ pub(super) fn selected()
 mod tests {
     use super::*;
     use ic_memory::{
-        MemoryRequest, MemoryRuntime, SchemaMetadata, SealedDeclarationSnapshot,
+        MemoryRequest, MemoryRuntime, SealedDeclarationSnapshot,
         ic_stable_structures::{
             Memory, VectorMemory,
             memory_manager::{MemoryId, MemoryManager},
@@ -59,9 +57,7 @@ mod tests {
         SealedDeclarationSnapshot::new(
             entries
                 .iter()
-                .map(|(owner, key)| {
-                    MemoryRequest::new(*owner, key, SchemaMetadata::default()).unwrap()
-                })
+                .map(|(owner, key)| MemoryRequest::new(*owner, key).unwrap())
                 .collect::<Vec<_>>(),
         )
         .unwrap()
@@ -182,11 +178,7 @@ mod tests {
         ));
         assert_eq!(*backing.borrow(), before);
         assert!(!runtime.is_bootstrapped());
-        let pool = framework_pool(
-            Vec::new(),
-            vec![MemoryManagerIdRange::new(200, 200).unwrap()],
-        )
-        .unwrap();
+        let pool = framework_pool(Vec::new(), vec![200]).unwrap();
         runtime.bootstrap(&declarations, &pool, &policy).unwrap();
         let allocations = runtime.memory_allocations().unwrap();
         assert_eq!(allocations.memories[200].pool_eligible, Some(false));
@@ -205,7 +197,7 @@ mod tests {
     fn explicit_owner_grants_share_physical_eligibility() {
         let pool = framework_pool(
             vec![MemoryAuthority::new("app", "app.").unwrap()],
-            vec![MemoryManagerIdRange::new(200, 201).unwrap()],
+            vec![200, 201],
         )
         .unwrap();
         for (owner, key) in [

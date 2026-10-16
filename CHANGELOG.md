@@ -12,9 +12,10 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
 ### ⚠️ Breaking
 
-- **Memory runtime:** adopt Memory 0.44 with one Canic-owned runtime and injected
+- **Memory runtime:** adopt Memory 0.45 with one Canic-owned runtime and injected
   component handles. Allocation reports derive byte totals from measured pages
-  and buckets; the storage-format hard cut requires a clean reinstall.
+  and buckets; pools use explicit excluded IDs and allocation diagnostics omit
+  removed schema metadata. The storage-format hard cut requires a clean reinstall.
 
 - **Host filesystem APIs:** adopt Host 0.23's explicit publication, path-resolution
   and lock-acquisition APIs, preserving write permissions and operation exclusion.
