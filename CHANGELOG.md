@@ -38,6 +38,9 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
 ### 🔧 Changed
 
+- **Developer setup:** select the hook-install destination explicitly, preparing
+  the caller for Shared Tooling's required `--consumer` argument.
+
 - **Release checks:** include the shared version validator in isolated release
   fixtures so preflight and failure-recovery checks can run after tooling updates.
 
