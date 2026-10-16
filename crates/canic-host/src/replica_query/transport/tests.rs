@@ -5,7 +5,7 @@ use super::{
 use crate::replica_query::ReplicaQueryError;
 use reqwest::Method;
 use std::{
-    io::{Read, Write},
+    io::Write,
     net::{TcpListener, TcpStream},
     sync::mpsc,
     thread::{self, JoinHandle},
@@ -305,28 +305,22 @@ fn serve(
     let server = thread::spawn(move || {
         let (mut stream, _) = listener.accept().unwrap();
         stream
-            .set_read_timeout(Some(Duration::from_secs(5)))
-            .unwrap();
-        stream
             .set_write_timeout(Some(Duration::from_secs(5)))
             .unwrap();
-        let mut header = Vec::new();
-        while !header.ends_with(b"\r\n\r\n") {
-            let mut byte = [0];
-            stream.read_exact(&mut byte).unwrap();
-            header.push(byte[0]);
-        }
-        let headers = String::from_utf8(header).unwrap();
-        let length = headers
-            .lines()
-            .find_map(|line| {
-                let (name, value) = line.split_once(':')?;
-                name.eq_ignore_ascii_case("content-length")
-                    .then(|| value.trim().parse::<usize>().unwrap())
-            })
-            .unwrap_or(0);
-        let mut body = vec![0; length];
-        stream.read_exact(&mut body).unwrap();
+        let request = ic_testkit::testing::read_http_request(
+            &mut stream,
+            Duration::from_secs(5),
+            16 * 1024,
+            4 * 1024 * 1024,
+        )
+        .unwrap();
+        let body_offset = request
+            .windows(4)
+            .position(|bytes| bytes == b"\r\n\r\n")
+            .unwrap()
+            + 4;
+        let headers = String::from_utf8(request[..body_offset].to_vec()).unwrap();
+        let body = request[body_offset..].to_vec();
         reply(&mut stream);
         ObservedRequest { headers, body }
     });

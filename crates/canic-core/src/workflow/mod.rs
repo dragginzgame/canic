@@ -3,7 +3,7 @@
 //! `workflow` sequences ops calls, schedules async follow-up work, and owns
 //! behavior that unfolds over time.
 
-pub mod auth;
+pub mod application_checkpoint;
 pub mod bootstrap;
 pub mod caller_authority;
 pub mod cascade;

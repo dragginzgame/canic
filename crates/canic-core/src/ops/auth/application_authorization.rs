@@ -4,6 +4,8 @@
 //! Does not own: caller/time acquisition, session lookup, authorization policy, or persistence.
 //! Boundary: endpoint and access adapters consume the same current authority projection.
 
+#![cfg(any(test, feature = "auth-local-application-authorization"))]
+
 use super::AuthOps;
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
 use crate::model::auth::application_authorization::{
@@ -23,46 +25,13 @@ use canic_contracts::ids::{CanisterRole, FleetKey, ManagedCanisterBinding};
 /// Protected configuration and exact current identity for local application authorization.
 
 pub struct LocalApplicationAuthorizationAuthority {
-    #[cfg_attr(
-        not(feature = "auth-local-application-authorization"),
-        expect(
-            dead_code,
-            reason = "the scope ceiling is consumed by the enabled SDK session engine"
-        )
-    )]
-    pub allowed_token_scopes: Vec<String>,
     pub config: LocalApplicationAuthorizationConfig,
     pub snapshot: LocalApplicationAuthoritySnapshot,
 }
 
 impl AuthOps {
-    /// Project a submitted token into the shared engine's current contract.
-    #[cfg(feature = "auth-local-application-authorization")]
-    pub(crate) fn application_session_token(
-        token: &crate::dto::auth::DelegatedToken,
-    ) -> Result<ic_auth_protocol_types::DelegatedToken, InternalError> {
-        super::delegated::protocol::token(token).map_err(|_| InternalError::invalid_input())
-    }
-
-    /// Convert the canonical narrowing request without selecting lease policy.
-    #[cfg(feature = "auth-local-application-authorization")]
-    pub(crate) fn shared_application_session_request(
-        scopes: &CanonicalApplicationScopes,
-        ttl: Option<u64>,
-    ) -> Result<ic_auth::session_request::SessionRequest, InternalError> {
-        ic_auth::session_request::SessionRequest::new(
-            scopes
-                .as_slice()
-                .iter()
-                .map(|scope| scope.as_str().to_owned())
-                .collect(),
-            ttl,
-        )
-        .map_err(|_| InternalError::invalid_input())
-    }
-
     /// Bind admission to current host generation and configured lease limits.
-    #[cfg(feature = "auth-local-application-authorization")]
+    #[cfg(test)]
     pub(crate) const fn shared_application_session_policy(
         authority: &LocalApplicationAuthorizationAuthority,
         subject_admissible: bool,
@@ -73,32 +42,57 @@ impl AuthOps {
             subject_admissible,
             default_ttl_secs: authority.config.default_session_ttl_secs,
             max_ttl_secs: authority.config.maximum_session_ttl_secs,
-            max_proof_ttl_ns:
-                crate::model::auth::application_authorization::MAX_APPLICATION_PROOF_LIFETIME_NS,
         }
     }
 
     /// Preserve typed endpoint diagnostics while delegating session decisions.
-    #[cfg(feature = "auth-local-application-authorization")]
+    #[cfg(test)]
     pub(crate) fn map_application_session_error(
         error: ic_auth::session::SessionError,
     ) -> InternalError {
         use crate::diagnostics::codes;
-        use ic_auth::session::SessionError as E;
+        use ic_auth::{
+            portable::LoginRevocationError as R, portable_certified::PortableCertifiedError as C,
+            portable_credential::PortableCredentialError as P,
+            portable_signature::PortableSignatureError as S, session::SessionError as E,
+        };
         match error {
-            E::Token(cause) => super::token::verification::map_shared_verification_error(cause),
+            // Preserve resource and clock failures through either verifier envelope.
+            E::Credential(P::Ed25519(cause)) => {
+                Self::map_application_session_error(E::Signature(cause))
+            }
+            E::Credential(P::Certified(cause)) => {
+                Self::map_application_session_error(E::Certified(cause))
+            }
+            E::Signature(S::Budget(cause)) | E::Certified(C::Budget(cause)) => {
+                Self::map_application_session_error(cause.into())
+            }
             E::ReplayConflict => InternalError::public(codes::STATE_CONFLICT),
-            E::Capacity | E::ByteCapacity => InternalError::public(codes::CAPACITY_LIMIT),
+            E::AdmissionThrottled | E::Capacity | E::ByteCapacity | E::Revocation(R::Capacity) => {
+                InternalError::public(codes::CAPACITY_LIMIT)
+            }
+            E::AdmissionClockRollback | E::Revocation(R::Clock) => {
+                InternalError::public(codes::TIME_INVALID)
+            }
             E::GenerationExhausted => InternalError::public(codes::VERSION_CAPACITY),
             E::Disabled => InternalError::public(codes::CONFIGURATION_INACTIVE),
             E::StaleAuthority | E::ScopeRejected => {
                 InternalError::public(codes::AUTHORITY_CONFLICT)
             }
-            E::ProofIneligible | E::MissingOrExpired => {
+            E::MissingOrExpired
+            | E::Claims(_)
+            | E::Signature(_)
+            | E::Certified(_)
+            | E::Credential(P::MechanismMismatch)
+            | E::Revocation(R::InvalidCaller | R::Revoked) => {
                 InternalError::public(codes::SECURITY_INVALID)
             }
-            E::StorageFailure => InternalError::unavailable(),
-            E::Canonical(_) | E::InvalidPolicyOrRecord => InternalError::invalid_input(),
+            E::StorageFailure | E::Revocation(R::Storage | R::InvalidPolicy) => {
+                InternalError::unavailable()
+            }
+            E::Canonical(_) | E::Encoding(_) | E::InvalidPolicyOrRecord => {
+                InternalError::invalid_input()
+            }
         }
     }
 
@@ -115,7 +109,6 @@ impl AuthOps {
         let binding = EnvOps::managed_binding()?;
         let (fleet, role) = managed_authority(&binding);
         Ok(Some(LocalApplicationAuthorizationAuthority {
-            allowed_token_scopes: canister.auth.allowed_token_scopes,
             config,
             snapshot: LocalApplicationAuthoritySnapshot::new(
                 fleet,
@@ -165,5 +158,70 @@ fn managed_authority(binding: &ManagedCanisterBinding) -> (FleetKey, CanisterRol
             child.component.authority.binding.fleet.fleet,
             child.role.clone(),
         ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{diagnostics::codes, test::support::fleet_key};
+    use ic_auth::{
+        admission_budget::AdmissionBudgetError, portable::LoginRevocationError,
+        portable_certified::PortableCertifiedError, portable_credential::PortableCredentialError,
+        portable_signature::PortableSignatureError, session::SessionError,
+    };
+
+    #[test]
+    fn verifier_envelopes_preserve_budget_and_clock_diagnostics() {
+        for (cause, expected) in [
+            (AdmissionBudgetError::Exhausted, codes::CAPACITY_LIMIT),
+            (AdmissionBudgetError::ClockRollback, codes::TIME_INVALID),
+        ] {
+            let certified = SessionError::Credential(PortableCredentialError::Certified(
+                PortableCertifiedError::Budget(cause),
+            ));
+            let signature = SessionError::Credential(PortableCredentialError::Ed25519(
+                PortableSignatureError::Budget(cause),
+            ));
+            for error in [certified, signature] {
+                assert_eq!(
+                    AuthOps::map_application_session_error(error).code(),
+                    expected
+                );
+            }
+        }
+        for (cause, expected) in [
+            (LoginRevocationError::Revoked, codes::SECURITY_INVALID),
+            (LoginRevocationError::Storage, codes::STATE_UNAVAILABLE),
+            (LoginRevocationError::Clock, codes::TIME_INVALID),
+            (LoginRevocationError::Capacity, codes::CAPACITY_LIMIT),
+        ] {
+            assert_eq!(
+                AuthOps::map_application_session_error(cause.into()).code(),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn session_policy_retains_protected_generation_limits_and_subject_refusal() {
+        let authority = LocalApplicationAuthorizationAuthority {
+            config: LocalApplicationAuthorizationConfig {
+                allowed_scopes: vec!["read".to_owned()],
+                default_session_ttl_secs: 30,
+                maximum_session_ttl_secs: 90,
+            },
+            snapshot: LocalApplicationAuthoritySnapshot::new(
+                fleet_key(1),
+                CanisterRole::new("app_service"),
+                7,
+            ),
+        };
+        let policy = AuthOps::shared_application_session_policy(&authority, false);
+        assert_eq!(policy.generation, 7);
+        assert_eq!(policy.default_ttl_secs, 30);
+        assert_eq!(policy.max_ttl_secs, 90);
+        assert!(policy.enabled);
+        assert!(!policy.subject_admissible);
     }
 }

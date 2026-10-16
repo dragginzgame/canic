@@ -4,8 +4,11 @@
 //! Does not own: compilation, release identity allocation, or Fleet deployment.
 //! Boundary: source bytes and admitted tools key a cache; immutable release records remain authority.
 
+use ic_build::cargo::observation::{CargoFeatureSelection, schema::Metadata};
+
 mod dependencies;
 mod diagnostics;
+mod exports;
 mod lock;
 #[cfg(test)]
 mod tests;
@@ -13,7 +16,7 @@ mod tests;
 use crate::{
     build_toolchain::BuildToolchain,
     canister_build::WorkspaceBuildContext,
-    cargo_metadata::{CargoFeatureSelection, cargo_metadata_catalog_for_manifest},
+    cargo_observation::cargo_metadata_catalog_for_manifest,
     release_build::validate_finalized_release_build_manifest,
     release_set::{
         AppConfigSnapshot, load_persisted_application_artifact_union,
@@ -27,7 +30,7 @@ use ic_build::artifacts::{
     InputEvidence, InputEvidenceError, InputEvidenceSpec, InputEvidenceValue,
 };
 use ic_host_fs::{
-    durable::write_bytes,
+    durable::{PublicationMode, WriteOptions, write_bytes},
     read::{hash_file_no_follow, read_file_no_follow},
 };
 use serde::{Deserialize, Serialize};
@@ -40,6 +43,8 @@ use std::{
     time::Duration,
 };
 use thiserror::Error;
+
+pub use exports::retain as retain_cargo_include_exports;
 
 pub use lock::{
     BuildLockInspection, BuildLockOwner, BuildLockPhase, BuildLockWait, BuildProcessActivity,
@@ -308,8 +313,15 @@ impl CompleteBuildReuse {
             files: output_files(&self.release_directory(release_build_id))?,
             roles,
         };
-        write_bytes(&record_path, &serde_json::to_vec(&record)?)
-            .map_err(crate::publication::ops::io_error)?;
+        write_bytes(
+            &record_path,
+            WriteOptions {
+                mode: PublicationMode::Replace,
+                permissions: 0o666,
+            },
+            &serde_json::to_vec(&record)?,
+        )
+        .map_err(crate::publication::ops::io_error)?;
         diagnostics::InputDiagnostics::capture(&self.context, &self.tool_paths, &after)
             .retain(&self.context.icp_root.join(".canic/build-reuse"));
         Ok(())
@@ -375,14 +387,17 @@ fn input_snapshot(
     .map_err(|error| BuildReuseError::Evidence(error.to_string()))?;
     let mut roots = BTreeSet::new();
     let mut paths = BTreeSet::new();
+    let mut targets = dependencies::generated_target_names(context)?;
+    let producers = selected_export_producers(context, &metadata)?;
     append_generated_inputs(context, &mut paths);
     for package in metadata.packages {
+        let manifest = package.manifest_path.into_std_path_buf();
         if package.name == "canic" {
             // Generated infrastructure enables family sources absent from the App's graph.
             roots.extend(
                 crate::fleet_package::resolved_family_roots(
-                    &package.manifest_path,
-                    &package.version,
+                    &manifest,
+                    &package.version.to_string(),
                 )
                 .map_err(|error| BuildReuseError::Evidence(error.to_string()))?
                 .into_values()
@@ -391,16 +406,17 @@ fn input_snapshot(
             );
         }
         roots.insert(
-            package
-                .manifest_path
+            manifest
                 .parent()
-                .ok_or_else(|| BuildReuseError::Unsupported(package.manifest_path.clone()))?
+                .ok_or_else(|| BuildReuseError::Unsupported(manifest.clone()))?
                 .canonicalize()?,
         );
         for target in package.targets {
-            let path = match target.src_path.canonicalize() {
+            targets.insert(target.name.replace('-', "_"));
+            let source = target.src_path.into_std_path_buf();
+            let path = match source.canonicalize() {
                 Ok(path) => path,
-                Err(error) if error.kind() == io::ErrorKind::NotFound => target.src_path,
+                Err(error) if error.kind() == io::ErrorKind::NotFound => source,
                 Err(error) => return Err(error.into()),
             };
             paths.insert(path);
@@ -413,13 +429,15 @@ fn input_snapshot(
             .ok_or_else(|| BuildReuseError::Unsupported(context.config_path.clone()))?
             .canonicalize()?,
     );
-    for root in &roots {
-        paths.insert(root.clone());
-    }
-    dependencies::append_observed_cargo_inputs(context, &mut paths)?;
+    paths.extend(roots.iter().cloned());
+    dependencies::append_observed_cargo_inputs(context, &targets, &mut paths)?;
+    exports::append_observed(context, &producers, &mut paths)?;
     let fixture_hashes = append_fixture_inputs(context, &mut paths)?;
     paths.insert(context.config_path.clone());
-    for root in [&context.workspace_root, &metadata.workspace_root] {
+    for root in [
+        context.workspace_root.as_path(),
+        metadata.workspace_root.as_std_path(),
+    ] {
         for ancestor in root.ancestors() {
             for name in [
                 "Cargo.toml",
@@ -441,9 +459,7 @@ fn input_snapshot(
             paths.insert(root.join(name));
         }
     }
-    for tool in tools {
-        paths.insert(tool.clone());
-    }
+    paths.extend(tools.iter().cloned());
     append_rust_toolchain_inputs(context, &mut paths)?;
 
     let evidence = InputEvidence::capture(&source_evidence_spec(input_identity(context)?, &paths))?;
@@ -466,6 +482,41 @@ fn input_snapshot(
     // Refuse the consumer's non-UTF-8 record encoding before any work or diagnostics.
     evidence.digest()?;
     Ok(evidence)
+}
+
+fn selected_export_producers(
+    context: &WorkspaceBuildContext,
+    metadata: &Metadata,
+) -> Result<BTreeMap<PathBuf, String>, BuildReuseError> {
+    let mut producers: BTreeMap<_, _> = metadata
+        .packages
+        .iter()
+        .map(|package| {
+            (
+                package.manifest_path.clone().into_std_path_buf(),
+                package.id.repr.clone(),
+            )
+        })
+        .collect();
+    for manifest in crate::fleet_package::generated_manifests(&context.config_path) {
+        if !manifest.is_file() {
+            continue;
+        }
+        let generated = cargo_metadata_catalog_for_manifest(
+            &manifest,
+            true,
+            true,
+            &CargoFeatureSelection::default(),
+        )
+        .map_err(|error| BuildReuseError::Evidence(error.to_string()))?;
+        producers.extend(
+            generated
+                .packages
+                .into_iter()
+                .map(|package| (package.manifest_path.into_std_path_buf(), package.id.repr)),
+        );
+    }
+    Ok(producers)
 }
 
 fn prepare_generated_inputs(context: &WorkspaceBuildContext) -> Result<(), BuildReuseError> {

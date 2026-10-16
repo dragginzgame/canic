@@ -35,9 +35,7 @@ pub(super) enum AuthScopeArg {
 
 #[derive(Clone, Debug)]
 pub(super) enum BuiltinPredicate {
-    CallerPermission {
-        permission: String,
-    },
+    CallerPermission { permission: String },
     AttestedLocalSubnet,
     FleetAllowsUpdates,
     FleetIsQueryable,
@@ -48,12 +46,7 @@ pub(super) enum BuiltinPredicate {
     CallerIsRoot,
     CallerIsSameCanister,
     CallerIsFleetAdmitted,
-    Authenticated {
-        required_scope: Option<AuthScopeArg>,
-    },
-    ServiceAuthority {
-        service: AuthScopeArg,
-    },
+    ServiceAuthority { service: AuthScopeArg },
     BuildIcOnly,
     BuildLocalOnly,
 }
@@ -466,27 +459,6 @@ fn parse_call_expr(call: syn::ExprCall) -> syn::Result<AccessExprAst> {
             )))
         }
         _ => {
-            if is_authenticated_path(&path) {
-                let required_scope = match args.next() {
-                    None => None,
-                    Some(scope_expr) => {
-                        if args.next().is_some() {
-                            return Err(syn::Error::new_spanned(
-                                &path,
-                                "authenticated(...) accepts zero arguments or one string literal/path scope",
-                            ));
-                        }
-                        Some(parse_static_string_arg(
-                            scope_expr,
-                            "authenticated(...) scope",
-                        )?)
-                    }
-                };
-                return Ok(AccessExprAst::Pred(AccessPredicateAst::Builtin(
-                    BuiltinPredicate::Authenticated { required_scope },
-                )));
-            }
-
             if short_path_is(&path, "caller", "has_permission") {
                 let Some(Expr::Lit(syn::ExprLit {
                     lit: syn::Lit::Str(permission),
@@ -541,14 +513,12 @@ fn parse_call_expr(call: syn::ExprCall) -> syn::Result<AccessExprAst> {
             }
             let builtin = builtin_from_path(&path).ok_or_else(|| {
                 if builtin_from_path_tail(&path).is_some()
-                    || is_authenticated_path(&path)
-                    || is_bare_authenticated_path(&path)
                     || is_service_authority_path(&path)
                     || is_bare_service_authority_path(&path)
                 {
                     return syn::Error::new_spanned(
                         &path,
-                        "built-in predicates must use short paths like auth::authenticated()",
+                        "built-in predicates must use short paths like caller::is_controller()",
                     );
                 }
                 syn::Error::new_spanned(
@@ -632,22 +602,6 @@ fn builtin_from_path_tail(path: &Path) -> Option<BuiltinPredicate> {
         ("env", "build_local_only") => Some(BuiltinPredicate::BuildLocalOnly),
         _ => None,
     }
-}
-
-fn is_authenticated_path(path: &Path) -> bool {
-    short_path_is(path, "auth", "authenticated")
-}
-
-fn is_bare_authenticated_path(path: &Path) -> bool {
-    if path.leading_colon.is_some() {
-        return false;
-    }
-
-    path.segments.len() == 1
-        && path
-            .segments
-            .last()
-            .is_some_and(|seg| seg.ident == "authenticated")
 }
 
 fn is_service_authority_path(path: &Path) -> bool {

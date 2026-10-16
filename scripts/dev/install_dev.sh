@@ -7,8 +7,6 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 source "$ROOT_DIR/tool-versions.env"
 CANIC_CLI_VERSION="${CANIC_CLI_VERSION:-0.111.0}"
 CANIC_RUST_TOOLCHAIN="${CANIC_RUST_TOOLCHAIN:-1.99.0}"
-ACTIONLINT_INSTALL_DIR="${ACTIONLINT_INSTALL_DIR:-$HOME/.local/bin}"
-SHELLCHECK_INSTALL_DIR="${SHELLCHECK_INSTALL_DIR:-$HOME/.local/bin}"
 CANIC_DEV_TOOLS=(
     "cargo-watch@$CANIC_CARGO_WATCH_VERSION"
     "cargo-edit@$CANIC_CARGO_EDIT_VERSION"
@@ -73,44 +71,13 @@ install_cargo_tools() {
     cargo_toolchain install --quiet --locked "${tools[@]}"
 }
 
-install_or_update_actionlint() {
-    local bin
-
-    yellow "actionlint:"
-    cyan_command "ACTIONLINT_INSTALL_DIR=$ACTIONLINT_INSTALL_DIR bash scripts/ci/install-pinned-ci-tool.sh actionlint"
-    require_command curl
-    require_command tar
-    bin="$(
-        ACTIONLINT_INSTALL_DIR="$ACTIONLINT_INSTALL_DIR" \
-            bash "$ROOT_DIR/scripts/ci/install-pinned-ci-tool.sh" actionlint
-    )"
-
-    green "actionlint installed: $("$bin" -version 2>&1)"
-    if command -v actionlint >/dev/null 2>&1; then
-        green "actionlint on PATH: $(command -v actionlint)"
-    else
-        yellow "actionlint installed at $ACTIONLINT_INSTALL_DIR/actionlint; add $ACTIONLINT_INSTALL_DIR to PATH to run it directly."
-    fi
-}
-
-install_or_update_shellcheck() {
-    local bin
-
-    yellow "ShellCheck:"
-    cyan_command "SHELLCHECK_INSTALL_DIR=$SHELLCHECK_INSTALL_DIR bash scripts/ci/install-pinned-ci-tool.sh shellcheck"
-    require_command curl
-    require_command tar
-    bin="$(
-        SHELLCHECK_INSTALL_DIR="$SHELLCHECK_INSTALL_DIR" \
-            bash "$ROOT_DIR/scripts/ci/install-pinned-ci-tool.sh" shellcheck
-    )"
-
-    green "ShellCheck installed: $("$bin" --version 2>&1 | head -n 1)"
-    if command -v shellcheck >/dev/null 2>&1; then
-        green "shellcheck on PATH: $(command -v shellcheck)"
-    else
-        yellow "shellcheck installed at $SHELLCHECK_INSTALL_DIR/shellcheck; add $SHELLCHECK_INSTALL_DIR to PATH to run it directly."
-    fi
+install_ci_lint_tools() {
+    local tool bin
+    for tool in actionlint shellcheck; do
+        yellow "$tool:"
+        bin="$(bash "$ROOT_DIR/scripts/ci/install-pinned-ci-tool.sh" "$tool")"
+        green "$tool installed: $bin"
+    done
 }
 
 install_repository_tools() {
@@ -143,8 +110,7 @@ main() {
     if [ "${1:-}" = "--update-prereqs" ]; then
         blue "Checking Python, shell lint, workflow lint, ICP CLI, and Wasm prerequisites"
         require_python
-        install_or_update_shellcheck
-        install_or_update_actionlint
+        install_ci_lint_tools
         install_repository_tools
         green "Python, shell lint, workflow lint, ICP CLI, and Wasm prerequisites ready."
         return 0
@@ -173,8 +139,7 @@ main() {
     install_cargo_tools "Rust development tools" "${CANIC_DEV_TOOLS[@]}"
     require_command sccache
     green "sccache ready: $(sccache --version 2>&1)"
-    install_or_update_shellcheck
-    install_or_update_actionlint
+    install_ci_lint_tools
     install_repository_tools
 
     yellow "Canic CLI:"

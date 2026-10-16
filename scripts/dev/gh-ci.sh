@@ -15,10 +15,11 @@ Options:
                       No implicit branch filter when this option is selected.
   --all-workflows     List runs across workflows, bounded by --limit.
   --run <id>          Inspect a specific workflow run id.
+                      Cannot combine with list, branch, workflow or failure filters.
   --failed            Search historical failures, even if a later run passed.
   --logs              Print failed-step logs for the selected attempt; if empty,
                       retrieve only its failed jobs' logs. Retain recovery evidence.
-  --list              List recent runs instead of opening one run.
+  --list              List recent runs instead of opening one run; excludes --logs.
   --limit <n>         Number of runs to list. Defaults to 10.
   -h, --help          Show this help.
 
@@ -77,7 +78,7 @@ limit=10
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --branch)
-            if [ "$#" -lt 2 ]; then
+            if [[ "$#" -lt 2 || -z "$2" ]]; then
                 usage
                 exit 2
             fi
@@ -85,7 +86,7 @@ while [ "$#" -gt 0 ]; do
             shift 2
             ;;
         --workflow)
-            if [ "$#" -lt 2 ]; then
+            if [[ "$#" -lt 2 || -z "$2" ]]; then
                 usage
                 exit 2
             fi
@@ -104,8 +105,8 @@ while [ "$#" -gt 0 ]; do
             shift
             ;;
         --run)
-            if [ "$#" -lt 2 ]; then
-                usage
+            if [[ "$#" -lt 2 || ! "$2" =~ ^[1-9][0-9]*$ ]]; then
+                echo '--run must be a positive integer' >&2
                 exit 2
             fi
             run_id="$2"
@@ -150,6 +151,14 @@ if [[ "$all_workflows" == 1 && ( "$workflow_selected" == 1 || -n "$run_id" || "$
 fi
 if [[ -n "$commit" && -n "$run_id" ]]; then
     echo '--commit selects runs; it cannot be combined with --run' >&2
+    exit 2
+fi
+if [[ -n "$run_id" && ( "$list_runs" == 1 || -n "$branch" || "$workflow_selected" == 1 || -n "$status_filter" ) ]]; then
+    echo '--run selects one run; it cannot be combined with list or search filters' >&2
+    exit 2
+fi
+if [[ "$list_runs" == 1 && "$print_logs" == 1 ]]; then
+    echo '--list cannot be combined with --logs; select a run to inspect its logs' >&2
     exit 2
 fi
 
@@ -209,11 +218,12 @@ if [ -z "$run_id" ]; then
     exit 1
 fi
 
+[[ "$run_id" =~ ^[1-9][0-9]*$ ]] || { echo 'invalid run identity' >&2; exit 1; }
+
 if [ "$print_logs" -eq 1 ]; then
     logs="$(mktemp -d "${TMPDIR:-/tmp}/gh-ci-logs.XXXXXX")"
     retain_logs=0
     trap 'status=$?; if [[ "$status" == 0 && "$retain_logs" == 0 ]]; then rm -rf "$logs"; else printf "\nCI log observation retained: %s\n" "$logs" >&2; fi' EXIT
-    [[ "$run_id" =~ ^[1-9][0-9]*$ ]] || { echo 'invalid run identity' >&2; exit 1; }
     # `gh repo view` does not honour GH_REPO on every supported CLI version.
     repo_args=()
     if [[ -n "${GH_REPO:-}" ]]; then repo_args+=("$GH_REPO"); fi

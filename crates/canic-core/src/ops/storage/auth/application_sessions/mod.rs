@@ -5,15 +5,17 @@
 //! Boundary: workflow supplies invariant-bearing model values; stable storage commits one current record set.
 
 use super::LocalApplicationAuthorizationStateOps;
+#[cfg(test)]
+use crate::model::auth::application_authorization::MAX_APPLICATION_SESSION_AUDIT_PAGE_ENTRIES;
 use crate::{
     cdk::types::Principal,
     model::auth::application_authorization::{
         ApplicationScope, CanonicalApplicationScopes, LocalApplicationAuthorityBinding,
         LocalApplicationReplay, LocalApplicationSession, MAX_ACTIVE_APPLICATION_SESSIONS,
         MAX_ACTIVE_APPLICATION_SESSIONS_PER_SUBJECT, MAX_APPLICATION_REPLAY_RECORDS,
-        MAX_APPLICATION_REPLAY_RECORDS_PER_SUBJECT, MAX_APPLICATION_SESSION_AUDIT_PAGE_ENTRIES,
-        MAX_APPLICATION_SESSION_INDEX_BYTES, MAX_APPLICATION_SESSION_RECORD_BYTES,
-        MAX_APPLICATION_SESSION_STABLE_BYTES, MAX_LOCAL_APPLICATION_SESSION_TTL_NS,
+        MAX_APPLICATION_REPLAY_RECORDS_PER_CALLER, MAX_APPLICATION_SESSION_INDEX_BYTES,
+        MAX_APPLICATION_SESSION_RECORD_BYTES, MAX_APPLICATION_SESSION_STABLE_BYTES,
+        MAX_LOCAL_APPLICATION_SESSION_TTL_NS,
     },
     storage::stable::auth::{
         LocalApplicationAuthorityBindingRecord, LocalApplicationAuthorizationState,
@@ -38,16 +40,18 @@ thread_local! {
 }
 
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
+mod login_restore;
+#[cfg(test)]
 mod shared;
-#[cfg(feature = "auth-local-application-authorization")]
-pub use shared::ApplicationSessionStore;
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
+use login_restore::validate_login_records;
 
 #[derive(Clone, Debug, Default)]
 struct ApplicationSessionIndexes {
     session_by_caller: BTreeMap<Principal, usize>,
     replay_by_fingerprint: BTreeMap<[u8; 32], usize>,
     session_count_by_subject: BTreeMap<Principal, usize>,
-    replay_count_by_subject: BTreeMap<Principal, usize>,
+    replay_count_by_caller: BTreeMap<Principal, usize>,
     estimated_bytes: usize,
     encoded_bytes: usize,
 }
@@ -74,13 +78,14 @@ pub struct ApplicationSessionRestoreStats {
     pub sessions: usize,
     pub replays: usize,
     pub session_subjects: usize,
-    pub replay_subjects: usize,
+    pub replay_callers: usize,
     pub stable_bytes: usize,
     pub estimated_index_bytes: usize,
 }
 
 /// Bounded model-owned page selected from the exact-caller index.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg(test)]
 pub struct ApplicationSessionPage {
     pub entries: Vec<LocalApplicationSession>,
     pub total: usize,
@@ -89,17 +94,18 @@ pub struct ApplicationSessionPage {
 /// Current physical occupancy projected from the reconstructed storage indexes.
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg(test)]
 pub struct ApplicationSessionOccupancy {
     pub active_global: usize,
-    pub active_for_subject: usize,
     pub replay_global: usize,
-    pub replay_for_subject: usize,
+    pub replay_for_caller: usize,
 }
 
 /// Closed corruption, capacity and atomic-commit failures for application-session state.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 pub enum ApplicationSessionStateError {
     #[error("application-session derived indexes are unavailable")]
+    #[cfg(test)]
     IndexesUnavailable,
 
     #[error("application-session state exceeds the active global bound")]
@@ -111,8 +117,8 @@ pub enum ApplicationSessionStateError {
     #[error("application-session state exceeds the replay global bound")]
     ReplayGlobalCapacity,
 
-    #[error("application-session state exceeds the replay per-subject bound")]
-    ReplaySubjectCapacity,
+    #[error("application-session state exceeds the replay per-caller bound")]
+    ReplayCallerCapacity,
 
     #[error("application-session state contains a duplicate caller")]
     DuplicateCaller,
@@ -125,6 +131,10 @@ pub enum ApplicationSessionStateError {
 
     #[error("application replay record is invalid")]
     InvalidReplayRecord,
+
+    #[error("application login records or protected occupancy are invalid")]
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
+    InvalidLoginRecord,
 
     #[error("application-session record exceeds its encoded bound")]
     SessionRecordTooLarge,
@@ -208,6 +218,7 @@ impl LocalApplicationAuthorizationStateOps {
     }
 
     /// Resolve one canonical retained session by exact transport caller without cleanup.
+    #[cfg(test)]
     pub fn application_session(
         caller: Principal,
     ) -> Result<Option<LocalApplicationSession>, ApplicationSessionStateError> {
@@ -224,15 +235,8 @@ impl LocalApplicationAuthorizationStateOps {
         Ok(Some(session))
     }
 
-    /// Observe presence without decoding a second copy of the retained authority.
-    #[cfg(feature = "auth-local-application-authorization")]
-    pub fn has_application_session(
-        caller: Principal,
-    ) -> Result<bool, ApplicationSessionStateError> {
-        with_indexes(|indexes| indexes.session_by_caller.contains_key(&caller))
-    }
-
     /// Return a deterministic bounded page of retained sessions without mutation.
+    #[cfg(test)]
     pub fn application_session_page(
         offset: u64,
         limit: u64,
@@ -264,27 +268,23 @@ impl LocalApplicationAuthorizationStateOps {
     }
 
     /// Return current physical occupancy used by target-local admission policy.
-    #[cfg(any(test, feature = "auth-local-application-authorization"))]
+    #[cfg(test)]
     pub fn application_session_occupancy(
-        subject: Principal,
+        caller: Principal,
     ) -> Result<ApplicationSessionOccupancy, ApplicationSessionStateError> {
         with_indexes(|indexes| ApplicationSessionOccupancy {
             active_global: indexes.session_by_caller.len(),
-            active_for_subject: indexes
-                .session_count_by_subject
-                .get(&subject)
-                .copied()
-                .unwrap_or(0),
             replay_global: indexes.replay_by_fingerprint.len(),
-            replay_for_subject: indexes
-                .replay_count_by_subject
-                .get(&subject)
+            replay_for_caller: indexes
+                .replay_count_by_caller
+                .get(&caller)
                 .copied()
                 .unwrap_or(0),
         })
     }
 
     /// Remove only the exact caller's retained session and preserve all replay tombstones.
+    #[cfg(test)]
     pub fn clear_application_session(
         caller: Principal,
     ) -> Result<bool, ApplicationSessionStateError> {
@@ -349,7 +349,6 @@ impl LocalApplicationAuthorizationStateOps {
 struct ApplicationSessionReplayAuthority {
     proof_fingerprint: [u8; 32],
     transport_caller: Principal,
-    authenticated_subject: Principal,
     authority_generation: u64,
 }
 
@@ -366,6 +365,7 @@ fn install_indexes(indexes: ApplicationSessionIndexes) {
     APPLICATION_SESSION_INDEXES.with_borrow_mut(|current| *current = Some(indexes));
 }
 
+#[cfg(test)]
 fn with_indexes<T>(
     read: impl FnOnce(&ApplicationSessionIndexes) -> T,
 ) -> Result<T, ApplicationSessionStateError> {
@@ -393,6 +393,8 @@ fn build_indexes(
     if encoded_state_len(state)? > MAX_APPLICATION_SESSION_STABLE_BYTES {
         return Err(ApplicationSessionStateError::StableStateTooLarge);
     }
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
+    validate_login_records(state)?;
 
     let mut indexes = ApplicationSessionIndexes::default();
     index_session_records(state, &mut indexes)?;
@@ -408,7 +410,7 @@ fn build_indexes(
         sessions: indexes.session_by_caller.len(),
         replays: indexes.replay_by_fingerprint.len(),
         session_subjects: indexes.session_count_by_subject.len(),
-        replay_subjects: indexes.replay_count_by_subject.len(),
+        replay_callers: indexes.replay_count_by_caller.len(),
         stable_bytes: indexes.encoded_bytes,
         estimated_index_bytes: indexes.estimated_bytes,
     };
@@ -474,12 +476,12 @@ fn index_replay_records(
             return Err(ApplicationSessionStateError::DuplicateProofFingerprint);
         }
         let count = indexes
-            .replay_count_by_subject
-            .entry(replay.authenticated_subject())
+            .replay_count_by_caller
+            .entry(replay.transport_caller())
             .or_default();
         *count += 1;
-        if *count > MAX_APPLICATION_REPLAY_RECORDS_PER_SUBJECT {
-            return Err(ApplicationSessionStateError::ReplaySubjectCapacity);
+        if *count > MAX_APPLICATION_REPLAY_RECORDS_PER_CALLER {
+            return Err(ApplicationSessionStateError::ReplayCallerCapacity);
         }
     }
     Ok(())
@@ -504,13 +506,11 @@ fn validate_overlapping_session_replay_bindings(
         let session_authority = ApplicationSessionReplayAuthority {
             proof_fingerprint: session.proof_fingerprint,
             transport_caller: session.transport_caller,
-            authenticated_subject: session.authenticated_subject,
             authority_generation: session.authority_generation,
         };
         let replay_authority = ApplicationSessionReplayAuthority {
             proof_fingerprint: replay.proof_fingerprint,
             transport_caller: replay.transport_caller,
-            authenticated_subject: replay.authenticated_subject,
             authority_generation: replay.authority_generation,
         };
         let replay_outlives_establishment = replay.remove_at_ns > session.established_at_ns;
@@ -557,7 +557,7 @@ fn session_from_record(
     .map_err(|_| ApplicationSessionStateError::InvalidSessionRecord)
 }
 
-#[cfg(any(test, feature = "auth-local-application-authorization"))]
+#[cfg(test)]
 fn session_to_record(session: &LocalApplicationSession) -> LocalApplicationSessionRecord {
     LocalApplicationSessionRecord {
         shared_session: session.shared_session_bytes().to_vec(),
@@ -664,7 +664,6 @@ fn replay_from_record(
     LocalApplicationReplay::new(
         record.proof_fingerprint,
         record.transport_caller,
-        record.authenticated_subject,
         record.authority_generation,
         record.remove_at_ns,
     )
@@ -674,12 +673,17 @@ fn replay_from_record(
 fn encoded_state_len(
     state: &LocalApplicationAuthorizationStateData,
 ) -> Result<usize, ApplicationSessionStateError> {
-    let header = encoded_len(&(state.authority_generation, &state.authority_binding))?;
+    let header = encoded_len(&(
+        state.authority_generation,
+        &state.authority_binding,
+        state.login_totals,
+    ))?;
     state
         .sessions
         .iter()
         .map(encoded_len)
         .chain(state.replays.iter().map(encoded_len))
+        .chain(state.logins.iter().map(encoded_len))
         .try_fold(header + 64, |total, bytes| {
             total
                 .checked_add(bytes?)
@@ -699,7 +703,7 @@ fn estimate_index_bytes(indexes: &ApplicationSessionIndexes) -> usize {
         indexes.session_by_caller.len(),
         indexes.replay_by_fingerprint.len(),
         indexes.session_count_by_subject.len(),
-        indexes.replay_count_by_subject.len(),
+        indexes.replay_count_by_caller.len(),
     )
 }
 
@@ -707,10 +711,10 @@ const fn index_bytes_for_counts(
     sessions: usize,
     replays: usize,
     session_subjects: usize,
-    replay_subjects: usize,
+    replay_callers: usize,
 ) -> usize {
     const BTREE_ENTRY_OVERHEAD: usize = 128;
-    (sessions + session_subjects + replay_subjects)
+    (sessions + session_subjects + replay_callers)
         * (29 + size_of::<usize>() + BTREE_ENTRY_OVERHEAD)
         + replays * (32 + size_of::<usize>() + BTREE_ENTRY_OVERHEAD)
 }
@@ -750,7 +754,6 @@ impl ApplicationSessionTestStateGuard {
                 replays: vec![LocalApplicationReplayRecord {
                     proof_fingerprint,
                     transport_caller: caller,
-                    authenticated_subject: caller,
                     authority_generation: 0,
                     remove_at_ns,
                 }],
@@ -837,7 +840,6 @@ mod tests {
         LocalApplicationReplayRecord {
             proof_fingerprint: [proof; 32],
             transport_caller: p(caller),
-            authenticated_subject: p(caller),
             authority_generation: 0,
             remove_at_ns: remove_at,
         }
@@ -1045,6 +1047,7 @@ mod tests {
                 replays: vec![replay],
                 authority_generation: 0,
                 authority_binding: None,
+                ..LocalApplicationAuthorizationStateData::default()
             },
         );
         invalidate_indexes();
@@ -1059,6 +1062,7 @@ mod tests {
                 replays: vec![replay],
                 authority_generation: 0,
                 authority_binding: None,
+                ..LocalApplicationAuthorizationStateData::default()
             },
         );
         invalidate_indexes();
@@ -1076,6 +1080,7 @@ mod tests {
                 replays: Vec::new(),
                 authority_generation: 0,
                 authority_binding: None,
+                ..LocalApplicationAuthorizationStateData::default()
             },
         );
         invalidate_indexes();
@@ -1097,7 +1102,6 @@ mod tests {
             state.replays.push(LocalApplicationReplayRecord {
                 proof_fingerprint: fingerprint,
                 transport_caller: caller,
-                authenticated_subject: caller,
                 authority_generation: 0,
                 remove_at_ns: 10,
             });
@@ -1152,6 +1156,29 @@ mod tests {
     }
 
     #[test]
+    fn replay_capacity_is_owned_by_each_transport_caller() {
+        let _lock = seams::lock();
+        let _state = StateGuard::empty();
+        let mut state = LocalApplicationAuthorizationStateData::default();
+        for id in 0..=MAX_APPLICATION_REPLAY_RECORDS_PER_CALLER {
+            let mut record = replay(1, 0, 70);
+            record.proof_fingerprint[..8].copy_from_slice(&(id as u64).to_be_bytes());
+            state.replays.push(record);
+        }
+        assert!(matches!(
+            build_indexes(&state),
+            Err(ApplicationSessionStateError::ReplayCallerCapacity)
+        ));
+        state.replays.last_mut().unwrap().transport_caller = p(2);
+        let (indexes, _) = build_indexes(&state).unwrap();
+        assert_eq!(
+            indexes.replay_count_by_caller.get(&p(1)),
+            Some(&MAX_APPLICATION_REPLAY_RECORDS_PER_CALLER)
+        );
+        assert_eq!(indexes.replay_count_by_caller.get(&p(2)), Some(&1));
+    }
+
+    #[test]
     fn maximum_admitted_state_reconstructs_within_stable_and_heap_bounds() {
         let _lock = seams::lock();
         let _state = StateGuard::empty();
@@ -1175,7 +1202,6 @@ mod tests {
             .map(|id| LocalApplicationReplayRecord {
                 proof_fingerprint: maximum_state_fingerprint(id),
                 transport_caller: maximum_state_principal(id),
-                authenticated_subject: maximum_state_principal(id),
                 authority_generation: 0,
                 remove_at_ns: 60_000_000_001,
             })
@@ -1192,6 +1218,7 @@ mod tests {
                         .collect::<Vec<_>>(),
                     1_800,
                 ))),
+                ..LocalApplicationAuthorizationStateData::default()
             },
         );
         invalidate_indexes();
@@ -1201,7 +1228,7 @@ mod tests {
         assert_eq!(stats.sessions, MAX_ACTIVE_APPLICATION_SESSIONS);
         assert_eq!(stats.replays, MAX_APPLICATION_REPLAY_RECORDS);
         assert_eq!(stats.session_subjects, MAX_ACTIVE_APPLICATION_SESSIONS);
-        assert_eq!(stats.replay_subjects, MAX_APPLICATION_REPLAY_RECORDS);
+        assert_eq!(stats.replay_callers, MAX_APPLICATION_REPLAY_RECORDS);
         assert!(stats.stable_bytes <= MAX_APPLICATION_SESSION_STABLE_BYTES);
         assert!(stats.estimated_index_bytes <= MAX_APPLICATION_SESSION_INDEX_BYTES);
     }

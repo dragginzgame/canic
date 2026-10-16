@@ -322,6 +322,7 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
             $crate::__internal::control_plane::api::fixture_store::FixtureStoreApi::upload(request)
         }
 
+        $crate::__canic_fixture_reply_endpoint! {
         #[$crate::canic_update(internal, public)]
         fn canic_wasm_store_fixture_chunk(
             request: ::canic::dto::fixture_provisioning::FixtureChunkRead,
@@ -337,6 +338,7 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
                 $crate::__canic_fixture_reply_checkpoint!(__CanicFixtureReplyKind::Chunk);
             }
             Ok(result)
+        }
         }
 
         #[$crate::canic_update(internal, requires(caller::is_root()))]

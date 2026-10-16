@@ -4,29 +4,22 @@
 //! Does not own: proof cryptography, stable records, access reads, or authorization policy.
 //! Boundary: ops supplies verified values; policy receives invariant-bearing models.
 
+#[cfg(any(
+    test,
+    feature = "auth-local-application-authorization",
+    feature = "internal-test-fixtures"
+))]
+use crate::model::auth::application_authorization::ApplicationScopeError;
 use crate::{
-    cdk::types::Principal,
-    model::auth::application_authorization::{ApplicationScopeError, CanonicalApplicationScopes},
+    cdk::types::Principal, model::auth::application_authorization::CanonicalApplicationScopes,
 };
 use canic_contracts::ids::{CanisterRole, FleetKey};
+#[cfg(any(
+    test,
+    feature = "auth-local-application-authorization",
+    feature = "internal-test-fixtures"
+))]
 use thiserror::Error;
-
-/// Issuer identity returned only after complete shared token verification.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct VerifiedApplicationAuthority {
-    issuer: Principal,
-}
-
-impl VerifiedApplicationAuthority {
-    #[cfg(any(test, feature = "auth-delegated-token-verify"))]
-    pub const fn new(issuer: Principal) -> Self {
-        Self { issuer }
-    }
-    #[must_use]
-    pub const fn issuer(&self) -> Principal {
-        self.issuer
-    }
-}
 
 /// Protected local authority used to validate retained application sessions.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -38,6 +31,11 @@ pub struct LocalApplicationAuthoritySnapshot {
 
 impl LocalApplicationAuthoritySnapshot {
     #[must_use]
+    #[cfg(any(
+        test,
+        feature = "auth-local-application-authorization",
+        feature = "internal-test-fixtures"
+    ))]
     pub const fn new(fleet: FleetKey, role: CanisterRole, generation: u64) -> Self {
         Self {
             fleet,
@@ -64,6 +62,7 @@ impl LocalApplicationAuthoritySnapshot {
 
 /// Current protected inputs whose narrowing can invalidate retained sessions.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
 pub enum LocalApplicationAuthorityBinding {
     Disabled,
     Enabled {
@@ -76,6 +75,7 @@ pub enum LocalApplicationAuthorityBinding {
     },
 }
 
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
 impl LocalApplicationAuthorityBinding {
     /// Construct one enabled protected binding from already validated inputs.
     #[must_use]
@@ -121,6 +121,11 @@ impl LocalApplicationSession {
         clippy::too_many_arguments,
         reason = "one constructor binds the complete session tuple"
     )]
+    #[cfg(any(
+        test,
+        feature = "auth-local-application-authorization",
+        feature = "internal-test-fixtures"
+    ))]
     pub fn new(
         transport_caller: Principal,
         authenticated_subject: Principal,
@@ -134,9 +139,6 @@ impl LocalApplicationSession {
         proof_fingerprint: [u8; 32],
         establishment_request_hash: [u8; 32],
     ) -> Result<Self, ApplicationAuthorityModelError> {
-        if transport_caller != authenticated_subject {
-            return Err(ApplicationAuthorityModelError::CallerSubjectMismatch);
-        }
         if expires_at_ns <= established_at_ns {
             return Err(ApplicationAuthorityModelError::InvalidSessionWindow);
         }
@@ -157,12 +159,13 @@ impl LocalApplicationSession {
     }
 
     /// Attach the canonical shared session to its product-only view projection.
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     pub(crate) fn with_shared_session(mut self, bytes: Vec<u8>) -> Self {
         self.shared_session = bytes;
         self
     }
 
-    #[cfg(any(test, feature = "auth-local-application-authorization"))]
+    #[cfg(test)]
     pub(crate) fn shared_session_bytes(&self) -> &[u8] {
         &self.shared_session
     }
@@ -178,6 +181,7 @@ impl LocalApplicationSession {
     }
 
     #[must_use]
+    #[cfg(test)]
     pub const fn issuer(&self) -> Principal {
         self.issuer
     }
@@ -203,6 +207,7 @@ impl LocalApplicationSession {
     }
 
     #[must_use]
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     pub const fn established_at_ns(&self) -> u64 {
         self.established_at_ns
     }
@@ -213,12 +218,13 @@ impl LocalApplicationSession {
     }
 
     #[must_use]
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     pub const fn proof_fingerprint(&self) -> [u8; 32] {
         self.proof_fingerprint
     }
 
     #[must_use]
-    #[cfg(any(test, feature = "auth-local-application-authorization"))]
+    #[cfg(test)]
     pub const fn establishment_request_hash(&self) -> [u8; 32] {
         self.establishment_request_hash
     }
@@ -226,46 +232,48 @@ impl LocalApplicationSession {
 
 /// Durable proof-consumption identity retained independently of an active session.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
 pub struct LocalApplicationReplay {
     proof_fingerprint: [u8; 32],
     transport_caller: Principal,
-    authenticated_subject: Principal,
     authority_generation: u64,
     remove_at_ns: u64,
 }
 
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
 impl LocalApplicationReplay {
     /// Construct one replay tombstone bound to the exact consumed proof authority.
-    pub fn new(
+    #[cfg(any(
+        test,
+        feature = "auth-local-application-authorization",
+        feature = "internal-test-fixtures"
+    ))]
+    pub const fn new(
         proof_fingerprint: [u8; 32],
         transport_caller: Principal,
-        authenticated_subject: Principal,
         authority_generation: u64,
         remove_at_ns: u64,
     ) -> Result<Self, ApplicationAuthorityModelError> {
-        if transport_caller != authenticated_subject {
-            return Err(ApplicationAuthorityModelError::CallerSubjectMismatch);
-        }
         if remove_at_ns == 0 {
             return Err(ApplicationAuthorityModelError::InvalidReplayRemovalTime);
         }
         Ok(Self {
             proof_fingerprint,
             transport_caller,
-            authenticated_subject,
             authority_generation,
             remove_at_ns,
         })
     }
 
     #[must_use]
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     pub const fn proof_fingerprint(&self) -> [u8; 32] {
         self.proof_fingerprint
     }
 
     #[must_use]
-    pub const fn authenticated_subject(&self) -> Principal {
-        self.authenticated_subject
+    pub const fn transport_caller(&self) -> Principal {
+        self.transport_caller
     }
 
     #[must_use]
@@ -276,10 +284,13 @@ impl LocalApplicationReplay {
 
 /// Typed model invariant failure for application authority values.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
+#[cfg(any(
+    test,
+    feature = "auth-local-application-authorization",
+    feature = "internal-test-fixtures"
+))]
 pub enum ApplicationAuthorityModelError {
-    #[error("application session caller and subject differ")]
-    CallerSubjectMismatch,
-
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     #[error("application replay removal time must be nonzero")]
     InvalidReplayRemovalTime,
 
@@ -309,8 +320,8 @@ mod tests {
     }
 
     #[test]
-    fn local_session_rejects_different_caller_and_subject() {
-        let err = LocalApplicationSession::new(
+    fn local_session_retains_distinct_transport_and_account_identities() {
+        let session = LocalApplicationSession::new(
             p(1),
             p(2),
             p(3),
@@ -323,13 +334,18 @@ mod tests {
             [5; 32],
             [6; 32],
         )
-        .unwrap_err();
-        assert_eq!(err, ApplicationAuthorityModelError::CallerSubjectMismatch);
+        .unwrap();
+        assert_eq!(session.transport_caller(), p(1));
+        assert_eq!(session.authenticated_subject(), p(2));
+        assert_eq!(session.issuer(), p(3));
     }
 
     #[test]
-    fn replay_rejects_different_caller_and_subject() {
-        let err = LocalApplicationReplay::new([1; 32], p(1), p(2), 3, 4).unwrap_err();
-        assert_eq!(err, ApplicationAuthorityModelError::CallerSubjectMismatch);
+    fn replay_rejects_zero_removal_time() {
+        let err = LocalApplicationReplay::new([1; 32], p(1), 3, 0).unwrap_err();
+        assert_eq!(
+            err,
+            ApplicationAuthorityModelError::InvalidReplayRemovalTime
+        );
     }
 }

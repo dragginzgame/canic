@@ -32,10 +32,10 @@ impl LocalApplicationSessionRecord {
 ///
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct LocalApplicationReplayRecord {
     pub proof_fingerprint: [u8; 32],
     pub transport_caller: Principal,
-    pub authenticated_subject: Principal,
     pub authority_generation: u64,
     pub remove_at_ns: u64,
 }
@@ -65,6 +65,28 @@ pub struct LocalApplicationAuthorizationStateData {
     pub replays: Vec<LocalApplicationReplayRecord>,
     pub authority_generation: u64,
     pub authority_binding: Option<LocalApplicationAuthorityBindingRecord>,
+    pub logins: Vec<(Principal, LocalApplicationLoginRecord)>,
+    pub login_totals: LocalApplicationLoginTotalsRecord,
+}
+
+/// Canonical IC Auth login reservation or logout tombstone, keyed by caller.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct LocalApplicationLoginRecord {
+    #[serde(with = "serde_bytes")]
+    pub bytes: Vec<u8>,
+}
+
+impl LocalApplicationLoginRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "LocalApplicationLoginRecord";
+}
+
+/// Physical pool occupancy committed atomically with the corresponding login row.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct LocalApplicationLoginTotalsRecord {
+    pub admitted: usize,
+    pub unknown: usize,
 }
 
 impl LocalApplicationAuthorizationStateData {
@@ -359,6 +381,7 @@ pub struct LocalApplicationAuthorizationStateRecord {
     pub application_authority_generation: u64,
 
     pub application_authority_binding: Option<LocalApplicationAuthorityBindingRecord>,
+    pub login_totals: LocalApplicationLoginTotalsRecord,
 }
 
 impl LocalApplicationAuthorizationStateRecord {
@@ -470,7 +493,6 @@ mod current_resource_contract {
         LocalApplicationReplayRecord {
             proof_fingerprint,
             transport_caller: principal(id),
-            authenticated_subject: principal(id),
             authority_generation: 1,
             remove_at_ns: 60_000_000_001,
         }
@@ -516,6 +538,7 @@ mod current_resource_contract {
         let header = LocalApplicationAuthorizationStateRecord {
             application_authority_generation: 1,
             application_authority_binding: Some(maximum_authority_binding()),
+            ..LocalApplicationAuthorizationStateRecord::default()
         };
         let maximum = (
             header,

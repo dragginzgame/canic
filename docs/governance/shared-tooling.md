@@ -1,8 +1,8 @@
 # Shared Tooling adoption
 
 The [manifest](../../.shared-tooling.snapshot) records reviewed files from
-committed revision `c118062a070a2e238f1eb3989b6fd700f369ce1e` (0.9.2),
-with 110 selected files. Explicit entrypoints record the maintained selection;
+committed revision `3bef3f2daec7f64f875397ed4d53d5b9e2e68a08` (0.15.0),
+with 115 selected files. Explicit entrypoints record the maintained selection;
 the exporter derives required companions and verifies ownership before retiring
 unused payloads. Refreshes reuse that selection without repeating file arguments.
 [AGENTS.md](../../AGENTS.md) retains the product overlay. Refresh only through
@@ -52,8 +52,10 @@ needs the export in [INSTALLING.md](../../INSTALLING.md). Ordinary validation
 and PocketIC test entrypoints check prepared tools without downloading them.
 
 `ci/ic-tools.tsv` owns common versions and archive digests. Root
-`tool-versions.env` retains Canic Cargo/lint pins, Binaryen executable/runtime-library
-digests. The shell projection reads the matrix; it defines no independent
+`tool-versions.env` retains Canic Cargo pins, additional lint-platform archive
+digests and Binaryen executable/runtime-library digests. Shared Tooling's catalog
+owns common lint versions and Linux x86_64 digests. The shell projection reads
+the matrix; it defines no independent
 version. Testkit owns PocketIC provisioning, offline byte/receipt admission, the
 16.x protocol policy and command-scoped server custody. `make install-testkit-server`
 explicitly installs the registry CLI through the shared Cargo installer and calls
@@ -138,9 +140,9 @@ The reporter's actual Canic member roster is qualified independently. Reporting
 needs explicit prepared `cargo` and `cloc`; direct canonical calls also need `jq`
 on PATH. Adoption does not install cloc into the user's environment.
 
-Canic's pin adapter selects existing actionlint, ShellCheck and CI sccache
-versions, archive digests and destinations; the shared installer owns download,
-verification and installation mechanics. CI and developer setup use that adapter.
+Canic's pin adapter selects reviewed catalogs, additional platform digests and
+destinations, then calls the maintained shared `install-ci-tool.sh` entrypoint.
+CI and developer setup use that adapter; development setup has one lint-tool loop.
 Linux installations pass in isolated evidence directories. Native macOS execution
 remains upstream CI evidence; local fixtures qualify the four host pin selections.
 Shared host setup now owns ripgrep with PCRE2 and cloc; their duplicate Cargo/

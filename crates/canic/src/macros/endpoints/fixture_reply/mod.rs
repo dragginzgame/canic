@@ -5,6 +5,26 @@
 #[doc(hidden)]
 #[cfg(not(feature = "internal-test-fixtures"))]
 #[macro_export]
+macro_rules! __canic_fixture_reply_endpoint {
+    ($(#[$attribute:meta])* fn $name:ident($($arguments:tt)*) -> $result:ty $body:block) => {
+        $(#[$attribute])*
+        fn $name($($arguments)*) -> $result $body
+    };
+}
+
+#[doc(hidden)]
+#[cfg(feature = "internal-test-fixtures")]
+#[macro_export]
+macro_rules! __canic_fixture_reply_endpoint {
+    ($(#[$attribute:meta])* fn $name:ident($($arguments:tt)*) -> $result:ty $body:block) => {
+        $(#[$attribute])*
+        async fn $name($($arguments)*) -> $result $body
+    };
+}
+
+#[doc(hidden)]
+#[cfg(not(feature = "internal-test-fixtures"))]
+#[macro_export]
 macro_rules! __canic_fixture_reply_support {
     () => {};
 }

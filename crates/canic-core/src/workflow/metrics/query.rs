@@ -171,9 +171,9 @@ mod tests {
 
         AuthMetrics::record(
             AuthMetricSurface::ApplicationSession,
-            AuthMetricOperation::Establish,
+            AuthMetricOperation::Cleanup,
             AuthMetricOutcome::Completed,
-            AuthMetricReason::Created,
+            AuthMetricReason::Expired,
         );
         AuthMetrics::record(
             AuthMetricSurface::Attestation,
@@ -187,9 +187,9 @@ mod tests {
             [
                 "auth",
                 "application_session",
-                "establish",
+                "cleanup",
                 "completed",
-                "created",
+                "expired",
             ],
         );
     }

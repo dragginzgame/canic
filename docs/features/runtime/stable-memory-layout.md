@@ -27,9 +27,11 @@ Application storage must follow the same bootstrap-before-access ordering.
 Early default-runtime opens return typed `RuntimeOpenError::NotBootstrapped`
 without constructing a manager or selecting its bucket size. Committed ID
 resolution and authority verification also observe only an existing runtime.
-Consumers can use `memory_id` / `default_memory_manager_memory_id` to resolve
-committed keys and `verify_authority` / `verify_default_memory_manager_authority`
-to check their key-only requirements without replaying host admission.
+Canic owns one explicit `MemoryRuntime` and opens application handles through
+`canic::memory::open`. Components contribute requests to the host composition;
+they must not construct another manager over the same backing memory. Independent
+hosts can use their runtime's `memory_id` and `verify_authority` methods to inspect
+committed keys and ownership before injecting handles into components.
 
 ### Native composed tests
 
@@ -48,7 +50,7 @@ canic::memory::bootstrap(application_memory())
 // Run the application's generated database initialization helper next.
 ```
 
-The default runtime is thread-local: run this ordering on every native thread
+The Canic-owned runtime is thread-local: run this ordering on every native thread
 that uses it. A process-global `Once` or a mutex serializing test bodies does
 not initialize another thread's runtime. Request-execution wrappers and the
 database's native helper retain their own startup/convergence responsibilities.

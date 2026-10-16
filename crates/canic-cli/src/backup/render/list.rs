@@ -38,9 +38,7 @@ pub(super) fn render_backup_list(entries: &[BackupListEntry]) -> String {
 }
 
 fn display_created_at(created_at: &str) -> String {
-    created_at
-        .strip_prefix("unix:")
-        .and_then(|seconds| seconds.parse::<u64>().ok())
+    canic_backup::timestamp::timestamp_seconds(created_at)
         .map_or_else(|| created_at.to_string(), backup_list_timestamp)
 }
 

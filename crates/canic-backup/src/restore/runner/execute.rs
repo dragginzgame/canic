@@ -33,7 +33,9 @@ use super::{
 };
 use crate::{
     persistence::{CommandLifetimeLock, CommandLifetimeLockError, JournalLock},
-    restore::persistence::{lock_restore_layout, release_restore, retain_restore},
+    restore::persistence::{
+        lock_restore_layout, release_restore, retain_restore, terminal_evidence_without_layout,
+    },
     timestamp::state_updated_at,
 };
 use std::{collections::BTreeSet, ops::ControlFlow, path::Path};
@@ -81,7 +83,7 @@ fn restore_run_execute_result_with_terminal_writer(
     executor: &mut impl RestoreRunnerCommandExecutor,
     terminal_writer: &mut impl FnMut(&Path, &RestoreApplyJournal) -> Result<(), RestoreRunnerError>,
 ) -> Result<RestoreRunnerOutcome, RestoreRunnerError> {
-    let _lock = JournalLock::acquire(&config.journal)?;
+    let journal_guard = JournalLock::acquire(&config.journal)?;
     let mut journal = read_apply_journal_file(&config.journal)?;
     let layout = lock_restore_layout(&journal)?;
     if let Some(layout) = &layout
@@ -98,16 +100,16 @@ fn restore_run_execute_result_with_terminal_writer(
             restore_run_max_steps_reached(config, executed_operations.len(), &report);
         if report.complete || max_steps_reached {
             if report.complete {
-                // Keep every command excluded through durable reference publication.
-                let command_guards = journal
-                    .operations
-                    .iter()
-                    .map(|operation| restore_command_lock(config, operation))
-                    .collect::<Result<Vec<_>, _>>()?;
                 if let Some(layout) = &layout {
-                    release_restore(layout, &config.journal, &journal)?;
+                    release_restore(layout, &journal_guard)?;
+                } else {
+                    let terminal = terminal_evidence_without_layout(&journal_guard)?;
+                    let _quiescence = terminal
+                        .commands()
+                        .iter()
+                        .map(crate::persistence::CommandQuiescenceGuard::acquire)
+                        .collect::<Result<Vec<_>, _>>()?;
                 }
-                drop(command_guards);
             }
             return Ok(RestoreRunnerOutcome::ok(restore_run_execute_summary(
                 &journal,
@@ -175,19 +177,15 @@ fn restore_run_prepare_next_operation(
         .clone()
         .ok_or_else(|| restore_command_unavailable_error(&preview))?;
     let sequence = operation.sequence;
-    let command_lock = restore_command_lock(config, &operation)?;
+    let mut command_lock = restore_command_lock(config, journal, &operation)?;
     let attempt = journal
         .operation_receipts
         .iter()
         .filter(|receipt| receipt.sequence == sequence)
         .count()
         + 1;
-    let reconciled_success = reconcile_restore_operation(
-        config,
-        executor,
-        &operation,
-        command_lock.as_ref().map(CommandLifetimeLock::handle),
-    )?;
+    let reconciled_success =
+        reconcile_restore_operation(config, executor, &operation, command_lock.as_mut())?;
     if let Some(reconciled_success) = reconciled_success {
         return Ok(RestoreRunPreparedOperation {
             operation,
@@ -214,17 +212,17 @@ fn restore_run_prepare_next_operation(
         && operation.snapshot_ids_before.is_none()
     {
         Some(
-            observe_snapshot_inventory(
-                config,
-                executor,
-                &operation,
-                command_lock.as_ref().map(CommandLifetimeLock::handle),
-            )?
-            .snapshot_ids,
+            observe_snapshot_inventory(config, executor, &operation, command_lock.as_mut())?
+                .snapshot_ids,
         )
     } else {
         None
     };
+
+    if let Some(lock) = &command_lock {
+        journal.retain_command_custody(lock.record())?;
+        write_apply_journal_file(&config.journal, journal)?;
+    }
 
     enforce_apply_claim_sequence(sequence, journal)?;
     let pending_at = Some(state_updated_at(config.updated_at.as_ref()));
@@ -271,10 +269,7 @@ fn restore_run_execute_prepared_operation(
         ControlFlow::Continue(prepared) => prepared,
         ControlFlow::Break(outcome) => return Ok(outcome),
     };
-    let command_lifetime = prepared
-        .command_lock
-        .as_ref()
-        .map(CommandLifetimeLock::handle);
+    let command_lifetime = prepared.command_lock.as_mut();
 
     let output = executor.execute(&prepared.command, command_lifetime);
     finish_restore_command_lock(&mut prepared)?;
@@ -355,10 +350,7 @@ fn restore_run_enforce_stopped_precondition(
         &prepared.operation,
         prepared.attempt,
         config.updated_at.as_ref(),
-        prepared
-            .command_lock
-            .as_ref()
-            .map(CommandLifetimeLock::handle),
+        prepared.command_lock.as_mut(),
     );
     match precondition {
         Ok(Some(outcome)) => {
@@ -479,7 +471,7 @@ fn reconcile_restore_operation(
     config: &RestoreRunnerConfig,
     executor: &mut impl RestoreRunnerCommandExecutor,
     operation: &crate::restore::RestoreApplyJournalOperation,
-    command_lifetime: Option<crate::persistence::CommandLifetimeHandle>,
+    command_lifetime: Option<&mut crate::persistence::CommandLifetimeLock>,
 ) -> Result<Option<RestoreReconciledCommandSuccess>, RestoreRunnerError> {
     let recovering = operation.state == crate::restore::RestoreApplyOperationState::Pending
         || (operation.operation == RestoreApplyOperationKind::UploadSnapshot
@@ -516,7 +508,7 @@ fn reconcile_lifecycle_operation(
     config: &RestoreRunnerConfig,
     executor: &mut impl RestoreRunnerCommandExecutor,
     operation: &crate::restore::RestoreApplyJournalOperation,
-    command_lifetime: Option<crate::persistence::CommandLifetimeHandle>,
+    command_lifetime: Option<&mut crate::persistence::CommandLifetimeLock>,
     completed_status: RestoreObservedCanisterStatus,
 ) -> Result<Option<RestoreReconciledCommandSuccess>, RestoreRunnerError> {
     let observation = observe_canister_status(config, executor, operation, command_lifetime)?;
@@ -552,7 +544,7 @@ fn reconcile_upload_operation(
     config: &RestoreRunnerConfig,
     executor: &mut impl RestoreRunnerCommandExecutor,
     operation: &crate::restore::RestoreApplyJournalOperation,
-    command_lifetime: Option<crate::persistence::CommandLifetimeHandle>,
+    command_lifetime: Option<&mut crate::persistence::CommandLifetimeLock>,
 ) -> Result<Option<RestoreReconciledCommandSuccess>, RestoreRunnerError> {
     let baseline = operation.snapshot_ids_before.as_ref().ok_or(
         RestoreRunnerError::InvalidSnapshotInventory {
@@ -622,7 +614,7 @@ fn observe_snapshot_inventory(
     config: &RestoreRunnerConfig,
     executor: &mut impl RestoreRunnerCommandExecutor,
     operation: &crate::restore::RestoreApplyJournalOperation,
-    command_lifetime: Option<crate::persistence::CommandLifetimeHandle>,
+    command_lifetime: Option<&mut crate::persistence::CommandLifetimeLock>,
 ) -> Result<RestoreSnapshotInventoryObservation, RestoreRunnerError> {
     let mut args = vec![
         "canister".to_string(),
@@ -642,7 +634,8 @@ fn observe_snapshot_inventory(
         requires_stopped_canister: false,
         note: "observes target snapshot inventory for upload reconciliation".to_string(),
     };
-    let raw = executor.execute(&command, command_lifetime)?;
+    let _ = command_lifetime;
+    let raw = executor.execute(&command, None)?;
     let output = RestoreApplyCommandOutputPair::from_bytes(
         &raw.stdout,
         &raw.stderr,
@@ -681,6 +674,7 @@ fn observe_snapshot_inventory(
 
 fn restore_command_lock(
     config: &RestoreRunnerConfig,
+    journal: &RestoreApplyJournal,
     operation: &crate::restore::RestoreApplyJournalOperation,
 ) -> Result<Option<CommandLifetimeLock>, RestoreRunnerError> {
     if !matches!(
@@ -693,7 +687,26 @@ fn restore_command_lock(
         return Ok(None);
     }
 
-    CommandLifetimeLock::acquire(&config.journal, operation.sequence)
+    let original = journal
+        .command_custody
+        .iter()
+        .find(|record| record.operation_sequence() == operation.sequence as u64);
+    let has_issued_state = matches!(
+        operation.state,
+        crate::restore::RestoreApplyOperationState::Pending
+            | crate::restore::RestoreApplyOperationState::Failed
+    );
+    let has_issued_receipt = journal
+        .operation_receipts
+        .iter()
+        .any(|receipt| receipt.sequence == operation.sequence);
+    let requires_original = has_issued_state || has_issued_receipt;
+    if original.is_none() && requires_original {
+        return Err(RestoreRunnerError::MissingOriginalCommandCustody {
+            sequence: operation.sequence,
+        });
+    }
+    crate::persistence::acquire_recorded_command(&config.journal, operation.sequence, original)
         .map(Some)
         .map_err(|error| restore_command_lock_error(operation, error))
 }
@@ -706,6 +719,7 @@ fn finish_restore_command_lock(
     };
     command_lock
         .finish()
+        .map(|_guard| ())
         .map_err(|error| restore_command_lock_error(&prepared.operation, error))
 }
 
@@ -714,20 +728,21 @@ fn restore_command_lock_error(
     error: CommandLifetimeLockError,
 ) -> RestoreRunnerError {
     match error {
-        CommandLifetimeLockError::InFlight { lock_path } => RestoreRunnerError::CommandInFlight {
+        CommandLifetimeLockError::InFlight { path } => RestoreRunnerError::CommandInFlight {
             sequence: operation.sequence,
             operation: operation.operation.clone(),
-            lock_path,
+            lock_path: path.display().to_string(),
         },
-        CommandLifetimeLockError::UnsafeEntry { lock_path, kind } => {
+        CommandLifetimeLockError::UnsafeEntry { path, kind } => {
             RestoreRunnerError::CommandLockUnsafeEntry {
                 sequence: operation.sequence,
                 operation: operation.operation.clone(),
-                lock_path,
+                lock_path: path.display().to_string(),
                 kind,
             }
         }
         CommandLifetimeLockError::Io(error) => RestoreRunnerError::Io(error),
+        other => RestoreRunnerError::CommandCustody(other),
     }
 }
 

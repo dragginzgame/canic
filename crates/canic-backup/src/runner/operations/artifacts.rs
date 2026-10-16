@@ -11,7 +11,7 @@ use crate::{
     },
     journal::{ArtifactJournalEntry, ArtifactState},
     persistence::{
-        BackupLayout, CommandLifetimeHandle, PersistenceError, commit_artifact_directory,
+        BackupLayout, CommandLifetimeLock, PersistenceError, commit_artifact_directory,
         verify_durable_artifact,
     },
     plan::BackupPlan,
@@ -32,12 +32,9 @@ use crate::{
 };
 
 use std::{
-    fs::{self, DirBuilder},
+    fs,
     path::{Path, PathBuf},
 };
-
-#[cfg(unix)]
-use std::os::unix::fs::DirBuilderExt;
 
 pub(super) fn execute_create_snapshot(
     executor: &mut impl BackupRunnerExecutor,
@@ -45,7 +42,7 @@ pub(super) fn execute_create_snapshot(
     plan: &BackupPlan,
     journal: &BackupExecutionJournal,
     operation: &BackupExecutionJournalOperation,
-    command_lifetime: CommandLifetimeHandle,
+    command_lifetime: &mut CommandLifetimeLock,
 ) -> Result<BackupExecutionOperationReceipt, BackupRunnerError> {
     let target = operation_target(operation)?;
     if let Some(receipt) = recorded_snapshot_receipt(layout, plan, journal, operation, &target)? {
@@ -143,7 +140,7 @@ pub(super) fn execute_download_snapshot(
     layout: &BackupLayout,
     journal: &BackupExecutionJournal,
     operation: &BackupExecutionJournalOperation,
-    command_lifetime: CommandLifetimeHandle,
+    command_lifetime: &mut CommandLifetimeLock,
 ) -> Result<BackupExecutionOperationReceipt, BackupRunnerError> {
     let target = operation_target(operation)?;
     let snapshot_id = snapshot_id_for_target(journal, operation.sequence, &target)?;
@@ -289,10 +286,14 @@ fn prepare_download_temp_directory(
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(error) => return Err(error.into()),
     }
-    let mut builder = DirBuilder::new();
-    #[cfg(unix)]
-    builder.mode(0o700);
-    builder.create(&temp_path)?;
+    // Retain any created claim on admission/sync failure for the journal's retry owner.
+    ic_host_fs::durable::create_private_directory(&temp_path).map_err(|source| {
+        let kind = match &source {
+            ic_host_fs::durable::DirectoryCreationError::BeforeCreation(error)
+            | ic_host_fs::durable::DirectoryCreationError::AfterCreation(error) => error.kind(),
+        };
+        std::io::Error::new(kind, source)
+    })?;
     Ok(temp_path)
 }
 

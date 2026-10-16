@@ -49,6 +49,7 @@ use canic_host::{
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
 };
 use clap::{ArgAction, Command};
+use ic_host_fs::durable::{PublicationMode, WriteOptions};
 use std::{
     ffi::OsString,
     fs, io,
@@ -882,8 +883,15 @@ fn publish_generated(
             if existing == bytes {
                 return Ok(());
             }
-            ic_host_fs::durable::write_bytes(&resolved, bytes)
-                .map_err(canic_host::publication::ops::io_error)?;
+            ic_host_fs::durable::write_bytes(
+                &resolved,
+                WriteOptions {
+                    mode: PublicationMode::Replace,
+                    permissions: 0o666,
+                },
+                bytes,
+            )
+            .map_err(canic_host::publication::ops::io_error)?;
             return Ok(());
         }
         Err(error) if error.kind() == io::ErrorKind::NotFound && expected_sha256.is_some() => {
@@ -894,8 +902,15 @@ fn publish_generated(
         Err(error) if error.kind() == io::ErrorKind::NotFound => {}
         Err(error) => return Err(error.into()),
     }
-    ic_host_fs::durable::create_new_bytes_with_parents(&resolved, bytes)
-        .map_err(canic_host::publication::ops::io_error)?;
+    ic_host_fs::durable::write_bytes(
+        &resolved,
+        WriteOptions {
+            mode: PublicationMode::CreateNew,
+            permissions: 0o666,
+        },
+        bytes,
+    )
+    .map_err(canic_host::publication::ops::io_error)?;
     Ok(())
 }
 

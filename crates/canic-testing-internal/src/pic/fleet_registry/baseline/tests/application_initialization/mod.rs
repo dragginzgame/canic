@@ -18,8 +18,8 @@ pub(super) use blob::production_blob_initialization_recovers_target_binding;
 )]
 pub(super) fn production_initialization_recovers_exact_target_bytes() {
     let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
-    let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
-        .expect("discover Canic test workspace through Cargo");
+    let workspace =
+        crate::workspace::discover().expect("discover Canic test workspace through Cargo");
     let config_path =
         workspace.join("canisters/test/managed_lifecycle_probe/canic.initialization.toml");
     let profile = crate::pic::artifacts::CanicWasmBuildProfile::Fast;
@@ -35,7 +35,7 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
         "fleet_coordinator",
         profile,
     );
-    let target_dir = test_target_dir(&workspace, "application-initialization");
+    let target_dir = workspace.join("target").join("application-initialization");
     let modules = crate::pic::artifacts::build_internal_test_wasm_canisters_with_env(
         &workspace,
         &target_dir,

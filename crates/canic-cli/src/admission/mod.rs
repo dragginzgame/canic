@@ -68,7 +68,7 @@ use canic_host::{
     query_canister_with_arg,
 };
 use clap::{ArgGroup, Command as ClapCommand};
-use ic_host_fs::durable::write_bytes;
+use ic_host_fs::durable::{PublicationMode, WriteOptions, write_bytes};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, ffi::OsString, fs, path::PathBuf};
 use thiserror::Error as ThisError;
@@ -266,8 +266,15 @@ fn run_plan(options: AdmissionPlanOptions) -> Result<(), AdmissionCommandError> 
     )?;
     let mut bytes = serde_json::to_vec_pretty(&plan)?;
     bytes.push(b'\n');
-    write_bytes(&crate::output::resolve_operator_path(&options.out)?, &bytes)
-        .map_err(canic_host::publication::ops::io_error)?;
+    write_bytes(
+        &crate::output::resolve_operator_path(&options.out)?,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &bytes,
+    )
+    .map_err(canic_host::publication::ops::io_error)?;
     println!(
         "Fleet-admission plan written to {}\nOperation: {}\nGeneration: {} -> {}\nRegistry revision: {}\nParticipant Roots: {}\nManaged participants: {}",
         options.out.display(),

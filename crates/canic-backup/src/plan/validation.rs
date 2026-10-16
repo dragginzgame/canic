@@ -348,13 +348,10 @@ pub(super) fn validate_preflight_timestamp(
     value: &str,
 ) -> Result<u64, BackupPlanError> {
     validate_nonempty(field, value)?;
-    value
-        .strip_prefix("unix:")
-        .and_then(|seconds| seconds.parse::<u64>().ok())
-        .ok_or_else(|| BackupPlanError::InvalidTimestamp {
-            field,
-            value: value.to_string(),
-        })
+    crate::timestamp::timestamp_seconds(value).ok_or_else(|| BackupPlanError::InvalidTimestamp {
+        field,
+        value: value.to_string(),
+    })
 }
 
 fn validate_optional_principal(

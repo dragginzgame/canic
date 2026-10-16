@@ -54,12 +54,6 @@ impl AuthOps {
         active::install_active_delegation_proof(proof, installed_by)
     }
 
-    pub(crate) fn active_delegation_proof(
-        now_ns: u64,
-    ) -> Result<Option<ActiveDelegationProof>, InternalError> {
-        active::active_delegation_proof(now_ns)
-    }
-
     pub(crate) fn active_delegation_proof_status(
         now_ns: u64,
     ) -> Result<ActiveDelegationProofStatusResponse, InternalError> {

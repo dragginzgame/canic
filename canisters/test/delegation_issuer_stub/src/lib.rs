@@ -12,13 +12,12 @@ use canic::{
     api::call::Call,
     api::metrics::MetricsQuery,
     dto::{
-        auth::{DelegatedToken, SignedRoleAttestation},
+        auth::SignedRoleAttestation,
         component_registry::RootPeerComponentAllocationRequest,
         metrics::{MetricEntry, QueryPerfSample},
         page::{Page, PageRequest},
         role::OperationReceipt,
     },
-    ids::cap,
     prelude::*,
     protocol::CANIC_ROOT_COMMAND,
 };
@@ -93,18 +92,6 @@ async fn canic_install(_args: Option<Vec<u8>>) {}
 
 /// Run no-op upgrade handling for the delegation issuer stub.
 async fn canic_upgrade() {}
-
-#[canic_update(requires(auth::authenticated(cap::VERIFY)))]
-fn issuer_verify_token(token: DelegatedToken) -> Result<(), Error> {
-    let _ = token;
-    Ok(())
-}
-
-#[canic_update(requires(auth::authenticated()))]
-fn issuer_verify_token_any(token: DelegatedToken) -> Result<(), Error> {
-    let _ = token;
-    Ok(())
-}
 
 /// Exercise the generic synchronous application guard without changing its application ABI.
 #[canic_query(public)]

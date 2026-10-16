@@ -11,7 +11,7 @@ use crate::fleet_ensure::{
     ops::{EnsurePaths, EnsureStateError, is_sha256, operation_selection},
     policy::validate_path_labels,
 };
-use ic_host_fs::durable::create_new_bytes_with_parents;
+use ic_host_fs::durable::{PublicationMode, WriteOptions, write_bytes};
 use ic_host_fs::read::read_optional_file_no_follow;
 
 use canic_core::cdk::utils::hash::sha256_hex;
@@ -301,7 +301,16 @@ fn read(path: &Path) -> Result<Vec<u8>, EnsureStateError> {
 }
 
 fn retain(path: &Path, bytes: &[u8]) -> Result<(), EnsureStateError> {
-    match create_new_bytes_with_parents(path, bytes).map_err(crate::publication::ops::io_error) {
+    match write_bytes(
+        path,
+        WriteOptions {
+            mode: PublicationMode::CreateNew,
+            permissions: 0o666,
+        },
+        bytes,
+    )
+    .map_err(crate::publication::ops::io_error)
+    {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
             if read(path)? == bytes {

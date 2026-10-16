@@ -11,7 +11,7 @@ use crate::canister_build::{
 };
 use canic_contracts::ids::ReleaseBuildId;
 use ic_build::artifacts::InputEvidence;
-use ic_host_fs::durable::write_bytes;
+use ic_host_fs::durable::{PublicationMode, WriteOptions, write_bytes};
 use serde::Serialize;
 use std::{
     collections::BTreeMap,
@@ -142,6 +142,14 @@ pub(in crate::canister_build::reuse) fn retain_rejection(
         .icp_root
         .join(".canic/build-reuse")
         .join(format!("rejected-{release_build_id}.json"));
-    write_bytes(&path, &bytes).ok()?;
+    write_bytes(
+        &path,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &bytes,
+    )
+    .ok()?;
     Some(path)
 }

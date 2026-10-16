@@ -7,10 +7,7 @@
 use super::{
     AccessContext, BuiltinPredicate, CallerPredicate, EnvironmentPredicate, FleetPredicate,
 };
-use crate::{
-    access,
-    access::{AccessError, metrics::DelegatedAuthMetrics},
-};
+use crate::{access, access::AccessError};
 use canic_contracts::ids::AccessMetricKind;
 
 pub(super) const fn name(pred: &BuiltinPredicate) -> &'static str {
@@ -29,9 +26,6 @@ pub(super) const fn name(pred: &BuiltinPredicate) -> &'static str {
         }
         BuiltinPredicate::Environment(EnvironmentPredicate::BuildIcOnly) => "build_ic_only",
         BuiltinPredicate::Environment(EnvironmentPredicate::BuildLocalOnly) => "build_local_only",
-        BuiltinPredicate::Authenticated { .. } | BuiltinPredicate::AuthenticatedArgument { .. } => {
-            "authenticated"
-        }
         BuiltinPredicate::AttestedLocalSubnet
         | BuiltinPredicate::AttestedLocalSubnetArgument(_) => "attested_local_subnet",
         BuiltinPredicate::ServiceAuthority { .. } => "deployment_service_authority",
@@ -43,9 +37,7 @@ pub(super) const fn metric_kind(pred: &BuiltinPredicate) -> AccessMetricKind {
         BuiltinPredicate::Fleet(_) => AccessMetricKind::Guard,
         BuiltinPredicate::Caller(_)
         | BuiltinPredicate::CallerPermission { .. }
-        | BuiltinPredicate::Authenticated { .. }
         | BuiltinPredicate::AttestedLocalSubnet
-        | BuiltinPredicate::AuthenticatedArgument { .. }
         | BuiltinPredicate::AttestedLocalSubnetArgument(_)
         | BuiltinPredicate::ServiceAuthority { .. } => AccessMetricKind::Auth,
         BuiltinPredicate::Environment(EnvironmentPredicate::SelfIsFleetSubnetRoot) => {
@@ -111,23 +103,8 @@ pub(super) fn evaluate<const FLEET_ADMISSION: bool>(
         BuiltinPredicate::Environment(EnvironmentPredicate::BuildLocalOnly) => {
             access::env::build_network_local()
         }
-        BuiltinPredicate::Authenticated { required_scope } => {
-            let issuer_pid = access::auth::delegated_token_verified(ctx.caller, *required_scope)
-                .map_err(BuiltinFailure::Denied)?;
-            DelegatedAuthMetrics::record_authority(issuer_pid);
-            Ok(())
-        }
         BuiltinPredicate::AttestedLocalSubnet => {
             access::auth::is_attested_local_subnet(ctx.caller)
-        }
-        BuiltinPredicate::AuthenticatedArgument {
-            token,
-            required_scope,
-        } => {
-            let issuer = access::auth::verify_decoded_token(token, ctx.caller, *required_scope)
-                .map_err(BuiltinFailure::Denied)?;
-            DelegatedAuthMetrics::record_authority(issuer);
-            Ok(())
         }
         BuiltinPredicate::AttestedLocalSubnetArgument(attestation) => {
             access::auth::verify_decoded_attestation(attestation, ctx.caller)

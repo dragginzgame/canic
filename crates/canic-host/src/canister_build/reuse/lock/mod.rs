@@ -5,7 +5,6 @@
 //! Boundary: metadata failure never changes exclusion; the lock inode is never replaced.
 
 mod inspection;
-mod serialization;
 #[cfg(all(test, unix))]
 mod tests;
 
@@ -46,7 +45,7 @@ pub struct BuildLockOwner {
     pub profile: String,
     pub started_at_unix_seconds: u64,
     pub workspace: PathBuf,
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub identity: Option<BuildProcessIdentity>,
     pub phase: BuildLockPhase,
     pub phase_started_at_unix_seconds: u64,

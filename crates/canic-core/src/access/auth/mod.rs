@@ -9,10 +9,7 @@ mod identity;
 #[cfg(feature = "internal-test-fixtures")]
 mod measurement;
 mod predicates;
-mod token;
 
-#[cfg(feature = "auth-local-application-authorization")]
-use crate::ops::storage::auth::LocalApplicationAuthorizationStateOps;
 use crate::{
     access::AccessError,
     cdk::types::Principal,
@@ -20,7 +17,7 @@ use crate::{
         LocalApplicationAuthorizationPolicyInput,
         authorize_local_application as authorize_local_application_policy,
     },
-    ops::{auth::AuthOps, ic::IcOps},
+    ops::ic::IcOps,
 };
 use std::fmt;
 
@@ -45,7 +42,8 @@ pub struct LocalApplicationAuthorizationRequest<'a> {
     pub required_scope: ApplicationScopeRef<'a>,
 }
 
-/// Authorize one local application call without parsing payloads or mutating state.
+/// Return a closed application admission decision until portable Auth is integrated.
+/// Caller mismatches retain their typed refusal; no session can grant access.
 #[must_use]
 pub fn authorize_local_application(
     request: LocalApplicationAuthorizationRequest<'_>,
@@ -57,63 +55,9 @@ pub fn authorize_local_application(
         return authorize_with_values(request, actual_caller, now_ns, false, None, None, false);
     }
 
-    let authority = match AuthOps::local_application_authorization_authority() {
-        Ok(Some(authority)) => authority,
-        Ok(None) => {
-            return authorize_with_values(request, actual_caller, now_ns, false, None, None, false);
-        }
-        Err(_) => {
-            return authorize_with_values(request, actual_caller, now_ns, true, None, None, false);
-        }
-    };
-    #[cfg(feature = "auth-local-application-authorization")]
-    {
-        use ic_auth::session::SessionError;
-        let subject_admissible = validate_application_subject(actual_caller).is_ok();
-        // SDK live checks precede the host's subject/scope denial classification.
-        let result =
-            crate::workflow::auth::application_sessions::ApplicationSessionWorkflow::authorize(
-                actual_caller,
-                Some(request.required_scope.as_str()),
-                now_ns,
-                &authority,
-                true,
-            );
-        let reason = match result {
-            Ok(session) if subject_admissible => {
-                return LocalApplicationAuthorizationDecision::Allow(
-                    AuthorizedApplicationSubject {
-                        subject: session.subject(),
-                        expires_at_ns: session.expires_at_ns(),
-                    },
-                );
-            }
-            Ok(_) => LocalApplicationAuthorizationDenial::InadmissibleSubject,
-            Err(SessionError::MissingOrExpired) => {
-                match LocalApplicationAuthorizationStateOps::has_application_session(actual_caller)
-                {
-                    Ok(false) => LocalApplicationAuthorizationDenial::MissingSession,
-                    Ok(true) => LocalApplicationAuthorizationDenial::Expired,
-                    Err(_) => LocalApplicationAuthorizationDenial::AuthorityUnavailable,
-                }
-            }
-            Err(SessionError::StaleAuthority) => {
-                LocalApplicationAuthorizationDenial::StaleAuthority
-            }
-            Err(SessionError::ScopeRejected) if !subject_admissible => {
-                LocalApplicationAuthorizationDenial::InadmissibleSubject
-            }
-            Err(SessionError::ScopeRejected) => LocalApplicationAuthorizationDenial::MissingScope,
-            Err(SessionError::Disabled) => LocalApplicationAuthorizationDenial::Disabled,
-            Err(_) => LocalApplicationAuthorizationDenial::AuthorityUnavailable,
-        };
-        LocalApplicationAuthorizationDecision::Deny(reason)
-    }
-    #[cfg(not(feature = "auth-local-application-authorization"))]
-    {
-        let _ = authority;
-        LocalApplicationAuthorizationDecision::Deny(LocalApplicationAuthorizationDenial::Disabled)
-    }
+    LocalApplicationAuthorizationDecision::Deny(
+        LocalApplicationAuthorizationDenial::AuthorityUnavailable,
+    )
 }
 
 fn authorize_with_values(
@@ -181,13 +125,6 @@ pub fn validate_application_subject(subject: Principal) -> Result<(), Applicatio
     identity::validate_application_subject(subject)
 }
 
-pub(crate) fn delegated_token_verified(
-    authenticated_subject: Principal,
-    required_scope: Option<&str>,
-) -> Result<Principal, AccessError> {
-    token::delegated_token_verified(authenticated_subject, required_scope)
-}
-
 // -----------------------------------------------------------------------------
 // Caller & topology predicates
 // -----------------------------------------------------------------------------
@@ -239,14 +176,6 @@ pub fn is_same_canister(caller: Principal) -> Result<(), AccessError> {
 /// Require a root-signed caller attestation bound to this canister's live Subnet.
 pub fn is_attested_local_subnet(caller: Principal) -> Result<(), AccessError> {
     attestation::is_attested_local_subnet(caller)
-}
-
-pub(crate) fn verify_decoded_token(
-    token: &crate::dto::auth::DelegatedToken,
-    caller: Principal,
-    required_scope: Option<&str>,
-) -> Result<Principal, AccessError> {
-    token::verify_token(token, caller, IcOps::now_nanos(), required_scope)
 }
 
 pub(crate) fn verify_decoded_attestation(

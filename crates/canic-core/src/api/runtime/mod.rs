@@ -509,10 +509,10 @@ fn timer_callback_performance_status(
     memory: ic_timers::MemoryPageSummary,
 ) -> TimerCallbackPerformanceStatus {
     TimerCallbackPerformanceStatus {
-        instruction_samples_since_runtime_start: instructions.samples(),
+        instruction_samples_since_runtime_start: instructions.aggregate().samples(),
         instructions_latest: instructions.latest(),
-        instructions_maximum: instructions.maximum(),
-        instructions_total_since_runtime_start: instructions.total(),
+        instructions_maximum: instructions.aggregate().maximum(),
+        instructions_total_since_runtime_start: instructions.aggregate().total(),
         memory_page_samples_since_runtime_start: memory.samples(),
         memory_pages_latest: memory.latest().map(timer_memory_page_sample_status),
         maximum_wasm_memory_growth_pages: memory.maximum_wasm_growth_pages(),

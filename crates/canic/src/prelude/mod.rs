@@ -5,13 +5,10 @@
 /// modules small and consistent. Library crates and shared modules should
 /// generally import from specific paths instead of pulling in the entire prelude.
 ///
-pub use crate::{
-    api::{
-        call::Call,
-        canister::CanisterRole,
-        ops::{log, perf},
-    },
-    dto::auth::DelegatedToken,
+pub use crate::api::{
+    call::Call,
+    canister::CanisterRole,
+    ops::{log, perf},
 };
 
 pub use canic_macros::{canic_query, canic_update};

@@ -86,24 +86,13 @@ pub enum AccessPredicate {
 
 #[derive(Clone, Debug)]
 pub enum BuiltinPredicate {
-    CallerPermission {
-        permission: &'static str,
-    },
+    CallerPermission { permission: &'static str },
     Fleet(FleetPredicate),
     Caller(CallerPredicate),
     Environment(EnvironmentPredicate),
-    Authenticated {
-        required_scope: Option<&'static str>,
-    },
     AttestedLocalSubnet,
-    AuthenticatedArgument {
-        token: Arc<crate::dto::auth::DelegatedToken>,
-        required_scope: Option<&'static str>,
-    },
     AttestedLocalSubnetArgument(Arc<crate::dto::auth::SignedRoleAttestation>),
-    ServiceAuthority {
-        service: &'static str,
-    },
+    ServiceAuthority { service: &'static str },
 }
 
 impl BuiltinPredicate {
@@ -302,20 +291,8 @@ pub mod env {
 
 pub mod auth {
     use super::{AccessExpr, BuiltinPredicate, builtin};
-    use crate::dto::auth::{DelegatedToken, SignedRoleAttestation};
+    use crate::dto::auth::SignedRoleAttestation;
     use std::sync::Arc;
-
-    /// Verify the proof already decoded under the endpoint's argument policy.
-    #[must_use]
-    pub fn authenticated_argument(
-        token: &DelegatedToken,
-        required_scope: Option<&'static str>,
-    ) -> AccessExpr {
-        builtin(BuiltinPredicate::AuthenticatedArgument {
-            token: Arc::new(token.clone()),
-            required_scope,
-        })
-    }
 
     /// Verify an already decoded role attestation without reading the message again.
     #[must_use]
@@ -328,16 +305,6 @@ pub mod auth {
     #[must_use]
     pub const fn attested_local_subnet() -> AccessExpr {
         builtin(BuiltinPredicate::AttestedLocalSubnet)
-    }
-
-    #[must_use]
-    pub const fn authenticated(required_scope: Option<&'static str>) -> AccessExpr {
-        builtin(BuiltinPredicate::Authenticated { required_scope })
-    }
-
-    #[must_use]
-    pub const fn authenticated_with_scope(required_scope: &'static str) -> AccessExpr {
-        authenticated(Some(required_scope))
     }
 }
 

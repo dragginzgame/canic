@@ -20,7 +20,7 @@ pub struct CapacityImportSampleRecord {
 #[serde(deny_unknown_fields)]
 pub struct CapacityImportSurveyCanisterRecord {
     pub attempts: u32,
-    #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub sample: Option<CapacityImportSampleRecord>,
 }
 

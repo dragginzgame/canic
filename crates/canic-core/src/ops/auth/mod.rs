@@ -32,13 +32,11 @@ pub use delegation::{
 pub use error::{
     AuthExpiryError, AuthOpsError, AuthScopeError, AuthSignatureError, AuthValidationError,
 };
-pub use token::DelegatedTokenIssuerPrepareError;
 pub use types::{
     AuthChainKeyRootVerifierConfig, AuthProofVerifierConfig,
     ChainKeyRootDelegationBatchSigningResult, ChainKeyRootDelegationBatchSweepResult,
-    PrepareChainKeyRootDelegationBatchInput, PrepareDelegatedTokenIssuerProofInput,
-    PrepareRootRoleAttestationInput, PreparedDelegatedTokenIssuerProof,
-    PreparedRootRoleAttestation, RootIssuerRenewalTiming, VerifyDelegatedTokenRuntimeInput,
+    PrepareChainKeyRootDelegationBatchInput, PrepareRootRoleAttestationInput,
+    PreparedRootRoleAttestation, RootIssuerRenewalTiming,
 };
 
 const ROLE_ATTESTATION_PROOF_HASH_DOMAIN: &[u8] = b"CANIC_ROLE_ATTESTATION_V1";

@@ -5,7 +5,7 @@
 //! Boundary: retain keyed comparison tags only; keep their random key private and local.
 
 use hmac::{Hmac, KeyInit, Mac};
-use ic_host_fs::durable::create_private_bytes_with_parents;
+use ic_host_fs::durable::{PublicationMode, WriteOptions, write_bytes};
 use ic_host_fs::read::read_private_bytes;
 use serde::{Deserialize, Serialize};
 use sha2_host::Sha256;
@@ -59,7 +59,14 @@ pub(super) fn prepare_key(root: &Path) {
     }
     let mut key = [0; 32];
     if getrandom::fill(&mut key).is_ok() {
-        let _ = create_private_bytes_with_parents(&path, &key);
+        let _ = write_bytes(
+            &path,
+            WriteOptions {
+                mode: PublicationMode::CreateNew,
+                permissions: 0o600,
+            },
+            &key,
+        );
     }
     key.fill(0);
 }

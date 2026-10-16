@@ -24,7 +24,10 @@ use crate::{
 };
 use candid::{Nat, Principal};
 use canic_core::cdk::utils::hash::{decode_hex, hex_bytes};
-use ic_host_fs::{durable::write_bytes, read::read_optional_file_no_follow};
+use ic_host_fs::{
+    durable::{PublicationMode, WriteOptions, write_bytes},
+    read::read_optional_file_no_follow,
+};
 use sha2_host::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -212,6 +215,10 @@ impl BootstrapSurvey {
             &paths
                 .plan
                 .with_file_name("infrastructure-bootstrap-survey.json"),
+            WriteOptions {
+                mode: PublicationMode::Replace,
+                permissions: 0o666,
+            },
             &bytes,
         )
         .map_err(crate::publication::ops::io_error)?;
@@ -317,8 +324,15 @@ fn retain_request(
         request_sha256,
         source: None,
     };
-    write_bytes(&path, &serde_json::to_vec_pretty(&record)?)
-        .map_err(crate::publication::ops::io_error)?;
+    write_bytes(
+        &path,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &serde_json::to_vec_pretty(&record)?,
+    )
+    .map_err(crate::publication::ops::io_error)?;
     Ok(record)
 }
 

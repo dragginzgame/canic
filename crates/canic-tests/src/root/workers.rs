@@ -13,13 +13,17 @@ const TC: u128 = 1_000_000_000_000;
 const DEFAULT_FUNDING_COOLDOWN_SECS: u64 = 60;
 
 /// Create a worker canister via the given hub canister.
+///
+/// # Panics
+/// Panics on a Candid harness failure or if the worker fails readiness checks.
 pub fn create_worker(
     pic: &PocketIc,
     root_pid: Principal,
     hub_pid: Principal,
 ) -> Result<Principal, Error> {
-    let worker_pid: Result<Principal, Error> =
-        pic.update_candid_or_panic(hub_pid, "create_worker", ());
+    let worker_pid: Result<Principal, Error> = pic
+        .update_candid(hub_pid, "create_worker", ())
+        .expect("update Candid harness call");
     let worker_pid = worker_pid?;
     wait_for_worker_sync(pic, root_pid, hub_pid, worker_pid);
     Ok(worker_pid)
@@ -45,14 +49,16 @@ fn wait_for_worker_sync(
     for _ in 0..50 {
         pic.tick();
 
-        let children: Result<CanisterStatusResponse, Error> = pic.query_candid_or_panic(
-            hub_pid,
-            protocol::CANIC_PUBLIC_STATUS,
-            (CanisterStatusRequest::Children(PageRequest {
-                limit: 100,
-                offset: 0,
-            }),),
-        );
+        let children: Result<CanisterStatusResponse, Error> = pic
+            .query_candid(
+                hub_pid,
+                protocol::CANIC_PUBLIC_STATUS,
+                (CanisterStatusRequest::Children(PageRequest {
+                    limit: 100,
+                    offset: 0,
+                }),),
+            )
+            .expect("query Candid harness call");
 
         let CanisterStatusResponse::Children(children) =
             children.expect("query child list application");

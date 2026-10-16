@@ -4,8 +4,6 @@
 //! Does not own: proof verification, storage, or endpoint authorization.
 //! Boundary: signed protocol bytes are library-owned; deployment envelopes stay local.
 
-#[cfg(test)]
-use crate::dto::auth::DelegatedTokenClaims;
 use crate::{
     cdk::types::Principal,
     dto::auth::{
@@ -19,9 +17,6 @@ use canic_contracts::ids::{BuildNetwork, CanisterRole, FleetKey};
 use ic_auth::canonical::CanonicalAuthError as ProtocolError;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
-
-#[cfg(test)]
-pub use ic_auth::canonical::MAX_TOKEN_EXT_BYTES;
 
 const ROOT_KEY_POLICY_DOMAIN: &[u8] = b"CANIC_ROOT_KEY_POLICY_V1";
 const DELEGATED_AUTH_REGISTRY_DOMAIN: &[u8] = b"CANIC_DELEGATED_AUTH_REGISTRY_SNAPSHOT_V1";
@@ -71,11 +66,6 @@ impl From<ic_auth::canonical::CanonicalAuthError> for CanonicalAuthError {
 
 pub fn cert_hash(cert: &DelegationCert) -> Result<[u8; 32], CanonicalAuthError> {
     Ok(ic_auth::canonical::cert_hash(&protocol::cert(cert)?)?)
-}
-
-#[cfg(test)]
-pub fn claims_hash(claims: &DelegatedTokenClaims) -> Result<[u8; 32], CanonicalAuthError> {
-    Ok(ic_auth::canonical::claims_hash(&protocol::claims(claims)?)?)
 }
 
 pub fn chain_key_batch_header_hash(
@@ -523,76 +513,6 @@ mod tests {
     }
 
     #[test]
-    fn claims_hash_rejects_noncanonical_scopes() {
-        let claims = DelegatedTokenClaims {
-            presenter: p(10),
-            subject: p(10),
-            issuer_pid: p(11),
-            cert_hash: [12; 32],
-            issued_at_ns: 100,
-            expires_at_ns: 120,
-            aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
-            grants: vec![DelegatedRoleGrant {
-                target: CanisterRole::new("project_instance"),
-                scopes: vec!["Read".to_string()],
-            }],
-            nonce: [14; 16],
-            ext: None,
-        };
-
-        assert_eq!(
-            claims_hash(&claims),
-            Err(CanonicalAuthError::InvalidScope {
-                scope: "Read".to_string(),
-            })
-        );
-    }
-
-    #[test]
-    fn claims_hash_rejects_noncanonical_scope_order() {
-        let left = DelegatedTokenClaims {
-            presenter: p(10),
-            subject: p(10),
-            issuer_pid: p(11),
-            cert_hash: [12; 32],
-            issued_at_ns: 100,
-            expires_at_ns: 120,
-            aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
-            grants: vec![grant("project_instance", &["write", "read"])],
-            nonce: [14; 16],
-            ext: None,
-        };
-
-        assert_eq!(
-            claims_hash(&left),
-            Err(CanonicalAuthError::NonCanonicalScopes)
-        );
-    }
-
-    #[test]
-    fn claims_hash_binds_signed_presenter() {
-        let claims = DelegatedTokenClaims {
-            presenter: p(10),
-            subject: p(10),
-            issuer_pid: p(11),
-            cert_hash: [12; 32],
-            issued_at_ns: 100,
-            expires_at_ns: 120,
-            aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
-            grants: vec![grant("project_instance", &["read"])],
-            nonce: [14; 16],
-            ext: None,
-        };
-        let mut changed_presenter = claims.clone();
-        changed_presenter.presenter = p(9);
-
-        assert_ne!(
-            claims_hash(&claims).unwrap(),
-            claims_hash(&changed_presenter).unwrap()
-        );
-    }
-
-    #[test]
     fn role_hash_is_domain_separated_from_certificate_hash() {
         let role = CanisterRole::new("project_instance");
         let cert = sample_cert();
@@ -768,52 +688,6 @@ mod tests {
                 .unwrap(),
             )
             .unwrap()
-        );
-    }
-
-    #[test]
-    fn claims_hash_binds_ext_bytes() {
-        let mut left = DelegatedTokenClaims {
-            presenter: p(10),
-            subject: p(10),
-            issuer_pid: p(11),
-            cert_hash: [12; 32],
-            issued_at_ns: 100,
-            expires_at_ns: 120,
-            aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
-            grants: vec![grant("project_instance", &["read"])],
-            nonce: [14; 16],
-            ext: Some(b"user=1".to_vec()),
-        };
-        let mut right = left.clone();
-        right.ext = Some(b"user=2".to_vec());
-
-        assert_ne!(claims_hash(&left).unwrap(), claims_hash(&right).unwrap());
-        left.ext = None;
-        assert_ne!(claims_hash(&left).unwrap(), claims_hash(&right).unwrap());
-    }
-
-    #[test]
-    fn claims_hash_rejects_oversized_ext() {
-        let claims = DelegatedTokenClaims {
-            presenter: p(10),
-            subject: p(10),
-            issuer_pid: p(11),
-            cert_hash: [12; 32],
-            issued_at_ns: 100,
-            expires_at_ns: 120,
-            aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
-            grants: vec![grant("project_instance", &["read"])],
-            nonce: [14; 16],
-            ext: Some(vec![1; MAX_TOKEN_EXT_BYTES + 1]),
-        };
-
-        assert_eq!(
-            claims_hash(&claims),
-            Err(CanonicalAuthError::TokenExtTooLarge {
-                len: MAX_TOKEN_EXT_BYTES + 1,
-                max: MAX_TOKEN_EXT_BYTES,
-            })
         );
     }
 

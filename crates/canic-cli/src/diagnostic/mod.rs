@@ -43,6 +43,9 @@ pub enum DiagnosticCommandError {
     #[error("invalid diagnostic code '{0}'; expected an unsigned decimal or uppercase E prefix")]
     InvalidCode(String),
 
+    #[error("diagnostic code '{0}' is outside the supported range 0..=65535")]
+    CodeOutOfRange(String),
+
     #[error("{0}")]
     Usage(String),
 }
@@ -119,7 +122,7 @@ fn parse_code(input: &str) -> Result<DiagnosticCode, DiagnosticCommandError> {
     numeric
         .parse::<u16>()
         .map(DiagnosticCode::from_raw)
-        .map_err(|_| DiagnosticCommandError::InvalidCode(input.to_string()))
+        .map_err(|_| DiagnosticCommandError::CodeOutOfRange(input.to_string()))
 }
 
 fn render_lookup(lookup: DiagnosticLookup<'_>) -> String {

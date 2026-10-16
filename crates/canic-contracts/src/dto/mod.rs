@@ -27,6 +27,7 @@
 //! transported, not what guarantees it provides.
 
 pub mod abi;
+pub mod application_checkpoint;
 pub mod auth;
 pub mod authority_restore;
 pub mod caller_authority;

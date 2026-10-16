@@ -7,6 +7,8 @@ use File::Path qw(make_path remove_tree);
 use FindBin;
 use JSON::PP;
 use Test::More;
+my $path_context = @ARGV == 1 && $ARGV[0] eq '--path-context';
+@ARGV == 0 || $path_context or die "usage: fixture [--path-context]\n";
 
 # All Git commands are substituted. No real commits, tag changes or pushes.
 my $fixture = tempdir('tag-maintenance-test.XXXXXX', TMPDIR => 1, CLEANUP => 0);
@@ -132,6 +134,21 @@ sub invoke {
     return $?;
 }
 my @delete = ('--cutoff', '0.1', '--remote', 'origin', '--delete-local', '--delete-remote', '--yes');
+if ($path_context) {
+    setup('path-context', qw(v0.1.0 v0.2.0));
+    is(invoke('', '--cutoff', '0.1'), 0, 'context dry run succeeds');
+    ok(!-e "$repo/.git/tag-maintenance", 'context dry run remains read-only');
+    isnt(invoke('reject', @delete), 0, 'context failure reported');
+    ok(-f "$repo/.git/tag-maintenance/pending.json", 'context intent retained');
+    ok(!-e "$repo/.git/tag-maintenance/lock", 'context lock released');
+    is(invoke('', @delete), 0, 'context retry completes');
+    is_deeply([sort keys %{state()->{local}}], ['v0.2.0'], 'context local result');
+    is_deeply([sort keys %{state()->{remote}}], ['v0.2.0'], 'context remote result');
+    ok(!-e "$repo/.git/tag-maintenance/pending.json", 'context intent retired');
+    $passed = Test::More->builder->is_passing;
+    done_testing;
+    exit($passed ? 0 : 1);
+}
 setup('selection', qw(v0.0.9 v0.1.0 v0.1.9 v0.2.0 v0.10.0 v0.1.0-rc.1 v00.1.0 other));
 is(invoke('', '--cutoff', '0.1.0'), 0, 'exact dry run succeeds');
 like(read_file("$repo/output"), qr/local tags selected: 2\n/, 'exact cutoff includes lower stable tags');

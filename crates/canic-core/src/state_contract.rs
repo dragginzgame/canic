@@ -358,7 +358,7 @@ fn fleet_state_domains() -> Vec<StateDomainManifest> {
 fn local_application_authorization_state_domains() -> Vec<StateDomainManifest> {
     use crate::storage::stable::auth::{
         LocalApplicationAuthorizationStateData, LocalApplicationAuthorizationStateRecord,
-        LocalApplicationReplayRecord, LocalApplicationSessionRecord,
+        LocalApplicationLoginRecord, LocalApplicationReplayRecord, LocalApplicationSessionRecord,
     };
 
     vec![
@@ -385,6 +385,14 @@ fn local_application_authorization_state_domains() -> Vec<StateDomainManifest> {
             LocalApplicationAuthorizationStateData::STATE_CONTRACT_NAME,
             64,
             "application_replays_retain_exact_proof_consumption_until_expiry",
+        ),
+        state_domain(
+            "local_application_logins",
+            crate::role_contract::allocation::memory::auth::LOCAL_APPLICATION_LOGINS_KEY,
+            LocalApplicationLoginRecord::STATE_CONTRACT_NAME,
+            LocalApplicationAuthorizationStateData::STATE_CONTRACT_NAME,
+            65,
+            "application_login_denials_restore_before_session_admission",
         ),
     ]
 }
@@ -832,8 +840,8 @@ mod tests {
             auth::{
                 DelegatedTokenIssuerStateData, DelegatedTokenIssuerStateRecord,
                 LocalApplicationAuthorizationStateData, LocalApplicationAuthorizationStateRecord,
-                LocalApplicationReplayRecord, LocalApplicationSessionRecord,
-                RootDelegationStateData, RootDelegationStateRecord,
+                LocalApplicationLoginRecord, LocalApplicationReplayRecord,
+                LocalApplicationSessionRecord, RootDelegationStateData, RootDelegationStateRecord,
             },
             replay::{ReplayReceiptRecord, ReplayReceiptsData},
         };
@@ -857,6 +865,12 @@ mod tests {
                 StateAllocationKey::CoreLocalApplicationAuthorizationState,
                 "local_application_replays",
                 LocalApplicationReplayRecord::STATE_CONTRACT_NAME,
+                LocalApplicationAuthorizationStateData::STATE_CONTRACT_NAME,
+            ),
+            (
+                StateAllocationKey::CoreLocalApplicationAuthorizationState,
+                "local_application_logins",
+                LocalApplicationLoginRecord::STATE_CONTRACT_NAME,
                 LocalApplicationAuthorizationStateData::STATE_CONTRACT_NAME,
             ),
             (

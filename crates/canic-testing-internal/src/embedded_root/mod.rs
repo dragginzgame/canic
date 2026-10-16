@@ -8,6 +8,7 @@ mod tests;
 
 use canic_core::cdk::utils::hash::sha256_hex;
 use ic_build::artifacts::{WasmBuildSpec, build_wasm_canisters_cached, resolve_cargo_build_inputs};
+use ic_host_fs::durable::{PublicationMode, WriteOptions};
 use serde::{Deserialize, Serialize};
 use std::{error::Error, fs, io, path::Path, process::Command};
 
@@ -65,7 +66,14 @@ pub fn refresh(workspace: &Path) -> Result<(), Box<dyn Error>> {
     let source = source::FixtureSource::prepare(&workspace)?;
     let spec = build_spec(&workspace, &source.root)?;
     let (bytes, _) = build(&workspace, &spec)?;
-    ic_host_fs::durable::write_bytes(&workspace.join(ARTIFACT), &bytes)?;
+    ic_host_fs::durable::write_bytes(
+        &workspace.join(ARTIFACT),
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &bytes,
+    )?;
     fs::write(source.root.join(ARTIFACT), &bytes)?;
     // The facade contains the host-only embedded bytes. Qualify again after
     // publication so evidence binds the final tree, with no self-hash in it.
@@ -79,6 +87,10 @@ pub fn refresh(workspace: &Path) -> Result<(), Box<dyn Error>> {
     }
     ic_host_fs::durable::write_bytes(
         &workspace.join(EVIDENCE),
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
         &serde_json::to_vec_pretty(&evidence)?,
     )?;
     Ok(())
@@ -89,7 +101,6 @@ fn build_spec(workspace: &Path, source: &Path) -> io::Result<WasmBuildSpec> {
         source,
         &workspace.join("target/embedded-root/cache"),
         &[PACKAGE],
-        PROFILE,
     )
     .with_shared_incremental_target(workspace.join("target/embedded-root/cargo"))
     .with_additional_inputs(["crates/canic-testing-internal/src/embedded_root"])

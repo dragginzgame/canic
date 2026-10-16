@@ -1,21 +1,11 @@
 //! Module: workflow::runtime::auth::prepare::admission
 //!
-//! Responsibility: validate delegated-token and role-attestation prepare requests.
+//! Responsibility: validate role-attestation prepare requests.
 //! Does not own: replay state, proof creation, or response encoding.
 //! Boundary: pure request checks plus deterministic configuration reads before replay reservation.
 
 use crate::{
-    InternalError,
-    cdk::types::Principal,
-    domain::policy::pure::{
-        PolicyError,
-        auth::{
-            AuthPolicyError, DeclaredApplicationRoleScopes, DelegatedRoleGrantPolicy,
-            validate_public_delegated_token_prepare,
-        },
-    },
-    dto::auth::{DelegatedRoleGrant, DelegatedTokenPrepareRequest, RoleAttestationRequest},
-    ops::config::ConfigOps,
+    InternalError, cdk::types::Principal, dto::auth::RoleAttestationRequest, ops::config::ConfigOps,
 };
 use canic_contracts::ids::{CanisterRole, ManagedCanisterBinding, SubnetId};
 
@@ -103,40 +93,6 @@ fn role_attestation_max_ttl_ns() -> Result<u64, InternalError> {
     cfg.max_ttl_secs
         .checked_mul(1_000_000_000)
         .ok_or_else(|| InternalError::public(crate::diagnostics::codes::TIME_CAPACITY))
-}
-
-pub(super) fn validate_token_prepare_public_request(
-    request: &DelegatedTokenPrepareRequest,
-) -> Result<(), InternalError> {
-    let grants = request
-        .grants
-        .iter()
-        .map(delegated_role_grant_policy)
-        .collect::<Vec<_>>();
-    let declared_application_scopes = request
-        .grants
-        .iter()
-        .filter_map(|grant| {
-            let local = ConfigOps::local_application_authorization_for_role(&grant.target)?;
-            Some(DeclaredApplicationRoleScopes {
-                target: grant.target.clone(),
-                scopes: local.allowed_scopes,
-            })
-        })
-        .collect::<Vec<_>>();
-    validate_public_delegated_token_prepare(&grants, &declared_application_scopes)
-        .map_err(map_token_prepare_policy_error)
-}
-
-fn delegated_role_grant_policy(grant: &DelegatedRoleGrant) -> DelegatedRoleGrantPolicy {
-    DelegatedRoleGrantPolicy {
-        target: grant.target.clone(),
-        scopes: grant.scopes.clone(),
-    }
-}
-
-fn map_token_prepare_policy_error(err: AuthPolicyError) -> InternalError {
-    PolicyError::AuthPolicy(err).into()
 }
 
 #[cfg(test)]

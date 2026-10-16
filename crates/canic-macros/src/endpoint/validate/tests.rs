@@ -24,24 +24,6 @@ fn guarded_plain_sync_handlers_require_rejection_and_decoder_has_one_owner() {
     assert!(validate(EndpointKind::Query, options, &signature).is_err());
 }
 
-fn parsed_authenticated() -> ParsedArgs {
-    ParsedArgs {
-        forwarded: Vec::new(),
-        export_name: None,
-        payload_max_bytes: None,
-        decode: None,
-        reject_access: false,
-        requires: vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
-            BuiltinPredicate::Authenticated {
-                required_scope: None,
-            },
-        ))],
-        internal: false,
-        public: false,
-        query_mode: QueryMode::Plain,
-    }
-}
-
 fn parsed_attested_local_subnet() -> ParsedArgs {
     ParsedArgs {
         forwarded: Vec::new(),
@@ -56,36 +38,6 @@ fn parsed_attested_local_subnet() -> ParsedArgs {
         public: false,
         query_mode: QueryMode::Plain,
     }
-}
-
-#[test]
-fn authenticated_requires_first_argument() {
-    let sig: Signature = syn::parse_quote!(async fn hello() -> Result<(), ::canic::Error>);
-    let err = validate(EndpointKind::Update, parsed_authenticated(), &sig).unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("authenticated(...) requires a first argument")
-    );
-}
-
-#[test]
-fn authenticated_accepts_delegated_token_first_arg() {
-    let sig: Signature = syn::parse_quote!(
-        async fn hello(token: ::canic::dto::auth::DelegatedToken) -> Result<(), ::canic::Error>
-    );
-    validate(EndpointKind::Update, parsed_authenticated(), &sig).expect("authenticated arg ok");
-}
-
-#[test]
-fn authenticated_rejects_wrong_first_arg_type() {
-    let sig: Signature = syn::parse_quote!(
-        async fn hello(user: ::candid::Principal) -> Result<(), ::canic::Error>
-    );
-    let err = validate(EndpointKind::Update, parsed_authenticated(), &sig).unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("authenticated(...) requires a first argument")
-    );
 }
 
 #[test]

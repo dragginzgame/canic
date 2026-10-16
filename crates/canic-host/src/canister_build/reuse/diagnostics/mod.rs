@@ -11,7 +11,7 @@ mod tests;
 
 use crate::canister_build::{WorkspaceBuildContext, reuse::hash_field};
 use ic_build::artifacts::{InputEvidence, InputEvidenceValue};
-use ic_host_fs::durable::write_bytes;
+use ic_host_fs::durable::{PublicationMode, WriteOptions, write_bytes};
 use ic_host_fs::read::read_file_no_follow;
 
 use canic_core::cdk::utils::hash::hex_bytes;
@@ -131,7 +131,14 @@ impl InputDiagnostics {
         if let Ok(bytes) = serde_json::to_vec(self)
             && bytes.len() <= LIMIT
         {
-            let _ = write_bytes(&directory.join("last-input-diagnostics.json"), &bytes);
+            let _ = write_bytes(
+                &directory.join("last-input-diagnostics.json"),
+                WriteOptions {
+                    mode: PublicationMode::Replace,
+                    permissions: 0o666,
+                },
+                &bytes,
+            );
         }
     }
 

@@ -22,8 +22,8 @@ follow the defect/invalidation protocol in [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
 | Audit ID | Version | SHA-256 | Definition |
 | --- | --- | --- | --- |
 | `CANIC-AUTH-AUDIENCE-001` | `3` | `10a790fd838059feea550533775f84fdb6e77fdc133a0c0306cc492ced321fe2` | `docs/audits/recurring/invariants/audience-target-binding.md` |
-| `CANIC-AUTH-EQUIVALENCE-001` | `2` | `de18b672622fdc8ec41882921ca6a11d3d7872e5d2df7754b855a45d6f639942` | `docs/audits/recurring/invariants/auth-abstraction-equivalence.md` |
-| `CANIC-AUTH-BOUNDARY-001` | `1` | `3fdc297ab141ff1bddd26981a4a25aaf7e727ff63146054b626e0e054500d822` | `docs/audits/recurring/invariants/canonical-auth-boundary.md` |
+| `CANIC-AUTH-EQUIVALENCE-001` | `3` | `b315a81570b6f1b2d9678850159714479de53d9bbe62fa2136ab634ed06277e4` | `docs/audits/recurring/invariants/auth-abstraction-equivalence.md` |
+| `CANIC-AUTH-BOUNDARY-001` | `2` | `1ae9c1894ebb36dbf79491efa1dc4edd675cfce482c99b353715c7ecfa9bceb4` | `docs/audits/recurring/invariants/canonical-auth-boundary.md` |
 | `CANIC-AUTH-CAPABILITY-001` | `1` | `1d6f51308f6c5d250f6931b3f3d98eb321aac2c24bbc794bfa3cd4742bbfffe4` | `docs/audits/recurring/invariants/capability-scope-enforcement.md` |
 | `CANIC-AUTH-REPLAY-001` | `2` | `743b9fcc18e37be029e12fa9db2a5fa5ffb8d4258c484739a5b0e73e43632b6d` | `docs/audits/recurring/invariants/expiry-replay-single-use.md` |
 | `CANIC-AUTH-SUBJECT-001` | `1` | `8af2c270ba89aae9715e6047afa908b1812865c5949f0f1da6441539fdee4475` | `docs/audits/recurring/invariants/subject-caller-binding.md` |
@@ -35,12 +35,12 @@ follow the defect/invalidation protocol in [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
 | `CANIC-COMPLEXITY-001` | `4` | `e3ea1d265170a7cfffe185c135d7a8b7e36a1a268cdca4380258dfa5b9e854db` | `docs/audits/recurring/system/complexity-accretion.md` |
 | `CANIC-DEPENDENCY-001` | `3` | `e0e4474467664e46a56243ccf41c5b29b9786a0052a9ccf9117e499226384d40` | `docs/audits/recurring/system/dependency-hygiene.md` |
 | `CANIC-DUPLICATION-001` | `3` | `5a417c934b44b2d1e3f31980aebcfa9c6b396cda5440ee64c4f917c964418021` | `docs/audits/recurring/system/dry-consolidation.md` |
-| `CANIC-INSTRUCTION-001` | `3` | `515dbe0d4957dd4705f3e21ce88cca1a34b8c4cc86ccd34483479abedf5c2ab8` | `docs/audits/recurring/system/instruction-footprint.md` |
+| `CANIC-INSTRUCTION-001` | `4` | `ea0af560838e43eb92206ec847dfc1117f655a19151fd5e73d2a1336a18e4048` | `docs/audits/recurring/system/instruction-footprint.md` |
 | `CANIC-LAYERING-001` | `2` | `a4c71532e85f3ea0c5f1802478b15f444d78eae3540dc35b96b77b04231503bc` | `docs/audits/recurring/system/layer-violations.md` |
 | `CANIC-STRUCTURE-001` | `3` | `635df6921e39cb0a780252248f4d6961d4f33d2a72e5b60535a872c2aa9846e8` | `docs/audits/recurring/system/module-structure.md` |
 | `CANIC-PUBLISH-001` | `2` | `5c6f38395c02454e861115c6a06638944d7841b331f1758c247601b69675e341` | `docs/audits/recurring/system/publish-surface.md` |
 | `CANIC-RELEASE-INTEGRITY-001` | `2` | `4eb3d6f45df9ee9b64df901dc891ebfd37e8aaa1ede45a02eadbc3018b8a6609` | `docs/audits/recurring/system/release-integrity.md` |
-| `CANIC-AUTH-ORDERING-001` | `1` | `2619b50394d35381cb2be0d124868f8249218bf41591fad2713730e20f266b87` | `docs/audits/recurring/system/security-boundary-ordering.md` |
+| `CANIC-AUTH-ORDERING-001` | `2` | `e77c733d61ae81b2a266a18d62fb1341c6589b3dfceaf7f552c30213f41197b7` | `docs/audits/recurring/system/security-boundary-ordering.md` |
 | `CANIC-WASM-001` | `6` | `0c8487a989dadaae03cba0437545a2ea236274607622ff3d74623696c1ebe797` | `docs/audits/recurring/system/wasm-footprint.md` |
 | `CANIC-MODULE-SURFACE-001` | `2.4` | `55490f62bd93b81d93d60168c05ea8de9797d081e9dbf8f7154ba0787db4e422` | `docs/audits/modular/module-surface-hardening.md` |
 
@@ -79,7 +79,6 @@ evidence; revision 2 reviews credential handling without requiring a scanner.
 | `CANIC-WASM-001` | `2` | `e33fc36ee904fa6a9af8c7aa399a94b98c441e25fe6590ac1548c548ba2f3ffb` | `docs/audits/recurring/system/wasm-footprint.md` | `CANIC-WASM-001/v3` |
 | `CANIC-AUTH-AUDIENCE-001` | `2` | `bfe780a3e93f0511f9c7bbbbf7cf84dee40b23d1456ab68fe12122a671b30a5c` | `docs/audits/recurring/invariants/audience-target-binding.md` | `CANIC-AUTH-AUDIENCE-001/v3` |
 | `CANIC-AUTH-AUDIENCE-001` | `1` | `9d28324a6101e94ba964e8d8478909323e16e83bc0134975ab37f69030602448` | `docs/audits/recurring/invariants/audience-target-binding.md` | `CANIC-AUTH-AUDIENCE-001/v2` |
-| `CANIC-AUTH-EQUIVALENCE-001` | `1` | `7784678597a51e59b521aaefc15806f20e2c03bc2ac49ba91b8c824f88d2461b` | `docs/audits/recurring/invariants/auth-abstraction-equivalence.md` | `CANIC-AUTH-EQUIVALENCE-001/v2` |
 | `CANIC-AUTH-REPLAY-001` | `1` | `2a4726ca049194175f1230c9de54442746d462d460f2adea77b8b1df57f8868c` | `docs/audits/recurring/invariants/expiry-replay-single-use.md` | `CANIC-AUTH-REPLAY-001/v2` |
 | `CANIC-AUTH-TRUST-001` | `1` | `5cb6143aee5fec2e4ff5f7c8649fc70e120f5233be19b913e90cff9ae38341d6` | `docs/audits/recurring/invariants/token-trust-chain.md` | `CANIC-AUTH-TRUST-001/v2` |
 | `CANIC-LIFECYCLE-001` | `1` | `df4fd68b78e1fab92bf17f85ac6adec235e978c52783f5151b2c57411b0e4913` | `docs/audits/recurring/system/bootstrap-lifecycle-symmetry.md` | `CANIC-LIFECYCLE-001/v2` |
@@ -91,6 +90,13 @@ evidence; revision 2 reviews credential handling without requiring a scanner.
 | `CANIC-INSTRUCTION-001` | `1` | `f90bbd1443ac5acdcc69ad256eaef8877955a9219025f65c6255c6fdd7bf2805` | `docs/audits/recurring/system/instruction-footprint.md` | `CANIC-INSTRUCTION-001/v2` |
 | `CANIC-LAYERING-001` | `1` | `86270ae481556a8f5b544d71529d3b324cf5dbf7af7267100a6a74976eacfc49` | `docs/audits/recurring/system/layer-violations.md` | `CANIC-LAYERING-001/v2` |
 | `CANIC-WASM-001` | `1` | `1ed32dd340d10135e899cda5794046d68e1e66ea89da9d6910aa4ca4e958a064` | `docs/audits/recurring/system/wasm-footprint.md` | `CANIC-WASM-001/v2` |
+
+| `CANIC-AUTH-EQUIVALENCE-001` | `1` | `7784678597a51e59b521aaefc15806f20e2c03bc2ac49ba91b8c824f88d2461b` | `docs/audits/recurring/invariants/auth-abstraction-equivalence.md` | `CANIC-AUTH-EQUIVALENCE-001/v2` |
+| `CANIC-AUTH-EQUIVALENCE-001` | `2` | `de18b672622fdc8ec41882921ca6a11d3d7872e5d2df7754b855a45d6f639942` | `docs/audits/recurring/invariants/auth-abstraction-equivalence.md` | `CANIC-AUTH-EQUIVALENCE-001/v3` |
+| `CANIC-AUTH-BOUNDARY-001` | `1` | `3fdc297ab141ff1bddd26981a4a25aaf7e727ff63146054b626e0e054500d822` | `docs/audits/recurring/invariants/canonical-auth-boundary.md` | `CANIC-AUTH-BOUNDARY-001/v2` |
+| `CANIC-AUTH-ORDERING-001` | `1` | `2619b50394d35381cb2be0d124868f8249218bf41591fad2713730e20f266b87` | `docs/audits/recurring/system/security-boundary-ordering.md` | `CANIC-AUTH-ORDERING-001/v2` |
+
+| `CANIC-INSTRUCTION-001` | `3` | `515dbe0d4957dd4705f3e21ce88cca1a34b8c4cc86ccd34483479abedf5c2ab8` | `docs/audits/recurring/system/instruction-footprint.md` | `CANIC-INSTRUCTION-001/v4` |
 
 ## Executable Composite Identities
 
@@ -137,7 +143,7 @@ and executable fixture inputs and record the resulting value in each run.
 | `ac7ab348d0e9a18df9def45f89f1c403f7c23e523eaf58da03b5099fb2634417` | `scripts/ci/audit-product-tree-hash.sh` |
 | `8d15916d94674d4fef698ea21d1d5dab3e770c84fae709964fb8ca341dc3931a` | `scripts/ci/check-audit-method-catalog.sh` |
 | `d6bc808dd8ef0b590dad612ca38a8b11ccdd18737165cc4b847368c4e187fd57` | `scripts/ci/check-release-integrity-contract.sh` |
-| `b99c45e6033b7537a62af5175ef874f35709dc7af12cae25f3f494921705f72b` | `scripts/ci/instruction-audit-report.sh` |
+| `6d2e09f42fc3fea7aeabd35ee472334ba560a230cfa693e2d932ca6a92ed4042` | `scripts/ci/instruction-audit-report.sh` |
 | `93ac1f3c77d9d58009cae84c4570e51306a077a207262c9316aea6f2fdae122c` | `scripts/ci/run-layering-guards.sh` |
 | `d4923f84ce221736e71619a148069f7e77b42e1270689224716fa28ede7e4542` | `scripts/ci/list-config-canisters.sh` |
 | `f2d37cdd60f85a3e7be5d4f57694cf62122f01c6576a3397e76c73b4f93cc216` | `scripts/ci/require_icp.sh` |

@@ -369,8 +369,8 @@ fn install_capacity_root_with_wasm(
         .take()
         .unwrap_or_else(build_test_wasm_store_wasm);
     let installation_controller = Principal::from_slice(&[0x46; 29]);
-    let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
-        .expect("discover Canic test workspace through Cargo");
+    let workspace =
+        crate::workspace::discover().expect("discover Canic test workspace through Cargo");
     let mut installed = prepare_current_root_fixture(
         pic,
         &root_wasm,

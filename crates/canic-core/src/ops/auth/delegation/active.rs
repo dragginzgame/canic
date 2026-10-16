@@ -57,16 +57,6 @@ pub(super) fn install_active_delegation_proof(
     Ok(active_proof)
 }
 
-pub(super) fn active_delegation_proof(
-    now_ns: u64,
-) -> Result<Option<ActiveDelegationProof>, InternalError> {
-    let proof = DelegatedTokenIssuerStateOps::active_delegation_proof(now_ns);
-    if let Some(proof) = proof.as_ref() {
-        require_current_epoch_floors(proof)?;
-    }
-    Ok(proof)
-}
-
 pub(super) fn active_delegation_proof_status(
     now_ns: u64,
 ) -> Result<ActiveDelegationProofStatusResponse, InternalError> {

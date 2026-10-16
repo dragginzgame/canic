@@ -23,12 +23,9 @@ thread_local! {
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
 pub enum DelegatedAuthMetricOperation {
-    #[cfg(any(test, feature = "auth-issuer-canister-sig-create"))]
-    PrepareIssuerProof,
     #[cfg(any(test, feature = "auth-root-canister-sig-create"))]
     PrepareRootProof,
     RenewalSweep,
-    VerifyToken,
 }
 
 impl DelegatedAuthMetricOperation {
@@ -36,12 +33,9 @@ impl DelegatedAuthMetricOperation {
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
-            #[cfg(any(test, feature = "auth-issuer-canister-sig-create"))]
-            Self::PrepareIssuerProof => "prepare_issuer_proof",
             #[cfg(any(test, feature = "auth-root-canister-sig-create"))]
             Self::PrepareRootProof => "prepare_root_proof",
             Self::RenewalSweep => "renewal_sweep",
-            Self::VerifyToken => "verify_token",
         }
     }
 }
@@ -80,37 +74,9 @@ impl DelegatedAuthMetricOutcome {
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
-#[cfg_attr(
-    not(any(test, feature = "auth-delegated-token-verify")),
-    expect(
-        dead_code,
-        reason = "proof failure dimensions are emitted by the enabled verifier"
-    )
-)]
 pub enum DelegatedAuthMetricReason {
-    Audience,
-    Canonical,
-    CertExpired,
-    CertHashMismatch,
-    CertNotYetValid,
-    Disabled,
-    GrantsNotSubset,
-    InvalidState,
-    IssuerProofInvalid,
-    #[cfg(any(test, feature = "auth-issuer-canister-sig-create"))]
-    IssuerProofPrepareFailed,
     Ok,
-    PresenterCallerMismatch,
-    PresenterSubjectMismatch,
-    RootKey,
-    RootProofInvalid,
     RootProofPrepareFailed,
-    ScopeRejected,
-    TokenExpired,
-    TokenGrantRejected,
-    TokenInvalidWindow,
-    TokenNotYetValid,
-    TokenTtlExceeded,
 }
 
 impl DelegatedAuthMetricReason {
@@ -118,29 +84,8 @@ impl DelegatedAuthMetricReason {
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
-            Self::Audience => "audience",
-            Self::Canonical => "canonical",
-            Self::CertExpired => "cert_expired",
-            Self::CertHashMismatch => "cert_hash_mismatch",
-            Self::CertNotYetValid => "cert_not_yet_valid",
-            Self::Disabled => "disabled",
-            Self::GrantsNotSubset => "grants_not_subset",
-            Self::InvalidState => "invalid_state",
-            Self::IssuerProofInvalid => "issuer_proof_invalid",
-            #[cfg(any(test, feature = "auth-issuer-canister-sig-create"))]
-            Self::IssuerProofPrepareFailed => "issuer_proof_prepare_failed",
             Self::Ok => "ok",
-            Self::PresenterCallerMismatch => "presenter_caller_mismatch",
-            Self::PresenterSubjectMismatch => "presenter_subject_mismatch",
-            Self::RootKey => "root_key",
             Self::RootProofPrepareFailed => "root_proof_prepare_failed",
-            Self::RootProofInvalid => "root_proof_invalid",
-            Self::ScopeRejected => "scope_rejected",
-            Self::TokenExpired => "token_expired",
-            Self::TokenGrantRejected => "token_grant_rejected",
-            Self::TokenInvalidWindow => "token_invalid_window",
-            Self::TokenNotYetValid => "token_not_yet_valid",
-            Self::TokenTtlExceeded => "token_ttl_exceeded",
         }
     }
 }
@@ -176,15 +121,6 @@ impl DelegatedAuthMetrics {
         });
     }
 
-    /// Record that delegated-token verification started.
-    pub fn record_verify_started() {
-        Self::record(
-            DelegatedAuthMetricOperation::VerifyToken,
-            DelegatedAuthMetricOutcome::Started,
-            DelegatedAuthMetricReason::Ok,
-        );
-    }
-
     /// Record that root proof preparation started.
     #[cfg(any(test, feature = "auth-root-canister-sig-create"))]
     pub fn record_root_proof_prepare_started() {
@@ -212,54 +148,6 @@ impl DelegatedAuthMetrics {
             DelegatedAuthMetricOperation::PrepareRootProof,
             DelegatedAuthMetricOutcome::Failed,
             DelegatedAuthMetricReason::RootProofPrepareFailed,
-        );
-    }
-
-    /// Record that issuer proof preparation started.
-    #[cfg(any(test, feature = "auth-issuer-canister-sig-create"))]
-    pub fn record_issuer_proof_prepare_started() {
-        Self::record(
-            DelegatedAuthMetricOperation::PrepareIssuerProof,
-            DelegatedAuthMetricOutcome::Started,
-            DelegatedAuthMetricReason::Ok,
-        );
-    }
-
-    /// Record that issuer proof preparation completed successfully.
-    #[cfg(any(test, feature = "auth-issuer-canister-sig-create"))]
-    pub fn record_issuer_proof_prepare_completed() {
-        Self::record(
-            DelegatedAuthMetricOperation::PrepareIssuerProof,
-            DelegatedAuthMetricOutcome::Completed,
-            DelegatedAuthMetricReason::Ok,
-        );
-    }
-
-    /// Record that issuer proof preparation failed.
-    #[cfg(any(test, feature = "auth-issuer-canister-sig-create"))]
-    pub fn record_issuer_proof_prepare_failed() {
-        Self::record(
-            DelegatedAuthMetricOperation::PrepareIssuerProof,
-            DelegatedAuthMetricOutcome::Failed,
-            DelegatedAuthMetricReason::IssuerProofPrepareFailed,
-        );
-    }
-
-    /// Record that delegated-token verification completed successfully.
-    pub fn record_verify_completed() {
-        Self::record(
-            DelegatedAuthMetricOperation::VerifyToken,
-            DelegatedAuthMetricOutcome::Completed,
-            DelegatedAuthMetricReason::Ok,
-        );
-    }
-
-    /// Record that delegated-token verification failed with a bounded reason.
-    pub fn record_verify_failed(reason: DelegatedAuthMetricReason) {
-        Self::record(
-            DelegatedAuthMetricOperation::VerifyToken,
-            DelegatedAuthMetricOutcome::Failed,
-            reason,
         );
     }
 
@@ -381,96 +269,6 @@ mod tests {
 
         let map = snapshot_map();
         assert_eq!(map.get(&pid), Some(&2));
-    }
-
-    #[test]
-    fn record_verify_outcomes_increment() {
-        DelegatedAuthMetrics::reset();
-
-        DelegatedAuthMetrics::record_root_proof_prepare_started();
-        DelegatedAuthMetrics::record_root_proof_prepare_completed();
-        DelegatedAuthMetrics::record_root_proof_prepare_failed();
-        DelegatedAuthMetrics::record_issuer_proof_prepare_started();
-        DelegatedAuthMetrics::record_issuer_proof_prepare_completed();
-        DelegatedAuthMetrics::record_issuer_proof_prepare_failed();
-        DelegatedAuthMetrics::record_verify_started();
-        DelegatedAuthMetrics::record_verify_completed();
-        DelegatedAuthMetrics::record_verify_failed(DelegatedAuthMetricReason::TokenExpired);
-        DelegatedAuthMetrics::record_verify_failed(DelegatedAuthMetricReason::TokenExpired);
-
-        let map = event_snapshot_map();
-        assert_eq!(
-            map.get(&DelegatedAuthMetricKey {
-                operation: DelegatedAuthMetricOperation::PrepareRootProof,
-                outcome: DelegatedAuthMetricOutcome::Started,
-                reason: DelegatedAuthMetricReason::Ok,
-            }),
-            Some(&1)
-        );
-        assert_eq!(
-            map.get(&DelegatedAuthMetricKey {
-                operation: DelegatedAuthMetricOperation::PrepareRootProof,
-                outcome: DelegatedAuthMetricOutcome::Completed,
-                reason: DelegatedAuthMetricReason::Ok,
-            }),
-            Some(&1)
-        );
-        assert_eq!(
-            map.get(&DelegatedAuthMetricKey {
-                operation: DelegatedAuthMetricOperation::PrepareRootProof,
-                outcome: DelegatedAuthMetricOutcome::Failed,
-                reason: DelegatedAuthMetricReason::RootProofPrepareFailed,
-            }),
-            Some(&1)
-        );
-        assert_eq!(
-            map.get(&DelegatedAuthMetricKey {
-                operation: DelegatedAuthMetricOperation::PrepareIssuerProof,
-                outcome: DelegatedAuthMetricOutcome::Started,
-                reason: DelegatedAuthMetricReason::Ok,
-            }),
-            Some(&1)
-        );
-        assert_eq!(
-            map.get(&DelegatedAuthMetricKey {
-                operation: DelegatedAuthMetricOperation::PrepareIssuerProof,
-                outcome: DelegatedAuthMetricOutcome::Completed,
-                reason: DelegatedAuthMetricReason::Ok,
-            }),
-            Some(&1)
-        );
-        assert_eq!(
-            map.get(&DelegatedAuthMetricKey {
-                operation: DelegatedAuthMetricOperation::PrepareIssuerProof,
-                outcome: DelegatedAuthMetricOutcome::Failed,
-                reason: DelegatedAuthMetricReason::IssuerProofPrepareFailed,
-            }),
-            Some(&1)
-        );
-        assert_eq!(
-            map.get(&DelegatedAuthMetricKey {
-                operation: DelegatedAuthMetricOperation::VerifyToken,
-                outcome: DelegatedAuthMetricOutcome::Started,
-                reason: DelegatedAuthMetricReason::Ok,
-            }),
-            Some(&1)
-        );
-        assert_eq!(
-            map.get(&DelegatedAuthMetricKey {
-                operation: DelegatedAuthMetricOperation::VerifyToken,
-                outcome: DelegatedAuthMetricOutcome::Completed,
-                reason: DelegatedAuthMetricReason::Ok,
-            }),
-            Some(&1)
-        );
-        assert_eq!(
-            map.get(&DelegatedAuthMetricKey {
-                operation: DelegatedAuthMetricOperation::VerifyToken,
-                outcome: DelegatedAuthMetricOutcome::Failed,
-                reason: DelegatedAuthMetricReason::TokenExpired,
-            }),
-            Some(&2)
-        );
     }
 
     #[test]

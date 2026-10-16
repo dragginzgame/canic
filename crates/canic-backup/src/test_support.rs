@@ -1,5 +1,5 @@
 use crate::{
-    persistence::CommandLifetimeHandle,
+    persistence::CommandLifetimeLock,
     plan::{
         AuthorityEvidence, AuthorityProofSource, BackupExecutionPreflightReceipts, BackupPlan,
         ControlAuthorityReceipt, QuiescencePreflightReceipt, QuiescencePreflightTarget,
@@ -161,7 +161,7 @@ impl BackupRunnerExecutor for FakeBackupRunnerExecutor {
     fn stop_canister(
         &mut self,
         canister_id: &str,
-        _command_lifetime: CommandLifetimeHandle,
+        _command_lifetime: &mut CommandLifetimeLock,
     ) -> Result<(), BackupRunnerCommandError> {
         self.commands.push(format!("stop:{canister_id}"));
         self.canister_statuses
@@ -172,7 +172,7 @@ impl BackupRunnerExecutor for FakeBackupRunnerExecutor {
     fn start_canister(
         &mut self,
         canister_id: &str,
-        _command_lifetime: CommandLifetimeHandle,
+        _command_lifetime: &mut CommandLifetimeLock,
     ) -> Result<(), BackupRunnerCommandError> {
         self.commands.push(format!("start:{canister_id}"));
         self.canister_statuses
@@ -183,7 +183,7 @@ impl BackupRunnerExecutor for FakeBackupRunnerExecutor {
     fn create_snapshot(
         &mut self,
         canister_id: &str,
-        _command_lifetime: CommandLifetimeHandle,
+        _command_lifetime: &mut CommandLifetimeLock,
     ) -> Result<BackupRunnerSnapshot, BackupRunnerCommandError> {
         self.commands.push(format!("snapshot:{canister_id}"));
         if self.fail_on == Some(FakeBackupRunnerFailure::CreateSnapshot) {
@@ -209,7 +209,7 @@ impl BackupRunnerExecutor for FakeBackupRunnerExecutor {
         canister_id: &str,
         snapshot_id: &str,
         artifact_path: &Path,
-        _command_lifetime: CommandLifetimeHandle,
+        _command_lifetime: &mut CommandLifetimeLock,
     ) -> Result<(), BackupRunnerCommandError> {
         self.commands
             .push(format!("download:{canister_id}:{snapshot_id}"));
@@ -297,4 +297,39 @@ pub fn wait_for_path(path: &Path, description: &str) {
         );
         thread::sleep(Duration::from_millis(10));
     }
+}
+
+/// Establish genuine original custody before a fixture's simulated claim/effect.
+pub fn retain_original_command(
+    layout: &crate::persistence::BackupLayout,
+    journal: &mut crate::execution::BackupExecutionJournal,
+    sequence: usize,
+) {
+    let operation = journal
+        .operations
+        .iter()
+        .find(|operation| operation.sequence == sequence)
+        .expect("fixture operation");
+    if !matches!(
+        operation.kind,
+        crate::plan::BackupOperationKind::Stop
+            | crate::plan::BackupOperationKind::CreateSnapshot
+            | crate::plan::BackupOperationKind::Start
+            | crate::plan::BackupOperationKind::DownloadSnapshot
+    ) {
+        return;
+    }
+    if journal
+        .command_custody
+        .iter()
+        .any(|record| record.operation_sequence() == sequence as u64)
+    {
+        return;
+    }
+    let lock = crate::persistence::CommandLifetimeLock::acquire(
+        &layout.execution_journal_path(),
+        sequence as u64,
+    )
+    .expect("retain original fixture command custody");
+    journal.command_custody.push(lock.record().clone());
 }

@@ -16,8 +16,8 @@ const GRANT: u128 = 1_000_000_000_000;
 #[test]
 pub(super) fn sibling_topups_retain_distinct_receipts_after_both_replies_are_lost() {
     let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
-    let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
-        .expect("discover Canic test workspace through Cargo");
+    let workspace =
+        crate::workspace::discover().expect("discover Canic test workspace through Cargo");
     let config_path = workspace.join("apps/test/test-configs/fixture-sibling-funding.toml");
     let config = AppConfigSnapshot::load(&config_path).unwrap();
     let pic = build_pic();
@@ -93,8 +93,9 @@ pub(super) fn sibling_topups_retain_distinct_receipts_after_both_replies_are_los
         assert_eq!(observed.pending_operations, 0);
         assert_eq!(observed.reserved_cycles, Some(0.into()));
     }
-    let collision: Result<CyclesResponse, Error> =
-        pic.update_candid_as_or_panic(second, root, "test_topup_collision", (GRANT, operations[0]));
+    let collision: Result<CyclesResponse, Error> = pic
+        .update_candid_as(second, root, "test_topup_collision", (GRANT, operations[0]))
+        .expect("update Candid harness call");
     assert_eq!(
         collision.unwrap_err().code(),
         canic_contracts::diagnostics::codes::CODEC_CONFLICT.raw_code()
@@ -116,8 +117,9 @@ fn request(
     child: Principal,
     discard: bool,
 ) -> ([u8; 32], Option<CyclesResponse>) {
-    let response: Result<([u8; 32], Option<CyclesResponse>), Error> =
-        pic.update_candid_as_or_panic(child, root, "test_topup_request", (GRANT, discard));
+    let response: Result<([u8; 32], Option<CyclesResponse>), Error> = pic
+        .update_candid_as(child, root, "test_topup_request", (GRANT, discard))
+        .expect("update Candid harness call");
     response.unwrap()
 }
 
@@ -138,8 +140,9 @@ fn usage(pic: &PocketIc, root: Principal, hub: Principal, child: Principal) -> C
 }
 
 fn qualify_terminal_diagnostic(pic: &PocketIc, root: Principal, hub: Principal, child: Principal) {
-    let exhausted: Result<([u8; 32], Option<CyclesResponse>), Error> =
-        pic.update_candid_as_or_panic(child, root, "test_topup_exhaustion", (1_000_000_u128,));
+    let exhausted: Result<([u8; 32], Option<CyclesResponse>), Error> = pic
+        .update_candid_as(child, root, "test_topup_exhaustion", (1_000_000_u128,))
+        .expect("update Candid harness call");
     assert_eq!(
         exhausted.unwrap_err().code(),
         canic_contracts::diagnostics::codes::PLATFORM_INSUFFICIENT_LIQUID_CYCLES.raw_code()
@@ -158,8 +161,9 @@ fn qualify_terminal_diagnostic(pic: &PocketIc, root: Principal, hub: Principal, 
         before.disposition,
         canic::dto::cycles::CycleTopupFailureDisposition::Terminal
     );
-    let burned: Result<u128, Error> =
-        pic.update_candid_as_or_panic(child, root, "test_recovery_balance", (1_u128,));
+    let burned: Result<u128, Error> = pic
+        .update_candid_as(child, root, "test_recovery_balance", (1_u128,))
+        .expect("update Candid harness call");
     assert!(burned.unwrap() > 0);
     let rejected = pic
         .update_call(
@@ -245,12 +249,9 @@ fn qualify_automatic_siblings(
     children: [Principal; 2],
 ) {
     for child in children {
-        let response: Result<(), Error> = pic.update_candid_as_or_panic(
-            child,
-            root,
-            "test_topup_demand",
-            (1_900_000_000_000_u128,),
-        );
+        let response: Result<(), Error> = pic
+            .update_candid_as(child, root, "test_topup_demand", (1_900_000_000_000_u128,))
+            .expect("update Candid harness call");
         response.unwrap();
     }
     for _ in 0..120 {

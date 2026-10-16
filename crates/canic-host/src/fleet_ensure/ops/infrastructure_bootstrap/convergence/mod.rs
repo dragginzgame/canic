@@ -12,7 +12,7 @@ use crate::fleet_ensure::{
         infrastructure_bootstrap::{InfrastructureBootstrapError, terminal},
     },
 };
-use ic_host_fs::durable::create_new_bytes_with_parents;
+use ic_host_fs::durable::{PublicationMode, WriteOptions, write_bytes};
 use ic_host_fs::read::{read_file_no_follow, read_optional_file_no_follow};
 
 use candid::Principal;
@@ -77,8 +77,15 @@ fn retain(path: &Path, bytes: &[u8]) -> Result<(), InfrastructureBootstrapError>
     {
         Some(existing) if existing == bytes => Ok(()),
         Some(_) => Err(InfrastructureBootstrapError::Integrity),
-        None => Ok(create_new_bytes_with_parents(path, bytes)
-            .map_err(crate::publication::ops::io_error)?),
+        None => Ok(write_bytes(
+            path,
+            WriteOptions {
+                mode: PublicationMode::CreateNew,
+                permissions: 0o666,
+            },
+            bytes,
+        )
+        .map_err(crate::publication::ops::io_error)?),
     }
 }
 

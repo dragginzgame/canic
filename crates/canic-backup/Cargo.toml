@@ -22,7 +22,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 
-[target.'cfg(unix)'.dependencies]
+[target.'cfg(unix)'.dev-dependencies]
 rustix = { workspace = true }
 
 [lints]

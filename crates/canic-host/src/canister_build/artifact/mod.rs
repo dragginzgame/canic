@@ -1,6 +1,7 @@
 //! Build and qualify configured canister artifacts with exact Cargo feature contracts.
 
 mod output;
+use ic_build::cargo::observation::CargoFeatureSelection;
 #[cfg(test)]
 mod tests;
 
@@ -30,7 +31,6 @@ use crate::{
     bootstrap_store::{build_bootstrap_wasm_store_artifact, compile_bootstrap_wasm_store_artifact},
     build_toolchain::BuildToolchain,
     cargo_command,
-    cargo_metadata::CargoFeatureSelection,
     release_set::AppConfigSnapshot,
     role_contract::{
         PackageValidationMode, RoleCargoGraphEvidence, RolePackageValidation, finding_detail,
@@ -542,6 +542,7 @@ fn run_canister_runtime_batch(
         )
         .into());
     }
+    super::retain_cargo_include_exports(context, &output.stdout)?;
     Ok(output.stdout)
 }
 
@@ -792,6 +793,7 @@ fn run_canister_build(
         .into());
     }
 
+    super::retain_cargo_include_exports(context, &output.stdout)?;
     Ok(output::select(&output.stdout, manifest_path)?)
 }
 
@@ -812,6 +814,7 @@ fn run_canister_profile_candid_build(
         )
         .into());
     }
+    super::retain_cargo_include_exports(context, &output.stdout)?;
     Ok(output::select(&output.stdout, manifest_path)?)
 }
 
@@ -868,6 +871,7 @@ fn run_canister_build_batch(
 
     let output = output_canister_cargo_command(&mut command, progress)?;
     if output.status.success() {
+        super::retain_cargo_include_exports(context, &output.stdout)?;
         return Ok(output.stdout);
     }
     let roles = group

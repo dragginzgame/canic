@@ -7,8 +7,6 @@ mod process_fixture;
 use canic::{
     Error,
     api::intent::{BeginLocalIntentInput, IntentResourceKey, LocalIntentApi},
-    dto::auth::DelegatedToken,
-    ids::cap,
     prelude::*,
 };
 use std::{
@@ -299,18 +297,6 @@ async fn reject_invalid_timer_identity() -> Result<bool, Error> {
         "x".repeat(ic_timers::MAX_TIMER_IDENTITY_COMPONENT_BYTES + 1),
     )
     .is_err())
-}
-
-#[canic_update(requires(auth::authenticated(cap::VERIFY)))]
-async fn test_verify_delegated_token(token: DelegatedToken) -> Result<(), Error> {
-    let _ = token;
-    if canic::access::env::build_network_local().is_err() {
-        return Err(Error::from_registered(
-            canic::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
-        ));
-    }
-
-    Ok(())
 }
 
 #[canic_query(public)]

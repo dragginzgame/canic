@@ -1,4 +1,8 @@
 # Supported Hosts And Dependencies
+<!-- Shared companions: docs/ci-change-selection.md docs/rust-toolchains.md -->
+
+For reviewed prose-only changes, use the [documentation-only CI selection](ci-change-selection.md)
+contract. Code and tooling changes retain the required native host coverage below.
 
 ## Required macOS support
 
@@ -20,6 +24,9 @@ macOS filesystem, process or deployment behavior. Report unqualified workflows
 explicitly while retaining the macOS support requirement.
 
 ## Host-specific setup and commands
+
+Rust workflows can adopt the shared [toolchain preparation action](rust-toolchains.md)
+while keeping their own development/MSRV selections and qualification gates.
 
 Dependency installation and CI/deployment setup may differ by host. Document
 those differences at the owning boundary and preserve the same product
@@ -80,6 +87,13 @@ a newer commit's success does not qualify an older release. Consumers must updat
 their owned workflows when adopting this guidance; snapshot refresh alone does
 not change their concurrency settings.
 
+Routine issue acceptance can use the latest delivered version that retains and
+tests the behavior; it need not wait for cancelled superseded runs. Follow the
+[issue maintenance procedure](../rules/agent-maintenance.md#issue-review-and-repair)
+to preserve historical evidence and require an explicit version-specific reason
+for any older run kept as an active gate. This does not qualify an older release
+or weaken the current version's required native matrix.
+
 Use the [CI-health task](../tasks/ci-health.md#queued-native-jobs-and-repeated-validation)
 to diagnose persistent native queues and repeated branch/tag gates. Keep all
 required hosts and checks on the retained run. Release, publication and deployment
@@ -103,6 +117,10 @@ selections, user Cargo credentials and host/IC bundles are not cached. Host/IC
 setup therefore continues to exercise fresh pinned downloads on every runner.
 The cache key uses the installer's exact compiler/native/build-policy identity,
 runner image identity, Cargo tool pins and installer/checksum sources. There are
+no misses solely from comments, record order or unrelated tool pins in the
+literal common catalog. Catalogs with executable configuration, duplicate
+assignments or unsupported syntax retain their full bytes as key input; cache
+inspection never executes them or guesses their selections. There are
 no broad restore prefixes or cross-host restores. Changed inputs or an absent
 cache use ordinary cold setup.
 
@@ -122,6 +140,9 @@ evidence. All fixtures remain sequential and all three hosts run the complete
 suite. Compare cold/warm setup and fixture timings on matching hosted inputs;
 local timings and cache fixtures do not establish a hosted speed-up or explain
 runner queue capacity.
+The IC-tool fixture also prints cleanup start, elapsed seconds and exit status
+after successful assertions. A start without an end identifies an interrupted
+cleanup; use native evidence before attributing a timeout or claiming a speed-up.
 
 Shared Tooling's portable scripts do not support Windows or non-Bash shells.
 This does not prohibit a consumer from supporting additional hosts or shells
@@ -136,6 +157,7 @@ required to run setup. Make targets and CI select this same local tool set.
 
 | Tool | Additional dependencies |
 | --- | --- |
+| Evidence download and its portable fixture | GitHub CLI, jq, unzip and SHA-256 verification; the fixture also uses zip |
 | `scripts/dev/cloc.sh` | Git, Cargo, `cloc`, `jq`, `awk`, `find`, `grep`, and `sort` |
 | `scripts/dev/cloc-siblings.sh` | Git and the same prepared tools as `cloc.sh`; read-only root workspace summaries |
 | `scripts/dev/cloc-tooling.pl` | Git, cloc, and core Perl modules including JSON::PP and Digest::SHA; no Cargo or consumer command execution |
@@ -261,6 +283,17 @@ the selected temporary root while preserving pipeline failure status.
 The local composite action `.github/actions/retain-failure-evidence/action.yml`
 owns that path selection and uploads one `evidence.tar.gz` created by the shared
 evidence archiver, including hidden inputs and excluding `.git` metadata.
+Consumers with a product-specific collector may instead pass absolute
+`prepared-archive` and `collection-log` paths. That branch never selects tools,
+repackages evidence or runs a collector; the caller owns original collection
+status, archive safety and content qualification. Both files are required inputs,
+but a missing or final-symlink file is excluded while the other is still uploaded;
+completeness then fails after upload. Relative/multiline, glob-pattern or identical paths are
+rejected. The prepared branch runs even after a previous step fails or is
+cancelled, preserving the caller's log independently of archive creation.
+`temp-root` and `repository-root` remain required by the collecting branch only.
+Uploads use zero ZIP compression because the selected archive is already compressed.
+
 The same action collects a
 disposable negative qualification on each native host: the real IC installer
 downloads Quill and rejects an intentionally incorrect pin, then offline checking
@@ -278,27 +311,22 @@ leave no completed manifest. All evidence is retained. CI observes the failed st
 requires that invocation's completion output (an old manifest cannot qualify it),
 uploads through the common collector, downloads the exact returned artifact ID,
 and extracts the archive to check its payload against the original checksum
-manifest. Both full and compact evidence readbacks use the pinned download
-action's authenticated REST path, scoped to the current repository and run.
-Only the portable job grants `actions: read`; download digest mismatches fail
-before the independent payload checks. Before each download,
-`scripts/ci/wait-for-artifact.sh OWNER/REPO RUN_ID ARTIFACT_ID` checks the same
-run's paginated REST listing for the exact ID returned by this attempt's upload.
-It requires GitHub CLI, jq and an explicit `GH_TOKEN` with `actions: read`.
-Only absence from a successful listing is retried: six reads with 2, 4, 8, 16
-and 30 seconds of backoff. Each hosted discovery step has a two-minute timeout
-including API calls. API/authentication errors, malformed responses, expired or
-conflicting identities and exhausted discovery fail the gate. Downloads only run
-after successful discovery; their errors are not retried by this gate. A later
-visibility regression still fails the pinned downloader. No name fallback,
-other run/attempt selection, upload replay or evidence cleanup occurs.
-This addresses the repeated immediate visibility observation in
-[#63](https://github.com/dragginzgame/shared-tooling/issues/63); a local fixture
-cannot establish the service's root cause or native hosted recovery.
-The transport selection follows
-[the Blob readback report](https://github.com/dragginzgame/shared-tooling/issues/93);
-its original internal lookup failure has no proven cause, and local checks do
-not establish hosted acceptance of the new path.
+manifest. Both full and compact readbacks use `scripts/ci/download-evidence.sh`
+with the upload output ID and SHA-256, scoped to the current repository and run.
+It requires GitHub CLI, jq, unzip and an explicit `GH_TOKEN` with `actions: read`.
+Only the portable job grants that permission. Direct artifact metadata must match
+the ID, run, expiry status and upload digest. The downloaded ZIP must match that
+digest and contain exactly `evidence.tar.gz`; payload checks remain independent.
+
+Only reported HTTP 404 responses from metadata or the exact-ID download are
+retried: six attempts with 2, 4, 8, 16 and 30 seconds of backoff. Each hosted
+readback has a three-minute timeout. Other API failures, malformed metadata,
+identity conflicts, unexpected archive members and checksum failures stop
+immediately. Every attempt remains in the destination, which must be new.
+No separate listing preflight, name fallback, upload replay or extraction of
+arbitrary ZIP paths occurs. This addresses the visibility regression tracked in
+[#158](https://github.com/dragginzgame/shared-tooling/issues/158); hosted
+qualification is still required on every native host.
 Separate checks cover a newline/colon filename's bytes and mode,
 executable state and a symlink whose target stays outside the selection. Missing logs,
 hidden candidate files, failed uploads, early fixture failures and corrupted

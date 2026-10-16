@@ -1,5 +1,6 @@
 use super::*;
 use crate::test_support::temp_dir;
+use serde_json::json;
 
 #[test]
 fn generated_profiles_match_the_maintained_workspace_profiles() {
@@ -120,26 +121,30 @@ fn generated_packages_preserve_special_characters_in_dependency_patch_paths() {
     fs::remove_dir_all(fixture).unwrap();
 }
 
-fn cargo_metadata_fixture(packages: Vec<CargoMetadataPackage>) -> CargoMetadata {
-    CargoMetadata {
-        packages,
-        resolve: None,
-        workspace_root: PathBuf::from("/workspace"),
-    }
+fn cargo_metadata_fixture(packages: Vec<Package>) -> Metadata {
+    serde_json::from_value::<Metadata>(
+        json!({"workspace_members": [], "target_directory": "/workspace/target", "version": 1,
+            "packages": packages,
+            "resolve": null,
+            "workspace_root": PathBuf::from("/workspace"),
+        }),
+    )
+    .unwrap()
 }
 
-fn package(name: &str, id: &str, version: &str) -> CargoMetadataPackage {
-    CargoMetadataPackage {
-        id: id.to_string(),
-        name: name.to_string(),
-        version: version.to_string(),
-        source: None,
-        manifest_path: PathBuf::from(format!("/workspace/{name}/Cargo.toml")),
-        metadata: None,
-        dependencies: Vec::new(),
-        features: std::collections::BTreeMap::new(),
-        targets: Vec::new(),
-    }
+fn package(name: &str, id: &str, version: &str) -> Package {
+    serde_json::from_value::<Package>(json!({
+        "id": id.to_string(),
+        "name": name.to_string(),
+        "version": version.to_string(),
+        "source": null,
+        "manifest_path": PathBuf::from(format!("/workspace/{name}/Cargo.toml")),
+        "metadata": null,
+        "dependencies": [],
+        "features": {},
+        "targets": [],
+    }))
+    .unwrap()
 }
 #[test]
 fn sibling_configurations_preserve_each_others_generated_packages() {

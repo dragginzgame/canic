@@ -25,6 +25,29 @@ install
 [[ -z "$(find "$consumer/.tools" "$first_consumer/.tools" -type f)" ]] || exit 1
 second_consumer="$consumer"
 
+# Neither checks nor explicit setup may replace an unmanaged checkout path.
+for shape in directory symlink; do
+    consumer="$fixture/unmanaged-$shape"; mkdir -p "$consumer/.tools"
+    if [[ "$shape" == directory ]]; then
+        mkdir "$consumer/.tools/$store_test_kind"
+        printf 'user-owned bytes\n' > "$consumer/.tools/$store_test_kind/payload"
+    else
+        ln -s "$first_bundle" "$consumer/.tools/$store_test_kind"
+    fi
+    for mode in check install; do
+        if [[ "$mode" == check ]]; then store_refuse install --check;
+        else store_refuse install; fi
+        [[ "$(wc -l < "$fixture/downloads")" == "$before" &&
+           ! -e "$consumer/.tools/.$store_test_kind-tools.lock" ]] || exit 1
+        if [[ "$shape" == directory ]]; then
+            [[ "$(cat "$consumer/.tools/$store_test_kind/payload")" == 'user-owned bytes' ]] || exit 1
+        else
+            [[ "$(readlink "$consumer/.tools/$store_test_kind")" == "$first_bundle" ]] || exit 1
+        fi
+    done
+done
+consumer="$second_consumer"
+
 # Explicit adoption replaces only the old active reference; retained physical
 # bundles remain byte-for-byte available and are never a check-time fallback.
 consumer="$fixture/local-adoption"; mkdir -p "$consumer/.tools"

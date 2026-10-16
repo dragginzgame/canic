@@ -161,7 +161,7 @@ fn run_with_private_cargo_target(test: fn()) {
     );
 }
 
-fn infrastructure_build_fixture() -> (PathBuf, WorkspaceBuildContext) {
+pub(super) fn infrastructure_build_fixture() -> (PathBuf, WorkspaceBuildContext) {
     let root = temp_dir("reuse-first-infrastructure");
     let app = root.join("app");
     let canic = root.join("upstream/canic");
@@ -252,7 +252,13 @@ fn compile_infrastructure_fixture(context: &WorkspaceBuildContext) {
 
 fn compile_infrastructure_fixture_at(context: &WorkspaceBuildContext, target: &Path) {
     let output = crate::cargo_command()
-        .args(["build", "--locked", "--offline", "--manifest-path"])
+        .args([
+            "build",
+            "--locked",
+            "--offline",
+            "--message-format=json-render-diagnostics",
+            "--manifest-path",
+        ])
         .arg(context.workspace_root.join("Cargo.toml"))
         .args([
             "--target",
@@ -272,11 +278,62 @@ fn compile_infrastructure_fixture_at(context: &WorkspaceBuildContext, target: &P
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
+    exports::retain(context, &output.stdout).unwrap();
 }
 
 #[test]
 fn repeated_cargo_inputs_preserve_one_snapshot_and_refresh_the_next() {
     run_with_private_cargo_target(repeated_cargo_inputs);
+}
+
+#[test]
+fn selected_depfiles_ignore_other_apps_and_retain_external_input_authority() {
+    run_with_private_cargo_target(|| {
+        let (root, context) = infrastructure_build_fixture();
+        let profile =
+            crate::canister_build::cache::canister_build_target_root(&context.workspace_root)
+                .join("wasm32-unknown-unknown/fast");
+        fs::create_dir_all(&profile).unwrap();
+        let selected = BTreeSet::from(["reuse_app".to_owned()]);
+        let input = root.join("external-input");
+        fs::write(&input, "selected input").unwrap();
+        fs::write(
+            profile.join("reuse_app.d"),
+            format!("app.wasm: {}\n", input.display()),
+        )
+        .unwrap();
+        let capture = || {
+            let mut paths = BTreeSet::new();
+            dependencies::append_observed_cargo_inputs(&context, &selected, &mut paths).unwrap();
+            InputEvidence::capture(&source_evidence_spec("selected graph", &paths)).unwrap()
+        };
+        let before = capture();
+        // A parallel App may add a record under the same shared target directory.
+        fs::write(profile.join("other_app.d"), "malformed foreign record").unwrap();
+        before.validate_after(&capture()).unwrap();
+        fs::write(&input, "changed selected input").unwrap();
+        assert!(matches!(before.validate_after(&capture()),
+            Err(InputEvidenceError::ChangedInput { path }) if path == input));
+        let before_new = capture();
+        let new_input = root.join("new-input");
+        fs::write(&new_input, "new input").unwrap();
+        fs::write(
+            profile.join("reuse_app.d"),
+            format!("app.wasm: {} {}\n", input.display(), new_input.display()),
+        )
+        .unwrap();
+        let changed = capture();
+        assert!(changed.entries().contains_key(&new_input));
+        assert!(matches!(before_new.validate_after(&changed),
+            Err(InputEvidenceError::UnobservedInput { path }) if path == new_input));
+        fs::write(profile.join("reuse_app.d"), "malformed selected record").unwrap();
+        let mut paths = BTreeSet::new();
+        assert!(matches!(
+            dependencies::append_observed_cargo_inputs(&context, &selected, &mut paths),
+            Err(BuildReuseError::Evidence(_))
+        ));
+        fs::remove_dir_all(root).unwrap();
+    });
 }
 
 fn repeated_cargo_inputs() {
@@ -297,7 +354,12 @@ fn repeated_cargo_inputs() {
     }
     fs::write(&input, "pub fn changed() {}\n").unwrap();
     let mut paths = BTreeSet::new();
-    dependencies::append_observed_cargo_inputs(&context, &mut paths).unwrap();
+    dependencies::append_observed_cargo_inputs(
+        &context,
+        &BTreeSet::from(["root".into(), "app".into()]),
+        &mut paths,
+    )
+    .unwrap();
     assert_eq!(paths.iter().filter(|path| **path == input).count(), 1);
     let fresh =
         InputEvidence::capture(&source_evidence_spec("same build context", &paths)).unwrap();
@@ -394,7 +456,33 @@ pub fn value() -> u8 { canic::value() + MODEL + AUTHORITY }
         matches!(before.validate_after(&input_snapshot(&context, &[]).unwrap()),
         Err(InputEvidenceError::ChangedInput { path }) if path == config)
     );
+    assert_foreign_cargo_exports_preserve_snapshot(
+        &context,
+        &targets,
+        &input_snapshot(&context, &[]).unwrap(),
+    );
     fs::remove_dir_all(root).unwrap();
+}
+
+fn assert_foreign_cargo_exports_preserve_snapshot(
+    context: &WorkspaceBuildContext,
+    targets: &[PathBuf],
+    selected: &InputEvidence,
+) {
+    let (foreign_root, foreign_context) = infrastructure_build_fixture();
+    let input = foreign_root.join("foreign-config");
+    fs::write(&input, "foreign").unwrap();
+    fs::write(foreign_context.workspace_root.join("build.rs"), format!(
+        "fn main() {{ println!(\"cargo::rustc-env=CANIC_CONFIG_SOURCE_PATH={{}}\", {input:?}); }}\n"
+    )).unwrap();
+    for target in targets {
+        compile_infrastructure_fixture_at(&foreign_context, target);
+        fs::remove_file(target.join("wasm32-unknown-unknown/fast/reuse_app.d")).unwrap();
+    }
+    let observed = input_snapshot(context, &[]).unwrap();
+    assert!(!observed.entries().contains_key(&input));
+    selected.validate_after(&observed).unwrap();
+    fs::remove_dir_all(foreign_root).unwrap();
 }
 
 #[expect(

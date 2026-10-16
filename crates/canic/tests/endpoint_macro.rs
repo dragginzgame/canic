@@ -18,8 +18,8 @@ fn bounded_composite(value: u64) -> u64 {
     value
 }
 
-#[canic_query(requires(auth::authenticated()), decode = LIMITS)]
-fn bounded_token(token: canic::dto::auth::DelegatedToken) -> Result<(), Error> {
+#[canic_query(requires(auth::attested_local_subnet()), decode = LIMITS)]
+fn bounded_token(token: canic::dto::auth::SignedRoleAttestation) -> Result<(), Error> {
     Ok(())
 }
 

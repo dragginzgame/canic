@@ -22,7 +22,7 @@ use crate::{output_with_executable_busy_retry, with_executable_busy_retry};
 const FOREGROUND_DIAGNOSTIC_BYTES: usize = 64 * 1024;
 
 use super::{
-    command::{command_display, configure_inherited_fd, ensure_command_compatible},
+    command::{command_display, ensure_command_compatible},
     error::IcpCommandError,
     model::{IcpCli, IcpRawOutput},
     version::compatible_version_output,
@@ -193,11 +193,15 @@ pub fn run_success(command: &mut Command) -> Result<bool, IcpCommandError> {
     Ok(output_with_executable_busy_retry(command)?.status.success())
 }
 
-/// Execute a rendered ICP CLI command and return raw process output.
+/// Execute one rendered ICP command through the caller's admitted spawn boundary.
+///
+/// No spawn retry is added; the caller retains custody and uncertain-effect policy.
+/// Shared Host communication bounds output/deadline and owns direct-child cleanup.
 pub fn run_raw_output(
     program: &str,
     args: &[String],
-    inherited_fd: Option<i32>,
+    limits: OutputLimits,
+    spawn: impl FnOnce(Command) -> std::io::Result<OwnedChild>,
 ) -> Result<IcpRawOutput, std::io::Error> {
     if is_icp_program(program) {
         compatible_version_output(program, None)
@@ -205,8 +209,17 @@ pub fn run_raw_output(
     }
     let mut command = Command::new(program);
     command.args(args);
-    configure_inherited_fd(&mut command, inherited_fd);
-    let output = output_with_executable_busy_retry(&mut command)?;
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = spawn(command)?;
+    let output = communicate_child_with_observer(
+        &mut child,
+        None,
+        limits,
+        SuccessfulExit::Cleanup,
+        || false,
+        |_, _| Ok(()),
+    )
+    .map_err(io::Error::other)?;
     Ok(IcpRawOutput {
         success: output.status.success(),
         status: exit_status_label(output.status),
@@ -261,6 +274,50 @@ impl IcpCli {
 mod tests {
     use super::*;
     use std::{fs, os::unix::process::CommandExt as _};
+
+    #[test]
+    fn supplied_spawn_runs_once_and_bounded_capture_retains_typed_failure() {
+        let mut calls = 0;
+        let result = run_raw_output(
+            "sh",
+            &["-c".into(), "printf supplied".into()],
+            OutputLimits {
+                stdout: OutputLimit::Terminate(1024),
+                stderr: OutputLimit::Terminate(1024),
+                timeout: Some(std::time::Duration::from_secs(5)),
+            },
+            |mut command| {
+                calls += 1;
+                OwnedChild::spawn_direct(&mut command)
+            },
+        )
+        .unwrap();
+        assert!(result.success);
+        assert_eq!(result.stdout, b"supplied");
+        assert_eq!(calls, 1);
+        let error = run_raw_output(
+            "sh",
+            &["-c".into(), "printf overflow".into()],
+            OutputLimits {
+                stdout: OutputLimit::Terminate(1),
+                stderr: OutputLimit::Terminate(1024),
+                timeout: Some(std::time::Duration::from_secs(5)),
+            },
+            |mut command| OwnedChild::spawn_direct(&mut command),
+        )
+        .unwrap_err();
+        let execution = error
+            .get_ref()
+            .unwrap()
+            .downcast_ref::<ToolError>()
+            .unwrap()
+            .execution_error()
+            .unwrap();
+        assert!(matches!(
+            execution.failure,
+            ExecutionFailure::OutputLimit { .. }
+        ));
+    }
 
     #[test]
     fn foreground_runner_forwards_bytes_and_retains_failed_command_diagnostics() {

@@ -2,9 +2,6 @@ use super::*;
 
 use std::{fs, path::PathBuf, time::SystemTime};
 
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
-
 #[test]
 fn repository_ic_wasm_authority_matches_every_install_projection() {
     assert_eq!(
@@ -168,9 +165,8 @@ fn temp_root(label: &str) -> PathBuf {
 
 #[cfg(unix)]
 fn write_executable(path: &Path, contents: &str) {
-    fs::write(path, contents).expect("write fake executable");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755))
-        .expect("make fake executable executable");
+    ic_host_process::testing::write_executable_script(path, contents)
+        .expect("write closed executable test script");
 }
 
 #[test]

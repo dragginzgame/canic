@@ -65,7 +65,10 @@ use canic_core::{
     shared_support::fleet_admission_policy::compile_fleet_admission_policy_template,
 };
 use ic_host_artifacts::artifact::ArtifactError;
-use ic_host_fs::{durable::create_new_bytes_with_parents, read::read_optional_file_no_follow};
+use ic_host_fs::{
+    durable::{PublicationMode, WriteOptions, write_bytes},
+    read::read_optional_file_no_follow,
+};
 use ic_query::subnet_catalog::{CatalogLoadOutcome, SubnetSpecialization};
 use serde::{Deserialize, Serialize};
 use sha2_host::{Digest, Sha256};
@@ -491,8 +494,15 @@ pub fn initialize_fresh_estate_seed(
     let encoded = toml::to_string_pretty(&seed).map_err(|error| {
         FleetGenerateError::Authority(format!("fresh seed encoding failed: {error}"))
     })?;
-    match create_new_bytes_with_parents(request.seed, encoded.as_bytes())
-        .map_err(crate::publication::ops::io_error)
+    match write_bytes(
+        request.seed,
+        WriteOptions {
+            mode: PublicationMode::CreateNew,
+            permissions: 0o666,
+        },
+        encoded.as_bytes(),
+    )
+    .map_err(crate::publication::ops::io_error)
     {
         Ok(()) => Ok(seed.fleet_id),
         Err(io_error) if io_error.kind() == std::io::ErrorKind::AlreadyExists => {

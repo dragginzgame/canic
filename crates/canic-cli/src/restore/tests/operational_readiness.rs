@@ -6,7 +6,7 @@
 
 use super::*;
 use canic_backup::{
-    persistence::CommandLifetimeHandle,
+    persistence::CommandLifetimeLock,
     restore::{
         RestoreApplyCommandConfig, RestoreApplyOperationState, RestoreApplyRunnerCommand,
         RestoreRunnerCommandExecutor, RestoreRunnerCommandOutput, RestoreRunnerConfig,
@@ -119,7 +119,7 @@ impl RestoreRunnerCommandExecutor for RealRestoreExecutor {
     fn execute(
         &mut self,
         command: &RestoreApplyRunnerCommand,
-        command_lifetime: Option<CommandLifetimeHandle>,
+        mut command_lifetime: Option<&mut CommandLifetimeLock>,
     ) -> Result<RestoreRunnerCommandOutput, std::io::Error> {
         let is_upload = command.args.get(1).map(String::as_str) == Some("snapshot")
             && command.args.get(2).map(String::as_str) == Some("upload");
@@ -130,7 +130,8 @@ impl RestoreRunnerCommandExecutor for RealRestoreExecutor {
         let output = icp::run_raw_output(
             &command.program,
             &command.args,
-            command_lifetime.map(CommandLifetimeHandle::raw_fd),
+            restore_output_limits(),
+            |command| spawn_restore_command(&mut command_lifetime, command),
         )?;
         if is_upload
             && output.success

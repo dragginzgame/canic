@@ -500,37 +500,6 @@ fn composed_framework_fleet_admission_facade_is_typed_and_synchronous() {
 }
 
 #[test]
-fn application_session_audit_is_bounded_protected_and_secret_free() {
-    let audit_env = candid_type_env::<canic::dto::auth::ApplicationSessionAuditResponse>();
-    for required in [
-        "allowed_scopes",
-        "authority_generation",
-        "minimum_accepted_registry_epoch",
-        "sessions",
-        "transport_caller",
-    ] {
-        assert!(audit_env.contains(required), "audit omits {required}");
-    }
-    for forbidden in [
-        "delegated_token",
-        "establishment_request_hash",
-        "proof_fingerprint",
-        "proof_bytes",
-    ] {
-        assert!(
-            !audit_env.contains(forbidden),
-            "operator audit exposes {forbidden}"
-        );
-    }
-
-    let role_surface =
-        read_text(&workspace_root().join("crates/canic/src/macros/endpoints/role.rs"));
-    let authorization = preceding_attribute(&role_surface, "fn canic_control_status");
-    assert!(authorization.contains("requires(caller::is_root())"));
-    assert!(role_surface.contains("ControlStatusRequest::ApplicationSessionAudit"));
-}
-
-#[test]
 fn icrc21_dispatcher_uses_the_registered_typed_handler() {
     let method = "protocol_surface_transfer";
     Icrc21Dispatcher::register(method, |request| {
@@ -549,19 +518,6 @@ fn icrc21_dispatcher_uses_the_registered_typed_handler() {
         info.consent_message,
         ConsentMessage::GenericDisplayMessage(method.to_string())
     );
-}
-
-fn preceding_attribute<'a>(source: &'a str, signature: &str) -> &'a str {
-    source
-        .split_once(signature)
-        .map_or_else(
-            || panic!("source should contain {signature}"),
-            |(preceding, _)| preceding,
-        )
-        .lines()
-        .rev()
-        .find(|line| line.trim_start().starts_with("#["))
-        .unwrap_or_else(|| panic!("{signature} should have a preceding attribute"))
 }
 
 #[test]
@@ -939,9 +895,7 @@ fn active_delegation_proof_installer_surface_is_issuer_gated() {
     assert!(
         endpoint_source.contains("#[cfg(canic_capability_delegated_token_issuer)]")
             && endpoint_source.contains("InstallDelegationProof(")
-            && endpoint_source.contains("PrepareDelegatedToken(")
-            && endpoint_source.contains("ActiveDelegationProof")
-            && endpoint_source.contains("DelegatedToken("),
+            && endpoint_source.contains("ActiveDelegationProof"),
         "managed auth command and status variants must be issuer-profile gated"
     );
     assert!(

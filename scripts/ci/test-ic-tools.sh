@@ -7,13 +7,20 @@ ROOT="$0"
 ROOT="$(cd -P "${ROOT%/*}/../.." && printf '%s/.' "$PWD")"
 ROOT="${ROOT%/.}"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/ic-tools-test.XXXXXX")"
+fixture="$(CDPATH="" cd -P -- "$fixture" && printf '%s/.' "$PWD")"
+fixture="${fixture%/.}"
 fixture_complete=false
 finish() {
-    local status=$?
+    local status=$? cleanup_started
     # Bash 3.2 may report zero after nounset before assertions finish.
     [[ "$fixture_complete" == true || "$status" != 0 ]] || status=1
-    if [[ "$status" == 0 ]]; then rm -rf "$fixture";
-    else echo "IC tool fixture retained: $fixture" >&2; fi
+    if [[ "$status" == 0 ]]; then
+        cleanup_started=$SECONDS
+        printf 'IC fixture cleanup started: %s\n' "$fixture" >&2 || :
+        rm -rf -- "$fixture" || status=$?
+        printf 'IC fixture cleanup finished: %ss, status %s\n' "$((SECONDS - cleanup_started))" "$status" >&2 || :
+    fi
+    if [[ "$status" != 0 ]]; then printf 'IC tool fixture retained: %s\n' "$fixture" >&2 || :; fi
     exit "$status"
 }
 trap finish EXIT

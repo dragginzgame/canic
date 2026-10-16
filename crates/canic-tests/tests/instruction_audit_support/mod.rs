@@ -2,10 +2,7 @@ use candid::Principal;
 use canic::{
     Error,
     dto::{
-        auth::{
-            AuthRequestMetadata, DelegatedToken, DelegatedTokenPrepareRequest, DelegationAudience,
-            RootIssuerConfigureRequest,
-        },
+        auth::{DelegationAudience, RootIssuerConfigureRequest},
         capability::{
             CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,
             RootCapabilityEnvelopeV1,
@@ -20,8 +17,8 @@ use canic::{
 };
 use canic_testing_internal::canister::{APP, SCALE_HUB, TEST, USER_HUB};
 use canic_testing_internal::pic::{
-    ActiveComponentRegistryFixture, issue_delegated_token_from_active_proof,
-    managed_test_init_identity, role_grant, setup_active_component_registry,
+    ActiveComponentRegistryFixture, managed_test_init_identity, role_grant,
+    setup_active_component_registry,
 };
 use canic_tests::root::{self, RootSetupProfile, harness::setup_root};
 use ic_testkit::pic::{PocketIc, prelude::*};
@@ -48,7 +45,7 @@ use report::{
 };
 use scenarios::{audit_metadata, audit_paths, scenarios, workspace_root};
 
-const METHOD_TAG: &str = "CANIC-INSTRUCTION-001/v3";
+const METHOD_TAG: &str = "CANIC-INSTRUCTION-001/v4";
 const PERF_COUNTER_ID: u8 = 1;
 const PERF_COUNTER_SOURCE: &str = "performance_counter(1)";
 const PERF_PAGE_LIMIT: u64 = 512;
@@ -65,10 +62,6 @@ const FLOW_GAPS: &[(&str, &str)] = &[
     (
         "root proof provisioning",
         "crates/canic-core/src/workflow/runtime/auth/provisioning",
-    ),
-    (
-        "issuer delegated-token prepare and verification",
-        "crates/canic-core/src/workflow/runtime/auth/prepare",
     ),
     (
         "replay/cached-response path",
@@ -169,9 +162,7 @@ struct ScenarioResult {
 
 struct PreparedScenario {
     target_pid: Principal,
-    caller_pid: Option<Principal>,
     issuer_pid: Option<Principal>,
-    delegated_token: Option<DelegatedToken>,
 }
 
 ///
@@ -411,14 +402,14 @@ mod tests {
             run_timestamp_utc: "2026-07-14T00:00:00Z".to_string(),
             compared_baseline_report: "N/A".to_string(),
             method_id: "CANIC-INSTRUCTION-001".to_string(),
-            method_version: "3".to_string(),
+            method_version: "4".to_string(),
             method_fingerprint: "test-fingerprint".to_string(),
         };
         let artifact =
             serde_json::to_value(method_artifact(&metadata)).expect("serialize method artifact");
 
         assert_eq!(artifact["method_id"], "CANIC-INSTRUCTION-001");
-        assert_eq!(artifact["method_version"], "3");
+        assert_eq!(artifact["method_version"], "4");
         assert_eq!(artifact["method_fingerprint"], "test-fingerprint");
         assert_eq!(artifact["counter_id"], PERF_COUNTER_ID);
         assert_eq!(artifact["counter_source"], PERF_COUNTER_SOURCE);

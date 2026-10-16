@@ -358,7 +358,7 @@ fn observed_retry_deadlines_reach_human_and_json_output_without_advancement() {
                         method: canic_contracts::protocol::CANIC_WASM_STORE_COMMAND.into(),
                         step: "inspect_template".into(),
                         rejection_code: Some(5),
-                        rejection_detail: Some("Store stopped\nunsafe\u{1b}".into()),
+                        rejection_detail: Some("Store stopped\nunsafe\u{1b}\u{202e}".into()),
                     },
                 ),
                 failed_at_ns: 123,
@@ -376,7 +376,7 @@ fn observed_retry_deadlines_reach_human_and_json_output_without_advancement() {
         }));
         assert!(render::plain(&event).contains(rendered));
         assert!(render::plain(&event).contains("inspect_template"));
-        assert!(render::plain(&event).contains("Store stopped?unsafe?"));
+        assert!(render::plain(&event).contains("Store stopped\\nunsafe\\u{1b}\\u{202e}"));
         let mut output = Vec::new();
         terminal::Painter::default()
             .paint(

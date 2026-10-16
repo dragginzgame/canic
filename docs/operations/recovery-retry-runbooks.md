@@ -33,7 +33,6 @@ These runbooks cover manual retry and recovery decisions for:
 - operation-ID reuse;
 - pending ICP refill operations under the selected ICP project root;
 - delegated-auth caller and issuer binding failures;
-- delegated-token prepare and issue replay;
 - ICP refill and value-transfer replay;
 - cost-boundary refusals;
 - durable-publication ambiguity;

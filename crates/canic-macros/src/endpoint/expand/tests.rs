@@ -1,5 +1,5 @@
 use super::*;
-use crate::endpoint::parse::{AccessExprAst, AccessPredicateAst, AuthScopeArg, BuiltinPredicate};
+use crate::endpoint::parse::{AccessExprAst, AccessPredicateAst, BuiltinPredicate};
 
 fn make_args(requires: Vec<AccessExprAst>) -> ValidatedArgs {
     ValidatedArgs {
@@ -17,20 +17,18 @@ fn make_args(requires: Vec<AccessExprAst>) -> ValidatedArgs {
 #[test]
 fn bounded_guards_consume_decoded_proofs_and_keep_the_fleet_guard() {
     let mut args = make_args(vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
-        BuiltinPredicate::Authenticated {
-            required_scope: None,
-        },
+        BuiltinPredicate::AttestedLocalSubnet,
     ))]);
     args.decode = Some(quote!(LIMITS));
     args.reject_access = true;
     let function: ItemFn = syn::parse_quote!(
-        fn read(token: DelegatedToken) -> u64 {
+        fn read(token: SignedRoleAttestation) -> u64 {
             1
         }
     );
     let expansion = expand(EndpointKind::Query, args, function).to_string();
     let compact = expansion.split_whitespace().collect::<String>();
-    assert!(compact.contains("authenticated_argument(&token,None)"));
+    assert!(compact.contains("attested_local_subnet_argument(&token)"));
     assert!(compact.contains("fleet::is_queryable()"));
     assert!(compact.contains("in_query_executor_context"));
     assert!(compact.contains("msg_reject"));
@@ -217,42 +215,6 @@ fn access_stage_default_guard_skips_the_unused_transport_caller() {
     assert!(compact.contains("eval_default_fleet_guard"));
     assert!(compact.contains("__canic_call"));
     assert!(!compact.contains("msg_caller"));
-}
-
-#[test]
-fn authenticated_endpoint_expansion_fences_before_access_and_dispatch() {
-    let args = make_args(vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
-        BuiltinPredicate::Authenticated {
-            required_scope: Some(AuthScopeArg::Literal(String::from("write"))),
-        },
-    ))]);
-    let func: ItemFn = syn::parse_quote!(
-        async fn write(token: ::canic::dto::auth::DelegatedToken) -> Result<(), ::canic::Error> {
-            Ok(())
-        }
-    );
-
-    let expanded = expand(EndpointKind::Update, args, func).to_string();
-    let compact = expanded.split_whitespace().collect::<String>();
-
-    let fence = expanded
-        .find("preflight_endpoint")
-        .expect("expanded endpoint must enforce the activation fence");
-    let access = expanded
-        .find("eval_access")
-        .expect("expanded endpoint must evaluate access");
-    let enter = expanded
-        .find("measure_endpoint_async")
-        .expect("expanded endpoint must enter instrumentation after access");
-    let impl_call = expanded
-        .find("__canic_impl_write")
-        .expect("expanded endpoint must call implementation");
-
-    assert!(fence < access);
-    assert!(access < enter);
-    assert!(enter < impl_call);
-    assert!(compact.contains("::canic::application_scope!(\"write\").as_str()"));
-    assert!(!compact.contains("authenticated_with_scope(\"write\")"));
 }
 
 #[test]

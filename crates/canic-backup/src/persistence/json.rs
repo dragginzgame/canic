@@ -7,8 +7,7 @@
 use crate::persistence::PersistenceError;
 
 use std::{
-    fs::File,
-    io::{self, BufReader, Write},
+    io::{self, Write},
     path::Path,
 };
 
@@ -17,6 +16,12 @@ use ic_host_fs::{
     path::canonicalize_allow_missing,
 };
 use serde::{Serialize, de::DeserializeOwned};
+
+/// Maximum encoded size of a Canic backup manifest, plan, mapping or journal.
+///
+/// The 64 MiB document allowance is independent from streamed snapshot artifacts.
+/// Publication applies the same bound so every written record remains readable.
+pub const JSON_RECORD_MAX_BYTES: usize = 64 * 1024 * 1024;
 
 pub fn write_json_durable<T>(path: &Path, value: &T) -> Result<(), PersistenceError>
 where
@@ -36,12 +41,21 @@ where
         .map_err(PersistenceError::from)
 }
 
+/// Read one complete bounded backup record before decoding its JSON schema.
+///
+/// Uses Host's descriptor admission and independently bounded stream reader.
+/// Explicit path aliases are followed; layout custody and schema validation
+/// remain with callers. Non-regular descriptors refuse before any stream read.
+///
+/// # Errors
+/// Returns native I/O, typed Host admission causes or JSON decoding failures.
 pub fn read_json<T>(path: &Path) -> Result<T, PersistenceError>
 where
     T: DeserializeOwned,
 {
-    let file = File::open(path)?;
-    Ok(serde_json::from_reader(BufReader::new(file))?)
+    let bytes =
+        ic_host_fs::read::read_file(path, JSON_RECORD_MAX_BYTES).map_err(io::Error::from)?;
+    Ok(serde_json::from_slice(&bytes)?)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -56,6 +70,12 @@ fn publish_bytes_at_barriers(
     mode: PublicationMode,
     mut barrier: impl FnMut(DurableWriteBarrier),
 ) -> io::Result<()> {
+    if bytes.len() > JSON_RECORD_MAX_BYTES {
+        return Err(ic_host_artifacts::artifact::ArtifactError::LimitExceeded {
+            limit: JSON_RECORD_MAX_BYTES as u64,
+        }
+        .into());
+    }
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     let name = path.file_name().ok_or(io::ErrorKind::InvalidInput)?;
     // Resolve selected directory aliases without following the publication leaf.
@@ -151,6 +171,117 @@ mod tests {
                 "intentional serialization failure",
             ))
         }
+    }
+
+    #[test]
+    fn bounded_record_reader_accepts_the_document_limit_and_refuses_larger_files() {
+        use ic_host_artifacts::artifact::ArtifactError;
+        let root = temp_dir("canic-backup-json-read-limit");
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("record.json");
+        let mut bytes = vec![b' '; JSON_RECORD_MAX_BYTES];
+        bytes[..2].copy_from_slice(b"{}");
+        fs::write(&path, &bytes).unwrap();
+        assert_eq!(
+            read_json::<serde_json::Value>(&path).unwrap(),
+            serde_json::json!({})
+        );
+        fs::OpenOptions::new()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_len(JSON_RECORD_MAX_BYTES as u64 + 1)
+            .unwrap();
+        let PersistenceError::Io(error) = read_json::<serde_json::Value>(&path).unwrap_err() else {
+            panic!("expected a bounded file admission error");
+        };
+        assert!(
+            matches!(error.get_ref().unwrap().downcast_ref::<ArtifactError>(),
+            Some(ArtifactError::LimitExceeded { limit }) if *limit == JSON_RECORD_MAX_BYTES as u64)
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn oversized_publication_preserves_the_previous_record_before_any_barrier() {
+        let root = temp_dir("canic-backup-json-write-limit");
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("record.json");
+        fs::write(&path, b"{}").unwrap();
+        let bytes = vec![b' '; JSON_RECORD_MAX_BYTES + 1];
+        let error = publish_bytes_at_barriers(&path, &bytes, PublicationMode::Replace, |_| {
+            panic!("oversized publication must not cross a durable barrier")
+        })
+        .unwrap_err();
+        assert!(matches!(
+            error
+                .get_ref()
+                .unwrap()
+                .downcast_ref::<ic_host_artifacts::artifact::ArtifactError>(),
+            Some(ic_host_artifacts::artifact::ArtifactError::LimitExceeded { .. })
+        ));
+        assert_eq!(fs::read(&path).unwrap(), b"{}");
+        assert_no_staging_file(&root, "record.json");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn record_reader_preserves_native_missing_and_json_failures() {
+        let root = temp_dir("canic-backup-json-read-errors");
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("record.json");
+        assert!(matches!(read_json::<serde_json::Value>(&path),
+            Err(PersistenceError::Io(error)) if error.kind() == io::ErrorKind::NotFound));
+        fs::write(&path, b"{").unwrap();
+        assert!(matches!(
+            read_json::<serde_json::Value>(&path),
+            Err(PersistenceError::Json(_))
+        ));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn record_reader_rejects_a_writerless_fifo_before_reading() {
+        let root = temp_dir("canic-backup-json-read-fifo");
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("record.json");
+        rustix::fs::mkfifoat(
+            rustix::fs::CWD,
+            &path,
+            rustix::fs::Mode::RUSR | rustix::fs::Mode::WUSR,
+        )
+        .unwrap();
+        let PersistenceError::Io(error) = read_json::<serde_json::Value>(&path).unwrap_err() else {
+            panic!("expected descriptor admission failure");
+        };
+        assert!(matches!(
+            error
+                .get_ref()
+                .unwrap()
+                .downcast_ref::<ic_host_artifacts::artifact::ArtifactError>(),
+            Some(ic_host_artifacts::artifact::ArtifactError::NotRegularFile)
+        ));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn explicit_record_aliases_are_followed_without_masking_missing_targets() {
+        let root = temp_dir("canic-backup-json-read-alias");
+        fs::create_dir_all(&root).unwrap();
+        let source = root.join("source.json");
+        let alias = root.join("record.json");
+        fs::write(&source, b"{}").unwrap();
+        std::os::unix::fs::symlink(&source, &alias).unwrap();
+        assert_eq!(
+            read_json::<serde_json::Value>(&alias).unwrap(),
+            serde_json::json!({})
+        );
+        fs::remove_file(source).unwrap();
+        assert!(matches!(read_json::<serde_json::Value>(&alias),
+            Err(PersistenceError::Io(error)) if error.kind() == io::ErrorKind::NotFound));
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

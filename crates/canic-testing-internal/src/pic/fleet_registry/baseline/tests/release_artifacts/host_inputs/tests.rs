@@ -145,8 +145,8 @@ fn cfg_classification_only_excludes_impossible_non_test_branches() {
 
 #[test]
 fn real_host_policy_tests_are_outside_the_fixture_producer() {
-    let workspace = ic_build::artifacts::workspace_root_for(env!("CARGO_MANIFEST_DIR"))
-        .expect("discover Canic test workspace through Cargo");
+    let workspace =
+        crate::workspace::discover().expect("discover Canic test workspace through Cargo");
     let host = workspace.join("crates/canic-host");
     let excluded = standalone_test_sources(&host).unwrap();
     assert!(excluded.contains(&host.join("src/fleet_ensure/policy/tests.rs")));
@@ -170,7 +170,7 @@ fn excluded_test_edits_still_abort_an_in_flight_cache_transaction() {
         "version = 4\n[[package]]\nname = \"native-producer\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
-    let build = WasmBuildSpec::new(&host, &root.join("target"), &["native-producer"], "release")
+    let build = WasmBuildSpec::new(&host, &root.join("target"), &["native-producer"])
         .with_cargo_profile_args(["--release"]);
     let inputs = resolve_cargo_build_inputs(&build).unwrap();
     let cache = FixtureArtifactCache::bind(

@@ -224,23 +224,10 @@ fn expr_from_ast(expr: &AccessExprAst, decoded: Option<&syn::Ident>) -> TokenStr
 }
 
 fn expr_from_builtin(pred: &BuiltinPredicate, decoded: Option<&syn::Ident>) -> TokenStream2 {
-    if let Some(argument) = decoded {
-        match pred {
-            BuiltinPredicate::Authenticated { required_scope } => {
-                let scope = match required_scope {
-                    Some(AuthScopeArg::Literal(scope)) => {
-                        quote!(Some(::canic::application_scope!(#scope).as_str()))
-                    }
-                    Some(AuthScopeArg::Expr(scope)) => quote!(Some(#scope)),
-                    None => quote!(None),
-                };
-                return quote!(::canic::__internal::core::access::expr::auth::authenticated_argument(&#argument, #scope));
-            }
-            BuiltinPredicate::AttestedLocalSubnet => {
-                return quote!(::canic::__internal::core::access::expr::auth::attested_local_subnet_argument(&#argument));
-            }
-            _ => {}
-        }
+    if let Some(argument) = decoded
+        && matches!(pred, BuiltinPredicate::AttestedLocalSubnet)
+    {
+        return quote!(::canic::__internal::core::access::expr::auth::attested_local_subnet_argument(&#argument));
     }
     match pred {
         BuiltinPredicate::CallerPermission { permission } => quote!({
@@ -279,23 +266,6 @@ fn expr_from_builtin(pred: &BuiltinPredicate, decoded: Option<&syn::Ident>) -> T
         BuiltinPredicate::CallerIsFleetAdmitted => {
             quote!(::canic::__internal::core::access::expr::caller::is_fleet_admitted())
         }
-        BuiltinPredicate::Authenticated { required_scope } => match required_scope {
-            Some(AuthScopeArg::Literal(required_scope)) => quote!(
-                ::canic::__internal::core::access::expr::auth::authenticated_with_scope(
-                    ::canic::application_scope!(#required_scope).as_str()
-                )
-            ),
-            Some(AuthScopeArg::Expr(required_scope)) => quote!(
-                ::canic::__internal::core::access::expr::auth::authenticated_with_scope(
-                    #required_scope
-                )
-            ),
-            None => quote!(
-                ::canic::__internal::core::access::expr::auth::authenticated(
-                    ::core::option::Option::None
-                )
-            ),
-        },
         BuiltinPredicate::AttestedLocalSubnet => {
             quote!(::canic::__internal::core::access::expr::auth::attested_local_subnet())
         }
@@ -336,10 +306,7 @@ fn expr_has_decoded_auth_argument(expr: &AccessExprAst) -> bool {
         AccessExprAst::Not(expr) => expr_has_decoded_auth_argument(expr),
         AccessExprAst::Pred(pred) => match pred {
             AccessPredicateAst::Builtin(builtin) => {
-                matches!(
-                    builtin,
-                    BuiltinPredicate::Authenticated { .. } | BuiltinPredicate::AttestedLocalSubnet
-                )
+                matches!(builtin, BuiltinPredicate::AttestedLocalSubnet)
             }
             AccessPredicateAst::Custom(_) => false,
         },

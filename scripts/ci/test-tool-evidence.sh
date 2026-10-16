@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared companions: scripts/ci/select-tool-evidence.sh scripts/ci/archive-evidence.sh .github/actions/retain-failure-evidence/action.yml
+# Shared companions: scripts/ci/select-tool-evidence.sh scripts/ci/archive-evidence.sh .github/actions/retain-failure-evidence/action.yml scripts/ci/fixture-lifecycle.sh
 set -euo pipefail
 [[ $# == 3 ]] || { echo 'usage: test-tool-evidence.sh CONSUMER host|ic CALLER-PINS' >&2; exit 2; }
 ROOT="${BASH_SOURCE[0]}"
@@ -8,16 +8,12 @@ ROOT="$(cd -P "${ROOT%/*}/../.." && printf '%s/.' "$PWD")"
 ROOT="${ROOT%/.}"
 consumer="$1"; kind="$2"; pins="$3"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/tool-evidence-test.XXXXXX")"
-# Bash 3.2 can enter EXIT with status zero after nounset; require completion too.
+fixture="$(CDPATH="" cd -P -- "$fixture" && printf '%s/.' "$PWD")"
+fixture="${fixture%/.}"
+# shellcheck source=scripts/ci/fixture-lifecycle.sh
+source "$ROOT/scripts/ci/fixture-lifecycle.sh"
 fixture_complete=false
-finish() {
-    local status=$?
-    [[ "$fixture_complete" == true || "$status" != 0 ]] || status=1
-    if [[ "$status" == 0 ]]; then rm -rf "$fixture"
-    else printf "Tool evidence fixture retained: %s\n" "$fixture" >&2; fi
-    exit "$status"
-}
-trap finish EXIT
+trap 'fixture_finish "$?" "$fixture" "Tool evidence fixture retained"' EXIT
 active="$(readlink "$consumer/.tools/$kind")"
 physical="$(cd "$consumer/.tools/$active" && pwd -P)"
 stored_parent="${physical%/*}"
@@ -189,6 +185,73 @@ for bad_store in "$fixture/rejected/store-link" relative-store "$fixture/rejecte
         fi
     done
 done
+# Caller-prepared evidence bypasses collection and preserves available files,
+# including the original log when archive creation failed. No tool roots exist.
+prepared="$fixture/prepared evidence"
+mkdir "$prepared"
+printf 'archive bytes\n' > "$prepared/original.tar.gz"
+printf 'original failure\n' > "$prepared/original.log"
+ln -s original.tar.gz "$prepared/archive-link"
+ln -s original.log "$prepared/log-link"
+for scenario in complete missing-archive missing-log missing-both archive-link log-link relative empty newline carriage glob same; do
+    archive="$prepared/original.tar.gz"; log="$prepared/original.log"
+    expected_complete=false; expected_status=0
+    : > "$prepared/expected-paths"
+    case "$scenario" in
+        complete) expected_complete=true; printf '%s\n' "$archive" "$log" > "$prepared/expected-paths" ;;
+        missing-archive) archive="$prepared/absent"; printf '%s\n' "$log" > "$prepared/expected-paths" ;;
+        missing-log) log="$prepared/absent"; printf '%s\n' "$archive" > "$prepared/expected-paths" ;;
+        missing-both) archive="$prepared/absent-archive"; log="$prepared/absent-log" ;;
+        archive-link) archive="$prepared/archive-link"; printf '%s\n' "$log" > "$prepared/expected-paths" ;;
+        log-link) log="$prepared/log-link"; printf '%s\n' "$archive" > "$prepared/expected-paths" ;;
+        relative) archive=relative.tar.gz; expected_status=2 ;;
+        empty) log=''; expected_status=2 ;;
+        newline) archive="$prepared/"$'bad\npath'; expected_status=2 ;;
+        carriage) archive="$prepared/"$'bad\rpath'; expected_status=2 ;;
+        glob) archive="$prepared/*.tar.gz"; expected_status=2 ;;
+        same) log="$archive"; expected_status=2 ;;
+    esac
+    output="$prepared/$scenario.output"; : > "$output"
+    status=0
+    EVIDENCE_PREPARED_ARCHIVE="$archive" EVIDENCE_COLLECTION_LOG="$log" \
+        EVIDENCE_TEMP_ROOT='' EVIDENCE_REPOSITORY_ROOT='' EVIDENCE_ACTION_ROOT="$prepared/absent" \
+        GITHUB_OUTPUT="$output" "$BASH" --noprofile --norc -e -o pipefail "$fixture/collector.sh" \
+        > "$prepared/$scenario.log" 2>&1 || status=$?
+    [[ "$status" == "$expected_status" ]] || exit 1
+    if [[ "$status" != 0 ]]; then [[ ! -s "$output" ]] || exit 1; continue; fi
+    grep -Fx "collection-complete=$expected_complete" "$output" > /dev/null
+    sed -n '/^path<<EVIDENCE_PATHS$/,/^EVIDENCE_PATHS$/{ /^path<</d; /^EVIDENCE_PATHS$/d; p; }' \
+        "$output" > "$prepared/actual-paths"
+    cmp "$prepared/expected-paths" "$prepared/actual-paths"
+done
+# Optional action inputs serve prepared uploads only. Ordinary collection still
+# requires both roots and must refuse before sourcing helpers or creating output.
+for missing in temp repository both; do
+    collection_temp="$prepared" collection_repository="$prepared"
+    [[ "$missing" == repository ]] || collection_temp=''
+    [[ "$missing" == temp ]] || collection_repository=''
+    output="$prepared/missing-$missing.output"; : > "$output"
+    status=0
+    EVIDENCE_PREPARED_ARCHIVE='' EVIDENCE_COLLECTION_LOG='' \
+        EVIDENCE_TEMP_ROOT="$collection_temp" EVIDENCE_REPOSITORY_ROOT="$collection_repository" \
+        EVIDENCE_ACTION_ROOT="$prepared/absent" GITHUB_OUTPUT="$output" \
+        "$BASH" --noprofile --norc -e -o pipefail "$fixture/collector.sh" \
+        > "$prepared/missing-$missing.log" 2>&1 || status=$?
+    [[ "$status" == 2 && ! -s "$output" ]] || exit 1
+done
+# Always upload available prepared diagnostics before enforcing completeness;
+# native collection retains its existing cancellation boundary.
+# shellcheck disable=SC2016 # Compare literal GitHub expressions.
+yq -o json '.' "$ROOT/.github/actions/retain-failure-evidence/action.yml" | jq -e \
+    --arg guard "inputs.prepared-archive != '' || inputs.collection-log != '' || !cancelled()" \
+    --arg nonempty "steps.archive.outputs.path != ''" \
+    --arg incomplete "steps.archive.outputs.collection-complete == 'false'" '
+    .runs.steps as $steps |
+    $steps[0].if == ("${{ always() && (" + $guard + ") }}") and
+    $steps[1].if == ("${{ always() && " + $nonempty + " && (" + $guard + ") }}") and
+    $steps[2].if == ("${{ always() && " + $incomplete + " && (" + $guard + ") }}") and
+    $steps[1].with["compression-level"] == 0 and $steps[1].with.path == "${{ steps.archive.outputs.path }}"
+' > /dev/null
 rm -rf "$candidate"
 echo 'Successful tool compaction, failed verification, unknown selections and actual collector passed'
 fixture_complete=true

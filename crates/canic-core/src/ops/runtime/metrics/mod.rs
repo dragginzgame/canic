@@ -618,7 +618,7 @@ fn perf_entries_from(
         ]
         .into_iter()
         .filter_map(|(phase, summary)| {
-            let total = u64::try_from(summary.total()).ok()?;
+            let total = u64::try_from(summary.aggregate().total()).ok()?;
             Some(MetricEntry {
                 labels: vec![
                     "timer".to_string(),
@@ -629,7 +629,7 @@ fn perf_entries_from(
                 ],
                 principal: None,
                 value: MetricValue::CountAndU64 {
-                    count: summary.samples(),
+                    count: summary.aggregate().samples(),
                     value_u64: total,
                 },
             })

@@ -12,7 +12,7 @@ use crate::fleet_ensure::{
     },
     ops::{EnsurePaths, infrastructure_bootstrap::InfrastructureBootstrapError},
 };
-use ic_host_fs::durable::write_bytes;
+use ic_host_fs::durable::{PublicationMode, WriteOptions, write_bytes};
 use ic_host_fs::read::read_optional_file_no_follow;
 
 use canic_core::cdk::utils::hash::hex_bytes;
@@ -182,7 +182,15 @@ fn reserve_inner(
         return Err(InfrastructureBootstrapError::InspectionBudget);
     }
     *counter += 1;
-    write_bytes(&path, &serde_json::to_vec(&record)?).map_err(crate::publication::ops::io_error)?;
+    write_bytes(
+        &path,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &serde_json::to_vec(&record)?,
+    )
+    .map_err(crate::publication::ops::io_error)?;
     Ok(())
 }
 

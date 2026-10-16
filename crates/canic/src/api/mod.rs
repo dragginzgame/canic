@@ -6,6 +6,14 @@
 /// core layout.
 ///
 
+/// Application-owned durable checkpoint participant transitions.
+pub mod application_checkpoint {
+    pub use crate::__internal::core::api::application_checkpoint::{
+        ApplicationCheckpointError, ApplicationCheckpointPhase, ApplicationCheckpointRecord,
+        ApplicationCheckpointRootPredicate, ApplicationCheckpointTransition,
+    };
+}
+
 /// Authentication workflow helpers
 pub mod auth {
     pub use crate::__internal::core::api::auth::AuthApi;

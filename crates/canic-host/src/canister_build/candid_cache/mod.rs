@@ -15,7 +15,7 @@ use super::{
 use ic_build::artifacts::{
     ArtifactCacheError, ArtifactCachePreparation, ArtifactCacheSpec, prepare_artifact_cache,
 };
-use ic_host_fs::durable::write_bytes;
+use ic_host_fs::durable::{PublicationMode, WriteOptions, write_bytes};
 use ic_host_fs::read::read_file_no_follow;
 use std::path::{Path, PathBuf};
 
@@ -173,7 +173,14 @@ impl CandidExtractionCache {
                 }
             } else {
                 let path = transaction.output_path("candid")?;
-                match write_bytes(&path, &candid) {
+                match write_bytes(
+                    &path,
+                    WriteOptions {
+                        mode: PublicationMode::Replace,
+                        permissions: 0o666,
+                    },
+                    &candid,
+                ) {
                     Ok(()) => {
                         if let Err(error) = transaction.commit() {
                             optional_cache_failure(wasm, error)?;

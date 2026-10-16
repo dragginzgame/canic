@@ -1072,6 +1072,7 @@ fn apply_journal_validation_rejects_unsupported_verification_kind() {
             expected_module_hash: None,
             verification_kind: Some("query".to_string()),
         }],
+        command_custody: Vec::new(),
         operation_receipts: Vec::new(),
     };
     journal.operation_counts =

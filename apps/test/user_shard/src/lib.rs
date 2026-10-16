@@ -4,7 +4,7 @@ mod fixture_importer;
 mod reinstall_fixture;
 
 use candid::Principal;
-use canic::{Error, dto::auth::DelegatedToken, ids::cap, prelude::*};
+use canic::{Error, prelude::*};
 use std::cell::RefCell;
 
 thread_local! {
@@ -24,13 +24,6 @@ async fn canic_install(_: Option<Vec<u8>>) {
     reinstall_fixture::seed();
 }
 async fn canic_upgrade() {}
-
-#[canic_query(requires(auth::authenticated(cap::VERIFY)))]
-async fn hello(token: DelegatedToken) -> Result<(), Error> {
-    let _ = token;
-
-    Ok(())
-}
 
 /// Prove direct Fleet-admitted ingress for managed child qualification.
 #[canic_query(requires(caller::is_fleet_admitted()))]

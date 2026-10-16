@@ -63,3 +63,45 @@ fn build_lock_parser_requires_an_exact_path_and_preserves_code_lookup() {
         clap::error::ErrorKind::DisplayHelp
     );
 }
+
+#[test]
+fn lookup_distinguishes_numeric_range_from_syntax_and_unknown_codes() {
+    for input in ["65536", "E99999", "999999999999999999999999999999999"] {
+        assert!(matches!(
+            parse_code(input),
+            Err(DiagnosticCommandError::CodeOutOfRange(value)) if value == input
+        ));
+    }
+    for input in ["e22", "E-1", "E99999x", ""] {
+        assert!(matches!(
+            parse_code(input),
+            Err(DiagnosticCommandError::InvalidCode(value)) if value == input
+        ));
+    }
+    let catalog = diagnostic_catalog();
+    assert!(matches!(
+        catalog.lookup(parse_code("E65535").unwrap()),
+        DiagnosticLookup::Unknown(_)
+    ));
+    for input in ["22", "E22", "00022", "E00022"] {
+        assert!(matches!(
+            catalog.lookup(parse_code(input).unwrap()),
+            DiagnosticLookup::Current(entry) if entry.name == "AUTHORITY_CONFLICT"
+        ));
+    }
+}
+
+#[test]
+fn diagnostic_lookup_preserves_current_authority_and_state_codes() {
+    let catalog = diagnostic_catalog();
+    for (input, name) in [
+        ("E31", "AUTHORITY_UNAVAILABLE"),
+        ("E137", "STATE_INVALID"),
+        ("E140", "STATE_UNAVAILABLE"),
+    ] {
+        assert!(matches!(
+            catalog.lookup(parse_code(input).unwrap()),
+            DiagnosticLookup::Current(entry) if entry.name == name
+        ));
+    }
+}

@@ -126,12 +126,26 @@ fn stage_and_publish_artifact_set<T>(
 ) -> Result<T, Box<dyn std::error::Error>> {
     let staged = StagedArtifactSet::create(finalization.wasm_path)?;
     write_wasm_artifact(finalization.source_wasm_path, &staged.wasm_path)?;
-    write_bytes(&staged.did_path, finalization.candid)?;
+    write_bytes(
+        &staged.did_path,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        finalization.candid,
+    )?;
 
     if let Some(identity) = finalization.release_build_id {
         let mut bytes = fs::read(&staged.wasm_path)?;
         crate::canister_build::release_binding::bind_release_build_id(&mut bytes, identity)?;
-        write_bytes(&staged.wasm_path, &bytes)?;
+        write_bytes(
+            &staged.wasm_path,
+            WriteOptions {
+                mode: PublicationMode::Replace,
+                permissions: 0o666,
+            },
+            &bytes,
+        )?;
     }
     let result = qualify(&staged)?;
     let wasm = fs::read(&staged.wasm_path)?;
@@ -140,9 +154,30 @@ fn stage_and_publish_artifact_set<T>(
 
     // The build lock keeps consumers behind this function's success boundary. Each complete
     // file is durably replaced only after the complete candidate set has qualified.
-    write_bytes(finalization.wasm_gz_path, &wasm_gz)?;
-    write_bytes(finalization.did_path, &candid)?;
-    write_bytes(finalization.wasm_path, &wasm)?;
+    write_bytes(
+        finalization.wasm_gz_path,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &wasm_gz,
+    )?;
+    write_bytes(
+        finalization.did_path,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &candid,
+    )?;
+    write_bytes(
+        finalization.wasm_path,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &wasm,
+    )?;
     Ok(result)
 }
 
@@ -271,36 +306,43 @@ fn shrink_wasm_artifact(
     tool: &IcWasmExecutable,
     wasm_path: &Path,
 ) -> Result<ArtifactTransformOutput, Box<dyn std::error::Error>> {
-    write_named_with(wasm_path, |shrunk_path| {
-        let produce = || -> Result<_, Box<dyn std::error::Error>> {
-            let mut command = crate::build_environment::command(tool.path());
-            command
-                .arg(wasm_path)
-                .arg("-o")
-                .arg(shrunk_path)
-                .arg("shrink");
-            let output = output_with_executable_busy_retry(&mut command)?;
-            if !output.status.success() {
-                return Err(format!(
-                    "ic-wasm shrink failed using {} ({}) for {} with status {}: {}",
-                    tool.path().display(),
-                    tool.version_identity(),
-                    wasm_path.display(),
-                    output.status,
-                    String::from_utf8_lossy(&output.stderr).trim()
-                )
-                .into());
-            }
-            let bytes = read_file_no_follow(shrunk_path, crate::MAX_ARTIFACT_READ_BYTES)?;
-            wasm::wasm_contract_snapshot(&bytes)?;
-            Ok(transform_output(
-                ArtifactTransformKind::Shrink,
-                Some(tool.version_identity().to_string()),
-                ArtifactTransformOutcome::Applied,
-            ))
-        };
-        produce().map_err(TransformProducerError::from)
-    })
+    write_named_with(
+        wasm_path,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        |shrunk_path| {
+            let produce = || -> Result<_, Box<dyn std::error::Error>> {
+                let mut command = crate::build_environment::command(tool.path());
+                command
+                    .arg(wasm_path)
+                    .arg("-o")
+                    .arg(shrunk_path)
+                    .arg("shrink");
+                let output = output_with_executable_busy_retry(&mut command)?;
+                if !output.status.success() {
+                    return Err(format!(
+                        "ic-wasm shrink failed using {} ({}) for {} with status {}: {}",
+                        tool.path().display(),
+                        tool.version_identity(),
+                        wasm_path.display(),
+                        output.status,
+                        String::from_utf8_lossy(&output.stderr).trim()
+                    )
+                    .into());
+                }
+                let bytes = read_file_no_follow(shrunk_path, crate::MAX_ARTIFACT_READ_BYTES)?;
+                wasm::wasm_contract_snapshot(&bytes)?;
+                Ok(transform_output(
+                    ArtifactTransformKind::Shrink,
+                    Some(tool.version_identity().to_string()),
+                    ArtifactTransformOutcome::Applied,
+                ))
+            };
+            produce().map_err(TransformProducerError::from)
+        },
+    )
     .map_err(Into::into)
 }
 
@@ -310,7 +352,14 @@ pub fn write_wasm_artifact(
     target_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let bytes = fs::read(source_path)?;
-    write_bytes(target_path, &bytes)?;
+    write_bytes(
+        target_path,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &bytes,
+    )?;
     Ok(())
 }
 
@@ -425,20 +474,27 @@ fn optimize_release_wasm_artifact_with_tool(
     let before_gzip = deterministic_gzip_bytes(&before_bytes)?;
     let before_metrics = wasm::wasm_artifact_metrics(&before_bytes, before_gzip.len())?;
 
-    let metrics = write_named_with(wasm_path, |optimized_path| {
-        run_binaryen_optimizer(tool.path(), wasm_path, optimized_path, &before_features)
-            .and_then(|()| {
-                validate_optimized_wasm(
-                    tool.path(),
-                    wasm_path,
-                    optimized_path,
-                    &before_contract,
-                    &before_features,
-                    before_metrics,
-                )
-            })
-            .map_err(TransformProducerError::from)
-    })?;
+    let metrics = write_named_with(
+        wasm_path,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        |optimized_path| {
+            run_binaryen_optimizer(tool.path(), wasm_path, optimized_path, &before_features)
+                .and_then(|()| {
+                    validate_optimized_wasm(
+                        tool.path(),
+                        wasm_path,
+                        optimized_path,
+                        &before_contract,
+                        &before_features,
+                        before_metrics,
+                    )
+                })
+                .map_err(TransformProducerError::from)
+        },
+    )?;
     eprintln!(
         "release Wasm optimization for {}: raw {} -> {}, gzip {} -> {}, code section {} -> {}, data section {} -> {}, functions {} -> {}",
         wasm_path.display(),

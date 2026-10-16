@@ -85,24 +85,36 @@ fn project(
     let groups = validate(report)?;
     let mut rows = vec![state(AllocationSampleState::Available, now)];
     for (name, value) in [
-        ("physical_extent", report.physical_extent.bytes),
-        ("bucket_size", report.bucket_size_bytes),
-        ("allocated_bucket_bytes", report.allocated_bucket_bytes),
-        ("virtual_extent", report.virtual_extent.bytes),
-        ("bucket_slack", report.bucket_slack_bytes),
-        ("manager_metadata", report.manager_metadata_bytes),
-        ("known_binding", report.known_binding_bytes),
-        ("unknown_binding", report.unknown_binding_bytes),
-        ("unmanaged", report.unmanaged_bytes),
-        ("metadata_read", report.metadata_bytes_read),
+        ("physical_extent", report.physical_extent.bytes()),
+        ("bucket_size", report.bucket_size_bytes()),
+        ("allocated_bucket_bytes", report.allocated_bucket_bytes()),
+        ("virtual_extent", report.virtual_extent.bytes()),
+        ("bucket_slack", report.bucket_slack_bytes()),
+        (
+            "manager_metadata",
+            ic_memory::MemoryAllocationSummary::MANAGER_METADATA_BYTES,
+        ),
+        ("known_binding", report.known_binding_bytes()),
+        ("unknown_binding", report.unknown_binding_bytes()),
+        ("unmanaged", report.unmanaged_bytes()),
+        (
+            "metadata_read",
+            ic_memory::MemoryAllocationSummary::METADATA_BYTES_READ,
+        ),
     ] {
         rows.push(gauge(name, value, "bytes", now));
     }
     for (name, value) in [
         ("allocated_buckets", u64::from(report.allocated_buckets)),
-        ("bucket_capacity", u64::from(report.bucket_capacity)),
-        ("remaining_buckets", u64::from(report.remaining_buckets)),
-        ("ids_measured", u64::from(report.memories_measured)),
+        (
+            "bucket_capacity",
+            u64::from(ic_memory::MemoryAllocationSummary::BUCKET_CAPACITY),
+        ),
+        ("remaining_buckets", u64::from(report.remaining_buckets())),
+        (
+            "ids_measured",
+            u64::from(ic_memory::MemoryAllocationSummary::MEMORIES_MEASURED),
+        ),
         ("ids_total", u64::from(ic_memory::MEMORY_MANAGER_INVALID_ID)),
         ("payload_available", 0),
     ] {
@@ -135,41 +147,46 @@ fn sum(a: u64, b: u64) -> Result<u64, InternalError> {
 /// Independently verify physical, capacity and binding partitions before publishing them.
 fn validate(report: &MemoryAllocationSummary) -> Result<[(u64, u64); 3], InternalError> {
     if report.current_generation.is_none()
-        || report.memories_measured != u16::from(ic_memory::MEMORY_MANAGER_INVALID_ID)
+        || report.bucket_size_pages == 0
+        || u32::from(report.allocated_buckets) > MemoryAllocationSummary::BUCKET_CAPACITY
     {
         return Err(invalid());
     }
-    let groups = [
+    let bindings = [
         report.current_binding,
         report.ledger_binding,
         report.unknown_binding,
-    ]
-    .map(|binding| (binding.allocated_bytes, binding.bucket_slack_bytes));
-    if groups.iter().any(|(allocated, slack)| slack > allocated) {
-        return Err(invalid());
+    ];
+    let mut groups = [(0, 0); 3];
+    let mut buckets = 0;
+    let mut virtual_pages = 0;
+    for (binding, group) in bindings.into_iter().zip(&mut groups) {
+        buckets = sum(buckets, u64::from(binding.allocated_buckets))?;
+        virtual_pages = sum(virtual_pages, binding.virtual_extent.wasm_pages)?;
+        let allocated = binding.allocated_bytes(report.bucket_size_pages);
+        let virtual_bytes = binding
+            .virtual_extent
+            .wasm_pages
+            .checked_mul(ic_memory::WASM_PAGE_SIZE_BYTES)
+            .ok_or_else(invalid)?;
+        *group = (
+            allocated,
+            allocated.checked_sub(virtual_bytes).ok_or_else(invalid)?,
+        );
     }
-    let virtual_bytes = report.virtual_extent.bytes;
-    let buckets = u64::from(report.allocated_buckets);
-    let known = sum(groups[0].0, groups[1].0)?;
-    let allocated = sum(known, groups[2].0)?;
-    let slack = sum(sum(groups[0].1, groups[1].1)?, groups[2].1)?;
-    let physical = sum(
-        sum(report.manager_metadata_bytes, allocated)?,
-        report.unmanaged_bytes,
+    let physical_bytes = report
+        .physical_extent
+        .wasm_pages
+        .checked_mul(ic_memory::WASM_PAGE_SIZE_BYTES)
+        .ok_or_else(invalid)?;
+    let accounted = sum(
+        MemoryAllocationSummary::MANAGER_METADATA_BYTES,
+        report.allocated_bucket_bytes(),
     )?;
-    let valid_partitions = report.physical_extent.bytes == physical
-        && report.allocated_bucket_bytes == allocated
-        && report.known_binding_bytes == known
-        && report.unknown_binding_bytes == groups[2].0;
-    let valid_capacity = report.bucket_slack_bytes == slack
-        && allocated == sum(virtual_bytes, slack)?
-        && report.bucket_size_bytes == u64::from(report.bucket_size_pages) * 65_536
-        && allocated
-            == buckets
-                .checked_mul(report.bucket_size_bytes)
-                .ok_or_else(invalid)?
-        && sum(buckets, u64::from(report.remaining_buckets))? == u64::from(report.bucket_capacity);
-    if !valid_partitions || !valid_capacity {
+    if buckets != u64::from(report.allocated_buckets)
+        || virtual_pages != report.virtual_extent.wasm_pages
+        || physical_bytes < accounted
+    {
         return Err(invalid());
     }
     Ok(groups)

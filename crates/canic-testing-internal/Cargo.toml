@@ -34,6 +34,7 @@ ciborium = { workspace = true }
 flate2 = { workspace = true }
 ic-build.workspace = true
 ic-host-fs = { workspace = true }
+ic-host-process.workspace = true
 ic-testkit = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

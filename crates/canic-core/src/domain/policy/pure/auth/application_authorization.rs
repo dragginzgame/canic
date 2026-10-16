@@ -10,7 +10,6 @@ use crate::{
     domain::value::Principal,
     model::auth::application_authorization::{
         ApplicationScopeRef, LocalApplicationAuthoritySnapshot, LocalApplicationSession,
-        MAX_LOCAL_APPLICATION_SESSION_TTL_NS,
     },
 };
 
@@ -181,55 +180,6 @@ pub fn authorize_local_application(
         subject: session.authenticated_subject(),
         expires_at_ns: session.expires_at_ns(),
     })
-}
-
-/// Resolve one strict session expiry from protected and requested TTL values.
-pub fn resolve_application_session_expiry(
-    established_at_ns: u64,
-    default_ttl_ns: u64,
-    maximum_ttl_ns: u64,
-    requested_ttl_ns: Option<u64>,
-) -> Result<u64, ApplicationSessionTtlError> {
-    if default_ttl_ns == 0 {
-        return Err(ApplicationSessionTtlError::DefaultZero);
-    }
-    if maximum_ttl_ns == 0 {
-        return Err(ApplicationSessionTtlError::MaximumZero);
-    }
-    if default_ttl_ns > maximum_ttl_ns {
-        return Err(ApplicationSessionTtlError::DefaultExceedsMaximum);
-    }
-    if maximum_ttl_ns > MAX_LOCAL_APPLICATION_SESSION_TTL_NS {
-        return Err(ApplicationSessionTtlError::MaximumExceedsHardLimit {
-            maximum_ttl_ns,
-            hard_limit_ns: MAX_LOCAL_APPLICATION_SESSION_TTL_NS,
-        });
-    }
-    let selected_ttl_ns = requested_ttl_ns.unwrap_or(default_ttl_ns);
-    if selected_ttl_ns == 0 {
-        return Err(ApplicationSessionTtlError::RequestedZero);
-    }
-    if selected_ttl_ns > maximum_ttl_ns {
-        return Err(ApplicationSessionTtlError::RequestedExceedsMaximum);
-    }
-    established_at_ns
-        .checked_add(selected_ttl_ns)
-        .ok_or(ApplicationSessionTtlError::ExpiryOverflow)
-}
-
-/// Typed protected/requested local session TTL failure.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ApplicationSessionTtlError {
-    DefaultExceedsMaximum,
-    DefaultZero,
-    ExpiryOverflow,
-    MaximumExceedsHardLimit {
-        maximum_ttl_ns: u64,
-        hard_limit_ns: u64,
-    },
-    MaximumZero,
-    RequestedExceedsMaximum,
-    RequestedZero,
 }
 
 // -----------------------------------------------------------------------------
@@ -472,31 +422,6 @@ mod tests {
             LocalApplicationAuthorizationDecision::Deny(
                 LocalApplicationAuthorizationDenial::MissingScope
             )
-        );
-    }
-
-    #[test]
-    fn ttl_resolution_uses_independent_protected_session_clock() {
-        assert_eq!(resolve_application_session_expiry(10, 20, 30, None), Ok(30));
-        assert_eq!(
-            resolve_application_session_expiry(10, 20, 30, Some(30)),
-            Ok(40)
-        );
-        assert_eq!(
-            resolve_application_session_expiry(10, 20, 30, Some(31)),
-            Err(ApplicationSessionTtlError::RequestedExceedsMaximum)
-        );
-        assert_eq!(
-            resolve_application_session_expiry(
-                10,
-                20,
-                MAX_LOCAL_APPLICATION_SESSION_TTL_NS + 1,
-                None
-            ),
-            Err(ApplicationSessionTtlError::MaximumExceedsHardLimit {
-                maximum_ttl_ns: MAX_LOCAL_APPLICATION_SESSION_TTL_NS + 1,
-                hard_limit_ns: MAX_LOCAL_APPLICATION_SESSION_TTL_NS,
-            })
         );
     }
 }

@@ -9,8 +9,8 @@ use canic_contracts::dto::root::RootComponentChildOperationStatus;
 #[test]
 pub(super) fn runtime_index_child_waits_for_startup_and_preserves_bounded_retry() {
     let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
-    let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
-        .expect("discover Canic test workspace through Cargo");
+    let workspace =
+        crate::workspace::discover().expect("discover Canic test workspace through Cargo");
     let config_path = initial_shard_root_canister_config_path(&workspace);
     let config = AppConfigSnapshot::load(&config_path).unwrap();
     let pic = build_pic();

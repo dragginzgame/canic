@@ -11,7 +11,7 @@ pub mod ttl;
 use crate::{
     cdk::types::Principal,
     dto::{
-        auth::{DelegatedTokenPrepareResponse, RoleAttestationPrepareResponse},
+        auth::RoleAttestationPrepareResponse,
         icp_refill::IcpRefillResponse,
         rpc::{CyclesResponse, Response},
     },
@@ -32,7 +32,6 @@ use crate::{
 };
 use candid::{CandidType, decode_one, encode_one};
 
-pub const DELEGATED_TOKEN_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
 pub const ICP_REFILL_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
 pub const ROLE_ATTESTATION_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
 
@@ -205,24 +204,6 @@ pub fn decode_root_replay_response(bytes: &[u8]) -> Result<Response, ReplayDecod
     }
 
     decode_one(bytes).map_err(|err| ReplayDecodeError::DecodeFailed(err.to_string()))
-}
-
-/// decode_delegated_token_prepare_replay_response
-///
-/// Decode a committed delegated-token prepare response from shared replay receipts.
-pub fn decode_delegated_token_prepare_replay_response(
-    receipt: &ReplayReceipt,
-) -> Result<DelegatedTokenPrepareResponse, ReplayDecodeError> {
-    let response_bytes = committed_response_bytes(
-        receipt,
-        DELEGATED_TOKEN_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
-        "delegated token prepare",
-    )?;
-    decode_one(response_bytes).map_err(|err| {
-        ReplayDecodeError::DecodeFailed(format!(
-            "failed to decode delegated token prepare replay response: {err}"
-        ))
-    })
 }
 
 /// decode_icp_refill_replay_response

@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Shared companions: scripts/ci/test-tool-evidence.sh scripts/ci/test-tool-store.sh
 set -euo pipefail
+path_context=false
+if [[ "${1:-}" == --path-context && $# == 1 ]]; then path_context=true;
+elif [[ $# != 0 ]]; then echo 'usage: fixture [--path-context]' >&2; exit 2; fi
 ROOT="$0"
 [[ "$ROOT" == /* ]] || ROOT="$PWD/$ROOT"
 ROOT="$(cd -P "${ROOT%/*}/../.." && printf '%s/.' "$PWD")"
@@ -109,6 +112,30 @@ refuse install --check
 [[ ! -e "$consumer/.tools" && ! -e "$fixture/downloads" ]] || exit 1
 grep -F "tool=jq expected=1.8.2 path=$consumer/.tools/host/bin/jq reason=missing-bundle" "$fixture/install.log"
 grep -F 'make install-host-tools' "$fixture/install.log"
+# The context gate reuses assets but runs only path-sensitive lifecycle probes.
+if [[ "$path_context" == true ]]; then
+    export TEST_OS=Linux TEST_ARCH=x86_64
+    install
+    original="$(readlink "$consumer/.tools/host")"
+    before="$(wc -l < "$fixture/downloads")"
+    install --check
+    install
+    [[ "$(wc -l < "$fixture/downloads")" == "$before" ]] || exit 1
+    # Interrupted replacement retains evidence and releases only owned locks.
+    saved_consumer="$consumer"
+    consumer="$fixture/interrupted"; mkdir "$consumer"
+    export SHARED_TOOLING_STORE="$consumer/store"
+    refuse env TEST_INTERRUPT=1 bash "$ROOT/scripts/dev/install-host-tools.sh" --consumer "$consumer" --versions "$pins"
+    [[ ! -e "$consumer/.tools/host" && ! -e "$consumer/.tools/.host-tools.lock" ]] || exit 1
+    [[ -n "$(find "$SHARED_TOOLING_STORE" -name 'set.*' -type d)" ]] || exit 1
+    [[ -z "$(find "$SHARED_TOOLING_STORE" -name install.lock)" ]] || exit 1
+    consumer="$saved_consumer"
+    [[ "$(readlink "$consumer/.tools/host")" == "$original" ]] || exit 1
+    install --check
+    fixture_complete=true
+    echo 'Host path-context install, reuse, check and retained failure passed'
+    exit 0
+fi
 for host in Linux:x86_64 Linux:arm64 Darwin:x86_64 Darwin:arm64; do
     export TEST_OS="${host%:*}" TEST_ARCH="${host#*:}"
     consumer="$fixture/$host"; mkdir "$consumer"

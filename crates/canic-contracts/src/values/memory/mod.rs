@@ -26,8 +26,7 @@ pub enum MemoryAllocationBinding {
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub enum MemoryCommitRecoveryErrorResponse {
     NoValidGeneration,
-    InvalidCommitSlots,
-    AmbiguousGeneration,
+    InvalidSnapshot,
     GenerationOverflow,
     UnexpectedGeneration,
     Unknown,

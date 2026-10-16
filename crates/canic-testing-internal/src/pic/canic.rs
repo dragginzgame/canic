@@ -47,7 +47,6 @@ use canic_contracts::{
 };
 use canic_core::cdk::utils::hash::wasm_hash;
 use canic_host::release_set::AppConfigSnapshot;
-use ic_build::artifacts::{test_target_dir, workspace_root_for};
 use ic_testkit::pic::{
     CandidCallError, CandidCallExt, CanisterDiagnosticsRequest, CanisterInstallExt, InstallSpec,
     LabeledCanisterDiagnosticsRequest, PocketIc, PocketIcBuilder, PocketIcDiagnosticsExt,
@@ -575,10 +574,14 @@ pub fn install_standalone_canister(
     let label = format!("standalone:{crate_name}:{role}");
     let wasm = standalone_canister_wasm(crate_name, profile);
     let pocket_ic = start_pocket_ic(PocketIcBuilder::new().with_application_subnet());
-    let fixture = StandaloneCanisterFixture::install(
-        pocket_ic,
+    let fixture = StandaloneCanisterFixture::try_install(
+        ic_testkit::pic::PocketIcInstance {
+            instance: pocket_ic,
+            server: None,
+        },
         InstallSpec::new(wasm, local_init_args(), 0).label(label),
-    );
+    )
+    .expect("install standalone canister");
     let canister_id = fixture.canister_id();
     let pic = fixture.pocket_ic();
     pic.wait_for_ready(
@@ -613,7 +616,10 @@ pub fn install_standalone_canister_on_pic(
 
     let wasm = standalone_canister_wasm(crate_name, profile);
     let canister_id = pic
-        .create_and_install(InstallSpec::new(wasm, local_init_args(), 0).label(label.to_string()));
+        .try_create_and_install(
+            InstallSpec::new(wasm, local_init_args(), 0).label(label.to_string()),
+        )
+        .expect("install test canister");
     pic.wait_for_ready(
         canister_id,
         Principal::anonymous(),
@@ -692,7 +698,7 @@ pub fn standalone_canister_wasm(crate_name: &str, profile: CanicWasmBuildProfile
     entry
         .get_or_init(|| {
             let target_name = format!("standalone-{crate_name}");
-            let target_dir = test_target_dir(&workspace_root, &target_name);
+            let target_dir = workspace_root.join("target").join(&target_name);
             build_internal_test_wasm_canisters(&workspace_root, &target_dir, &[crate_name], profile)
                 .wasm(crate_name)
         })
@@ -706,7 +712,9 @@ pub fn standalone_canister_wasm(crate_name: &str, profile: CanicWasmBuildProfile
 #[must_use]
 pub fn standalone_canister_candid(crate_name: &str, profile: CanicWasmBuildProfile) -> String {
     let workspace = workspace_root();
-    let target = test_target_dir(&workspace, &format!("declaration-{crate_name}"));
+    let target = workspace
+        .join("target")
+        .join(format!("declaration-{crate_name}"));
     let artifacts = super::artifacts::build_internal_test_wasm_canisters_with_env(
         &workspace,
         &target,
@@ -877,8 +885,7 @@ const fn test_subnet(byte: u8) -> SubnetId {
 }
 
 fn workspace_root() -> PathBuf {
-    workspace_root_for(env!("CARGO_MANIFEST_DIR"))
-        .expect("discover Canic test workspace through Cargo")
+    crate::workspace::discover().expect("discover Canic test workspace through Cargo")
 }
 
 /// Exact read transport used by Coordinator fixtures after endpoint separation.

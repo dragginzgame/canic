@@ -8,10 +8,14 @@ use crate::{InternalError, ops::auth::AuthSignatureError};
 use std::cell::RefCell;
 
 use ic_auth::signature_store::{
-    MAX_COMPOSITION_DEPTH, MAX_PRUNE_BATCH, MAX_SIGNATURES, PreparedSignature, SignatureInputs,
-    SignatureLimits, SignatureSibling, SignatureStore, SignatureStoreError,
+    MAX_COMPOSITION_DEPTH, MAX_SIGNATURES, SignatureLimits, SignatureSibling, SignatureStore,
+    SignatureStoreError,
 };
-use ic_auth_protocol_types::{IcCanisterSignatureProofV1, Principal};
+#[cfg(feature = "auth-root-canister-sig-create")]
+use ic_auth::signature_store::{MAX_PRUNE_BATCH, PreparedSignature, SignatureInputs};
+#[cfg(feature = "auth-root-canister-sig-create")]
+use ic_auth_protocol_types::IcCanisterSignatureProofV1;
+use ic_auth_protocol_types::Principal;
 
 /// One /sig owner shared by Root and issuer, with host-owned sibling branches.
 struct SignatureHost {
@@ -75,6 +79,7 @@ pub fn reset() -> Result<(), InternalError> {
 }
 
 /// Prepare one already-authorized profile; cleanup and publication share this message.
+#[cfg(feature = "auth-root-canister-sig-create")]
 pub(super) fn prepare(
     inputs: SignatureInputs<'_>,
     now_ns: u64,
@@ -101,6 +106,7 @@ pub(super) fn prepare(
 }
 
 /// Retrieve against the actual host certificate and current composed branch roots.
+#[cfg(feature = "auth-root-canister-sig-create")]
 pub(super) fn retrieve(
     inputs: SignatureInputs<'_>,
     signing_canister: Principal,

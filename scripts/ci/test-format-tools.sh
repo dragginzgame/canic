@@ -1,21 +1,17 @@
 #!/usr/bin/env bash
-# Shared companions: scripts/ci/check-format-tools.sh
+# Shared companions: scripts/ci/check-format-tools.sh scripts/ci/fixture-lifecycle.sh
 set -euo pipefail
 ROOT="$0"
 [[ "$ROOT" == /* ]] || ROOT="$PWD/$ROOT"
 ROOT="$(cd -P "${ROOT%/*}/../.." && printf '%s/.' "$PWD")"
 ROOT="${ROOT%/.}"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/format-tools-test.XXXXXX")"
-# Bash 3.2 can enter EXIT with status zero after nounset; require completion too.
+fixture="$(CDPATH="" cd -P -- "$fixture" && printf '%s/.' "$PWD")"
+fixture="${fixture%/.}"
+# shellcheck source=scripts/ci/fixture-lifecycle.sh
+source "$ROOT/scripts/ci/fixture-lifecycle.sh"
 fixture_complete=false
-finish() {
-    local status=$?
-    [[ "$fixture_complete" == true || "$status" != 0 ]] || status=1
-    if [[ "$status" == 0 ]]; then rm -rf "$fixture"
-    else echo "Formatter fixtures retained: $fixture" >&2; fi
-    exit "$status"
-}
-trap finish EXIT
+trap 'fixture_finish "$?" "$fixture" "Formatter fixtures retained"' EXIT
 export FORMAT_TOOLS_FIXTURE="$fixture"
 mkdir "$fixture/bin"
 cat > "$fixture/bin/cargo" <<'SCRIPT'

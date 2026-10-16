@@ -121,7 +121,10 @@ fn accept_preflight_if_needed(
     }
 
     let validated_at = state_updated_at(config.updated_at.as_ref());
-    let expires_at = timestamp_marker(timestamp_seconds(&validated_at) + PREFLIGHT_TTL_SECONDS);
+    let expires_at = timestamp_marker(
+        timestamp_seconds(&validated_at).unwrap_or_else(crate::timestamp::current_unix_seconds)
+            + PREFLIGHT_TTL_SECONDS,
+    );
     let preflight_id = format!("preflight-{}", plan.run_id);
     let receipts = executor
         .preflight_receipts(plan, &preflight_id, &validated_at, &expires_at)
@@ -171,7 +174,11 @@ fn execute_ready_operations(
             });
         }
 
-        let mut command_lock = backup_command_lock(layout, &operation)?;
+        let mut command_lock = backup_command_lock(layout, journal, &operation)?;
+        if let Some(lock) = &command_lock {
+            journal.retain_command_custody(lock.record())?;
+            layout.write_execution_journal(journal)?;
+        }
         let preparation = prepare_backup_operation(
             config,
             executor,
@@ -212,7 +219,7 @@ fn execute_ready_operations(
             plan,
             journal,
             &operation,
-            command_lock.as_ref().map(CommandLifetimeLock::handle),
+            command_lock.as_mut(),
         );
         finish_backup_command_lock(&operation, command_lock)?;
 
@@ -259,7 +266,7 @@ fn finish_preparation_command_lock(
         .finish()
         .map_err(|error| backup_command_lock_error(operation, error))
     {
-        Ok(()) => Ok(primary),
+        Ok(_guard) => Ok(primary),
         Err(containment) => Err(BackupRunnerError::FailureContainmentFailed {
             primary: Box::new(primary),
             containment: Box::new(containment),
@@ -382,7 +389,11 @@ fn contain_backup_failure(
     );
 
     while let Some(operation) = journal.next_failure_containment_start().cloned() {
-        let mut command_lock = backup_command_lock(layout, &operation)?;
+        let mut command_lock = backup_command_lock(layout, journal, &operation)?;
+        if let Some(lock) = &command_lock {
+            journal.retain_command_custody(lock.record())?;
+            layout.write_execution_journal(journal)?;
+        }
         let reconcile_previous_attempt = operation.state == BackupExecutionOperationState::Pending
             || operation.state == BackupExecutionOperationState::Failed
             || journal.operation_receipts.iter().any(|receipt| {
@@ -427,7 +438,7 @@ fn contain_backup_failure(
                 plan,
                 journal,
                 &pending_operation,
-                command_lock.as_ref().map(CommandLifetimeLock::handle),
+                command_lock.as_mut(),
             );
             if let Some(command_lock) = command_lock {
                 command_lock
@@ -743,6 +754,7 @@ fn finish_backup_command_lock(
     };
     command_lock
         .finish()
+        .map(|_guard| ())
         .map_err(|error| backup_command_lock_error(operation, error))
 }
 
@@ -776,15 +788,38 @@ fn reject_unknown_backup_command_outcome(
 
 fn backup_command_lock(
     layout: &BackupLayout,
+    journal: &BackupExecutionJournal,
     operation: &crate::execution::BackupExecutionJournalOperation,
 ) -> Result<Option<CommandLifetimeLock>, BackupRunnerError> {
     if !backup_operation_uses_command_lock(&operation.kind) {
         return Ok(None);
     }
 
-    CommandLifetimeLock::acquire(&layout.execution_journal_path(), operation.sequence)
-        .map(Some)
-        .map_err(|error| backup_command_lock_error(operation, error))
+    let original = journal
+        .command_custody
+        .iter()
+        .find(|record| record.operation_sequence() == operation.sequence as u64);
+    let has_issued_state = matches!(
+        operation.state,
+        BackupExecutionOperationState::Pending | BackupExecutionOperationState::Failed
+    );
+    let has_issued_receipt = journal
+        .operation_receipts
+        .iter()
+        .any(|receipt| receipt.sequence == operation.sequence);
+    let requires_original = has_issued_state || has_issued_receipt;
+    if original.is_none() && requires_original {
+        return Err(BackupRunnerError::MissingOriginalCommandCustody {
+            sequence: operation.sequence,
+        });
+    }
+    crate::persistence::acquire_recorded_command(
+        &layout.execution_journal_path(),
+        operation.sequence,
+        original,
+    )
+    .map(Some)
+    .map_err(|error| backup_command_lock_error(operation, error))
 }
 
 fn backup_command_lock_error(
@@ -792,20 +827,21 @@ fn backup_command_lock_error(
     error: CommandLifetimeLockError,
 ) -> BackupRunnerError {
     match error {
-        CommandLifetimeLockError::InFlight { lock_path } => BackupRunnerError::CommandInFlight {
+        CommandLifetimeLockError::InFlight { path } => BackupRunnerError::CommandInFlight {
             sequence: operation.sequence,
             operation_id: operation.operation_id.clone(),
-            lock_path,
+            lock_path: path.display().to_string(),
         },
-        CommandLifetimeLockError::UnsafeEntry { lock_path, kind } => {
+        CommandLifetimeLockError::UnsafeEntry { path, kind } => {
             BackupRunnerError::CommandLockUnsafeEntry {
                 sequence: operation.sequence,
                 operation_id: operation.operation_id.clone(),
-                lock_path,
+                lock_path: path.display().to_string(),
                 kind,
             }
         }
         CommandLifetimeLockError::Io(error) => BackupRunnerError::Io(error),
+        other => BackupRunnerError::CommandCustody(other),
     }
 }
 

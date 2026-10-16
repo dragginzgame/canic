@@ -5,6 +5,7 @@
 //! Boundary: ops-layer counters consumed by metrics projection and auth recorders.
 
 mod attestation;
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
 mod sessions;
 
 use std::{cell::RefCell, collections::HashMap};
@@ -13,12 +14,6 @@ pub use attestation::{record_attestation_epoch_rejected, record_attestation_veri
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
 pub use sessions::{
     record_application_session_cleanup, record_application_session_generation_invalidation,
-};
-pub use sessions::{
-    record_application_session_clear, record_application_session_created,
-    record_application_session_establishment_started,
-    record_application_session_expired_observation, record_application_session_idempotent,
-    record_application_session_rejected, record_application_session_replaced,
 };
 
 thread_local! {
@@ -34,6 +29,7 @@ thread_local! {
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
 pub enum AuthMetricSurface {
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     ApplicationSession,
     Attestation,
 }
@@ -43,6 +39,7 @@ impl AuthMetricSurface {
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
+            #[cfg(any(test, feature = "auth-local-application-authorization"))]
             Self::ApplicationSession => "application_session",
             Self::Attestation => "attestation",
         }
@@ -59,9 +56,6 @@ impl AuthMetricSurface {
 pub enum AuthMetricOperation {
     #[cfg(any(test, feature = "auth-local-application-authorization"))]
     Cleanup,
-    Clear,
-    Establish,
-    ExpiryObservation,
     #[cfg(any(test, feature = "auth-local-application-authorization"))]
     GenerationInvalidation,
     Verify,
@@ -74,9 +68,6 @@ impl AuthMetricOperation {
         match self {
             #[cfg(any(test, feature = "auth-local-application-authorization"))]
             Self::Cleanup => "cleanup",
-            Self::Clear => "clear",
-            Self::Establish => "establish",
-            Self::ExpiryObservation => "expiry_observation",
             #[cfg(any(test, feature = "auth-local-application-authorization"))]
             Self::GenerationInvalidation => "generation_invalidation",
             Self::Verify => "verify",
@@ -92,11 +83,9 @@ impl AuthMetricOperation {
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
 pub enum AuthMetricOutcome {
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     Completed,
     Failed,
-    Idempotent,
-    Rejected,
-    Started,
 }
 
 impl AuthMetricOutcome {
@@ -104,11 +93,9 @@ impl AuthMetricOutcome {
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
+            #[cfg(any(test, feature = "auth-local-application-authorization"))]
             Self::Completed => "completed",
             Self::Failed => "failed",
-            Self::Idempotent => "idempotent",
-            Self::Rejected => "rejected",
-            Self::Started => "started",
         }
     }
 }
@@ -121,21 +108,11 @@ impl AuthMetricOutcome {
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
 pub enum AuthMetricReason {
-    AuthorityConflict,
-    Capacity,
-    Cleared,
-    Created,
     EpochRejected,
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     Expired,
     #[cfg(any(test, feature = "auth-local-application-authorization"))]
     GenerationAdvanced,
-    InvalidRequest,
-    ProofInvalid,
-    Replaced,
-    Replay,
-    ReplayConflict,
-    Request,
-    StateUnavailable,
     VerifyFailed,
 }
 
@@ -144,21 +121,11 @@ impl AuthMetricReason {
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
-            Self::AuthorityConflict => "authority_conflict",
-            Self::Capacity => "capacity",
-            Self::Cleared => "cleared",
-            Self::Created => "created",
             Self::EpochRejected => "epoch_rejected",
+            #[cfg(any(test, feature = "auth-local-application-authorization"))]
             Self::Expired => "expired",
             #[cfg(any(test, feature = "auth-local-application-authorization"))]
             Self::GenerationAdvanced => "generation_advanced",
-            Self::InvalidRequest => "invalid_request",
-            Self::ProofInvalid => "proof_invalid",
-            Self::Replaced => "replaced",
-            Self::Replay => "replay",
-            Self::ReplayConflict => "replay_conflict",
-            Self::Request => "request",
-            Self::StateUnavailable => "state_unavailable",
             Self::VerifyFailed => "verify_failed",
         }
     }
@@ -258,74 +225,6 @@ mod tests {
         assert_eq!(
             auth_metric_count(surface, operation, outcome, reason),
             expected
-        );
-    }
-
-    fn assert_session_metric_count(
-        operation: AuthMetricOperation,
-        outcome: AuthMetricOutcome,
-        reason: AuthMetricReason,
-        expected: u64,
-    ) {
-        assert_metric_count(
-            AuthMetricSurface::ApplicationSession,
-            operation,
-            outcome,
-            reason,
-            expected,
-        );
-    }
-
-    #[test]
-    fn application_session_metrics_use_only_bounded_outcome_dimensions() {
-        AuthMetrics::reset();
-
-        record_application_session_establishment_started();
-        record_application_session_created();
-        record_application_session_replaced();
-        record_application_session_idempotent();
-        record_application_session_rejected(AuthMetricReason::Capacity);
-        record_application_session_clear(true);
-        record_application_session_clear(false);
-        record_application_session_expired_observation();
-        record_application_session_cleanup(2);
-        record_application_session_generation_invalidation();
-
-        assert_session_metric_count(
-            AuthMetricOperation::Establish,
-            AuthMetricOutcome::Started,
-            AuthMetricReason::Request,
-            1,
-        );
-        assert_session_metric_count(
-            AuthMetricOperation::Establish,
-            AuthMetricOutcome::Completed,
-            AuthMetricReason::Created,
-            1,
-        );
-        assert_session_metric_count(
-            AuthMetricOperation::Establish,
-            AuthMetricOutcome::Idempotent,
-            AuthMetricReason::Replay,
-            1,
-        );
-        assert_session_metric_count(
-            AuthMetricOperation::Cleanup,
-            AuthMetricOutcome::Completed,
-            AuthMetricReason::Expired,
-            2,
-        );
-        assert_session_metric_count(
-            AuthMetricOperation::Clear,
-            AuthMetricOutcome::Idempotent,
-            AuthMetricReason::Cleared,
-            1,
-        );
-        assert_session_metric_count(
-            AuthMetricOperation::GenerationInvalidation,
-            AuthMetricOutcome::Completed,
-            AuthMetricReason::GenerationAdvanced,
-            1,
         );
     }
 

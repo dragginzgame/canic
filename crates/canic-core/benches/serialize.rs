@@ -2,10 +2,8 @@ use canic_contracts::{
     dto::auth::{
         ChainKeyAlgorithm, ChainKeyBatchHeaderV1, ChainKeyBatchWitnessStepV1,
         ChainKeyBatchWitnessV1, ChainKeyDelegationCertV1, ChainKeyKeyId, ChainKeyRootSignatureV1,
-        DelegatedRoleGrant, DelegatedToken, DelegatedTokenClaims, DelegationAudience,
-        DelegationCert, DelegationProof, IcCanisterSignatureProofV1,
-        IcChainKeyBatchSignatureProofV1, IssuerProof, IssuerProofAlgorithm, IssuerProofBinding,
-        RootProof,
+        DelegatedRoleGrant, DelegationAudience, DelegationCert, DelegationProof,
+        IcChainKeyBatchSignatureProofV1, IssuerProofAlgorithm, IssuerProofBinding, RootProof,
     },
     ids::{CanisterRole, CanonicalNetworkId, FleetId, FleetKey},
 };
@@ -20,55 +18,26 @@ fn fleet() -> FleetKey {
     }
 }
 
-fn bench_delegated_token_serialization(criterion: &mut Criterion) {
-    let token = sample_delegated_token();
-    let encoded = candid::encode_one(&token).expect("sample delegated token must encode");
+fn bench_delegation_proof_serialization(criterion: &mut Criterion) {
+    let proof = DelegationProof {
+        cert: sample_cert(),
+        root_proof: sample_chain_key_root_proof(),
+    };
+    let encoded = candid::encode_one(&proof).expect("sample delegation proof must encode");
 
-    criterion.bench_function("delegated_token_candid_encode", |bench| {
-        bench.iter(|| candid::encode_one(black_box(&token)).expect("token encodes"));
+    criterion.bench_function("delegation_proof_candid_encode", |bench| {
+        bench.iter(|| candid::encode_one(black_box(&proof)).expect("proof encodes"));
     });
 
-    criterion.bench_function("delegated_token_candid_decode", |bench| {
+    criterion.bench_function("delegation_proof_candid_decode", |bench| {
         bench.iter(|| {
-            candid::decode_one::<DelegatedToken>(black_box(&encoded)).expect("token decodes")
+            candid::decode_one::<DelegationProof>(black_box(&encoded)).expect("proof decodes")
         });
     });
 
-    criterion.bench_function("delegated_token_encoded_size_bytes", |bench| {
+    criterion.bench_function("delegation_proof_encoded_size_bytes", |bench| {
         bench.iter(|| black_box(encoded.len()));
     });
-}
-
-fn sample_delegated_token() -> DelegatedToken {
-    let cert = sample_cert();
-    let claims = DelegatedTokenClaims {
-        presenter: p(9),
-        subject: p(9),
-        issuer_pid: cert.issuer_pid,
-        cert_hash: [8; 32],
-        issued_at_ns: 120_000_000_000,
-        expires_at_ns: 180_000_000_000,
-        aud: DelegationAudience::Fleet(fleet()),
-        grants: vec![
-            grant("project_hub", &["read", "upload"]),
-            grant("project_instance", &["read"]),
-            grant("user_shard", &["session"]),
-        ],
-        nonce: [7; 16],
-        ext: Some(b"user_id=42;session=primary".to_vec()),
-    };
-
-    DelegatedToken {
-        claims,
-        proof: DelegationProof {
-            cert,
-            root_proof: sample_chain_key_root_proof(),
-        },
-        issuer_proof: IssuerProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
-            signature_cbor: vec![3; 256],
-            public_key_der: vec![4; 96],
-        }),
-    }
 }
 
 fn sample_chain_key_root_proof() -> RootProof {
@@ -159,6 +128,6 @@ const fn p(id: u8) -> Principal {
 
 fn main() {
     let mut criterion = Criterion::default();
-    bench_delegated_token_serialization(&mut criterion);
+    bench_delegation_proof_serialization(&mut criterion);
     criterion.final_summary();
 }

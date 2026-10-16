@@ -23,13 +23,13 @@ thread_local! {
 }
 
 pub(super) fn install(initial: u64) {
-    let memory = ic_memory::open_default_memory_manager_memory(KEY).expect("counter grant");
+    let memory = canic::memory::open(KEY);
     assert_eq!(memory.size(), 0, "fresh counter memory");
     COUNTER.with_borrow_mut(|counter| *counter = Some(Cell::init(memory, initial)));
 }
 
 pub(super) fn restore() {
-    let memory = ic_memory::open_default_memory_manager_memory(KEY).expect("counter grant");
+    let memory = canic::memory::open(KEY);
     assert!(memory.size() > 0, "retained counter memory");
     COUNTER.with_borrow_mut(|counter| *counter = Some(Cell::init(memory, 0)));
 }

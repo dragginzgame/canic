@@ -1,7 +1,5 @@
 use super::*;
 use canic_contracts::ids::BuildNetwork;
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
@@ -648,14 +646,8 @@ fn unique_temp_dir(label: &str) -> std::path::PathBuf {
 
 #[cfg(unix)]
 fn write_executable(path: &Path, contents: &str) {
-    let staged_path = path.with_extension("staged");
-    fs::write(&staged_path, contents).expect("write staged fake executable");
-    let mut permissions = fs::metadata(&staged_path)
-        .expect("read fake executable metadata")
-        .permissions();
-    permissions.set_mode(0o755);
-    fs::set_permissions(&staged_path, permissions).expect("make fake executable runnable");
-    fs::rename(staged_path, path).expect("publish closed fake executable");
+    ic_host_process::testing::write_executable_script(path, contents)
+        .expect("write closed executable test script");
 }
 
 #[test]

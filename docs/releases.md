@@ -1,4 +1,5 @@
 # Common release commands
+<!-- Shared companions: docs/cargo-publication.md -->
 
 Every `dragginzgame` repository, including Shared Tooling and repositories without
 a publishable package, must provide these Make targets:
@@ -564,8 +565,11 @@ outside immutable shared snapshots until adopting a reviewed upstream revision.
 
 ### Fixture ownership
 
-Consumer adoption runs the canonical `scripts/ci/test-release-runner.sh` suite.
-It simulates repository and release effects; its native Git delegate accepts only
+Shared Tooling owns the canonical `scripts/ci/test-release-runner.sh` regression
+suite. Consumers qualify their actual Make/metadata/logger wiring, source admission
+and evidence custody against the reviewed snapshot; they need not rerun the
+producer's exhaustive implementation suites in every ordinary CI run. The owner
+suite simulates repository and release effects; its native Git delegate accepts only
 `hash-object --stdin`, without object writes. Any attempted real Git operation
 fails the suite even if a negative case consumes its immediate failure status.
 
@@ -660,6 +664,9 @@ plan is retained evidence and does not block the next release. A later failure
 from a separately chained command does not undo that successful branch/tag push.
 Package publication requires a consumer-owned publication command and an eligible
 package; do not append `make publish` automatically to the standard release flow.
+For a crates.io package using the workspace's stable version, consumers may reuse
+the [read-only publication admission helper](verification-helpers.md#read-only-cargo-publication-admission)
+while keeping upload authority, package policy and recovery local.
 
 ## Shared changelog finalization
 
@@ -682,15 +689,16 @@ rollback, receipts and exact prepared-payload checks.
 Pass the saved previous version even after package metadata has been bumped.
 Undated numbered sections at or below that version remain history. One pending
 numbered section must agree with the target; competing candidates or a target
-already dated differently are conflicts. The helper also understands the older
-`Draft` input, but maintained notes follow the numbered-draft rules. With no
-draft it creates the selected heading; it does not invent release-note content.
+already dated differently are conflicts. The selected numbered candidate must
+be the first release heading; `Draft` and misplaced candidates are rejected.
+With no candidate, the first release heading must identify the saved previous
+version; the helper then inserts the selected heading without inventing content.
 
 Horizontal spaces and tabs in headings are normalized only for classification;
 an already-dated target with extra separator whitespace cannot become a second
 release entry. Retained content keeps its original bytes, including a historical
-body without a terminal newline. A draft moved from EOF gains only the separator
-needed before the following history. The helper reads the document as one awk
+body without a terminal newline. Candidates are never moved from history.
+The helper reads the document as one awk
 record using regular-expression `RS`, supported by the system awks on the host
 matrix; it does not depend on GNU awk's `RT` extension.
 
@@ -704,6 +712,11 @@ and reconcile prose requirements with the [changelog rules](../rules/changelogs.
 Do not silently change a consumer's refusal or recovery behavior during adoption.
 
 ## Adoption and verification
+
+For a caller-admitted Cargo upload or dry run, the optional
+[publication attempt helper](cargo-publication.md) records one exact selection
+and command. It does not replace consumer registry/provenance admission or
+partial-upload recovery, and release execution never invokes it implicitly.
 
 The Makefile pattern specifies a contract; adding this document does not install
 helpers or prove consumer adoption. Consumers implement or align their targets,
@@ -734,3 +747,94 @@ of live package publication or a native host release.
 Supplement effect/interruption stubs with real Git index/tree checks at staging
 boundaries. Shared Tooling's metadata fixture reuses existing history without
 creating commits and exercises the actual adapter's failed-log retention.
+
+## Pure workspace-version rendering
+
+`scripts/ci/render-cargo-workspace-version.pl SOURCE PREVIOUS CANDIDATE [WORKSPACE_INPUT_JSON]` emits
+the complete candidate manifest without changing the source. It recognizes one
+literal bare `workspace.package` table and one double-quoted stable version,
+including indentation, table comments and CRLF. Surrounding bytes and unrelated
+versions remain unchanged. Missing, duplicate, unsupported or mismatched literal
+selectors fail before candidate output; version components compare as strings.
+
+This helper is not a TOML parser or a release transaction. The caller admits the
+source with its existing TOML owner and independently checks the candidate's
+meaning before installation. Keep file custody, source identity, metadata roster,
+dependency selection, rollback and interruption recovery in the consumer. A
+saved-source renderer must not be replaced by the mutating adapter below solely
+to share version mechanics
+([#159](https://github.com/dragginzgame/shared-tooling/issues/159)).
+
+The optional input contains the admitted parsed root `manifest` and complete
+workspace `members` with `name` and absolute `manifest_path`. The renderer updates
+owned path-dependency requirements while preserving aliases, requirement precision
+and operators. Composite ranges remain unchanged for the caller's graph check.
+By default, dependency ownership is resolved against the live manifest directory;
+missing ownership evidence refuses rather than silently omitting an edit.
+
+For a saved manifest, also supply `source_root`: the absolute workspace identity
+from the same admitted source as the manifest and member records. The renderer
+then compares lexical dependency paths with recorded member identities, independent
+of the scratch file location or whether the old workspace still exists. It does
+not inspect today's filesystem or reconstruct a workspace. A path for a named
+workspace member that disagrees with its recorded identity refuses before output;
+duplicate member identities and invalid paths also refuse. Source admission must
+establish these lexical identities; symlink-dependent ownership that cannot be
+represented by this contract is unsupported, not guessed or silently skipped.
+The caller supplies complete, source-bound records and independently admits the
+rendered candidate. This helper does not authenticate the supplied JSON.
+
+Candidate comparison remains a separate consumer
+contract. An exact saved-byte comparison must not become parsed-TOML equality
+merely to share code; a consumer admitting harmless formatting differences must
+not silently gain byte-exact rejection either. Keep independent parsed-candidate
+checks where they protect the renderer boundary. The shared literal renderer
+does not replace those checks or generalize into a selector/comparator framework
+without another demonstrated matching contract.
+
+Select this helper as a snapshot entrypoint when invoking it directly. Commit
+and qualify its owner before adopting it; a dirty producer draft is not an
+immutable consumer export.
+
+## Coordinated Cargo metadata adapter
+
+`scripts/ci/cargo-release-metadata.sh prepare|check PRIMARY_PACKAGE` owns
+the reusable Cargo-only metadata flow. Adopt it as a snapshot root; its version
+reader, lock rewriter and changelog finalizer are required companions. It requires
+root `Cargo.toml`, `Cargo.lock`, `CHANGELOG.md`, workspace-inherited package versions
+and no source-less packages outside the workspace. It admits actual workspace
+and lock identities before mutation; independently versioned packages need their
+consumer-owned adapter. Existing adapters are not replaced by adoption alone.
+
+The caller supplies `RELEASE_PREVIOUS`, `RELEASE_VERSION`, `RELEASE_DATE`, prepared
+Cargo, Perl, jq and Mike Farah yq. Preparation uses the locked offline graph
+and a literal root-version renderer. It independently parses the candidate before
+installation, preserves manifest layout, file modes and external lock selections,
+restores all three original files on failure and retains failure custody. It does
+not run Cargo-edit or Cargo-sort; consumer ordering gates remain separate.
+Catchable INT/TERM interruptions restore the same originals and preserve their
+exit status. Unsupported literal layouts refuse before installation.
+The `check` operation uses `RELEASE_COMMIT` when selected, exporting that exact
+committed source instead of reading newer working metadata. No version selection,
+fetch, tool installation, Git staging/ref mutation or publication is implicit.
+Consumer preflight and late source/index admission remain outside this helper.
+
+IC Metrics adopts the corrected helper from committed Shared Tooling 0.11.1
+through normal snapshot distribution, retaining its local policy in a thin adapter.
+Other Cargo consumers must retain their own file set, recovery and metadata policy
+when qualifying this adapter; it is not a fleet-wide automatic replacement.
+
+### Pure release input admission
+
+`scripts/ci/validate-release-inputs.pl version X.Y.Z` accepts canonical stable
+versions with decimal u64 components and prints those three components separated
+by tabs. It compares large values as strings, preserving integers above 2^53.
+`date YYYY-MM-DD` validates the Gregorian date (years 0001 through 9999) and
+prints its exact spelling. Both refuse extra whitespace, CR/LF and malformed
+values, perform no file IO and select no release effects. Consumer adapters can
+use this same grammar at each saved-input/receipt boundary.
+
+The shell increment helper retains its narrower signed arithmetic headroom;
+admission of a u64 version is not permission to increment it through Bash.
+The runner admits generated and retained dates before dispatching release
+callbacks. Consumers still own metadata, selected identity, receipts and replay.

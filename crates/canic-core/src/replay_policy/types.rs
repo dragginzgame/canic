@@ -147,7 +147,6 @@ pub enum CostClass {
     None,
     RootCanisterSignaturePrepare,
     RootChainKeySigning,
-    IssuerCanisterSignaturePrepare,
     ManagementDeployment,
     ValueTransfer,
     DurablePublish,

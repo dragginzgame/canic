@@ -20,7 +20,7 @@ use crate::fleet_ensure::{
         lock_capacity_import_operation,
     },
 };
-use ic_host_fs::durable::write_bytes;
+use ic_host_fs::durable::{PublicationMode, WriteOptions, write_bytes};
 use ic_host_fs::read::read_file_no_follow;
 
 use std::{
@@ -149,8 +149,15 @@ impl CapacityImportJournalStore {
                     }
                     Ok(_) => {}
                     Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                        ic_host_fs::durable::create_new_bytes_with_parents(&archive, &bytes)
-                            .map_err(crate::publication::ops::io_error)?;
+                        ic_host_fs::durable::write_bytes(
+                            &archive,
+                            WriteOptions {
+                                mode: PublicationMode::CreateNew,
+                                permissions: 0o666,
+                            },
+                            &bytes,
+                        )
+                        .map_err(crate::publication::ops::io_error)?;
                     }
                     Err(error) => return Err(error.into()),
                 }
@@ -182,7 +189,15 @@ impl CapacityImportJournalStore {
         if bytes.len() > MAXIMUM_JOURNAL_BYTES {
             return Err(CapacityImportJournalError::Integrity);
         }
-        write_bytes(&self.path, &bytes).map_err(crate::publication::ops::io_error)?;
+        write_bytes(
+            &self.path,
+            WriteOptions {
+                mode: PublicationMode::Replace,
+                permissions: 0o666,
+            },
+            &bytes,
+        )
+        .map_err(crate::publication::ops::io_error)?;
         Ok(())
     }
 }

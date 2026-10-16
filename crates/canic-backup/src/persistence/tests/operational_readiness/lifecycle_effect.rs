@@ -8,7 +8,7 @@ use super::{hold_at_acknowledged_barrier, kill_child_at_acknowledged_barrier};
 use crate::{
     execution::{BackupExecutionJournal, BackupExecutionOperationState},
     operational_readiness::manifest::assert_case_defined,
-    persistence::{BackupLayout, CommandLifetimeHandle},
+    persistence::{BackupLayout, CommandLifetimeLock},
     plan::{BackupExecutionPreflightReceipts, BackupPlan},
     runner::{
         BackupRunnerCanisterStatus, BackupRunnerCommandError, BackupRunnerConfig,
@@ -410,6 +410,7 @@ fn prepared_pending_stop(
         .next_ready_operation()
         .cloned()
         .expect("ready stop operation");
+    crate::test_support::retain_original_command(&layout, &mut pending, stop.sequence);
     pending
         .mark_operation_pending_at(stop.sequence, Some("unix:20".to_string()))
         .expect("mark stop pending");
@@ -502,7 +503,7 @@ impl BackupRunnerExecutor for LifecycleEffectExecutor {
     fn stop_canister(
         &mut self,
         canister_id: &str,
-        _command_lifetime: CommandLifetimeHandle,
+        _command_lifetime: &mut CommandLifetimeLock,
     ) -> Result<(), BackupRunnerCommandError> {
         self.commands.push(format!("stop:{canister_id}"));
         write_state(&self.state_path, "Stopped");
@@ -515,7 +516,7 @@ impl BackupRunnerExecutor for LifecycleEffectExecutor {
     fn start_canister(
         &mut self,
         canister_id: &str,
-        _command_lifetime: CommandLifetimeHandle,
+        _command_lifetime: &mut CommandLifetimeLock,
     ) -> Result<(), BackupRunnerCommandError> {
         self.commands.push(format!("start:{canister_id}"));
         if self.reject_start {
@@ -540,7 +541,7 @@ impl BackupRunnerExecutor for LifecycleEffectExecutor {
     fn create_snapshot(
         &mut self,
         canister_id: &str,
-        command_lifetime: CommandLifetimeHandle,
+        command_lifetime: &mut CommandLifetimeLock,
     ) -> Result<BackupRunnerSnapshot, BackupRunnerCommandError> {
         self.delegate.create_snapshot(canister_id, command_lifetime)
     }
@@ -550,7 +551,7 @@ impl BackupRunnerExecutor for LifecycleEffectExecutor {
         canister_id: &str,
         snapshot_id: &str,
         artifact_path: &Path,
-        command_lifetime: CommandLifetimeHandle,
+        command_lifetime: &mut CommandLifetimeLock,
     ) -> Result<(), BackupRunnerCommandError> {
         self.delegate
             .download_snapshot(canister_id, snapshot_id, artifact_path, command_lifetime)

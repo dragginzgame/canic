@@ -45,7 +45,7 @@ pub struct CapacityImportSourceBinding {
     pub canister_id: Principal,
     pub subnet: SubnetId,
     pub controllers: Vec<Principal>,
-    #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub module_sha256: Option<[u8; 32]>,
     pub canister_version: u64,
     pub stopped: bool,
@@ -84,7 +84,7 @@ pub struct CapacityImportPlanRecord {
     /// Explicit supplementary credits, including an empty array for an uncredited review.
     pub funding_credits: Vec<funding::CapacityImportFundingCreditRecord>,
     pub schema_version: u16,
-    #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub admission: Option<admission::CapacityImportAdmissionRecord>,
     pub authority: CapacityImportAuthority,
     pub sources: Vec<CapacityImportSourceRecord>,
@@ -102,9 +102,9 @@ pub struct CapacityImportHandoffRecord {
     pub canister_id: Principal,
     /// Authenticated terminal status remains attached to its original signed ingress.
     pub retirements: Vec<retirement::CapacityImportHandoffRetirementRecord>,
-    #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub effect: Option<crate::fleet_ensure::model::EffectRecord>,
-    #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub request: Option<CapacityImportHandoffRequestRecord>,
     #[serde(with = "crate::fleet_ensure::model::option_u128_text")]
     pub before_reserved_cycles: Option<u128>,
@@ -118,12 +118,12 @@ pub struct CapacityImportHandoffRecord {
 #[serde(deny_unknown_fields)]
 pub struct CapacityImportJournalRecord {
     pub plan: CapacityImportPlanRecord,
-    #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub operation: Option<operation::CapacityImportOperationRecord>,
     /// Explicit approval of this digest never authorizes another source or allowance.
     pub approved: bool,
     /// Authenticated Root reservation evidence is retained before any host handoff intent.
-    #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub reservation: Option<CapacityImportReservationRecord>,
     pub handoffs: Vec<CapacityImportHandoffRecord>,
 }

@@ -2,7 +2,7 @@
 
 use crate::{fleet_ensure::model::DesiredFleet, local_fleet::LocalFleetError, release_set};
 use canic_core::cdk::utils::hash::{hex_bytes, sha256_hex};
-use ic_host_fs::durable;
+use ic_host_fs::durable::{self, PublicationMode, WriteOptions};
 use std::path::Path;
 
 fn failure(error: impl std::fmt::Display) -> LocalFleetError {
@@ -79,6 +79,14 @@ fn publish(
         return Err(LocalFleetError::Identity);
     }
     let destination = crate::icp::local_canister_candid_path(workspace, environment, role);
-    durable::write_bytes(&destination, &bytes).map_err(crate::publication::ops::io_error)?;
+    durable::write_bytes(
+        &destination,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &bytes,
+    )
+    .map_err(crate::publication::ops::io_error)?;
     Ok(())
 }

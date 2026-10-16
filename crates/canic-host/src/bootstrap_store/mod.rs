@@ -15,7 +15,7 @@ use crate::{
         compiled::CompiledCanisterArtifact,
     },
     cargo_command,
-    cargo_metadata::cargo_metadata,
+    cargo_observation::cargo_metadata,
     fleet_package,
     fleet_package::{
         FleetPackageSpec, append_infrastructure_profile_args, resolved_canic_package,
@@ -171,6 +171,7 @@ fn run_wasm_store_cargo_build(
     );
 
     if output.status.success() {
+        crate::canister_build::retain_cargo_include_exports(context, &output.stdout)?;
         return Ok(());
     }
 
@@ -199,6 +200,7 @@ fn wasm_store_cargo_build_command(
             "build",
             "--lib",
             "--locked",
+            "--message-format=json-render-diagnostics",
             "--manifest-path",
             &manifest_path.display().to_string(),
             "--target",
@@ -248,7 +250,7 @@ fn resolve_bootstrap_wasm_store_source(
     fleet_package::materialize(
         &manifest,
         &context.workspace_root,
-        &canic.manifest_path,
+        canic.manifest_path.as_std_path(),
         &dependencies,
         &FleetPackageSpec {
             package: GENERATED_WRAPPER_PACKAGE_NAME,
@@ -263,11 +265,12 @@ fn resolve_bootstrap_wasm_store_source(
     Ok(BootstrapWasmStoreSource {
         manifest_path: manifest,
         package_name: GENERATED_WRAPPER_PACKAGE_NAME.to_string(),
-        package_version: canic.version.clone(),
+        package_version: canic.version.to_string(),
         canonical_did_path: canic
             .manifest_path
             .parent()
             .ok_or("Canic manifest has no parent")?
-            .join("candid/wasm_store.did"),
+            .join("candid/wasm_store.did")
+            .into_std_path_buf(),
     })
 }

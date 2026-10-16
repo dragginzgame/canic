@@ -31,7 +31,11 @@ auth-issuer-canister-sig-create = [
 ]
 auth-issuer-canister-sig-verify = ["ic-auth/canister-signature-verification"]
 auth-delegated-token-verify = ["auth-chain-key-ecdsa", "auth-issuer-canister-sig-verify"]
-auth-local-application-authorization = ["auth-delegated-token-verify", "ic-auth/sessions"]
+auth-local-application-authorization = [
+    "auth-delegated-token-verify",
+    "ic-auth/session-restore",
+    "ic-auth/portable-signature-verification",
+]
 auth-root-delegation-state = []
 internal-test-fixtures = []
 
@@ -66,8 +70,10 @@ candid = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
+ed25519-dalek = { workspace = true }
 futures = { workspace = true }
-ic-auth = { workspace = true, features = ["sessions"] }
+ic-auth = { workspace = true, features = ["session-restore", "token-verification", "portable-signature-verification"] }
+ic-memory = { workspace = true, features = ["test-support"] }
 k256 = { workspace = true }
 syn = { workspace = true, features = ["full", "visit"] }
 

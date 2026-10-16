@@ -23,6 +23,30 @@ const BACKUP_EXECUTION_JOURNAL_VERSION: u16 = 1;
 const PREFLIGHT_NOT_ACCEPTED: &str = "preflight-not-accepted";
 
 impl BackupExecutionJournal {
+    /// Retain one exact original command identity before any external dispatch.
+    pub(crate) fn retain_command_custody(
+        &mut self,
+        record: &ic_backup::model::command_custody::CommandCustodyRecord,
+    ) -> Result<(), BackupExecutionJournalError> {
+        if let Some(original) = self
+            .command_custody
+            .iter()
+            .find(|original| original.operation_sequence() == record.operation_sequence())
+        {
+            return if original == record {
+                Ok(())
+            } else {
+                Err(BackupExecutionJournalError::InvalidCommandCustody)
+            };
+        }
+        self.command_custody.push(record.clone());
+        if let Err(error) = self.validate() {
+            self.command_custody.pop();
+            return Err(error);
+        }
+        Ok(())
+    }
+
     /// Build an execution journal from a validated backup plan.
     pub fn from_plan(plan: &BackupPlan) -> Result<Self, BackupExecutionJournalError> {
         plan.validate()
@@ -40,6 +64,7 @@ impl BackupExecutionJournal {
             preflight_accepted: false,
             restart_required: false,
             operations,
+            command_custody: Vec::new(),
             operation_receipts: Vec::new(),
         };
         journal.refresh_blocked_operations();
@@ -80,6 +105,25 @@ impl BackupExecutionJournal {
                         });
                     }
                 }
+            }
+        }
+        let mut command_sequences = std::collections::BTreeSet::new();
+        for record in &self.command_custody {
+            let operation = self
+                .operations
+                .iter()
+                .find(|operation| operation.sequence as u64 == record.operation_sequence());
+            let external_operation = operation.is_some_and(|operation| {
+                matches!(
+                    operation.kind,
+                    BackupOperationKind::Stop
+                        | BackupOperationKind::CreateSnapshot
+                        | BackupOperationKind::Start
+                        | BackupOperationKind::DownloadSnapshot
+                )
+            });
+            if !external_operation || !command_sequences.insert(record.operation_sequence()) {
+                return Err(BackupExecutionJournalError::InvalidCommandCustody);
             }
         }
         for receipt in &self.operation_receipts {

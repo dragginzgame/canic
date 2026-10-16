@@ -12,6 +12,7 @@ use crate::{
 };
 use canic_contracts::ids::BuildNetwork;
 use ic_build::artifacts::CapturedArtifact;
+use ic_host_fs::durable::{PublicationMode, WriteOptions};
 use std::path::{Path, PathBuf};
 
 /// Compiled input and private output metadata awaiting the existing finalization pipeline.
@@ -73,7 +74,14 @@ impl CompiledCanisterArtifact {
             toolchain,
         )?;
         if let Some(path) = &self.profile_marker {
-            ic_host_fs::durable::write_bytes(path, self.profile.target_dir_name().as_bytes())?;
+            ic_host_fs::durable::write_bytes(
+                path,
+                WriteOptions {
+                    mode: PublicationMode::Replace,
+                    permissions: 0o666,
+                },
+                self.profile.target_dir_name().as_bytes(),
+            )?;
         }
         Ok(self.output)
     }

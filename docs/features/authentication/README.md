@@ -20,32 +20,19 @@ application token never becomes controller or Fleet authority.
 
 ## What It Provides
 
-- guards that protect public canister methods by caller, infrastructure role,
-  or represented user
-- reusable signed tokens that a receiving canister can verify locally
-- root-managed chain-key delegation proof renewal
-- issuer canister-signature proofs and bounded replay protection
-- optional root-signed role attestation
-- session identities that do not replace the calling canister's infrastructure
-  permissions
+- synchronous caller, topology and infrastructure-authority guards
+- Root-managed chain-key delegation proof provisioning and renewal
+- Root-signed role attestations with local verification
 
-Cargo features and `canic.toml` settings are both explicit. Issuer and verifier
-roles must opt into the runtime capabilities they use. Verifiers declare
-`auth.allowed_token_scopes`; an omitted ceiling accepts no grant. Local session
-scopes must be a subset of that ceiling.
+Portable application authentication uses Fleet Root-managed enrollment and
+IC Auth's session engine. Its endpoint integration is unfinished; application
+session admission is unavailable. Bounded storage and restoration fixtures are
+implementation evidence, not a live login service. Track completion in
+[#491](https://github.com/dragginzgame/canic/issues/491).
 
-IC Auth owns full token verification, session admission, exact retries and live
-session checks. Canic supplies protected Fleet/role/Root authority and commits
-one session/replay pair synchronously. Same-release restoration retains the
-original lease and proof consumption; retry never extends the lease. Status and
-audit reads check current authority before reporting an active session. Across
-releases, rebuild and cleanly reinstall the maintained family.
-
-Endpoint authentication and authorization run synchronously using local state
-and supplied signature proofs. Custom guards implement
-`canic::access::AccessCheck`; neither builtin nor custom admission awaits a
-remote authority. Use synchronous handlers when their application work does
-not await. Proof issuance and renewal retain async calls where needed.
+Custom guards implement synchronous `canic::access::AccessCheck`. Admission uses
+local state and supplied proofs; issuance and renewal may perform asynchronous
+calls outside admission.
 
 ## Boundary
 
@@ -57,7 +44,7 @@ an application token into controller or Fleet authority.
 ## Continue From Here
 
 - [Authentication architecture](../../architecture/authentication.md)
-- [Receiver-local caller authority proposal](../../architecture/authentication.md#receiver-local-caller-authority--design-proposal-2026-10-03)
+- [Receiver-local caller authority](../../architecture/authentication.md#receiver-local-caller-authority--accepted-contract)
 - [Delegated-signature contract](../../contracts/AUTH_DELEGATED_SIGNATURES.md)
 - [Access architecture](../../contracts/ACCESS_ARCHITECTURE.md)
 - [Authentication configuration](../../../CONFIG.md#authdelegated_tokens)

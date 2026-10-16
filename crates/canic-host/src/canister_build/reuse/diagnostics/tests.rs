@@ -1,5 +1,6 @@
 use super::*;
 use crate::test_support::temp_dir;
+use ic_host_fs::durable::{PublicationMode, WriteOptions};
 use std::{env, fs};
 
 #[test]
@@ -142,7 +143,15 @@ fn missing_corrupt_and_unsafe_diagnostics_remain_bounded_and_optional() {
         current.explain_miss(&root),
         "no comparable prior input evidence"
     );
-    write_bytes(&root.join("last-input-diagnostics.json"), b"invalid").unwrap();
+    write_bytes(
+        &root.join("last-input-diagnostics.json"),
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        b"invalid",
+    )
+    .unwrap();
     assert_eq!(
         current.explain_miss(&root),
         "no comparable prior input evidence"

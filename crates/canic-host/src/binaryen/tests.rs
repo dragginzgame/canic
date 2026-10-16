@@ -2,9 +2,6 @@ use super::*;
 
 use std::{fs, path::PathBuf, time::SystemTime};
 
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
-
 #[test]
 fn repository_binaryen_authority_matches_every_supported_projection() {
     let pins = include_str!(concat!(
@@ -81,13 +78,12 @@ fn same_version_executable_with_wrong_digest_is_rejected_before_execution() {
     let root = temp_root("wrong-digest");
     fs::create_dir_all(&root).expect("create test root");
     let executable = root.join("wasm-opt");
-    fs::write(
+    write_executable(
         &executable,
-        crate::test_support::tool_script("#!/bin/sh\nprintf 'this must not execute' > execution-marker\nprintf '@BINARYEN_IDENTITY@\\n'\n"),
-    )
-    .expect("write fake executable");
-    fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))
-        .expect("make fake executable runnable");
+        &crate::test_support::tool_script(
+            "#!/bin/sh\nprintf 'this must not execute' > execution-marker\nprintf '@BINARYEN_IDENTITY@\\n'\n",
+        ),
+    );
 
     let error = admit_binaryen_executable(&executable, &"0".repeat(64), None)
         .expect_err("wrong executable digest must reject");
@@ -109,13 +105,10 @@ fn admitted_executable_records_exact_path_version_and_digest() {
     let root = temp_root("admitted");
     fs::create_dir_all(&root).expect("create test root");
     let executable = root.join("wasm-opt");
-    fs::write(
+    write_executable(
         &executable,
-        crate::test_support::tool_script("#!/bin/sh\nprintf '@BINARYEN_IDENTITY@\\n'\n"),
-    )
-    .expect("write fake executable");
-    fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))
-        .expect("make fake executable runnable");
+        &crate::test_support::tool_script("#!/bin/sh\nprintf '@BINARYEN_IDENTITY@\\n'\n"),
+    );
     let digest = sha256_file(&executable).expect("hash fake executable");
 
     let admitted =
@@ -202,13 +195,10 @@ fn staged_installer_closes_its_writer_before_executable_admission() {
     let root = temp_root("staged-admission");
     fs::create_dir_all(&root).expect("create test root");
     let candidate = root.join("candidate-wasm-opt");
-    fs::write(
+    write_executable(
         &candidate,
-        crate::test_support::tool_script("#!/bin/sh\nprintf '@BINARYEN_IDENTITY@\\n'\n"),
-    )
-    .expect("write fake optimizer candidate");
-    fs::set_permissions(&candidate, fs::Permissions::from_mode(0o755))
-        .expect("make fake optimizer candidate runnable");
+        &crate::test_support::tool_script("#!/bin/sh\nprintf '@BINARYEN_IDENTITY@\\n'\n"),
+    );
     let digest = sha256_file(&candidate).expect("hash fake optimizer candidate");
     let destination = root.join("bin/wasm-opt");
 
@@ -238,9 +228,8 @@ fn temp_root(label: &str) -> PathBuf {
 
 #[cfg(unix)]
 fn write_executable(path: &Path, contents: &str) {
-    fs::write(path, contents).expect("write fake executable");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755))
-        .expect("make fake executable executable");
+    ic_host_process::testing::write_executable_script(path, contents)
+        .expect("write closed executable test script");
 }
 
 #[cfg(unix)]

@@ -90,7 +90,7 @@ pub const CANIC_WASM_CHUNK_REQUEST_MAX_BYTES: usize = CANIC_WASM_CHUNK_BYTES + 6
 #[cfg(test)]
 const _: () = {
     fn __canic_memory_test_bootstrap() {
-        crate::memory::bootstrap_default_memory_manager().expect("test stable-memory bootstrap");
+        crate::memory::bootstrap_framework().expect("test stable-memory bootstrap");
     }
 
     #[crate::__reexports::ctor::ctor(

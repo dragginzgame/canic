@@ -1,21 +1,17 @@
 #!/usr/bin/env bash
-# Shared companions: scripts/dev/gh-ci.sh
+# Shared companions: scripts/dev/gh-ci.sh scripts/ci/fixture-lifecycle.sh
 set -euo pipefail
 ROOT="$0"
 [[ "$ROOT" == /* ]] || ROOT="$PWD/$ROOT"
 ROOT="$(cd -P "${ROOT%/*}/../.." && printf '%s/.' "$PWD")"
 ROOT="${ROOT%/.}"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/gh-ci-test.XXXXXX")"
-# Bash 3.2 can enter EXIT with status zero after nounset; require completion too.
+fixture="$(CDPATH="" cd -P -- "$fixture" && printf '%s/.' "$PWD")"
+fixture="${fixture%/.}"
+# shellcheck source=scripts/ci/fixture-lifecycle.sh
+source "$ROOT/scripts/ci/fixture-lifecycle.sh"
 fixture_complete=false
-finish() {
-    local status=$?
-    [[ "$fixture_complete" == true || "$status" != 0 ]] || status=1
-    if [[ "$status" == 0 ]]; then rm -rf "$fixture"
-    else echo "CI inspection fixtures retained: $fixture" >&2; fi
-    exit "$status"
-}
-trap finish EXIT
+trap 'fixture_finish "$?" "$fixture" "CI inspection fixtures retained"' EXIT
 mkdir "$fixture/bin"
 export GH_CI_TEST_LOG="$fixture/calls"
 export GH_CI_TEST_SHA=0123456789012345678901234567890123456789
@@ -154,6 +150,37 @@ refuse 2 --all-workflows --logs
 refuse 2 --limit 0
 refuse 2 --commit
 [[ ! -s "$GH_CI_TEST_LOG" ]] || exit 1
+
+# Invalid explicit selections must not fall back, ignore filters or become CLI
+# flags. Refuse them before either local Git or authenticated GitHub probes.
+for selector in --branch --workflow --run; do
+    refuse 2 "$selector" ''
+    [[ ! -s "$GH_CI_TEST_LOG" ]] || exit 1
+    refuse 2 "$selector"
+    [[ ! -s "$GH_CI_TEST_LOG" ]] || exit 1
+done
+for id in 0 -1 1.5 abc --help $'17\n18'; do
+    refuse 2 --run "$id"
+    [[ ! -s "$GH_CI_TEST_LOG" ]] || exit 1
+done
+for selector in --list --failed; do
+    refuse 2 --run 17 "$selector"
+    [[ ! -s "$GH_CI_TEST_LOG" ]] || exit 1
+done
+for selector in --branch --workflow; do
+    refuse 2 --run 17 "$selector" main
+    [[ ! -s "$GH_CI_TEST_LOG" ]] || exit 1
+done
+refuse 2 --list --logs
+[[ ! -s "$GH_CI_TEST_LOG" ]] || exit 1
+run --run 17
+grep -Fx 'gh <run> <view> <17> <--verbose>' "$GH_CI_TEST_LOG"
+if grep -E 'git |gh <run> <list>' "$GH_CI_TEST_LOG"; then exit 1; fi
+for id in 0 abc --help $'17\n18'; do
+    GH_CI_TEST_ID="$id" refuse 1 --branch main
+    grep -F 'invalid run identity' "$fixture/output"
+    if grep -F 'gh <run> <view>' "$GH_CI_TEST_LOG"; then exit 1; fi
+done
 
 # Partial output on failed observations must never dispatch run inspection.
 GH_CI_TEST_GIT_STATUS=9 refuse 1 --commit HEAD --all-workflows

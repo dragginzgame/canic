@@ -4,7 +4,7 @@ use crate::{
         BackupExecutionResumeSummary,
     },
     journal::ArtifactState,
-    persistence::CommandLifetimeHandle,
+    persistence::{CommandLifetimeLock, CommandLifetimeLockError},
     plan::{BackupExecutionPreflightReceipts, BackupPlan},
 };
 use serde::Serialize;
@@ -56,21 +56,21 @@ pub trait BackupRunnerExecutor {
     fn stop_canister(
         &mut self,
         canister_id: &str,
-        command_lifetime: CommandLifetimeHandle,
+        command_lifetime: &mut CommandLifetimeLock,
     ) -> Result<(), BackupRunnerCommandError>;
 
     /// Start one selected canister.
     fn start_canister(
         &mut self,
         canister_id: &str,
-        command_lifetime: CommandLifetimeHandle,
+        command_lifetime: &mut CommandLifetimeLock,
     ) -> Result<(), BackupRunnerCommandError>;
 
     /// Create one selected canister snapshot and return the typed snapshot receipt.
     fn create_snapshot(
         &mut self,
         canister_id: &str,
-        command_lifetime: CommandLifetimeHandle,
+        command_lifetime: &mut CommandLifetimeLock,
     ) -> Result<BackupRunnerSnapshot, BackupRunnerCommandError>;
 
     /// Download one selected snapshot into a temporary artifact directory.
@@ -79,7 +79,7 @@ pub trait BackupRunnerExecutor {
         canister_id: &str,
         snapshot_id: &str,
         artifact_path: &Path,
-        command_lifetime: CommandLifetimeHandle,
+        command_lifetime: &mut CommandLifetimeLock,
     ) -> Result<(), BackupRunnerCommandError>;
 }
 
@@ -145,6 +145,10 @@ impl BackupRunnerCommandError {
 
 #[derive(Debug, ThisError)]
 pub enum BackupRunnerError {
+    #[error("operation {sequence} omits original issued command custody")]
+    MissingOriginalCommandCustody { sequence: usize },
+    #[error(transparent)]
+    CommandCustody(#[from] CommandLifetimeLockError),
     #[error("backup execution journal is locked: {lock_path}")]
     JournalLocked { lock_path: String },
 

@@ -123,6 +123,8 @@ pub mod memory {
             "canic.core.auth.local_application_authorization.sessions.v1";
         pub const LOCAL_APPLICATION_REPLAYS_KEY: &str =
             "canic.core.auth.local_application_authorization.replays.v1";
+        pub const LOCAL_APPLICATION_LOGINS_KEY: &str =
+            "canic.core.auth.local_application_authorization.logins.v1";
         pub const DELEGATED_TOKEN_ISSUER_STATE_KEY: &str =
             "canic.core.auth.delegated_token_issuer.state.v1";
         pub const ROOT_DELEGATION_STATE_KEY: &str = "canic.core.auth.root_delegation.state.v1";
@@ -233,6 +235,7 @@ const CORE_LOCAL_APPLICATION_AUTHORIZATION_STATE_KEYS: &[&str] = &[
     LOCAL_APPLICATION_AUTHORIZATION_STATE_KEY,
     memory::auth::LOCAL_APPLICATION_SESSIONS_KEY,
     memory::auth::LOCAL_APPLICATION_REPLAYS_KEY,
+    memory::auth::LOCAL_APPLICATION_LOGINS_KEY,
 ];
 const CORE_ROOT_DELEGATION_STATE_KEYS: &[&str] = &[ROOT_DELEGATION_STATE_KEY];
 const CORE_REPLAY_RECEIPTS_KEYS: &[&str] = &[REPLAY_RECEIPTS_KEY];

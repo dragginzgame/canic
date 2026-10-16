@@ -1,8 +1,40 @@
 # Consuming Shared Tooling Snapshots
+<!-- Shared companions: docs/rust-toolchains.md scripts/distribution/maintenance-files.txt -->
 
 CI and release behavior must not depend on a sibling checkout, a moving Git
 branch, or network availability. Consumers vendor a reviewed file set and
 record its exact Shared Tooling source revision.
+
+## Consolidating existing snapshots
+
+Use the explicit `--takeover-snapshot ROOT MANIFEST` option on
+`scripts/distribution/refresh-consumer.sh`. ROOT is relative to the consumer
+(`.` means its root); MANIFEST is relative to that snapshot root. The consumer
+must still be a Git checkout root. For example:
+
+```sh
+/path/to/shared-tooling/scripts/distribution/refresh-consumer.sh --preview \
+  --consumer /path/to/consumer \
+  --takeover-snapshot . .supplement.snapshot \
+  --takeover-snapshot helpers .shared-tooling.snapshot
+```
+
+Review the preview, then repeat without `--preview`. Without an explicit complete
+`--entrypoint` set, existing and transferred entrypoints are unioned. Every
+transferred record is proved against its recorded source commit, hash and mode;
+edited, forged, staged, aliased or unavailable inputs refuse before publication.
+The root must match the actual prior layout; it is never inferred from the
+manifest's directory. The source remote must match the destination owner.
+
+Selected canonical payloads are exported normally. Unneeded old copies retire
+under the same unchanged-source proof as ordinary refresh; transferred receipts
+retire only after the new manifest and payloads verify. Unrelated files, index
+entries and tool/evidence storage remain untouched. No ownership records are
+hand-edited. Subsequent refreshes need only the consolidated manifest. An
+interruption can leave some retired copies absent or some prior receipts still
+present: retain the preview and old receipts, inspect the new manifest's integrity,
+and retry with the remaining receipts. This one-off ownership operation is not a
+transactional release or a tool-store cleanup mechanism.
 
 ## Common catalog ownership in 0.10.0
 
@@ -218,8 +250,10 @@ preserves the roots. Pass a complete replacement `--entrypoint` set to narrow or
 replace them; supplying roots is a replacement, not an addition.
 
 Selected committed files can declare unconditional shared dependencies on their
-second line as `# Shared companions: relative/path another/path`. Refresh checks
-those declarations in the exported blobs, including companions' own declarations,
+second line as `# Shared companions: relative/path another/path`, or for Markdown
+as `<!-- Shared companions: relative/path another/path -->`. Markdown declarations
+keep required guides with reduced task exports without selecting optional commands.
+Refresh checks those declarations in the exported blobs, including companions' own declarations,
 and includes their complete closure. Missing source payloads refuse before any
 consumer replacement. Review additions in preview; no inspected code is executed
 to discover dependencies.
@@ -283,17 +317,26 @@ refresh is harmless: removed paths are no longer in its ownership roster.
 No retirement journal or cleanup daemon is added.
 
 The optional `scripts/ci/test-installers.sh` fixture exercises all five CI
-installer wrappers: actionlint, gitleaks, ShellCheck, yq and sccache. Selecting
-that fixture requires all five wrappers, their shared `install-ci-tool.sh` engine
-and the checksum verifier, even if production CI uses only some of them. The
+tools through `install-ci-tool.sh`. Selecting the fixture requires that command
+and the checksum verifier, even if production CI uses only some of the tools. The
 exporter includes that closure; omit the optional fixture and its callers if unwanted.
-Selecting an individual production installer does not require the whole suite.
+Selecting the production installer does not require the fixture.
 
 Reusable Cargo, formatter, evidence, registry, release-PR and tool-command tests
 also declare their required helpers. Review fixture dependencies when selecting
 tests, not only production entrypoints. The PR fixture requires the PR helper
 even though direct release delivery does not. Caller-owned pin files and optional
 production modes stay explicit inputs rather than unconditional companions.
+Fixtures using `scripts/ci/fixture-lifecycle.sh` include it through their companion
+declarations. It removes successful fixture directories and preserves failures,
+including premature exits; production entrypoints do not acquire this test helper.
+Callers resolve the created fixture directory to an absolute physical path before
+registering their trap or changing working directory; clear `CDPATH` for that
+resolution. They own the directory, completion assertion and diagnostic label.
+The helper reports cleanup failure even when invoked from a conditional, and
+retains the original nonzero status if reporting fails. Sourcing it has no effects.
+The release runner also includes `scripts/ci/check-release-tag.sh` so direct and
+PR release paths use the same annotated-tag and exact-commit checks.
 
 Run `test-snapshot-distribution.sh` from Shared Tooling for upstream exporter and
 governance qualification. Consumers should normally omit that integration fixture
@@ -354,11 +397,9 @@ checks with trailing-slash and aliased temporary roots. Refresh
 `test-cloc-siblings.sh` to receive its physical-path correction; counts, partial
 totals, error handling and retained failures keep their existing contracts.
 
-When refreshing `install-actionlint.sh`, `install-shellcheck.sh`, `install-gitleaks.sh`,
-`install-sccache.sh` or `install-yq.sh`, the exporter derives
-`scripts/ci/install-ci-tool.sh` and `scripts/ci/verify-file-checksum.sh`.
-These entrypoints share that implementation; select only the roots used by callers.
-Pins and command arguments remain consumer-owned and unchanged.
+Select `scripts/ci/install-ci-tool.sh` as the production entrypoint; the exporter
+derives `scripts/ci/verify-file-checksum.sh`. Pins and installation arguments
+remain consumer-owned. See the 0.11 adoption instructions below.
 
 Cargo inheritance adoption selects `check-dependency-pins.sh`, whose declared
 companions include `dependency-pins.jq`, then adds `--cargo-inheritance` to the
@@ -463,8 +504,11 @@ them. Reporting an issue neither applies the upstream fix nor verifies consumer
 adoption; broad validation authority stays unchanged.
 After delivering the adoption, apply that rule's issue reconciliation: record
 the exact consumer commit, Shared revision and required validation evidence in
-the consumer's owning issue, close it when its criteria are met, and update the
-linked Shared tracker. Consumers still awaiting required CI remain open. This is
+the consumer's owning issue and close it when its criteria are met. Update a
+linked Shared issue only for its own remaining work; completed producer issues
+stay closed while adoption proceeds in consumer issues. Retire redundant
+coordination trackers through the maintenance procedure, preserving owner links.
+Consumers still awaiting required CI remain open. This is
 part of the agent's adoption/maintenance pass, not a GitHub auto-close-on-push
 workflow or authorization to dispatch CI or start a schedule.
 
@@ -472,11 +516,21 @@ Consumers using the maintenance rule's exact-commit CI inspection command also
 refresh `scripts/dev/gh-ci.sh` from that reviewed revision. It remains a read-only
 interactive helper using the consumer checkout and authenticated GitHub CLI.
 When adopting the repeatable task commands, include the `tasks/` catalog,
-definitions, prompt and schedule guidance plus linked companions from the
-governance file list. Shared Tooling coordinates central runs; consumers retain
-their focused commands and product scope. Copying those files never installs a
-timer, activates an agent, grants sibling edit authority or requires Codex/systemd
-on every consumer host. Enable one local scheduler separately when requested.
+definitions, prompt and schedule guidance from the governance file list. Shared
+Tooling coordinates central runs; consumers retain their focused commands and
+product scope. The operational runner and systemd units are optional: their
+selection roots are listed in
+[`scripts/distribution/maintenance-files.txt`](../scripts/distribution/maintenance-files.txt).
+A host that needs copied operational files may add those roots explicitly with
+`--add-entrypoint`; their normal owner is the selected Shared Tooling checkout.
+Existing snapshots retain recorded roots on ordinary refresh. To stop carrying
+these files, pass the complete retained `--entrypoint` selection without the
+optional roots. Canonical retirement refuses modified payloads; preserve local
+work and resolve it before retrying. Never hand-edit a snapshot or delete its
+owned files to bypass that check. Catalog/guidance adoption does not select
+operational files, install a timer, activate an agent, grant sibling edit authority
+or require Codex/systemd on every consumer host. Enable one local scheduler
+separately when requested.
 The portable-suite prerequisite check is Shared Tooling's own test setup, not a
 required consumer gate. If vendoring the complete portable suite, include its
 new `scripts/ci/check-portable-prerequisites.sh`, `scripts/ci/test-portable-prerequisites.sh`
@@ -499,18 +553,61 @@ instructions and checks with the [release contract](releases.md), including
 artifact retention and the exact atomic branch/tag push. A passing snapshot
 check alone does not verify those behaviors. Explicit PR adopters instead qualify
 the exact branch push, review boundary, merged-source validation and tag-only push.
-The direct release runner's consumer fixture, `scripts/ci/test-release-runner.sh`,
-simulates Git effects. Real-Git tracking qualification is independently selected
+The owner regression fixture, `scripts/ci/test-release-runner.sh`, simulates Git
+effects. Consumers retain their actual integration checks and tool/snapshot
+admission rather than routinely rerunning Shared's implementation regressions. Real-Git tracking qualification is independently selected
 as `scripts/ci/test-release-tracking.sh`; the owner portable suite always runs it.
 Select fixtures according to their documented effects and local authority rather
 than editing vendored tests or invoking an unauthorized broader suite.
 Pinning adoption also requires the checker and its jq module, prepared Git/jq/yq
 tools (and Cargo for Rust workspaces), a CI/release invocation, and consumer-owned
 qualification for locked builds and external inputs. Consumers may also vendor
-`scripts/ci/install-yq.sh` with `scripts/ci/install-ci-tool.sh` and the checksum
+`scripts/ci/install-ci-tool.sh` (selecting `yq`) and the checksum
 helper; choose and record their own reviewed version and platform digests.
 Resolve existing exceptions under the
 [pinning policy](../rules/dependency-pinning.md) before claiming adoption.
+
+## Consumer qualification selection
+
+Shared Tooling CI qualifies the shared implementation. A consumer qualifies how
+its selected snapshot is wired into its own repository. Installing a snapshot
+does not require running every exported upstream test in routine consumer CI or
+adding the complete producer suite to its release gate.
+
+| Proof | Owner and selection |
+| --- | --- |
+| Snapshot bytes, modes and declared roots | Consumer: verify every maintained bundle. Integrity alone does not establish caller behavior. |
+| Shared parser, installer and helper implementation cases | Shared Tooling: keep the general regression matrix beside its owner. Select relevant cases during a changed-contract adoption or when they supply a missing consumer proof. |
+| Actual Make, hook, release adapter and CI wiring | Consumer: exercise its real callers, selected inputs, status propagation and applicable recovery/evidence boundaries. |
+| Installed tools and host behavior | Consumer: retain prepared-tool admission and applicable native platform qualification for its own selected catalogs and workflows. |
+| Product correctness and release acceptance | Consumer: retain its product tests and release obligations. A passing upstream job does not qualify them. |
+
+Before removing a test invocation, identify what it proves and where that proof
+will remain. For example, a generic maintenance-task or LOC parser matrix usually
+belongs upstream; a test that checks the consumer's actual Make target or input
+selection belongs with that consumer. A generic release-runner fixture may still
+be useful when it exercises a consumer-specific invocation contract not covered
+by its adapter tests. Classify behavior, not filenames or the number of tests.
+Keep justified upstream fixtures with a short explanation at their caller.
+
+For a roster reduction, check the affected consumer callers and failure paths,
+verify snapshot integrity, and retain the required native acceptance. Measure
+gate duration before and after on comparable source/tool/host inputs if claiming
+a speed-up. Syntax checks, snapshot hashes and upstream CI each provide different
+evidence; none alone replaces a consumer integration test. Do not remove product
+or recovery tests merely because their helpers are now shared.
+
+Revisit the selection when adopted helper bytes or contracts, caller wiring,
+tool catalogs or supported-host inputs change. Reuse evidence only for unchanged
+inputs under the [validation policy](../DRAGGINZGAME.md#validation-and-evidence).
+Keep evidence and consumer-specific exceptions with their existing owners; no
+new scheduler or parallel test inventory is required. This guidance does not
+itself rewrite existing CI/release targets or authorize broad local execution.
+
+Only retire an exported test entrypoint after checking all consumer callers.
+Use the canonical refresh preview to inspect its companion closure and proposed
+retirements; do not delete snapshot files or edit their manifest records by hand.
+Shared fixtures that remain dependencies of another selected root stay exported.
 
 ## Audit method adoption
 
@@ -755,6 +852,12 @@ native hosts, plus relevant product checks for changed tool selections. Do not
 claim deployment or PocketIC client/server compatibility from `--version` alone.
 Snapshot integrity and consumer adoption remain separate from upstream fixtures.
 
+The Rust setup action is an independent entrypoint:
+`.github/actions/prepare-rust-toolchains/action.yml`. Its declared companion is
+`scripts/dev/prepare-rust-toolchain.sh`; the canonical exporter includes that
+helper automatically when selecting or refreshing the action.
+Select `docs/rust-toolchains.md` too for its [caller contract](rust-toolchains.md).
+
 The evidence archiver can be adopted independently as
 `scripts/ci/archive-evidence.sh`; see its
 [selection and retention contract](verification-helpers.md#evidence-archives).
@@ -797,3 +900,20 @@ include it and `docs/verification-helpers.md` when adopting it. Replace only
 database acquisition/isolation, retain consumer audit policy and failure evidence,
 and pass `--no-fetch` when auditing the prepared database so its identity stays
 bound to the recorded commit.
+
+## CI installer command in 0.11.0
+
+Replace `install-actionlint.sh`, `install-gitleaks.sh`, `install-shellcheck.sh`,
+`install-sccache.sh` and `install-yq.sh` calls with `install-ci-tool.sh TOOL`, where
+TOOL is respectively `actionlint`, `gitleaks`, `shellcheck`, `sccache` or `yq`.
+Keep existing `--version`, `--sha256` and `--install-dir` arguments and local pins.
+There are no forwarding aliases in 0.11.
+
+Before refresh, replace each recorded wrapper entrypoint with
+`scripts/ci/install-ci-tool.sh` in the reviewed selection. Pass the complete new
+root set with repeated `--entrypoint` arguments; `--add-entrypoint` alone retains
+the old roots. Use the normal preview and owned-file retirement checks to remove
+snapshot-owned wrappers; preserve modified or consumer-owned files for review.
+Refresh `test-installers.sh` too if selected, then qualify the same installer
+failure cases and each declared native host. No storage layout or tool upgrade
+is part of this command change.

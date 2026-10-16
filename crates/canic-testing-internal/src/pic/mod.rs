@@ -1,5 +1,7 @@
 //! Repo-only PocketIC fixtures layered on top of `ic-testkit`.
 
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+mod application_checkpoint;
 mod artifacts;
 mod audit;
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
@@ -75,10 +77,7 @@ pub use canic::{
     managed_test_init_identity, report_canister_diagnostics, report_canister_diagnostics_batch,
     standalone_canister_candid, standalone_canister_wasm, wait_until_ready,
 };
-pub use delegation::{
-    create_user_shard, issue_delegated_token_from_active_proof,
-    issue_delegated_token_from_active_proof_with_request_nonce, role_grant,
-};
+pub use delegation::{create_user_shard, role_grant};
 #[cfg(all(
     feature = "pocketic-fixtures",
     any(not(test), feature = "governed-pocketic-tests")

@@ -4,6 +4,7 @@
 //! storage, call IC/runtime APIs, spawn timers, serialize wire/storage payloads,
 //! or mutate state.
 
+pub mod application_checkpoint;
 pub mod auth;
 pub mod authority_restore;
 pub mod caller_authority;
@@ -55,8 +56,7 @@ impl From<PolicyError> for InternalError {
 
         let code = match err {
             PolicyError::AuthPolicy(err) => match err {
-                auth::AuthPolicyError::PublicPrepareScopeNotSelfGrantable { .. }
-                | auth::AuthPolicyError::RootIssuerAudienceNotAllowed { .. }
+                auth::AuthPolicyError::RootIssuerAudienceNotAllowed { .. }
                 | auth::AuthPolicyError::RootIssuerGrantNotAllowed { .. } => {
                     codes::AUTHORITY_UNAUTHORIZED
                 }

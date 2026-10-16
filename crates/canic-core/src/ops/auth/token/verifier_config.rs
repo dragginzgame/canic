@@ -5,6 +5,7 @@
 //! Boundary: deterministic config validation and verifier-policy construction.
 
 use super::*;
+use crate::ops::runtime::env::EnvOps;
 
 pub(super) fn configured_root_canister_id(
     cfg: &DelegatedTokenConfig,

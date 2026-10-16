@@ -70,11 +70,15 @@ fn explicit_composition_refuses_duplicates_and_admission_before_publication() {
         duplicated.requests.push(duplicated.requests[0].clone());
         assert!(matches!(
             canic::memory::bootstrap(duplicated),
-            Err(ic_memory::RuntimeBootstrapError::Declarations(
-                ic_memory::MemoryDeclarationError::DuplicateRequest { .. }
+            Err(canic::memory::MemoryBootstrapError::Bootstrap(
+                ic_memory::RuntimeBootstrapError::Resolution(
+                    ic_memory::MemoryResolutionError::Declarations(
+                        ic_memory::MemoryDeclarationError::DuplicateRequest { .. }
+                    )
+                )
             ))
         ));
-        assert!(!ic_memory::is_default_memory_manager_bootstrapped().unwrap());
+        assert!(!canic::memory::runtime::is_memory_bootstrap_ready().unwrap());
 
         let mut rejected = canic::memory::framework();
         rejected.admission = Some(MemoryBootstrapAdmission::new(
@@ -88,13 +92,15 @@ fn explicit_composition_refuses_duplicates_and_admission_before_publication() {
         ));
         assert!(matches!(
             canic::memory::bootstrap(rejected),
-            Err(ic_memory::RuntimeBootstrapError::AdmissionPolicy(
-                MemoryRegistryError::InvalidDeclaration { .. }
+            Err(canic::memory::MemoryBootstrapError::Bootstrap(
+                ic_memory::RuntimeBootstrapError::AdmissionPolicy(
+                    MemoryRegistryError::InvalidDeclaration { .. }
+                )
             ))
         ));
-        assert!(!ic_memory::is_default_memory_manager_bootstrapped().unwrap());
+        assert!(!canic::memory::runtime::is_memory_bootstrap_ready().unwrap());
         canic::memory::bootstrap(canic::memory::framework()).unwrap();
-        assert!(ic_memory::is_default_memory_manager_bootstrapped().unwrap());
+        assert!(canic::memory::runtime::is_memory_bootstrap_ready().unwrap());
     })
     .join()
     .unwrap();

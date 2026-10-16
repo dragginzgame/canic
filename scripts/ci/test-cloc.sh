@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared companions: scripts/dev/cloc.sh
+# Shared companions: scripts/dev/cloc.sh scripts/ci/fixture-lifecycle.sh
 set -euo pipefail
 
 ROOT="$0"
@@ -10,16 +10,12 @@ ROOT="${ROOT%/.}"
 # below still select explicit targets; an enclosing consumer must not select it.
 unset CARGO_TARGET_DIR
 FIXTURE="$(mktemp -d "${TMPDIR:-/tmp}/shared-tooling-cloc-test.XXXXXX")"
-# Bash 3.2 can enter EXIT with status zero after nounset; require completion too.
+FIXTURE="$(CDPATH="" cd -P -- "$FIXTURE" && printf '%s/.' "$PWD")"
+FIXTURE="${FIXTURE%/.}"
+# shellcheck source=scripts/ci/fixture-lifecycle.sh
+source "$ROOT/scripts/ci/fixture-lifecycle.sh"
 fixture_complete=false
-finish() {
-    local status=$?
-    [[ "$fixture_complete" == true || "$status" != 0 ]] || status=1
-    if [[ "$status" == 0 ]]; then rm -rf "$FIXTURE"
-    else printf "Failed cloc fixture retained: %s\n" "$FIXTURE" >&2; fi
-    exit "$status"
-}
-trap finish EXIT
+trap 'fixture_finish "$?" "$FIXTURE" "Failed cloc fixture retained"' EXIT
 
 for command in cargo cloc jq; do
     command -v "$command" >/dev/null 2>&1 || {

@@ -44,18 +44,6 @@ pub enum AccessError {
     #[error("access denied: a controller is required")]
     ControllerRequired,
 
-    #[error("access denied: delegated auth cert expired")]
-    DelegatedAuthCertExpired,
-
-    #[error("access denied: delegated auth token expired")]
-    DelegatedAuthTokenExpired,
-
-    #[error("access denied: delegated token authentication is disabled")]
-    DelegatedTokensDisabled,
-
-    #[error("access denied: delegated token is malformed")]
-    DelegatedTokenMalformed,
-
     #[error("access denied: a direct child is required")]
     DirectChildRequired,
 
@@ -80,9 +68,6 @@ pub enum AccessError {
     #[error("access denied: a negated access predicate matched")]
     NegatedPredicateMatched,
 
-    #[error("access denied: the delegated token is missing the required scope")]
-    RequiredScopeMissing,
-
     #[error("access denied: a role attestation is malformed")]
     RoleAttestationMalformed,
 
@@ -105,9 +90,6 @@ pub enum AccessError {
         "access denied: this canister is not the active authority for Fleet service '{service}'"
     )]
     ServiceAuthorityRequired { service: FleetServiceId },
-
-    #[error("access denied: delegated token TTL configuration overflows nanoseconds")]
-    DelegatedTokenMaxTtlOverflow,
 
     #[error("access denied: Fleet admission is required")]
     FleetAdmissionRequired,
@@ -147,16 +129,7 @@ impl AccessError {
             Self::BuildNetworkUnavailable => {
                 AccessDiagnosticCodes::public(codes::PLATFORM_UNAVAILABLE)
             }
-            Self::DelegatedAuthCertExpired => {
-                AccessDiagnosticCodes::public(codes::AUTH_CERT_EXPIRED)
-            }
-            Self::DelegatedAuthTokenExpired => {
-                AccessDiagnosticCodes::public(codes::AUTH_TOKEN_EXPIRED)
-            }
-            Self::DelegatedTokensDisabled => {
-                AccessDiagnosticCodes::public(codes::SECURITY_INACTIVE)
-            }
-            Self::DelegatedTokenMalformed | Self::RoleAttestationMalformed => {
+            Self::RoleAttestationMalformed => {
                 AccessDiagnosticCodes::public(codes::SECURITY_INVALID_STATE)
             }
             Self::RoleAttestationSubjectMismatch => {
@@ -171,16 +144,13 @@ impl AccessError {
             Self::NegatedPredicateMatched => {
                 AccessDiagnosticCodes::public(codes::CONFIGURATION_INVALID_STATE)
             }
-            Self::FleetAdmissionRequired | Self::RequiredScopeMissing => {
+            Self::FleetAdmissionRequired => {
                 AccessDiagnosticCodes::public(codes::CONFIGURATION_UNAVAILABLE)
             }
             Self::ServiceGuardInvalid => AccessDiagnosticCodes::projected(
                 codes::AUTHORITY_INVALID,
                 codes::CONFIGURATION_INVALID,
             ),
-            Self::DelegatedTokenMaxTtlOverflow => {
-                AccessDiagnosticCodes::projected(codes::TIME_CAPACITY, codes::CONFIGURATION_INVALID)
-            }
             Self::Internal(_) => return None,
         };
         Some(codes)
@@ -233,22 +203,6 @@ mod tests {
                 codes::AUTHORITY_UNAVAILABLE,
             ),
             (
-                AccessError::DelegatedAuthCertExpired,
-                codes::AUTH_CERT_EXPIRED,
-            ),
-            (
-                AccessError::DelegatedAuthTokenExpired,
-                codes::AUTH_TOKEN_EXPIRED,
-            ),
-            (
-                AccessError::DelegatedTokensDisabled,
-                codes::SECURITY_INACTIVE,
-            ),
-            (
-                AccessError::DelegatedTokenMalformed,
-                codes::SECURITY_INVALID_STATE,
-            ),
-            (
                 AccessError::DirectChildRequired,
                 codes::AUTHORITY_UNAVAILABLE,
             ),
@@ -262,10 +216,6 @@ mod tests {
             (
                 AccessError::NegatedPredicateMatched,
                 codes::CONFIGURATION_INVALID_STATE,
-            ),
-            (
-                AccessError::RequiredScopeMissing,
-                codes::CONFIGURATION_UNAVAILABLE,
             ),
             (
                 AccessError::RoleAttestationMalformed,
@@ -311,11 +261,6 @@ mod tests {
             (
                 AccessError::ServiceGuardInvalid,
                 codes::AUTHORITY_INVALID,
-                codes::CONFIGURATION_INVALID,
-            ),
-            (
-                AccessError::DelegatedTokenMaxTtlOverflow,
-                codes::TIME_CAPACITY,
                 codes::CONFIGURATION_INVALID,
             ),
         ];

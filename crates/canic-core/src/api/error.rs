@@ -129,18 +129,6 @@ mod tests {
             exhausted_child.code(),
             crate::diagnostics::codes::CAPACITY_LIMIT.raw_code()
         );
-
-        let token_expired: Error = AccessError::DelegatedAuthTokenExpired.into();
-        assert_eq!(
-            token_expired.code(),
-            crate::diagnostics::codes::AUTH_TOKEN_EXPIRED.raw_code()
-        );
-
-        let cert_expired: Error = AccessError::DelegatedAuthCertExpired.into();
-        assert_eq!(
-            cert_expired.code(),
-            crate::diagnostics::codes::AUTH_CERT_EXPIRED.raw_code()
-        );
     }
 
     #[test]

@@ -4,7 +4,6 @@ use candid::{CandidType, Deserialize, Principal, encode_one};
 use canic_testing_internal::pic::{
     CanicWasmBuildProfile, InternalTestWasms, build_internal_test_wasm_canisters, start_pocket_ic,
 };
-use ic_build::artifacts::{test_target_dir, workspace_root_for};
 use ic_testkit::pic::{InstallSpec, PocketIc, PocketIcBuilder, RetryPolicy, prelude::*};
 use std::{
     path::{Path, PathBuf},
@@ -111,14 +110,16 @@ fn receipt_backed_intent_conformance() {
     let pic = start_pocket_ic(PocketIcBuilder::new().with_application_subnet());
     println!("receipt_backed_intent: PocketIC ready");
 
-    let authority_id = pic.create_and_install(
-        InstallSpec::new(
-            authority_wasm.clone(),
-            encode_one(()).unwrap(),
-            INSTALL_CYCLES,
+    let authority_id = pic
+        .try_create_and_install(
+            InstallSpec::new(
+                authority_wasm.clone(),
+                encode_one(()).unwrap(),
+                INSTALL_CYCLES,
+            )
+            .label("intent_authority"),
         )
-        .label("intent_authority"),
-    );
+        .expect("install test canister");
     println!("receipt_backed_intent: installed authority={authority_id}");
 
     assert_receipt_backed_adapter_conformance(&pic, authority_id, authority_id, &authority_wasm);
@@ -130,7 +131,7 @@ fn assert_receipt_backed_adapter_conformance(
     evidence_source: Principal,
     authority_wasm: &[u8],
 ) {
-    let replay_deadline_ns = pic.current_time_nanos() + NANOS_PER_HOUR;
+    let replay_deadline_ns = pic.get_time().as_nanos_since_unix_epoch() + NANOS_PER_HOUR;
     let pending = assert_pending_begin_decisions(pic, authority_id, replay_deadline_ns);
     assert_pending_settlement_decisions(pic, authority_id, evidence_source, &pending);
     upgrade_authority(pic, authority_id, authority_wasm);
@@ -203,7 +204,7 @@ fn assert_pending_begin_decisions(
         }
     );
 
-    let now_ns = pic.current_time_nanos();
+    let now_ns = pic.get_time().as_nanos_since_unix_epoch();
     assert_eq!(
         begin_receipt(pic, authority_id, 51, 52, 1, 1, now_ns),
         ReceiptBeginView {
@@ -216,7 +217,8 @@ fn assert_pending_begin_decisions(
     assert_eq!(load_receipt(pic, authority_id, 51), None);
 
     let maximum_ns = MAX_REPLAY_WINDOW_NS;
-    let overlong_deadline_ns = pic.current_time_nanos() + maximum_ns + NANOS_PER_HOUR;
+    let overlong_deadline_ns =
+        pic.get_time().as_nanos_since_unix_epoch() + maximum_ns + NANOS_PER_HOUR;
     let overlong = begin_receipt(pic, authority_id, 53, 54, 1, 1, overlong_deadline_ns);
     let ReceiptBeginStatus::ReplayWindowTooLong {
         remaining_ns,
@@ -521,7 +523,7 @@ fn assert_terminal_reclamation(pic: &PocketIc, authority_id: Principal, replay_d
             22,
             1,
             1,
-            pic.current_time_nanos() + NANOS_PER_HOUR,
+            pic.get_time().as_nanos_since_unix_epoch() + NANOS_PER_HOUR,
         ),
         ReceiptBeginView {
             status: ReceiptBeginStatus::CapacityExceeded {
@@ -598,14 +600,17 @@ fn load_receipt(
     .expect("load receipt application")
 }
 
-fn install_retry_policy() -> RetryPolicy {
-    RetryPolicy::try_new(INSTALL_CODE_RETRY_LIMIT, INSTALL_CODE_COOLDOWN)
-        .expect("install retry policy")
+const fn install_retry_policy() -> RetryPolicy {
+    RetryPolicy::new(
+        std::num::NonZeroUsize::new(INSTALL_CODE_RETRY_LIMIT)
+            .expect("non-zero install attempt limit"),
+        INSTALL_CODE_COOLDOWN,
+    )
 }
 
 fn build_canisters(workspace_root: &Path) -> &'static InternalTestWasms {
     BUILD_ONCE.get_or_init(|| {
-        let target_dir = test_target_dir(workspace_root, "pic-runtime-wasm");
+        let target_dir = workspace_root.join("target").join("pic-runtime-wasm");
         build_internal_test_wasm_canisters(
             workspace_root,
             &target_dir,
@@ -616,6 +621,6 @@ fn build_canisters(workspace_root: &Path) -> &'static InternalTestWasms {
 }
 
 fn workspace_root() -> PathBuf {
-    workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+    canic_testing_internal::workspace::discover()
         .expect("discover Canic test workspace through Cargo")
 }

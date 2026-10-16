@@ -1,5 +1,6 @@
 //! Canic-owned managed lifecycle and explicit admission guard qualification.
 
+mod checkpoint;
 mod initialization;
 
 use candid::CandidType;

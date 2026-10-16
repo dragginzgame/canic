@@ -1,6 +1,6 @@
 //! Module: blob_service::ops::memory
 //!
-//! Responsibility: contribute service requests and open the existing default runtime.
+//! Responsibility: contribute service requests and open handles from the Canic-owned runtime.
 //! Does not own: memory bootstrap, placement policy or storage schemas.
 //! Boundary: Canic bootstraps once before the lifecycle participant opens the grants.
 
@@ -37,7 +37,7 @@ pub fn host() -> canic::memory::MemoryBootstrap {
 }
 
 pub(super) fn open() -> ServiceInstallationMemories<Memory> {
-    let lookup = ic_memory::open_default_memory_manager_memory;
+    let lookup = |key: &str| Ok::<_, ic_memory::RuntimeOpenError>(canic::memory::open(key));
     ServiceInstallationMemories {
         configuration: lookup(INSTALLATION_MEMORY_KEY).expect("configuration grant"),
         stores: grants::open(lookup).expect("service grants"),

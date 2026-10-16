@@ -14,9 +14,8 @@ use crate::{
         RuntimeCanisterConfig, RuntimeChildCanisterAuthority,
         schema::{
             CanisterConfig, ComponentSpecConfig, CyclesFundingPolicyConfig, DelegatedTokenConfig,
-            FleetInitMode, IndexConfig, LocalApplicationAuthorizationConfig, LogConfig,
-            RoleAttestationConfig, ScalingConfig, implicit_root_canister_config,
-            implicit_wasm_store_canister_config,
+            FleetInitMode, IndexConfig, LogConfig, RoleAttestationConfig, ScalingConfig,
+            implicit_root_canister_config, implicit_wasm_store_canister_config,
         },
     },
     dto::component_deployment::ProtectedComponentDeployment,
@@ -308,12 +307,6 @@ impl ConfigOps {
 
     pub(crate) fn role_attestation_config() -> Result<RoleAttestationConfig, InternalError> {
         Ok(Self::authority()?.auth.role_attestation.clone())
-    }
-
-    pub(crate) fn local_application_authorization_for_role(
-        role: &CanisterRole,
-    ) -> Option<LocalApplicationAuthorizationConfig> {
-        RoleRuntimeConfig::try_get()?.local_application_authorization(role)
     }
 
     pub(crate) fn app_init_mode() -> Result<FleetMode, InternalError> {

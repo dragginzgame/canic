@@ -2,7 +2,7 @@
 //!
 //! Responsibility: adapt the native `ic-memory` runtime diagnostic export.
 //! Does not own: memory-manager instances, ledger cells, allocation policy, or DTO shaping.
-//! Boundary: diagnostics read the already bootstrapped default runtime through `ic-memory`.
+//! Boundary: diagnostics read the already bootstrapped Canic-owned runtime through `ic-memory`.
 
 use crate::memory::{pool, registry::MemoryRegistryError};
 use ic_memory::{DiagnosticExport, MemoryAllocationPool, RuntimeDiagnosticError};
@@ -22,10 +22,10 @@ pub struct NativeMemoryLedgerSnapshot {
     pub allocation_pool: MemoryAllocationPool,
 }
 
-/// Read the committed allocation ledger from the canonical default runtime.
+/// Read the committed allocation ledger from the Canic-owned runtime.
 pub fn try_snapshot() -> Result<NativeMemoryLedgerSnapshot, MemoryLedgerError> {
     Ok(NativeMemoryLedgerSnapshot {
-        export: ic_memory::default_memory_manager_diagnostic_export()?,
+        export: super::runtime::with_runtime(ic_memory::MemoryRuntime::diagnostic_export)?,
         allocation_pool: pool::selected()?,
     })
 }

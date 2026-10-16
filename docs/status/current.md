@@ -1,4 +1,4 @@
-# Current handoff — 2026-10-12
+# Current handoff — 2026-10-14
 
 **Canic 0.111.0 is live; the integration batch remains uncommitted.** The maintainer
 explicitly waived the 0.111 closeout audit for completing Auth, Backup and Blob
@@ -9,6 +9,971 @@ blanket exception for future minors. The pending incompatible public family is
 classified under the existing **0.112.0** changelog entry. Own package versions
 remain **0.111.0**. The objective is to delete duplicate mechanisms in favor of
 upstream owners; moving declarations alone does not demonstrate faster builds.
+
+
+## Memory 0.44 integration — 2026-10-16
+
+Canic now owns one explicit thread-local Memory runtime. Lifecycle bootstrap
+constructs it; framework/application stores and the Blob adapter receive handles
+from that owner. Readiness and diagnostics do not initialize memory. Construction,
+bootstrap and reentrant access retain typed errors. Allocation projections derive
+bytes from upstream page/bucket measurements and constants, while checking primary
+conservation inputs before subtraction. Current Canic diagnostic DTO values remain
+unchanged. Removed upstream singleton and fixture transition APIs have no callers.
+
+Focused qualification passes: 33 Core Memory tests, two public composition tests,
+strict Core library/test lint, Host/CLI/Backup all-target compilation, Core Wasm
+compilation and the managed lifecycle probe's native compilation. The Wasm probe
+check exposed and corrected two stale Auth feature gates, then reached the required
+`canic build` artifact guard; no governed installed artifact or PocketIC qualification
+is claimed. Evidence: `/tmp/canic-memory44-*.log`; incoming source:
+`/tmp/canic-memory44-before/`. Tests began with Timers 0.25.1; subsequent lint and
+compilation used the maintainer-selected 0.25.2. No dependency files were edited.
+
+Build 0.10.0 aligns with Host 0.22.1. Blob/contracts 0.30.0 now select the
+same Memory 0.44.0 as Canic, clearing the known dependency mismatches. The Blob
+adapter's locked/offline all-target compile and strict library lint pass; evidence:
+`/tmp/canic-blob030-check.log` and `/tmp/canic-blob030-clippy.log`. No source or
+dependency changes were needed for this recheck. The complete 0.112 batch remains
+not push-ready: portable Root-managed Auth admission and installed recovery/fixture
+qualification are unfinished. The open changelog documents the implemented slices;
+no commit, version change, release or broad gate ran.
+
+## Shared Tooling and Host adoption — 2026-10-16
+
+Shared Tooling 0.15.7 is adopted at `05548771d95c4f27f23f29e28a6db8f4c0cac44d`;
+the 119-file snapshot integrity check passes. The maintainer-selected Host 0.22.1
+callers now specify durable publication mode and permissions explicitly, preserving
+replace/create-only behavior and owner-only environment-key creation. No compatibility
+wrappers or package-version changes were added.
+
+The focused Host/CLI/Backup all-target compile exposes five Host errors: published
+Build 0.9.0 takes Host Process 0.21 `OutputLimits`, while Canic selects 0.22.1.
+Build's local checkout already selects Host 0.22; a published aligned Build is
+required before the consumer compile and focused publication tests can complete.
+Evidence: `/tmp/canic-host022-check.log`; incoming source is retained under
+`/tmp/canic-host022-before/`. No broad gate or Git publication ran.
+
+Auth 0.7.2 includes the required session selectors; Blob 0.29.0 aligns with Memory
+0.43. Their prior focused compile passed, as did eight portable session-storage
+tests. Those upstream blockers are cleared. The complete 0.112 batch remains
+unready: portable Root-managed enrollment/admission and installed recovery/fixture
+qualification are unfinished. Application admission still refuses. Live Backup
+remains unavailable under the accepted release scope.
+
+## Application Auth hard cut — 2026-10-16
+
+The maintainer explicitly selected removal of both delegated-token issuance/
+per-call guards and delegated-token session establishment. The DTOs, command and
+status variants, access guard, issuer retention and replay helpers, session
+workflow and obsolete installed journeys are removed, including sample-app
+endpoints. Root proof provisioning/renewal, role attestations and portable
+Root enrollment/storage infrastructure remain. Public application admission
+refuses while the portable workflow is unfinished; this is not a working login
+replacement.
+
+Focused evidence under `/tmp/canic-auth-hardcut/`: 321 Auth-enabled Core tests,
+32 replay-policy tests, 39 runtime metric tests, 42 endpoint macro tests and 38
+public endpoint/protocol tests and 283 current DTO tests pass. The instruction-audit native tests pass
+38 cases with report generation ignored. Default Core/Contracts and Auth-enabled
+Core strict lint pass; final Core lint includes the serialization benchmark.
+The affected native-agent/instruction targets and four changed canister packages
+pass strict lint. No installed PocketIC proof or broad gate ran for this cut.
+
+During qualification the maintainer selected Build 0.9. Its consumers now derive
+output directories from existing Cargo profile arguments. Testkit 0.48 baseline
+callers return the successful restore receipt directly. The agent did not change
+manifest or lock selections. Both changes remain within the existing integration
+batch; no publication, staging, commit or own-version change ran.
+
+Active guides and 0.112 notes describe the removal. The reduced instruction audit
+uses method v4, with a separate comparison identity. Four changed audit method
+fingerprints match; the catalog-wide check still fails on the unchanged incoming
+`capability-surface.md` fingerprint mismatch. Historical reports retain their
+original scope. The selected Blob 0.28/Memory 0.43 alignment and portable Auth
+workflow/enrollment/clock-floor/installed qualification remain unfinished. The
+complete 0.112 batch and changelog are not ready to publish; this cut is local
+source preparation. Retained fixture artifacts still need final release-graph
+qualification. Live Backup remains unavailable under the accepted release scope.
+
+## Auth 0.7 package recheck — 2026-10-16
+
+The maintainer selected published Auth/protocol-types 0.7.0 and Metrics 0.11.4.
+The session-storage fixture now consumes Auth's decoded claims in the two-argument
+verifier callback, avoiding a second decode. All 18 owning storage tests and strict
+Core library/test lint pass. Auth-enabled compilation still fails at the two
+unfinished establish/authorize workflow calls. Auth PR #64 remains open and the
+published Session still lacks mechanism/key-binding selectors.
+
+Registry inspection confirms Blob/contracts remain 0.28.0 with Memory 0.41;
+Canic still selects Memory 0.43. Build 0.8.0, Host Process 0.21.0, Testkit 0.48.0
+and Backup 0.25.1 remain current. Blob publication/alignment and the unfinished
+Root-managed Auth integration still block the complete 0.112 batch and publication
+readiness. No dependency selection, own version, Git index or release changed.
+Evidence and incoming copies: `/tmp/canic-auth07-check/`. No broad gate ran.
+
+## Build 0.8 and Memory 0.43 consumer qualification — 2026-10-16
+
+Published Build 0.8 clears the Host Process type mismatch. Memory 0.43 adoption
+now uses the consolidated RuntimeBootstrapPolicy, typed resolution errors and
+canonical ledger identity constants. Diagnostic fixture constructors use Memory's
+test-support feature through a development dependency; production admission and
+report fields retain their existing behavior.
+
+All 33 memory-filtered tests, two public memory-provider tests, six CLI diagnostic
+tests and 17 Host artifact tests pass. The diagnostic and artifact fixes previously
+blocked below are now exercised. During qualification the maintainer selected
+Testkit 0.48; a scoped lock update selects 0.48.0 and removes Host Process 0.20.1.
+Strict Core/Host/CLI library-and-test lint and public-provider lint pass on that
+final graph. Behavioral runs preceded the Testkit update and retain their original
+0.47 input scope. Evidence and incoming copies: `/tmp/canic-build08-check/`.
+
+The Blob adapter check fails at its request return boundary: published Blob 0.28
+exposes Memory 0.41 requests while Canic selects 0.43. The sibling Blob checkout
+already prepares this alignment for 0.29; inspection was read-only. Blob #77 and
+Canic #517 retain the publication/adoption dependency. No bridge or downgrade was
+added. Root/private-consumer adoption and installed qualification follow publication.
+
+Auth PR #64 remains open at `19ea243`; selected Auth 0.6.4 still lacks its session
+mechanism/key selectors. Root enrollment, portable endpoint wiring, persisted
+clocks/floors, cleanup and installed recovery qualification remain unfinished.
+The complete 0.112 batch and changelog are not ready to publish. Live Backup remains
+unavailable under the accepted release scope. No broad gate, own version change,
+staging, commit, sibling edit or release ran. Older entries retain historical scope.
+
+## Host transform write-policy adoption — 2026-10-16
+
+Both Wasm shrink and Binaryen optimization now pass explicit Host WriteOptions:
+Replace publication and 0666 staging permissions reduced by umask, matching the
+previous Host 0.19 named-writer defaults. Qualification-before-publication and
+producer failure handling are unchanged. The focused locked/offline Host library
+check confirms both missing-argument errors are gone; five Build/Host OutputLimits
+identity errors still prevent successful compilation and test execution.
+
+Published Build remains 0.7.0 with Host Process 0.20. The sibling Build checkout,
+inspected read-only, already prepares Host 0.21 alignment for pending 0.8.0 and
+records targeted producer qualification. Do not duplicate that in-progress work
+or introduce a consumer bridge. Adoption remains tracked by Canic #517 and
+Build #9. Evidence and incoming copies: `/tmp/canic-host021/`. The #547 tests
+remain unexecuted. The complete 0.112 batch and notes remain unready to publish;
+no broad gate, dependency/version change, sibling edit, commit or release ran.
+
+## Diagnostic range reporting prepared — 2026-10-16
+
+Issue #547 is corrected locally: decimal codes outside u16 receive a distinct
+CodeOutOfRange error; malformed syntax retains InvalidCode. Focused regressions
+cover overflow, in-range unknown values, leading zeros and current catalogue
+identities. Tests have not executed: the selected graph stops in Host compilation
+with two missing WriteOptions arguments after Host FS 0.21 adoption and five
+OutputLimits identity mismatches between Build 0.7's Host Process 0.20.1 and
+Canic's 0.21. Source and failure evidence are under `/tmp/canic-547/`.
+
+This is a dirty local fix, not delivered or qualified behavior. The existing
+integration owner #517 retains the new dependency blockers. Auth integration and
+the complete 0.112 release batch remain unfinished; notes are not ready for
+publication. No dependency downgrade, broad gate, commit or release ran.
+
+## Auth restoration association check — 2026-10-15
+
+Restoration now checks each retained login with a corresponding session against
+IC Auth's canonical session/login association API. A different account binding
+or a revoked login with a retained session rejects before indexes are published.
+Logout state without a session remains valid and preserves replay evidence.
+The cross-record lookup is allocated only after existing state size/count limits.
+This does not complete missing-row, clock/floor or live enrollment restoration.
+
+The new regression failed before the correction. All 18 targeted session-storage
+tests and strict Core library/test lint now pass on Auth 0.6.2, Metrics 0.11.3
+and Timers 0.25. Evidence and incoming copies: `/tmp/canic-auth06-restore-binding/`.
+No dependency selection changed. Upstream Auth PR #64 remains open; published
+Auth is still 0.6.2. Root enrollment, the portable workflow, clocks/floors,
+cleanup and installed qualification remain unfinished. The complete 0.112 batch
+and its changelog are not ready to publish. No broad gate, staging, commit,
+version transaction or release ran.
+
+## Auth logout binding preservation — 2026-10-15
+
+A focused regression reproduced a stable-adapter defect: after session removal,
+a logout proposed from another account's login for the same transport caller
+could replace the retained login binding. The adapter now requires binding
+equality for logout as well as admission. The failed commit changes neither
+stable state nor the proposing heap ledger; matching logout retries remain
+idempotent and preserve replay custody through restoration.
+
+All 17 targeted session-storage tests and strict Core library/test lint pass.
+The current lock selects Auth/protocol-types 0.6.2 and Timers 0.25; no dependency
+selection was changed by this slice. Inspection of published Auth 0.6.2 shows
+that the session mechanism/key selectors are still absent. Evidence, the failing
+regression before the fix, and incoming source copies are retained under
+`/tmp/canic-auth06-logout-binding/`.
+
+Root enrollment, clocks/floors, cleanup and the portable endpoint workflow remain
+unfinished. These native checks do not qualify installed Auth or the complete
+0.112 batch. The batch and changelog are not ready for publication. No broad
+gate, staging, commit, version transaction or release ran.
+
+## Auth policy and verifier diagnostics — 2026-10-15
+
+The local session policy now uses Auth 0.6.1's maintained fields. The adapter
+handles its current typed failures and preserves budget exhaustion and clock
+rollback through both portable credential verifier envelopes. The production
+session capability selects upstream portable signature verification. Revoked
+credentials remain security refusals; storage failures remain unavailable.
+
+Both focused policy/diagnostic tests and strict Core library/test lint pass.
+Feature-enabled compilation now has two remaining errors, both in the old
+establish/authorize workflow calls; the three policy/error-projection errors
+recorded below are resolved. This run selects Metrics 0.11.2, so it does not
+relabel earlier graph evidence. Evidence and incoming copies are retained at
+`/tmp/canic-auth06-policy/`. No upstream or dependency-version edit was made.
+
+Continue with the portable credential workflow and protected Root enrollment,
+persisted clocks/floors, bounded cleanup and installed recovery qualification.
+The complete 0.112 batch and its changelog remain unready for publication. No
+broad gate, staging, commit, version transaction or release ran.
+
+## Auth durable admission/logout continuation — 2026-10-15
+
+The stable adapter now commits canonical login rows and protected pool totals
+with session/replay admission, and commits logout denial with session-only removal.
+Replay custody survives logout. Restoration validates row identities and exact
+pool occupancy; failed staging, mismatched bindings and exhausted capacity leave
+storage unchanged. Native fixtures now use signed portable credentials instead
+of the old retained codec files. Runtime login clocks/floors, cleanup, Root
+refresh and endpoint wiring remain unfinished; this is storage qualification,
+not a working Auth-enabled deployment.
+
+The selected Core graph now uses Memory 0.42. Its snapshot diagnostic is mapped
+directly; the existing optional payload measurement remains unavailable because
+allocation metadata does not measure payload occupancy. No dependency downgrade
+or local override was introduced. Auth remains published 0.6.1; upstream
+[PR #64](https://github.com/dragginzgame/ic-auth/pull/64) is still open.
+
+On this graph, 369 Auth-filtered native tests, 30 role-contract tests, 11
+state-contract tests and 15 memory-ops tests pass; strict Core library/test lint
+passes. Feature-enabled compilation still reports five errors in the old
+session policy/error projection and delegated-token workflow. The durable
+transaction/test compile errors recorded below are cleared. Evidence and the
+incoming source snapshot are under `/tmp/canic-auth06-transactions/`.
+
+The complete 0.112 batch and its changelog are not ready to publish. Continue
+with portable credential admission, persisted login clocks/floors and bounded
+cleanup, Root issuance/refresh and installed recovery proofs. Earlier installed
+fixture evidence does not qualify these changed sources or dependency graph.
+No broad gate, staging, commit, version change or release ran.
+
+## Auth 0.6.1 and caller-bound replay continuation — 2026-10-15
+
+The maintainer's root lock now selects Auth/protocol-types 0.6.1. Both private
+Blob consumer locks are aligned to that patch, and the root catalog requires
+0.6.1 for its public session/login association check. No unrelated dependency
+selection was changed by this continuation. Earlier installed qualification
+below remains evidence for its original 0.6.0 graph.
+
+Canic's session projection now permits distinct transport and account principals.
+Replay records, pair checks and capacity accounting use the transport caller;
+the obsolete account field is removed from replay storage. This is part of the
+pending 0.112 reinstall-only cut. The local model regression now retains distinct
+caller/account/issuer identities, and a new capacity case checks separate caller
+budgets. These cases have not executed: Core native test compilation still fails
+with eight errors in the old transaction adapter and its old codec fixtures.
+Ordinary Core compilation and strict library lint pass on 0.6.1; this is not
+Auth-enabled qualification.
+
+The explicitly authorized isolated upstream proposal is
+[Auth PR #64](https://github.com/dragginzgame/ic-auth/pull/64), head `19ea243`.
+It exposes retained session mechanism/key selectors so Root enrollment lookup
+does not parse private records or guess among an issuer's keys. All 20 upstream
+session tests, strict affected library/test lint and the Rust 1.88 session-restore
+library check pass. Merge/publication remain separate; Canic has no path override.
+
+Evidence and incoming source copies: `/tmp/canic-auth06-durable/`. The durable
+login/session/replay transaction, portable workflow, Root issuance/refresh and
+installed restoration proofs remain unfinished. The complete 0.112 batch is not
+push-ready; the notes are maintained but not ready to publish. No Canic staging,
+commit, own version change, broad gate or release ran.
+
+## Blob alignment qualified; Auth 0.6 boundary remains — 2026-10-15
+
+Published Blob/contracts 0.27.1 and both private composition locks now share
+Memory 0.41. The selected graph also includes Metrics 0.11, Timers 0.24, Build
+0.6, Host 0.19, Testkit 0.46 and Auth/protocol-types 0.6. No compatibility bridge
+or override was added. The embedded allocation peer and its structured evidence
+are refreshed; provenance verification, adapter/internal compilation and strict
+internal/integration fixture lint pass.
+
+All four selected installed cases pass on the final fixed graph: checkpoint
+freeze/restore (35.58s), dedicated Blob permissions/recovery (3m10s), embedded
+application-state/recovery (3m09s) and production initialization target binding/
+lost replies (16.44s). The governed PocketIC run takes 491.32s. The live-create
+refusal regression passes and retains existing output unchanged. Earlier metrics
+(86) and timer (12) cases passed before the Auth update; their input identity
+remains separate. Evidence: `/tmp/canic-0271-ready/`, with final graph hashes in
+`graph-auth06.sha256`. The first installed attempt overlapped the maintainer's
+Auth update and failed on mixed protocol identities; it is retained separately.
+
+Core's targeted native Auth check fails against 0.6: the session store still
+implements the old transaction and subject-based replay contract. The new owner
+requires atomic login revocation persistence, caller-based replay custody,
+session-only removal and explicit restoration/verification features. Do not
+ignore the proposed login change merely to compile. The existing
+[Auth issue](https://github.com/dragginzgame/canic/issues/491#issuecomment-6192040229)
+records the failure and required safety evidence. The maintainer has now resumed
+Auth integration and selected Fleet Root management of issuer enrollment. The Blob consumer
+blocker is resolved; its separate publication-classification concern remains on
+[Blob #77](https://github.com/dragginzgame/ic-blob-storage/issues/77#issuecomment-6192039897).
+
+The complete 0.112 batch is not push-ready on Auth 0.6. Open changelog notes are
+updated; own versions remain 0.111.0 and publication readiness is blocked by the
+Auth integration. Retain the accepted release scope with live Backup unavailable;
+its resumed production Root workflow remains incomplete separate work. No broad
+gate, staging, commit, version transaction or release ran. Older sections below
+retain their historical dependency selections and limitations.
+
+### Root-managed Auth continuation — 2026-10-15
+
+The approved design is recorded at the top of the 0.112 extraction plan. Passive
+enrollment contracts now bind the Fleet, exact Root/receiver installations, role,
+fresh challenge, revision/generation, validity windows, approved issuer keys and
+scopes, and terminal key revocations. They are not yet a callable endpoint or an
+installed enrollment protocol. The local session capability selects IC Auth's
+checked restoration feature; native verification tests select the verifier feature.
+
+The unconnected enrollment validator proposal is retained outside production at
+`/tmp/canic-auth06-integration/enrollment-proposal/`; it must be integrated with
+the actual stable transaction owner rather than added as unused runtime code.
+Remaining work is Root issuance and receiver refresh/startup closure, portable
+credential admission, atomic login/session/replay persistence through shared commit
+hooks, bounded cleanup/logout, complete restoration and installed recovery proofs.
+Do not treat the passive contract checks as qualification of those workflows.
+The existing Auth-enabled compile failures remain in scope; no additional
+maintainer choice is needed to proceed.
+
+Both enrollment Candid round-trip tests, strict Contracts library/test lint and
+ordinary Core library compilation pass. Evidence is under
+`/tmp/canic-auth06-integration/`. Auth-enabled compilation and installed admission
+remain unqualified; the passing ordinary build does not cover that feature.
+
+## Memory 0.41 adoption and Blob alignment — 2026-10-15
+
+The maintainer updated the root catalog/lock to Memory 0.41.0. Registry checks
+still report Build 0.6.0, Host 0.19.0, Backup 0.24.7, Blob 0.27.0, Query 0.56.0
+and Testkit 0.45.0. Core compiles; the Blob adapter fails at its request return
+boundary because published Blob exposes Memory 0.40 types. Keep the maintainer's
+0.41 selection; no type bridge, downgrade or source override was introduced.
+
+Three Memory test constructors now omit the removed declaration label. All 27
+Memory-filtered cases and 21 checkpoint-model cases pass on 0.41; strict Core
+library/test lint also passes. The numeric-slot
+encoding and constructor hard cuts are documented in the open 0.112 notes;
+pre-1.0 retained installations require the existing clean reinstall procedure.
+Earlier installed Blob/checkpoint proofs remain evidence for their Memory 0.40
+graph and do not qualify 0.41.
+
+[Blob #77](https://github.com/dragginzgame/ic-blob-storage/issues/77) records the
+exact consumer failure and public version boundary. The maintainer's local Blob
+commit `b92ccb8` already selects 0.41; published main was `cc1a720` when checked.
+No duplicate implementation PR or sibling edit was made. The pending 0.27.1
+notes claiming unchanged contracts need to reflect the exposed identity change
+before publication. Adoption in both private consumer locks and installed
+composition qualification follow a published coherent Blob family.
+
+Evidence and incoming copies: `/tmp/canic-memory041-adoption/`; initial compile
+failure: `/tmp/canic-memory041-check.log`. Live Backup's production Root workflow
+remains unfinished, independently of this dependency mismatch. The complete 0.112
+batch is not ready to push or publish. Own versions, Canic Git index and release
+records remain untouched.
+
+## Published Build 0.6 qualification — 2026-10-15
+
+The maintainer's graph now selects published Build 0.6.0. Its Host 0.19 boundary
+removes the previous producer mismatch. Fixture workspace discovery uses the new
+Cargo observation API through one Canic-owned policy: the internal fixture
+manifest, 64 KiB stdout, 256 KiB stderr and no elapsed-time deadline. Cargo still
+owns workspace membership; no path-layout guessing or compatibility import remains.
+Default and governed fixture caller compilation and strict internal/integration
+fixture lint pass on the actual registry graph.
+
+The exact Testkit 0.45 runner is prepared through the governed setup target.
+The single installed checkpoint case passes using that owner, PocketIC 16.1.0,
+Build 0.6, Host 0.19, Blob 0.27 and Memory 0.40. It covers durable business freeze,
+upgrade retention, snapshot capture/restore, fresh restore authority, delayed
+requests and release replay. Its selected case takes 29.14s; the governed run,
+including managed artifact preparation, takes 108.14s. This replaces the previous
+candidate/old-driver qualification limitation for the participant proof.
+
+Both managed Blob composition cases also pass on the published graph: dedicated
+permissions/recovery and embedded application-state retention/recovery. All four
+artifacts were rebuilt for each consumer. The selected run takes 336.91s; the
+root catalog and all three lockfile digests remain unchanged. This supersedes
+the pending installed Blob 0.27 qualification noted below.
+
+Evidence and incoming source copies: `/tmp/canic-build06-adoption/`. Live Backup
+still requires the production Root checkpoint store, authenticated complete-unit
+orchestration, paid snapshot reconciliation and host restore integration. The
+complete 0.112 batch remains unready; no own package versions, Git index or release
+records changed. Build and fixture notes now identify the maintained 0.6 contract.
+
+## Upstream recheck and Host proposal repairs — 2026-10-15
+
+No newer registry versions are available than the preceding refresh: Build
+0.5.0, Backup 0.24.7, Blob 0.27.0, Host 0.19.0, Query 0.56.0 and Testkit 0.45.0.
+Build #44 is open and mergeable with successful Linux, macOS Apple Silicon,
+macOS Intel and lint/security CI. Its publication still blocks the normal Canic
+Host/fixture graph; candidate rehearsal evidence remains separate.
+
+Host PRs #120 and #127 now incorporate released 0.19.0 (`804a78b`) through
+normal isolated topic merges, at `415f86a` and `c89b1b3` respectively. Their
+implementations are unchanged; compatible pending notes now select 0.19.1.
+Two duration cases and 69 durable filesystem cases pass on Rust 1.88, alongside
+strict affected-package lint, Rustdoc, formatting and diff checks. Hosted checks
+must qualify these new heads. No integration branch merge or publication ran.
+Evidence is retained in `/tmp/canic-refresh-followup-20261015/`.
+
+The Root checkpoint storage/topology trace confirms these must be coupled to
+complete authenticated issuance/release and participant discovery. No unused
+store, standalone freeze gate or live-create bypass was added. Coordinated Backup
+implementation remains unfinished; the full 0.112 batch is not push-ready.
+Canic source, dependencies, package versions and Git index remain unchanged by
+this follow-up; the handoff records the upstream contribution progress.
+
+## Published dependency refresh — 2026-10-15
+
+Registry inspection confirms Build 0.5.0, Host 0.19.0, Testkit 0.45.0,
+Query 0.56.0 and Backup 0.24.7. Blob/contracts 0.27.0 became available during
+this work; the root and both private consumer locks now select it with Memory
+0.40.0, without changing unrelated pins. The registry-backed Blob adapter check
+passes. Installed composition qualification on this exact graph remains pending.
+
+Testkit 0.45 callers now use fallible installation/Candid APIs, nonzero retries
+and a fallible baseline builder. Canic owns the fixture target paths removed
+by Build 0.5. The source changes from draft Canic PR #572 were reconciled with
+current local fixtures rather than replacing their incoming changes.
+
+Build 0.5 still exposes Host 0.18 output-limit types while Canic selects 0.19.
+The isolated [Build #44](https://github.com/dragginzgame/ic-build/pull/44)
+aligns its three Host dependencies and classifies the exposed identity change
+for pending 0.6. Five observation and six real Cargo example cases pass on Rust
+1.91; strict library lint passes on the default toolchain. Publication is needed
+before normal Canic Host/fixture qualification can pass. No shipping override,
+compatibility shim, dependency downgrade or maintainer sibling edit was added.
+
+A frozen consumer rehearsal with only that Build candidate substituted passes
+internal/test-package caller compilation and strict internal fixture lint,
+including the governed feature; strict integration-test lint also passes.
+Checkpoint fixture lint now separates restore
+assertions and removes redundant Copy-error clones. This is candidate evidence, not
+published adoption. Evidence and incoming copies are retained under
+`/tmp/canic-upstream-refresh-20261015/`. The accepted coordinated live Backup
+work remains incomplete; its Root stable store, topology gate, paid snapshot
+reconciliation and production capture/restore path still need implementation.
+The full 0.112 batch is not push-ready. Changelog notes are updated; Canic's own
+versions, Git index and release records remain untouched.
+
+## Live Backup implementation resumed — 2026-10-15
+
+The maintainer now requests getting Backup working. This supersedes the temporary
+implementation deferral; the accepted consistency contract remains application
+coordinated, with framework-owned fixtures. The design/status tracker records
+Root state, topology exclusion, paid capture/reconciliation, host custody and
+same-release restore as one complete outcome. Live create must keep refusing
+until the actual production path and its interruption evidence pass.
+
+The Root checkpoint model now retains a bounded complete unit and Root-issued
+sequence, replays an exact original begin without issuing a second sequence,
+rejects stale issuance and changed installation/membership, and retains release
+intent even for unanswered prepare calls. Every participant must acknowledge
+before the aggregate reaches Prepared or Released. Membership admission remains
+closed until Released. CBOR decode validates the retained identity and phase.
+All 18 participant/Root native cases and strict Core library/test lint pass.
+Evidence/before-images: `/tmp/canic-live-backup-20261015/`.
+
+This slice exposes the canonical model through Core's shared control-plane
+support; it does not install a Root store or dispatch a snapshot. Next implement
+that stable owner and topology gates, then authenticated Root command/RPC steps
+with existing paid-effect custody, followed by host capture/restore integration.
+The installed participant proof is already retained from the previous batch;
+current installed qualification is blocked by Blob 0.26 / Memory 0.40. Do not
+replace the graph with overrides or infer that native journal tests enable live
+backup. The complete batch remains unready, with no own version/Git/release effects.
+
+## Upstream integration PR repairs — 2026-10-15
+
+Four existing PRs were reconciled with their latest released upstream bases in
+isolated checkouts and pushed without integration merges or publication:
+[Build #38](https://github.com/dragginzgame/ic-build/pull/38) at `aaff825`
+and [Build #37](https://github.com/dragginzgame/ic-build/pull/37) at `9b3b67c`
+now build on released 0.5.0; [Host #120](https://github.com/dragginzgame/ic-host-tooling/pull/120)
+at `b3d267e` and [Host #127](https://github.com/dragginzgame/ic-host-tooling/pull/127)
+at `7d06ae5` now build on released 0.18.6. GitHub reports all four conflict-free;
+hosted checks must qualify these new heads before upstream integration.
+Published notes and metadata are preserved, with compatible pending notes updated.
+No maintainer sibling checkout or Canic dependency graph was changed.
+
+Focused evidence passes: Build configuration has three public cases, four input
+mutation/include/alias cases and one compiler-identity case on Rust 1.91; flags
+has its real-Cargo harness with five scenarios on Rust 1.91. Host duration has
+two cases and filesystem primitives have 69 durable cases on Rust 1.88. Strict
+affected package lint, warning-denied Rustdoc, formatting and diff checks pass.
+Retained checkouts/logs are under `/tmp/canic-upstream-prs-20261015/`.
+
+Backup custody/process integration is delivered. Further generic engine adoption
+and live Root coordination are distinct: publishing Host filesystem helpers does
+not implement Root-issued checkpoint sequences, complete-unit exclusion, paid
+snapshot reconciliation or restore/release authority. The accepted live-backup
+deferral and installed participant proof are recorded on
+[#550](https://github.com/dragginzgame/canic/issues/550#issuecomment-6189432882).
+The registry now has Build 0.5.0; normal Canic adoption still needs removal of its
+remaining fixture-only test-target helper callers. Blob remains published at
+0.26, so the Memory 0.40 mismatch still blocks the narrowed release batch.
+
+## Shared Tooling 0.15 adoption — 2026-10-15
+
+Refreshed the existing snapshot selection from committed upstream HEAD
+`3bef3f2daec7f64f875397ed4d53d5b9e2e68a08` (version annotation 0.15.0),
+verified against the remote HEAD. The exporter now records 115 payloads, including
+the required pure version/date validator. This is exact-commit adoption, not a
+claim that every pending feature listed in upstream changelogs has shipped.
+Canic's isolated release fixture now includes that required helper. Current
+reporting rules count genuinely created/deleted symbols only; changelogs describe
+outcomes and consumer actions without structural symbol inventories.
+
+Snapshot integrity, governance closure (227 references across 47 documents) and
+Canic's real-Cargo/fake-Git transaction/rollback fixture and shared release
+command simulation pass. Focused ShellCheck with sourced companions and Perl
+syntax admission also pass. Repository description
+matches the maintained framework scope. Evidence and incoming dirty-file copies
+are retained in `/tmp/canic-shared015-adoption/`. The 0.112 notes and adoption
+guide identify the new revision. No application dependencies, own package versions,
+Git index/refs or release records changed. The previously recorded Memory/Blob
+integration blocker is independent of this tooling adoption.
+
+## Accepted release scope and current blocker — 2026-10-15
+
+The maintainer selected **ship integrations; keep live backup unavailable**.
+The 0.112 draft now explicitly defers Root-paid capture, membership exclusion and
+coordinated restore/release under #550. Pending unpublished Host/Build extractions
+and the Auth redesign do not gate this narrowed release. Existing Backup custody
+and checkpoint participant SDK remain included. Live create still returns its
+typed unavailable error before resolving or creating any output; dry-run is only
+planning. This decision supersedes earlier handoff statements requiring complete
+live Backup or every pending upstream extraction for 0.112.
+
+The dependency graph changed during checkpoint qualification: the root requests
+Memory 0.40 and selects Metrics 0.10.1, while Blob 0.26 uses Memory 0.39.
+Offline metadata reconciled the root lock without updating other selections.
+The participant fixture checks successfully on Memory 0.40, but affected internal
+lint cannot compile the Blob adapter because its public memory declaration types
+come from different crate versions. Registry inspection confirms Blob 0.26.0 is
+the newest published release; sibling 0.27 is a draft targeting Memory 0.40.
+Do not bridge these types or silently revert the maintainer's Memory selection.
+A published matching Blob family and aligned private consumer locks, followed by
+owning adapter/composition checks, remain required before declaring push readiness.
+
+The new installed participant fixture covers business freeze, lifecycle recovery,
+delayed requests and snapshot restoration; it is not Root orchestration. The SDK
+now exposes its canonical checkpoint binding. Qualification evidence is retained
+under `/tmp/canic-112-checkpoint-20261015/`. The installed participant case now
+passes with a Memory 0.40 Wasm; its native driver was built before that graph
+change. This is a scoped participant proof, not complete current-graph validation.
+The participant fixture also passes warning-denied lint, and the registered-case
+partition regression passes using the retained native driver. Internal lint is
+blocked before reaching the new test module by the Blob memory mismatch.
+The CLI live-create refusal regression also passes on the current root graph:
+new output is not created and retained output is unchanged.
+The initial fixture omitted activation and was corrected; the next attempt was
+stopped by the changed locked graph before execution. No broad gate, package
+version change, commit, push or release has run.
+
+## Remaining fixture Cargo observation — 2026-10-15
+
+The registry index still selects IC Build 0.4.0 as the newest published release;
+0.4.1 remains an upstream documentation draft. Canic already meets its Rust 1.91
+floor and has no callers of the removed Wasm-path convenience functions.
+The embedded-peer source builder now uses IC Build's canonical metadata
+observation with 16 MiB stdout and 1 MiB stderr limits. Its locked/offline recipe,
+local-version normalization and external-lock preservation remain Canic-owned.
+The internal testing package explicitly selects the existing Host process
+workspace dependency for capture limits; no dependency version changed here.
+
+Four fixture regressions, strict internal-library lint and current-source
+embedded-peer verification pass on Build 0.4.0, Host 0.18.5 and the maintainer's
+Timers 0.23.1 selection. The explicit relocation/version real-Wasm test remains
+ignored; it was not run. Evidence and task before-images are retained under
+`/tmp/canic-build04-continuation-20261015/`. Duration PR #120 is still open;
+upstream scratch and Cargo configuration/flag owners remain pending. This
+completion does not make the full 0.112 batch push-ready: coordinated Backup and
+remaining upstream delivery are still open. Changelog notes are updated; package
+versions, Git index and publication remain untouched.
+
+## Blob 0.26 adoption — 2026-10-15
+
+The adapter now delegates continuity preparation, version observation, resume
+orchestration and certificate issuance to published Blob 0.26.0. Both private
+consumer locks select Memory 0.39.0, Metrics 0.10.0 and Timers 0.23.0 alongside
+Blob 0.26.0, matching the framework without updating unrelated transitive pins.
+Memory diagnostics now expose the current snapshot; Metrics projections use the
+current aggregate API. Testkit 0.44 callers use current capture/restore, error
+fields and native PocketIC time access. Remaining nested nullable-decoder callers
+now use Contracts directly.
+
+The adapter check, 15 Memory cases, 17 Metrics cases and the Memory Candid
+roundtrip pass. Strict Blob/Core/Host/CLI and changed integration-test lint pass;
+both Host nullable-owner and capacity-import decoding regressions pass.
+The embedded allocation peer was refreshed and its verifier
+passes. Dedicated and embedded managed composition cases pass on IC Build 0.4.0 and
+Host 0.18.5. The root catalog changed during the first embedded build, invalidating
+its follow-up cache admission; both cases were rerun on the final stable graph.
+Adoption evidence is recorded on [Blob #72](https://github.com/dragginzgame/ic-blob-storage/issues/72#issuecomment-6187960855).
+Retained evidence and source before-images are under
+`/tmp/canic-blob026-20261015/`. This is framework qualification; application/provider
+acceptance and coordinated live Backup remain separate unfinished obligations.
+The complete 0.112 batch is not yet ready to push or publish; package versions
+and the Git index remain untouched.
+
+## JSON and timestamp consolidation — 2026-10-15
+
+Fleet and build-lock records now call Contracts' required-nullable decoder;
+Backup validation, runner and CLI report consumers share a pure timestamp parser.
+Missing/null semantics and caller-specific malformed-timestamp policies remain.
+Five timestamp-filtered, three Contracts serialization and 18 Backup preflight
+cases pass. Host's owning nullable-field regression cannot compile because the
+current Core dependency adoption has unrelated Memory diagnostic and Metrics
+summary API errors; CLI qualification shares that dependency boundary. No broad
+gate or unrelated dependency repair ran. Source before-images and logs are in
+`/tmp/canic-json-time-20261015/`.
+
+[Host #122](https://github.com/dragginzgame/ic-host-tooling/issues/122) owns the
+prepared invocation scratch API at `/tmp/canic-host-scratch-20261015/`. Four
+focused Linux cases, strict lint, Rustdoc and Rust 1.88 checks pass. The Canic
+adoption patch passes applicability checking but waits for registry publication;
+current Candid argument-file handling remains intact. This slice does not make
+the complete 0.112 batch ready to push or publish. Package versions and the
+current checkout's Git index remain untouched.
+
+## Staging and text extraction — 2026-10-15
+
+Download and restore staging now delegate private directory creation to published
+Host FS. Native I/O kinds and before/after-creation evidence remain available;
+Canic owns journal sequencing, namespace custody and stale-stage cleanup.
+Twelve staging cases, 36 restore-runner cases and strict Backup library/test
+Clippy pass in the isolated package workspace
+`/tmp/canic-backup-staging-20261015/`. The main locked invocation refuses the
+concurrent Testkit catalog 0.44 / lock 0.43 mismatch before compiling. Its lock
+was not changed; isolated evidence is not full current-workspace qualification.
+Before-images, checks and the pending duration adoption patch are retained under
+`/tmp/canic-extractions-20261015/`.
+
+[Host PR #120](https://github.com/dragginzgame/ic-host-tooling/pull/120) supplies
+compact duration formatting, with focused Linux tests, strict lint and Rust 1.88
+checks. Canic's direct CLI adoption waits for publication; no live path override
+or compatibility reexport is added. Native macOS remains upstream qualification.
+The proposed complete Wasm-tool relocation was narrowed after reading Host's
+ownership contract: pins, installation policy, archive recipes and differing
+admission requirements stay local. The remaining generic bundle-publication gap
+is tracked by [Host #121](https://github.com/dragginzgame/ic-host-tooling/issues/121).
+Existing Host directory PRs own deeper staging primitives; no competing owner
+was added. These scoped changes do not complete the accepted 0.112 batch or make
+its changelog/version surfaces ready for publication. Canic remains uncommitted.
+
+## Published Cargo observation owner — 2026-10-15
+
+Discovery, role-package admission and complete-build export inventories now use
+published IC Build 0.3.3's bounded observations and canonical Cargo metadata types.
+The private schema, feature argument builder and unbounded capture are removed.
+Canic retains commands, 16 MiB stdout/1 MiB stderr limits, sanitized diagnostics
+and package/recipe authority; the existing #553 export repair is preserved.
+The catalog minimum is 0.3.3; no source override or own version change is added.
+
+The 41 role, 44 reuse/export, seven Fleet, 18 bootstrap, ten artifact and four
+canonical-selection checks pass. Strict Host library/test Clippy passes; actual
+Rust 1.91 library checking passes in a frozen copy on the unchanged incoming lock
+`1fb060c8029f246f1841f67d2d6c61c8e8bda51cc3c07ef03fa10d35db64372f`:
+Build 0.3.3, Host 0.18.3, Testkit 0.43, Memory 0.38, Metrics 0.10, Timers 0.22.6.
+The opt-in real-Cargo cold/warm/relocation/source-change matrix also passes
+in that copy; its synthetic release sealing is not installed Fleet acceptance.
+
+Another task raised the live Memory requirement to 0.39 during qualification;
+the live locked-check refusal is retained separately. The older graph's passing
+checks do not qualify the independent adoption or current installed artifacts.
+Build #33 and Canic #530 retain delivery, native and current-graph/application
+acceptance. Source and pending 0.112 notes stay uncommitted; no version, release,
+publication or live effect ran. Before-images, failed attempts and frozen-source
+evidence: `/tmp/ic-build-canic-adopt033-20261015/`.
+
+## Selected build-script inputs — 2026-10-14
+
+The local [#553](https://github.com/dragginzgame/canic/issues/553) correction
+retains Canic include exports from current Cargo JSON messages, associated with
+exact compiler-artifact package IDs and canonical manifests. Config, profile,
+network, target and build environment bind each observation recipe. The selected
+App and generated Fleet catalogs admit producer records through Host's bounded
+descriptor reader; IC Build still owns input evidence and before/after refusal.
+Same-name foreign workspaces, malformed/nonregular foreign records and replaced
+selected records have owning regressions. Selected external includes remain
+observed before depfiles exist; late discovery and byte changes still refuse.
+
+All 44 reuse, 10 artifact and 18 bootstrap cases, the opt-in real-Cargo cold/warm/
+relocation matrix and strict Host library/test lint pass on the final root graph.
+The matrix seals synthetic release records; it is not an installed Fleet proof.
+The root lock changed externally during qualification to Timers 0.22.6 at SHA-256
+`1b7633d5a6ad5aa7fceffc864d4aa03a82b5e5f2dcdea6327a95436d12444283`.
+Catalog and Shared snapshot remain unchanged. Earlier installed composition and
+embedded-peer receipts, and both private Blob locks, retain Timers 0.22.5; they
+are not current 0.22.6 installed acceptance. Evidence/before-images are retained
+under `/tmp/canic-553-20261014/`. One intermediate real-Cargo fixture failure
+exposed the already-diagnosed shared-target build-script clobbering hazard;
+foreign input acquisition is qualified independently from subsequent recompilation.
+The full 0.112 batch remains open for coordinated Backup, upstream ownership,
+delivery/native-host acceptance and new-graph alignment/installed qualification.
+No version, Git publication, release or live effect ran.
+
+## Previous adoption and first sediment removals — 2026-10-14
+
+The maintainer requested latest Shared Tooling/Host adoption and implementation
+of the audit findings. That adoption selected Host 0.18.2 (including CLI-only Text),
+Build 0.3.2, Backup 0.24.5, Blob/contracts 0.25, Query 0.55.8, Testkit 0.42,
+Memory 0.38, Metrics 0.9.6 and Timers 0.22.5. Both private Blob locks now select
+Blob 0.25/Memory 0.38 and the same Metrics/Timers family. Root lock SHA-256:
+`1a9464b6c5ce5fc86c877947c341d24672b8fbcfd622c33991d7962ff444951c`.
+Shared's clean main snapshot is 0.13.3 at
+`d963db4b85b4fa65560fd87e8398f228955a2b71`, with 114 verified payloads.
+Its selected payloads match 0.13.2; the future version/date/prose helpers in its
+notes remain pending PRs and are not adopted as implemented APIs.
+
+The obsolete Memory reservation callback/direct-call fixture is removed (#559).
+Bootstrap admission, policy identity and explicit namespace grants remain.
+CI/dev callers use the maintained shared CI installer and common lint pins;
+additional platform digests and Canic tool policies remain local (#563).
+Native query fixtures use bounded Testkit HTTP acquisition; ordinary executable
+fixtures use Host's fork-safe writer. Fleet progress delegates text escaping to
+Host, while interactive clipping, ANSI layout and screen custody remain local.
+Backup layout/restore/CLI record acquisition shares Host's bounded descriptor
+reader, with a matching 64 MiB publication limit (#562). Snapshot artifacts have
+independent limits; schema/terminal receipt validation and path custody remain.
+
+The 27 memory cases, 47 Host fixture cases, 11 JSON/durability cases, 36 restore
+runner cases, 42 CLI restore cases (one ignored), 33 progress cases and strict
+affected Core/Host/Backup/CLI library/test lint pass on their recorded inputs.
+Host 0.18.2 reruns pass; source/lock drift checks retain their exact scope.
+Snapshot/governance/link checks and the four-platform installer/Make fixtures,
+including Bash 3.2 admission, pass. Testkit 0.42/PocketIC 16.1 are prepared and
+admitted. The allocation peer is refreshed and read-only verification passes
+against the selected lock. The subsequent Timers 0.22.5 update is fetched and
+both private locks aligned; its 27 memory and six timer cases and refreshed-peer
+verification pass. All three installed cases pass on that unchanged final graph:
+dedicated composition, embedded composition and production Root initialization/
+recovery. A declaration build first ran out of space; `target/` was then removed
+externally. The retry rebuilds and passes without agent cleanup. Original failed
+and earlier-graph receipts remain distinct. Final four-package strict lint also
+passes on the unchanged Timers 0.22.5 graph.
+Evidence and incoming dirty before-images: `/tmp/canic-removals-20261014/`.
+
+The complete 0.112 batch remains **not ready to push or publish**. Coordinated
+live capture/restore (#550/#394), generic Backup engine convergence (#513),
+selected generated-export evidence (#553), Build metadata ownership (Build #33)
+and shared Blob continuity/certificate orchestration (Blob #72) remain open.
+Auth redesign is deferred. No broad gate, Git publication, package version or
+live effect ran. Earlier receipts below retain their original graphs.
+
+## Shared Tooling and recent changelog layout — 2026-10-14
+
+The maintainer requested the latest Shared Tooling adoption, local PR inspection
+and revision of recent release notes. The canonical exporter selects clean source
+0.12.8 at `eafa07cac1fdba7d6303d061ed8af458aacf32b7`, verified against remote main,
+with 114 payloads. New derived guides describe Rust preparation and CI change
+selection; this refresh changes no tool pins or Canic workflow selections.
+
+The new shared readable-layout policy replaces the local one-bullet restriction.
+Root and detailed notes for pending 0.112, published 0.111, 0.110.54 and 0.110.53
+now separate outcomes and upgrade actions, keep descriptive issue links at their
+owners and distinguish live-backup/graph limitations from implemented mechanisms.
+Intermediate 0.112 adoption narratives are consolidated; all existing issue
+destinations remain represented. Older historical sections, published version
+identities/dates and the recorded 0.110.53 minor-boundary conflict are retained.
+The pending version remains 0.112.0 because public Rust, access, memory and journal
+contracts change; contributor-only Shared Tooling adoption is not its breaking cause.
+
+Both open local source PRs are inspected without modifying their branches:
+#546 at `f76ea5bf3835462920f8f4ff383cb6b979aecd95` and #519 at
+`a25f4fd22eab23e1a2a5fa9947a9bbfa064e25a0`. Their exact hosted Linux checks,
+ordinary tests and MSRV pass; both PocketIC jobs fail the embedded allocation-peer
+preflight before server/test startup. Both macOS lanes are queued at inspection.
+Existing #551 owns the repair, which already has active isolated-checkout work;
+no duplicate implementation or integration is performed.
+
+Snapshot integrity, source-owner refresh fixtures, documentation links and the
+existing compiled changelog identity test pass. Evidence/before-images are under
+`/tmp/canic-shared-changelogs-20261014/`; the identity test reads the current notes,
+and is not a current-graph Cargo qualification. This scoped documentation/tooling
+task is complete; the full integration batch remains not ready to push/publish
+for the previously recorded runtime graph and live-backup work. No broad gate,
+Cargo/version/index/ref mutation, PR merge or live effect ran.
+
+## Maintainer Cargo update recheck — 2026-10-14
+
+The maintainer updated the root catalog and lock. It now selects Build 0.3.0,
+Backup 0.24.3, Blob/contracts 0.23.4, Host 0.17.13, Query 0.55.7, Testkit 0.40.0,
+Memory 0.37.0, Metrics 0.9.4 and Timers 0.22.3. Auth redesign remains deferred.
+Root lock SHA-256 is
+`a03c6dd8306baabd8d738ea4305b0875256f468cfbb0cc8eb0530ede16a90a45`;
+both private Blob locks and Shared Tooling 0.12.5 remain unchanged.
+
+The focused initial compile exposed Memory 0.37's allocation-summary hard cut.
+The Canic projection and direct report assertions are corrected; all 15 owning
+allocation/bootstrap/conservation cases and eight memory-metrics cases pass.
+The prepared Testkit 0.40 caller migration is applied: borrowed-server construction
+uses `build_instance`, and standalone/root/registry baseline captures transfer an
+explicit instance owner. Governed internal library compilation and strict lint
+pass. Strict all-feature Core/Host library/test lint passes after correcting the
+proposal's map/unwrap lint. Original failed attempts are retained.
+
+The remaining compile blocker is published Blob 0.23.4's Memory 0.36.4 dependency.
+The root graph contains both Memory versions; the adapter cannot return Blob's
+0.36 `MemoryRequest` as Canic's 0.37 request. Crates.io still reports 0.23.4 as
+the latest Blob release at this inspection. Its owner already records the pending
+0.24.0 adoption under [Blob #68](https://github.com/dragginzgame/ic-blob-storage/issues/68).
+No duplicate PR, local override or conversion between runtimes is introduced.
+Both private consumers still select Memory 0.36.4 and Timers 0.22.2; align all
+three graphs with the published compatible Blob family before installed checks.
+[Canic #548](https://github.com/dragginzgame/canic/issues/548) and
+[#549](https://github.com/dragginzgame/canic/issues/549) retain their delivery and
+installed qualification requirements; the owning issues have current evidence.
+
+Earlier Blob/PocketIC and embedded-fixture receipts bind the preceding graph.
+The embedded fixture's recorded lock differs from this selection; current-source
+verification/refresh remains required after the Blob compile blocker clears.
+No updated-graph installed journey or broad gate is claimed. Evidence and source
+before-images are in `/tmp/canic-update-check-20261014/`. The complete 0.112 batch
+remains **not ready to push or publish**: graph convergence and installed checks
+remain, as does coordinated live backup under #550/#394. Changelog surfaces retain
+the open 0.112 draft; own package versions, Git refs and live effects are unchanged.
+
+## Previous registry graph and checkpoint participant — 2026-10-14
+
+The maintainer resumed implementation and requested adoption plus owning issues/PRs.
+The root now requires published Build 0.3, Backup 0.24.3, Blob 0.23.4, Host 0.17.12,
+Query 0.55.6 and Testkit 0.39. Auth redesign is explicitly deferred. The root lock
+selects those releases, Memory 0.36.4, Metrics 0.9.4 and Timers 0.22.2. Both private
+Blob consumers select Blob/contracts 0.23.4 and those same Memory/Metrics/Timers
+versions; their unchanged Auth selection remains separate.
+
+Shared Tooling 0.12.5 is adopted from clean committed source
+`4256171b5b7ec4c4cc4078548c1c1617ee150699`, with 112 verified payloads and unchanged
+common tool versions/checksums. Snapshot, governance links, IC installer fixtures,
+Canic formatter/tool-recipe fixtures and actual prepared tool checks pass.
+The selected Testkit 0.39 runner and PocketIC 16.1.0 are prepared explicitly.
+
+On this graph, 41 Build reuse cases (one optional performance case ignored),
+30 Query receipt cases, 309 Backup native cases and 42 CLI restore cases (one
+ignored) pass. Strict affected Host/Backup/CLI library/test lint passes. Generated
+Cargo metadata requires the explicitly inherited offline setting for offline
+qualification; the initial network-resolution failure remains recorded.
+
+The interrupted checkpoint draft now has an application-facing SDK record API,
+exact original restore-source retention and durable release high-water behavior.
+Wire and stored records share one canonical phase enum; the duplicate is removed.
+The SDK endpoint predicate authenticates the issuing Root against Canic's
+independently installed receiver authority. Root recovery authentication remains
+independent from ordinary application admission; it confers no freeze/effect claim.
+All 15 participant ordering/replay/serialization/Candid and authority cases and strict Core/SDK
+library/test lint pass. This qualifies local transitions, not application freeze
+or IC effects. [#550 — Coordinated Fleet backup checkpoints](https://github.com/dragginzgame/canic/issues/550)
+owns remaining installed-Root authority, membership exclusion, application hooks,
+Root-paid capture and outside-snapshot same-release restore/release qualification.
+Live creation remains unavailable under #394; generic engine adoption stays #513.
+
+Exact producer hosted results are separate: at inspection Build 0.3 CI is queued; Host 0.17.12's
+run is cancelled. Testkit 0.39 passes the other eleven hosted jobs but its Intel
+checks fail in the synthetic async peer fixture. Its owner has a pending repair
+under Testkit #68 and a separate unpublished 0.40 ownership cut; Canic #548 owns
+that caller migration after publication. No local override or premature 0.40
+selection is introduced. Earlier producer failures are historical.
+
+Current evidence and source before-images: `/tmp/canic-adoption-20261014/`.
+All three installed Blob 0.23.4 journeys and all six Testkit payload-limit cases
+pass on the selected graph. The embedded fixture is refreshed and read-only
+verification passes. The final participant/guard source is explicitly refreshed
+and its read-only source/toolchain/artifact verification also passes. Blob/payload
+receipts retain their original artifact/source scope before the unused SDK-only
+refinements; their consuming behavior is unchanged and is not silently rebound.
+The complete
+0.112 batch remains open and not ready to push or publish. No broad Canic gate,
+version, Git publication, live deployment or paid effect ran.
+
+## Framework live-readiness completion — 2026-10-14
+
+The maintainer requested completing Build, Blob, Auth, Backup, IC tools and
+Shared Tooling, and selected **Canic framework only** for this qualification.
+The existing 0.112 batch stays open; package versions stay 0.111.0.
+
+Build 0.2.6 now owns bounded selected Cargo-depfile reads, parsing and input
+evidence. Unrelated App records no longer contaminate selected recipes; malformed,
+changed and newly observed selected inputs refuse. All 40 reuse cases and the
+actual generated-input preflight pass. Published Query 0.55.5 owns certificate,
+tip and bounded block-chain validation; 30 receipt cases preserve Canic mint
+binding. The Store's installed held-reply/Root-restart recovery case and all eight
+native-agent cases pass on their recorded graphs. All three Blob framework
+journeys and all eight native-agent cases pass on the frozen selections.
+
+The separately authorized Host child transfer API is published in 0.17.8 and
+selected by Canic. Backup uses published 0.24.2 journal, command and layout guards.
+Original command identities are persisted before dispatch; missing/replaced
+custody refuses. Fresh complete terminal bytes and exact quiescence govern
+reference release. All 309 Backup cases, 42 CLI restore cases and the one-spawn,
+bounded-output Host regression pass. Strict Backup/Host/CLI library/test lint
+passes with all features. The registry-only custody composition proves descendant
+exclusion, cancellation and output-overflow cleanup. Local generic lock/reference
+engines and raw descriptor handles are removed. Live create remains unavailable:
+actual Fleet capture consistency/authority and a same-release capture/restore
+journey remain required under #394/#513.
+
+Shared Tooling 0.12.0 is adopted at f7fe31bf80a2b445bf37a470527f001210241aea,
+with 111 verified payloads. Governance links, snapshot/release adoption, IC installer,
+formatter and local tool adapters pass. Exact prepared host/IC/Rust/Testkit tools
+pass offline checks. The selected manifest, lockfiles and snapshot are frozen;
+qualification checks their hashes, with receipts under `/tmp/canic-112-completion/`.
+The stale embedded allocation peer refusal was reproduced, explicitly refreshed
+from these inputs and then passed read-only verification. Its old bytes and failed
+receipt remain retained. Exact Host 0.17.8 CI passes Linux/MSRV but both macOS lanes fail; the Intel
+log proves a nonportable FIFO fixture. Producer correction/adoption and exact
+native acceptance remain required. The frozen selections remain unchanged.
+
+Auth's accepted pending cut is now 0.6, including `session-restore`, explicit
+storage/reset policy and receiver-wide `SessionAdmissionBudget` (#58/#59).
+Published 0.5.10 does not provide those APIs; its current-source consumer proofs
+cannot qualify the pending contract. Shape validation and coordinated Canic
+framework adoption remain open. Downstream application/provider acceptance is
+outside this maintainer-selected framework scope.
+
+Evidence and before-images: `/tmp/canic-112-completion/`. Linux proofs do not
+establish native macOS acceptance. The complete batch is **not ready to push or
+publish**. No broad Canic gate, version/Git/publication or live effect ran.
+
+## Testkit 0.38 payload-limit caller migration — 2026-10-14
+
+The previously approved caller migration under
+[#540](https://github.com/dragginzgame/canic/issues/540) is applied to the existing
+0.112 batch. The suite uses Testkit's standalone recipe and baseline pool with
+one slot, lazy construction, retained canister metadata and the original explicit
+cycle top-up. Payload, dispatch, lifecycle and Candid-boundary assertions remain.
+The already-selected Testkit 0.38 requirement and own package version are preserved.
+
+Focused compilation and all six tests through `make test-pocketic-case
+CASE=pic_ingress_payload_limits` pass; the live artifact observes one cold build
+and five warm restores. Exact CLI preparation was explicit after offline admission
+refused the missing selected 0.38 runner. An initial source-cache miss was prepared
+separately with locked fetch, without dependency resolution.
+
+Strict lint is incomplete: concurrent Host reuse changes trigger too_many_lines
+in input_snapshot; the caller-only attempt then stops on missing IC Query
+certificate-host/ledger-evidence-host features in concurrently changed receipts.
+Those inputs remain intact. The tests qualify their compiled artifact, not the
+whole concurrently edited batch. Logs: `/tmp/ic-testkit-issues-20261014/`, with
+full live output in `target/test-runs/20261014T065121Z-3666646.8CJlEX/1.log`.
+Delivery, complete current-source validation and native macOS acceptance remain
+outstanding; Host 0.17.8 is still unpublished. No version, index, ref or release
+mutation ran for this migration.
 
 ## 0.112 duplication-removal plan and Query extraction — 2026-10-13
 

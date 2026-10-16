@@ -210,7 +210,6 @@ pub(super) fn literal_zero_release_artifact_cache_spec(
         workspace_root,
         &canic_host::canister_build::canister_build_target_root(workspace_root),
         &packages,
-        CanisterBuildProfile::Fast.target_dir_name(),
     )
     .with_cargo_profile_args(["--profile", "fast", "--locked"])
     .with_extra_env(environment);
@@ -278,7 +277,6 @@ fn bind_host_producer_inputs(
         workspace_root,
         &canic_host::canister_build::canister_build_target_root(workspace_root),
         &["canic-host"],
-        CanisterBuildProfile::Fast.target_dir_name(),
     )
     .with_cargo_profile_args(["--profile", "fast", "--locked"])
     .with_extra_env(environment.iter().copied());

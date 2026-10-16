@@ -304,14 +304,14 @@ round, truncate, or saturate them.
 - `scaling` – optional table that defines stateless replica pools.
 - `sharding` – optional table that defines stateful shard pools.
 - `index` – optional table that defines keyed instance pools.
-- `auth.delegated_token_issuer = true` – mark this role as a delegated-token issuer; Canic requires local issuer canister-signature support for token issuance.
+- `auth.delegated_token_issuer = true` – mark this role as an issuer for Root proof provisioning; the role requires local issuer-signature support.
 - `auth.delegated_token_verifier = true` – mark this role as a delegated-token
   verifier; the role contract requires the matching verifier feature and the
   global delegated-token trust policy.
 - `auth.allowed_token_scopes` – protected, explicit role-local token scope ceiling.
   Omission permits no token scopes. Declare the complete accepted grant set;
   Canic never derives it from a submitted token.
-- `auth.role_attestation_cache = true` – start the role-attestation key cache for canisters that verify root-signed role attestations. Delegated-token endpoint verification itself is driven by endpoint guards and `auth.delegated_tokens`, not this flag.
+- `auth.role_attestation_cache = true` – start the role-attestation key cache for canisters that verify root-signed role attestations. Root delegation policy is configured through `auth.delegated_tokens`.
 - `auth.local_application_authorization` – optional role-local application
   session policy with required `allowed_scopes`, `default_session_ttl_secs`,
   and `maximum_session_ttl_secs`. Scope ordering is normalized; TTLs and scope
@@ -322,6 +322,9 @@ round, truncate, or saturate them.
 - `diagnostics.memory_ledger = true` – opt this role into the controller-only `canic_memory_ledger` recovery diagnostic. The endpoint is omitted by default to keep the shared Candid/runtime surface smaller.
 - `metrics.profile = "leaf" | "hub" | "storage" | "root" | "full"` – override
   the role-derived metrics profile.
+
+Portable Auth enrollment and endpoint integration are unfinished. These settings
+do not enable application credential issuance or session admission.
 
 The same cycles, placement, auth, standards, diagnostics, and metrics fields
 also apply directly to the Component Spec table. Placement pools refer to

@@ -201,12 +201,13 @@ impl RestoreRunnerCommandExecutor for HostRestoreCommandExecutor {
     fn execute(
         &mut self,
         command: &canic_backup::restore::RestoreApplyRunnerCommand,
-        command_lifetime: Option<canic_backup::persistence::CommandLifetimeHandle>,
+        mut command_lifetime: Option<&mut canic_backup::persistence::CommandLifetimeLock>,
     ) -> Result<RestoreRunnerCommandOutput, std::io::Error> {
         let output = icp::run_raw_output(
             &command.program,
             &command.args,
-            command_lifetime.map(canic_backup::persistence::CommandLifetimeHandle::raw_fd),
+            restore_output_limits(),
+            |command| spawn_restore_command(&mut command_lifetime, command),
         )?;
         Ok(RestoreRunnerCommandOutput {
             success: output.success,
@@ -302,3 +303,25 @@ fn restore_command() -> ClapCommand {
 
 #[cfg(test)]
 mod tests;
+
+// Host owns bounded capture; Backup alone owns descriptor inheritance and one spawn.
+fn spawn_restore_command(
+    lifetime: &mut Option<&mut canic_backup::persistence::CommandLifetimeLock>,
+    mut command: std::process::Command,
+) -> std::io::Result<ic_host_process::child::OwnedChild> {
+    match lifetime {
+        Some(lock) => lock
+            .spawn(command)
+            .map(ic_host_process::child::OwnedChild::from_spawned_direct)
+            .map_err(std::io::Error::other),
+        None => ic_host_process::child::OwnedChild::spawn_direct(&mut command),
+    }
+}
+
+const fn restore_output_limits() -> ic_host_process::tool::OutputLimits {
+    ic_host_process::tool::OutputLimits {
+        stdout: ic_host_process::tool::OutputLimit::Terminate(8 * 1024 * 1024),
+        stderr: ic_host_process::tool::OutputLimit::Truncate(64 * 1024),
+        timeout: Some(std::time::Duration::from_secs(600)),
+    }
+}

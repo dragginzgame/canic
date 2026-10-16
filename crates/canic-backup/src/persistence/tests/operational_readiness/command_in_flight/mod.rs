@@ -11,9 +11,7 @@ use super::{
 use crate::{
     execution::{BackupExecutionOperationReceiptOutcome, BackupExecutionOperationState},
     operational_readiness::manifest::{assert_case_defined, backup_operation_label},
-    persistence::{
-        BackupLayout, CommandLifetimeHandle, CommandLifetimeLock, CommandLifetimeLockError,
-    },
+    persistence::{BackupLayout, CommandLifetimeLock, CommandLifetimeLockError},
     plan::{BackupExecutionPreflightReceipts, BackupOperationKind, BackupPlan},
     runner::{
         BackupRunResponse, BackupRunnerCanisterStatus, BackupRunnerCommandError, BackupRunnerError,
@@ -22,14 +20,10 @@ use crate::{
     test_support::{FakeBackupRunnerExecutor, temp_dir},
 };
 
-use rustix::io::{FdFlags, fcntl_getfd, fcntl_setfd};
 use std::{
     fs::{self, File},
-    io::{self, Write},
-    os::{
-        fd::{BorrowedFd, FromRawFd},
-        unix::process::CommandExt,
-    },
+    io::Write,
+    os::fd::FromRawFd,
     path::{Path, PathBuf},
     process::{Child, Command},
     thread,
@@ -40,7 +34,7 @@ const ROLE_ENV: &str = "CANIC_TEST_COMMAND_IN_FLIGHT_ROLE";
 const ROOT_ENV: &str = "CANIC_TEST_COMMAND_IN_FLIGHT_ROOT";
 const OPERATION_ENV: &str = "CANIC_TEST_COMMAND_IN_FLIGHT_OPERATION";
 const HANDSHAKE_ENV: &str = "CANIC_TEST_COMMAND_IN_FLIGHT_HANDSHAKE";
-const COMMAND_FD_ENV: &str = "CANIC_TEST_COMMAND_IN_FLIGHT_FD";
+const COMMAND_FD_ENV: &str = ic_backup::ops::persistence::COMMAND_CUSTODY_DESCRIPTOR_ENV;
 const ARTIFACT_PATH_ENV: &str = "CANIC_TEST_COMMAND_IN_FLIGHT_ARTIFACT";
 
 const SNAPSHOT_ID: &str = "snap-app";
@@ -300,7 +294,7 @@ impl InFlightCommandExecutor {
     fn execute_command(
         &self,
         operation: BackupOperationKind,
-        command_lifetime: CommandLifetimeHandle,
+        command_lifetime: &mut CommandLifetimeLock,
         artifact_path: Option<&Path>,
     ) -> Result<(), BackupRunnerCommandError> {
         assert_eq!(self.operation, operation);
@@ -315,14 +309,13 @@ impl InFlightCommandExecutor {
             ])
             .env(ROLE_ENV, "external")
             .env(OPERATION_ENV, backup_operation_label(&operation))
-            .env(HANDSHAKE_ENV, &self.handshake_root)
-            .env(COMMAND_FD_ENV, command_lifetime.raw_fd().to_string());
+            .env(HANDSHAKE_ENV, &self.handshake_root);
         if let Some(artifact_path) = artifact_path {
             command.env(ARTIFACT_PATH_ENV, artifact_path);
         }
-        inherit_command_descriptor(&mut command, command_lifetime);
-        let status = command
-            .status()
+        let status = command_lifetime
+            .spawn(command)
+            .and_then(|mut child| child.wait().map_err(CommandLifetimeLockError::from))
             .map_err(|error| BackupRunnerCommandError::failed("test-command", error.to_string()))?;
         if !status.success() {
             return Err(BackupRunnerCommandError::failed(
@@ -363,7 +356,7 @@ impl BackupRunnerExecutor for InFlightCommandExecutor {
     fn stop_canister(
         &mut self,
         _canister_id: &str,
-        command_lifetime: CommandLifetimeHandle,
+        command_lifetime: &mut CommandLifetimeLock,
     ) -> Result<(), BackupRunnerCommandError> {
         self.execute_command(BackupOperationKind::Stop, command_lifetime, None)
     }
@@ -371,7 +364,7 @@ impl BackupRunnerExecutor for InFlightCommandExecutor {
     fn start_canister(
         &mut self,
         _canister_id: &str,
-        command_lifetime: CommandLifetimeHandle,
+        command_lifetime: &mut CommandLifetimeLock,
     ) -> Result<(), BackupRunnerCommandError> {
         self.execute_command(BackupOperationKind::Start, command_lifetime, None)
     }
@@ -379,7 +372,7 @@ impl BackupRunnerExecutor for InFlightCommandExecutor {
     fn create_snapshot(
         &mut self,
         _canister_id: &str,
-        command_lifetime: CommandLifetimeHandle,
+        command_lifetime: &mut CommandLifetimeLock,
     ) -> Result<BackupRunnerSnapshot, BackupRunnerCommandError> {
         self.execute_command(BackupOperationKind::CreateSnapshot, command_lifetime, None)?;
         Ok(snapshot())
@@ -390,7 +383,7 @@ impl BackupRunnerExecutor for InFlightCommandExecutor {
         _canister_id: &str,
         _snapshot_id: &str,
         artifact_path: &Path,
-        command_lifetime: CommandLifetimeHandle,
+        command_lifetime: &mut CommandLifetimeLock,
     ) -> Result<(), BackupRunnerCommandError> {
         self.execute_command(
             BackupOperationKind::DownloadSnapshot,
@@ -526,7 +519,7 @@ fn assert_target_recovery(
 fn wait_for_command_quiescence(layout: &BackupLayout, sequence: usize) {
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
-        match CommandLifetimeLock::acquire(&layout.execution_journal_path(), sequence) {
+        match CommandLifetimeLock::acquire(&layout.execution_journal_path(), sequence as u64) {
             Ok(lock) => {
                 lock.finish().expect("finish quiescence probe");
                 return;
@@ -536,21 +529,6 @@ fn wait_for_command_quiescence(layout: &BackupLayout, sequence: usize) {
             }
             Err(error) => panic!("command tree did not become quiescent: {error:?}"),
         }
-    }
-}
-
-fn inherit_command_descriptor(command: &mut Command, handle: CommandLifetimeHandle) {
-    let raw_fd = handle.raw_fd();
-    // SAFETY: the runner-owned command lock keeps the descriptor valid through
-    // spawn, and this child setup performs only fcntl on that descriptor.
-    unsafe {
-        command.pre_exec(move || {
-            // SAFETY: the runner retains the descriptor until command return.
-            let fd = BorrowedFd::borrow_raw(raw_fd);
-            let mut flags = fcntl_getfd(fd).map_err(io::Error::from)?;
-            flags.remove(FdFlags::CLOEXEC);
-            fcntl_setfd(fd, flags).map_err(io::Error::from)
-        });
     }
 }
 

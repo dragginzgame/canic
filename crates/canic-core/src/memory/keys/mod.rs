@@ -15,6 +15,7 @@ keys! {
     #[cfg(any(test, feature = "auth-delegated-token-issuer-state"))]
     AUTH_DELEGATED_TOKEN_ISSUER_STATE_V1 = "canic.core.auth.delegated_token_issuer.state.v1";
     AUTH_LOCAL_APPLICATION_AUTHORIZATION_REPLAYS_V1 = "canic.core.auth.local_application_authorization.replays.v1";
+    AUTH_LOCAL_APPLICATION_AUTHORIZATION_LOGINS_V1 = "canic.core.auth.local_application_authorization.logins.v1";
     AUTH_LOCAL_APPLICATION_AUTHORIZATION_SESSIONS_V1 = "canic.core.auth.local_application_authorization.sessions.v1";
     #[cfg(any(test, feature = "auth-local-application-authorization"))]
     AUTH_LOCAL_APPLICATION_AUTHORIZATION_STATE_V1 = "canic.core.auth.local_application_authorization.state.v1";

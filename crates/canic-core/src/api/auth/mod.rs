@@ -13,11 +13,9 @@ use crate::{dto::error::Error, ops::config::ConfigOps};
 pub use ic_auth::signature_store::SignatureSibling;
 
 // Internal auth pipeline:
-// - `application_session` owns managed scoped-session command/status adapters.
 // - `attestation` owns role-attestation endpoint adapters.
 // - `root` owns root-only issuer policy, renewal, and chain-key proof adapters.
 // - `token` owns issuer-local delegated-token endpoint adapters.
-mod application_session;
 mod attestation;
 mod root;
 mod token;

@@ -13,7 +13,6 @@ use syn::{FnArg, LitStr, Signature, Type};
 ///
 /// This phase enforces only *structural* invariants:
 /// - fallible return requirements
-/// - authenticated predicate argument shape
 /// - internal-only predicate usage
 /// - explicit public-vs-gated access shape
 ///
@@ -81,18 +80,7 @@ pub(super) fn validate(
         ));
     }
 
-    let requires_authenticated = requires_authenticated(&parsed.requires);
-    let requires_attested_local_subnet = requires_attested_local_subnet(&parsed.requires);
-    if requires_authenticated && requires_attested_local_subnet {
-        return Err(syn::Error::new_spanned(
-            &sig.ident,
-            "authenticated(...) and attested_local_subnet() cannot share one first proof argument",
-        ));
-    }
-    if requires_authenticated {
-        validate_authenticated_args(sig)?;
-    }
-    if requires_attested_local_subnet {
+    if requires_attested_local_subnet(&parsed.requires) {
         validate_attested_local_subnet_args(sig)?;
     }
 
@@ -106,25 +94,6 @@ pub(super) fn validate(
         internal: parsed.internal,
         query_mode: parsed.query_mode,
     })
-}
-
-fn requires_authenticated(requires: &[AccessExprAst]) -> bool {
-    requires.iter().any(access_expr_contains_authenticated)
-}
-
-fn access_expr_contains_authenticated(expr: &AccessExprAst) -> bool {
-    match expr {
-        AccessExprAst::All(exprs) | AccessExprAst::Any(exprs) => {
-            exprs.iter().any(access_expr_contains_authenticated)
-        }
-        AccessExprAst::Not(expr) => access_expr_contains_authenticated(expr),
-        AccessExprAst::Pred(AccessPredicateAst::Builtin(BuiltinPredicate::Authenticated {
-            ..
-        })) => true,
-        AccessExprAst::Pred(AccessPredicateAst::Builtin(_) | AccessPredicateAst::Custom(_)) => {
-            false
-        }
-    }
 }
 
 fn requires_attested_local_subnet(requires: &[AccessExprAst]) -> bool {
@@ -178,17 +147,12 @@ fn access_expr_contains_identity_predicate(expr: &AccessExprAst) -> bool {
                     | BuiltinPredicate::CallerIsRoot
                     | BuiltinPredicate::CallerIsSameCanister
                     | BuiltinPredicate::CallerIsFleetAdmitted
-                    | BuiltinPredicate::Authenticated { .. }
                     | BuiltinPredicate::AttestedLocalSubnet
                     | BuiltinPredicate::ServiceAuthority { .. }
             )
         }
         AccessExprAst::Pred(AccessPredicateAst::Custom(_)) => false,
     }
-}
-
-fn validate_authenticated_args(sig: &Signature) -> syn::Result<()> {
-    validate_first_arg_type(sig, "DelegatedToken", authenticated_arg_error())
 }
 
 fn validate_attested_local_subnet_args(sig: &Signature) -> syn::Result<()> {
@@ -224,10 +188,6 @@ fn validate_first_arg_type(
     }
 
     Err(syn::Error::new_spanned(first_ty, error))
-}
-
-const fn authenticated_arg_error() -> &'static str {
-    "authenticated(...) requires a first argument of type `DelegatedToken`"
 }
 
 fn type_ident(ty: &Type) -> Option<&syn::Ident> {

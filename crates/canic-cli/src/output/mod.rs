@@ -13,7 +13,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use ic_host_fs::durable::write_bytes;
+use ic_host_fs::durable::{PublicationMode, WriteOptions, write_bytes};
 use serde::{Serialize, de::DeserializeOwned};
 
 /// Resolve the selected output's existing parent once, including macOS `/tmp`.
@@ -73,8 +73,15 @@ where
 {
     if let Some(path) = out {
         let data = serde_json::to_vec_pretty(value)?;
-        write_bytes(&resolve_operator_path(path)?, &data)
-            .map_err(canic_host::publication::ops::io_error)?;
+        write_bytes(
+            &resolve_operator_path(path)?,
+            WriteOptions {
+                mode: PublicationMode::Replace,
+                permissions: 0o666,
+            },
+            &data,
+        )
+        .map_err(canic_host::publication::ops::io_error)?;
         return Ok(());
     }
 
@@ -92,8 +99,15 @@ where
     E: From<io::Error> + From<serde_json::Error>,
 {
     let data = serde_json::to_vec_pretty(value)?;
-    write_bytes(&resolve_operator_path(path)?, &data)
-        .map_err(canic_host::publication::ops::io_error)?;
+    write_bytes(
+        &resolve_operator_path(path)?,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &data,
+    )
+    .map_err(canic_host::publication::ops::io_error)?;
     Ok(())
 }
 
@@ -103,8 +117,15 @@ where
     E: From<io::Error>,
 {
     if let Some(path) = out {
-        write_bytes(&resolve_operator_path(path)?, text.as_bytes())
-            .map_err(canic_host::publication::ops::io_error)?;
+        write_bytes(
+            &resolve_operator_path(path)?,
+            WriteOptions {
+                mode: PublicationMode::Replace,
+                permissions: 0o666,
+            },
+            text.as_bytes(),
+        )
+        .map_err(canic_host::publication::ops::io_error)?;
     } else {
         println!("{text}");
     }

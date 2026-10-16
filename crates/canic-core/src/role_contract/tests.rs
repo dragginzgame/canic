@@ -192,6 +192,7 @@ fn canonical_allocations_match_the_active_memory_map() {
                 "canic.core.auth.local_application_authorization.state.v1".to_string(),
                 "canic.core.auth.local_application_authorization.sessions.v1".to_string(),
                 "canic.core.auth.local_application_authorization.replays.v1".to_string(),
+                "canic.core.auth.local_application_authorization.logins.v1".to_string(),
             ],
         ),
         (

@@ -10,6 +10,7 @@ use canic_host::fleet_ensure::dto::{
     FleetComponentProgress, FleetComponentProgressState, FleetEnsureActionKind, FleetEnsurePhase,
     FleetEnsureProgress, FleetEnsureProgressState, FleetProvisioningProgress,
 };
+use ic_host_text::escape::terminal_text;
 use std::{fmt::Write as _, time::Duration};
 
 pub(in crate::fleet) fn plain(progress: &FleetEnsureProgress) -> String {
@@ -24,7 +25,7 @@ pub(in crate::fleet) fn plain(progress: &FleetEnsureProgress) -> String {
             line,
             "; next reviewed work: {} ({})",
             action_label(action.kind),
-            safe_text(&action.target)
+            terminal_text(&action.target)
         );
     }
     if let FleetEnsureProgressState::AwaitingProgress {
@@ -116,7 +117,7 @@ pub(super) fn panel(
         lines.push(format!(
             "Current work: {} ({})",
             action_label(action.kind),
-            safe_text(&action.target)
+            terminal_text(&action.target)
         ));
     }
     if let FleetEnsureProgressState::AwaitingProgress {
@@ -179,10 +180,10 @@ fn component_label(component: &FleetComponentProgress) -> String {
     };
     format!(
         "{}[{}]/{} ({}): {state}{}",
-        safe_text(&component.deployment),
+        terminal_text(&component.deployment),
         component.placement,
-        safe_text(&component.member_path.join("/")),
-        safe_text(&component.component_spec),
+        terminal_text(&component.member_path.join("/")),
+        terminal_text(&component.component_spec),
         if component.current { " [current]" } else { "" }
     )
 }
@@ -316,13 +317,6 @@ const fn action_label(kind: FleetEnsureActionKind) -> &'static str {
     }
 }
 
-fn safe_text(value: &str) -> String {
-    value
-        .chars()
-        .map(|ch| if ch.is_control() { '?' } else { ch })
-        .collect()
-}
-
 fn pending_retry(
     retry: &canic_contracts::dto::component_provisioning::FleetComponentProvisioningRootFailure,
 ) -> Vec<String> {
@@ -342,10 +336,10 @@ fn pending_retry(
             lines.push(format!(
                 "Dependency {} {} ({}), rejection {:?}: {}",
                 dependency.target,
-                safe_text(&dependency.method),
-                safe_text(&dependency.step),
+                terminal_text(&dependency.method),
+                terminal_text(&dependency.step),
                 dependency.rejection_code,
-                safe_text(
+                terminal_text(
                     dependency
                         .rejection_detail
                         .as_deref()

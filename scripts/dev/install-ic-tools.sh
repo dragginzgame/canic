@@ -145,22 +145,10 @@ verify_bundle() (
 
 tool_root="$consumer/.tools"
 active="$tool_root/ic"
-[[ ! -L "$tool_root" ]] || { echo 'repository .tools may not be a symlink' >&2; exit 1; }
-if [[ -e "$active" && ! -L "$active" ]]; then
-    echo 'refusing to replace an unmanaged .tools/ic path' >&2; exit 1
-fi
-if [[ -L "$active" ]]; then
-    # Preserve trailing newlines so admission checks the literal link target.
-    selection="$(perl -e 'my $s=readlink($ARGV[0]); defined($s) or exit 1; print $s,"/."' "$active")"
-    selection="${selection%/.}"
-    [[ "$selection" =~ ^ic-set\.[[:alnum:]]+$ ]] || {
-        echo 'refusing an unmanaged .tools/ic link' >&2; exit 1;
-    }
-    if bundle="$(tool_store_resolve "$tool_root/$selection" "$store_slot")" &&
-        tool_store_unlocked && verify_bundle "$bundle"; then
-        printf '%s\n' "$active/bin"
-        exit 0
-    fi
+bundle="$(tool_store_verified_selection verify_bundle)"
+if [[ -n "$bundle" ]]; then
+    printf '%s\n' "$active/bin"
+    exit 0
 fi
 [[ "$check" == false ]] || { echo 'IC tools missing, changed or selected with different pins; run make install-ic-tools' >&2; exit 1; }
 for command in curl tar gzip perl; do command -v "$command" >/dev/null; done

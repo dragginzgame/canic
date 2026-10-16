@@ -6,26 +6,9 @@
 
 use crate::{
     cdk::types::Principal,
-    dto::auth::{
-        DelegatedRoleGrant, DelegatedToken, DelegatedTokenClaims, DelegationAudience,
-        RoleAttestation, RootKeyPolicyV1,
-    },
+    dto::auth::{RoleAttestation, RootKeyPolicyV1},
 };
 use canic_contracts::ids::{BuildNetwork, CanisterRole};
-
-///
-/// PrepareDelegatedTokenIssuerProofInput
-///
-/// Auth-ops input for preparing an issuer-local delegated token proof.
-///
-
-#[derive(Clone)]
-pub struct PrepareDelegatedTokenIssuerProofInput {
-    pub audience: DelegationAudience,
-    pub grants: Vec<DelegatedRoleGrant>,
-    pub ttl_ns: u64,
-    pub ext: Option<Vec<u8>>,
-}
 
 ///
 /// PrepareRootRoleAttestationInput
@@ -114,18 +97,6 @@ pub struct PreparedRootRoleAttestation {
 }
 
 ///
-/// PreparedDelegatedTokenIssuerProof
-///
-/// Prepared issuer-local delegated token material and retrieval expiry.
-///
-
-pub struct PreparedDelegatedTokenIssuerProof {
-    pub claims: DelegatedTokenClaims,
-    pub claims_hash: [u8; 32],
-    pub retrieval_expires_at_ns: u64,
-}
-
-///
 /// AuthProofVerifierConfig
 ///
 /// Runtime verifier trust-anchor configuration for delegated auth proofs.
@@ -140,6 +111,7 @@ pub struct AuthProofVerifierConfig {
             reason = "network binding is consumed by the enabled verifier"
         )
     )]
+    #[cfg(test)]
     pub build_network: BuildNetwork,
     pub root_canister_id: Principal,
     pub ic_root_public_key_raw: Vec<u8>,
@@ -156,26 +128,4 @@ pub struct AuthProofVerifierConfig {
 pub struct AuthChainKeyRootVerifierConfig {
     pub policy: RootKeyPolicyV1,
     pub allow_test_chain_key: bool,
-}
-
-///
-/// VerifyDelegatedTokenRuntimeInput
-///
-/// Auth-ops input for local delegated-token verification.
-///
-
-#[cfg_attr(
-    not(any(test, feature = "auth-delegated-token-verify")),
-    expect(
-        dead_code,
-        reason = "verification input is rejected when the capability is absent"
-    )
-)]
-pub struct VerifyDelegatedTokenRuntimeInput<'a> {
-    pub token: &'a DelegatedToken,
-    pub caller: Principal,
-    pub max_cert_ttl_ns: u64,
-    pub max_token_ttl_ns: u64,
-    pub required_scopes: &'a [String],
-    pub now_ns: u64,
 }
