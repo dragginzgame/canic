@@ -2356,9 +2356,9 @@ dependencies = [
 
 [[package]]
 name = "ic-auth"
-version = "0.7.3"
+version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f79e8c6a4929c32a989ebaa291e2c04f8420a911a7834c226734ca77d499b8d0"
+checksum = "3e82713f0dc3d58e772a98babb755965c7fb635bb8cb417a7ca36cd6cf8181b0"
 dependencies = [
  "curve25519-dalek 5.0.0",
  "ed25519-dalek 3.0.0",
@@ -2377,9 +2377,9 @@ dependencies = [
 
 [[package]]
 name = "ic-auth-protocol-types"
-version = "0.7.3"
+version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf5ba3b80f3633f469c3a02dcf85d995638ecca62a47ab441fe88e59340e29c5"
+checksum = "1c176f40ab9cdbfe4540911ace1a128262dc2f4d3168c0d47e367889fbdd0749"
 dependencies = [
  "candid",
  "serde",
@@ -2694,9 +2694,9 @@ dependencies = [
 
 [[package]]
 name = "ic-metrics"
-version = "0.11.5"
+version = "0.11.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8fd222c253f7db55b9bc3393b24ad7895edef6641bed28e45bdc49c3a228f7b"
+checksum = "17c632ef8715ef18f74eaf3586a4eb8fe314fc3d80d325de586896d24a661535"
 
 [[package]]
 name = "ic-query"
