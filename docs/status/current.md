@@ -11,6 +11,18 @@ remain **0.111.0**. The objective is to delete duplicate mechanisms in favor of
 upstream owners; moving declarations alone does not demonstrate faster builds.
 
 
+## Auth storage visibility lint — 2026-10-16
+
+The two conditional Auth record reexports now use `pub` inside the existing
+crate-private storage module. The layering guard explicitly requires that storage
+boundary and exempts only its internal reexports; `ops/storage` remains checked.
+Core library/test strict lint with `auth-local-application-authorization`, the
+layering guard and repository-configured shell lint pass. Evidence:
+`/tmp/canic-auth-visibility-clippy.log`; incoming content:
+`/tmp/canic-auth-visibility-before/`. This clears the reported visibility failure;
+the complete 0.112 Auth/installed-qualification blockers below remain.
+
+
 ## Host 0.23 caller alignment — 2026-10-16
 
 Host/Backup/CLI compile with Host 0.23.1. Missing-path resolution explicitly

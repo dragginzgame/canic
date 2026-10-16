@@ -40,6 +40,7 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
 - **Release checks:** include the shared version validator in isolated release
   fixtures so preflight and failure-recovery checks can run after tooling updates.
+  Align record-export checks with the crate-private storage boundary.
 
 - **Diagnostic lookup:** distinguish out-of-range numbers from malformed codes
   ([#547](https://github.com/dragginzgame/canic/issues/547)).

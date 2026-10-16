@@ -10,7 +10,7 @@ use crate::{
 use std::cell::RefCell;
 
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
-pub(crate) use records::LocalApplicationAuthorityBindingRecord;
+pub use records::LocalApplicationAuthorityBindingRecord;
 
 pub use records::{
     ActiveDelegationProofRecord, ChainKeyAlgorithmRecord, ChainKeyBatchHeaderRecord,
@@ -27,7 +27,7 @@ pub use records::{
 };
 
 #[cfg(test)]
-pub(crate) use records::LocalApplicationLoginTotalsRecord;
+pub use records::LocalApplicationLoginTotalsRecord;
 
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
 thread_local! {
