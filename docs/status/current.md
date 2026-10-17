@@ -1,5 +1,55 @@
 # Current handoff — 2026-10-14
 
+## Build 0.14 registry adoption — 2026-10-17
+
+The follow-up replaces three raw-file-hash `to_hex()` calls with canonical
+`Display`/`to_string()`, preserving retained output keys, fixture comparison and
+rejection diagnostics. Registry Build 0.14 / Host 0.25 still passes actual Rust
+1.91 library checks and strict development all-target Clippy for Host and Testing
+Internal. A separate frozen Build candidate with direct Host file hashes passes
+those checks and all 44 enabled reuse cases; its source patch SHA-256 is
+`e6ac51fa032f1cfe6c77fa04a532d6b22f4c2f5d5f302c16d754ca0661d42c25`.
+The opt-in measurement remains ignored; no PocketIC instance or native macOS
+qualification is implied. Logs: `/tmp/ic-build-representation-cuts-20261017/`.
+That rehearsal kept Host 0.25 and changed only Build's source/checksum lock row;
+the registry lock is restored byte-for-byte. No path override or unpublished
+requirement is committed. Build's concurrent Host 0.26 adoption requires its own
+matching consumer graph after publication; this PR retains the published pair.
+
+The isolated [PR #593](https://github.com/dragginzgame/canic/pull/593) extends
+`5181a159` from pushed main `53f1f22`, selecting registry Build 0.14.0 and
+Host 0.25.1. It excludes the normal checkout's dirty integration batch; own
+versions remain 0.111.0 and Testkit remains the public base's 0.49 selection.
+Internal/embedded Wasm recipes use typed Cargo selections, canonical feature and
+phase values, stored batch entries and the single configured batch entrypoint.
+
+Complete-build reuse constructs the post-work specification without capturing it
+first. Canonical validation checks original and selected roots together and
+returns the selected inventory used in Canic's record key. Required-file and
+fixture checks remain Canic policy; rejection-only recapture preserves the
+primary typed failure even when diagnostics cannot be captured or retained.
+Canic's structural installation policy is reused at its existing canonical path
+from committed `56f8d65c1`, over Host's facts. No duplicate Wasm inspector,
+source engine, release admission or compatibility path is added.
+
+Actual Rust 1.91 library checking and Rust 1.99 all-target strict Clippy pass for
+Host and Testing Internal. All 44 enabled reuse cases, affected Wasm/artifact/Root
+and feature-selection cases, and six internal artifact cases pass. The existing
+opt-in reuse measurement remains ignored. Real Cargo/Wasm fixtures complement
+synthetic release sealing and producer bytes; this is not installed PocketIC or
+native macOS qualification. Rust 1.91 all-target test compilation remains blocked
+by pre-existing tests using a newer standard-library assertion macro; the declared
+floor is qualified for the production libraries, not that development test source.
+
+Formatting and documentation links pass. The original PR CI's unrelated Testkit
+Candid assertion errors and native path-identity failures remain owned by
+[PR #569](https://github.com/dragginzgame/canic/pull/569) and
+[PR #519](https://github.com/dragginzgame/canic/pull/519). Required hosted checks
+remain source-bound; local checks do not establish their completion. The scoped
+contribution is ready for review; the full pending 0.112 integration batch below
+is not qualified by this work. Logs and before-images are retained under
+`/tmp/ic-build-canic-014-20261017/`.
+
 **Canic 0.111.0 is live; the integration batch remains uncommitted.** The maintainer
 explicitly waived the 0.111 closeout audit for completing Auth, Backup and Blob
 integration, then a cleanup slice to reduce Canic's surface. That decision is

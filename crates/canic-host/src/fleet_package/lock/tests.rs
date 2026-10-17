@@ -1,6 +1,6 @@
 //! Parent-only corrections, interrupted seeding and unchanged resolved graphs.
 
-use ic_build::cargo::observation::CargoFeatureSelection;
+use ic_build::cargo::selection::CargoFeatureSelection;
 
 use super::*;
 use std::fs;

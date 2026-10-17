@@ -4,10 +4,12 @@
 //! Does not own: Wasm optimization, installation, or replica validation.
 //! Boundary: parses top-level sections around artifact transforms and before publication.
 
+mod install_policy;
+
 use crate::canister_build::WasmArtifactMetrics;
 use canic_contracts::ids::BuildNetwork;
 use ic_host_artifacts::wasm::{InspectionError, InspectionLimits, WasmFacts};
-use ic_host_tools::install_limits::{InstallReport, REFERENCE_LIMITS};
+use install_policy::InstallReport;
 use std::{fs, path::Path};
 
 const IC_WASM_CODE_SECTION_WARNING_HEADROOM_BYTES: i128 = 768 * 1024;
@@ -162,7 +164,7 @@ fn inspect_wasm(wasm: &[u8]) -> Result<WasmStructure<'_>, InspectionError> {
             custom_sections: wasm.len() / 2,
         },
     )?;
-    let install_report = REFERENCE_LIMITS.report(&facts);
+    let install_report = InstallReport::from_facts(&facts);
     let public_candid_metadata = facts
         .custom_sections
         .iter()

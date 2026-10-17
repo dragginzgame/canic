@@ -159,9 +159,13 @@ fn rejected_build_retains_path_fingerprints_without_becoming_reuse_authority() {
 fn unavailable_rejection_diagnostics_preserve_the_typed_failure() {
     run_with_private_cargo_target(|| {
         let (root, context) = infrastructure_build_fixture();
-        let reuse = prepared_reuse(&context);
+        let tool = context.workspace_root.join("required-tool");
+        fs::write(&tool, b"admitted tool").unwrap();
+        let mut reuse = prepared_reuse(&context);
+        reuse.tool_paths.push(tool.clone());
         let release = finalize_fixture(&context);
         let source = context.workspace_root.join("src/lib.rs");
+        let original = fs::read(&source).unwrap();
         fs::write(&source, b"pub const EDITED: bool = true;\n").unwrap();
         let evidence_path = context
             .icp_root
@@ -181,6 +185,12 @@ fn unavailable_rejection_diagnostics_preserve_the_typed_failure() {
                 Err(BuildReuseError::ChangedInput(path)) if path == source));
             assert_eq!(fs::read(&destination).unwrap(), b"untouched");
         }
+        // Required-tool disappearance also makes the diagnostic recapture fail.
+        fs::write(&source, original).unwrap();
+        fs::remove_file(&tool).unwrap();
+        assert!(matches!(reuse.record(release, vec![]),
+            Err(BuildReuseError::ChangedInput(path)) if path == tool));
+        assert!(!reuse.record_path.exists());
         drop(reuse);
         fs::remove_dir_all(root).unwrap();
     });

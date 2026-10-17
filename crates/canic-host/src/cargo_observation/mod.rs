@@ -5,9 +5,9 @@
 
 use crate::cargo_command;
 use ic_build::cargo::observation::{
-    CargoFeatureSelection, CargoMetadataSpec, CargoTreeSpec, observe_metadata, observe_tree,
-    schema::Metadata,
+    CargoMetadataSpec, CargoTreeSpec, observe_metadata, observe_tree, schema::Metadata,
 };
+use ic_build::cargo::selection::CargoFeatureSelection;
 use ic_host_process::tool::{OutputLimit, OutputLimits};
 use std::path::Path;
 

@@ -1,7 +1,7 @@
 //! Build and qualify configured canister artifacts with exact Cargo feature contracts.
 
 mod output;
-use ic_build::cargo::observation::CargoFeatureSelection;
+use ic_build::cargo::selection::CargoFeatureSelection;
 #[cfg(test)]
 mod tests;
 
@@ -612,6 +612,7 @@ pub fn resolve_canister_artifact_build_spec(
         &CargoFeatureSelection {
             features: options.cargo_features.clone(),
             default_features: options.default_features,
+            all_features: false,
         },
     );
     resolve_canister_artifact_build_spec_from_validation(context, config, canister_name, validation)

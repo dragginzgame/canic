@@ -15639,8 +15639,8 @@ cycles = "80T"
         crate::pic::progress::timed(
             "FLEET",
             crate::pic::progress::ProgressStatus::Ready,
-            &format!("active baseline (slot {})", outcome.slot()),
-            outcome.timings().total(),
+            &format!("active baseline (slot {})", outcome.slot),
+            outcome.timings.total(),
         );
         crate::pic::progress::detail("FLEET", &format!("active baseline: {outcome}"));
 

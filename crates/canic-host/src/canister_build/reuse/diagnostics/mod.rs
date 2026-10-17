@@ -225,6 +225,6 @@ fn value_text(value: &InputEvidenceValue) -> String {
     match value {
         InputEvidenceValue::Missing => "absent".into(),
         InputEvidenceValue::Directory => "directory".into(),
-        InputEvidenceValue::File { sha256 } => sha256.to_hex(),
+        InputEvidenceValue::File { sha256 } => sha256.to_string(),
     }
 }
