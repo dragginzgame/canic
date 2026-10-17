@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Prepare shared Cargo execution and typed artifact/export observations for Build
+  0.17. Keep Canic's declaration/runtime recipes, release admission and finalization.
+  The dependent draft needs producer publication and matching dependency/lock
+  alignment before integration; existing published selectors remain unchanged.
+
 Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
 ### ⚠️ Breaking

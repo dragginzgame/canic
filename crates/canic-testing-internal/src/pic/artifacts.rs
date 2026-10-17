@@ -4,12 +4,11 @@ use canic_host::role_contract::{
     CargoFeatureSelection, PackageValidationMode, RolePackageValidation,
 };
 use ic_build::artifacts::{
-    ArtifactCacheMaintenance, ArtifactCachePrunePolicy, ArtifactCacheSpec, LabeledWasmBuildSpec,
+    ArtifactCacheMaintenance, ArtifactCacheSpec, CacheRetentionLimits, LabeledWasmBuildSpec,
     SharedIncrementalTargetMaintenanceConfig, SharedIncrementalTargetMaintenanceFailureMode,
-    SharedIncrementalTargetMaintenanceOutcome, SharedIncrementalTargetPrunePolicy,
-    WasmBuildBatchConfig, WasmBuildBatchProgressEvent, WasmBuildBatchReport, WasmBuildPhase,
-    WasmBuildProgressConfig, WasmBuildProgressEvent, WasmBuildRecord, WasmBuildSpec,
-    build_wasm_canisters_cached_batch, resolve_cargo_build_inputs,
+    SharedIncrementalTargetMaintenanceOutcome, WasmBuildBatchConfig, WasmBuildBatchProgressEvent,
+    WasmBuildBatchReport, WasmBuildPhase, WasmBuildProgressConfig, WasmBuildProgressEvent,
+    WasmBuildRecord, WasmBuildSpec, build_wasm_canisters_cached_batch, resolve_cargo_build_inputs,
 };
 #[cfg(all(
     feature = "pocketic-fixtures",
@@ -63,9 +62,9 @@ pub(super) fn with_canonical_root_cargo_inputs(
         &evidence.cargo_workspace_root,
         target_dir,
         &[evidence.role_package_name.as_str()],
+        canic_host::build_environment::cargo_inputs(environment.iter().copied()),
     )
-    .with_cargo_selection(profile.cargo_selection())
-    .with_extra_env(environment.iter().copied());
+    .with_cargo_selection(profile.cargo_selection());
     let inputs = resolve_cargo_build_inputs(&build).expect("canonical Root cache Cargo inputs");
     cache.with_cargo_build_inputs("canonical-root-cargo", &build, &inputs)
 }
@@ -265,13 +264,17 @@ fn canonical_fleet_coordinator_cache_spec(
         ("ICP_ENVIRONMENT", "local"),
         INTERNAL_TEST_RELEASE_BUILD_ID,
     ];
-    let cargo_build = WasmBuildSpec::new(workspace_root, target_dir, &["canic", "canic-host"])
-        .with_cargo_selection(ic_build::cargo::selection::CargoSelection {
-            profile: Some("fast".into()),
-            locked: true,
-            ..Default::default()
-        })
-        .with_extra_env(environment);
+    let cargo_build = WasmBuildSpec::new(
+        workspace_root,
+        target_dir,
+        &["canic", "canic-host"],
+        canic_host::build_environment::cargo_inputs(environment),
+    )
+    .with_cargo_selection(ic_build::cargo::selection::CargoSelection {
+        profile: Some("fast".into()),
+        locked: true,
+        ..Default::default()
+    });
     let cargo_inputs = resolve_cargo_build_inputs(&cargo_build)
         .expect("resolve canonical Fleet Coordinator Cargo inputs");
     let config_relative = config_path
@@ -460,18 +463,22 @@ pub(super) fn build_internal_test_wasm_canisters_with_features(
         .map(|package| {
             LabeledWasmBuildSpec::new(
                 *package,
-                WasmBuildSpec::new(workspace_root, target_dir, &[*package])
-                    .with_cargo_selection(selection.clone())
-                    .with_extra_env(build_env.iter().copied())
-                    .with_additional_inputs(additional_inputs.iter().cloned())
-                    .with_shared_incremental_target(internal_test_shared_wasm_target(
-                        workspace_root,
-                        &build_env,
-                    ))
-                    .with_prune_policy_at_most_every(
-                        internal_test_artifact_prune_policy(),
-                        internal_test_artifact_maintenance_interval(),
-                    ),
+                WasmBuildSpec::new(
+                    workspace_root,
+                    target_dir,
+                    &[*package],
+                    canic_host::build_environment::cargo_inputs(build_env.iter().copied()),
+                )
+                .with_cargo_selection(selection.clone())
+                .with_additional_inputs(additional_inputs.iter().cloned())
+                .with_shared_incremental_target(internal_test_shared_wasm_target(
+                    workspace_root,
+                    &build_env,
+                ))
+                .with_prune_policy_at_most_every(
+                    internal_test_artifact_prune_policy(),
+                    internal_test_artifact_maintenance_interval(),
+                ),
             )
         })
         .collect::<Vec<_>>();
@@ -483,6 +490,7 @@ pub(super) fn build_internal_test_wasm_canisters_with_features(
         &builds,
         batch_config,
         Some((progress, &mut report_wasm_build_progress)),
+        ic_host_process::child::OwnedChild::spawn_direct,
     )
     .unwrap_or_else(|error| panic!("internal test Wasm batch contract failed: {error}"));
     report_wasm_batch(&batch);
@@ -596,8 +604,8 @@ fn internal_test_shared_wasm_target(workspace_root: &Path, build_env: &[(&str, &
         .join(build_network)
 }
 
-pub(super) const fn internal_test_artifact_prune_policy() -> ArtifactCachePrunePolicy {
-    ArtifactCachePrunePolicy::new()
+pub(super) const fn internal_test_artifact_prune_policy() -> CacheRetentionLimits {
+    CacheRetentionLimits::new()
         .with_max_age(INTERNAL_TEST_WASM_CACHE_MAX_AGE)
         .with_max_size_bytes(INTERNAL_TEST_WASM_CACHE_MAX_BYTES)
 }
@@ -606,8 +614,8 @@ pub(super) const fn internal_test_artifact_maintenance_interval() -> Duration {
     INTERNAL_TEST_WASM_CACHE_MAINTENANCE_INTERVAL
 }
 
-const fn internal_test_shared_wasm_target_prune_policy() -> SharedIncrementalTargetPrunePolicy {
-    SharedIncrementalTargetPrunePolicy::new()
+const fn internal_test_shared_wasm_target_prune_policy() -> CacheRetentionLimits {
+    CacheRetentionLimits::new()
         .with_max_age(INTERNAL_TEST_SHARED_WASM_TARGET_MAX_AGE)
         .with_max_size_bytes(INTERNAL_TEST_SHARED_WASM_TARGET_MAX_BYTES)
 }
@@ -807,7 +815,7 @@ mod tests {
         let replacement = acquire("second");
         assert!(!replacement.is_reused());
         fs::remove_file(&output).unwrap();
-        let policy = ArtifactCachePrunePolicy::new().with_max_size_bytes(0);
+        let policy = CacheRetentionLimits::new().with_max_size_bytes(0);
         prune_artifact_cache(&cache_root, "handoff", policy).unwrap();
         let original_path = retained_artifact_path(&retained, "probe").to_path_buf();
         assert_ne!(original_path, output);
@@ -1046,8 +1054,13 @@ mod tests {
         let target = root.join("target/compiler");
         fs::create_dir_all(&target).unwrap();
         let artifact = target.join("working-set.rlib");
-        let spec = WasmBuildSpec::new(&root, &root.join("target/exact"), &["retention_fixture"])
-            .with_shared_incremental_target(&target);
+        let spec = WasmBuildSpec::new(
+            &root,
+            &root.join("target/exact"),
+            &["retention_fixture"],
+            canic_host::build_environment::cargo_inputs(std::iter::empty::<(&str, &str)>()),
+        )
+        .with_shared_incremental_target(&target);
         // Sparse files exercise the actual logical-byte accounting without
         // allocating gigabytes of test data or touching a live compiler cache.
         for (bytes, should_clear) in [(5_u64 << 30, false), (9_u64 << 30, true)] {

@@ -30,6 +30,7 @@ fn generated_infrastructure_inputs_are_stable_before_compilation() {
         &package,
         &directory.join("target"),
         &["fixture-consumer"],
+        crate::build_environment::cargo_inputs(std::iter::empty::<(&str, &str)>()),
     )
     .with_cargo_selection(ic_build::cargo::selection::CargoSelection {
         profile: Some("release".into()),
@@ -360,4 +361,50 @@ fn build_spec(
         did_path: artifact_root.join(format!("{role}.did")),
         artifact_root,
     }
+}
+
+#[test]
+fn configured_library_command_cannot_build_a_colliding_binary() {
+    use crate::canister_build::{CanisterBuildProfile, WorkspaceBuildContext};
+    let root = crate::test_support::temp_dir("cargo-library-binary-collision");
+    fs::create_dir_all(root.join("src")).unwrap();
+    let manifest = root.join("Cargo.toml");
+    fs::write(&manifest, "[workspace]\n[package]\nname='collision'\nversion='0.1.0'\nedition='2024'\n[lib]\ncrate-type=['cdylib']\n[[bin]]\nname='collision'\npath='src/main.rs'\n").unwrap();
+    fs::write(
+        root.join("src/lib.rs"),
+        "#[unsafe(no_mangle)] pub extern \"C\" fn canister_marker() {}\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("src/main.rs"),
+        "compile_error!(\"colliding binary must not build\");\nfn main() {}\n",
+    )
+    .unwrap();
+    crate::test_support::generate_fixture_lockfile(&root);
+    let context = WorkspaceBuildContext {
+        role: "app".into(),
+        profile: CanisterBuildProfile::Debug,
+        environment: "local".into(),
+        build_network: canic_contracts::ids::BuildNetwork::Local,
+        workspace_root: root.clone(),
+        icp_root: root.clone(),
+        config_path: root.join("canic.toml"),
+        local_replica: None,
+        refresh_canonical_infrastructure_did: false,
+        release_build_id: None,
+    };
+    let mut command =
+        canister_cargo_build_command(&context, &manifest, CanisterBuildProfile::Debug);
+    command.arg("--offline").env_remove("CARGO_BUILD_BUILD_DIR");
+    let (output, messages) =
+        output_canister_cargo_command(&mut command, CargoBuildProgress::single("app")).unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let path = ic_build::cargo::execution::select_cdylib_wasm(&messages, &manifest).unwrap();
+    assert_eq!(path.file_name().unwrap(), "collision.wasm");
+    assert!(fs::read(path).unwrap().starts_with(b"\0asm"));
+    fs::remove_dir_all(root).unwrap();
 }

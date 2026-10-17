@@ -279,9 +279,9 @@ fn root_release_cargo_build_spec(
         &spec.workspace_root,
         &spec.workspace_root.join("target/icp-build"),
         &packages,
+        canic_host::build_environment::cargo_inputs(environment.iter().copied()),
     )
     .with_cargo_selection(spec.build_profile.cargo_selection())
-    .with_extra_env(environment.iter().copied())
 }
 
 fn root_release_artifact_outputs(spec: &RootBaselineSpec<'_>) -> BTreeMap<String, PathBuf> {

@@ -187,7 +187,7 @@ fn run_coordinator_cargo_build(
         );
     }
     let started = Instant::now();
-    let output = output_canister_cargo_command(
+    let (output, messages) = output_canister_cargo_command(
         &mut command,
         CargoBuildProgress::batch(["bootstrap_coordinator"], 1, 1, started),
     )?;
@@ -202,7 +202,7 @@ fn run_coordinator_cargo_build(
     );
 
     if output.status.success() {
-        crate::canister_build::retain_cargo_include_exports(context, &output.stdout)?;
+        crate::canister_build::retain_cargo_include_exports(context, &messages)?;
         return Ok(());
     }
     Err(format!(

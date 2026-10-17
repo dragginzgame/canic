@@ -1,5 +1,40 @@
 # Current handoff — 2026-10-14
 
+## Shared Cargo execution — dependent draft, 2026-10-17
+
+This isolated branch extends PR #593 at `83976fd140891f6df0051a07be45199a90c645e8`.
+App and bootstrap builds use Build's Cargo child communication and canonical
+messages. Exact manifest-bound cdylib selection moved upstream; duplicate raw
+message models, value decoding and the heartbeat thread are removed. Canic retains
+command/role recipes, target locking, declaration/runtime passes, selected export
+admission, capture before later builds, finalization and complete-release policy.
+The library-only collision regression stays with Canic's command recipe; generic
+cross-workspace collision and retained-capture controls move to Build.
+
+Existing Canic environment selection is the sole policy owner for its internal
+Wasm adapters. Complete maps include explicit consumer replacements and exclude
+the engine-owned target directory. Adapters use explicit child spawning and the
+current retention limits; the released standalone and five-part batch APIs remain.
+
+Actual Rust 1.91 library checks for Host/Testing Internal and strict development
+all-target Clippy pass against a frozen pending Build candidate and direct Host
+0.27.1. The candidate retains package version 0.16.0; it is not the published
+0.16 implementation. All 65 focused Canic cases pass: seven target/cache controls,
+44 release-input/export cases, eight artifact cases and six internal artifact
+cases. The existing opt-in reuse measurement remains ignored. Real Cargo/Wasm
+fixtures complement synthetic release/admission and retention controls. No
+PocketIC instance, full suite, native macOS or complete-release qualification.
+
+Producer [Build #75](https://github.com/dragginzgame/ic-build/issues/75) must land
+and publish 0.17 before this draft can select its registry version, align direct
+Host dependencies and qualify that exact published graph. Manifest/lock selectors
+are restored byte-for-byte to PR #593's Build 0.14 / Host 0.25 base; no path patch
+is committed. Local validation used a temporary parent Cargo configuration and
+invocation-owned fixture directory so child commands selected the same candidate.
+Own versions remain 0.111.0. Normal sibling checkouts are untouched.
+Evidence, qualified graph, frozen producer tar and patch remain in
+`/tmp/ic-build-execution-reuse-contracts-20261017/`.
+
 ## Build 0.14 registry adoption — 2026-10-17
 
 The follow-up replaces three raw-file-hash `to_hex()` calls with canonical

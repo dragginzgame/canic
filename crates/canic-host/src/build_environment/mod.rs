@@ -34,6 +34,7 @@ pub fn apply(command: &mut Command) {
 }
 
 /// Fingerprint the environment tools receive, including the fixed shell-depth value.
+#[must_use]
 pub fn inputs() -> Vec<(OsString, OsString)> {
     env::vars_os()
         .filter(|(key, _)| {
@@ -41,4 +42,25 @@ pub fn inputs() -> Vec<(OsString, OsString)> {
         })
         .chain([(OsString::from("SHLVL"), OsString::from("0"))])
         .collect()
+}
+
+/// Select the complete Cargo recipe environment with explicit consumer replacements.
+/// Cargo's target directory is owned by the build specification, not ambient input.
+#[must_use]
+pub fn cargo_inputs<I, K, V>(extra: I) -> std::collections::BTreeMap<OsString, OsString>
+where
+    I: IntoIterator<Item = (K, V)>,
+    K: Into<OsString>,
+    V: Into<OsString>,
+{
+    let mut environment = inputs()
+        .into_iter()
+        .collect::<std::collections::BTreeMap<_, _>>();
+    environment.extend(
+        extra
+            .into_iter()
+            .map(|(key, value)| (key.into(), value.into())),
+    );
+    environment.remove(OsStr::new("CARGO_TARGET_DIR"));
+    environment
 }

@@ -7,13 +7,18 @@
 #[cfg(test)]
 mod tests;
 
+use ic_build::cargo::{execution::communicate_cargo, observation::schema::Message};
 use ic_host_fs::durable::{lock_exclusive, open_regular_lock_file_with_parents};
+use ic_host_process::{
+    child::OwnedChild,
+    tool::{OutputLimit, OutputLimits},
+};
 use std::{
     env,
     ffi::OsStr,
     fs, io,
     path::{Path, PathBuf},
-    process::{Command, Output},
+    process::{Command, Stdio},
     time::{Duration, Instant},
 };
 
@@ -100,7 +105,10 @@ impl CargoBuildProgress {
 pub fn output_canister_cargo_command(
     command: &mut Command,
     progress: CargoBuildProgress,
-) -> io::Result<Output> {
+) -> io::Result<(
+    ic_host_process::tool::CompletedExecution,
+    Vec<ic_build::cargo::observation::schema::Message>,
+)> {
     crate::build_environment::apply(command);
     let declaration = command.get_envs().any(|(key, value)| {
         key == canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV
@@ -111,16 +119,50 @@ pub fn output_canister_cargo_command(
     } else {
         "runtime"
     };
-    crate::canister_build::process::output_with_progress(
-        command,
-        std::time::Duration::from_secs(30),
-        move |elapsed| {
-            eprintln!(
-                "{}",
-                progress.message(phase, elapsed, progress.phase_started.elapsed())
-            );
+    command
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = OwnedChild::spawn_direct(command)?;
+    let started = Instant::now();
+    let mut next_heartbeat = Duration::from_secs(30);
+    let mut messages = Vec::new();
+    let observed = communicate_cargo(
+        &mut child,
+        OutputLimits {
+            // Canonical typed records replace the former raw stdout buffer.
+            stdout: OutputLimit::Truncate(0),
+            stderr: OutputLimit::Truncate(usize::MAX),
+            timeout: None,
         },
-    )
+        usize::MAX,
+        || {
+            let elapsed = started.elapsed();
+            if elapsed >= next_heartbeat {
+                eprintln!(
+                    "{}",
+                    progress.message(phase, elapsed, progress.phase_started.elapsed())
+                );
+                next_heartbeat = elapsed.saturating_add(Duration::from_secs(30));
+            }
+            false
+        },
+        |_, _| Ok(()),
+        |message| {
+            if matches!(
+                message,
+                Message::CompilerArtifact(_) | Message::BuildScriptExecuted(_)
+            ) {
+                messages.push(message);
+            }
+            Ok(())
+        },
+    );
+    let execution = observed.execution.map_err(io::Error::other)?;
+    if execution.status.success() {
+        observed.messages?;
+    }
+    Ok((execution, messages))
 }
 
 /// Declaration passes retain runtime cfg/profile semantics without paying for LTO.

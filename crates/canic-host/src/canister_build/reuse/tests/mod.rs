@@ -251,7 +251,8 @@ fn compile_infrastructure_fixture(context: &WorkspaceBuildContext) {
 }
 
 fn compile_infrastructure_fixture_at(context: &WorkspaceBuildContext, target: &Path) {
-    let output = crate::cargo_command()
+    let mut command = crate::cargo_command();
+    command
         .args([
             "build",
             "--locked",
@@ -270,15 +271,18 @@ fn compile_infrastructure_fixture_at(context: &WorkspaceBuildContext, target: &P
         ])
         .env("CARGO_TARGET_DIR", target)
         .env_remove("CARGO_BUILD_BUILD_DIR")
-        .env("RUSTC_WRAPPER", "")
-        .output()
-        .unwrap();
+        .env("RUSTC_WRAPPER", "");
+    let (output, messages) = crate::canister_build::cache::output_canister_cargo_command(
+        &mut command,
+        crate::canister_build::cache::CargoBuildProgress::single(&context.role),
+    )
+    .unwrap();
     assert!(
         output.status.success(),
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    exports::retain(context, &output.stdout).unwrap();
+    exports::retain(context, &messages).unwrap();
 }
 
 #[test]

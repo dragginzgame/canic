@@ -13,6 +13,10 @@ pub(super) fn compatible_package_groups(
         workspace,
         packages,
         "wasm32-unknown-unknown",
+        &ic_build::cargo::selection::CargoSelection {
+            locked: true,
+            ..Default::default()
+        },
         OutputLimits {
             stdout: OutputLimit::Terminate(usize::MAX),
             stderr: OutputLimit::Terminate(usize::MAX),

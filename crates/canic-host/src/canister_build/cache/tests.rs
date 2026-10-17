@@ -204,16 +204,19 @@ fn cargo_keeps_explicit_wrapper_and_returns_its_failure_without_retry() {
         let mut cargo = Command::new("/bin/sh");
         cargo.current_dir(&root).args([
             "-c",
-            "printf 'run\\n' >> calls; printf '%s' \"$RUSTC_WRAPPER\"; printf 'compiler failure' >&2; exit 7",
+            "printf 'run\\n' >> calls; printf '%s' \"$RUSTC_WRAPPER\" > selected-wrapper; printf 'compiler failure' >&2; exit 7",
         ]);
         cargo.env("RUSTC_WRAPPER", selected);
         configure_canister_cargo_command(&mut cargo, &root);
-        let output =
+        let (output, _) =
             output_canister_cargo_command(&mut cargo, CargoBuildProgress::single("fixture"))
                 .unwrap();
         assert_eq!(output.status.code(), Some(7));
-        assert_eq!(output.stdout, selected.as_bytes());
         assert_eq!(output.stderr, b"compiler failure");
+        assert_eq!(
+            fs::read(root.join("selected-wrapper")).unwrap(),
+            selected.as_bytes()
+        );
         assert_eq!(fs::read(root.join("calls")).unwrap(), b"run\n");
         fs::remove_dir_all(root).unwrap();
     }

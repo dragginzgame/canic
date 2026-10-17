@@ -1,6 +1,5 @@
 //! Build and qualify configured canister artifacts with exact Cargo feature contracts.
 
-mod output;
 use ic_build::cargo::selection::CargoFeatureSelection;
 #[cfg(test)]
 mod tests;
@@ -414,7 +413,10 @@ fn build_workspace_canister_artifacts_from_specs_with_toolchain(
             group.progress(index + 1, workspace_groups.len(), started),
         )?;
         for spec in &group.specs {
-            let wasm = output::select(&messages, &spec.package_manifest_path)?;
+            let wasm = ic_build::cargo::execution::select_cdylib_wasm(
+                &messages,
+                &spec.package_manifest_path,
+            )?;
             captured.insert(
                 spec.role.clone(),
                 CapturedArtifact::capture(
@@ -464,14 +466,17 @@ fn build_workspace_canister_artifacts_from_specs_with_toolchain(
 
 fn declaration_inputs<'a>(
     specs: &[&'a CanisterArtifactBuildSpec],
-    messages: &[u8],
-) -> Result<Vec<CandidExtractionInput<'a>>, output::CargoArtifactError> {
+    messages: &[ic_build::cargo::observation::schema::Message],
+) -> Result<Vec<CandidExtractionInput<'a>>, ic_build::cargo::execution::CargoArtifactError> {
     specs
         .iter()
         .map(|spec| {
             Ok(CandidExtractionInput {
                 role: &spec.role,
-                wasm: output::select(messages, &spec.package_manifest_path)?,
+                wasm: ic_build::cargo::execution::select_cdylib_wasm(
+                    messages,
+                    &spec.package_manifest_path,
+                )?,
             })
         })
         .collect()
@@ -521,7 +526,7 @@ fn run_canister_runtime_batch(
     group: &CanisterBuildGroup<'_>,
     batch: String,
     progress: CargoBuildProgress,
-) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+) -> Result<Vec<ic_build::cargo::observation::schema::Message>, Box<dyn std::error::Error>> {
     let mut command = canister_cargo_build_command(
         context,
         &group.workspace_root.join("Cargo.toml"),
@@ -534,7 +539,7 @@ fn run_canister_runtime_batch(
     for spec in &group.specs {
         command.arg("--package").arg(&spec.package_name);
     }
-    let output = output_canister_cargo_command(&mut command, progress)?;
+    let (output, messages) = output_canister_cargo_command(&mut command, progress)?;
     if !output.status.success() {
         return Err(format!(
             "configured runtime batch failed: {}",
@@ -542,8 +547,8 @@ fn run_canister_runtime_batch(
         )
         .into());
     }
-    super::retain_cargo_include_exports(context, &output.stdout)?;
-    Ok(output.stdout)
+    super::retain_cargo_include_exports(context, &messages)?;
+    Ok(messages)
 }
 
 fn prepare_canister_artifact_output(
@@ -783,7 +788,7 @@ fn run_canister_build(
         );
     }
 
-    let output =
+    let (output, messages) =
         output_canister_cargo_command(&mut command, CargoBuildProgress::single(&context.role))?;
     if !output.status.success() {
         return Err(format!(
@@ -794,8 +799,11 @@ fn run_canister_build(
         .into());
     }
 
-    super::retain_cargo_include_exports(context, &output.stdout)?;
-    Ok(output::select(&output.stdout, manifest_path)?)
+    super::retain_cargo_include_exports(context, &messages)?;
+    Ok(ic_build::cargo::execution::select_cdylib_wasm(
+        &messages,
+        manifest_path,
+    )?)
 }
 
 fn run_canister_profile_candid_build(
@@ -805,7 +813,7 @@ fn run_canister_profile_candid_build(
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let mut command =
         canister_profile_candid_command(context, manifest_path, context.profile, options);
-    let output =
+    let (output, messages) =
         output_canister_cargo_command(&mut command, CargoBuildProgress::single(&context.role))?;
     if !output.status.success() {
         return Err(format!(
@@ -815,8 +823,11 @@ fn run_canister_profile_candid_build(
         )
         .into());
     }
-    super::retain_cargo_include_exports(context, &output.stdout)?;
-    Ok(output::select(&output.stdout, manifest_path)?)
+    super::retain_cargo_include_exports(context, &messages)?;
+    Ok(ic_build::cargo::execution::select_cdylib_wasm(
+        &messages,
+        manifest_path,
+    )?)
 }
 
 fn canister_profile_candid_command(
@@ -862,7 +873,7 @@ fn run_canister_build_batch(
     context: &WorkspaceBuildContext,
     group: &CanisterBuildGroup<'_>,
     progress: CargoBuildProgress,
-) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+) -> Result<Vec<ic_build::cargo::observation::schema::Message>, Box<dyn std::error::Error>> {
     let mut command = canister_cargo_batch_command(
         context,
         &group.workspace_root,
@@ -870,10 +881,10 @@ fn run_canister_build_batch(
         context.profile,
     );
 
-    let output = output_canister_cargo_command(&mut command, progress)?;
+    let (output, messages) = output_canister_cargo_command(&mut command, progress)?;
     if output.status.success() {
-        super::retain_cargo_include_exports(context, &output.stdout)?;
-        return Ok(output.stdout);
+        super::retain_cargo_include_exports(context, &messages)?;
+        return Ok(messages);
     }
     let roles = group
         .specs
