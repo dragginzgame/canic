@@ -11,8 +11,8 @@ use canic_testing_internal::pic::{
 };
 use ic_testkit::pic::{
     CachedPocketIcBaseline, CachedPocketIcBaselinePool, CachedPocketIcBaselinePoolGuard,
-    CandidCallErrorKind, CandidCallExt, CanisterInstallExt, ErrorCode, FixtureRecipeId, RejectCode,
-    RetryPolicy, SnapshotRestoreFunding, StandaloneCanisterFixture, StandaloneCanisterRecipe,
+    CandidCallErrorKind, CandidCallExt, CanisterInstallExt, ErrorCode, RejectCode, RetryPolicy,
+    SnapshotRestoreFunding, StandaloneCanisterFixture, StandaloneCanisterRecipe,
 };
 
 const PROBE_CRATE: &str = "payload_limit_probe";
@@ -382,7 +382,6 @@ static PROBE_FIXTURES: LazyLock<CachedPocketIcBaselinePool<ProbeRecipe>> = LazyL
     CachedPocketIcBaselinePool::new(
         NonZeroUsize::new(1).expect("one is nonzero"),
         StandaloneCanisterRecipe::new(
-            FixtureRecipeId::try_new("canic/payload-limit-probe").unwrap(),
             SnapshotRestoreFunding::TopUpTo {
                 minimum_cycles: SNAPSHOT_RESTORE_MINIMUM_CYCLES,
             },

@@ -4,16 +4,14 @@ use super::{
 };
 use ic_testkit::pic::{
     BaselinePoolContractError, BaselinePreparationStage, CachedPocketIcBaseline,
-    CanisterSnapshotTarget, ControllerSnapshotError, CycleResetPolicy, FailureDisposition,
-    FixtureRecipeId, PocketIcBaselineRecipe, PreparedBaseline, RebuildReason, ResetDomainPolicy,
-    ResetReceipt, ResetRequirements, SnapshotRestoreFunding, TimeResetPolicy,
-    is_dead_pocket_ic_transport_error,
+    CanisterSnapshotTarget, ControllerSnapshotError, FailureDisposition, PocketIcBaselineRecipe,
+    PreparedBaseline, RebuildReason, ResetDomainPolicy, ResetReceipt, ResetRequirements,
+    SnapshotRestoreFunding, TimeResetPolicy, is_dead_pocket_ic_transport_error,
 };
 use std::{collections::BTreeMap, error::Error as StdError, fmt, path::PathBuf, time::Instant};
 
 /// Typed lifecycle recipe for one reusable root topology profile.
 pub struct RootBaselineRecipe {
-    id: FixtureRecipeId,
     reset_requirements: ResetRequirements,
     spec: RootBaselineSpec<'static>,
 }
@@ -36,13 +34,9 @@ impl RootBaselineRecipe {
     ///
     /// # Errors
     ///
-    /// Returns an error when the identity or mandatory reset contract is invalid.
-    pub fn try_new(
-        identity: impl Into<String>,
-        spec: RootBaselineSpec<'static>,
-    ) -> Result<Self, BaselinePoolContractError> {
+    /// Returns an error when the mandatory reset contract is invalid.
+    pub fn try_new(spec: RootBaselineSpec<'static>) -> Result<Self, BaselinePoolContractError> {
         Ok(Self {
-            id: FixtureRecipeId::try_new(identity)?,
             reset_requirements: ResetRequirements::try_new(
                 SnapshotRestoreFunding::TopUpTo {
                     minimum_cycles: crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,
@@ -59,10 +53,6 @@ impl RootBaselineRecipe {
 impl PocketIcBaselineRecipe for RootBaselineRecipe {
     type Metadata = RootBaselineMetadata;
     type Error = RootBaselineRecipeError;
-
-    fn id(&self) -> &FixtureRecipeId {
-        &self.id
-    }
 
     fn reset_requirements(&self) -> &ResetRequirements {
         &self.reset_requirements

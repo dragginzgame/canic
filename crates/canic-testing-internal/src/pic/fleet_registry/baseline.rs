@@ -358,10 +358,10 @@ mod tests {
     use ic_testkit::pic::{
         BaselinePoolContractError, BaselinePreparationStage, CachedPocketIcBaseline,
         CachedPocketIcBaselinePool, CachedPocketIcBaselinePoolGuard, CandidCallError,
-        CanisterSnapshotTarget, ControllerSnapshotError, CycleResetPolicy, FailureDisposition,
-        FixtureRecipeId, PocketIcBaselineRecipe, PreparedBaseline, RebuildReason,
-        ResetDomainPolicy, ResetReceipt, ResetRequirements, SnapshotRestoreFunding,
-        TimeResetPolicy, is_dead_pocket_ic_transport_error,
+        CanisterSnapshotTarget, ControllerSnapshotError, FailureDisposition,
+        PocketIcBaselineRecipe, PreparedBaseline, RebuildReason, ResetDomainPolicy, ResetReceipt,
+        ResetRequirements, SnapshotRestoreFunding, TimeResetPolicy,
+        is_dead_pocket_ic_transport_error,
     };
     #[cfg(test)]
     use ic_testkit::pocket_ic::{
@@ -1375,7 +1375,6 @@ mod tests {
     }
 
     struct ActiveComponentRegistryBaselineRecipe {
-        id: FixtureRecipeId,
         reset_requirements: ResetRequirements,
     }
 
@@ -1401,7 +1400,6 @@ mod tests {
     impl ActiveComponentRegistryBaselineRecipe {
         fn new() -> Result<Self, BaselinePoolContractError> {
             Ok(Self {
-                id: FixtureRecipeId::try_new("canic/active-component-registry/v1")?,
                 reset_requirements: ResetRequirements::try_new(
                     SnapshotRestoreFunding::TopUpTo {
                         minimum_cycles: crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,
@@ -1417,10 +1415,6 @@ mod tests {
     impl PocketIcBaselineRecipe for ActiveComponentRegistryBaselineRecipe {
         type Metadata = ActiveComponentRegistryBaselineMetadata;
         type Error = ActiveComponentRegistryBaselineError;
-
-        fn id(&self) -> &FixtureRecipeId {
-            &self.id
-        }
 
         fn reset_requirements(&self) -> &ResetRequirements {
             &self.reset_requirements
