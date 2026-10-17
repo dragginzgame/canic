@@ -490,16 +490,19 @@ pub(super) fn build_internal_test_wasm_canisters_with_features(
     .unwrap_or_else(|error| panic!("internal test Wasm batch contract failed: {error}"));
     report_wasm_batch(&batch);
     let failures = batch
-        .failures()
-        .map(|failure| {
-            format!(
+        .entries()
+        .iter()
+        .filter_map(|entry| {
+            let error = entry.error()?;
+            let details = entry.failure_details().expect("failed entry details");
+            Some(format!(
                 "`{}` failed in {:?} after {:?}: {}; partial timings: {:?}",
-                failure.label(),
-                failure.phase(),
-                failure.entry_elapsed(),
-                failure.error(),
-                failure.timings(),
-            )
+                entry.label(),
+                details.phase(),
+                entry.entry_elapsed(),
+                error,
+                details.timings(),
+            ))
         })
         .collect::<Vec<_>>();
     assert!(
@@ -509,16 +512,24 @@ pub(super) fn build_internal_test_wasm_canisters_with_features(
     );
     InternalTestWasms {
         records: batch
-            .outcomes()
-            .map(|entry| (entry.label().to_owned(), entry.outcome().record().clone()))
+            .entries()
+            .iter()
+            .filter_map(|entry| {
+                entry
+                    .outcome()
+                    .map(|outcome| (entry.label().to_owned(), outcome.record().clone()))
+            })
             .collect(),
     }
 }
 
 fn report_wasm_batch(batch: &WasmBuildBatchReport) {
-    for entry in batch.outcomes() {
+    for (entry, outcome) in batch
+        .entries()
+        .iter()
+        .filter_map(|entry| entry.outcome().map(|outcome| (entry, outcome)))
+    {
         let package = entry.label();
-        let outcome = entry.outcome();
         progress::timed(
             "WASM",
             if outcome.is_reused() {

@@ -38,6 +38,9 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
 ### 🔧 Changed
 
+- **Internal Wasm batches:** read canonical Build entries directly, retaining
+  ordered failures, phase timings and artifact records across the Build 0.13 cut.
+
 - **Release checks:** include the shared version validator in isolated release
   fixtures so preflight and failure-recovery checks can run after tooling updates.
   Align record-export checks with the crate-private storage boundary.

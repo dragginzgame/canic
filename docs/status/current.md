@@ -1,5 +1,21 @@
 # Current handoff — 2026-10-14
 
+## Build canonical-entry caller preparation — 2026-10-17
+
+The isolated contribution from pushed `53f1f22` reads canonical batch entries for
+internal Wasm diagnostics, progress and retained records. It works with the
+selected registry Build API and avoids the views removed by pending Build 0.13;
+no dependency, own version or retained format changes. The normal checkout's
+unpublished integration batch is excluded.
+
+The actual Rust 1.91 package check fails on two existing Testkit getter calls
+in `pic/fleet_registry/baseline.rs`, reproduced on the unchanged base. A temporary
+two-line field-access correction permits the package check to pass; that repair
+is not part of this contribution. An exact-source projection harness against
+pending Build passes on Rust 1.91 and retains failure ordering/phase/timing text.
+Formatting and documentation links pass. Whole-package/native/PocketIC acceptance
+remains separate; sources and logs are in `/tmp/ic-build-canic-followup-20261017/`.
+
 **Canic 0.111.0 is live; the integration batch remains uncommitted.** The maintainer
 explicitly waived the 0.111 closeout audit for completing Auth, Backup and Blob
 integration, then a cleanup slice to reduce Canic's surface. That decision is
