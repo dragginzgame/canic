@@ -10,9 +10,13 @@ use crate::{
     InternalError,
     domain::public_metrics::PublicMetricKind,
     model::public_metrics::PublicMetricSample,
-    ops::runtime::metrics::{
-        intent::IntentMetrics, placement_index::PlacementIndexMetrics,
-        platform_call::PlatformCallMetrics, system::SystemMetrics, wasm_store::WasmStoreMetrics,
+    ops::runtime::{
+        metrics::{
+            intent::IntentMetrics, placement_index::PlacementIndexMetrics,
+            platform_call::PlatformCallMetrics, system::SystemMetrics,
+            wasm_store::WasmStoreMetrics,
+        },
+        timer_process_condition,
     },
 };
 use std::collections::BTreeMap;
@@ -79,7 +83,12 @@ fn timer_rows(timers: &[ic_timers::TimerSnapshot]) -> Vec<PublicMetricSample> {
     let mut counts = BTreeMap::new();
     // The timer owner admits at most 64 declarations, independently of topology size.
     for timer in timers {
-        add(&mut counts, "state", timer.process_condition().label(), 1);
+        let condition = timer_process_condition(
+            timer.state(),
+            timer.scheduling_mode(),
+            timer.observability().outcomes().last_outcome(),
+        );
+        add(&mut counts, "state", condition.label(), 1);
         let counters = timer.observability().counters();
         for (name, value) in [
             ("schedule_requests", counters.schedule_requests()),

@@ -25,6 +25,7 @@ use crate::{
             memory::MemoryRegistryOps,
             ready::ReadyOps,
             recent_failure::{RecentFailureInput, RecentFailureOps},
+            timer_process_condition,
         },
         storage::intent::{RECEIPT_CAPACITY_WARNING_HEADROOM_THRESHOLD, ReceiptBackedIntentOps},
     },
@@ -458,7 +459,11 @@ fn timer_statuses_from(snapshots: Vec<ic_timers::TimerSnapshot>) -> Vec<Canister
             let outcomes = observability.outcomes();
             let counters = observability.counters();
             let performance = observability.performance();
-            let condition = timer_process_condition(snapshot.process_condition());
+            let condition = timer_process_condition(
+                snapshot.state(),
+                snapshot.scheduling_mode(),
+                outcomes.last_outcome(),
+            );
             CanisterTimerStatus {
                 name: identity.name().to_string(),
                 owner: identity.owner().to_string(),
@@ -561,19 +566,6 @@ const fn timer_registration_status(
         ic_timers::TimerRegistrationStatus::Unregistered => Canic::Unregistered,
         ic_timers::TimerRegistrationStatus::Scheduled => Canic::Scheduled,
         ic_timers::TimerRegistrationStatus::Running => Canic::Running,
-    }
-}
-
-const fn timer_process_condition(
-    value: ic_timers::TimerProcessCondition,
-) -> crate::domain::runtime::TimerProcessCondition {
-    use crate::domain::runtime::TimerProcessCondition as Canic;
-    match value {
-        ic_timers::TimerProcessCondition::Disabled => Canic::Disabled,
-        ic_timers::TimerProcessCondition::Idle => Canic::Idle,
-        ic_timers::TimerProcessCondition::Active => Canic::Active,
-        ic_timers::TimerProcessCondition::Retrying => Canic::Retrying,
-        ic_timers::TimerProcessCondition::Failed => Canic::Failed,
     }
 }
 

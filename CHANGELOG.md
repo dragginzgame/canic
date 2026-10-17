@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
+- Align the standalone IcyDB host adapter with Timer 0.27 so consuming
+  applications resolve one timer runtime; share Canic's operator-health
+  projection between runtime status and metrics.
+
 ### ⚠️ Breaking
 
 - **Memory runtime:** adopt Memory 0.44 with one Canic-owned runtime and injected
