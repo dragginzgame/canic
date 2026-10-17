@@ -454,6 +454,7 @@ After the lifecycle root commits its complete requests, grants and admission,
 `canic::memory::runtime::shared_runtime()` returns that same committed runtime
 for synchronous component binding. Bind consumers before invoking their startup
 participant. This does not create another manager or grant additional keys.
-Finish bootstrap before handoff; a component retaining the runtime prevents
-another mutable bootstrap. Runtime diagnostics and Canic stores keep using the
-same allocation authority. A component's pool provider describes grants only.
+Finish bootstrap before handoff. Exact warm bootstrap verifies the committed
+request/pool/policy binding without mutable access, admission replay or new
+allocation; a mismatch refuses while retaining the existing runtime and leases.
+Runtime diagnostics and Canic stores use the same allocation authority.

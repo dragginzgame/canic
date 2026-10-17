@@ -14,8 +14,8 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
 - **Composed memory:** expose the committed host runtime through
   `memory::runtime::shared_runtime()` for explicit component binding. Complete
-  bootstrap before handing out the runtime; a later bootstrap attempt while a
-  participant retains it returns `MemoryBootstrapError::SharedRuntime`.
+  bootstrap before handoff; exact warm replay verifies the binding through the
+  shared owner without rerunning admission or invalidating live leases.
 
 - **Memory runtime:** adopt Memory 0.44 with one Canic-owned runtime and injected
   component handles. Allocation reports derive byte totals from measured pages

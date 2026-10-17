@@ -4,7 +4,8 @@
 //! Does not own: stable schema definitions, allocation policy, or lifecycle hooks.
 //! Boundary: macros and lifecycle call this before stable-memory-backed statics are used.
 
-use ic_memory::{MemoryRuntime, RuntimeDiagnosticError, ic_stable_structures::DefaultMemoryImpl};
+use crate::memory::{MemoryBootstrap, MemoryBootstrapError, configured_bucket_pages, policy};
+use ic_memory::{DefaultMemoryImpl, MemoryRuntime, RuntimeDiagnosticError};
 use std::{cell::RefCell, rc::Rc};
 
 #[cfg(any(test, debug_assertions))]
@@ -17,6 +18,52 @@ thread_local! {
     pub(super) static RUNTIME: RefCell<Option<Rc<MemoryRuntime<DefaultMemoryImpl>>>> = const { RefCell::new(None) };
 }
 
+/// Bootstrap exactly the supplied host composition before any store opens.
+pub fn bootstrap(input: MemoryBootstrap) -> Result<(), MemoryBootstrapError> {
+    let declarations = ic_memory::SealedDeclarationSnapshot::new(input.requests)
+        .map_err(ic_memory::MemoryResolutionError::from)
+        .map_err(ic_memory::RuntimeBootstrapError::from)?;
+    let config = ic_memory::MemoryManagerConfig::new(configured_bucket_pages())?;
+    let mut policy = policy::CanicMemoryManagerPolicy::new();
+    if let Some(participant) = input.admission {
+        policy = policy.with_admission(participant);
+    }
+    RUNTIME.with(|cell| -> Result<(), MemoryBootstrapError> {
+        let mut owner = cell
+            .try_borrow_mut()
+            .map_err(|_| RuntimeDiagnosticError::ReentrantAccess)?;
+        if let Some(runtime) = owner.as_ref() {
+            runtime.verify_bootstrap(&declarations, &input.pool, &policy)?;
+        } else {
+            let mut runtime = MemoryRuntime::new_with_config(DefaultMemoryImpl::default(), config)?;
+            runtime.bootstrap(&declarations, &input.pool, &policy)?;
+            // Share only committed authority. Failed admission publishes no
+            // runtime, so a consumer cannot mistake partial setup for readiness.
+            *owner = Some(Rc::new(runtime));
+        }
+        Ok(())
+    })?;
+    super::pool::remember(input.pool);
+    Ok(())
+}
+
+/// Share the exact committed host runtime with a synchronous storage participant.
+///
+/// This clones its `Rc`, never its backing memory or allocation leases. Bind the
+/// returned instance before opening consumer stores. Absence and reentrant
+/// access fail without constructing or bootstrapping another manager.
+pub fn shared_runtime() -> Result<Rc<MemoryRuntime<DefaultMemoryImpl>>, RuntimeDiagnosticError> {
+    RUNTIME.with(|cell| {
+        let owner = cell
+            .try_borrow()
+            .map_err(|_| RuntimeDiagnosticError::ReentrantAccess)?;
+        let runtime = owner
+            .as_ref()
+            .ok_or(RuntimeDiagnosticError::NotBootstrapped)?;
+        Ok(Rc::clone(runtime))
+    })
+}
+
 /// Inspect the Canic-owned runtime without constructing memory on a read path.
 pub(crate) fn with_runtime<T>(
     inspect: impl FnOnce(&MemoryRuntime<DefaultMemoryImpl>) -> Result<T, RuntimeDiagnosticError>,
@@ -27,27 +74,9 @@ pub(crate) fn with_runtime<T>(
             .map_err(|_| RuntimeDiagnosticError::ReentrantAccess)?;
         inspect(
             runtime
-                .as_deref()
+                .as_ref()
                 .ok_or(RuntimeDiagnosticError::NotBootstrapped)?,
         )
-    })
-}
-
-/// Share the committed host runtime with a synchronous component participant.
-///
-/// Call after `memory::bootstrap` and before that component opens its stores.
-/// The returned `Rc` refers to the same allocation authority used by Canic;
-/// it cannot construct another manager. Bootstrap must finish before handoff.
-pub fn shared_runtime() -> Result<Rc<MemoryRuntime<DefaultMemoryImpl>>, RuntimeDiagnosticError> {
-    RUNTIME.with(|cell| {
-        let owner = cell
-            .try_borrow()
-            .map_err(|_| RuntimeDiagnosticError::ReentrantAccess)?;
-        let runtime = owner
-            .as_ref()
-            .filter(|runtime| runtime.is_bootstrapped())
-            .ok_or(RuntimeDiagnosticError::NotBootstrapped)?;
-        Ok(Rc::clone(runtime))
     })
 }
 
@@ -58,8 +87,8 @@ pub fn is_memory_bootstrap_ready() -> Result<bool, RuntimeDiagnosticError> {
             .try_borrow()
             .map_err(|_| RuntimeDiagnosticError::ReentrantAccess)?;
         Ok(runtime
-            .as_deref()
-            .is_some_and(MemoryRuntime::is_bootstrapped))
+            .as_ref()
+            .is_some_and(|runtime| runtime.is_bootstrapped()))
     })
 }
 
@@ -157,14 +186,13 @@ mod tests {
                 with_runtime(|runtime| { Ok(runtime.memory_id(key).unwrap()) }).unwrap()
             );
             drop(memory);
-            assert!(matches!(
-                crate::memory::bootstrap(crate::memory::MemoryBootstrap {
-                    requests: crate::memory::requests().unwrap(),
-                    pool: crate::memory::pool::framework_pool(Vec::new(), Vec::new()).unwrap(),
-                    admission: None,
-                }),
-                Err(crate::memory::MemoryBootstrapError::SharedRuntime)
-            ));
+            crate::memory::bootstrap(crate::memory::MemoryBootstrap {
+                requests: crate::memory::requests().unwrap(),
+                pool: crate::memory::pool::framework_pool(Vec::new(), Vec::new()).unwrap(),
+                admission: None,
+            })
+            .unwrap();
+            assert!(Rc::ptr_eq(&runtime, &shared_runtime().unwrap()));
         })
         .join()
         .unwrap();
