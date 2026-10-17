@@ -4,7 +4,8 @@
 //! Does not own: compilation, release identity allocation, or Fleet deployment.
 //! Boundary: source bytes and admitted tools key a cache; immutable release records remain authority.
 
-use ic_build::cargo::observation::{CargoFeatureSelection, schema::Metadata};
+use ic_build::cargo::observation::schema::Metadata;
+use ic_build::cargo::selection::CargoFeatureSelection;
 
 mod dependencies;
 mod diagnostics;
@@ -288,19 +289,32 @@ impl CompleteBuildReuse {
     ) -> Result<(), BuildReuseError> {
         self.lock.phase(BuildLockPhase::VerifyingAndPublishing);
         verify_release(&self.context, release_build_id)?;
-        let after = input_snapshot(&self.context, &self.tool_paths)?;
-        self.inputs
-            .validate_after(&after)
+        let (after_spec, fixture_hashes) = input_snapshot_spec(&self.context, &self.tool_paths)?;
+        let after = self
+            .inputs
+            .validate_after(&after_spec)
             .map_err(BuildReuseError::from)
-            .inspect_err(|error| {
-                if let Some(path) = diagnostics::retain_rejection(
+            .and_then(|after| {
+                validate_snapshot_evidence(
                     &self.context,
-                    release_build_id,
-                    &self.input_locations,
-                    &self.inputs,
+                    &self.tool_paths,
                     &after,
-                    error,
-                ) {
+                    &fixture_hashes,
+                )?;
+                Ok(after)
+            })
+            .inspect_err(|error| {
+                // A diagnostic-only recapture must never replace the primary rejection.
+                if let Ok(after) = input_snapshot(&self.context, &self.tool_paths)
+                    && let Some(path) = diagnostics::retain_rejection(
+                        &self.context,
+                        release_build_id,
+                        &self.input_locations,
+                        &self.inputs,
+                        &after,
+                        error,
+                    )
+                {
                     eprintln!("Build input rejection evidence: {}", path.display());
                 }
             })?;
@@ -378,6 +392,16 @@ fn input_snapshot(
     context: &WorkspaceBuildContext,
     tools: &[PathBuf],
 ) -> Result<InputEvidence, BuildReuseError> {
+    let (spec, fixture_hashes) = input_snapshot_spec(context, tools)?;
+    let evidence = InputEvidence::capture(&spec)?;
+    validate_snapshot_evidence(context, tools, &evidence, &fixture_hashes)?;
+    Ok(evidence)
+}
+
+fn input_snapshot_spec(
+    context: &WorkspaceBuildContext,
+    tools: &[PathBuf],
+) -> Result<(InputEvidenceSpec, BTreeMap<PathBuf, String>), BuildReuseError> {
     let metadata = cargo_metadata_catalog_for_manifest(
         &context.workspace_root.join("Cargo.toml"),
         true,
@@ -462,7 +486,18 @@ fn input_snapshot(
     paths.extend(tools.iter().cloned());
     append_rust_toolchain_inputs(context, &mut paths)?;
 
-    let evidence = InputEvidence::capture(&source_evidence_spec(input_identity(context)?, &paths))?;
+    Ok((
+        source_evidence_spec(input_identity(context)?, &paths),
+        fixture_hashes,
+    ))
+}
+
+fn validate_snapshot_evidence(
+    context: &WorkspaceBuildContext,
+    tools: &[PathBuf],
+    evidence: &InputEvidence,
+    fixture_hashes: &BTreeMap<PathBuf, String>,
+) -> Result<(), BuildReuseError> {
     for required in std::iter::once(&context.config_path).chain(tools) {
         if !matches!(
             evidence.entries().get(required),
@@ -474,14 +509,14 @@ fn input_snapshot(
         }
     }
     for (path, expected) in fixture_hashes {
-        if !matches!(evidence.entries().get(&path), Some(InputEvidenceValue::File { sha256 }) if sha256.to_hex() == expected)
+        if !matches!(evidence.entries().get(path), Some(InputEvidenceValue::File { sha256 }) if sha256.to_hex() == *expected)
         {
-            return Err(BuildReuseError::ChangedInput(path));
+            return Err(BuildReuseError::ChangedInput(path.clone()));
         }
     }
     // Refuse the consumer's non-UTF-8 record encoding before any work or diagnostics.
     evidence.digest()?;
-    Ok(evidence)
+    Ok(())
 }
 
 fn selected_export_producers(

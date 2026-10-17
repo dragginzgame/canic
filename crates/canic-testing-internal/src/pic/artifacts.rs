@@ -7,16 +7,16 @@ use ic_build::artifacts::{
     ArtifactCacheMaintenance, ArtifactCachePrunePolicy, ArtifactCacheSpec, LabeledWasmBuildSpec,
     SharedIncrementalTargetMaintenanceConfig, SharedIncrementalTargetMaintenanceFailureMode,
     SharedIncrementalTargetMaintenanceOutcome, SharedIncrementalTargetPrunePolicy,
-    WasmBuildBatchConfig, WasmBuildBatchProgressEvent, WasmBuildBatchReport,
-    WasmBuildProgressConfig, WasmBuildProgressEvent, WasmBuildProgressPhase, WasmBuildRecord,
-    WasmBuildSpec, build_wasm_canisters_cached_batch_with_config_and_progress,
-    resolve_cargo_build_inputs,
+    WasmBuildBatchConfig, WasmBuildBatchProgressEvent, WasmBuildBatchReport, WasmBuildPhase,
+    WasmBuildProgressConfig, WasmBuildProgressEvent, WasmBuildRecord, WasmBuildSpec,
+    build_wasm_canisters_cached_batch, resolve_cargo_build_inputs,
 };
 #[cfg(all(
     feature = "pocketic-fixtures",
     any(not(test), feature = "governed-pocketic-tests")
 ))]
 use ic_build::artifacts::{ArtifactCacheOutcome, ArtifactCachePreparation, prepare_artifact_cache};
+use ic_build::cargo::selection::CargoSelection;
 #[cfg(all(
     feature = "pocketic-fixtures",
     any(not(test), feature = "governed-pocketic-tests")
@@ -64,13 +64,7 @@ pub(super) fn with_canonical_root_cargo_inputs(
         target_dir,
         &[evidence.role_package_name.as_str()],
     )
-    .with_cargo_profile_args(
-        profile
-            .cargo_profile_args()
-            .iter()
-            .copied()
-            .chain(["--locked"]),
-    )
+    .with_cargo_selection(profile.cargo_selection())
     .with_extra_env(environment.iter().copied());
     let inputs = resolve_cargo_build_inputs(&build).expect("canonical Root cache Cargo inputs");
     cache.with_cargo_build_inputs("canonical-root-cargo", &build, &inputs)
@@ -272,7 +266,11 @@ fn canonical_fleet_coordinator_cache_spec(
         INTERNAL_TEST_RELEASE_BUILD_ID,
     ];
     let cargo_build = WasmBuildSpec::new(workspace_root, target_dir, &["canic", "canic-host"])
-        .with_cargo_profile_args(["--profile", "fast", "--locked"])
+        .with_cargo_selection(ic_build::cargo::selection::CargoSelection {
+            profile: Some("fast".into()),
+            locked: true,
+            ..Default::default()
+        })
         .with_extra_env(environment);
     let cargo_inputs = resolve_cargo_build_inputs(&cargo_build)
         .expect("resolve canonical Fleet Coordinator Cargo inputs");
@@ -325,10 +323,14 @@ pub enum CanicWasmBuildProfile {
 
 impl CanicWasmBuildProfile {
     #[must_use]
-    pub(super) const fn cargo_profile_args(self) -> &'static [&'static str] {
-        match self {
-            Self::Debug => &[],
-            Self::Fast => &["--profile", "fast"],
+    pub(super) fn cargo_selection(self) -> CargoSelection {
+        CargoSelection {
+            profile: match self {
+                Self::Debug => None,
+                Self::Fast => Some("fast".into()),
+            },
+            locked: true,
+            ..Default::default()
         }
     }
 
@@ -438,12 +440,8 @@ pub(super) fn build_internal_test_wasm_canisters_with_features(
             )
         });
 
-    let mut cargo_args = profile.cargo_profile_args().to_vec();
-    cargo_args.push("--locked");
-    let features = features.join(",");
-    if !features.is_empty() {
-        cargo_args.extend(["--features", features.as_str()]);
-    }
+    let mut selection = profile.cargo_selection();
+    selection.features.features = features.iter().cloned().collect();
 
     let mut build_env = vec![
         ("CARGO_INCREMENTAL", "0"),
@@ -463,7 +461,7 @@ pub(super) fn build_internal_test_wasm_canisters_with_features(
             LabeledWasmBuildSpec::new(
                 *package,
                 WasmBuildSpec::new(workspace_root, target_dir, &[*package])
-                    .with_cargo_profile_args(cargo_args.iter().copied())
+                    .with_cargo_selection(selection.clone())
                     .with_extra_env(build_env.iter().copied())
                     .with_additional_inputs(additional_inputs.iter().cloned())
                     .with_shared_incremental_target(internal_test_shared_wasm_target(
@@ -481,11 +479,10 @@ pub(super) fn build_internal_test_wasm_canisters_with_features(
     let progress = WasmBuildProgressConfig::new()
         .with_heartbeat_interval(INTERNAL_TEST_WASM_HEARTBEAT_INTERVAL)
         .with_cargo_output(false);
-    let batch = build_wasm_canisters_cached_batch_with_config_and_progress(
+    let batch = build_wasm_canisters_cached_batch(
         &builds,
         batch_config,
-        progress,
-        report_wasm_build_progress,
+        Some((progress, &mut report_wasm_build_progress)),
     )
     .unwrap_or_else(|error| panic!("internal test Wasm batch contract failed: {error}"));
     report_wasm_batch(&batch);
@@ -641,7 +638,7 @@ fn report_wasm_build_progress(event: WasmBuildBatchProgressEvent) {
             label,
             event:
                 WasmBuildProgressEvent::Heartbeat {
-                    phase: WasmBuildProgressPhase::CargoBuild,
+                    phase: WasmBuildPhase::CargoBuild,
                     elapsed,
                 },
             ..

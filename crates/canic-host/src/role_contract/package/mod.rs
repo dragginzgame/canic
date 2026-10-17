@@ -4,8 +4,8 @@
 //! Does not own: arbitrary Cargo feature resolution or role allocation policy.
 //! Boundary: rich metadata stays private; consumers receive compact evidence.
 
-use ic_build::cargo::observation::CargoFeatureSelection;
 use ic_build::cargo::observation::schema::{Dependency, Metadata, Node, NodeDep, Package};
+use ic_build::cargo::selection::CargoFeatureSelection;
 
 mod graph;
 #[cfg(test)]

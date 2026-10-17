@@ -211,7 +211,11 @@ pub(super) fn literal_zero_release_artifact_cache_spec(
         &canic_host::canister_build::canister_build_target_root(workspace_root),
         &packages,
     )
-    .with_cargo_profile_args(["--profile", "fast", "--locked"])
+    .with_cargo_selection(ic_build::cargo::selection::CargoSelection {
+        profile: Some("fast".into()),
+        locked: true,
+        ..Default::default()
+    })
     .with_extra_env(environment);
     let config_relative = config_path
         .strip_prefix(workspace_root)
@@ -278,7 +282,11 @@ fn bind_host_producer_inputs(
         &canic_host::canister_build::canister_build_target_root(workspace_root),
         &["canic-host"],
     )
-    .with_cargo_profile_args(["--profile", "fast", "--locked"])
+    .with_cargo_selection(ic_build::cargo::selection::CargoSelection {
+        profile: Some("fast".into()),
+        locked: true,
+        ..Default::default()
+    })
     .with_extra_env(environment.iter().copied());
     let host_inputs = resolve_cargo_build_inputs(&host_build)
         .expect("resolve native artifact producer Cargo inputs");

@@ -104,7 +104,12 @@ fn build_spec(workspace: &Path, source: &Path) -> io::Result<WasmBuildSpec> {
     )
     .with_shared_incremental_target(workspace.join("target/embedded-root/cargo"))
     .with_additional_inputs(["crates/canic-testing-internal/src/embedded_root"])
-    .with_cargo_profile_args(["--profile", PROFILE, "--locked", "--offline"])
+    .with_cargo_selection(ic_build::cargo::selection::CargoSelection {
+        profile: Some(PROFILE.into()),
+        locked: true,
+        offline: true,
+        ..Default::default()
+    })
     .with_extra_env([
         ("CARGO_INCREMENTAL", "0".to_owned()),
         ("ICP_ENVIRONMENT", "local".to_owned()),

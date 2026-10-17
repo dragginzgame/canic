@@ -31,7 +31,10 @@ fn generated_infrastructure_inputs_are_stable_before_compilation() {
         &directory.join("target"),
         &["fixture-consumer"],
     )
-    .with_cargo_profile_args(["--release"]);
+    .with_cargo_selection(ic_build::cargo::selection::CargoSelection {
+        profile: Some("release".into()),
+        ..Default::default()
+    });
     let cold = ic_build::artifacts::resolve_cargo_build_inputs(&spec).unwrap();
     prepare_workspace_infrastructure_packages(&context).unwrap();
     assert!(

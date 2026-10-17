@@ -274,15 +274,13 @@ fn root_release_cargo_build_spec(
         );
     }
     let packages = packages.iter().map(String::as_str).collect::<Vec<_>>();
-    let mut cargo_args = spec.build_profile.cargo_profile_args().to_vec();
-    cargo_args.push("--locked");
 
     WasmBuildSpec::new(
         &spec.workspace_root,
         &spec.workspace_root.join("target/icp-build"),
         &packages,
     )
-    .with_cargo_profile_args(cargo_args.iter().copied())
+    .with_cargo_selection(spec.build_profile.cargo_selection())
     .with_extra_env(environment.iter().copied())
 }
 

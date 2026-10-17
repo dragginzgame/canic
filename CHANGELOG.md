@@ -16,9 +16,10 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
   component handles. Allocation reports derive byte totals from measured pages
   and buckets; the storage-format hard cut requires a clean reinstall.
 
-- **Host filesystem APIs:** adopt Host 0.23's explicit publication, path-resolution
-  and lock-acquisition APIs, preserving write permissions and operation exclusion.
-  Candid normalization uses Host Text directly.
+- **Host and build APIs:** adopt Build 0.14 and Host 0.25. Align direct Host
+  dependencies when passing exposed types; keep replica installation thresholds
+  in Canic over Host's inspected Wasm facts. Publication permissions, operation
+  exclusion and Candid normalization retain their existing policy.
 
 - **Application Auth hard cut:** remove delegated-token issuance/retrieval,
   `auth::authenticated(...)` guards, and delegated-token session commands/status.
@@ -38,8 +39,9 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
 ### 🔧 Changed
 
-- **Internal Wasm batches:** read canonical Build entries directly, retaining
-  ordered failures, phase timings and artifact records across the Build 0.13 cut.
+- **Build reuse and internal Wasm batches:** use typed Cargo recipes, canonical
+  feature/phase values and one batch API. Validate a fresh post-build input recipe
+  once, retaining complete-release checks and typed rejection diagnostics.
   Read Testkit baseline outcome fields through their current public contract.
 
 - **Release checks:** include the shared version validator in isolated release

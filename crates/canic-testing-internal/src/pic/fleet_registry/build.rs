@@ -360,7 +360,11 @@ fn build_bootstrap_wasm_store(workspace_root: &Path, config_path: &Path) -> Vec<
         .to_str()
         .expect("bootstrap Store config path UTF-8");
     let cargo_build = WasmBuildSpec::new(workspace_root, &target_dir, &["canic", "canic-host"])
-        .with_cargo_profile_args(["--profile", "fast", "--locked"])
+        .with_cargo_selection(ic_build::cargo::selection::CargoSelection {
+            profile: Some("fast".into()),
+            locked: true,
+            ..Default::default()
+        })
         .with_extra_env([
             ("CARGO_INCREMENTAL", "0"),
             ("ICP_ENVIRONMENT", "local"),

@@ -171,7 +171,10 @@ fn excluded_test_edits_still_abort_an_in_flight_cache_transaction() {
     )
     .unwrap();
     let build = WasmBuildSpec::new(&host, &root.join("target"), &["native-producer"])
-        .with_cargo_profile_args(["--release"]);
+        .with_cargo_selection(ic_build::cargo::selection::CargoSelection {
+            profile: Some("release".into()),
+            ..Default::default()
+        });
     let inputs = resolve_cargo_build_inputs(&build).unwrap();
     let cache = FixtureArtifactCache::bind(
         ArtifactCacheSpec::new(&root.join("cache"), "host-guard", "canic/host-guard/v1")
