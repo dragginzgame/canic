@@ -53,6 +53,8 @@ never delegates broad validation, Git publication or deployment.
 
 ## Ownership
 - Runtime/facade: `canic`, `canic-core`, `canic-macros`.
+- Native database host integration: `canic-icydb`; it emits consumer-bound glue
+  without depending on IcyDB or instantiating a framework memory runtime.
 - Canister control plane: `canic-control-plane`. Fleet artifact entrypoints and
   their generated Cargo packages are owned by `canic-host`; canonical Candid
   ships with `canic`.

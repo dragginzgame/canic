@@ -11,6 +11,30 @@ remain **0.111.0**. The objective is to delete duplicate mechanisms in favor of
 upstream owners; moving declarations alone does not demonstrate faster builds.
 
 
+## IcyDB native host adapter — 2026-10-17
+
+The dedicated [#590 contribution](https://github.com/dragginzgame/canic/pull/591)
+now provides `canic-icydb`. Consumers explicitly mount their facade binding via
+`canic_icydb::start!(icydb)` and declare `canic_icydb::endpoints!`. Raw transport,
+controller checks, lifecycle/watchdog scheduling and secure boot entropy move
+out of the database. The adapter has no IcyDB or Memory dependency and reuses
+the existing Canic export/executor owner without creating a framework runtime.
+
+Linux qualification passes all 47 macro cases, the entropy state case, native
+and Wasm owner checks/strict lint, the declared Rust 1.91 Wasm check, affected
+Core compilation and publication inventory fixtures. A fresh installed raw
+probe passes malformed/oversized/controller refusal, typed application results
+and synchronous encoding-trap rollback. Logs are `/tmp/canic-cdk-*.log`.
+Testkit owned temporary server lifecycle. Package versions and normal sibling
+checkouts remain unchanged; broad gates, native macOS and attributable
+Wasm/cycle/instruction deltas were not selected/measured.
+
+Downstream IcyDB qualifies its actual native database and lifecycle separately.
+Full Canic-managed runtime composition remains under #590 until the framework's
+Memory 0.44 graph and the consumer's exclusive Memory 0.46 graph align. This
+standalone SDK adapter introduces no parallel allocator and does not retire
+IC Wire's separate asynchronous endpoint proof.
+
 ## IcyDB raw entrypoint prerequisite — 2026-10-17
 
 The dedicated contribution for [#590](https://github.com/dragginzgame/canic/issues/590)
@@ -26,10 +50,9 @@ Testkit 0.49's prepared launcher owned the temporary server lifecycle. The first
 installed attempt stopped before calls because no governed URL was supplied;
 the launcher run passes. Evidence: `/tmp/canic-raw-*.log`.
 
-The actual `canic-icydb` integration and database endpoint cut remain outstanding.
-This contribution's committed graph uses Memory 0.44; IcyDB's pending native API
-uses Memory 0.46. Use one compatible runtime and a committed native binding; do
-not consume another checkout's dirty adoption. Installed startup refusal and
+The standalone adapter is implemented above. Full Canic-managed runtime
+composition still needs the framework Memory 0.44 graph and consumer Memory 0.46
+graph to align; do not consume another checkout's dirty adoption. Installed startup refusal and
 codec-specific checks still belong to complete adapter acceptance. Broad gates,
 macOS and raw Wasm/cycle/instruction deltas were not selected or measured. Package
 versions remain unchanged; this is a draft contribution, not a release.
