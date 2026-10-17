@@ -1,3 +1,4 @@
+mod raw;
 mod wasm;
 
 use crate::{
@@ -233,11 +234,11 @@ pub fn validate_sidecar_only_candid_artifact(
     validate_candid_methods(wasm_path, did_path, &snapshot, &candid)
 }
 
-/// Verify that a Wasm exports exactly the application methods declared in its Candid.
+/// Verify exact exports against Candid plus declared protocol-neutral methods.
 ///
 /// Lifecycle and IC CDK internal exports are outside the public method inventory.
 /// This compares endpoint names and modes; release-bound Candid hashes retain the type authority.
-pub fn validate_wasm_candid_endpoints(
+pub fn validate_wasm_endpoints(
     wasm_path: &Path,
     did_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -261,10 +262,11 @@ fn validate_candid_methods(
             methods: candid.len(),
         },
     )?;
-    let declared = methods
+    let mut declared = methods
         .iter()
         .map(|method| method.as_export())
         .collect::<BTreeSet<_>>();
+    declared.extend(raw::methods(&snapshot.facts, &declared)?);
     let exported = interface::exported_methods(&snapshot.facts)
         .filter(|method| !method.name.starts_with(IC_CDK_INTERNAL_METHOD_PREFIX))
         .collect::<BTreeSet<_>>();

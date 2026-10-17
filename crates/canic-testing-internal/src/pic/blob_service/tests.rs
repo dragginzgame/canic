@@ -173,7 +173,7 @@ fn qualify(embedded: bool) {
         .find(|entry| entry.role.as_str() == role)
         .expect("selected Blob role in application manifest");
     let wasm_path = consumer.join(&entry.wasm_relative_path);
-    canic_host::canister_build::validate_wasm_candid_endpoints(
+    canic_host::canister_build::validate_wasm_endpoints(
         &wasm_path,
         &wasm_path.with_extension("did"),
     )

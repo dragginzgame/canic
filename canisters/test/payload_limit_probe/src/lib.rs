@@ -210,3 +210,47 @@ fn bare_echo(payload: String) -> usize {
 }
 
 canic::finish!();
+
+thread_local! {
+    static RAW_CALLS: Cell<u64> = const { Cell::new(0) };
+}
+
+// Framework-only raw protocol: the single command byte is exact and bounded.
+// The database integration supplies its own Wire contract downstream.
+#[canic::canic_raw_query(public, payload(max_bytes = 16), name = "raw_counts")]
+fn native_counts() {
+    if ic_cdk::api::msg_arg_data() != [0] {
+        ic_cdk::api::msg_reject("invalid raw query");
+        return;
+    }
+    ic_cdk::api::msg_reply(RAW_CALLS.get().to_le_bytes());
+}
+
+#[canic::canic_raw_update(
+    requires(caller::is_controller()),
+    payload(max_bytes = 16),
+    name = "raw_commit"
+)]
+fn native_commit() {
+    let bytes = ic_cdk::api::msg_arg_data();
+    let action = match bytes.as_slice() {
+        [action @ 0..=2] => *action,
+        _ => {
+            ic_cdk::api::msg_reject("invalid raw command");
+            return;
+        }
+    };
+    if action == 1 {
+        // An ordinary application failure is a successfully delivered native reply.
+        ic_cdk::api::msg_reply([1]);
+        return;
+    }
+    RAW_CALLS.set(RAW_CALLS.get() + 1);
+    if action == 2 {
+        // Model an adapter that cannot encode its post-handler response.
+        ic_cdk::trap("raw reply encoding failed");
+    }
+    let mut reply = vec![0];
+    reply.extend_from_slice(&RAW_CALLS.get().to_le_bytes());
+    ic_cdk::api::msg_reply(reply);
+}

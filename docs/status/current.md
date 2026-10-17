@@ -11,6 +11,52 @@ remain **0.111.0**. The objective is to delete duplicate mechanisms in favor of
 upstream owners; moving declarations alone does not demonstrate faster builds.
 
 
+## IcyDB native host adapter — 2026-10-17
+
+The dedicated [#590 contribution](https://github.com/dragginzgame/canic/pull/591)
+now provides `canic-icydb`. Consumers explicitly mount their facade binding via
+`canic_icydb::start!(icydb)` and declare `canic_icydb::endpoints!`. Raw transport,
+controller checks, lifecycle/watchdog scheduling and secure boot entropy move
+out of the database. The adapter has no IcyDB or Memory dependency and reuses
+the existing Canic export/executor owner without creating a framework runtime.
+
+Linux qualification passes all 47 macro cases, the entropy state case, native
+and Wasm owner checks/strict lint, the declared Rust 1.91 Wasm check, affected
+Core compilation and publication inventory fixtures. A fresh installed raw
+probe passes malformed/oversized/controller refusal, typed application results
+and synchronous encoding-trap rollback. Logs are `/tmp/canic-cdk-*.log`.
+Testkit owned temporary server lifecycle. Package versions and normal sibling
+checkouts remain unchanged; broad gates, native macOS and attributable
+Wasm/cycle/instruction deltas were not selected/measured.
+
+Downstream IcyDB qualifies its actual native database and lifecycle separately.
+Full Canic-managed runtime composition remains under #590 until the framework's
+Memory 0.44 graph and the consumer's exclusive Memory 0.46 graph align. This
+standalone SDK adapter introduces no parallel allocator and does not retire
+IC Wire's separate asynchronous endpoint proof.
+
+## IcyDB raw entrypoint prerequisite — 2026-10-17
+
+The dedicated contribution for [#590](https://github.com/dragginzgame/canic/issues/590)
+adds synchronous bounded raw query/update macros to the existing access/dispatch
+owner. Host export validation combines raw declarations and Candid methods and
+rejects overlap or duplicate names. The public checker is now
+`validate_wasm_endpoints`; callers must use that name.
+
+Focused Linux checks pass: 44 endpoint macro cases, bounded declaration parsing,
+strict changed-owner and selected installed-test lint, and the installed raw
+probe's admission/denial, byte, application failure and trap rollback controls.
+Testkit 0.49's prepared launcher owned the temporary server lifecycle. The first
+installed attempt stopped before calls because no governed URL was supplied;
+the launcher run passes. Evidence: `/tmp/canic-raw-*.log`.
+
+The standalone adapter is implemented above. Full Canic-managed runtime
+composition still needs the framework Memory 0.44 graph and consumer Memory 0.46
+graph to align; do not consume another checkout's dirty adoption. Installed startup refusal and
+codec-specific checks still belong to complete adapter acceptance. Broad gates,
+macOS and raw Wasm/cycle/instruction deltas were not selected or measured. Package
+versions remain unchanged; this is a draft contribution, not a release.
+
 ## Auth status capability emission — 2026-10-16
 
 Managed Auth status types and their endpoint now require delegation-proof issuer
@@ -1773,3 +1819,20 @@ with [#1](https://github.com/dragginzgame/ic-build/issues/1); its published-sour
 [CI run](https://github.com/dragginzgame/ic-build/actions/runs/38288344214) was
 queued when inspected. Complete-release admission remains Canic-owned. No broad
 gate, PocketIC, commit, own package-version change or release ran.
+
+## Workspace-owned Wire export continuation
+
+IcyDB requested Canic ownership for every generated fixture export. The existing
+native entrypoint owner now needs a public Wire export macro receiving the
+consumer's bounded codec body and contract ID. The 64-method async fixture must
+retain async polling; Canic will share ingress admission and reply handling
+between sync and async raw serving. Synchronizing those handlers changes the
+measured subject. No protocol selector, persisted state or endpoint names are
+added. IcyDB retains native metadata/scalar authority; SDK protocol internals
+remain host-owned. This continues the adapter PR, not managed Memory convergence.
+
+The Wire export macro and sync/async transport pass strict selected Wasm lint.
+A fresh external consumer compiles both query and async update exports for Wasm
+without IcyDB, Candid declarations or a framework runtime. Installed async Wire
+qualification remains with the downstream contract/fixture owner; no full gates,
+package-version change, native macOS or performance measurement ran here.
