@@ -40,6 +40,9 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
 - Add authenticated protocol-neutral endpoints for bounded application codecs;
   artifact validation checks their declarations alongside Candid endpoints.
+- Provide the `canic-icydb` host adapter for native IcyDB endpoints, lifecycle
+  scheduling and secure boot entropy. Consumers explicitly mount their IcyDB
+  binding; the adapter creates no framework memory runtime.
 
 - **Release checks:** include the shared version validator in isolated release
   fixtures so preflight and failure-recovery checks can run after tooling updates.

@@ -24,6 +24,7 @@ PUBLISH_ORDER=(
     canic-core
     canic-control-plane
     canic-macros
+    canic-icydb
     canic
     canic-blob-service
     canic-host

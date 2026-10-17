@@ -35,6 +35,7 @@ members = [
     "crates/canic-control-plane",
     "crates/canic-core",
     "crates/canic-host",
+    "crates/canic-icydb",
     "crates/canic-macros",
     "crates/canic-testing-internal",
     "crates/canic-tests",
@@ -70,6 +71,7 @@ canic-cli = { version = "0.111.0", path = "crates/canic-cli" }
 canic-contracts = { version = "0.111.0", path = "crates/canic-contracts" }
 canic-control-plane = { version = "0.111.0", path = "crates/canic-control-plane", default-features = false }
 canic-core = { version = "0.111.0", path = "crates/canic-core" }
+canic-icydb = { version = "0.111.0", path = "crates/canic-icydb" }
 canic-host = { version = "0.111.0", path = "crates/canic-host" }
 canic-macros = { version = "0.111.0", path = "crates/canic-macros" }
 canic-testing-internal = { version = "0.111.0", path = "crates/canic-testing-internal" }
@@ -101,6 +103,7 @@ ic-host-process = { version = "0.23", default-features = false }
 ic-host-text = "0.23"
 ic-host-tools = "0.23"
 ic-management-canister-types = "0.11"
+ic-cdk-management-canister = "0.3"
 ic-memory = "0.44"
 ic-metrics = "0.11"
 ic-query = { version = "0.59", default-features = false, features = [
@@ -109,7 +112,7 @@ ic-query = { version = "0.59", default-features = false, features = [
 ic-secp256k1 = "=0.3.0"
 ic-signature-verification = "0.3.0"
 ic-testkit = { version = "0.49" }
-ic-timers = "0.25"
+ic-timers = "0.26"
 ic-verify-bls-signature = { version = "0.6.0", default-features = false, features = [
     "alloc",
 ] }

@@ -3,6 +3,7 @@
 mod adapter;
 mod endpoint;
 mod lifecycle;
+mod native;
 
 use crate::endpoint::{EndpointKind, expand_entry};
 use proc_macro::TokenStream;
@@ -60,4 +61,14 @@ pub fn canic_raw_query(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn canic_raw_update(attr: TokenStream, item: TokenStream) -> TokenStream {
     endpoint::expand_raw_entry(EndpointKind::Update, attr, item)
+}
+
+/// Native component adapter expansion support; not a framework endpoint policy.
+/// The owning adapter supplies its explicit SDK path and admission/codec body.
+#[doc(hidden)]
+#[proc_macro_attribute]
+pub fn __canic_native_entry(attr: TokenStream, item: TokenStream) -> TokenStream {
+    native::expand(attr.into(), item.into())
+        .unwrap_or_else(|error| error.to_compile_error())
+        .into()
 }

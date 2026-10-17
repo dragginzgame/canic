@@ -67,7 +67,7 @@ export PUBLISH_FROM='' PUBLISH_DRY_RUN=0
 # Stubbed online cases own their policy independently of the offline release gate.
 # The explicit offline case below still verifies the production refusal.
 export CARGO_NET_OFFLINE=false
-expected_packages=(canic-backup canic-contracts canic-core canic-control-plane canic-macros canic canic-blob-service canic-host canic-cli)
+expected_packages=(canic-backup canic-contracts canic-core canic-control-plane canic-macros canic-icydb canic canic-blob-service canic-host canic-cli)
 
 run_case() {
     local expected="$1" status=0

@@ -603,7 +603,7 @@ dependencies = [
  "ic-cdk",
  "ic-certification",
  "ic-memory",
- "ic-metrics",
+ "ic-metrics 0.11.7",
  "ic-secp256k1",
  "ic-timers",
  "k256",
@@ -658,6 +658,17 @@ dependencies = [
  "tokio",
  "toml 1.1.8+spec-1.1.0",
  "url",
+]
+
+[[package]]
+name = "canic-icydb"
+version = "0.111.0"
+dependencies = [
+ "canic-macros",
+ "ic-cdk",
+ "ic-cdk-management-canister",
+ "ic-timers",
+ "ic0",
 ]
 
 [[package]]
@@ -2303,7 +2314,7 @@ dependencies = [
  "ic-host-artifacts 0.23.1",
  "ic-host-fs 0.23.1",
  "ic-management-canister-types 0.11.0",
- "ic-metrics",
+ "ic-metrics 0.11.7",
  "ic_principal",
  "rustix",
  "serde",
@@ -2419,14 +2430,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "ic-cdk-timers"
-version = "1.0.0"
+name = "ic-cdk-management-canister"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6852b9c1d4a82ff50fc7318599298aee8bfb082bd7e9fe7e5c1420692b2170f7"
+checksum = "1c8fb578283e842e9f2c84a4477f751ee2146bea13017a10d227afd952d349a2"
 dependencies = [
- "ic-cdk-executor",
- "ic0",
- "slotmap",
+ "candid",
+ "ic-cdk",
+ "ic-management-canister-types 0.11.0",
+ "serde",
+ "serde_bytes",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -2621,6 +2635,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3aa440238acf049dc652b9cd9a932b79b19e5562f8e80d6994d3eb92523221a4"
 
 [[package]]
+name = "ic-metrics"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c30a384477a9783da95cd991e576f6f6a76c5d3691299fffe294f95affae3fd7"
+
+[[package]]
 name = "ic-query"
 version = "0.59.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2636,7 +2656,7 @@ dependencies = [
  "ic-host-fs 0.22.1",
  "ic-host-text 0.22.1",
  "ic-host-tools 0.22.1",
- "ic-metrics",
+ "ic-metrics 0.11.7",
  "ic-testkit-candid",
  "icrc-ledger-types",
  "prost",
@@ -2713,7 +2733,7 @@ dependencies = [
  "ic-host-artifacts 0.22.1",
  "ic-host-fs 0.22.1",
  "ic-host-process 0.22.1",
- "ic-metrics",
+ "ic-metrics 0.11.7",
  "libc",
  "pocket-ic",
  "serde",
@@ -2734,12 +2754,12 @@ dependencies = [
 
 [[package]]
 name = "ic-timers"
-version = "0.25.2"
+version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aabfccb24b7cc56480f20f750b98e08bbeae318d1e317d85ecedf2c322c352c4"
+checksum = "dd168b22836f5e5101f508069c766d9414e7b064e435090a32c43f36900543e4"
 dependencies = [
- "ic-cdk-timers",
- "ic-metrics",
+ "ic-cdk-executor",
+ "ic-metrics 0.12.0",
  "ic0",
  "thiserror 2.0.18",
 ]

@@ -1,0 +1,20 @@
+[package]
+name = "canic-icydb"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = true
+description = "Native IcyDB canister transport and lifecycle adapter"
+repository.workspace = true
+readme = "README.md"
+
+[dependencies]
+canic-macros.workspace = true
+ic-cdk.workspace = true
+ic-cdk-management-canister.workspace = true
+ic-timers.workspace = true
+ic0.workspace = true
+
+[lints]
+workspace = true

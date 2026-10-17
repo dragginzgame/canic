@@ -120,21 +120,7 @@ fn raw_entry(
 ) -> syn::Result<proc_macro2::TokenStream> {
     let func: ItemFn = syn::parse2(item)?;
     let sig = &func.sig;
-    if sig.asyncness.is_some()
-        || sig.constness.is_some()
-        || sig.abi.is_some()
-        || sig.variadic.is_some()
-        || sig.generics.where_clause.is_some()
-        || !matches!(sig.safety, syn::Safety::Default)
-        || !sig.inputs.is_empty()
-        || !sig.generics.params.is_empty()
-        || !matches!(sig.output, syn::ReturnType::Default)
-    {
-        return Err(syn::Error::new_spanned(
-            sig,
-            "raw entrypoints require a synchronous safe fn() with an implicit unit result",
-        ));
-    }
+    crate::adapter::validate_raw_signature(sig)?;
     let mut parsed = parse::parse_args(attr)?;
     if parsed.decode.is_some() || parsed.reject_access {
         return Err(syn::Error::new_spanned(

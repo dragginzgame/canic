@@ -162,11 +162,13 @@ pub(super) fn expand_raw(
         .export_name
         .as_ref()
         .map_or_else(|| name.to_string(), syn::LitStr::value);
-    let declaration = raw_declaration(kind, args.query_mode, &method, &func.sig)?;
+    let declaration =
+        crate::adapter::raw_declaration(&entry_kind(kind, args.query_mode), &method, &func.sig)?;
     let entry = crate::adapter::entrypoint(
         &entry_kind(kind, args.query_mode),
         &method,
         &adapter_name,
+        quote!(::canic::__internal::cdk),
         quote!(#name();),
     );
     Ok(quote! {
@@ -197,37 +199,6 @@ pub(super) fn expand_raw(
         }
         #func
         #entry
-    })
-}
-
-// One artifact declaration binds the exact public name and mode to its export.
-fn raw_declaration(
-    kind: EndpointKind,
-    mode: QueryMode,
-    method: &str,
-    signature: &Signature,
-) -> syn::Result<TokenStream2> {
-    let length = u16::try_from(method.len())
-        .map_err(|_| syn::Error::new_spanned(signature, "raw endpoint name is too long"))?;
-    if method.is_empty() || method.chars().any(char::is_control) {
-        return Err(syn::Error::new_spanned(
-            signature,
-            "raw endpoint name must be nonempty without controls",
-        ));
-    }
-    let mode = match (kind, mode) {
-        (EndpointKind::Query, QueryMode::Plain) => 1,
-        (EndpointKind::Update, _) => 2,
-        (EndpointKind::Query, QueryMode::Composite) => 3,
-    };
-    let mut declaration = vec![mode];
-    declaration.extend_from_slice(&length.to_le_bytes());
-    declaration.extend_from_slice(method.as_bytes());
-    let declaration_length = declaration.len();
-    Ok(quote! {
-        #[used]
-        #[unsafe(link_section = "canic:raw")]
-        static DECLARATION: [u8; #declaration_length] = [#(#declaration),*];
     })
 }
 
