@@ -7,7 +7,7 @@
 use crate::ops;
 
 use ic_blob_storage::ops::{
-    caffeine::gateway::GatewayReplyLimits,
+    caffeine::decoding::CaffeineReplyLimits,
     service::gateways::{StableGatewayRegistry, access::GatewayRegistryAccess},
 };
 pub struct GatewayHost;
@@ -20,8 +20,8 @@ impl GatewayRegistryAccess for GatewayHost {
         ops::mutate(|stores| operation(&mut stores.gateways))
     }
 }
-pub fn limits() -> GatewayReplyLimits {
-    GatewayReplyLimits {
+pub fn limits() -> CaffeineReplyLimits {
+    CaffeineReplyLimits {
         max_bytes: 65_536.try_into().unwrap(),
         decoding_quota: 500_000.try_into().unwrap(),
         skipping_quota: 1000.try_into().unwrap(),

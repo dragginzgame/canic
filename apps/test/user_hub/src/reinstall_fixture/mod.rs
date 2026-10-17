@@ -22,10 +22,9 @@ pub fn memory() -> canic::memory::MemoryBootstrap {
     let mut input = canic::memory::framework();
     input.pool = memory_pool().expect("fixture grants");
     for key in [ROWS_KEY, super::fixture_importer::MEMORY_KEY] {
-        input.requests.push(
-            ic_memory::MemoryRequest::new("test", key, ic_memory::SchemaMetadata::default())
-                .expect("fixture memory request"),
-        );
+        input
+            .requests
+            .push(ic_memory::MemoryRequest::new("test", key).expect("fixture memory request"));
     }
     input
 }

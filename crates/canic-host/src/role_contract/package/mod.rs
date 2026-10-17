@@ -1191,7 +1191,7 @@ fn explicit_feature_array<'a>(
         .and_then(toml::Value::as_array)
         .ok_or_else(|| {
             unsupported_finding(format!(
-                "the {label} must declare an explicit features array"
+                "the {label} must declare an explicit features array; use `canic = {{ workspace = true, features = [] }}` when no runtime features are needed"
             ))
         })?
         .iter()

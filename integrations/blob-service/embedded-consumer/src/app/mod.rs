@@ -12,10 +12,7 @@ const KEY: &str = "embedded_app.counter.v1";
 type Counter = Cell<u64, RuntimeMemory<DefaultMemoryImpl>>;
 
 pub(super) fn memory_requests() -> Vec<ic_memory::MemoryRequest> {
-    vec![
-        ic_memory::MemoryRequest::new("embedded-app", KEY, ic_memory::SchemaMetadata::default())
-            .unwrap(),
-    ]
+    vec![ic_memory::MemoryRequest::new("embedded-app", KEY).unwrap()]
 }
 
 thread_local! {

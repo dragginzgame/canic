@@ -13,7 +13,8 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 ### ⚠️ Breaking
 
 - **Memory runtime:** adopt Memory 0.45 with one Canic-owned runtime and injected
-  component handles. Allocation reports derive byte totals from measured pages
+  component handles, including test App and embedded Blob fixtures. Allocation reports
+  derive byte totals from measured pages
   and buckets; pools use explicit excluded IDs and allocation diagnostics omit
   removed schema metadata. The storage-format hard cut requires a clean reinstall.
 
@@ -38,6 +39,17 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
   across releases. Same-release interruption recovery remains supported.
 
 ### 🔧 Changed
+
+- **Developer setup:** explicitly select Canic as the hook-install destination
+  ([PR #588](https://github.com/dragginzgame/canic/pull/588)).
+- **Build guidance:** show the accepted explicit Canic feature declaration in
+  diagnostics and the managed-Fleet example
+  ([#583](https://github.com/dragginzgame/canic/issues/583)).
+
+- **Fleet diagnostics:** missing import reviews and idle attempt recovery now report
+  their actual state instead of a controller-handoff mismatch
+  ([#577](https://github.com/dragginzgame/canic/issues/577),
+  [#576](https://github.com/dragginzgame/canic/issues/576)).
 
 - **Fixture decoding:** select finite Candid reply budgets explicitly; native HTTP
   fixtures use Host Process capture with bounded headers and bodies.
@@ -78,9 +90,9 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
   installation memory, continuity checks, certificate issuance, proof verification
   and session machinery; Canic retains
   endpoint admission, lifecycle and Fleet authority.
-- **Blob composition:** align published Blob 0.27.1 and both private consumers
-  with Memory 0.41; refresh the embedded allocation fixture and qualify dedicated,
-  embedded and production initialization recovery on the selected runtime graph.
+- **Blob composition:** align published Blob 0.31 and both private consumers
+  with Memory 0.45. Use shared reply-decoding limits while preserving each
+  account and gateway query budget.
 - **Provisioning diagnostics:** retain exact rejection evidence and approved
   resume inputs ([#516 — Expose failed provisioning dependencies](https://github.com/dragginzgame/canic/issues/516)).
 - **Funding replies:** decode the Registry response once, preserving typed remote

@@ -6,9 +6,9 @@
 
 use crate::ops;
 
-use ic_blob_storage::ops::service::{
-    account::{AccountInspectionAccess, AccountInspectionLimits},
-    operator::OperatorStores,
+use ic_blob_storage::ops::{
+    caffeine::decoding::CaffeineReplyLimits,
+    service::{account::AccountInspectionAccess, operator::OperatorStores},
 };
 pub struct AccountHost;
 impl AccountInspectionAccess for AccountHost {
@@ -17,8 +17,8 @@ impl AccountInspectionAccess for AccountHost {
         ops::read(|stores| f(OperatorStores::from(stores)))
     }
 }
-pub fn limits() -> AccountInspectionLimits {
-    AccountInspectionLimits {
+pub fn limits() -> CaffeineReplyLimits {
+    CaffeineReplyLimits {
         max_bytes: 4096.try_into().unwrap(),
         decoding_quota: 500_000.try_into().unwrap(),
         skipping_quota: 1000.try_into().unwrap(),

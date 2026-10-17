@@ -11,6 +11,83 @@ remain **0.111.0**. The objective is to delete duplicate mechanisms in favor of
 upstream owners; moving declarations alone does not demonstrate faster builds.
 
 
+## PR #588 and issue #583 — 2026-10-17
+
+Developer setup now passes the explicit Canic destination to the shared hook
+installer. Bash syntax, ShellCheck and focused exact-argument probes pass,
+including spaces, a different working directory, installer failure and absent hooks.
+The missing-feature diagnostic shows `canic = { workspace = true, features = [] }`;
+the managed-Fleet guide now uses a workspace catalog and explicit member tables.
+Both manifest examples parse as TOML. The open 0.112 notes include these changes.
+
+The selected graph changed to Memory 0.46, Build 0.12.1 and Query 0.60 during this
+slice. The focused Host role-manifest regression stops before tests because Core
+still imports Memory's removed `ic_stable_structures` and `PolicyIdentityError`
+exports. Log and task before-images: `/tmp/canic-pr588-issue583/`. No dependency
+rollback, broad gate, Git publication, PR merge or issue closure was performed.
+The preceding Blob checks belong to the earlier Memory 0.45 graph. Current build
+readiness requires the Memory 0.46 caller adoption as well as the existing Auth
+and installed-qualification work. Issue #579's split-tool-directory check remains
+a confirmed follow-up for bundled macOS Binaryen installations.
+
+## Blob 0.31 adoption — 2026-10-17
+
+The maintainer selected published Blob/contracts 0.31 in the root graph. Canic's
+account and gateway adapters now use `CaffeineReplyLimits` with unchanged budgets;
+both private consumer locks select 0.31 and remove the obsolete Memory 0.44 edge.
+Adapter all-target strict Clippy, internal fixture all-target/all-feature compilation,
+and both locked native consumer compilations pass. Logs and task before-images:
+`/tmp/canic-blob31/`. No broad suite, installed journey or Git/release effect ran.
+
+This supersedes the Blob compilation blocker below. Whole-batch push readiness
+still requires portable Root-managed Auth admission (the public application
+facade currently returns `AuthorityUnavailable`), final embedded-fixture verification
+and selected installed Blob/checkpoint recovery qualification. Live Backup remains
+unavailable under the accepted delivery scope. The 0.112 notes cover this adoption,
+but do not claim the incomplete batch is ready for publication.
+
+## Issue triage and Fleet diagnostics — 2026-10-17
+
+Issues #576 and #577 now return specific typed errors for idle attempt recovery
+and absent import reviews, before live transport creation or journal publication.
+All four focused attempt-recovery tests and the import admission regression pass;
+evidence is retained in `/tmp/canic-issue-triage/`. Both 0.112 changelog views agree.
+
+Open Testkit preparation PRs overlap the local 0.50 adoption and need reconciliation,
+not blind application. PR #588 still supplies the explicit hook destination fix.
+Blob's pending 0.31 notes incorporate its PRs #73/#78; Backup 0.27.1's notes include
+its still-open Host-adoption PR #57's outcomes. No PR was merged or closed.
+The Blob build mismatch and whole-batch Auth/installed qualification work remain;
+this diagnostic slice does not make the complete 0.112 batch ready to push.
+
+## Current build blocker and private consumer alignment — 2026-10-17
+
+The embedded Blob application now uses Memory 0.45 and key-only requests. Both
+private consumer lockfiles were regenerated against their current manifests and
+pass locked/offline metadata resolution. Evidence: `/tmp/canic-consumer-align/`;
+task input is retained in `before/`. Root dependencies and package versions were
+not changed. The pending changelog includes the consumer propagation.
+
+A fresh locked adapter compile still fails on one request-type mismatch: published
+Blob 0.30 returns Memory 0.44 requests, whereas Canic selects Memory 0.45.
+`cargo info ic-blob-storage` reports 0.30.0 as latest, and an explicit 0.31.0 lookup
+fails. Upstream's pending 0.31 changelog already names the required Memory 0.45
+alignment. Publish the matching Blob/contracts family, then adopt it and qualify
+the adapter, private consumers and internal dev/test targets. No local shim or
+unpublished dependency override was introduced. Consumer code compilation and
+installed qualification are not claimed; the overall batch is not push-ready.
+
+
+## App fixture Memory callers — 2026-10-17
+
+The user-hub and user-shard reinstall fixtures now use Memory 0.45's two-argument
+request constructor. Their locked strict library/test Clippy checks pass with the
+selected Auth 0.7.8 (`/tmp/canic-app-memory45/clippy.log`). The remaining old schema
+constructor is confined to the independent embedded Blob consumer's Memory 0.41
+graph. No dependency selection or release changed; the whole-batch blockers below
+remain. Both 0.112 changelog views include the fixture propagation.
+
+
 ## Testkit 0.50 caller adoption — 2026-10-16
 
 Typed Candid calls in the published qualification helpers, Host funding fixtures,
