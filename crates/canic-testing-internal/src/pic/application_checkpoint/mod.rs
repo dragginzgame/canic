@@ -11,7 +11,7 @@ use canic_contracts::{
     ids::{ApplicationCheckpointBinding as Binding, ApplicationCheckpointPhase as Phase},
 };
 use ic_testkit::pic::{
-    CandidCallExt, CanisterInstallExt, CanisterSnapshotTarget, PocketIc, PocketIcSnapshotExt,
+    CanisterInstallExt, CanisterSnapshotTarget, PocketIc, PocketIcSnapshotExt,
     SnapshotRestoreFunding,
 };
 use serde::Deserialize;
@@ -29,16 +29,18 @@ pub(super) fn qualify(fixture: &super::ManagedLifecycleFixture, target: Principa
     let pic = &fixture.pic;
     pic.add_cycles(target, super::SNAPSHOT_RESTORE_MINIMUM_CYCLES);
     let root = fixture.root;
-    let response: Result<StatusResponse, Error> = pic
-        .query_candid(
-            target,
-            root,
-            canic::protocol::CANIC_CONTROL_STATUS,
-            (StatusRequest::CallerAuthority(OperationStatusRequest {
-                operation_id: [0; 32],
-            }),),
-        )
-        .unwrap();
+    let response: Result<StatusResponse, Error> = ::ic_testkit::pic::query_candid_args(
+        &pic,
+        target,
+        root,
+        canic::protocol::CANIC_CONTROL_STATUS,
+        (StatusRequest::CallerAuthority(OperationStatusRequest {
+            operation_id: [0; 32],
+        }),),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap();
     let StatusResponse::CallerAuthority(status) = response.unwrap();
     let first = Binding {
         authority: status.authority,
@@ -174,23 +176,29 @@ fn verify_restore_release(
 }
 
 fn view(pic: &PocketIc, target: Principal) -> CheckpointView {
-    pic.query_candid::<Result<CheckpointView, Error>, _>(
+    ::ic_testkit::pic::query_candid_args::<(Result<CheckpointView, Error>,), _>(
+        pic,
         target,
         candid::Principal::anonymous(),
         "checkpoint_view",
         (),
+        ::canic::testing::CANDID_REPLY_LIMITS,
     )
+    .map(|(reply,)| reply)
     .unwrap()
     .unwrap()
 }
 
 fn increment(pic: &PocketIc, target: Principal) -> Result<u64, Error> {
-    pic.update_candid(
+    ::ic_testkit::pic::update_candid_args(
+        pic,
         target,
         candid::Principal::anonymous(),
         "checkpoint_increment",
         (),
+        ::canic::testing::CANDID_REPLY_LIMITS,
     )
+    .map(|(reply,)| reply)
     .unwrap()
 }
 
@@ -201,8 +209,16 @@ fn transition(
     binding: &Binding,
     phase: Phase,
 ) -> Result<Phase, Error> {
-    pic.update_candid(target, root, "checkpoint_transition", (binding, phase))
-        .unwrap()
+    ::ic_testkit::pic::update_candid_args(
+        pic,
+        target,
+        root,
+        "checkpoint_transition",
+        (binding, phase),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap()
 }
 
 fn release(pic: &PocketIc, target: Principal, root: Principal, binding: &Binding) {
@@ -223,6 +239,14 @@ fn restore(
     captured: &Binding,
     fresh: &Binding,
 ) -> Result<Phase, Error> {
-    pic.update_candid(target, root, "checkpoint_restore", (captured, fresh))
-        .unwrap()
+    ::ic_testkit::pic::update_candid_args(
+        pic,
+        target,
+        root,
+        "checkpoint_restore",
+        (captured, fresh),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap()
 }

@@ -283,11 +283,11 @@ mod tests {
         let targets = root_baseline_snapshot_targets(&metadata);
 
         assert_eq!(targets.len(), 3);
-        assert_eq!(targets[0].canister_id(), root_id);
-        assert_eq!(targets[0].sender(), None);
-        assert_eq!(targets[1].canister_id(), child_id);
-        assert_eq!(targets[1].sender(), Some(root_id));
-        assert_eq!(targets[2].canister_id(), store_id);
-        assert_eq!(targets[2].sender(), Some(root_id));
+        assert_eq!(targets[0].canister_id, root_id);
+        assert_eq!(targets[0].sender, None);
+        assert_eq!(targets[1].canister_id, child_id);
+        assert_eq!(targets[1].sender, Some(root_id));
+        assert_eq!(targets[2].canister_id, store_id);
+        assert_eq!(targets[2].sender, Some(root_id));
     }
 }

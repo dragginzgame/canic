@@ -9,7 +9,7 @@ use super::artifacts::{self, Composition};
 
 use candid::{CandidType, Principal};
 use canic::testing::{
-    CandidCallExt, ManagedApplicationInit, ManagedComponentGroupQualificationInput,
+    ManagedApplicationInit, ManagedComponentGroupQualificationInput,
     ManagedRoleQualificationArtifact, install_managed_component_group,
 };
 use canic_blob_service::__private::ic_blob_storage_contracts::identity::ProviderRootHash;
@@ -203,14 +203,30 @@ fn qualify(embedded: bool) {
     let stranger = principal(9);
     let resume = || {
         let result: Result<(), canic_blob_service::dto::recovery::CurrentInstanceRecoveryFailure> =
-            pic.update_candid(service, operator, "blob_resume_current_instance", ())
-                .expect("recovery transport");
+            ::ic_testkit::pic::update_candid_args(
+                &pic,
+                service,
+                operator,
+                "blob_resume_current_instance",
+                (),
+                ::canic::testing::CANDID_REPLY_LIMITS,
+            )
+            .map(|(reply,)| reply)
+            .expect("recovery transport");
         assert_eq!(result, Ok(()));
     };
     resume();
     let configuration = || {
-        let result: Result<HostConfigurationView, HostFailure> = pic
-            .query_candid(service, operator, "blob_configuration", ())
+        let result: Result<HostConfigurationView, HostFailure> =
+            ::ic_testkit::pic::query_candid_args(
+                &pic,
+                service,
+                operator,
+                "blob_configuration",
+                (),
+                ::canic::testing::CANDID_REPLY_LIMITS,
+            )
+            .map(|(reply,)| reply)
             .expect("configuration transport");
         result.expect("operator configuration")
     };
@@ -224,9 +240,16 @@ fn qualify(embedded: bool) {
     refuse_invalid_configuration(&fixture, service, &reinstall_wasm, embedded, &installed);
     resume();
     assert_eq!(configuration(), installed);
-    let denied: Result<HostConfigurationView, HostFailure> = pic
-        .query_candid(service, stranger, "blob_configuration", ())
-        .expect("stranger query transport");
+    let denied: Result<HostConfigurationView, HostFailure> = ::ic_testkit::pic::query_candid_args(
+        &pic,
+        service,
+        stranger,
+        "blob_configuration",
+        (),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("stranger query transport");
     assert_eq!(denied, Err(HostFailure::Denied));
 
     let scope = TenantScope {
@@ -235,8 +258,16 @@ fn qualify(embedded: bool) {
         tenant,
     };
     let capacity = || {
-        let result: Result<UploadCapacityResponse, UploadCapacityFailure> = pic
-            .query_candid(service, tenant, "blob_upload_capacity", (scope,))
+        let result: Result<UploadCapacityResponse, UploadCapacityFailure> =
+            ::ic_testkit::pic::query_candid_args(
+                &pic,
+                service,
+                tenant,
+                "blob_upload_capacity",
+                (scope,),
+                ::canic::testing::CANDID_REPLY_LIMITS,
+            )
+            .map(|(reply,)| reply)
             .expect("tenant capacity transport");
         result
     };
@@ -246,25 +277,56 @@ fn qualify(embedded: bool) {
         expected: None,
         active: true,
     };
-    let denied: Result<TenantEnrollmentResponse, TenantFailure> = pic
-        .update_candid(service, stranger, "blob_update_tenant", (request,))
+    let denied: Result<TenantEnrollmentResponse, TenantFailure> =
+        ::ic_testkit::pic::update_candid_args(
+            &pic,
+            service,
+            stranger,
+            "blob_update_tenant",
+            (request,),
+            ::canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)
         .expect("stranger mutation transport");
     assert_eq!(denied, Err(TenantFailure::Denied));
     let wrong = TenantScope {
         service: principal(12),
         ..scope
     };
-    let invalid: Result<TenantEnrollmentResponse, TenantFailure> = pic
-        .query_candid(service, operator, "blob_tenant", (wrong,))
+    let invalid: Result<TenantEnrollmentResponse, TenantFailure> =
+        ::ic_testkit::pic::query_candid_args(
+            &pic,
+            service,
+            operator,
+            "blob_tenant",
+            (wrong,),
+            ::canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)
         .expect("wrong-service query transport");
     assert_eq!(invalid, Err(TenantFailure::Binding));
 
     // Discard the mutation result, then reconcile from authenticated current state.
-    let _: Result<TenantEnrollmentResponse, TenantFailure> = pic
-        .update_candid(service, operator, "blob_update_tenant", (request,))
-        .expect("accepted mutation transport");
-    let enrolled: Result<TenantEnrollmentResponse, TenantFailure> = pic
-        .query_candid(service, tenant, "blob_tenant", (scope,))
+    let _: Result<TenantEnrollmentResponse, TenantFailure> = ::ic_testkit::pic::update_candid_args(
+        &pic,
+        service,
+        operator,
+        "blob_update_tenant",
+        (request,),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("accepted mutation transport");
+    let enrolled: Result<TenantEnrollmentResponse, TenantFailure> =
+        ::ic_testkit::pic::query_candid_args(
+            &pic,
+            service,
+            tenant,
+            "blob_tenant",
+            (scope,),
+            ::canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)
         .expect("tenant reconciliation transport");
     let enrolled = enrolled.expect("retained enrollment after discarded result");
     assert!(enrolled.enrollment.expect("enrollment").active);
@@ -272,8 +334,16 @@ fn qualify(embedded: bool) {
         expected: enrolled.enrollment,
         ..request
     };
-    let replayed: Result<TenantEnrollmentResponse, TenantFailure> = pic
-        .update_candid(service, operator, "blob_update_tenant", (replay,))
+    let replayed: Result<TenantEnrollmentResponse, TenantFailure> =
+        ::ic_testkit::pic::update_candid_args(
+            &pic,
+            service,
+            operator,
+            "blob_update_tenant",
+            (replay,),
+            ::canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)
         .expect("exact current-state retry transport");
     assert_eq!(replayed.unwrap().enrollment, enrolled.enrollment);
     let initial_capacity = capacity().expect("enrolled tenant capacity");
@@ -284,8 +354,16 @@ fn qualify(embedded: bool) {
     assert_eq!(initial_capacity.remaining_liability_bytes, 20_000);
     assert_eq!(initial_capacity.remaining_bytes, 10_000);
     assert!(!initial_capacity.fenced);
-    let denied: Result<UploadCapacityResponse, UploadCapacityFailure> = pic
-        .query_candid(service, stranger, "blob_upload_capacity", (scope,))
+    let denied: Result<UploadCapacityResponse, UploadCapacityFailure> =
+        ::ic_testkit::pic::query_candid_args(
+            &pic,
+            service,
+            stranger,
+            "blob_upload_capacity",
+            (scope,),
+            ::canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)
         .expect("stranger capacity transport");
     assert_eq!(denied, Err(UploadCapacityFailure::Denied));
 
@@ -315,17 +393,28 @@ fn qualify(embedded: bool) {
         })
         .collect::<Vec<_>>();
     for permission in &permissions {
-        let denied: Result<UploadAdmissionMutation, UploadAdmissionFailure> = pic
-            .update_candid(
+        let denied: Result<UploadAdmissionMutation, UploadAdmissionFailure> =
+            ::ic_testkit::pic::update_candid_args(
+                &pic,
                 service,
                 permission.uploader,
                 "blob_admit_upload",
                 (*permission,),
+                ::canic::testing::CANDID_REPLY_LIMITS,
             )
+            .map(|(reply,)| reply)
             .expect("uploader cannot grant tenant authority");
         assert_eq!(denied, Err(UploadAdmissionFailure::Denied));
-        let granted: Result<UploadAdmissionMutation, UploadAdmissionFailure> = pic
-            .update_candid(service, tenant, "blob_admit_upload", (*permission,))
+        let granted: Result<UploadAdmissionMutation, UploadAdmissionFailure> =
+            ::ic_testkit::pic::update_candid_args(
+                &pic,
+                service,
+                tenant,
+                "blob_admit_upload",
+                (*permission,),
+                ::canic::testing::CANDID_REPLY_LIMITS,
+            )
+            .map(|(reply,)| reply)
             .expect("tenant permission transport");
         let granted = granted.expect("tenant grants uploader permission");
         assert_eq!(granted.admission.permission, *permission);
@@ -335,12 +424,15 @@ fn qualify(embedded: bool) {
             .to_string();
         for actor in [permission.uploader, stranger] {
             let assessment: Result<UploadCertificateAssessmentResponse, UploadExposureFailure> =
-                pic.query_candid(
+                ::ic_testkit::pic::query_candid_args(
+                    &pic,
                     service,
                     actor,
                     "blob_upload_certificate_assessment",
                     (root.clone(),),
+                    ::canic::testing::CANDID_REPLY_LIMITS,
                 )
+                .map(|(reply,)| reply)
                 .expect("certificate assessment transport");
             let expected = if actor == permission.uploader {
                 UploadExposureFailure::Unprepared
@@ -366,14 +458,16 @@ fn qualify(embedded: bool) {
         }
     );
     if embedded {
-        let count: u64 = pic
-            .update_candid(
-                service,
-                candid::Principal::anonymous(),
-                "application_increment",
-                (),
-            )
-            .expect("application mutation");
+        let count: u64 = ::ic_testkit::pic::update_candid_args(
+            &pic,
+            service,
+            candid::Principal::anonymous(),
+            "application_increment",
+            (),
+            ::canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)
+        .expect("application mutation");
         assert_eq!(count, 42);
     }
     fixture
@@ -391,27 +485,45 @@ fn qualify(embedded: bool) {
     resume();
     assert!(!configuration().fenced);
     assert_eq!(capacity().unwrap(), admitted_capacity);
-    let restored: Result<TenantEnrollmentResponse, TenantFailure> = pic
-        .query_candid(service, tenant, "blob_tenant", (scope,))
+    let restored: Result<TenantEnrollmentResponse, TenantFailure> =
+        ::ic_testkit::pic::query_candid_args(
+            &pic,
+            service,
+            tenant,
+            "blob_tenant",
+            (scope,),
+            ::canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)
         .expect("restored tenant transport");
     assert_eq!(restored.unwrap().enrollment, enrolled.enrollment);
     for permission in permissions {
-        let replayed: Result<UploadAdmissionMutation, UploadAdmissionFailure> = pic
-            .update_candid(service, tenant, "blob_admit_upload", (permission,))
+        let replayed: Result<UploadAdmissionMutation, UploadAdmissionFailure> =
+            ::ic_testkit::pic::update_candid_args(
+                &pic,
+                service,
+                tenant,
+                "blob_admit_upload",
+                (permission,),
+                ::canic::testing::CANDID_REPLY_LIMITS,
+            )
+            .map(|(reply,)| reply)
             .expect("restored uploader permission transport");
         let replayed = replayed.expect("retained exact permission after restoration");
         assert!(replayed.replayed);
         assert_eq!(replayed.admission.permission, permission);
     }
     if embedded {
-        let count: u64 = pic
-            .query_candid(
-                service,
-                candid::Principal::anonymous(),
-                "application_count",
-                (),
-            )
-            .expect("restored application counter");
+        let count: u64 = ::ic_testkit::pic::query_candid_args(
+            &pic,
+            service,
+            candid::Principal::anonymous(),
+            "application_count",
+            (),
+            ::canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)
+        .expect("restored application counter");
         assert_eq!(count, 42);
     }
 }
@@ -492,8 +604,16 @@ fn refuse_invalid_configuration(
             ic_testkit::pic::RejectCode::CanisterError
         );
         assert_eq!(pic.get_stable_memory(service), stable);
-        let current: Result<HostConfigurationView, HostFailure> = pic
-            .query_candid(service, principal(7), "blob_configuration", ())
+        let current: Result<HostConfigurationView, HostFailure> =
+            ::ic_testkit::pic::query_candid_args(
+                &pic,
+                service,
+                principal(7),
+                "blob_configuration",
+                (),
+                ::canic::testing::CANDID_REPLY_LIMITS,
+            )
+            .map(|(reply,)| reply)
             .unwrap();
         // Failed management installation preserves bytes but must not silently
         // activate the reopened Blob stores. Recovery remains operator-owned.
@@ -505,14 +625,16 @@ fn refuse_invalid_configuration(
             }
         );
         if embedded {
-            let count: u64 = pic
-                .query_candid(
-                    service,
-                    candid::Principal::anonymous(),
-                    "application_count",
-                    (),
-                )
-                .unwrap();
+            let count: u64 = ::ic_testkit::pic::query_candid_args(
+                &pic,
+                service,
+                candid::Principal::anonymous(),
+                "application_count",
+                (),
+                ::canic::testing::CANDID_REPLY_LIMITS,
+            )
+            .map(|(reply,)| reply)
+            .unwrap();
             assert_eq!(count, 41);
         }
     }

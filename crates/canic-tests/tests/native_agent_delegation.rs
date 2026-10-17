@@ -20,7 +20,7 @@ use canic_testing_internal::pic::{
     setup_fresh_active_component_registry, upgrade_args,
 };
 use ic_agent::{Identity, identity::Secp256k1Identity};
-use ic_testkit::pic::{CandidCallExt, CanisterInstallExt, RetryPolicy};
+use ic_testkit::pic::{CanisterInstallExt, RetryPolicy};
 use ic_testkit::pocket_ic::{PocketIc, common::rest::BlobCompression};
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
@@ -203,10 +203,16 @@ fn generic_application_subject_as(
     canister_id: candid::Principal,
     caller: candid::Principal,
 ) -> Result<candid::Principal, Error> {
-    fixture
-        .pic()
-        .query_candid(canister_id, caller, "issuer_application_subject", ())
-        .expect("query Candid harness call")
+    ::ic_testkit::pic::query_candid_args(
+        fixture.pic(),
+        canister_id,
+        caller,
+        "issuer_application_subject",
+        (),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("query Candid harness call")
 }
 
 fn fleet_admission_status_as(
@@ -214,9 +220,9 @@ fn fleet_admission_status_as(
     canister_id: candid::Principal,
     caller: candid::Principal,
 ) -> Result<FleetAdmissionProjectionStatusResponse, Error> {
-    let response: Result<FleetAdmissionManagedStatusResponse, Error> = fixture
-        .pic()
-        .query_candid(
+    let response: Result<FleetAdmissionManagedStatusResponse, Error> =
+        ::ic_testkit::pic::query_candid_args(
+            fixture.pic(),
             canister_id,
             caller,
             protocol::CANIC_ADMISSION_STATUS,
@@ -224,7 +230,9 @@ fn fleet_admission_status_as(
                 offset: 0,
                 limit: u64::MAX,
             }),),
+            ::canic::testing::CANDID_REPLY_LIMITS,
         )
+        .map(|(reply,)| reply)
         .expect("query Candid harness call");
     response.map(|response| match response {
         FleetAdmissionManagedStatusResponse::Admission(response) => response,
@@ -236,10 +244,16 @@ fn fleet_admission_probe_as(
     canister_id: candid::Principal,
     caller: candid::Principal,
 ) -> Result<(), Error> {
-    fixture
-        .pic()
-        .query_candid(canister_id, caller, "issuer_fleet_admission_probe", ())
-        .expect("query Candid harness call")
+    ::ic_testkit::pic::query_candid_args(
+        fixture.pic(),
+        canister_id,
+        caller,
+        "issuer_fleet_admission_probe",
+        (),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("query Candid harness call")
 }
 
 #[test]
@@ -247,15 +261,16 @@ fn closed_local_authorization_denial_partition_is_bounded() {
     let fixture = setup_snapshot_resettable_active_component_registry();
     let caller = native_agent_subject();
     let observations = LocalAuthorizationDenialProbe::ALL.map(|probe| {
-        let sample: Result<QueryPerfSample<String>, Error> = fixture
-            .pic()
-            .query_candid(
-                fixture.verifier.canister_id,
-                caller,
-                "issuer_application_denial_perf",
-                (probe,),
-            )
-            .expect("query Candid harness call");
+        let sample: Result<QueryPerfSample<String>, Error> = ::ic_testkit::pic::query_candid_args(
+            fixture.pic(),
+            fixture.verifier.canister_id,
+            caller,
+            "issuer_application_denial_perf",
+            (probe,),
+            ::canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)
+        .expect("query Candid harness call");
         let sample = sample.expect("denial performance probe must succeed");
         assert_eq!(sample.value, probe.label());
         assert!(

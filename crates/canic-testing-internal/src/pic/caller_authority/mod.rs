@@ -15,7 +15,7 @@ use canic_contracts::dto::wire::projection::caller_authority::StatusRequest;
 use canic_contracts::dto::wire::projection::caller_authority::StatusResponse;
 use canic_contracts::dto::wire::projection::fixture_caller_authority::Command;
 use canic_contracts::dto::wire::projection::fixture_caller_authority::Response;
-use ic_testkit::pic::{CandidCallExt, PocketIc};
+use ic_testkit::pic::PocketIc;
 use std::time::Duration;
 
 pub(super) fn qualify_candid(workspace: &std::path::Path) {
@@ -236,14 +236,16 @@ fn command(
     hub: Principal,
     request: CallerAuthorityCommand,
 ) -> Result<CallerAuthorityReceipt, Error> {
-    let response: Result<Response, Error> = pic
-        .update_candid(
-            hub,
-            caller,
-            canic::protocol::CANIC_COMMAND,
-            (Command::CallerAuthority(request),),
-        )
-        .unwrap();
+    let response: Result<Response, Error> = ::ic_testkit::pic::update_candid_args(
+        pic,
+        hub,
+        caller,
+        canic::protocol::CANIC_COMMAND,
+        (Command::CallerAuthority(request),),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap();
     response.map(|Response::CallerAuthority(receipt)| receipt)
 }
 
@@ -253,23 +255,33 @@ fn status(
     target: Principal,
     operation_id: [u8; 32],
 ) -> CallerAuthorityStatus {
-    let response: Result<StatusResponse, Error> = pic
-        .query_candid(
-            target,
-            root,
-            canic::protocol::CANIC_CONTROL_STATUS,
-            (StatusRequest::CallerAuthority(OperationStatusRequest {
-                operation_id,
-            }),),
-        )
-        .unwrap();
+    let response: Result<StatusResponse, Error> = ::ic_testkit::pic::query_candid_args(
+        pic,
+        target,
+        root,
+        canic::protocol::CANIC_CONTROL_STATUS,
+        (StatusRequest::CallerAuthority(OperationStatusRequest {
+            operation_id,
+        }),),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap();
     let StatusResponse::CallerAuthority(status) = response.unwrap();
     status
 }
 
 fn probe(pic: &PocketIc, hub: Principal, shard: Principal) -> Result<Principal, Error> {
-    pic.update_candid(hub, shard, "test_caller_probe", ())
-        .unwrap()
+    ::ic_testkit::pic::update_candid_args(
+        pic,
+        hub,
+        shard,
+        "test_caller_probe",
+        (),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap()
 }
 
 const fn inactive() -> Result<Principal, Error> {

@@ -38,10 +38,10 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
 ### 🔧 Changed
 
-- **Pending Testkit adoption:** prepare unit-returning pool readiness/validation
-  hooks, field-based fixture inputs and explicit-principal typed calls while
-  preserving bootstrap, topology checks and exact senders. Normal dependency adoption
-  remains blocked on Testkit 0.52 publication and the existing 0.50 caller alignment.
+- **Testkit qualification:** adopt published Testkit 0.52, unit-returning pool
+  hooks, field-based fixture inputs and bounded argument-sequence Candid calls.
+  Qualification replies use explicit test-owned wire/work/type/header ceilings;
+  bootstrap, topology checks, exact senders and pool-owned restoration remain intact.
 
 - **Release checks:** include the shared version validator in isolated release
   fixtures so preflight and failure-recovery checks can run after tooling updates.

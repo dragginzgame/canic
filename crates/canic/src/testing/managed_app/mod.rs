@@ -56,7 +56,7 @@ use canic_core::bootstrap::parse_config_model;
 use canic_core::cdk::utils::hash::sha256_bytes;
 use canic_core::shared_support::fleet_admission_policy::compile_fleet_admission_projection;
 use canic_core::shared_support::fleet_admission_policy::compile_installed_fleet_admission_policy;
-use ic_testkit::pic::{CandidCallError, CandidCallExt, CanisterInstallExt, PocketIc};
+use ic_testkit::pic::{CandidCallError, CanisterInstallExt, PocketIc};
 use std::{fmt, time::Duration};
 
 const DEFAULT_INSTALL_CYCLES: u128 = 10_000_000_000_000;
@@ -140,14 +140,18 @@ impl ManagedAppFixture {
 
     /// Configure the exact retained runtime directory through Canic's managed command endpoint.
     pub fn configure_runtime(&self) -> Result<OperationReceipt, ManagedAppQualificationError> {
-        let response: Result<ManagedCommandResponse, Error> = self.pic.update_candid(
-            self.app,
-            self.root,
-            CANIC_COMMAND,
-            (ManagedCommand::ConfigureRuntime(Box::new(
-                self.directory.clone(),
-            )),),
-        )?;
+        let response: Result<ManagedCommandResponse, Error> =
+            ::ic_testkit::pic::update_candid_args(
+                &self.pic,
+                self.app,
+                self.root,
+                CANIC_COMMAND,
+                (ManagedCommand::ConfigureRuntime(Box::new(
+                    self.directory.clone(),
+                )),),
+                crate::testing::CANDID_REPLY_LIMITS,
+            )
+            .map(|(reply,)| reply)?;
         let response = response.map_err(ManagedAppQualificationError::Canic)?;
         let ManagedCommandResponse::OperationAccepted(receipt) = response else {
             return Err(ManagedAppQualificationError::UnexpectedResponse(
@@ -202,7 +206,8 @@ impl ManagedAppFixture {
     pub fn admission_status(
         &self,
     ) -> Result<FleetAdmissionProjectionStatusResponse, ManagedAppQualificationError> {
-        let response: Result<ManagedStatusResponse, Error> = self.pic.query_candid(
+        let response: Result<ManagedStatusResponse, Error> = ::ic_testkit::pic::query_candid_args(
+            &self.pic,
             self.app,
             self.root,
             CANIC_ADMISSION_STATUS,
@@ -210,7 +215,9 @@ impl ManagedAppFixture {
                 limit: DEFAULT_STATUS_PAGE_LIMIT,
                 offset: 0,
             }),),
-        )?;
+            crate::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)?;
         let response = response.map_err(ManagedAppQualificationError::Canic)?;
         let ManagedStatusResponse::Admission(status) = response else {
             return Err(ManagedAppQualificationError::UnexpectedResponse(
@@ -246,12 +253,16 @@ impl ManagedAppFixture {
             expected_policy_digest: current.policy_digest,
             successor,
         };
-        let response: Result<ManagedCommandResponse, Error> = self.pic.update_candid(
-            self.app,
-            self.root,
-            CANIC_COMMAND,
-            (ManagedCommand::PrepareFleetAdmission(Box::new(request)),),
-        )?;
+        let response: Result<ManagedCommandResponse, Error> =
+            ::ic_testkit::pic::update_candid_args(
+                &self.pic,
+                self.app,
+                self.root,
+                CANIC_COMMAND,
+                (ManagedCommand::PrepareFleetAdmission(Box::new(request)),),
+                crate::testing::CANDID_REPLY_LIMITS,
+            )
+            .map(|(reply,)| reply)?;
         let response = response.map_err(ManagedAppQualificationError::Canic)?;
         let ManagedCommandResponse::PrepareFleetAdmission(receipt) = response else {
             return Err(ManagedAppQualificationError::UnexpectedResponse(
@@ -280,14 +291,17 @@ impl ManagedAppFixture {
     }
 
     fn runtime_is_active(&self) -> Result<bool, ManagedAppQualificationError> {
-        let response: Result<ManagedStatusResponse, Error> = self.pic.query_candid(
+        let response: Result<ManagedStatusResponse, Error> = ::ic_testkit::pic::query_candid_args(
+            &self.pic,
             self.app,
             self.root,
             CANIC_CONTROL_STATUS,
             (ManagedStatusRequest::Operation(OperationStatusRequest {
                 operation_id: self.directory.operation_id,
             }),),
-        )?;
+            crate::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)?;
         let response = response.map_err(ManagedAppQualificationError::Canic)?;
         let ManagedStatusResponse::Operation(status) = response else {
             return Err(ManagedAppQualificationError::UnexpectedResponse(

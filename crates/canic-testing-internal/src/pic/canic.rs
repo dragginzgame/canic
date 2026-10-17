@@ -48,7 +48,7 @@ use canic_contracts::{
 use canic_core::cdk::utils::hash::wasm_hash;
 use canic_host::release_set::AppConfigSnapshot;
 use ic_testkit::pic::{
-    CandidCallError, CandidCallExt, CanisterDiagnosticsRequest, CanisterInstallExt, InstallSpec,
+    CandidCallError, CanisterDiagnosticsRequest, CanisterInstallExt, InstallSpec,
     LabeledCanisterDiagnosticsRequest, PocketIc, PocketIcBuilder, PocketIcDiagnosticsExt,
     StandaloneCanisterFixture,
 };
@@ -66,12 +66,15 @@ fn root_command(
     root: Principal,
     command: RootCommandFragment,
 ) -> Result<RootCommandResponseFragment, Error> {
-    pic.update_candid(
+    ::ic_testkit::pic::update_candid_args(
+        pic,
         root,
         candid::Principal::anonymous(),
         protocol::CANIC_ROOT_COMMAND,
         (command,),
+        ::canic::testing::CANDID_REPLY_LIMITS,
     )
+    .map(|(reply,)| reply)
     .expect("Root command transport")
 }
 
@@ -80,7 +83,8 @@ fn root_status(
     root: Principal,
     request: RootStatusRequestFragment,
 ) -> Result<RootStatusResponseFragment, Error> {
-    pic.query_candid(
+    ::ic_testkit::pic::query_candid_args(
+        pic,
         root,
         candid::Principal::anonymous(),
         match &request {
@@ -88,7 +92,9 @@ fn root_status(
             RootStatusRequestFragment::Operation(_) => protocol::CANIC_ROOT_OPERATION_STATUS,
         },
         (request,),
+        ::canic::testing::CANDID_REPLY_LIMITS,
     )
+    .map(|(reply,)| reply)
     .expect("Root status transport")
 }
 
@@ -304,7 +310,7 @@ pub fn report_canister_diagnostics(
     context: &str,
 ) {
     let report = pic.collect_canister_diagnostics(CanisterDiagnosticsRequest {
-        canister_id: canister_id,
+        canister_id,
         status_sender: diagnostic_sender,
         log_sender: diagnostic_sender,
         log_limits: ic_testkit::pic::CanisterLogRenderLimits::default(),
@@ -338,7 +344,7 @@ where
             |(label, canister_id, diagnostic_sender)| LabeledCanisterDiagnosticsRequest {
                 label: label.into(),
                 request: CanisterDiagnosticsRequest {
-                    canister_id: canister_id,
+                    canister_id,
                     status_sender: diagnostic_sender,
                     log_sender: diagnostic_sender,
                     log_limits: ic_testkit::pic::CanisterLogRenderLimits::default(),
@@ -506,8 +512,9 @@ pub(super) fn activate_managed_fleet(
     else {
         panic!("prepared root must retain exactly one Store child");
     };
-    let store_response: Result<StoreStatusResponseFragment, Error> = pic
-        .query_candid(
+    let store_response: Result<StoreStatusResponseFragment, Error> =
+        ::ic_testkit::pic::query_candid_args(
+            pic,
             store.principal,
             candid::Principal::anonymous(),
             protocol::CANIC_WASM_STORE_STATUS,
@@ -516,7 +523,9 @@ pub(super) fn activate_managed_fleet(
                     operation_id: managed_test_store_install_id(),
                 },
             ),),
+            ::canic::testing::CANDID_REPLY_LIMITS,
         )
+        .map(|(reply,)| reply)
         .expect("Store activation status transport");
     let StoreStatusResponseFragment::Operation(StoreOperationStatusFragment::FleetActivation(
         store_status,
@@ -542,12 +551,7 @@ pub(super) fn activate_managed_fleet(
 pub fn wait_until_ready(pic: &PocketIc, canister_id: Principal, tick_limit: usize) {
     for _ in 0..tick_limit {
         if matches!(
-            pic.query_candid::<Result<RootStatusResponseFragment, Error>, _>(
-                canister_id,
-                Principal::anonymous(),
-                protocol::CANIC_OBSERVABILITY,
-                (RootStatusRequestFragment::Readiness,),
-            ),
+            ::ic_testkit::pic::query_candid_args::<(Result<RootStatusResponseFragment, Error>,), _>(pic, canister_id, Principal::anonymous(), protocol::CANIC_OBSERVABILITY, (RootStatusRequestFragment::Readiness,), ::canic::testing::CANDID_REPLY_LIMITS).map(|(reply,)| reply),
             Ok(Ok(RootStatusResponseFragment::Readiness(
                 CanicReadinessStatus {
                     status: ReadinessStatus::Ready,
@@ -597,7 +601,7 @@ pub fn install_standalone_canister(
             init_bytes: local_init_args(),
             cycles: 0,
             install_sender: None,
-            label: Some(label.into()),
+            label: Some(label),
         },
     )
     .expect("install standalone canister");
@@ -640,7 +644,7 @@ pub fn install_standalone_canister_on_pic(
             init_bytes: local_init_args(),
             cycles: 0,
             install_sender: None,
-            label: Some(label.to_string().into()),
+            label: Some(label.to_string()),
         })
         .expect("install test canister");
     pic.wait_for_ready(
@@ -654,12 +658,7 @@ pub fn install_standalone_canister_on_pic(
 }
 
 fn fetch_ready(pic: &PocketIc, canister_id: Principal) -> Result<bool, CandidCallError> {
-    match pic.query_candid::<Result<CanisterStatusResponseFragment, Error>, _>(
-        canister_id,
-        candid::Principal::anonymous(),
-        protocol::CANIC_OBSERVABILITY,
-        (CanisterStatusRequestFragment::Readiness,),
-    ) {
+    match ::ic_testkit::pic::query_candid_args::<(Result<CanisterStatusResponseFragment, Error>,), _>(pic, canister_id, candid::Principal::anonymous(), protocol::CANIC_OBSERVABILITY, (CanisterStatusRequestFragment::Readiness,), ::canic::testing::CANDID_REPLY_LIMITS).map(|(reply,)| reply) {
         Ok(Ok(CanisterStatusResponseFragment::Readiness(readiness))) => {
             Ok(readiness.status == ReadinessStatus::Ready)
         }
@@ -669,12 +668,16 @@ fn fetch_ready(pic: &PocketIc, canister_id: Principal) -> Result<bool, CandidCal
 }
 
 fn fetch_root_ready(pic: &PocketIc, canister_id: Principal) -> Result<bool, CandidCallError> {
-    match pic.query_candid::<Result<RootStatusResponseFragment, Error>, _>(
+    match ::ic_testkit::pic::query_candid_args::<(Result<RootStatusResponseFragment, Error>,), _>(
+        pic,
         canister_id,
         candid::Principal::anonymous(),
         protocol::CANIC_OBSERVABILITY,
         (RootStatusRequestFragment::Readiness,),
-    ) {
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    {
         Ok(Ok(RootStatusResponseFragment::Readiness(readiness))) => {
             Ok(readiness.status == ReadinessStatus::Ready)
         }

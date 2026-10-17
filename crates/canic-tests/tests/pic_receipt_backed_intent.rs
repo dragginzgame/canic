@@ -544,7 +544,8 @@ fn begin_receipt(
     quantity: u64,
     replay_deadline_ns: u64,
 ) -> ReceiptBeginView {
-    pic.update_candid::<Result<ReceiptBeginView, String>, _>(
+    ::ic_testkit::pic::update_candid_args::<(Result<ReceiptBeginView, String>,), _>(
+        pic,
         authority_id,
         candid::Principal::anonymous(),
         "begin_receipt",
@@ -555,7 +556,9 @@ fn begin_receipt(
             quantity,
             replay_deadline_ns,
         ),
+        ::canic::testing::CANDID_REPLY_LIMITS,
     )
+    .map(|(reply,)| reply)
     .expect("begin receipt transport")
     .expect("begin receipt application")
 }
@@ -571,7 +574,8 @@ fn settle_receipt(
     source_canister: Principal,
     evidence_seed: u8,
 ) -> Result<ReceiptSettlementView, String> {
-    pic.update_candid::<Result<ReceiptSettlementView, String>, _>(
+    ::ic_testkit::pic::update_candid_args::<(Result<ReceiptSettlementView, String>,), _>(
+        pic,
         authority_id,
         candid::Principal::anonymous(),
         "settle_receipt",
@@ -583,7 +587,9 @@ fn settle_receipt(
             source_canister,
             evidence_seed,
         ),
+        ::canic::testing::CANDID_REPLY_LIMITS,
     )
+    .map(|(reply,)| reply)
     .expect("settle receipt transport")
 }
 
@@ -592,12 +598,15 @@ fn load_receipt(
     authority_id: Principal,
     operation_seed: u8,
 ) -> Option<ReceiptIntentView> {
-    pic.query_candid::<Result<Option<ReceiptIntentView>, String>, _>(
+    ::ic_testkit::pic::query_candid_args::<(Result<Option<ReceiptIntentView>, String>,), _>(
+        pic,
         authority_id,
         candid::Principal::anonymous(),
         "load_receipt",
         (operation_seed,),
+        ::canic::testing::CANDID_REPLY_LIMITS,
     )
+    .map(|(reply,)| reply)
     .expect("load receipt transport")
     .expect("load receipt application")
 }

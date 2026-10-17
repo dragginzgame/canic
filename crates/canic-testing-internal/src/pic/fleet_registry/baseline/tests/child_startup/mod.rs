@@ -150,9 +150,17 @@ fn bound_child(status: &PlacementIndexStatusResponse) -> Principal {
 }
 
 fn startup_calls(pic: &PocketIc, root: Principal, child: Principal) -> u32 {
-    pic.query_candid::<Result<u32, Error>, _>(child, root, "test_startup_calls", ())
-        .unwrap()
-        .unwrap()
+    ::ic_testkit::pic::query_candid_args::<(Result<u32, Error>,), _>(
+        pic,
+        child,
+        root,
+        "test_startup_calls",
+        (),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap()
+    .unwrap()
 }
 
 fn child_operation(

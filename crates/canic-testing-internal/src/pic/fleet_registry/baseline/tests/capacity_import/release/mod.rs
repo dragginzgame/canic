@@ -16,12 +16,15 @@ pub(super) fn assert_census(
         .map(|source| pic.cycle_balance(source.canister_id))
         .collect::<Vec<_>>();
     let read = |caller| -> Result<StatusResponse, Error> {
-        pic.query_candid(
+        ::ic_testkit::pic::query_candid_args(
+            pic,
             root,
             caller,
             canic::protocol::CANIC_ROOT_STATUS,
             (StatusRequest::PoolRelease,),
+            ::canic::testing::CANDID_REPLY_LIMITS,
         )
+        .map(|(reply,)| reply)
         .unwrap()
     };
     let StatusResponse::PoolRelease(observed) = read(controller).unwrap() else {

@@ -16,7 +16,7 @@ use canic_testing_internal::pic::{
     install_lifecycle_boundary_fixture, invalid_init_args, lifecycle_participant_init_trap_wasm,
     lifecycle_participant_trap_wasm, managed_test_init_identity, upgrade_args,
 };
-use ic_testkit::pic::{CandidCallExt, CanisterInstallExt, PocketIc, RetryPolicy};
+use ic_testkit::pic::{CanisterInstallExt, PocketIc, RetryPolicy};
 use std::{any::Any, time::Duration};
 
 const INSTALL_CODE_RETRY_LIMIT: usize = 4;
@@ -278,16 +278,18 @@ fn missing_selected_admission_rejects_install_then_accepts_corrected_retry() {
 }
 
 fn assert_prepared_and_not_ready(pic: &PocketIc, canister_id: Principal, root: Principal) {
-    let status: Result<CanisterStatusResponse, Error> = pic
-        .query_candid(
-            canister_id,
-            root,
-            canic_contracts::protocol::CANIC_CONTROL_STATUS,
-            (CanisterStatusRequest::Operation(OperationStatusRequest {
-                operation_id: [0x43; 32],
-            }),),
-        )
-        .expect("query Prepared Fleet activation status");
+    let status: Result<CanisterStatusResponse, Error> = ::ic_testkit::pic::query_candid_args(
+        pic,
+        canister_id,
+        root,
+        canic_contracts::protocol::CANIC_CONTROL_STATUS,
+        (CanisterStatusRequest::Operation(OperationStatusRequest {
+            operation_id: [0x43; 32],
+        }),),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("query Prepared Fleet activation status");
     let CanisterStatusResponse::Operation(operation) = status.expect("Prepared activation status")
     else {
         panic!("managed Canister returned a differently correlated operation status");
@@ -297,14 +299,16 @@ fn assert_prepared_and_not_ready(pic: &PocketIc, canister_id: Principal, root: P
         status.fleet_activation.phase,
         FleetActivationPhase::Prepared
     );
-    let readiness: Result<CanisterStatusResponse, Error> = pic
-        .query_candid(
-            canister_id,
-            candid::Principal::anonymous(),
-            canic_contracts::protocol::CANIC_OBSERVABILITY,
-            (CanisterStatusRequest::Readiness,),
-        )
-        .expect("query managed Canister readiness");
+    let readiness: Result<CanisterStatusResponse, Error> = ::ic_testkit::pic::query_candid_args(
+        pic,
+        canister_id,
+        candid::Principal::anonymous(),
+        canic_contracts::protocol::CANIC_OBSERVABILITY,
+        (CanisterStatusRequest::Readiness,),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("query managed Canister readiness");
     let CanisterStatusResponse::Readiness(readiness) =
         readiness.expect("Prepared readiness status")
     else {

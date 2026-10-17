@@ -33,13 +33,16 @@ pub(super) fn review(
         .unwrap();
     pic.set_controllers(coordinator, Some(operator), vec![operator])
         .unwrap();
-    let registry: Result<CoordinatorRegistryResponse, Error> = pic
-        .query_candid(
+    let registry: Result<CoordinatorRegistryResponse, Error> =
+        ::ic_testkit::pic::query_candid_args(
+            pic,
             coordinator,
             operator,
             canic::protocol::CANIC_COORDINATOR_REGISTRY,
             (CoordinatorRegistryRequest::Registry,),
+            ::canic::testing::CANDID_REPLY_LIMITS,
         )
+        .map(|(reply,)| reply)
         .unwrap();
     let CoordinatorRegistryResponse::Registry(registry) = registry.unwrap();
     let infrastructure = [
