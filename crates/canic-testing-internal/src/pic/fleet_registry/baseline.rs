@@ -360,9 +360,8 @@ mod tests {
         CachedPocketIcBaselinePool, CachedPocketIcBaselinePoolGuard, CandidCallError,
         CanisterRestoreReceipt, CanisterSnapshotTarget, ControllerSnapshotError, CycleResetPolicy,
         FailureDisposition, FixtureRecipeId, PocketIcBaselineRecipe, PreparedBaseline,
-        ReadinessReceipt, RebuildReason, ResetDomainPolicy, ResetReceipt, ResetRequirements,
-        SnapshotRestoreFunding, TimeResetPolicy, ValidationReceipt,
-        is_dead_pocket_ic_transport_error,
+        RebuildReason, ResetDomainPolicy, ResetReceipt, ResetRequirements, SnapshotRestoreFunding,
+        TimeResetPolicy, is_dead_pocket_ic_transport_error,
     };
     #[cfg(test)]
     use ic_testkit::pocket_ic::{
@@ -1486,7 +1485,7 @@ mod tests {
         fn drive_to_readiness(
             &self,
             baseline: &CachedPocketIcBaseline<Self::Metadata>,
-        ) -> Result<ReadinessReceipt, Self::Error> {
+        ) -> Result<(), Self::Error> {
             let metadata = baseline.metadata();
             wait_for_role_overviews_ready(
                 baseline.pocket_ic(),
@@ -1500,17 +1499,16 @@ mod tests {
                 60,
                 "restored active Component Registry baseline",
             )?;
-            ReadinessReceipt::try_new("active-fleet-ready").map_err(Into::into)
+            Ok(())
         }
 
         fn validate(
             &self,
             baseline: &CachedPocketIcBaseline<Self::Metadata>,
             _preparation: &PreparedBaseline,
-        ) -> Result<ValidationReceipt, Self::Error> {
+        ) -> Result<(), Self::Error> {
             validate_active_component_registry_baseline(baseline)?;
-            ValidationReceipt::try_new(self.id.clone(), "active-fleet-authority-exact")
-                .map_err(Into::into)
+            Ok(())
         }
 
         fn classify_failure(

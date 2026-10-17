@@ -5,9 +5,9 @@ use super::{
 use ic_testkit::pic::{
     BaselinePoolContractError, BaselinePreparationStage, CachedPocketIcBaseline,
     CanisterRestoreReceipt, CanisterSnapshotTarget, ControllerSnapshotError, CycleResetPolicy,
-    FailureDisposition, FixtureRecipeId, PocketIcBaselineRecipe, PreparedBaseline,
-    ReadinessReceipt, RebuildReason, ResetDomainPolicy, ResetReceipt, ResetRequirements,
-    SnapshotRestoreFunding, TimeResetPolicy, ValidationReceipt, is_dead_pocket_ic_transport_error,
+    FailureDisposition, FixtureRecipeId, PocketIcBaselineRecipe, PreparedBaseline, RebuildReason,
+    ResetDomainPolicy, ResetReceipt, ResetRequirements, SnapshotRestoreFunding, TimeResetPolicy,
+    is_dead_pocket_ic_transport_error,
 };
 use std::{collections::BTreeMap, error::Error as StdError, fmt, path::PathBuf, time::Instant};
 
@@ -100,7 +100,7 @@ impl PocketIcBaselineRecipe for RootBaselineRecipe {
     fn drive_to_readiness(
         &self,
         baseline: &CachedPocketIcBaseline<Self::Metadata>,
-    ) -> Result<ReadinessReceipt, Self::Error> {
+    ) -> Result<(), Self::Error> {
         wait_for_bootstrap(
             &self.spec,
             baseline.pocket_ic(),
@@ -118,14 +118,14 @@ impl PocketIcBaselineRecipe for RootBaselineRecipe {
             baseline.metadata().root_id,
             &baseline.metadata().snapshot_pids,
         );
-        ReadinessReceipt::try_new("root-and-managed-children-ready").map_err(Into::into)
+        Ok(())
     }
 
     fn validate(
         &self,
         baseline: &CachedPocketIcBaseline<Self::Metadata>,
         _preparation: &PreparedBaseline,
-    ) -> Result<ValidationReceipt, Self::Error> {
+    ) -> Result<(), Self::Error> {
         for canister_id in baseline.snapshot_canister_ids() {
             if !baseline.pocket_ic().canister_exists(canister_id) {
                 return Err(RootBaselineRecipeError::Invariant(format!(
@@ -133,8 +133,7 @@ impl PocketIcBaselineRecipe for RootBaselineRecipe {
                 )));
             }
         }
-        ValidationReceipt::try_new(self.id.clone(), "captured-root-topology-exists")
-            .map_err(Into::into)
+        Ok(())
     }
 
     fn classify_failure(
