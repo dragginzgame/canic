@@ -8,13 +8,15 @@ selected registry Build API and avoids the views removed by pending Build 0.13;
 no dependency, own version or retained format changes. The normal checkout's
 unpublished integration batch is excluded.
 
-The actual Rust 1.91 package check fails on two existing Testkit getter calls
-in `pic/fleet_registry/baseline.rs`, reproduced on the unchanged base. A temporary
-two-line field-access correction permits the package check to pass; that repair
-is not part of this contribution. An exact-source projection harness against
-pending Build passes on Rust 1.91 and retains failure ordering/phase/timing text.
-Formatting and documentation links pass. Whole-package/native/PocketIC acceptance
-remains separate; sources and logs are in `/tmp/ic-build-canic-followup-20261017/`.
+The two stale Testkit outcome getter calls in
+`pic/fleet_registry/baseline.rs` now read the public fields, permitting the
+contribution to compile against pushed main without the normal checkout's batch.
+Actual Rust 1.91 library checking and strict current library Clippy pass. The
+exact-source projection harness against pending Build also passes on Rust 1.91,
+retaining failure ordering and phase/timing text. Formatting and documentation
+links pass. Whole-package/native/PocketIC acceptance remains separate; sources
+and logs are in `/tmp/ic-build-next-20261017/` and
+`/tmp/ic-build-canic-followup-20261017/`.
 
 **Canic 0.111.0 is live; the integration batch remains uncommitted.** The maintainer
 explicitly waived the 0.111 closeout audit for completing Auth, Backup and Blob
