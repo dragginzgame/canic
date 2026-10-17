@@ -78,12 +78,17 @@ pub enum MemoryBootstrapError {
     /// The runtime is already borrowed by a synchronous participant.
     #[error(transparent)]
     Access(#[from] ic_memory::RuntimeDiagnosticError),
+    /// A component already retains the committed runtime; bootstrap must precede handoff.
+    #[error("memory bootstrap cannot run after sharing the host runtime")]
+    SharedRuntime,
     /// The complete host composition could not be committed.
     #[error(transparent)]
     Bootstrap(#[from] ic_memory::RuntimeBootstrapError<registry::MemoryRegistryError>),
 }
 
 /// Bootstrap exactly the supplied host composition before any store opens.
+///
+/// Finish bootstrap before sharing the runtime with component participants.
 pub fn bootstrap(input: MemoryBootstrap) -> Result<(), MemoryBootstrapError> {
     let declarations = ic_memory::SealedDeclarationSnapshot::new(input.requests)
         .map_err(ic_memory::MemoryResolutionError::from)
@@ -98,14 +103,15 @@ pub fn bootstrap(input: MemoryBootstrap) -> Result<(), MemoryBootstrapError> {
             .try_borrow_mut()
             .map_err(|_| ic_memory::RuntimeDiagnosticError::ReentrantAccess)?;
         if owner.is_none() {
-            *owner = Some(ic_memory::MemoryRuntime::new_with_config(
+            *owner = Some(std::rc::Rc::new(ic_memory::MemoryRuntime::new_with_config(
                 ic_memory::ic_stable_structures::DefaultMemoryImpl::default(),
                 config,
-            )?);
+            )?));
         }
         let runtime = owner
             .as_mut()
             .ok_or(ic_memory::RuntimeDiagnosticError::NotBootstrapped)?;
+        let runtime = std::rc::Rc::get_mut(runtime).ok_or(MemoryBootstrapError::SharedRuntime)?;
         runtime.bootstrap(&declarations, &input.pool, &policy)?;
         Ok(())
     })?;
