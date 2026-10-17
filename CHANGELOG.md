@@ -38,10 +38,13 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
 ### 🔧 Changed
 
-- **Testkit qualification:** adopt published Testkit 0.52, unit-returning pool
+- **Testkit qualification:** adopt published Testkit 0.53, unit-returning pool
   hooks, field-based fixture inputs and bounded argument-sequence Candid calls.
   Qualification replies use explicit test-owned wire/work/type/header ceilings;
   bootstrap, topology checks, exact senders and pool-owned restoration remain intact.
+  Reset requirements and achieved coverage use independent fixed fields.
+  Local-fleet startup and native Host fixtures use the current startup, rejection
+  and HTTP-capture contracts.
 
 - **Release checks:** include the shared version validator in isolated release
   fixtures so preflight and failure-recovery checks can run after tooling updates.

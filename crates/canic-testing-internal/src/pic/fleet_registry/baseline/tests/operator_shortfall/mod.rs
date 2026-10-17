@@ -27,7 +27,7 @@ pub(super) fn assert_fresh_reinstall_rejection(
     };
     let before = snapshot();
     let withdrawals: u64 = ::ic_testkit::pic::query_candid_args(
-        &input.pic,
+        input.pic,
         ledger,
         candid::Principal::anonymous(),
         "withdrawal_count",
@@ -70,7 +70,7 @@ pub(super) fn assert_fresh_reinstall_rejection(
     assert_eq!(snapshot(), before);
     assert_eq!(
         ::ic_testkit::pic::query_candid_args::<(u64,), _>(
-            &input.pic,
+            input.pic,
             ledger,
             candid::Principal::anonymous(),
             "withdrawal_count",

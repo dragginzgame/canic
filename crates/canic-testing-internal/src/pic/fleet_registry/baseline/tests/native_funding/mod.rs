@@ -257,7 +257,7 @@ pub(super) fn assert_issued_native_funding(input: &AutonomousFundingJourney<'_>)
         );
     }
     let requests: u64 = ::ic_testkit::pic::query_candid_args(
-        &input.pic,
+        input.pic,
         input.cycles_ledger,
         candid::Principal::anonymous(),
         "request_count",
@@ -276,7 +276,7 @@ pub(super) fn assert_issued_native_funding(input: &AutonomousFundingJourney<'_>)
         after
     );
     let replay_requests: u64 = ::ic_testkit::pic::query_candid_args(
-        &input.pic,
+        input.pic,
         input.cycles_ledger,
         candid::Principal::anonymous(),
         "request_count",
@@ -301,7 +301,7 @@ pub(super) fn assert_issued_native_funding(input: &AutonomousFundingJourney<'_>)
 
 fn burn_to(input: &AutonomousFundingJourney<'_>, retain: u128) {
     let burned: u128 = ::ic_testkit::pic::update_candid_args(
-        &input.pic,
+        input.pic,
         input.root,
         input.operator,
         "audit_recovery_balance",
@@ -318,7 +318,7 @@ fn child_status(
     operation_id: [u8; 32],
 ) -> canic_contracts::dto::root::RootComponentChildOperationStatus {
     let response: Result<RootStatusResponseFragment, Error> = ::ic_testkit::pic::query_candid_args(
-        &input.pic,
+        input.pic,
         input.root,
         input.operator,
         canic::protocol::CANIC_ROOT_OPERATION_STATUS,
@@ -360,7 +360,7 @@ fn block_initial_child(
     for attempt in 0..240 {
         let response: Result<RootStatusResponseFragment, Error> =
             ::ic_testkit::pic::query_candid_args(
-                &input.pic,
+                input.pic,
                 input.root,
                 input.operator,
                 canic::protocol::CANIC_ROOT_OPERATION_STATUS,
@@ -393,7 +393,7 @@ fn block_initial_child(
     for _ in 0..240 {
         let response: Result<CoordinatorOperationReadResponse, Error> =
             ::ic_testkit::pic::query_candid_args(
-                &input.pic,
+                input.pic,
                 coordinator,
                 input.operator,
                 canic::protocol::CANIC_COORDINATOR_OPERATION_STATUS,
@@ -433,7 +433,7 @@ fn block_initial_child(
 
 fn withdrawals(input: &AutonomousFundingJourney<'_>) -> u64 {
     ::ic_testkit::pic::query_candid_args(
-        &input.pic,
+        input.pic,
         input.cycles_ledger,
         candid::Principal::anonymous(),
         "withdrawal_count",

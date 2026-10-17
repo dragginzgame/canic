@@ -14,6 +14,15 @@ use std::{
 const POCKET_IC_SERVER_URL_ENV: &str = "IC_TESTKIT_POCKET_IC_URL";
 const POCKET_IC_STARTUP_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// Host qualification reply ceilings; production request policy remains separate.
+pub const CANDID_REPLY_LIMITS: ic_testkit_candid::DecodeLimits = ic_testkit_candid::DecodeLimits {
+    reply_bytes: 16 * 1024 * 1024,
+    decoding_quota: 100_000_000,
+    skipping_quota: 1_000_000,
+    type_entries: 4_096,
+    header_bytes: 256 * 1024,
+};
+
 pub fn start_pocket_ic(builder: PocketIcBuilder) -> PocketIc {
     let server_url = std::env::var(POCKET_IC_SERVER_URL_ENV)
         .ok()
@@ -23,12 +32,15 @@ pub fn start_pocket_ic(builder: PocketIcBuilder) -> PocketIc {
                 "{POCKET_IC_SERVER_URL_ENV} must name the governed PocketIC server; use the workspace test runner"
             )
         });
-    PocketIcStartupConfig::connect(server_url, POCKET_IC_STARTUP_TIMEOUT)
-        .build_instance(builder)
-        .map_or_else(
-            |error| panic!("start governed PocketIC instance: {error}"),
-            |owned| owned.instance,
-        )
+    PocketIcStartupConfig::Connect {
+        server_url,
+        timeout: POCKET_IC_STARTUP_TIMEOUT,
+    }
+    .build_instance(builder)
+    .map_or_else(
+        |error| panic!("start governed PocketIC instance: {error}"),
+        |owned| owned.instance,
+    )
 }
 
 pub fn fleet_subnet_root_funding_authority() -> FleetSubnetRootFundingAuthority {

@@ -14,6 +14,10 @@ use canic::dto::{
 const GRANT: u128 = 1_000_000_000_000;
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one funding journey retains both lost replies, distinct receipts and conserved cycle assertions"
+)]
 pub(super) fn sibling_topups_retain_distinct_receipts_after_both_replies_are_lost() {
     let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
     let workspace =

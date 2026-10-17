@@ -90,7 +90,7 @@ fn root_baseline_pool(
     pool.get_or_init(|| {
         CachedPocketIcBaselinePool::new(
             NonZeroUsize::new(1).expect("one is nonzero"),
-            RootBaselineRecipe::try_new(spec).expect("valid root baseline recipe"),
+            RootBaselineRecipe::new(spec),
         )
     })
 }

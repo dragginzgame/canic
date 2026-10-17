@@ -356,12 +356,11 @@ mod tests {
     #[cfg(test)]
     use ic_testkit::pic::PocketIcSnapshotExt;
     use ic_testkit::pic::{
-        BaselinePoolContractError, BaselinePreparationStage, CachedPocketIcBaseline,
-        CachedPocketIcBaselinePool, CachedPocketIcBaselinePoolGuard, CandidCallError,
-        CanisterSnapshotTarget, ControllerSnapshotError, FailureDisposition,
-        PocketIcBaselineRecipe, PreparedBaseline, RebuildReason, ResetDomainPolicy, ResetReceipt,
-        ResetRequirements, SnapshotRestoreFunding, TimeResetPolicy,
-        is_dead_pocket_ic_transport_error,
+        BaselinePreparationStage, CachedPocketIcBaseline, CachedPocketIcBaselinePool,
+        CachedPocketIcBaselinePoolGuard, CandidCallError, CanisterSnapshotTarget,
+        ControllerSnapshotError, FailureDisposition, PocketIcBaselineRecipe, PreparedBaseline,
+        RebuildReason, ResetPolicies, ResetReceipt, ResetRequirements, SnapshotRestoreFunding,
+        TimeResetPolicy, is_dead_pocket_ic_transport_error,
     };
     #[cfg(test)]
     use ic_testkit::pocket_ic::{
@@ -665,6 +664,10 @@ mod tests {
     }
 
     #[cfg(test)]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one authority matrix compares anonymous, active and unlisted callers across sensitive endpoints"
+    )]
     fn validate_sensitive_observability_authority(
         pic: &PocketIc,
         metadata: &ActiveComponentRegistryBaselineMetadata,
@@ -1443,7 +1446,6 @@ mod tests {
             context: String,
             failures: Vec<RoleOverviewQueryFailure>,
         },
-        Contract(BaselinePoolContractError),
         Invariant(String),
         Snapshot(ControllerSnapshotError),
     }
@@ -1456,17 +1458,18 @@ mod tests {
     }
 
     impl ActiveComponentRegistryBaselineRecipe {
-        fn new() -> Result<Self, BaselinePoolContractError> {
-            Ok(Self {
-                reset_requirements: ResetRequirements::try_new(
-                    SnapshotRestoreFunding::TopUpTo {
+        fn new() -> Self {
+            Self {
+                reset_requirements: ResetRequirements {
+                    funding: SnapshotRestoreFunding::TopUpTo {
                         minimum_cycles: crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,
                     },
-                    [ResetDomainPolicy::PocketIcTime(
-                        TimeResetPolicy::PreserveCurrent,
-                    )],
-                )?,
-            })
+                    policies: ResetPolicies {
+                        pocket_ic_time: Some(TimeResetPolicy::PreserveCurrent),
+                        ..ResetPolicies::default()
+                    },
+                },
+            }
         }
     }
 
@@ -1543,10 +1546,12 @@ mod tests {
             baseline: &CachedPocketIcBaseline<Self::Metadata>,
         ) -> Result<ResetReceipt, Self::Error> {
             reset_unclaimed_pool_assets(baseline)?;
-            ResetReceipt::try_new([ResetDomainPolicy::PocketIcTime(
-                TimeResetPolicy::PreserveCurrent,
-            )])
-            .map_err(Into::into)
+            Ok(ResetReceipt {
+                policies: ResetPolicies {
+                    pocket_ic_time: Some(TimeResetPolicy::PreserveCurrent),
+                    ..ResetPolicies::default()
+                },
+            })
         }
 
         fn drive_to_readiness(
@@ -1591,12 +1596,6 @@ mod tests {
         }
     }
 
-    impl From<BaselinePoolContractError> for ActiveComponentRegistryBaselineError {
-        fn from(error: BaselinePoolContractError) -> Self {
-            Self::Contract(error)
-        }
-    }
-
     impl From<CandidCallError> for ActiveComponentRegistryBaselineError {
         fn from(error: CandidCallError) -> Self {
             Self::Call(error)
@@ -1624,7 +1623,6 @@ mod tests {
                     }
                     Ok(())
                 }
-                Self::Contract(error) => error.fmt(formatter),
                 Self::Invariant(message) => formatter.write_str(message),
                 Self::Snapshot(error) => error.fmt(formatter),
             }
@@ -1638,7 +1636,6 @@ mod tests {
                 Self::Calls { failures, .. } => failures
                     .first()
                     .map(|failure| &failure.error as &(dyn StdError + 'static)),
-                Self::Contract(error) => Some(error),
                 Self::Invariant(_) => None,
                 Self::Snapshot(error) => Some(error),
             }
@@ -3432,6 +3429,10 @@ exec icp "$@"
 
     /// The initial child completes autonomously while the parent's data remains held.
     #[cfg(test)]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one bootstrap journey preserves staged readiness and exact-sender reply assertions"
+    )]
     fn qualify_pending_fixture_bootstrap(
         pic: &PocketIc,
         fixture: &BootstrappedRootFixture,
@@ -3684,6 +3685,10 @@ exec icp "$@"
 
     /// A later application allocation uses retained sources after publication authority leaves.
     #[cfg(test)]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one shard journey preserves admission, binding and readiness assertions in execution order"
+    )]
     fn qualify_later_fixture_shard(
         pic: &PocketIc,
         fixture: &BootstrappedRootFixture,
@@ -4736,7 +4741,7 @@ exec icp "$@"
                 assert_eq!(grant.binding.content_id, source.content_id);
                 let runtime: Result<ManagedStatusResponseFragment, Error> =
                     ::ic_testkit::pic::query_candid_args(
-                        pic,
+                        &pic,
                         *canister,
                         fixture.root_id,
                         canic::protocol::CANIC_CONTROL_STATUS,
@@ -9789,6 +9794,10 @@ esac
     }
 
     #[cfg(test)]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one contract matrix compares every public memory target with its observed runtime projection"
+    )]
     fn assert_public_memory_target(
         pic: &PocketIc,
         target: Principal,
@@ -9985,7 +9994,7 @@ esac
         let operator = Principal::from_text(&input.desired.operator).unwrap();
         let rows = |id| {
             ::ic_testkit::pic::query_candid_args::<(Result<Vec<ReinstallUserRow>, Error>,), _>(
-                &input.pic,
+                input.pic,
                 id,
                 candid::Principal::anonymous(),
                 "test_user_rows",
@@ -10006,7 +10015,7 @@ esac
         for id in applications {
             for (key, value) in [(0_u64, 99_u64), (42, 1001)] {
                 let result: Result<(), Error> = ::ic_testkit::pic::update_candid_args(
-                    &input.pic,
+                    input.pic,
                     id,
                     candid::Principal::anonymous(),
                     "test_set_user_row",
@@ -10144,7 +10153,7 @@ esac
         let ledger = Principal::from_text(&input.desired.cycles_ledger).unwrap();
         let transfer: Result<Nat, QualificationIcrc1TransferError> =
             ::ic_testkit::pic::update_candid_args(
-                &pic,
+                pic,
                 ledger,
                 operator,
                 "icrc1_transfer",
@@ -10867,7 +10876,7 @@ exec '{}' "$@"
             planned.plan.plan_sha256.clone()
         };
         let _: () = ::ic_testkit::pic::update_candid_args(
-            &input.pic,
+            input.pic,
             input.cycles_ledger,
             candid::Principal::anonymous(),
             "set_transfer_fee_override",
@@ -10893,7 +10902,7 @@ exec '{}' "$@"
             "a changed fee must reject before debit: {fee_rejection:?}"
         );
         let transfers: u64 = ::ic_testkit::pic::query_candid_args(
-            &input.pic,
+            input.pic,
             input.cycles_ledger,
             candid::Principal::anonymous(),
             "transfer_count",
@@ -10912,7 +10921,7 @@ exec '{}' "$@"
             Nat::from(0_u8)
         );
         let _: () = ::ic_testkit::pic::update_candid_args(
-            &input.pic,
+            input.pic,
             input.cycles_ledger,
             candid::Principal::anonymous(),
             "set_transfer_fee_override",
@@ -10942,7 +10951,7 @@ exec '{}' "$@"
             "the transfer must reach response-loss injection: {lost:?}"
         );
         let transfers: u64 = ::ic_testkit::pic::query_candid_args(
-            &input.pic,
+            input.pic,
             input.cycles_ledger,
             candid::Principal::anonymous(),
             "transfer_count",
@@ -11072,7 +11081,7 @@ exec '{}' "$@"
             assert!(status.cycles >= input.readiness_floor);
         }
         let requests: u64 = ::ic_testkit::pic::query_candid_args(
-            &input.pic,
+            input.pic,
             input.cycles_ledger,
             candid::Principal::anonymous(),
             "request_count",
@@ -11103,7 +11112,7 @@ exec '{}' "$@"
         assert!(replay.terminal);
         assert_eq!(replay.effects_applied, 0);
         let transfers: u64 = ::ic_testkit::pic::query_candid_args(
-            &input.pic,
+            input.pic,
             input.cycles_ledger,
             candid::Principal::anonymous(),
             "transfer_count",
@@ -11113,7 +11122,7 @@ exec '{}' "$@"
         .map(|(reply,)| reply)
         .unwrap();
         let replay_requests: u64 = ::ic_testkit::pic::query_candid_args(
-            &input.pic,
+            input.pic,
             input.cycles_ledger,
             candid::Principal::anonymous(),
             "request_count",
@@ -11210,7 +11219,7 @@ exec '{}' "$@"
             Nat::from(0_u8)
         );
         let transfers: u64 = ::ic_testkit::pic::query_candid_args(
-            &input.pic,
+            input.pic,
             input.cycles_ledger,
             candid::Principal::anonymous(),
             "transfer_count",
@@ -11266,7 +11275,7 @@ exec '{}' "$@"
     ) {
         let counts = || {
             let withdrawals: u64 = ::ic_testkit::pic::query_candid_args(
-                &input.pic,
+                input.pic,
                 input.cycles_ledger,
                 candid::Principal::anonymous(),
                 "withdrawal_count",
@@ -11276,7 +11285,7 @@ exec '{}' "$@"
             .map(|(reply,)| reply)
             .unwrap();
             let transfers: u64 = ::ic_testkit::pic::query_candid_args(
-                &input.pic,
+                input.pic,
                 input.cycles_ledger,
                 candid::Principal::anonymous(),
                 "transfer_count",
@@ -11286,7 +11295,7 @@ exec '{}' "$@"
             .map(|(reply,)| reply)
             .unwrap();
             let creates: u64 = ::ic_testkit::pic::query_candid_args(
-                &input.pic,
+                input.pic,
                 input.cycles_ledger,
                 candid::Principal::anonymous(),
                 "request_count",
@@ -15556,7 +15565,7 @@ cycles = "80T"
             fixture.pic.advance_time(Duration::from_secs(1));
         }
         let terminal = terminal.unwrap_or_else(|| {
-            let storage: Result<StoreCatalogResponse, Error> = ::ic_testkit::pic::query_candid_args(&fixture.pic, fixture.wasm_store, fixture.root, canic::protocol::CANIC_WASM_STORE_CATALOG, (StoreCatalogRequest::Storage,), ::canic::testing::CANDID_REPLY_LIMITS).map(|(reply,)| reply).expect("retirement Store diagnostic transport");
+            let storage: Result<StoreCatalogResponse, Error> = ::ic_testkit::pic::query_candid_args(fixture.pic, fixture.wasm_store, fixture.root, canic::protocol::CANIC_WASM_STORE_CATALOG, (StoreCatalogRequest::Storage,), ::canic::testing::CANDID_REPLY_LIMITS).map(|(reply,)| reply).expect("retirement Store diagnostic transport");
             match storage {
                 Ok(StoreCatalogResponse::Storage(storage)) => eprintln!("retirement Store: {storage:?}"),
                 Ok(_) => eprintln!("retirement Store returned another response variant"),
@@ -15677,7 +15686,7 @@ cycles = "80T"
         assert_eq!(ledger_receipt.intent.fee, 100_000_000);
         assert!(ledger_receipt.block_index.is_some());
         let transfers: u64 = ::ic_testkit::pic::query_candid_args(
-            &fixture.pic,
+            fixture.pic,
             cycles_ledger,
             candid::Principal::anonymous(),
             "transfer_count",
@@ -15710,6 +15719,10 @@ cycles = "80T"
     }
 
     #[cfg(test)]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one retirement journey preserves refund, completion and no-effect replay assertions"
+    )]
     fn finish_coordinator_retirement(
         fixture: &RootRetirementFixture<'_>,
         ledger: Principal,
@@ -15734,7 +15747,7 @@ cycles = "80T"
         };
         let call = |request| -> Result<CoordinatorCommandResponse, Error> {
             ::ic_testkit::pic::update_candid_args(
-                &pic,
+                pic,
                 fixture.coordinator,
                 operator,
                 canic::protocol::CANIC_COORDINATOR_COMMAND,
@@ -15766,7 +15779,7 @@ cycles = "80T"
             Nat::from(900_000_000_u128)
         );
         let (): () = ::ic_testkit::pic::update_candid_args(
-            &pic,
+            pic,
             ledger,
             candid::Principal::anonymous(),
             "lose_next_transfer_reply",
@@ -15804,7 +15817,7 @@ cycles = "80T"
         };
         assert_eq!(replayed, completed);
         let transfers: u64 = ::ic_testkit::pic::query_candid_args(
-            &pic,
+            pic,
             ledger,
             candid::Principal::anonymous(),
             "transfer_count",
@@ -15959,7 +15972,7 @@ cycles = "80T"
             Nat::from(0_u128)
         );
         let transfers: u64 = ::ic_testkit::pic::query_candid_args(
-            &pic,
+            pic,
             ledger,
             candid::Principal::anonymous(),
             "transfer_count",
@@ -16148,8 +16161,7 @@ cycles = "80T"
         POOL.get_or_init(|| {
             CachedPocketIcBaselinePool::new(
                 NonZeroUsize::new(1).expect("one is nonzero"),
-                ActiveComponentRegistryBaselineRecipe::new()
-                    .expect("valid active Component Registry baseline recipe"),
+                ActiveComponentRegistryBaselineRecipe::new(),
             )
         })
     }
@@ -16369,7 +16381,7 @@ cycles = "80T"
         for canister in [fixture.root, target] {
             let denied: Result<CanisterObservabilityResponse, Error> =
                 ::ic_testkit::pic::query_candid_args(
-                    &pic,
+                    pic,
                     canister,
                     outsider,
                     canic::protocol::CANIC_OBSERVABILITY,
@@ -16382,7 +16394,7 @@ cycles = "80T"
         }
         let root_report: Result<CanisterObservabilityResponse, Error> =
             ::ic_testkit::pic::query_candid_args(
-                &pic,
+                pic,
                 fixture.root,
                 candid::Principal::anonymous(),
                 canic::protocol::CANIC_OBSERVABILITY,
@@ -16419,7 +16431,7 @@ cycles = "80T"
         };
         let denied: Result<RootCommandResponseFragment, Error> =
             ::ic_testkit::pic::update_candid_args(
-                &pic,
+                pic,
                 fixture.root,
                 outsider,
                 canic::protocol::CANIC_ROOT_COMMAND,
@@ -16438,7 +16450,7 @@ cycles = "80T"
         for _ in 0..2 {
             let response: Result<RootCommandResponseFragment, Error> =
                 ::ic_testkit::pic::update_candid_args(
-                    &pic,
+                    pic,
                     fixture.root,
                     candid::Principal::anonymous(),
                     canic::protocol::CANIC_ROOT_COMMAND,

@@ -494,7 +494,7 @@ pub(super) fn funded_operator() -> (ic_testkit::pocket_ic::PocketIc, OperatorMin
                 memo: None,
                 created_at_time: None,
             },),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            crate::test_support::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap();

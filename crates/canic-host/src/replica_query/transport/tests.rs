@@ -307,12 +307,14 @@ fn serve(
         stream
             .set_write_timeout(Some(Duration::from_secs(5)))
             .unwrap();
-        let request = ic_testkit::testing::read_http_request(
+        let request = ic_host_process::testing::http::capture_http_request(
             &mut stream,
             Duration::from_secs(5),
             16 * 1024,
             4 * 1024 * 1024,
+            ic_host_process::testing::http::HttpContentLength::Optional,
         )
+        .into_result()
         .unwrap();
         let body_offset = request
             .windows(4)

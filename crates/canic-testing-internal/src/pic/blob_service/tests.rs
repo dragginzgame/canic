@@ -204,7 +204,7 @@ fn qualify(embedded: bool) {
     let resume = || {
         let result: Result<(), canic_blob_service::dto::recovery::CurrentInstanceRecoveryFailure> =
             ::ic_testkit::pic::update_candid_args(
-                &pic,
+                pic,
                 service,
                 operator,
                 "blob_resume_current_instance",
@@ -219,7 +219,7 @@ fn qualify(embedded: bool) {
     let configuration = || {
         let result: Result<HostConfigurationView, HostFailure> =
             ::ic_testkit::pic::query_candid_args(
-                &pic,
+                pic,
                 service,
                 operator,
                 "blob_configuration",
@@ -241,7 +241,7 @@ fn qualify(embedded: bool) {
     resume();
     assert_eq!(configuration(), installed);
     let denied: Result<HostConfigurationView, HostFailure> = ::ic_testkit::pic::query_candid_args(
-        &pic,
+        pic,
         service,
         stranger,
         "blob_configuration",
@@ -260,7 +260,7 @@ fn qualify(embedded: bool) {
     let capacity = || {
         let result: Result<UploadCapacityResponse, UploadCapacityFailure> =
             ::ic_testkit::pic::query_candid_args(
-                &pic,
+                pic,
                 service,
                 tenant,
                 "blob_upload_capacity",
@@ -279,7 +279,7 @@ fn qualify(embedded: bool) {
     };
     let denied: Result<TenantEnrollmentResponse, TenantFailure> =
         ::ic_testkit::pic::update_candid_args(
-            &pic,
+            pic,
             service,
             stranger,
             "blob_update_tenant",
@@ -295,7 +295,7 @@ fn qualify(embedded: bool) {
     };
     let invalid: Result<TenantEnrollmentResponse, TenantFailure> =
         ::ic_testkit::pic::query_candid_args(
-            &pic,
+            pic,
             service,
             operator,
             "blob_tenant",
@@ -308,7 +308,7 @@ fn qualify(embedded: bool) {
 
     // Discard the mutation result, then reconcile from authenticated current state.
     let _: Result<TenantEnrollmentResponse, TenantFailure> = ::ic_testkit::pic::update_candid_args(
-        &pic,
+        pic,
         service,
         operator,
         "blob_update_tenant",
@@ -319,7 +319,7 @@ fn qualify(embedded: bool) {
     .expect("accepted mutation transport");
     let enrolled: Result<TenantEnrollmentResponse, TenantFailure> =
         ::ic_testkit::pic::query_candid_args(
-            &pic,
+            pic,
             service,
             tenant,
             "blob_tenant",
@@ -336,7 +336,7 @@ fn qualify(embedded: bool) {
     };
     let replayed: Result<TenantEnrollmentResponse, TenantFailure> =
         ::ic_testkit::pic::update_candid_args(
-            &pic,
+            pic,
             service,
             operator,
             "blob_update_tenant",
@@ -356,7 +356,7 @@ fn qualify(embedded: bool) {
     assert!(!initial_capacity.fenced);
     let denied: Result<UploadCapacityResponse, UploadCapacityFailure> =
         ::ic_testkit::pic::query_candid_args(
-            &pic,
+            pic,
             service,
             stranger,
             "blob_upload_capacity",
@@ -395,7 +395,7 @@ fn qualify(embedded: bool) {
     for permission in &permissions {
         let denied: Result<UploadAdmissionMutation, UploadAdmissionFailure> =
             ::ic_testkit::pic::update_candid_args(
-                &pic,
+                pic,
                 service,
                 permission.uploader,
                 "blob_admit_upload",
@@ -407,7 +407,7 @@ fn qualify(embedded: bool) {
         assert_eq!(denied, Err(UploadAdmissionFailure::Denied));
         let granted: Result<UploadAdmissionMutation, UploadAdmissionFailure> =
             ::ic_testkit::pic::update_candid_args(
-                &pic,
+                pic,
                 service,
                 tenant,
                 "blob_admit_upload",
@@ -425,7 +425,7 @@ fn qualify(embedded: bool) {
         for actor in [permission.uploader, stranger] {
             let assessment: Result<UploadCertificateAssessmentResponse, UploadExposureFailure> =
                 ::ic_testkit::pic::query_candid_args(
-                    &pic,
+                    pic,
                     service,
                     actor,
                     "blob_upload_certificate_assessment",
@@ -459,7 +459,7 @@ fn qualify(embedded: bool) {
     );
     if embedded {
         let count: u64 = ::ic_testkit::pic::update_candid_args(
-            &pic,
+            pic,
             service,
             candid::Principal::anonymous(),
             "application_increment",
@@ -487,7 +487,7 @@ fn qualify(embedded: bool) {
     assert_eq!(capacity().unwrap(), admitted_capacity);
     let restored: Result<TenantEnrollmentResponse, TenantFailure> =
         ::ic_testkit::pic::query_candid_args(
-            &pic,
+            pic,
             service,
             tenant,
             "blob_tenant",
@@ -500,7 +500,7 @@ fn qualify(embedded: bool) {
     for permission in permissions {
         let replayed: Result<UploadAdmissionMutation, UploadAdmissionFailure> =
             ::ic_testkit::pic::update_candid_args(
-                &pic,
+                pic,
                 service,
                 tenant,
                 "blob_admit_upload",
@@ -515,7 +515,7 @@ fn qualify(embedded: bool) {
     }
     if embedded {
         let count: u64 = ::ic_testkit::pic::query_candid_args(
-            &pic,
+            pic,
             service,
             candid::Principal::anonymous(),
             "application_count",
@@ -606,7 +606,7 @@ fn refuse_invalid_configuration(
         assert_eq!(pic.get_stable_memory(service), stable);
         let current: Result<HostConfigurationView, HostFailure> =
             ::ic_testkit::pic::query_candid_args(
-                &pic,
+                pic,
                 service,
                 principal(7),
                 "blob_configuration",
@@ -626,7 +626,7 @@ fn refuse_invalid_configuration(
         );
         if embedded {
             let count: u64 = ::ic_testkit::pic::query_candid_args(
-                &pic,
+                pic,
                 service,
                 candid::Principal::anonymous(),
                 "application_count",

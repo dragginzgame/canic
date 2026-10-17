@@ -128,7 +128,7 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, previous_operation: &s
         .filter(|action| matches!(action, EnsureAction::Fund { .. }))
         .count();
     let withdrawals: u64 = ::ic_testkit::pic::query_candid_args(
-        &input.pic,
+        input.pic,
         ledger,
         candid::Principal::anonymous(),
         "withdrawal_count",
@@ -164,7 +164,7 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, previous_operation: &s
         if funding_interrupted {
             assert_eq!(
                 ::ic_testkit::pic::query_candid_args::<(u64,), _>(
-                    &input.pic,
+                    input.pic,
                     ledger,
                     candid::Principal::anonymous(),
                     "withdrawal_count",
@@ -189,7 +189,7 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, previous_operation: &s
     assert!(initialized.terminal);
     assert_eq!(
         ::ic_testkit::pic::query_candid_args::<(u64,), _>(
-            &input.pic,
+            input.pic,
             ledger,
             candid::Principal::anonymous(),
             "withdrawal_count",

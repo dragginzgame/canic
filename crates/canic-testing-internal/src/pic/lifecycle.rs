@@ -821,6 +821,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one interleaved journey compares execution counters across both checkpoint orders"
+    )]
     fn interleaved_endpoint_and_checkpoint_metrics_preserve_call_contexts() {
         let fixture = install_lifecycle_boundary_fixture();
         for order in [[0_u8, 1_u8], [1_u8, 0_u8]] {
@@ -1135,6 +1139,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one guard journey compares direct-ingress identities before and after activation"
+    )]
     fn explicit_guard_matches_canic_endpoint_on_direct_ingress() {
         let fixture = install_managed_lifecycle_fixture();
         let (canister, directory) = fixture.install_managed_canister();
@@ -1541,6 +1549,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one public-fixture journey covers installation, active readiness and same-release upgrade"
+    )]
     fn published_managed_app_support_drives_managed_lifecycle() {
         let workspace_root = workspace_root();
 

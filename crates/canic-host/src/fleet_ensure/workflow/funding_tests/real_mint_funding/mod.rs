@@ -201,7 +201,7 @@ impl EnsurePlatform for FundedCanister {
                 from_subaccount: None,
                 to: self.destination,
             },),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            crate::test_support::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap();
@@ -242,7 +242,7 @@ fn governed_pocketic_mint_credit_resumes_original_native_withdrawal() {
         candid::Principal::anonymous(),
         "icrc1_fee",
         (),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        crate::test_support::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .unwrap();

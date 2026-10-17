@@ -30,7 +30,7 @@ pub(super) fn qualify(fixture: &super::ManagedLifecycleFixture, target: Principa
     pic.add_cycles(target, super::SNAPSHOT_RESTORE_MINIMUM_CYCLES);
     let root = fixture.root;
     let response: Result<StatusResponse, Error> = ::ic_testkit::pic::query_candid_args(
-        &pic,
+        pic,
         target,
         root,
         canic::protocol::CANIC_CONTROL_STATUS,
