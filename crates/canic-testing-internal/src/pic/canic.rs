@@ -297,11 +297,12 @@ pub fn report_canister_diagnostics(
     diagnostic_sender: Principal,
     context: &str,
 ) {
-    let report = pic.collect_canister_diagnostics(CanisterDiagnosticsRequest::new(
-        canister_id,
-        diagnostic_sender,
-        diagnostic_sender,
-    ));
+    let report = pic.collect_canister_diagnostics(CanisterDiagnosticsRequest {
+        canister_id: canister_id,
+        status_sender: diagnostic_sender,
+        log_sender: diagnostic_sender,
+        log_limits: ic_testkit::pic::CanisterLogRenderLimits::default(),
+    });
     eprintln!("{context}: {report}");
 }
 
@@ -327,12 +328,17 @@ where
 {
     let requests = targets
         .into_iter()
-        .map(|(label, canister_id, diagnostic_sender)| {
-            LabeledCanisterDiagnosticsRequest::new(
-                label,
-                CanisterDiagnosticsRequest::new(canister_id, diagnostic_sender, diagnostic_sender),
-            )
-        })
+        .map(
+            |(label, canister_id, diagnostic_sender)| LabeledCanisterDiagnosticsRequest {
+                label: label.into(),
+                request: CanisterDiagnosticsRequest {
+                    canister_id: canister_id,
+                    status_sender: diagnostic_sender,
+                    log_sender: diagnostic_sender,
+                    log_limits: ic_testkit::pic::CanisterLogRenderLimits::default(),
+                },
+            },
+        )
         .collect::<Vec<_>>();
     match pic.collect_canister_diagnostics_batch(&requests) {
         Ok(report) => eprintln!("{context}: {report}"),

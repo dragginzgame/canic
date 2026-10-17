@@ -39,7 +39,8 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 ### 🔧 Changed
 
 - **Pending Testkit adoption:** prepare unit-returning pool readiness/validation
-  hooks while preserving bootstrap and topology checks. Normal dependency adoption
+  hooks and field-based diagnostic inputs while preserving bootstrap, topology
+  checks and exact diagnostic senders. Normal dependency adoption
   remains blocked on Testkit 0.51 publication and the existing 0.50 caller alignment.
 
 - **Release checks:** include the shared version validator in isolated release
