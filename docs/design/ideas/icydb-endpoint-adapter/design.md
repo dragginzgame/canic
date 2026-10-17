@@ -1,9 +1,10 @@
 # Candid-free IcyDB endpoint composition
 
-Status: proposed, unscheduled. Implementation and follow-up tracking belong to
+Status: framework raw entrypoint prerequisite implemented; database adapter outstanding.
+Implementation and follow-up tracking belong to
 [Canic #590](https://github.com/dragginzgame/canic/issues/590) and
 [IcyDB #373](https://github.com/dragginzgame/icydb/issues/373).
-This draft does not implement or qualify the adapter.
+The framework fixture qualifies raw dispatch; it does not qualify database composition.
 
 ## Need and evidence
 
@@ -106,3 +107,22 @@ The simplest alternative is retaining IcyDB-owned exports. The intended
 state-space delta is transferring that endpoint owner to one integration, with
 no new service state, database format, host lifecycle, codec fallback or
 application configuration mode.
+
+## Implemented framework boundary
+
+`canic_raw_query` and `canic_raw_update` accept synchronous `fn()` handlers.
+They require explicit access and `payload(max_bytes = N)`; handlers own bounded
+byte decoding and replies. The existing access plan supplies startup/authorization
+and instrumentation, and the common IC entrypoint supplies query/update executor
+context. Asynchronous raw handlers and decoded-argument guards are outside this
+prerequisite. The `canic:raw` section records exact names/modes for the Host's
+combined export check without manufacturing Candid declarations.
+
+The framework probe covers admitted/denied callers, malformed/trailing/oversized
+commands, exact query/update bytes, typed application failures and synchronous
+trap rollback. Codec-specific identity/canonicality, installed startup refusal,
+actual database operations and single-runtime lifecycle composition remain
+adapter acceptance. The committed Canic graph selects Memory 0.44; the pending
+IcyDB native graph selects exclusive Memory 0.46. A coordinated published native
+binding and compatible framework memory owner are required before the downstream
+adapter can consume that graph. Sibling dirty source is not an integration input.

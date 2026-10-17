@@ -127,6 +127,110 @@ pub(super) fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) 
     }
 }
 
+// Raw adapters share the ordinary startup/access/dispatch authorities. Only the
+// consumer-owned fn() performs payload IO and reply; no Candid attributes exist.
+pub(super) fn expand_raw(
+    kind: EndpointKind,
+    args: ValidatedArgs,
+    mut func: ItemFn,
+) -> syn::Result<TokenStream2> {
+    if requires_decoded_auth_argument(&args.requires) {
+        return Err(syn::Error::new_spanned(
+            &func.sig,
+            "raw entrypoints cannot use a guard requiring decoded arguments",
+        ));
+    }
+    let name = func.sig.ident.clone();
+    let impl_name = format_ident!("__canic_impl_{}", name);
+    let adapter_name = format_ident!("__canic_raw_{}", name);
+    let plan = build_access_plan(kind, &args, &func.sig)?;
+    let call = format_ident!("__canic_call");
+    let exported = exported_method(&args, &name);
+    let call_decl = call_decl(kind, args.query_mode, &call, &exported);
+    let preflight = preflight(&name);
+    let access = access_stage(&plan, &call);
+    let dispatch = dispatch_call(false, &call, impl_name.clone(), &[]);
+    let registration = payload_registration(kind, &args, &name);
+    let max_bytes = args
+        .payload_max_bytes
+        .as_ref()
+        .expect("raw byte limit validated");
+    let vis = func.vis.clone();
+    let attrs = std::mem::take(&mut func.attrs);
+    func.sig.ident = impl_name;
+    let method = args
+        .export_name
+        .as_ref()
+        .map_or_else(|| name.to_string(), syn::LitStr::value);
+    let declaration = raw_declaration(kind, args.query_mode, &method, &func.sig)?;
+    let entry = crate::adapter::entrypoint(
+        &entry_kind(kind, args.query_mode),
+        &method,
+        &adapter_name,
+        quote!(#name();),
+    );
+    Ok(quote! {
+        #registration
+        #(#attrs)*
+        #vis fn #name() {
+            #declaration
+            #call_decl
+            #preflight(#call);
+            #[cfg(target_arch = "wasm32")]
+            if ::canic::__internal::cdk::raw::msg_arg_data_size() > #max_bytes {
+                ::canic::__internal::cdk::api::msg_reject("raw argument envelope exceeds its byte allowance");
+                return;
+            }
+            let __canic_admission: Result<(), ::canic::Error> = (|| {
+                #[cfg(target_arch = "wasm32")]
+                if let Err(err) = ::canic::__internal::core::access::expr::eval_application_startup(#call) {
+                    return Err(err.into());
+                }
+                #access
+                Ok(())
+            })();
+            if let Err(error) = __canic_admission {
+                ::canic::__internal::cdk::api::msg_reject(error.to_string());
+                return;
+            }
+            #dispatch;
+        }
+        #func
+        #entry
+    })
+}
+
+// One artifact declaration binds the exact public name and mode to its export.
+fn raw_declaration(
+    kind: EndpointKind,
+    mode: QueryMode,
+    method: &str,
+    signature: &Signature,
+) -> syn::Result<TokenStream2> {
+    let length = u16::try_from(method.len())
+        .map_err(|_| syn::Error::new_spanned(signature, "raw endpoint name is too long"))?;
+    if method.is_empty() || method.chars().any(char::is_control) {
+        return Err(syn::Error::new_spanned(
+            signature,
+            "raw endpoint name must be nonempty without controls",
+        ));
+    }
+    let mode = match (kind, mode) {
+        (EndpointKind::Query, QueryMode::Plain) => 1,
+        (EndpointKind::Update, _) => 2,
+        (EndpointKind::Query, QueryMode::Composite) => 3,
+    };
+    let mut declaration = vec![mode];
+    declaration.extend_from_slice(&length.to_le_bytes());
+    declaration.extend_from_slice(method.as_bytes());
+    let declaration_length = declaration.len();
+    Ok(quote! {
+        #[used]
+        #[unsafe(link_section = "canic:raw")]
+        static DECLARATION: [u8; #declaration_length] = [#(#declaration),*];
+    })
+}
+
 // Async instrumentation is deliberately local to the single-threaded IC executor.
 fn async_context_attribute(impl_async: bool) -> Option<TokenStream2> {
     impl_async.then(|| quote! {

@@ -72,12 +72,6 @@ impl RawAdapter<'_> {
         let name = &self.signature.ident;
         let adapter_name = format_ident!("__canic_raw_{}", name);
         let lifecycle = matches!(self.kind, EntryKind::Init | EntryKind::PostUpgrade);
-        let export = if lifecycle {
-            self.kind.export().to_string()
-        } else {
-            format!("{} {}", self.kind.export(), self.method)
-        };
-        let host_export = export.replace(' ', ".").replace(['-', '<', '>'], "_");
         let mut names = Vec::new();
         let mut types = Vec::new();
         for input in &self.signature.inputs {
@@ -122,20 +116,7 @@ impl RawAdapter<'_> {
         } else {
             execute
         };
-        let executor = if matches!(self.kind, EntryKind::Query | EntryKind::CompositeQuery) {
-            format_ident!("in_query_executor_context")
-        } else {
-            format_ident!("in_executor_context")
-        };
-        Ok(quote! {
-            #[cfg_attr(target_family = "wasm", unsafe(export_name = #export))]
-            #[cfg_attr(not(target_family = "wasm"), unsafe(export_name = #host_export))]
-            fn #adapter_name() {
-                ::canic::__internal::cdk::futures::internals::#executor(|| {
-                    #execute
-                });
-            }
-        })
+        Ok(entrypoint(&self.kind, &self.method, &adapter_name, execute))
     }
 
     fn decode(&self, names: &[syn::Ident], types: &[&Type]) -> TokenStream {
@@ -191,6 +172,37 @@ impl RawAdapter<'_> {
                 ::canic::__internal::cdk::trap(format!("failed to encode response: {error}"))
             });
             ::canic::__internal::cdk::api::msg_reply(__canic_reply);
+        }
+    }
+}
+
+/// Emit only the IC export and executor context, independent of payload protocol.
+#[expect(
+    clippy::redundant_pub_crate,
+    reason = "shared by sibling endpoint expansion modules"
+)]
+pub(crate) fn entrypoint(
+    kind: &EntryKind,
+    method: &str,
+    name: &syn::Ident,
+    execute: TokenStream,
+) -> TokenStream {
+    let export = if matches!(kind, EntryKind::Init | EntryKind::PostUpgrade) {
+        kind.export().to_string()
+    } else {
+        format!("{} {}", kind.export(), method)
+    };
+    let host_export = export.replace(' ', ".").replace(['-', '<', '>'], "_");
+    let executor = if matches!(kind, EntryKind::Query | EntryKind::CompositeQuery) {
+        format_ident!("in_query_executor_context")
+    } else {
+        format_ident!("in_executor_context")
+    };
+    quote! {
+        #[cfg_attr(target_family = "wasm", unsafe(export_name = #export))]
+        #[cfg_attr(not(target_family = "wasm"), unsafe(export_name = #host_export))]
+        fn #name() {
+            ::canic::__internal::cdk::futures::internals::#executor(|| { #execute });
         }
     }
 }

@@ -14,7 +14,7 @@ mod reuse;
 
 pub(crate) use reuse::retain_cargo_include_exports;
 
-pub use crate::{artifact_io::validate_wasm_candid_endpoints, build_profile::CanisterBuildProfile};
+pub use crate::{artifact_io::validate_wasm_endpoints, build_profile::CanisterBuildProfile};
 pub use artifact::{
     CanisterArtifactBuilder, build_workspace_canister_artifact,
     build_workspace_canister_artifact_with_options, build_workspace_configured_canister_artifacts,

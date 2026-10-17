@@ -11,6 +11,29 @@ remain **0.111.0**. The objective is to delete duplicate mechanisms in favor of
 upstream owners; moving declarations alone does not demonstrate faster builds.
 
 
+## IcyDB raw entrypoint prerequisite — 2026-10-17
+
+The dedicated contribution for [#590](https://github.com/dragginzgame/canic/issues/590)
+adds synchronous bounded raw query/update macros to the existing access/dispatch
+owner. Host export validation combines raw declarations and Candid methods and
+rejects overlap or duplicate names. The public checker is now
+`validate_wasm_endpoints`; callers must use that name.
+
+Focused Linux checks pass: 44 endpoint macro cases, bounded declaration parsing,
+strict changed-owner and selected installed-test lint, and the installed raw
+probe's admission/denial, byte, application failure and trap rollback controls.
+Testkit 0.49's prepared launcher owned the temporary server lifecycle. The first
+installed attempt stopped before calls because no governed URL was supplied;
+the launcher run passes. Evidence: `/tmp/canic-raw-*.log`.
+
+The actual `canic-icydb` integration and database endpoint cut remain outstanding.
+This contribution's committed graph uses Memory 0.44; IcyDB's pending native API
+uses Memory 0.46. Use one compatible runtime and a committed native binding; do
+not consume another checkout's dirty adoption. Installed startup refusal and
+codec-specific checks still belong to complete adapter acceptance. Broad gates,
+macOS and raw Wasm/cycle/instruction deltas were not selected or measured. Package
+versions remain unchanged; this is a draft contribution, not a release.
+
 ## Auth status capability emission — 2026-10-16
 
 Managed Auth status types and their endpoint now require delegation-proof issuer

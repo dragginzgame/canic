@@ -6700,7 +6700,7 @@ exec icp "$@"
         let canister_id = Principal::from_text(&application.pid).unwrap();
         let release = desired.bootstrap.as_ref().unwrap().release_build_id;
         let candid = literal_zero_role_artifact_path(root, release, "app", "did");
-        canic_host::canister_build::validate_wasm_candid_endpoints(
+        canic_host::canister_build::validate_wasm_endpoints(
             &literal_zero_role_artifact_path(root, release, "app", "wasm"),
             &candid,
         )
@@ -7117,7 +7117,7 @@ exec icp "$@"
         let path = canic_host::icp::local_canister_candid_path(directory, "ic", role);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, &candid).unwrap();
-        canic_host::canister_build::validate_wasm_candid_endpoints(&wasm_path, &path).unwrap();
+        canic_host::canister_build::validate_wasm_endpoints(&wasm_path, &path).unwrap();
         let role = canic_contracts::ids::CanisterRole::from(role.to_string());
         let capabilities = std::collections::BTreeSet::new();
         let release_identity = "operator-cli-runtime-fixture".to_string();
@@ -15639,8 +15639,8 @@ cycles = "80T"
         crate::pic::progress::timed(
             "FLEET",
             crate::pic::progress::ProgressStatus::Ready,
-            &format!("active baseline (slot {})", outcome.slot()),
-            outcome.timings().total(),
+            &format!("active baseline (slot {})", outcome.slot),
+            outcome.timings.total(),
         );
         crate::pic::progress::detail("FLEET", &format!("active baseline: {outcome}"));
 
