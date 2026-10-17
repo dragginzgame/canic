@@ -11,6 +11,76 @@ remain **0.111.0**. The objective is to delete duplicate mechanisms in favor of
 upstream owners; moving declarations alone does not demonstrate faster builds.
 
 
+## Host 0.25 resolution — 2026-10-17
+
+Canic Host now selects only `ic-interface`: Candid service inspection is always
+available and `ic-limits` is retired. Replica structural comparison is now private
+Canic policy beside Wasm enforcement, retaining 12 MiB code bodies, 50,000 local
+functions and 1,000 imported plus local globals at the previously selected replica
+revision. The exact policy source passes its inclusive/exceeded boundary regression
+in an isolated package against published Host Artifacts 0.25.
+
+Resolution remains blocked independently: Host 0.25 requires thiserror ^2.0.21,
+while latest PocketIC 16.1.0 pins =2.0.18. A two-dependency isolated registry repro
+confirms this; [Host #178](https://github.com/dragginzgame/ic-host-tooling/issues/178)
+owns compatible publication. Root Cargo.lock is unchanged by this work. Automatic
+approval review rejected the root online update attempt, so verification used a
+disposable manifest instead. Logs/before-images: `/tmp/canic-host25/`. No full
+package qualification, broad gate or release ran; existing Memory/Storage, Blob,
+Auth and installed qualification work remains before complete push readiness.
+
+## IC Storage map-clear prerequisite — 2026-10-17
+
+Canic's existing in-place stable-map clearing requires a missing adapter operation.
+[Storage PR #3](https://github.com/dragginzgame/ic-storage/pull/3) exposes the exact
+upstream `clear_new` operation while retaining the governed allocation. The isolated
+branch passes a public populated/empty-clear and cold-reopen regression plus strict
+library/adapter Clippy. It retains released Storage 0.3.1's Memory 0.45 graph;
+Memory 0.46 adoption remains with Storage #1 and narrow exports with #2. This is
+not Memory 0.46 lease, installed-canister or native macOS qualification.
+
+The PR is submitted for review, not merged or released. Canic source and dependency
+selections are unchanged by this slice. The Storage owner must integrate and publish
+the compatible facade, including this operation; Blob also needs Memory 0.46
+alignment before full collection adoption. Evidence: `/tmp/canic-storage-clear/`
+and `/tmp/canic-storage-clear-{test,clippy}.log`. Existing Auth and installed
+acceptance blockers remain; the complete 0.112 batch is not ready to push.
+
+## Memory 0.46 policy-token slice — 2026-10-17
+
+Canic now derives the infallible bootstrap token from its policy name/version and
+an explicit optional admission token. Fixture callers supply 32-byte identities;
+backing-memory setup uses Memory's root `DefaultMemoryImpl` export. The exact
+policy/admission sources pass an isolated regression against registry Memory 0.46,
+covering repeatability, absent versus zero-token admission and changes to every
+participant-token byte. The probe substitutes only the registry error type; it is
+not full Core qualification. Evidence: `/tmp/canic-memory46-policy/`.
+
+The focused Core library check now reports two removed raw-collection reexports
+in `cdk::structures`. The next work is the governed IC Storage collection migration,
+including exclusive-lease lifetimes and fixture callers, then package regressions.
+IC Storage 0.3.1 is published. Blob remains published at 0.31 and depends on Memory
+0.45, so its matching 0.46 allocation integration is also required. No direct raw
+collection dependency, compatibility wrapper or dependency rollback was added.
+Both 0.112 notes cover this slice. Whole-batch build, Auth and installed acceptance
+remain incomplete; this is not push-ready and no Git/release effect ran.
+
+## Issue #579 toolchain bundle correction — 2026-10-17
+
+Toolchain installation now reports the configured public destination rather than
+requiring admitted executable parents to match. This permits Binaryen's macOS
+bundle layout while retaining both installers' executable/library admission.
+The obsolete `SplitInstallDirectories` error is removed; both 0.112 notes explain
+the behavior and public error change.
+
+An isolated harness runs the exact orchestration function with admitted-tool
+stubs: bundle acceptance, public destination reporting and rejection propagation
+pass. This is not real download, library-loading or macOS qualification. The
+owning Host regression stops before tests at the existing Memory 0.46 import
+errors. Evidence and task before-images: `/tmp/canic-579/`. Native macOS evidence
+and package regression remain open; no issue closure or Git/release effect ran.
+Whole-batch Auth and installed-qualification requirements are unchanged.
+
 ## PR #588 and issue #583 — 2026-10-17
 
 Developer setup now passes the explicit Canic destination to the shared hook

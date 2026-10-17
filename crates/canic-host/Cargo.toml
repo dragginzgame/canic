@@ -41,7 +41,7 @@ ic-host-artifacts = { workspace = true, features = ["gzip", "wasm"] }
 ic-host-fs = { workspace = true }
 ic-host-process = { workspace = true }
 ic-host-text = { workspace = true }
-ic-host-tools = { workspace = true, features = ["candid-service", "ic-interface", "ic-limits"] }
+ic-host-tools = { workspace = true, features = ["ic-interface"] }
 ic-query = { workspace = true, features = ["ledger-evidence-host"] }
 ic-testkit = { workspace = true, optional = true }
 icrc-ledger-types = { workspace = true }

@@ -50,9 +50,7 @@ pub fn requests() -> Result<Vec<ic_memory::MemoryRequest>, ic_memory::MemoryDecl
 /// # Panics
 /// Panics if the host has not bootstrapped or omitted this key.
 #[must_use]
-pub fn open(
-    key: &str,
-) -> ic_memory::RuntimeMemory<ic_memory::ic_stable_structures::DefaultMemoryImpl> {
+pub fn open(key: &str) -> ic_memory::RuntimeMemory<ic_memory::DefaultMemoryImpl> {
     runtime::assert_memory_bootstrap_ready(key);
     runtime::with_runtime(|runtime| Ok(runtime.open_memory(key)))
         .expect("initialized memory runtime")
@@ -99,7 +97,7 @@ pub fn bootstrap(input: MemoryBootstrap) -> Result<(), MemoryBootstrapError> {
             .map_err(|_| ic_memory::RuntimeDiagnosticError::ReentrantAccess)?;
         if owner.is_none() {
             *owner = Some(ic_memory::MemoryRuntime::new_with_config(
-                ic_memory::ic_stable_structures::DefaultMemoryImpl::default(),
+                ic_memory::DefaultMemoryImpl::default(),
                 config,
             )?);
         }

@@ -5,9 +5,7 @@
 //! Boundary: memory bootstrap passes this policy into `ic-memory` validation.
 
 use crate::memory::{admission::MemoryBootstrapAdmission, registry::MemoryRegistryError};
-use ic_memory::{
-    MemoryManagerSlot, PolicyIdentity, PolicyIdentityError, RuntimeBootstrapPolicy, StableKey,
-};
+use ic_memory::{MemoryManagerSlot, PolicyIdentity, RuntimeBootstrapPolicy, StableKey};
 use sha2::{Digest as _, Sha256};
 
 const CANIC_MEMORY_BOOTSTRAP_POLICY_NAME: &str = "canic.memory-bootstrap-policy";
@@ -62,26 +60,18 @@ impl RuntimeBootstrapPolicy for CanicMemoryManagerPolicy {
         }
     }
 
-    fn runtime_bootstrap_identity(&self) -> Result<PolicyIdentity, PolicyIdentityError> {
-        let identity = PolicyIdentity::new(
-            CANIC_MEMORY_BOOTSTRAP_POLICY_NAME,
-            CANIC_MEMORY_BOOTSTRAP_POLICY_VERSION,
-        )?;
-        let Some(participant) = &self.admission else {
-            return Ok(identity);
-        };
+    fn runtime_bootstrap_identity(&self) -> PolicyIdentity {
         let mut hash = Sha256::new();
-        hash.update(b"canic:memory-admission:v1");
-        hash.update((participant.identity.name().len() as u64).to_be_bytes());
-        hash.update(participant.identity.name().as_bytes());
-        hash.update(participant.identity.version().to_be_bytes());
-        if let Some(configuration) = participant.identity.configuration_digest() {
-            hash.update([1]);
-            hash.update(configuration);
-        } else {
-            hash.update([0]);
+        hash.update(CANIC_MEMORY_BOOTSTRAP_POLICY_NAME.as_bytes());
+        hash.update(CANIC_MEMORY_BOOTSTRAP_POLICY_VERSION.to_be_bytes());
+        match &self.admission {
+            Some(participant) => {
+                hash.update([1]);
+                hash.update(participant.identity.as_bytes());
+            }
+            None => hash.update([0]),
         }
-        Ok(identity.with_configuration_digest(hash.finalize().into()))
+        PolicyIdentity::new(hash.finalize().into())
     }
 }
 
@@ -90,12 +80,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn runtime_bootstrap_policy_has_explicit_v1_identity() {
-        assert_eq!(
+    fn runtime_bootstrap_policy_binds_optional_admission_token() {
+        let base = CanicMemoryManagerPolicy::new().runtime_bootstrap_identity();
+        let policy = |token| {
             CanicMemoryManagerPolicy::new()
+                .with_admission(MemoryBootstrapAdmission::new(
+                    PolicyIdentity::new(token),
+                    |_| Ok(()),
+                ))
                 .runtime_bootstrap_identity()
-                .unwrap(),
-            PolicyIdentity::new("canic.memory-bootstrap-policy", 1).unwrap()
+        };
+        assert_eq!(
+            base,
+            CanicMemoryManagerPolicy::new().runtime_bootstrap_identity()
         );
+        assert_ne!(base, policy([0; 32]));
+        let token = [7; 32];
+        assert_eq!(policy(token), policy(token));
+        for index in 0..32 {
+            let mut changed = token;
+            changed[index] ^= 1;
+            assert_ne!(policy(token), policy(changed));
+        }
     }
 }

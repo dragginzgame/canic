@@ -72,7 +72,7 @@ fn explicit_composition_refuses_duplicates_and_admission_before_publication() {
 
         let mut rejected = canic::memory::framework();
         rejected.admission = Some(MemoryBootstrapAdmission::new(
-            PolicyIdentity::new("test.host-admission", 1).unwrap(),
+            PolicyIdentity::new([3; 32]),
             |_| {
                 Err(MemoryRegistryError::InvalidDeclaration {
                     stable_key: "test.refused.v1".to_string(),

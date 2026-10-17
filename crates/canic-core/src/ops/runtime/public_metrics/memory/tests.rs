@@ -24,10 +24,8 @@ impl ic_memory::RuntimeBootstrapPolicy for FixturePolicy {
         Ok(())
     }
 
-    fn runtime_bootstrap_identity(
-        &self,
-    ) -> Result<ic_memory::PolicyIdentity, ic_memory::PolicyIdentityError> {
-        ic_memory::PolicyIdentity::new("public-memory-fixture", 1)
+    fn runtime_bootstrap_identity(&self) -> ic_memory::PolicyIdentity {
+        ic_memory::PolicyIdentity::new([2; 32])
     }
 }
 

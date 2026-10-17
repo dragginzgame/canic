@@ -72,7 +72,7 @@ mod tests {
         .unwrap();
         let policy = crate::memory::CanicMemoryManagerPolicy::new().with_admission(
             crate::memory::admission::MemoryBootstrapAdmission::new(
-                ic_memory::PolicyIdentity::new("test.composed-host", 1).unwrap(),
+                ic_memory::PolicyIdentity::new([1; 32]),
                 |_| {
                     ADMISSIONS.fetch_add(1, Ordering::SeqCst);
                     Ok(())

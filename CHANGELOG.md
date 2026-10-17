@@ -12,6 +12,10 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
 ### ⚠️ Breaking
 
+- **Memory admission identity:** accept host-issued 32-byte policy tokens and
+  bind the optional admission token into Canic’s bootstrap identity. Callers
+  must derive their token from the callback’s complete semantics and configuration.
+
 - **Memory runtime:** adopt Memory 0.45 with one Canic-owned runtime and injected
   component handles, including test App and embedded Blob fixtures. Allocation reports
   derive byte totals from measured pages
@@ -39,6 +43,14 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
   across releases. Same-release interruption recovery remains supported.
 
 ### 🔧 Changed
+
+- **Host 0.25:** remove retired feature selections and own replica structural
+  limits beside Wasm enforcement, preserving the existing code, function and
+  global thresholds. Generic Wasm inspection remains upstream.
+
+- **Toolchain installation:** accept verified Binaryen bundles whose executable
+  resolves beneath the public install directory, fixing macOS setup
+  ([#579](https://github.com/dragginzgame/canic/issues/579)).
 
 - **Developer setup:** explicitly select Canic as the hook-install destination
   ([PR #588](https://github.com/dragginzgame/canic/pull/588)).
