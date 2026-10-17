@@ -5,9 +5,10 @@ mod entropy;
 mod lifecycle;
 mod transport;
 mod watchdog;
+mod wire;
 
 pub use entropy::request_boot_entropy;
-pub use transport::{read_arguments, serve_raw};
+pub use transport::{read_arguments, serve_raw, serve_raw_async};
 
 #[doc(hidden)]
 pub mod __private {

@@ -44,15 +44,51 @@ pub fn serve_raw<Q, R, E>(
     encode: impl FnOnce(R) -> Result<Vec<u8>, E>,
     handler: impl FnOnce(Q) -> R,
 ) {
+    let Some(request) = admit_request(max_request_bytes, decode) else {
+        return;
+    };
+    reply(handler(request), encode);
+}
+
+/// Serve a bounded asynchronous call using the consumer's native contract.
+///
+/// Admission precedes the handler's first poll. Response failure traps the
+/// current message; effects committed before an await are not rolled back.
+/// The host entrypoint must spawn this future in its IC executor context.
+///
+/// # Panics
+/// Panics outside an IC entrypoint; traps on response encoding failure.
+pub async fn serve_raw_async<Q, R, E, F: std::future::Future<Output = R>>(
+    max_request_bytes: usize,
+    decode: impl FnOnce(&[u8]) -> Result<Q, E>,
+    encode: impl FnOnce(R) -> Result<Vec<u8>, E>,
+    handler: impl FnOnce(Q) -> F,
+) {
+    let Some(request) = admit_request(max_request_bytes, decode) else {
+        return;
+    };
+    reply(handler(request).await, encode);
+}
+
+// Both execution forms reject before handler effects or argument allocation.
+fn admit_request<Q, E>(
+    max_request_bytes: usize,
+    decode: impl FnOnce(&[u8]) -> Result<Q, E>,
+) -> Option<Q> {
     let Some(bytes) = read_arguments(max_request_bytes) else {
         ic0::msg_reject(b"IcyDB request admission failed");
-        return;
+        return None;
     };
     let Ok(request) = decode(&bytes) else {
         ic0::msg_reject(b"Invalid IcyDB request");
-        return;
+        return None;
     };
-    match encode(handler(request)) {
+    Some(request)
+}
+
+// Encoding failure must abort the current message's uncommitted effects.
+fn reply<R, E>(response: R, encode: impl FnOnce(R) -> Result<Vec<u8>, E>) {
+    match encode(response) {
         Ok(response) => {
             ic0::msg_reply_data_append(&response);
             ic0::msg_reply();

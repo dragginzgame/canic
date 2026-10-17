@@ -1819,3 +1819,20 @@ with [#1](https://github.com/dragginzgame/ic-build/issues/1); its published-sour
 [CI run](https://github.com/dragginzgame/ic-build/actions/runs/38288344214) was
 queued when inspected. Complete-release admission remains Canic-owned. No broad
 gate, PocketIC, commit, own package-version change or release ran.
+
+## Workspace-owned Wire export continuation
+
+IcyDB requested Canic ownership for every generated fixture export. The existing
+native entrypoint owner now needs a public Wire export macro receiving the
+consumer's bounded codec body and contract ID. The 64-method async fixture must
+retain async polling; Canic will share ingress admission and reply handling
+between sync and async raw serving. Synchronizing those handlers changes the
+measured subject. No protocol selector, persisted state or endpoint names are
+added. IcyDB retains native metadata/scalar authority; SDK protocol internals
+remain host-owned. This continues the adapter PR, not managed Memory convergence.
+
+The Wire export macro and sync/async transport pass strict selected Wasm lint.
+A fresh external consumer compiles both query and async update exports for Wasm
+without IcyDB, Candid declarations or a framework runtime. Installed async Wire
+qualification remains with the downstream contract/fixture owner; no full gates,
+package-version change, native macOS or performance measurement ran here.

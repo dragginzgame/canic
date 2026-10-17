@@ -42,7 +42,8 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
   artifact validation checks their declarations alongside Candid endpoints.
 - Provide the `canic-icydb` host adapter for native IcyDB endpoints, lifecycle
   scheduling and secure boot entropy. Consumers explicitly mount their IcyDB
-  binding; the adapter creates no framework memory runtime.
+  binding; the adapter creates no framework memory runtime. Application Wire
+  exports use the same owner, with shared bounded sync/async raw transport.
 
 - **Release checks:** include the shared version validator in isolated release
   fixtures so preflight and failure-recovery checks can run after tooling updates.
