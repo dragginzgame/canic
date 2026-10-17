@@ -202,21 +202,6 @@ fn duplicate_payload_is_rejected() {
 }
 
 #[test]
-fn authenticated_allows_no_scope_argument() {
-    let parsed = parse_args(quote!(requires(auth::authenticated()))).expect("parse args");
-    let AccessExprAst::All(exprs) = &parsed.requires[0] else {
-        panic!("expected requires(all)");
-    };
-    let AccessExprAst::Pred(AccessPredicateAst::Builtin(BuiltinPredicate::Authenticated {
-        required_scope,
-    })) = &exprs[0]
-    else {
-        panic!("expected authenticated predicate");
-    };
-    assert!(required_scope.is_none());
-}
-
-#[test]
 fn attested_local_subnet_is_a_builtin_auth_predicate() {
     let parsed = parse_args(quote!(requires(auth::attested_local_subnet()))).expect("parse args");
     let AccessExprAst::All(exprs) = &parsed.requires[0] else {
@@ -272,61 +257,4 @@ fn grouped_access_expression_is_unwrapped() {
     else {
         panic!("expected caller::is_controller predicate");
     };
-}
-
-#[test]
-fn authenticated_allows_string_scope_argument() {
-    let parsed =
-        parse_args(quote!(requires(auth::authenticated("scope:test")))).expect("parse args");
-    let AccessExprAst::All(exprs) = &parsed.requires[0] else {
-        panic!("expected requires(all)");
-    };
-    let AccessExprAst::Pred(AccessPredicateAst::Builtin(BuiltinPredicate::Authenticated {
-        required_scope,
-    })) = &exprs[0]
-    else {
-        panic!("expected authenticated predicate");
-    };
-    let Some(AuthScopeArg::Literal(required_scope)) = required_scope else {
-        panic!("expected literal scope");
-    };
-    assert_eq!(required_scope, "scope:test");
-}
-
-#[test]
-fn authenticated_allows_path_scope_argument() {
-    let parsed =
-        parse_args(quote!(requires(auth::authenticated(cap::VERIFY)))).expect("parse args");
-    let AccessExprAst::All(exprs) = &parsed.requires[0] else {
-        panic!("expected requires(all)");
-    };
-    let AccessExprAst::Pred(AccessPredicateAst::Builtin(BuiltinPredicate::Authenticated {
-        required_scope,
-    })) = &exprs[0]
-    else {
-        panic!("expected authenticated predicate");
-    };
-    let Some(AuthScopeArg::Expr(required_scope)) = required_scope else {
-        panic!("expected expr scope");
-    };
-    assert_eq!(required_scope.to_string(), "cap :: VERIFY");
-}
-
-#[test]
-fn authenticated_rejects_multiple_arguments() {
-    let err = parse_args(quote!(requires(auth::authenticated("a", "b"))))
-        .expect_err("authenticated with two args must fail");
-    assert!(
-        err.to_string()
-            .contains("authenticated(...) accepts zero arguments or one string literal/path scope")
-    );
-}
-
-#[test]
-fn authenticated_requires_builtin_namespace() {
-    let err = parse_args(quote!(requires(authenticated()))).expect_err("unqualified path fails");
-    assert!(
-        err.to_string()
-            .contains("built-in predicates must use short paths like auth::authenticated()")
-    );
 }

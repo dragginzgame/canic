@@ -11,20 +11,25 @@ use ic_memory::{
 const KEY: &str = "embedded_app.counter.v1";
 type Counter = Cell<u64, RuntimeMemory<DefaultMemoryImpl>>;
 
-ic_memory::ic_memory_declaration!(authority = "embedded-app", key = "embedded_app.counter.v1");
+pub(super) fn memory_requests() -> Vec<ic_memory::MemoryRequest> {
+    vec![
+        ic_memory::MemoryRequest::new("embedded-app", KEY, ic_memory::SchemaMetadata::default())
+            .unwrap(),
+    ]
+}
 
 thread_local! {
     static COUNTER: RefCell<Option<Counter>> = const { RefCell::new(None) };
 }
 
 pub(super) fn install(initial: u64) {
-    let memory = ic_memory::open_default_memory_manager_memory(KEY).expect("counter grant");
+    let memory = canic::memory::open(KEY);
     assert_eq!(memory.size(), 0, "fresh counter memory");
     COUNTER.with_borrow_mut(|counter| *counter = Some(Cell::init(memory, initial)));
 }
 
 pub(super) fn restore() {
-    let memory = ic_memory::open_default_memory_manager_memory(KEY).expect("counter grant");
+    let memory = canic::memory::open(KEY);
     assert!(memory.size() > 0, "retained counter memory");
     COUNTER.with_borrow_mut(|counter| *counter = Some(Cell::init(memory, 0)));
 }

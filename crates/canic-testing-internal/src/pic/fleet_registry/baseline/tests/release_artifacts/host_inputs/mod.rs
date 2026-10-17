@@ -8,7 +8,7 @@
 mod tests;
 
 use canic_core::cdk::utils::hash::{hex_bytes, sha256_hex};
-use ic_testkit::artifacts::{ArtifactCacheSpec, ResolvedCargoBuildInputs};
+use ic_build::artifacts::{ArtifactCacheSpec, ResolvedCargoBuildInputs};
 use proc_macro2::{TokenStream, TokenTree};
 use std::{
     collections::BTreeSet,

@@ -127,7 +127,6 @@ macro_rules! canic_emit_root_command_endpoint {
             let controller_command = controller_command || matches!(&command, RootCommand::GetChainKeyPublicKey(_) | RootCommand::ConfigureIssuer(_));
             if controller_command {
                 $crate::__internal::core::access::auth::is_controller(caller)
-                    .await
                     .map_err(::canic::Error::from)?;
             }
 
@@ -168,7 +167,7 @@ macro_rules! canic_emit_root_command_endpoint {
 
             #[cfg(canic_capability_root_delegation)]
             if matches!(&command, RootCommand::GetOrCreateDelegationProof) {
-                use $crate::__internal::core::access::expr::AsyncAccessPredicate as _;
+                use $crate::__internal::core::access::expr::AccessCheck as _;
                 let context = $crate::__internal::core::access::expr::AccessContext {
                     caller,
                     call: $crate::__internal::contracts::ids::EndpointCall {
@@ -180,13 +179,12 @@ macro_rules! canic_emit_root_command_endpoint {
                 };
                 $crate::__internal::control_plane::api::component_auth::ActiveComponentMemberPredicate
                     .eval(&context)
-                    .await
                     .map_err(::canic::Error::from)?;
             }
 
             #[cfg(canic_capability_role_attestation_signer)]
             if matches!(&command, RootCommand::PrepareRoleAttestation(_)) {
-                use $crate::__internal::core::access::expr::AsyncAccessPredicate as _;
+                use $crate::__internal::core::access::expr::AccessCheck as _;
                 let context = $crate::__internal::core::access::expr::AccessContext {
                     caller,
                     call: $crate::__internal::contracts::ids::EndpointCall {
@@ -198,7 +196,6 @@ macro_rules! canic_emit_root_command_endpoint {
                 };
                 $crate::__internal::control_plane::api::component_auth::ActiveComponentMemberPredicate
                     .eval(&context)
-                    .await
                     .map_err(::canic::Error::from)?;
             }
 
@@ -217,7 +214,7 @@ macro_rules! canic_emit_root_command_endpoint {
             }
 
             if matches!(&command, RootCommand::RespondCapability(_)) {
-                use $crate::__internal::core::access::expr::AsyncAccessPredicate as _;
+                use $crate::__internal::core::access::expr::AccessCheck as _;
                 let context = $crate::__internal::core::access::expr::AccessContext {
                     caller,
                     call: $crate::__internal::contracts::ids::EndpointCall {
@@ -229,7 +226,6 @@ macro_rules! canic_emit_root_command_endpoint {
                 };
                 $crate::__internal::control_plane::api::component_rpc::RootCapabilityCallerPredicate
                     .eval(&context)
-                    .await
                     .map_err(::canic::Error::from)?;
             }
 
@@ -698,7 +694,7 @@ macro_rules! canic_emit_root_status_endpoint {
             caller::is_controller(),
             custom(::canic::__internal::control_plane::api::component_auth::ActiveComponentMemberPredicate)
         )))]
-        async fn canic_root_membership(
+        fn canic_root_membership(
             request: ::canic::dto::component_registry::RootMembershipRequest,
         ) -> Result<::canic::dto::component_registry::RootMembershipResponse, ::canic::Error> {
             $crate::__internal::control_plane::api::component_auth::RootComponentMembershipApi::lookup(request)
@@ -715,7 +711,7 @@ macro_rules! canic_emit_root_status_endpoint {
         }
 
         #[$crate::canic_query(public)]
-        async fn canic_public_status(
+        fn canic_public_status(
             request: PublicStatusRequest,
         ) -> Result<PublicStatusResponse, ::canic::Error> {
             match request {
@@ -761,7 +757,7 @@ macro_rules! canic_emit_root_status_endpoint {
 
 
         #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_observability(
+        fn canic_observability(
             request: ObservabilityRequest,
         ) -> Result<ObservabilityResponse, ::canic::Error> {
             $crate::__internal::core::control_plane_support::workflow::runtime::fleet_activation::FleetActivationWorkflow::require_root_status_variant_allowed(
@@ -832,7 +828,7 @@ macro_rules! canic_emit_root_status_endpoint {
 
         #[cfg(canic_capability_role_attestation_signer)]
         #[$crate::canic_query(public)]
-        async fn canic_root_auth_status(
+        fn canic_root_auth_status(
             request: RootAuthStatusRequest,
         ) -> Result<RootAuthStatusResponse, ::canic::Error> {
             $crate::__internal::core::control_plane_support::workflow::runtime::fleet_activation::FleetActivationWorkflow::require_root_status_variant_allowed(false)?;
@@ -848,7 +844,7 @@ macro_rules! canic_emit_root_status_endpoint {
 
 
         #[$crate::canic_query(public)]
-        async fn canic_root_operation_status(
+        fn canic_root_operation_status(
             request: RootOperationStatusRequest,
         ) -> Result<RootOperationStatusResponse, ::canic::Error> {
             let caller = $crate::__internal::cdk::api::msg_caller();
@@ -884,7 +880,7 @@ macro_rules! canic_emit_root_status_endpoint {
 
 
         #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_root_status(
+        fn canic_root_status(
             request: RootStatusRequest,
         ) -> Result<RootStatusResponse, ::canic::Error> {
             let prepared = matches!(

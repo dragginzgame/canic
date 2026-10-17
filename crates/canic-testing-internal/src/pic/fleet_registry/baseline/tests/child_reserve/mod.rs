@@ -13,8 +13,8 @@ use canic_contracts::dto::wire::projection::fixture_baseline_child_reserve::Resp
 #[test]
 pub(super) fn initial_child_failure_reaches_coordinator_and_recovers_same_claim() {
     let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
-    let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
-        .expect("discover Canic test workspace through Cargo");
+    let workspace =
+        crate::workspace::discover().expect("discover Canic test workspace through Cargo");
     let config_path = initial_shard_root_canister_config_path(&workspace);
     let config = AppConfigSnapshot::load(&config_path).unwrap();
     let mut pic = build_management_pic();
@@ -43,12 +43,14 @@ pub(super) fn initial_child_failure_reaches_coordinator_and_recovers_same_claim(
     .unwrap();
     wait_for_parent_commit(&pic, root, operation_id);
     assert_balance_control_requires_controller(&pic, root);
-    let burned: u128 = pic.update_candid_as_or_panic(
-        root,
-        Principal::anonymous(),
-        "audit_recovery_balance",
-        (800_000_000_000_u128,),
-    );
+    let burned: u128 = pic
+        .update_candid_as(
+            root,
+            Principal::anonymous(),
+            "audit_recovery_balance",
+            (800_000_000_000_u128,),
+        )
+        .expect("update Candid harness call");
     assert!(burned > 0);
     let origin = (0..240).find_map(|_| {
         let status = provisioning_status(&pic, coordinator, operation_id);
@@ -117,8 +119,8 @@ fn assert_host_origin(
     plan: &CompiledCurrentComponentProvisioning,
     expected: &canic::dto::component_provisioning::ProvisioningFailureOrigin,
 ) {
-    let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
-        .expect("discover Canic test workspace through Cargo");
+    let workspace =
+        crate::workspace::discover().expect("discover Canic test workspace through Cargo");
     let directory = literal_zero_adapter_root(&workspace).join("child-origin");
     let _cleanup = TestDirectoryCleanup(directory.clone());
     let (wrapper, operator, _) = prepare_isolated_icp(&directory);
@@ -239,8 +241,8 @@ fn provisioning_status(
 #[test]
 pub(super) fn low_native_reserve_retains_child_failure_and_recovers_same_claim() {
     let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
-    let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
-        .expect("discover Canic test workspace through Cargo");
+    let workspace =
+        crate::workspace::discover().expect("discover Canic test workspace through Cargo");
     let config_path = initial_shard_root_canister_config_path(&workspace);
     let config = AppConfigSnapshot::load(&config_path).unwrap();
     let pic = build_pic();
@@ -383,25 +385,29 @@ fn prepare_spare(pic: &PocketIc, root: Principal) {
 }
 
 fn pause_and_reduce_reserve(pic: &PocketIc, root: Principal) {
-    let paused: Result<Response, Error> = pic.update_candid_as_or_panic(
-        root,
-        Principal::anonymous(),
-        canic::protocol::CANIC_ROOT_COMMAND,
-        (Command::SetCyclesFunding(
-            canic::dto::state::SetCyclesFundingRequest { enabled: false },
-        ),),
-    );
+    let paused: Result<Response, Error> = pic
+        .update_candid_as(
+            root,
+            Principal::anonymous(),
+            canic::protocol::CANIC_ROOT_COMMAND,
+            (Command::SetCyclesFunding(
+                canic::dto::state::SetCyclesFundingRequest { enabled: false },
+            ),),
+        )
+        .expect("update Candid harness call");
     let Response::SetCyclesFunding(paused) = paused.unwrap() else {
         panic!("funding response")
     };
     assert_eq!(paused.propagation.unconfirmed_targets, 0);
     assert!(paused.reconciliation_error.is_none());
-    let burned: u128 = pic.update_candid_as_or_panic(
-        root,
-        Principal::anonymous(),
-        "audit_recovery_balance",
-        (800_000_000_000_u128,),
-    );
+    let burned: u128 = pic
+        .update_candid_as(
+            root,
+            Principal::anonymous(),
+            "audit_recovery_balance",
+            (800_000_000_000_u128,),
+        )
+        .expect("update Candid harness call");
     assert!(burned > 0);
     assert!(pic.cycle_balance(root) < 1_000_000_000_000);
 }
@@ -412,12 +418,14 @@ fn provision(
     parent: Principal,
     request: &RootComponentChildAllocationRequest,
 ) {
-    let response: Result<Response, Error> = pic.update_candid_as_or_panic(
-        root,
-        parent,
-        canic::protocol::CANIC_ROOT_COMMAND,
-        (Command::ProvisionChild(request.clone()),),
-    );
+    let response: Result<Response, Error> = pic
+        .update_candid_as(
+            root,
+            parent,
+            canic::protocol::CANIC_ROOT_COMMAND,
+            (Command::ProvisionChild(request.clone()),),
+        )
+        .expect("update Candid harness call");
     let Response::OperationAccepted(receipt) = response.unwrap() else {
         panic!("accepted child")
     };

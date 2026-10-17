@@ -14,9 +14,9 @@ use crate::{
     workflow::{placement::acknowledgement::PlacementAcknowledgementWorkflow, runtime},
 };
 use ic_timers::{
-    DeclarationLifetime, OnceContext, OnceDecision, OnceRegistration, OnceRunResult, ScheduleError,
-    TimerCadence, TimerCompletion, TimerError as ProviderError, TimerIdentity, TimerIdentityError,
-    TimerRegistrationStatus, TimerSchedule, TimerSnapshot, WatchdogReconcileState,
+    OnceContext, OnceDecision, OnceRegistration, OnceRunResult, ScheduleError, TimerCadence,
+    TimerCompletion, TimerError as ProviderError, TimerIdentity, TimerIdentityError,
+    TimerRegistrationStatus, TimerSchedule, TimerSnapshot, TimerStart, WatchdogReconcileState,
     WatchdogRegistration, WatchdogRunResult, initialize_runtime, reconcile_watchdog, register_once,
     timer_inventory,
 };
@@ -342,7 +342,9 @@ fn register_lifecycle_once(
     let mut task = Some(task);
     let registration = register_once(
         identity,
-        DeclarationLifetime::RemoveWhenStopped,
+        TimerStart::RemoveWhenStopped {
+            initial: TimerSchedule::After(delay),
+        },
         move |_context: OnceContext| {
             let task = task.take();
             async move {
@@ -356,15 +358,6 @@ fn register_lifecycle_once(
             }
         },
     )?;
-    if let Err(primary) = registration.ensure_scheduled(TimerSchedule::After(delay)) {
-        return match registration.unregister() {
-            Ok(()) => Err(primary.into()),
-            Err(cleanup) => Err(TimerError::RegistrationRollback {
-                primary: Box::new(primary.into()),
-                cleanup: Box::new(cleanup.into()),
-            }),
-        };
-    }
     drop(registration);
     Ok(())
 }

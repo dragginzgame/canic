@@ -2,6 +2,7 @@ use super::{FrontendError, model::*, ops, policy};
 use crate::test_support::temp_dir;
 use candid::Principal;
 use canic_contracts::ids::{CanisterRole, CanonicalNetworkId};
+use ic_host_fs::durable::{PublicationMode, WriteOptions};
 use std::fs;
 
 fn input() -> FrontendEnvironmentInput {
@@ -227,7 +228,15 @@ fn complete_bundle_and_interrupted_publication_have_identical_verified_bytes() {
     let bundle = prepared_bundle(&root);
     let destination = root.join("browser");
     let (name, bytes) = bundle.files.first_key_value().unwrap();
-    ic_host_fs::durable::create_new_bytes_with_parents(&destination.join(name), bytes).unwrap();
+    ic_host_fs::durable::write_bytes(
+        &destination.join(name),
+        WriteOptions {
+            mode: PublicationMode::CreateNew,
+            permissions: 0o666,
+        },
+        bytes,
+    )
+    .unwrap();
     assert!(!destination.join("canic-frontend.json").exists());
     ops::publish_bundle(&destination, &bundle).unwrap();
     let verified = ops::verify_bundle(&destination, &bundle.manifest.manifest_sha256).unwrap();

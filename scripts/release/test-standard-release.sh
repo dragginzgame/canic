@@ -6,7 +6,7 @@ trap 'rm -rf "$fixture"' EXIT
 mkdir -p "$fixture/bin" "$fixture/ci" "$fixture/make" "$fixture/scripts/ci"
 cp "$root/Makefile" "$root/tool-versions.env" "$fixture/"
 cp "$root/ci/tool-versions.env" "$root/ci/ic-tools.tsv" "$fixture/ci/"
-cp "$root/make/tools.mk" "$root/make/execution.mk" "$root/make/release.mk" "$fixture/make/"
+cp "$root/make/tools.mk" "$root/make/execution.mk" "$root/make/release.mk" "$root/make/consumer.mk" "$root/make/rust-format.mk" "$fixture/make/"
 cp "$root/scripts/ci/check-make-execution.sh" "$fixture/scripts/ci/"
 cp "$root/scripts/ci/ic-tool-pins.sh" "$fixture/scripts/ci/"
 real_bash="$(command -v bash)"

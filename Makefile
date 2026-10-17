@@ -21,14 +21,13 @@
 CARGO_INSTALL_BIN_DIR ?= $(if $(CARGO_HOME),$(CARGO_HOME),$(HOME)/.cargo)/bin
 include tool-versions.env
 include ci/tool-versions.env
-IC_TOOL_PINS ?= ci/ic-tools.tsv
-HOST_TOOL_VERSIONS ?= ci/tool-versions.env
 override SHARED_TOOLING_ROOT := $(CURDIR)
 CLOC_REPORT := $(CURDIR)/scripts/dev/report-cloc.sh
 LOCAL_TOOL_INSTALL_TARGETS += install-testkit-server
 LOCAL_TOOL_CHECK_TARGETS += testkit-server-check
-include make/tools.mk
-include make/execution.mk
+FORMAT_WRITE_COMMAND = bash scripts/ci/run-canic-formatters.sh --write $(CANIC_BLOB_WORKSPACES)
+FORMAT_CHECK_COMMAND = bash scripts/ci/run-canic-formatters.sh --check $(CANIC_BLOB_WORKSPACES)
+include make/consumer.mk
 
 .PHONY: install-testkit-server testkit-server-check
 install-testkit-server:
@@ -158,10 +157,6 @@ install-dev:
 .PHONY: dependency-pins-gate
 dependency-pins-gate:
 	bash scripts/ci/check-dependency-pins.sh --cargo-inheritance
-
-# Configure the one repository-owned hook without installing the full toolchain.
-install-hooks:
-	bash scripts/dev/install-git-hooks.sh
 
 # Synchronize reviewed pins and report Binaryen drift without rewriting the snapshot.
 update-dev:
@@ -472,12 +467,6 @@ check:
 clippy:
 	$(CARGO_ENV) bash scripts/ci/run-workspace-cargo.sh clippy -D warnings
 
-fmt:
-	@bash scripts/ci/run-formatting.sh --write bash scripts/ci/run-canic-formatters.sh --write $(CANIC_BLOB_WORKSPACES)
-
-fmt-check:
-	@bash scripts/ci/run-formatting.sh --check bash scripts/ci/run-canic-formatters.sh --check $(CANIC_BLOB_WORKSPACES)
-
 clean:
 	@bash scripts/ci/cleanup-release-artifacts.sh
 
@@ -502,8 +491,6 @@ ifneq ($(word 2,$(filter release-patch release-minor release-major release-resum
 $(error Select exactly one release target)
 endif
 .PHONY: release-resume release-version release-preflight release-prepare-version release-prepared-check release-files release-commit-check release-committed-check release-tagged-check release-push-check
-
-include make/release.mk
 
 .PHONY: release-verify
 release-version:

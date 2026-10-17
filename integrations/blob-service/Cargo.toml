@@ -22,8 +22,5 @@ ic-blob-storage-contracts.workspace = true
 ic-cdk.workspace = true
 ic-memory.workspace = true
 
-[dev-dependencies]
-canic = { workspace = true, features = ["testing"] }
-
 [lints]
 workspace = true

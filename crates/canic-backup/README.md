@@ -15,7 +15,14 @@ maintained manifest shape and preserves native I/O failures. Other traversal
 failures use `ArtifactChecksumError::Artifact(ic_backup::ops::artifacts::ArtifactError)`.
 Tree names must be UTF-8 so checksum paths retain exact identity.
 
-Canic retains publication barriers, layout custody and same-operation recovery.
+Host Artifacts owns raw SHA-256 calculation and formatting for topology hashes,
+layout sidecar names and restore-authority digests. Canic retains their exact
+input framing and persisted representation.
+
+IC Backup owns journal, command and layout guards, durable restore references and
+guarded terminal release. Canic retains original Fleet authority, publication
+barriers and same-operation recovery. Execution journals store exact original
+command identities before dispatch; retries never recreate missing custody.
 Ordinary JSON creation and replacement use Host Tooling's durable publication
 engine after serialization succeeds. The existing `PersistenceError::Io` kind
 is retained; its source carries typed publication visibility, native filesystem
@@ -33,7 +40,8 @@ after verifying command quiescence. Custom external journals use the same contra
 
 Fresh CLI backup execution currently rejects because Component Registry topology
 preflight is unimplemented. The runner and same-release recovery contracts remain
-maintained; this gap has no accepted implementation slice. See the
+maintained; the accepted 0.112 completion batch includes the missing capture
+workflow and its actual same-release recovery proof. See the
 [availability boundary](../../docs/features/backup-and-restore/README.md#current-availability).
 
 `DeploymentBackupManifest::validate()` enforces the hard manifest contract.
@@ -43,9 +51,22 @@ execution state. Code/module hash metadata remains useful provenance, but it is
 not a prerequisite for snapshot load because snapshot load restores code and
 state together.
 
+Restore upload receipts and load selection compare validated digest identities
+through IC Backup. Equivalent hexadecimal case does not change artifact identity;
+malformed hashes, different bytes and unsupported algorithms still reject.
+Validation preserves the original checksum text in operations and receipts.
+
 ## Continue From Here
 
 - [Use backup and restore](../../docs/features/backup-and-restore/README.md)
 - [Operate a Fleet](../../docs/operations/README.md)
 - [Browse all documentation](../../docs/README.md)
 - [Back to the main README](../../README.md)
+
+Backup manifests, plans, mappings and journals have a 64 MiB encoded JSON limit.
+Snapshot artifact streams have their own separate limits. Readers acquire a
+regular file through Host's descriptor admission, bound the complete byte stream,
+then decode and validate the record. Writers refuse oversized documents before
+publication, retaining the previous record. Explicit file aliases remain usable;
+layout ownership, manifest path checks and fresh terminal receipt validation
+remain required.

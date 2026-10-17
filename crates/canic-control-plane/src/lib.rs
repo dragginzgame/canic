@@ -4,12 +4,19 @@
 //! managed-store workflows on top of `canic-core`. The `canic` facade
 //! re-exports each role-specific surface through its matching feature.
 
-use canic_contracts::{dto, ids};
+#[cfg(any(
+    feature = "fleet-coordinator-canister",
+    feature = "root-control-plane",
+    feature = "wasm-store-canister"
+))]
+use canic_contracts::dto;
+#[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
+use canic_contracts::ids;
 
 #[cfg(test)]
 const _: () = {
     fn __canic_memory_test_bootstrap() {
-        canic_core::api::runtime::MemoryRuntimeApi::bootstrap_registry()
+        canic_core::memory::bootstrap(crate::memory::framework())
             .expect("test stable-memory bootstrap");
     }
 
@@ -27,6 +34,7 @@ pub mod api;
 #[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
 pub(crate) mod config;
 pub mod installation;
+pub mod memory;
 
 pub(crate) mod ops;
 #[cfg(feature = "root-control-plane")]

@@ -946,7 +946,7 @@ fn validate_terminal_coordinator_component_status(
         &FleetComponentProvisioningPhase::RuntimesActivated,
         &status.phase,
     )?;
-    if let Some(failure) = status.pending_root_failure {
+    if let Some(failure) = &status.pending_root_failure {
         return Err(terminal_field_error(
             "coordinator.pending_root_failure",
             "none".to_string(),

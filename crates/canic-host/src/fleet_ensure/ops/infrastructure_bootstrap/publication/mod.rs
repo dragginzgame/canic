@@ -18,7 +18,7 @@ use crate::fleet_ensure::{
 };
 use candid::Principal;
 use ic_host_fs::{
-    durable::write_bytes,
+    durable::{PublicationMode, WriteOptions, write_bytes},
     read::{read_file_no_follow, read_optional_file_no_follow},
 };
 use sha2_host::{Digest, Sha256};
@@ -244,8 +244,15 @@ fn finish(
         if bytes != seed.original.as_bytes() {
             return Err(invalid());
         }
-        write_bytes(&destination, record.replacement.as_bytes())
-            .map_err(crate::publication::ops::io_error)?;
+        write_bytes(
+            &destination,
+            WriteOptions {
+                mode: PublicationMode::Replace,
+                permissions: 0o666,
+            },
+            record.replacement.as_bytes(),
+        )
+        .map_err(crate::publication::ops::io_error)?;
     }
     record.completed = true;
     save(paths, &record)?;
@@ -260,8 +267,15 @@ fn save(
     if bytes.len() > MAX_BYTES {
         return Err(invalid());
     }
-    Ok(write_bytes(&path(paths, &record.plan.plan_sha256)?, &bytes)
-        .map_err(crate::publication::ops::io_error)?)
+    Ok(write_bytes(
+        &path(paths, &record.plan.plan_sha256)?,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &bytes,
+    )
+    .map_err(crate::publication::ops::io_error)?)
 }
 
 fn validate_path(relative: &str) -> Result<(), InfrastructureBootstrapError> {

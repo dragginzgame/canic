@@ -5,7 +5,7 @@ use ic_agent::agent::agent_error::HttpErrorPayload;
 use std::{
     cell::Cell,
     collections::VecDeque,
-    io::{BufRead, BufReader, Read, Write},
+    io::Write,
     net::{TcpListener, TcpStream},
     thread,
     time::Instant,
@@ -224,12 +224,12 @@ fn query_runtime_drives_concurrent_contexts_without_serializing_reads() {
 #[test]
 fn pooled_transport_rechecks_signer_and_network_authority() {
     use ic_agent::{Identity as _, identity::BasicIdentity};
-    use std::{fs, os::unix::fs::PermissionsExt as _};
+    use std::fs;
 
     let root = crate::test_support::temp_dir("pooled-query-authority");
     fs::create_dir_all(&root).unwrap();
     let executable = root.join("icp");
-    fs::write(
+    ic_host_process::testing::write_executable_script(
         &executable,
         crate::test_support::tool_script(
             r#"#!/bin/sh
@@ -245,7 +245,6 @@ esac
         ),
     )
     .unwrap();
-    fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
     let icp = IcpCli::new(executable.to_str().unwrap(), Some("local".into()))
         .with_cwd(&root)
         .with_identity(Some("test-signer"));
@@ -291,26 +290,22 @@ esac
 
 fn read_request(connection: &mut TcpStream) -> (String, Vec<u8>) {
     connection
-        .set_read_timeout(Some(Duration::from_secs(3)))
-        .unwrap();
-    connection
         .set_write_timeout(Some(Duration::from_secs(3)))
         .unwrap();
-    let mut reader = BufReader::new(connection);
-    let mut head = String::new();
-    let mut length = None;
-    loop {
-        let mut line = String::new();
-        assert!(reader.read_line(&mut line).unwrap() > 0);
-        if line == "\r\n" {
-            break;
-        }
-        if let Some(value) = line.to_ascii_lowercase().strip_prefix("content-length:") {
-            length = Some(value.trim().parse().unwrap());
-        }
-        head.push_str(&line);
-    }
-    let mut body = vec![0; length.unwrap()];
-    reader.read_exact(&mut body).unwrap();
-    (head, body)
+    let request = ic_testkit::testing::read_http_request(
+        connection,
+        Duration::from_secs(3),
+        16 * 1024,
+        4 * 1024 * 1024,
+    )
+    .unwrap();
+    let body_offset = request
+        .windows(4)
+        .position(|bytes| bytes == b"\r\n\r\n")
+        .unwrap()
+        + 4;
+    (
+        String::from_utf8(request[..body_offset].to_vec()).unwrap(),
+        request[body_offset..].to_vec(),
+    )
 }

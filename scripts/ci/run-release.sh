@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared companions: scripts/ci/check-make-execution.sh scripts/ci/next-release-version.sh
+# Shared companions: scripts/ci/check-make-execution.sh scripts/ci/next-release-version.sh scripts/ci/check-release-tag.sh scripts/ci/validate-release-inputs.pl
 set -euo pipefail
 
 # Canonical ordering and Git effects; consumer targets own metadata and gates.
@@ -54,7 +54,17 @@ state_root="$(git rev-parse --git-path release-state)"
 if [[ "$delivery" == pr ]]; then state_root="$(git rev-parse --git-common-dir)/release-state"; fi
 [[ ! -L "$state_root" ]] || fail 'release state directory is symlinked'
 mkdir -p "$state_root"
-mkdir "$state_root/lock" 2>/dev/null || fail 'release lock is occupied; inspect its owner before clearing a stale lock'
+if mkdir "$state_root/lock"; then
+    :
+else
+    lock_status=$?
+    if [[ -e "$state_root/lock" || -L "$state_root/lock" ]]; then
+        echo 'release refused: release lock is occupied; inspect its owner before clearing a stale lock' >&2
+    else
+        echo 'release refused: unable to acquire release lock' >&2
+    fi
+    exit "$lock_status"
+fi
 trap 'rmdir "$state_root/lock"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
@@ -96,8 +106,10 @@ read_plan() {
         release-pr-plan-1) saved_delivery='pr' ;;
         *) fail 'release plan identity is invalid' ;;
     esac
-    [[ "$saved_candidate" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ && "$1" == "$state_root/$saved_candidate.plan" ]] || fail 'release plan identity is invalid'
-    [[ "$saved_source" =~ ^[0-9a-f]{40,64}$ && "$saved_date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ && "$saved_destination" =~ ^[0-9a-f]{40,64}$ ]] || fail 'release plan source/date/destination is invalid'
+    perl "$runner_dir/validate-release-inputs.pl" version "$saved_candidate" >/dev/null || fail 'release plan identity is invalid'
+    [[ "$1" == "$state_root/$saved_candidate.plan" ]] || fail 'release plan identity is invalid'
+    [[ "$saved_source" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ && "$saved_destination" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]] || fail 'release plan source/date/destination is invalid'
+    perl "$runner_dir/validate-release-inputs.pl" date "$saved_date" >/dev/null || fail "release plan date is invalid"
     [[ "$(bash "$(dirname "${BASH_SOURCE[0]}")/next-release-version.sh" "$saved_previous" "$saved_kind")" == "$saved_candidate" ]] || fail 'release plan increment is invalid'
     case "$saved_phase" in
         preflight|validate|prepare|stage|commit|complete) ;;
@@ -120,6 +132,27 @@ load_plan() {
     # Early plans have no reusable validation: repeat preflight and the full gate.
     case "$phase" in preflight|validate) phase=preflight ;; esac
 }
+restart_committed_preparation() {
+    local current_source current_version untracked archive
+    # Preparation owns local metadata only. A clean descendant commit captures
+    # its current disposition; no runner staging/commit/delivery was dispatched.
+    current_source="$(git rev-parse --verify HEAD)"
+    [[ "$current_source" != "$source" ]] || return 0
+    [[ -z "$index_tree" && ! -e "$plan.files" && ! -L "$plan.files" ]] || fail 'saved preparation has staging evidence; reconcile its exact release'
+    git merge-base --is-ancestor "$source" "$current_source" || fail 'saved preparation source is not an ancestor of current HEAD'
+    git diff --cached --quiet HEAD -- || fail 'commit or restore staged changes before restarting preparation'
+    git diff --quiet HEAD -- || fail 'commit or restore worktree changes before restarting preparation'
+    untracked="$(git ls-files --others --exclude-standard)" || fail 'cannot inventory source before restarting preparation'
+    [[ -z "$untracked" ]] || fail 'commit or remove untracked source before restarting preparation'
+    current_version="$("$make_bin" --no-print-directory -s release-version)"
+    [[ "$current_version" == "$previous" || "$current_version" == "$candidate" ]] || fail 'committed metadata differs from the saved preparation versions'
+    assert_destination
+    archive="$(mktemp -d "$state_root/$candidate.attempt.XXXXXX")"
+    mv "$plan" "$archive/$candidate.plan"
+    printf 'Restarting from committed metadata %s at %s; retained preparation: %s\n' \
+        "$current_version" "$current_source" "$archive/$candidate.plan"
+    plan=""
+}
 select_release() {
     plan=""
     release_commit=""
@@ -128,7 +161,7 @@ select_release() {
     validation_source=""
     followup=no
     if [[ "$mode" == resume ]]; then
-        [[ "$requested_version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || usage
+        perl "$runner_dir/validate-release-inputs.pl" version "$requested_version" >/dev/null || usage
         plan="$state_root/$requested_version.plan"
     else
         # Select saved intent before reading possibly bumped metadata. Recovery uses
@@ -150,6 +183,11 @@ select_release() {
     fi
     if [[ -n "$plan" ]]; then
         load_plan
+        if [[ "$mode" != resume && "$delivery" == direct && "$phase" == prepare ]]; then
+            restart_committed_preparation
+        fi
+    fi
+    if [[ -n "$plan" ]]; then
         if [[ "$mode" != resume && "$kind" != "$mode" ]]; then
             case "$phase" in
                 commit|tag|push)
@@ -164,6 +202,7 @@ select_release() {
         previous="$("$make_bin" --no-print-directory -s release-version)"
         candidate="$(bash "$(dirname "${BASH_SOURCE[0]}")/next-release-version.sh" "$previous" "$kind")"
         release_date="$(date -u +%F)"
+        perl "$runner_dir/validate-release-inputs.pl" date "$release_date" >/dev/null || fail "release date is invalid"
         source="$(git rev-parse --verify HEAD)"
         plan="$state_root/$candidate.plan"
         # Validation has no release mutations to resume. Retain its old identity as
@@ -204,7 +243,18 @@ save_phase() {
         "$source" "$remote" "$branch" "$remote_identity" "$index_tree" "$phase" > "$temporary_plan"
     mv "$temporary_plan" "$plan"
 }
-assert_source() { [[ "$(git rev-parse HEAD)" == "$source" ]] || fail 'validated source commit changed'; }
+assert_source() {
+    local current_source
+    current_source="$(git rev-parse HEAD)" || fail 'cannot inspect current release source'
+    [[ "$current_source" == "$source" ]] && return 0
+    printf 'Release source conflict:\n  plan: %s\n  phase: %s\n  version: %s -> %s\n  saved source: %s\n  current source: %s\n' \
+        "$plan" "$phase" "$previous" "$candidate" "$source" "$current_source" >&2
+    if [[ "$phase" == prepare ]]; then
+        echo 'Use the normal release target from a clean descendant commit to restart direct preparation with fresh validation.' >&2
+        echo 'Keep the plan and evidence; see docs/releases.md#source-changes-after-saved-preparation-intent.' >&2
+    fi
+    fail 'validated source commit changed; saved validation cannot qualify the current source'
+}
 assert_release_commit() {
     # The first direct descendant must be the exact staged release. Later fixes
     # may be committed without changing its identity or repeating its commit.
@@ -212,8 +262,8 @@ assert_release_commit() {
         history="$(git rev-list --first-parent --reverse "$source..HEAD")"
         release_commit="${history%%$'\n'*}"
     fi
-    [[ "$release_commit" =~ ^[0-9a-f]{40,64}$ && "$(git log -1 --format=%P "$release_commit")" == "$source" && "$(git log -1 --format=%s "$release_commit")" == "Release $candidate" ]] || fail 'release commit does not match the saved source/version'
-    [[ "$index_tree" =~ ^[0-9a-f]{40,64}$ && "$(git rev-parse "$release_commit^{tree}")" == "$index_tree" ]] || fail 'release commit tree differs from the exact staged release'
+    [[ "$release_commit" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ && "$(git log -1 --format=%P "$release_commit")" == "$source" && "$(git log -1 --format=%s "$release_commit")" == "Release $candidate" ]] || fail 'release commit does not match the saved source/version'
+    [[ "$index_tree" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ && "$(git rev-parse "$release_commit^{tree}")" == "$index_tree" ]] || fail 'release commit tree differs from the exact staged release'
     git merge-base --is-ancestor "$release_commit" HEAD || fail 'release commit is not an ancestor of the selected branch'
     [[ "$("$make_bin" --no-print-directory -s release-version)" == "$candidate" ]] || fail 'release metadata no longer matches the candidate'
     git diff --cached --quiet HEAD -- || fail 'release index differs from the committed payload'
@@ -223,7 +273,7 @@ assert_release_commit() {
     if [[ "$mode" != resume && "$(git rev-parse HEAD)" != "$release_commit" ]]; then followup=yes; fi
 }
 assert_release_tag() {
-    [[ "$(git cat-file -t "refs/tags/v$candidate")" == tag && "$(git rev-parse "refs/tags/v$candidate^{commit}")" == "$release_commit" ]] || fail 'existing tag differs from the exact release commit'
+    bash "$runner_dir/check-release-tag.sh" "$release_commit" "$candidate" || fail 'existing tag differs from the exact release commit'
 }
 read_remote_refs() {
     refs="$(git ls-remote --refs -- "$destination" "refs/heads/$branch" "refs/tags/v$candidate")"
@@ -231,7 +281,7 @@ read_remote_refs() {
     remote_tag=""
     while read -r sha ref extra; do
         [[ -n "$sha" || -n "$ref" ]] || continue
-        [[ "$sha" =~ ^[0-9a-f]{40,64}$ && -z "$extra" ]] || fail 'remote ref output is malformed'
+        [[ "$sha" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ && -z "$extra" ]] || fail 'remote ref output is malformed'
         case "$ref" in
             "refs/heads/$branch") [[ -z "$remote_head" ]] || fail 'remote branch is duplicated'; remote_head="$sha" ;;
             "refs/tags/v$candidate") [[ -z "$remote_tag" ]] || fail 'remote tag is duplicated'; remote_tag="$sha" ;;

@@ -195,9 +195,7 @@ impl RuntimeAuthWorkflow {
     }
 
     /// Check local canister-signature support when the current canister issues delegated tokens.
-    pub async fn check_issuer_canister_signature_support() -> Result<(), InternalError> {
-        // Keep the public runtime hook async without adding hot-path outbound work.
-        std::future::ready(()).await;
+    pub fn check_issuer_canister_signature_support() -> Result<(), InternalError> {
         let delegated_tokens_cfg = ConfigOps::delegated_tokens_config()?;
         let canister_cfg = ConfigOps::current_canister()?;
         if !delegated_tokens_cfg.enabled || !canister_cfg.auth.delegated_token_issuer {
@@ -215,13 +213,11 @@ impl RuntimeAuthWorkflow {
     }
 
     /// Verify a role attestation locally from its embedded root proof.
-    pub async fn verify_role_attestation(
+    pub fn verify_role_attestation(
         attestation: &SignedRoleAttestation,
         min_accepted_epoch: u64,
     ) -> Result<(), InternalError> {
-        // This verifier is intentionally local. The await preserves the async
-        // endpoint shape; do not add root, issuer, or management-canister calls here.
-        std::future::ready(()).await;
+        // Verify embedded proof locally; never fetch authority during admission.
         let context = role_attestation_verification_context(attestation, min_accepted_epoch)?;
         let verifier_subnet = Some(role_attestation_verifier_subnet()?);
         let result = AuthOps::verify_role_attestation_cached(
@@ -237,12 +233,11 @@ impl RuntimeAuthWorkflow {
     }
 
     /// Require a root-signed role attestation bound to the receiver's live Subnet.
-    pub async fn verify_local_subnet_role_attestation(
+    pub fn verify_local_subnet_role_attestation(
         attestation: &SignedRoleAttestation,
         min_accepted_epoch: u64,
     ) -> Result<(), InternalError> {
         // Proof verification and Subnet comparison are local runtime work.
-        std::future::ready(()).await;
         let context = role_attestation_verification_context(attestation, min_accepted_epoch)?;
         let result = AuthOps::verify_local_subnet_role_attestation_cached(
             attestation,
@@ -493,6 +488,7 @@ mod tests {
         issuer_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: true,
             delegated_token_verifier: false,
+            allowed_token_scopes: Vec::new(),
             local_application_authorization: None,
             role_attestation_cache: false,
         };
@@ -515,6 +511,7 @@ mod tests {
         verifier_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: false,
             delegated_token_verifier: false,
+            allowed_token_scopes: Vec::new(),
             local_application_authorization: None,
             role_attestation_cache: true,
         };
@@ -537,6 +534,7 @@ mod tests {
         issuer_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: true,
             delegated_token_verifier: false,
+            allowed_token_scopes: Vec::new(),
             local_application_authorization: None,
             role_attestation_cache: false,
         };
@@ -566,6 +564,7 @@ mod tests {
         verifier_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: false,
             delegated_token_verifier: true,
+            allowed_token_scopes: Vec::new(),
             local_application_authorization: None,
             role_attestation_cache: false,
         };
@@ -585,6 +584,7 @@ mod tests {
         verifier_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: false,
             delegated_token_verifier: false,
+            allowed_token_scopes: Vec::new(),
             local_application_authorization: None,
             role_attestation_cache: true,
         };
@@ -612,6 +612,7 @@ mod tests {
         verifier_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: false,
             delegated_token_verifier: true,
+            allowed_token_scopes: Vec::new(),
             local_application_authorization: None,
             role_attestation_cache: true,
         };
@@ -620,6 +621,7 @@ mod tests {
         issuer_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: true,
             delegated_token_verifier: false,
+            allowed_token_scopes: Vec::new(),
             local_application_authorization: None,
             role_attestation_cache: false,
         };
@@ -646,6 +648,7 @@ mod tests {
         verifier_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: false,
             delegated_token_verifier: true,
+            allowed_token_scopes: Vec::new(),
             local_application_authorization: None,
             role_attestation_cache: true,
         };
@@ -661,6 +664,7 @@ mod tests {
         issuer_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: true,
             delegated_token_verifier: false,
+            allowed_token_scopes: Vec::new(),
             local_application_authorization: None,
             role_attestation_cache: true,
         };

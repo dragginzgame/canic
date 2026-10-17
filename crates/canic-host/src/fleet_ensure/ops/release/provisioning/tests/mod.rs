@@ -226,6 +226,7 @@ fn wire_assessment_retains_both_owners_and_ignores_stale_failure_on_completion()
     let entry = first.entry.as_mut().unwrap();
     entry.phase = Phase::RuntimesActive;
     entry.last_failure = Some(RootComponentProvisioningFailure {
+        dependency: None,
         stage: ProvisioningFailureStage::Provisioning,
         target: root,
         operation_id: [7; 32],

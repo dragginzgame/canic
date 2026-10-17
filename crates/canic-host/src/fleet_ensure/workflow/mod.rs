@@ -36,7 +36,9 @@ use crate::fleet_ensure::{
     },
     ops::{
         EffectRetry, EnsurePaths, EnsurePlatform, EnsureStateError, action_sha256,
-        continuation::verify_release_transition, effect_preparation::prepare_effect,
+        continuation::verify_release_transition,
+        effect_evidence::{retain_cycles, retain_observation},
+        effect_preparation::prepare_effect,
         lock_operation, read_root_start_authority, read_state, reserve_fixture_publication_attempt,
         resolve_desired_artifacts, retain_configured_principal_bindings, write_journal, write_plan,
         write_state,
@@ -249,8 +251,11 @@ where
         progress_identity: String,
     },
 
-    #[error("Root {root} provisioning has made no progress for {observations} observations: stage={stage:?}, target={target}, operation={operation}, diagnostic={diagnostic_code}, retry=Backoff, failed_at_ns={failed_at_ns}; the issued operation remains retained; resume the same reviewed apply after the dependency recovers", operation = canic_core::cdk::utils::hash::hex_bytes(.operation_id))]
+    #[error("Root {root} provisioning has made no progress for {observations} observations: stage={stage:?}, target={target}, operation={operation}, diagnostic={diagnostic_code}, dependency={dependency:?}, retry=Backoff, failed_at_ns={failed_at_ns}; the issued operation remains retained; resume the same reviewed apply after the dependency recovers", operation = canic_core::cdk::utils::hash::hex_bytes(.operation_id))]
     ProvisioningRetryPending {
+        dependency: Option<
+            Box<canic_contracts::values::provisioning_failure::ProvisioningDependencyFailure>,
+        >,
         root: candid::Principal,
         stage: canic_contracts::dto::component_provisioning::ProvisioningFailureStage,
         target: candid::Principal,
@@ -1556,7 +1561,7 @@ where
                         .effects
                         .get_mut(index)
                         .ok_or(EnsureWorkflowError::JournalIntegrity)?;
-                    merge_observed_cycles(record, source_cycles, destination_cycles);
+                    retain_cycles(record, source_cycles, destination_cycles);
                     if replan_after_create_balance {
                         if !retained_create_balance_is_exact {
                             return Err(EnsureWorkflowError::JournalIntegrity);
@@ -1598,8 +1603,7 @@ where
                         });
                     }
                     if observed.applied {
-                        record.progress_identity = Some(observed.progress_identity);
-                        record.state = EffectState::Applied;
+                        retain_observation(record, observed, None, None);
                         journal.stalled_observations = 0;
                         write_journal(&paths, &journal)?;
                         let record = journal
@@ -1834,12 +1838,16 @@ where
                     if journal.stalled_observations
                         >= observation_policy.maximum_stalled_observations
                     {
-                        if let Some((failure, origin)) = observed
-                            .provisioning_failure
-                            .and_then(|failure| failure.origin.map(|origin| (failure, origin)))
+                        if let Some((root, origin)) =
+                            observed.provisioning_failure.and_then(|failure| {
+                                failure
+                                    .origin
+                                    .map(|origin| (failure.fleet_subnet_root, origin))
+                            })
                         {
                             return Err(EnsureWorkflowError::ProvisioningRetryPending {
-                                root: failure.fleet_subnet_root,
+                                dependency: origin.dependency.map(Box::new),
+                                root,
                                 stage: origin.stage,
                                 target: origin.target,
                                 operation_id: origin.operation_id,
@@ -2340,19 +2348,6 @@ fn report_progress_state<P: EnsurePlatform>(
                 .filter(|review| review.effect.is_some())
                 .count(),
     });
-}
-
-const fn merge_observed_cycles(
-    record: &mut EffectRecord,
-    source_cycles: Option<u128>,
-    destination_cycles: Option<u128>,
-) {
-    if let Some(cycles) = source_cycles {
-        record.post_cycles = Some(cycles);
-    }
-    if let Some(cycles) = destination_cycles {
-        record.destination_post_cycles = Some(cycles);
-    }
 }
 
 pub(super) fn retain_applied_create_authority<E>(

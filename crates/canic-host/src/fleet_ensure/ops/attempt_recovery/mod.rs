@@ -11,7 +11,7 @@ use crate::fleet_ensure::{
     model::attempt_recovery::AttemptRecoveryReviewRecord,
     ops::{EnsurePaths, capacity_import::journal::CapacityImportJournalError},
 };
-use ic_host_fs::durable::write_bytes;
+use ic_host_fs::durable::{PublicationMode, WriteOptions, write_bytes};
 use ic_host_fs::read::read_file_no_follow;
 
 use canic_core::cdk::utils::hash::hex_bytes;
@@ -47,7 +47,15 @@ pub(in crate::fleet_ensure) fn review(
             return Err(CapacityImportJournalError::Integrity);
         }
         Some(_) => {}
-        None => write_bytes(&path, &bytes).map_err(crate::publication::ops::io_error)?,
+        None => write_bytes(
+            &path,
+            WriteOptions {
+                mode: PublicationMode::Replace,
+                permissions: 0o666,
+            },
+            &bytes,
+        )
+        .map_err(crate::publication::ops::io_error)?,
     }
     Ok(review)
 }
@@ -85,7 +93,15 @@ pub(in crate::fleet_ensure) fn apply(
         .map(|target| owner::prepare(paths, target))
         .collect::<Result<Vec<_>, _>>()?;
     for update in updates.into_iter().flatten() {
-        write_bytes(&update.0, &update.1).map_err(crate::publication::ops::io_error)?;
+        write_bytes(
+            &update.0,
+            WriteOptions {
+                mode: PublicationMode::Replace,
+                permissions: 0o666,
+            },
+            &update.1,
+        )
+        .map_err(crate::publication::ops::io_error)?;
     }
     Ok(review)
 }

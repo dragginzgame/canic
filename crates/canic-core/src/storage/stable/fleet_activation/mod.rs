@@ -33,10 +33,7 @@ pub const MAX_RETAINED_PREPARED_CREDENTIAL_GENERATIONS: usize = 2;
 std::thread_local! {
     static FLEET_ACTIVATION: RefCell<
         BoundedCell<Option<FleetActivationRecord>, RuntimeMemory<DefaultMemoryImpl>>,
-    > = RefCell::new(BoundedCell::init(crate::ic_memory_key!(
-        authority = CANIC_CORE_MEMORY_AUTHORITY,
-        key = "canic.core.fleet.activation.v1",
-    ), None));
+    > = RefCell::new(BoundedCell::init(crate::memory::open(crate::memory::keys::FLEET_ACTIVATION_V1), None));
 }
 
 ///

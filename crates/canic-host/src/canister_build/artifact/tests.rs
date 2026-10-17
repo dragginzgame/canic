@@ -26,20 +26,19 @@ fn generated_infrastructure_inputs_are_stable_before_compilation() {
         refresh_canonical_infrastructure_did: false,
         release_build_id: None,
     };
-    let spec = ic_testkit::artifacts::WasmBuildSpec::new(
+    let spec = ic_build::artifacts::WasmBuildSpec::new(
         &package,
         &directory.join("target"),
         &["fixture-consumer"],
-        "release",
     )
     .with_cargo_profile_args(["--release"]);
-    let cold = ic_testkit::artifacts::resolve_cargo_build_inputs(&spec).unwrap();
+    let cold = ic_build::artifacts::resolve_cargo_build_inputs(&spec).unwrap();
     prepare_workspace_infrastructure_packages(&context).unwrap();
     assert!(
         !cold.is_content_current().unwrap(),
         "late package preparation changes an enclosing package's frozen inputs"
     );
-    let prepared = ic_testkit::artifacts::resolve_cargo_build_inputs(&spec).unwrap();
+    let prepared = ic_build::artifacts::resolve_cargo_build_inputs(&spec).unwrap();
     prepare_workspace_infrastructure_packages(&context).unwrap();
     assert!(prepared.is_content_current().unwrap());
     assert!(prepared.is_current(&spec).unwrap());
@@ -109,6 +108,7 @@ fn configured_batch_command_selects_every_group_package_once() {
         args,
         [
             "build",
+            "--lib",
             "--locked",
             "--keep-going",
             "--message-format=json-render-diagnostics",

@@ -37,8 +37,14 @@ fn completed_backup_replays_after_final_response_is_lost() {
 
     assert!(response.complete);
     assert!(!response.max_steps_reached);
-    assert_eq!(response.executed_operation_count, 6);
-    assert_eq!(response.executed_operations.len(), 6);
+    assert_eq!(
+        response.executed_operation_count,
+        backup_post_preflight_operations().len()
+    );
+    assert_eq!(
+        response.executed_operations.len(),
+        backup_post_preflight_operations().len()
+    );
     super::hold_at_acknowledged_barrier(&handshake_root);
 }
 

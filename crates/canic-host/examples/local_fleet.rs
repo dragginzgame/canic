@@ -8,7 +8,7 @@ use canic_host::{
         workflow::LocalFleetSession,
     },
 };
-use ic_host_fs::durable;
+use ic_host_fs::durable::{self, PublicationMode, WriteOptions};
 
 use serde::Deserialize;
 use std::{
@@ -176,6 +176,10 @@ fn execute(
             })?;
             durable::write_bytes(
                 &root.join(out),
+                WriteOptions {
+                    mode: PublicationMode::Replace,
+                    permissions: 0o666,
+                },
                 toml::to_string_pretty(&generated.desired)?.as_bytes(),
             )?;
             emit(&generated.desired)

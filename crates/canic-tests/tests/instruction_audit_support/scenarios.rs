@@ -1,6 +1,6 @@
 use super::*;
 
-// Build the fixed v3 scenario manifest. Every row uses an exclusive lease of
+// Build the fixed v4 scenario manifest. Every row uses an exclusive lease of
 // its authoritative profile baseline after exact snapshot restore and validation.
 #[expect(
     clippy::too_many_lines,
@@ -71,38 +71,6 @@ pub(super) fn scenarios() -> Vec<AuditScenario> {
             topology_state: "component-registry-active",
             freshness_model: "restored-baseline-per-scenario",
             notes: "Active Fleet Subnet Root creates and installs the first chain-key delegation proof for its Registry-issued Component.",
-        },
-        AuditScenario {
-            key: "issuer:canic_command.PrepareDelegatedToken:active-proof",
-            canister: "issuer",
-            endpoint_or_flow: "canic_command::PrepareDelegatedToken",
-            transport_mode: "update",
-            subject_kind: "endpoint",
-            subject_label: "canic_command::PrepareDelegatedToken",
-            arg_class: "minimal-valid",
-            caller_class: "delegated-subject",
-            auth_state: "active-proof",
-            replay_state: "fresh",
-            cache_state: "proof-warm",
-            topology_state: "component-registry-active",
-            freshness_model: "restored-baseline-per-scenario",
-            notes: "Registry-issued Component prepares a delegated token from an explicitly provisioned active proof.",
-        },
-        AuditScenario {
-            key: "issuer_verifier:issuer_verify_token:valid-delegated-token",
-            canister: "issuer_verifier",
-            endpoint_or_flow: "issuer_verify_token",
-            transport_mode: "update",
-            subject_kind: "endpoint",
-            subject_label: "issuer_verify_token",
-            arg_class: "valid-delegated-token",
-            caller_class: "delegated-subject",
-            auth_state: "delegated-token",
-            replay_state: "fresh",
-            cache_state: "proof-warm",
-            topology_state: "component-registry-active",
-            freshness_model: "restored-baseline-per-scenario",
-            notes: "A second Registry-issued issuer Component verifies a freshly issued delegated token.",
         },
         AuditScenario {
             key: "root:canic_root_command:respond-capability-request-cycles-fresh",
@@ -204,15 +172,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn v3_roster_is_fixed_complete_and_query_free() {
+    fn v4_roster_is_fixed_complete_and_query_free() {
         let actual = scenarios();
         let expected_keys = [
             "scale:request_cycles_from_parent:fresh",
             "scale_hub:create_worker:empty-pool",
             "user_hub:create_account:new-principal",
             "root:test_provision_chain_key_delegation_proof_for_issuer:new-issuer",
-            "issuer:canic_command.PrepareDelegatedToken:active-proof",
-            "issuer_verifier:issuer_verify_token:valid-delegated-token",
             "root:canic_root_command:respond-capability-request-cycles-fresh",
             "root:canic_root_command:respond-capability-request-cycles-replay",
             "root:bootstrap:init-checkpoints",

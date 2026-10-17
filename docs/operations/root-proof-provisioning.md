@@ -112,8 +112,7 @@ the required revocation behavior rather than treating a cached proof as an
 instantaneous registry lookup.
 
 `GetOrCreateDelegationProof` binds the issuer to the **calling canister**. A user
-hub cannot call it on behalf of a user shard. The maintained issuer lazy-repair
-and controller-configured Root renewal paths are described below. The public
+hub cannot call it on behalf of a user shard. Controller-configured Root renewal and explicit provisioning are described below. The public
 Rust provisioning facade runs inside Root; it is not a canonical wire command
 for arbitrary application managers. An application requiring immediate manager-
 triggered provisioning needs an explicitly reviewed authorization contract.
@@ -148,7 +147,8 @@ AuthApi::configure_issuer_root(RootIssuerConfigureRequest {
 Select the application's grants and certificate lifetime explicitly. Repeat the
 same setup safely whenever the application ensures a shard exists. Deployment
 completion alone does not establish authentication readiness; check the issuer's
-`ActiveDelegationProof` status for `Valid` and verify a token through its receiver.
+`ActiveDelegationProof` status for `Valid`. Application session admission remains
+unavailable until portable Auth integration is complete.
 
 Root-owned renewal is the active delegated-auth liveness path for enabled issuers:
 
@@ -159,37 +159,10 @@ root                   -> management canister sign_with_ecdsa
 root                   -> issuer canic_command InstallDelegationProof update
 operator/medic         -> root canic_root_status IssuerRenewal query
 operator/medic         -> issuer canic_auth_status ActiveDelegationProof query
-caller/session         -> issuer canic_command PrepareDelegatedToken update
-caller/session         -> issuer canic_auth_status DelegatedToken query
 ```
-
-Issuer delegated-token preparation automatically fetches a missing proof and
-repairs stale or expired material. Fresh shards therefore need no separate
-application provisioning call before their first login. The issuer requests
-the caller-bound Root update:
-
-```text
-issuer                 -> root canic_root_command GetOrCreateDelegationProof update
-root                   -> management canister sign_with_ecdsa when no reusable batch exists
-root                   -> return the issuer-bound proof
-issuer                 -> verify and store the returned proof locally
-```
-
-Lazy repair must reuse a valid existing chain-key batch when possible and must
-honor signing retry-after state after management-canister failures. It must not
-fall back to per-login signing or to the old bridge-backed proof shape.
-Each preparation makes at most one repair attempt, revalidates replay ownership
-after the awaited call, and prepares the token once more. Unrelated
-`SECURITY_UNAVAILABLE` failures do not trigger proof fetching. Missing or disabled
-Root configuration still refuses issuance; login requests cannot create grants.
-Missing configuration returns `CONFIGURATION_INCOMPLETE`; disabled issuer
-renewal returns `SECURITY_INACTIVE`. Both refuse before paid signing work.
-When a shared signing attempt is already in progress, preparation may return
-`SECURITY_UNAVAILABLE`. Retry the same request after that batch progresses; its
-status distinguishes this case from incomplete issuer setup.
 
 An application root may also make a newly installed or reinstalled issuer
-ready before login through the public Rust facade:
+ready through the public Rust facade:
 
 ```text
 app root               -> AuthApi::provision_chain_key_delegation_proof_for_issuer_root
@@ -220,7 +193,7 @@ warning is observational; it does not mutate root or issuer state.
 
 ## Hard Invariants
 
-- Delegated-token root proofs use `RootProof::IcChainKeyBatchSignatureV1` in
+- Root delegation proofs use `RootProof::IcChainKeyBatchSignatureV1` in
   hard-cut mode.
 - Root chain-key proof batches are signed by root through the management
   canister ECDSA API.
@@ -279,14 +252,13 @@ Important status outcomes:
 For `missing`, configure the issuer through `ConfigureIssuer` with the intended
 Fleet audience and grants. For `disabled`, review and enable that same issuer
 configuration when issuance is intended. A missing issuer-local proof with
-enabled Root configuration is fetched automatically on token preparation.
-For `batch_pending`, allow the root timer or lazy repair path to finish before
+enabled Root configuration is installed by Root renewal or explicit provisioning.
+For `batch_pending`, allow the root timer to finish before
 forcing additional work. For `batch_failed`, inspect `latest_batch.failure` and
 allow the recorded retry to run. For `proof_unavailable`, use the application
 root readiness facade after install/reinstall or wait for root renewal. For
 `drift_detected`, first re-check status to rule out local metadata or transport
-staleness. If drift persists, repair by letting root chain-key renewal or issuer
-lazy repair install a fresh active proof.
+staleness. If drift persists, repair by letting root chain-key renewal install a fresh active proof.
 
 ## Expected Failures
 
@@ -304,7 +276,7 @@ lazy repair install a fresh active proof.
 | `DriftDetected` | Issuer-observed active proof differs from root-managed renewal state. |
 An unregistered issuer is a topology failure, not missing proof material. Do
 not add a caller-supplied proof bypass. Restore topology first, then use root
-renewal, issuer lazy repair, or the root readiness facade to install proof
+renewal or the root readiness facade to install proof
 material derived from the registered policy and renewal template.
 
 ## Validation
@@ -328,7 +300,7 @@ substitute a directly installed single-root fixture.
 
 - [Read the Authentication feature guide](../features/authentication/README.md)
 - [Review the authentication architecture](../architecture/authentication.md)
-- [Review the delegated-token contract](../contracts/AUTH_DELEGATED_SIGNATURES.md)
+- [Review the Root delegation contract](../contracts/AUTH_DELEGATED_SIGNATURES.md)
 - [Browse Operations](README.md)
 - [Browse all documentation](../README.md)
 - [Back to the main README](../../README.md)

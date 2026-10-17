@@ -23,6 +23,7 @@ pub const MANIFEST_LIMITS: ArgumentLimits = ArgumentLimits {
 };
 pub const CONFIGURATION_LIMITS: ArgumentLimits = ArgumentLimits {
     max_bytes: 16_384,
+    skipping_quota: 0,
     ..REQUEST_LIMITS
 };
 pub const ENVELOPE_LIMITS: ArgumentLimits = ArgumentLimits {

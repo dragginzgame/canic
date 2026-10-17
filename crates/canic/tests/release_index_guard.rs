@@ -105,12 +105,36 @@ fn release_index_guard_accepts_complete_release_files() {
 
     write_file(&root, "release-validation.json", "{}\n");
     run_git(&root, &["add", "release-validation.json"]);
+    for lock in [
+        "integrations/blob-service/consumer/Cargo.lock",
+        "integrations/blob-service/embedded-consumer/Cargo.lock",
+    ] {
+        write_file(&root, lock, "# projected release lock\n");
+        run_git(&root, &["add", lock]);
+    }
 
     let output = run_guard(&root);
 
     assert!(
         output.status.success(),
         "guard should accept release-only index\n{}",
+        output_text(&output)
+    );
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn release_index_guard_rejects_unowned_consumer_lock() {
+    let root = create_repo("release-index-unowned-lock");
+    let lock = "integrations/blob-service/consumer/other/Cargo.lock";
+    write_file(&root, lock, "# unowned lock\n");
+    run_git(&root, &["add", lock]);
+
+    let output = run_guard(&root);
+
+    assert!(
+        !output.status.success(),
+        "guard should reject locks outside the release inventory\n{}",
         output_text(&output)
     );
     let _ = fs::remove_dir_all(root);

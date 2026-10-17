@@ -15,6 +15,12 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum RestoreCommandError {
+    #[error("restore operation {sequence} omits original issued command custody")]
+    RestoreMissingOriginalCommandCustody { sequence: usize },
+
+    #[error(transparent)]
+    RestoreCommandCustody(#[from] canic_backup::persistence::CommandLifetimeLockError),
+
     #[error("{0}")]
     Usage(String),
 
@@ -232,6 +238,10 @@ impl From<RestoreRunnerError> for RestoreCommandError {
     )]
     fn from(error: RestoreRunnerError) -> Self {
         match error {
+            RestoreRunnerError::MissingOriginalCommandCustody { sequence } => {
+                Self::RestoreMissingOriginalCommandCustody { sequence }
+            }
+            RestoreRunnerError::CommandCustody(error) => Self::RestoreCommandCustody(error),
             RestoreRunnerError::ArtifactStageChecksum { sequence, source } => {
                 Self::RestoreArtifactStageChecksum { sequence, source }
             }

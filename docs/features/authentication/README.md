@@ -20,17 +20,19 @@ application token never becomes controller or Fleet authority.
 
 ## What It Provides
 
-- guards that protect public canister methods by caller, infrastructure role,
-  or represented user
-- reusable signed tokens that a receiving canister can verify locally
-- root-managed chain-key delegation proof renewal
-- issuer canister-signature proofs and bounded replay protection
-- optional root-signed role attestation
-- session identities that do not replace the calling canister's infrastructure
-  permissions
+- synchronous caller, topology and infrastructure-authority guards
+- Root-managed chain-key delegation proof provisioning and renewal
+- Root-signed role attestations with local verification
 
-Cargo features and `canic.toml` settings are both explicit. Issuer and verifier
-roles must opt into the runtime capabilities they use.
+Portable application authentication uses Fleet Root-managed enrollment and
+IC Auth's session engine. Its endpoint integration is unfinished; application
+session admission is unavailable. Bounded storage and restoration fixtures are
+implementation evidence, not a live login service. Track completion in
+[#491](https://github.com/dragginzgame/canic/issues/491).
+
+Custom guards implement synchronous `canic::access::AccessCheck`. Admission uses
+local state and supplied proofs; issuance and renewal may perform asynchronous
+calls outside admission.
 
 ## Boundary
 
@@ -42,7 +44,7 @@ an application token into controller or Fleet authority.
 ## Continue From Here
 
 - [Authentication architecture](../../architecture/authentication.md)
-- [Receiver-local caller authority proposal](../../architecture/authentication.md#receiver-local-caller-authority--design-proposal-2026-10-03)
+- [Receiver-local caller authority](../../architecture/authentication.md#receiver-local-caller-authority--accepted-contract)
 - [Delegated-signature contract](../../contracts/AUTH_DELEGATED_SIGNATURES.md)
 - [Access architecture](../../contracts/ACCESS_ARCHITECTURE.md)
 - [Authentication configuration](../../../CONFIG.md#authdelegated_tokens)

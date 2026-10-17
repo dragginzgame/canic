@@ -3765,8 +3765,12 @@ async fn query_managed_binding(
         .with_arg(CanisterStatusRequestFragment::Binding)?
         .execute()
         .await
-        .map_err(|_error| {
-            InternalError::public(canic_contracts::diagnostics::codes::STATE_UNAVAILABLE)
+        .map_err(|error| {
+            error.with_dependency_failure(
+                canister,
+                protocol::CANIC_OBSERVABILITY,
+                "managed_binding",
+            )
         })?;
     let result: Result<CanisterStatusResponseFragment, Error> =
         call.candid().map_err(|_error| {
@@ -4183,8 +4187,12 @@ async fn query_component_runtime_status(
         ))?
         .execute()
         .await
-        .map_err(|_error| {
-            InternalError::public(canic_contracts::diagnostics::codes::STATE_UNAVAILABLE)
+        .map_err(|error| {
+            error.with_dependency_failure(
+                canister,
+                protocol::CANIC_CONTROL_STATUS,
+                "component_runtime_status",
+            )
         })?;
     let result: Result<CanisterStatusResponseFragment, Error> =
         call.candid().map_err(|_error| {
@@ -4213,8 +4221,12 @@ async fn require_component_runtime_ready(
         .with_arg(CanisterStatusRequestFragment::Readiness)?
         .execute()
         .await
-        .map_err(|_error| {
-            InternalError::public(canic_contracts::diagnostics::codes::STATE_UNAVAILABLE)
+        .map_err(|error| {
+            error.with_dependency_failure(
+                canister,
+                protocol::CANIC_OBSERVABILITY,
+                "component_readiness",
+            )
         })?;
     let result: Result<CanisterStatusResponseFragment, Error> =
         call.candid().map_err(|_error| {
@@ -4446,8 +4458,8 @@ async fn configure_target_component_runtime(
         .with_arg(CanisterCommandFragment::ConfigureRuntime(request))?
         .execute()
         .await
-        .map_err(|_error| {
-            InternalError::public(canic_contracts::diagnostics::codes::STATE_UNAVAILABLE)
+        .map_err(|error| {
+            error.with_dependency_failure(canister, protocol::CANIC_COMMAND, "configure_runtime")
         })?;
     let result: Result<CanisterCommandResponseFragment, Error> =
         call.candid().map_err(|_error| {

@@ -6,154 +6,177 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.111.1]
+## [0.112.0]
 
-- Select the developer hook-install destination explicitly before adopting
-  Shared Tooling's required `--consumer` argument.
-  [Detailed notes](docs/changelog/0.111.md).
+Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
+
+### ⚠️ Breaking
+
+- **Memory runtime:** adopt Memory 0.44 with one Canic-owned runtime and injected
+  component handles. Allocation reports derive byte totals from measured pages
+  and buckets; the storage-format hard cut requires a clean reinstall.
+
+- **Host filesystem APIs:** adopt Host 0.23's explicit publication, path-resolution
+  and lock-acquisition APIs, preserving write permissions and operation exclusion.
+  Candid normalization uses Host Text directly.
+
+- **Application Auth hard cut:** remove delegated-token issuance/retrieval,
+  `auth::authenticated(...)` guards, and delegated-token session commands/status.
+  Root proof provisioning and role attestations remain supported. Portable Auth
+  enrollment and endpoint integration remain unfinished; application session
+  admission is unavailable ([#491](https://github.com/dragginzgame/canic/issues/491)).
+
+- **Runtime contracts:** use explicit host memory composition and synchronous
+  access guards; Auth/Backup reexports and wide performance fields change Rust
+  types. Memory allocation slots use checked numeric IDs and declarations drop
+  unused labels. Memory diagnostics expose one current snapshot and use the current bootstrap
+  policy contract; provisioning failures
+  add structured dependency evidence.
+- **Upgrade action:** rebuild clients and the complete Canic family against the
+  selected contracts, update guard and memory providers, and cleanly reinstall
+  across releases. Same-release interruption recovery remains supported.
+
+### 🔧 Changed
+
+- **Developer setup:** select the hook-install destination explicitly before
+  adopting Shared Tooling's required `--consumer` argument
+  ([PR #588](https://github.com/dragginzgame/canic/pull/588)).
+
+- **Release checks:** include the shared version validator in isolated release
+  fixtures so preflight and failure-recovery checks can run after tooling updates.
+  Align record-export checks with the crate-private storage boundary.
+
+- **Diagnostic lookup:** distinguish out-of-range numbers from malformed codes
+  ([#547](https://github.com/dragginzgame/canic/issues/547)).
+
+- **Auth status:** emit delegation-proof status only for issuer-capable canisters,
+  avoiding empty Candid types in local-authorization-only applications.
+
+- **Auth enrollment:** adopt Auth 0.7, introduce the Root-managed enrollment
+  contract and separate transport callers from account identity in session/replay
+  projections. Persist login denial atomically with session admission/logout
+  and preserve its original account binding on repeated logout. Restoration
+  rejects conflicting session/login records.
+  Enrollment delivery and endpoint integration remain unfinished
+  ([#491](https://github.com/dragginzgame/canic/issues/491)).
+- **Builds:** IC Build 0.9 owns bounded Cargo metadata/tree observations,
+  declaration caching, artifact retention and selected input evidence. Canic
+  retains release admission, recipe selection and observation budgets; embedded
+  fixture normalization uses the same canonical metadata owner
+  ([Build #33 — Share Cargo observations](https://github.com/dragginzgame/ic-build/issues/33)).
+- **Build-script inputs:** bind retained include exports to exact Cargo producers
+  and the selected recipe, preserving external-input change and discovery refusals
+  ([#553 — Scope retained build-script exports](https://github.com/dragginzgame/canic/issues/553)).
+- **Restore:** IC Backup and Host own original command custody, bounded process
+  capture and guarded reference release. Backup record acquisition shares bounded
+  Host reads; publication and acquisition enforce the same 64 MiB document limit.
+- **Record decoding:** share required-nullable JSON decoding and Backup timestamp
+  parsing across validation and CLI reports, retaining each caller's error policy.
+- **Backup staging:** use Host's private directory creation and parent sync for
+  download and restore staging; retain Canic's journal and cleanup policy.
+- **Blob and authentication:** shared owners supply endpoint declarations,
+  installation memory, continuity checks, certificate issuance, proof verification
+  and session machinery; Canic retains
+  endpoint admission, lifecycle and Fleet authority.
+- **Blob composition:** align published Blob 0.27.1 and both private consumers
+  with Memory 0.41; refresh the embedded allocation fixture and qualify dedicated,
+  embedded and production initialization recovery on the selected runtime graph.
+- **Provisioning diagnostics:** retain exact rejection evidence and approved
+  resume inputs ([#516 — Expose failed provisioning dependencies](https://github.com/dragginzgame/canic/issues/516)).
+- **Funding replies:** decode the Registry response once, preserving typed remote
+  rejection ([#436 — Fix Registry reply decoding in cycles funding](https://github.com/dragginzgame/canic/issues/436)).
+- **Contributor tools:** adopt Shared Tooling 0.15.0, Host 0.19 and Testkit 0.46;
+  repair CI/dev installer callers after shared wrapper retirement
+  ([#563 — Converge CI and maintainer setup](https://github.com/dragginzgame/canic/issues/563)).
+
+### ➕ Added
+
+- **Checkpoint SDK:** provide durable participant transitions and exact Root
+  authentication, including public checkpoint bindings. **Limitation:** live backup
+  creation remains unavailable while coordinated capture is implemented
+  ([#550 — Coordinated Fleet backup checkpoints](https://github.com/dragginzgame/canic/issues/550)).
 
 ## [0.111.0] - 2026-10-10
 
 Detailed notes: [docs/changelog/0.111.md](docs/changelog/0.111.md)
 
-- Consolidate contracts, adopt upstream Auth/Backup/Host tooling and deliver Blob
-  with the coherent Canic family. Fix retained child startup retries and
-  release-lock propagation. **Breaking:** adopt key-only Memory pools and current
-  contract paths; rebuild clients, prepare the selected Testkit runner and
-  Binaryen 133, and cleanly reinstall across releases
-  ([#354](https://github.com/dragginzgame/canic/issues/354),
-  [#33](https://github.com/dragginzgame/canic/issues/33),
-  [#459](https://github.com/dragginzgame/canic/issues/459),
-  [#444](https://github.com/dragginzgame/canic/issues/444),
-  [#458](https://github.com/dragginzgame/canic/issues/458),
-  [#461](https://github.com/dragginzgame/canic/issues/461),
-  [#491](https://github.com/dragginzgame/canic/issues/491),
-  [#498](https://github.com/dragginzgame/canic/issues/498),
-  [#505](https://github.com/dragginzgame/canic/issues/505),
-  [#510](https://github.com/dragginzgame/canic/issues/510),
-  [#511](https://github.com/dragginzgame/canic/issues/511),
-  [Shared #108](https://github.com/dragginzgame/shared-tooling/issues/108)).
+### ⚠️ Breaking
+
+- **Contracts and memory:** move shared Rust contracts to `canic-contracts` and
+  replace numeric memory partitions with key-based pools and namespace grants.
+- **Blob:** publish the adapter with the Canic family; capacity replies distinguish
+  tenant, physical and billing limits, and composition uses explicit memory grants.
+- **Upgrade action:** update imports, memory providers and Blob clients; rebuild
+  the family and cleanly reinstall across releases. Same-release recovery remains.
+
+### 🔧 Changed
+
+- **Startup:** resume retained child-start operations without another create
+  request, preserving their original identity and retry bounds
+  ([#505 — Resume child startup until readiness](https://github.com/dragginzgame/canic/issues/505)).
+- **Host and Auth:** share proof and Merkle verification, bounded process output,
+  file publication and artifact recovery with their upstream owners.
+- **Contributor tools:** select Testkit from the lockfile, prepare its runner and
+  Binaryen 133 explicitly, and retain complete interrupted-worker evidence.
+
+### 🩹 Fixed
+
+- **Publication:** distinguish unavailable registry lookups from absence before
+  attempting uploads ([#462 — Stop publication on unavailable registry lookup](https://github.com/dragginzgame/canic/issues/462)).
+- **Observatory:** use declared capabilities before querying Coordinator cost
+  evidence ([#439 — Use declared Coordinator observation capabilities](https://github.com/dragginzgame/canic/issues/439)).
 
 ## [0.110.54] - 2026-10-08
 
 Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
-- Consolidate shared tooling and local readiness, preserve test diagnostics and
-  live progress, and prepare Blob adapter registry packaging
-  ([#444](https://github.com/dragginzgame/canic/issues/444)).
+### 🔧 Changed
+
+- **Host mechanics:** share executable publication, checksum framing and install
+  limits. Local readiness handles chunked HTTP replies within its existing bounds
+  ([#458 — Share Host mechanisms](https://github.com/dragginzgame/canic/issues/458)).
+- **Blob packaging:** prepare the adapter for registry publication while consumers
+  retain their own configuration and deployment authority.
+
+### 🩹 Fixed
+
+- **Test evidence:** show progress while workers run and retain full output on
+  failure or interruption ([#492 — Stream progress without pipe buffering](https://github.com/dragginzgame/canic/issues/492),
+  [#474 — Retain complete PocketIC failure evidence](https://github.com/dragginzgame/canic/issues/474)).
+- **Managed helpers:** borrow the caller-owned governed PocketIC server.
 
 ## [0.110.53] - 2026-10-08
 
 Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
-- Adopt published IC Backup for artifact checksums, no-follow traversal and private
-  staging; remove the copied filesystem engine and retain publication/recovery
-  boundaries. **Breaking for checksum-error callers:** traversal errors use the
-  shared typed cause through `ArtifactChecksumError::Artifact`; tree names require UTF-8
-  ([#488](https://github.com/dragginzgame/canic/issues/488)).
+### ⚠️ Breaking
 
-- Prepare the locked Cargo dependency cache before offline release validation,
-  preserving explicit offline policy and existing dependency selections
-  ([#486](https://github.com/dragginzgame/canic/issues/486)).
+- **Public contracts:** change checksum and response error matching, remove
+  `durable_io`, simplify Memory ledger diagnostics and replace direct performance
+  enter/exit hooks with scoped measurements.
+- **Application startup and Blob:** bind initialization to the allocated target,
+  compile named receiver permissions and move embedded Blob APIs into the
+  independent adapter.
+- **Required action and historical boundary:** rebuild direct callers and
+  diagnostic clients, select the independent Blob adapter, and cleanly reinstall.
+  These hard cuts were recorded as requiring a minor release despite the selected
+  0.110.53 patch; this presentation change preserves that recorded conflict.
 
-- Accept Wasm code sections up to the IC's current 12 MiB ceiling while
-  preserving pre-publication rejection and artifact-set protection
-  ([#476](https://github.com/dragginzgame/canic/issues/476)).
+### 🔧 Changed
 
-- **Breaking; incompatible with the selected patch target:** adopt `ic-memory`'s
-  current ownership ledger. Diagnostic consumers must replace history
-  fields with current schema metadata; earlier installations require clean
-  reinstall. This change requires a minor release
-  ([#459](https://github.com/dragginzgame/canic/issues/459)).
+- **Shared owners:** adopt IC Backup filesystem/checksum engines, Host artifact and
+  process mechanics, Metrics arithmetic and Timer callback contracts.
+- **Release and development tools:** prepare locked dependencies before offline
+  validation, retain exact release evidence and consolidate tool setup, hooks,
+  auditing and platform admission through Shared Tooling.
 
-- **Breaking for direct Core instrumentation callers:** isolate endpoint and
-  checkpoint instruction accounting across async calls. Replace direct enter/exit
-  hooks with scoped measurements; background checkpoints require an owned context
-  ([#99](https://github.com/dragginzgame/canic/issues/99)).
+### 🩹 Fixed
 
-- Adopt arithmetic-only `ic-metrics 0.2` and `ic-timers 0.14`; read counter 1 through the
-  existing CDK adapter ([ic-metrics #10](https://github.com/dragginzgame/ic-metrics/issues/10)).
-
-- Adopt management-canister types `0.11` in the controlled HTTP runtime probe,
-  preserving its existing pricing and cycle budget.
-
-- Reuse performance keys during repeated observations and collect reports in the
-  map's existing order ([#456](https://github.com/dragginzgame/canic/issues/456),
-  [#451](https://github.com/dragginzgame/canic/issues/451)).
-
-- Adopt published IC Host Tooling 0.4 for artifact inspection,
-  filesystem publication and locks, executable resolution and Candid formats.
-  Remove Canic's copied durable-file engine and public `durable_io` surface;
-  direct callers use `ic-host-fs`. Preserve Canic admission, install limits and
-  journal ordering. Stream gzip publication and file hashing through shared
-  mechanics; use the shared strict lowercase digest parser and encoder.
-  Delegate Backup stream hashing/copy, bounded evidence reads and path observations.
-  Use the shared bounded filesystem readers and typed lock errors; delegate
-  Observatory query capture and remove its copied process engine.
-  Delegate Wasm transform staging to Host 0.4.1 and Observatory rendering limits
-  to the shared bounded writer, preserving artifact and output validation.
-  Bound compiled Candid capture and delegate process-evidence stream collection.
-  Require Host 0.4.6 for the macOS publication fix; compare gzip without a second
-  Wasm allocation, share chunk identities and stream generated lock-seed JSON.
-  Delegate build-input and local executable fingerprints to the shared reader.
-  **Breaking for response-error callers:** match the shared codec error through
-  `IcpJsonResponseError::Envelope` instead of local JSON/hex variants.
-  These public hard cuts add to the minor-release requirement
-  ([#458](https://github.com/dragginzgame/canic/issues/458)).
-
-- Adopt reviewed shared repository tool setup and pin checks, shared pinned CI
-  installers, Cargo version/inheritance and formatter probes, local lock rewriting,
-  portable digests, isolated RustSec preparation and explicit-cutoff tag maintenance.
-  Verify snapshots independently, bind release pushes to the captured URL and
-  inspect CI by exact commit. Replace stale native CI selection with guarded
-  recovery tests. Reject Make modes that skip execution or ignore failures;
-  delegate retained validation logs and timings and adopt common setup/LOC Make
-  recipes, retiring copied logger tests and tool installs/pins. Preserve
-  App, framework-fixture and independent blob layouts through approved boundaries.
-  Isolate formatting hooks, validate retained release commits and
-  consolidate audit methods;
-  preserve macOS Binaryen's runtime library during Rust installation
-  ([#461](https://github.com/dragginzgame/canic/issues/461),
-  [#473](https://github.com/dragginzgame/canic/issues/473),
-  [#454](https://github.com/dragginzgame/canic/issues/454),
-  [#453](https://github.com/dragginzgame/canic/issues/453),
-  [#460](https://github.com/dragginzgame/canic/issues/460),
-  [#464](https://github.com/dragginzgame/canic/issues/464)).
-
-- `0.110.53` extracts blob storage into an optional embedded or dedicated adapter,
-  adds per-canister application usage reporting, and repairs operator commands,
-  repository hygiene, development-tool discovery, validation and build evidence,
-  memory registration and public framework APIs, including guarded Root membership
-  discovery, compiled receiver permissions and publication-bound application
-  startup. It also adopts ic-memory’s checked allocation-slot API and ic-timers’
-  policy-specific callback results, and aligns dedicated and embedded blob consumers
-  with published Blob 0.17.1 on the current Memory/Timers/Metrics runtime and its
-  documented pinning exception, retaining durable target-bound production initialization.
-  Refresh the embedded allocation peer after the selected runtime dependency update
-  ([#444](https://github.com/dragginzgame/canic/issues/444),
-  [#450](https://github.com/dragginzgame/canic/issues/450)).
-
-- Use published `ic-metrics` arithmetic and the existing CDK call-context reader,
-  preserving endpoint attribution and report shapes ([#447](https://github.com/dragginzgame/canic/issues/447));
-  standardize SemVer release commands with exact
-  resume, atomic branch/tag pushes and retained artifacts. Validation-only
-  release failures restart through the same command after source corrections.
-- Repair fixture guard inputs and compare Wasm crypto package sets
-  independently of host locale ([#448](https://github.com/dragginzgame/canic/issues/448)).
-- Restore ingress-payload test compilation against the current testkit pool API
-  and align its lockfile with the selected `0.18` dependency line
-  ([#449](https://github.com/dragginzgame/canic/issues/449)).
-- Complete native coverage for caller-authority startup and Root membership;
-  align canonical interfaces and cache, release and operator fixtures with
-  current contracts, bind release fixtures to their own identity and explain
-  release version mismatches ([#450](https://github.com/dragginzgame/canic/issues/450)).
-- Refresh the embedded allocation peer and its provenance for the selected
-  dependency graph after runtime updates; keep ordinary preflight read-only
-  and preserve external lock selections during fixture version
-  normalization ([#450](https://github.com/dragginzgame/canic/issues/450)).
-- Align managed admission fixtures with publication-bound application startup
-  and bound imported-pool cycle assertions by observed IC idle charges
-  ([#457](https://github.com/dragginzgame/canic/issues/457)).
+- **Operator and runtime behavior:** repair funding resume inputs, caller-authority
+  publication, Root membership discovery, per-canister usage reporting and async
+  instruction accounting.
+- **Validation:** align current contracts and fixtures, preserve typed failures
+  and complete progress evidence, and refresh the embedded allocation peer.
 
 ## [0.110.x] - Fleet Runtime Contraction
 

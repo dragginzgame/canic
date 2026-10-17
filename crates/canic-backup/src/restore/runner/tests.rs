@@ -338,6 +338,20 @@ fn pending_claim_publication_selects_each_restore_recovery_policy() {
         restore_operation_label(&operation.operation),
         operation_label
     );
+    let _command = if matches!(
+        operation.operation,
+        RestoreApplyOperationKind::UploadSnapshot
+            | RestoreApplyOperationKind::StopCanister
+            | RestoreApplyOperationKind::LoadSnapshot
+            | RestoreApplyOperationKind::StartCanister
+    ) {
+        let command = CommandLifetimeLock::acquire(&config.journal, operation.sequence as u64)
+            .expect("retain custody before original claim");
+        journal.command_custody.push(command.record().clone());
+        Some(command)
+    } else {
+        None
+    };
     if operation.operation == RestoreApplyOperationKind::UploadSnapshot {
         journal
             .mark_upload_snapshot_pending_at(
@@ -1145,9 +1159,11 @@ fn execute_preserves_pending_operation_while_command_is_in_flight() {
     journal.operations[0].snapshot_ids_before = Some(Vec::new());
     journal.ready_operations = 0;
     journal.pending_operations = 1;
-    write_restore_apply_journal(&fixture.config.journal, &journal).expect("write pending journal");
-    let command_lock =
-        CommandLifetimeLock::acquire(&fixture.config.journal, 0).expect("hold prior command lock");
+    let command_lock = CommandLifetimeLock::acquire(&fixture.config.journal, 0)
+        .expect("hold original command custody");
+    journal.command_custody.push(command_lock.record().clone());
+    write_restore_apply_journal(&fixture.config.journal, &journal)
+        .expect("write original pending journal");
     let mut executor = InspectingExecutor {
         original_source: fixture.root.join("artifacts/root"),
         observed_input: None,
@@ -1265,6 +1281,7 @@ fn pending_verification_fixture(prefix: &str) -> (PathBuf, RestoreRunnerConfig) 
         verification_kind: Some("status".to_string()),
     };
     let journal = RestoreApplyJournal {
+        command_custody: Vec::new(),
         journal_version: 1,
         backup_id: "backup-pending-verification".to_string(),
         ready: true,
@@ -1334,6 +1351,7 @@ fn finish_upload_fixture(root: PathBuf, checksum: ArtifactChecksum) -> UploadFix
         verification_kind: None,
     };
     let journal = RestoreApplyJournal {
+        command_custody: Vec::new(),
         journal_version: 1,
         backup_id: "backup-private-stage".to_string(),
         ready: true,
@@ -1380,6 +1398,15 @@ fn ready_restore_operation_fixture(
         None,
         &checksum,
     );
+    let config = runner_test_config(&root);
+    let prior_command = (target_sequence > 0).then(|| {
+        CommandLifetimeLock::acquire(&config.journal, 0)
+            .expect("retain prior upload command custody")
+    });
+    let command_custody = prior_command
+        .as_ref()
+        .map(|lock| vec![lock.record().clone()])
+        .unwrap_or_default();
     let (operations, operation_receipts) = if target_sequence == 0 {
         (vec![target_operation], Vec::new())
     } else {
@@ -1422,6 +1449,7 @@ fn ready_restore_operation_fixture(
             }
         });
     let journal = RestoreApplyJournal {
+        command_custody,
         journal_version: 1,
         backup_id: "backup-restore-claim".to_string(),
         ready: true,
@@ -1437,7 +1465,7 @@ fn ready_restore_operation_fixture(
         operations,
         operation_receipts,
     };
-    let config = runner_test_config(&root);
+    drop(prior_command);
     write_restore_apply_journal(&config.journal, &journal).expect("write restore claim journal");
     UploadFixture { root, config }
 }
@@ -1595,6 +1623,11 @@ fn pending_lifecycle_fixture(
 ) -> (PathBuf, RestoreRunnerConfig) {
     let root = temp_dir(prefix);
     fs::create_dir_all(&root).expect("create fixture root");
+    let config = runner_test_config(&root);
+    let original_command = CommandLifetimeLock::acquire(&config.journal, 0)
+        .expect("retain original lifecycle custody");
+    let original_record = original_command.record().clone();
+    drop(original_command);
     let operation = RestoreApplyJournalOperation {
         sequence: 0,
         operation: operation_kind,
@@ -1613,6 +1646,7 @@ fn pending_lifecycle_fixture(
         verification_kind: None,
     };
     let journal = RestoreApplyJournal {
+        command_custody: vec![original_record],
         journal_version: 1,
         backup_id: "backup-pending-lifecycle".to_string(),
         ready: true,
@@ -1630,7 +1664,6 @@ fn pending_lifecycle_fixture(
         operations: vec![operation],
         operation_receipts: Vec::new(),
     };
-    let config = runner_test_config(&root);
     write_restore_apply_journal(&config.journal, &journal).expect("write pending journal");
     (root, config)
 }
@@ -1639,6 +1672,15 @@ fn pending_load_fixture() -> (PathBuf, RestoreRunnerConfig) {
     let root = temp_dir("canic-restore-pending-load");
     fs::create_dir_all(&root).expect("create fixture root");
     let checksum = ArtifactChecksum::from_bytes(SOURCE_BYTES);
+    let config = runner_test_config(&root);
+    let prior_upload =
+        CommandLifetimeLock::acquire(&config.journal, 0).expect("retain original upload custody");
+    let original_upload = prior_upload.record().clone();
+    let prior_load =
+        CommandLifetimeLock::acquire(&config.journal, 1).expect("retain original load custody");
+    let original_load = prior_load.record().clone();
+    drop(prior_load);
+    drop(prior_upload);
     let upload = RestoreApplyJournalOperation {
         sequence: 0,
         operation: RestoreApplyOperationKind::UploadSnapshot,
@@ -1695,6 +1737,7 @@ fn pending_load_fixture() -> (PathBuf, RestoreRunnerConfig) {
     );
     let operations = vec![upload, load];
     let journal = RestoreApplyJournal {
+        command_custody: vec![original_upload, original_load],
         journal_version: 1,
         backup_id: "backup-pending-load".to_string(),
         ready: true,
@@ -1710,7 +1753,6 @@ fn pending_load_fixture() -> (PathBuf, RestoreRunnerConfig) {
         operations,
         operation_receipts: vec![upload_receipt],
     };
-    let config = runner_test_config(&root);
     write_restore_apply_journal(&config.journal, &journal).expect("write pending load journal");
     (root, config)
 }
@@ -1742,7 +1784,7 @@ impl RestoreRunnerCommandExecutor for ScriptedExecutor {
     fn execute(
         &mut self,
         command: &RestoreApplyRunnerCommand,
-        _command_lifetime: Option<crate::persistence::CommandLifetimeHandle>,
+        _command_lifetime: Option<&mut crate::persistence::CommandLifetimeLock>,
     ) -> Result<RestoreRunnerCommandOutput, std::io::Error> {
         self.commands.push(command.clone());
         self.outputs
@@ -1761,7 +1803,7 @@ impl RestoreRunnerCommandExecutor for PreconditionBarrierExecutor {
     fn execute(
         &mut self,
         command: &RestoreApplyRunnerCommand,
-        _command_lifetime: Option<crate::persistence::CommandLifetimeHandle>,
+        _command_lifetime: Option<&mut crate::persistence::CommandLifetimeLock>,
     ) -> Result<RestoreRunnerCommandOutput, std::io::Error> {
         assert_eq!(command.args.get(1).map(String::as_str), Some("status"));
         hold_at_acknowledged_barrier(&self.handshake_root);
@@ -1776,7 +1818,7 @@ impl RestoreRunnerCommandExecutor for FailingPreconditionExecutor {
     fn execute(
         &mut self,
         command: &RestoreApplyRunnerCommand,
-        _command_lifetime: Option<crate::persistence::CommandLifetimeHandle>,
+        _command_lifetime: Option<&mut crate::persistence::CommandLifetimeLock>,
     ) -> Result<RestoreRunnerCommandOutput, std::io::Error> {
         self.calls += 1;
         assert_eq!(command.args.get(1).map(String::as_str), Some("status"));
@@ -1806,7 +1848,7 @@ impl RestoreRunnerCommandExecutor for DirectoryInspectingExecutor {
     fn execute(
         &mut self,
         command: &RestoreApplyRunnerCommand,
-        _command_lifetime: Option<crate::persistence::CommandLifetimeHandle>,
+        _command_lifetime: Option<&mut crate::persistence::CommandLifetimeLock>,
     ) -> Result<RestoreRunnerCommandOutput, std::io::Error> {
         if is_snapshot_inventory_command(command) {
             return Ok(snapshot_inventory_output(&[]));
@@ -1857,7 +1899,7 @@ impl RestoreRunnerCommandExecutor for SuccessfulExecutor {
     fn execute(
         &mut self,
         _command: &RestoreApplyRunnerCommand,
-        _command_lifetime: Option<crate::persistence::CommandLifetimeHandle>,
+        _command_lifetime: Option<&mut crate::persistence::CommandLifetimeLock>,
     ) -> Result<RestoreRunnerCommandOutput, std::io::Error> {
         self.calls += 1;
         Ok(RestoreRunnerCommandOutput {
@@ -1892,7 +1934,7 @@ impl RestoreRunnerCommandExecutor for InspectingExecutor {
     fn execute(
         &mut self,
         command: &RestoreApplyRunnerCommand,
-        _command_lifetime: Option<crate::persistence::CommandLifetimeHandle>,
+        _command_lifetime: Option<&mut crate::persistence::CommandLifetimeLock>,
     ) -> Result<RestoreRunnerCommandOutput, std::io::Error> {
         if is_snapshot_inventory_command(command) {
             return Ok(snapshot_inventory_output(&self.snapshot_ids));
@@ -1920,15 +1962,10 @@ impl RestoreRunnerCommandExecutor for InspectingExecutor {
 #[cfg(unix)]
 mod command_in_flight {
     use super::*;
-    use crate::persistence::{CommandLifetimeHandle, CommandLifetimeLockError};
-    use rustix::io::{FdFlags, fcntl_getfd, fcntl_setfd};
+    use crate::persistence::{CommandLifetimeLock, CommandLifetimeLockError};
     use std::{
         fs::File,
-        io,
-        os::{
-            fd::{BorrowedFd, FromRawFd},
-            unix::process::CommandExt,
-        },
+        os::fd::FromRawFd,
         process::Child,
         thread,
         time::{Duration, Instant},
@@ -1938,7 +1975,7 @@ mod command_in_flight {
     const ROOT_ENV: &str = "CANIC_TEST_RESTORE_IN_FLIGHT_ROOT";
     const OPERATION_ENV: &str = "CANIC_TEST_RESTORE_IN_FLIGHT_OPERATION";
     const HANDSHAKE_ENV: &str = "CANIC_TEST_RESTORE_IN_FLIGHT_HANDSHAKE";
-    const COMMAND_FD_ENV: &str = "CANIC_TEST_RESTORE_IN_FLIGHT_FD";
+    const COMMAND_FD_ENV: &str = ic_backup::ops::persistence::COMMAND_CUSTODY_DESCRIPTOR_ENV;
 
     #[test]
     fn orphaned_command_tree_blocks_restart_for_every_mutating_restore_operation() {
@@ -2172,7 +2209,7 @@ mod command_in_flight {
         fn execute(
             &mut self,
             command: &RestoreApplyRunnerCommand,
-            command_lifetime: Option<CommandLifetimeHandle>,
+            command_lifetime: Option<&mut CommandLifetimeLock>,
         ) -> Result<RestoreRunnerCommandOutput, std::io::Error> {
             if !command.mutates {
                 if is_snapshot_inventory_command(command) {
@@ -2195,10 +2232,11 @@ mod command_in_flight {
                 ])
                 .env(ROLE_ENV, "external")
                 .env(OPERATION_ENV, restore_operation_label(&self.operation))
-                .env(HANDSHAKE_ENV, &self.handshake_root)
-                .env(COMMAND_FD_ENV, command_lifetime.raw_fd().to_string());
-            inherit_command_descriptor(&mut external, command_lifetime);
-            let status = external.status()?;
+                .env(HANDSHAKE_ENV, &self.handshake_root);
+            let status = command_lifetime
+                .spawn(external)
+                .map_err(std::io::Error::other)?
+                .wait()?;
             if !status.success() {
                 return Err(std::io::Error::other(format!(
                     "external restore command failed: {status}"
@@ -2231,7 +2269,7 @@ mod command_in_flight {
     fn wait_for_command_quiescence(journal: &Path, sequence: usize) {
         let deadline = Instant::now() + Duration::from_secs(5);
         loop {
-            match CommandLifetimeLock::acquire(journal, sequence) {
+            match CommandLifetimeLock::acquire(journal, sequence as u64) {
                 Ok(lock) => {
                     lock.finish().expect("finish restore quiescence probe");
                     return;
@@ -2242,25 +2280,6 @@ mod command_in_flight {
                 Err(error) => panic!("restore command tree did not become quiescent: {error:?}"),
             }
         }
-    }
-
-    fn inherit_command_descriptor(command: &mut Command, handle: CommandLifetimeHandle) {
-        let raw_fd = handle.raw_fd();
-        // SAFETY: the runner-owned command lock keeps the descriptor valid
-        // through spawn; child setup only clears close-on-exec on that fd.
-        unsafe {
-            command.pre_exec(move || {
-                // SAFETY: the runner retains the descriptor through spawn.
-                let fd = BorrowedFd::borrow_raw(raw_fd);
-                let mut flags = fcntl_getfd(fd).map_err(errno_to_io)?;
-                flags.remove(FdFlags::CLOEXEC);
-                fcntl_setfd(fd, flags).map_err(errno_to_io)
-            });
-        }
-    }
-
-    fn errno_to_io(error: rustix::io::Errno) -> io::Error {
-        io::Error::from_raw_os_error(error.raw_os_error())
     }
 
     fn required_operation() -> RestoreApplyOperationKind {
@@ -2297,4 +2316,102 @@ mod command_in_flight {
     fn external_complete_marker(root: &Path) -> PathBuf {
         root.join("external-complete")
     }
+}
+
+#[test]
+fn pending_command_requires_its_original_custody_before_reconciliation() {
+    let (root, config) = pending_lifecycle_fixture(
+        "canic-restore-missing-custody",
+        RestoreApplyOperationKind::StopCanister,
+    );
+    let mut journal: RestoreApplyJournal =
+        serde_json::from_slice(&fs::read(&config.journal).unwrap()).unwrap();
+    journal.command_custody.clear();
+    write_restore_apply_journal(&config.journal, &journal).unwrap();
+    let before = fs::read(&config.journal).unwrap();
+    let mut executor = ScriptedExecutor::new([]);
+    std::assert_matches!(
+        restore_run_execute_with_executor(&config, &mut executor),
+        Err(RestoreRunnerError::MissingOriginalCommandCustody { sequence: 0 })
+    );
+    assert!(executor.commands.is_empty());
+    assert_eq!(fs::read(&config.journal).unwrap(), before);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn terminal_replay_refuses_replaced_original_custody_without_effects() {
+    let fixture = upload_fixture("canic-restore-replaced-original-custody");
+    let mut executor = ScriptedExecutor::new([
+        snapshot_inventory_output(&[]),
+        RestoreRunnerCommandOutput {
+            success: true,
+            status: "0".to_string(),
+            stdout: br#"{"snapshot_id":"uploaded-snapshot"}"#.to_vec(),
+            stderr: Vec::new(),
+        },
+    ]);
+    assert!(
+        restore_run_execute_with_executor(&fixture.config, &mut executor)
+            .unwrap()
+            .complete
+    );
+    let before = fs::read(&fixture.config.journal).unwrap();
+    let journal: RestoreApplyJournal = serde_json::from_slice(&before).unwrap();
+    let original = &journal.command_custody[0];
+    let path = PathBuf::from(format!(
+        "{}.command-{}.lock",
+        original.journal().display(),
+        original.operation_sequence()
+    ));
+    fs::rename(&path, path.with_extension("original")).unwrap();
+    fs::write(&path, b"").unwrap();
+    let mut replay = ScriptedExecutor::new([]);
+    std::assert_matches!(
+        restore_run_execute_with_executor(&fixture.config, &mut replay),
+        Err(RestoreRunnerError::Persistence(
+            crate::restore::RestorePersistenceError::ReferenceRelease(
+                ic_backup::ops::persistence::RestoreReferenceReleaseError::Custody(
+                    crate::persistence::CommandLifetimeLockError::IdentityChanged { .. }
+                )
+            )
+        ))
+    );
+    assert!(replay.commands.is_empty());
+    assert_eq!(fs::read(&fixture.config.journal).unwrap(), before);
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
+fn retry_retains_original_custody_requirement_after_failed_state_is_rearmed() {
+    let fixture = upload_fixture("canic-restore-retry-missing-original");
+    let mut failed = ScriptedExecutor::new([
+        snapshot_inventory_output(&[]),
+        RestoreRunnerCommandOutput {
+            success: false,
+            status: "7".into(),
+            stdout: Vec::new(),
+            stderr: Vec::new(),
+        },
+    ]);
+    std::assert_matches!(
+        restore_run_execute_with_executor(&fixture.config, &mut failed),
+        Err(RestoreRunnerError::CommandFailed { sequence: 0, .. })
+    );
+    let mut journal: RestoreApplyJournal =
+        serde_json::from_slice(&fs::read(&fixture.config.journal).unwrap()).unwrap();
+    journal.command_custody.clear();
+    journal
+        .retry_failed_operation_at(0, Some("unix:2".into()))
+        .unwrap();
+    write_restore_apply_journal(&fixture.config.journal, &journal).unwrap();
+    let before = fs::read(&fixture.config.journal).unwrap();
+    let mut replay = ScriptedExecutor::new([]);
+    std::assert_matches!(
+        restore_run_execute_with_executor(&fixture.config, &mut replay),
+        Err(RestoreRunnerError::MissingOriginalCommandCustody { sequence: 0 })
+    );
+    assert!(replay.commands.is_empty());
+    assert_eq!(fs::read(&fixture.config.journal).unwrap(), before);
+    fs::remove_dir_all(fixture.root).unwrap();
 }

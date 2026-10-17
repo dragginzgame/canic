@@ -27,7 +27,7 @@ thread_local! {
     // Keeping it lazy prevents non-root canisters from opening root-only state.
     static ICP_REFILL_RECORDS: RefCell<IcpRefillRecords> =
         RefCell::new(IcpRefillRecords::new(StableBtreeMap::init(
-            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.cycles.icp_refill_records.v1"),
+            crate::memory::open(crate::memory::keys::CYCLES_ICP_REFILL_RECORDS_V1),
         )));
 }
 

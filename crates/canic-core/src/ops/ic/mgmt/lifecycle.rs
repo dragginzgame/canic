@@ -26,7 +26,14 @@ impl MgmtOps {
             wasm_module_hash,
             args,
         ))
-        .await?;
+        .await
+        .map_err(|error| {
+            error.with_dependency_failure(
+                target_canister,
+                "install_chunked_code",
+                "install_chunked_code",
+            )
+        })?;
 
         log!(
             Topic::CanisterLifecycle,
@@ -43,7 +50,11 @@ impl MgmtOps {
         chunk: Vec<u8>,
     ) -> Result<Vec<u8>, InternalError> {
         let chunk_len = chunk.len();
-        let hash = management_call(MgmtInfra::upload_chunk(canister_pid, chunk)).await?;
+        let hash = management_call(MgmtInfra::upload_chunk(canister_pid, chunk))
+            .await
+            .map_err(|error| {
+                error.with_dependency_failure(canister_pid, "upload_chunk", "upload_chunk")
+            })?;
 
         #[expect(clippy::cast_precision_loss)]
         let bytes_kb = chunk_len as f64 / 1_000.0;
@@ -58,12 +69,24 @@ impl MgmtOps {
 
     /// List the chunk hashes currently stored in one canister's chunk store.
     pub async fn stored_chunks(canister_pid: Principal) -> Result<Vec<Vec<u8>>, InternalError> {
-        management_call(MgmtInfra::stored_chunks(canister_pid)).await
+        management_call(MgmtInfra::stored_chunks(canister_pid))
+            .await
+            .map_err(|error| {
+                error.with_dependency_failure(canister_pid, "stored_chunks", "stored_chunks")
+            })
     }
 
     /// Clear the chunk store of one canister.
     pub async fn clear_chunk_store(canister_pid: Principal) -> Result<(), InternalError> {
-        management_call(MgmtInfra::clear_chunk_store(canister_pid)).await?;
+        management_call(MgmtInfra::clear_chunk_store(canister_pid))
+            .await
+            .map_err(|error| {
+                error.with_dependency_failure(
+                    canister_pid,
+                    "clear_chunk_store",
+                    "clear_chunk_store",
+                )
+            })?;
 
         log!(
             Topic::CanisterLifecycle,
@@ -89,7 +112,11 @@ impl MgmtOps {
 
     /// Start one verified installation through the observed management boundary.
     pub async fn start_canister(canister_pid: Principal) -> Result<(), InternalError> {
-        management_call(MgmtInfra::start_canister(canister_pid)).await
+        management_call(MgmtInfra::start_canister(canister_pid))
+            .await
+            .map_err(|error| {
+                error.with_dependency_failure(canister_pid, "start_canister", "start_canister")
+            })
     }
 
     /// Stops a canister via the management canister.

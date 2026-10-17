@@ -20,9 +20,17 @@ use std::{cell::RefCell, collections::BTreeMap};
 
 const ROLE_ATTESTATION_SIGNATURE_CBOR_MAX_BYTES: usize = 256 * 1024;
 const ROLE_ATTESTATION_PUBLIC_KEY_DER_MAX_BYTES: usize = 4 * 1024;
+const MAX_PENDING_ROLE_ATTESTATIONS: usize = 4096;
+const PENDING_CLEANUP_BUDGET: usize = 128;
+
+/// Product custody retained separately from the shared signature leaf.
+struct PendingRoleAttestation {
+    operation_id: [u8; 32],
+    prepared: PreparedRootRoleAttestation,
+}
 
 thread_local! {
-    static PENDING_ROLE_ATTESTATIONS: RefCell<BTreeMap<PendingRoleAttestationKey, PreparedRootRoleAttestation>> =
+    static PENDING_ROLE_ATTESTATIONS: RefCell<BTreeMap<PendingRoleAttestationKey, PendingRoleAttestation>> =
         const { RefCell::new(BTreeMap::new()) };
 }
 
@@ -63,22 +71,44 @@ impl AuthOps {
             epoch: input.epoch,
         };
         let payload_hash = crypto::role_attestation_hash(&payload)?;
-        let prepared_root_proof = Self::prepare_root_canister_signature(
-            input.operation_id,
-            payload_hash,
-            input.subject,
-            input.issued_at_ns,
-        )?;
+        let key = PendingRoleAttestationKey::new(payload_hash, input.subject);
+        PENDING_ROLE_ATTESTATIONS.with_borrow_mut(|pending| {
+            let expired = pending
+                .iter()
+                .filter(|(_, value)| value.prepared.retrieval_expires_at_ns <= input.issued_at_ns)
+                .take(PENDING_CLEANUP_BUDGET)
+                .map(|(key, _)| key.clone())
+                .collect::<Vec<_>>();
+            for key in expired {
+                pending.remove(&key);
+            }
+            if !pending.contains_key(&key) && pending.len() >= MAX_PENDING_ROLE_ATTESTATIONS {
+                return Err(AuthValidationError::Auth(
+                    "pending role attestation capacity exhausted".into(),
+                ));
+            }
+            Ok(())
+        })?;
+        let prepared_root_proof =
+            Self::prepare_root_canister_signature(payload_hash, input.issued_at_ns)?;
         let prepared = PreparedRootRoleAttestation {
             payload,
             payload_hash,
             retrieval_expires_at_ns: prepared_root_proof.retrieval_expires_at_ns,
         };
         PENDING_ROLE_ATTESTATIONS.with_borrow_mut(|pending| {
-            pending.insert(
-                PendingRoleAttestationKey::new(payload_hash, input.subject),
-                prepared.clone(),
-            );
+            let retained = pending
+                .entry(key)
+                .or_insert_with(|| PendingRoleAttestation {
+                    operation_id: input.operation_id,
+                    prepared: prepared.clone(),
+                });
+            if retained.prepared.retrieval_expires_at_ns <= input.issued_at_ns {
+                *retained = PendingRoleAttestation {
+                    operation_id: input.operation_id,
+                    prepared: prepared.clone(),
+                };
+            }
         });
 
         Ok(prepared)
@@ -89,15 +119,22 @@ impl AuthOps {
         payload_hash: [u8; 32],
     ) -> Result<SignedRoleAttestation, InternalError> {
         let key = PendingRoleAttestationKey::new(payload_hash, caller);
-        let prepared = PENDING_ROLE_ATTESTATIONS.with_borrow(|pending| pending.get(&key).cloned());
-        let prepared = prepared.ok_or_else(|| {
-            AuthValidationError::Auth(
-                "role attestation was not prepared or has been pruned".to_string(),
-            )
+        let prepared = PENDING_ROLE_ATTESTATIONS.with_borrow(|pending| {
+            let retained = pending.get(&key).ok_or_else(|| {
+                AuthValidationError::Auth(
+                    "role attestation was not prepared or has been pruned".to_string(),
+                )
+            })?;
+            if IcOps::now_nanos() >= retained.prepared.retrieval_expires_at_ns {
+                return Err(AuthValidationError::Auth(format!(
+                    "root proof retrieval window expired for operation {:?}",
+                    retained.operation_id,
+                )));
+            }
+            Ok(retained.prepared.clone())
         })?;
         let root_proof = Self::get_root_canister_signature_proof(
             payload_hash,
-            caller,
             IcOps::canister_self(),
             IcOps::now_nanos(),
         )?;
@@ -116,7 +153,7 @@ impl AuthOps {
         now_ns: u64,
         min_accepted_epoch: u64,
     ) -> Result<RoleAttestation, AuthOpsError> {
-        verify_role_attestation_proof(attestation)?;
+        verify_role_attestation_proof(attestation, now_ns)?;
 
         verify::verify_role_attestation_claims(
             &attestation.payload,
@@ -138,7 +175,7 @@ impl AuthOps {
         now_ns: u64,
         min_accepted_epoch: u64,
     ) -> Result<RoleAttestation, AuthOpsError> {
-        verify_role_attestation_proof(attestation)?;
+        verify_role_attestation_proof(attestation, now_ns)?;
 
         verify::verify_local_subnet_role_attestation_claims(
             &attestation.payload,
@@ -153,7 +190,10 @@ impl AuthOps {
     }
 }
 
-fn verify_role_attestation_proof(attestation: &SignedRoleAttestation) -> Result<(), AuthOpsError> {
+fn verify_role_attestation_proof(
+    attestation: &SignedRoleAttestation,
+    now_ns: u64,
+) -> Result<(), AuthOpsError> {
     validate_role_attestation_proof_bounds(&attestation.root_proof)?;
     let payload_hash = crypto::role_attestation_hash(&attestation.payload)
         .map_err(|err| AuthSignatureError::AttestationProofInvalid(err.to_string()))?;
@@ -164,6 +204,7 @@ fn verify_role_attestation_proof(attestation: &SignedRoleAttestation) -> Result<
         &attestation.root_proof,
         verifier_cfg.root_canister_id,
         &verifier_cfg.ic_root_public_key_raw,
+        now_ns,
     )
     .map_err(|err| AuthSignatureError::AttestationProofInvalid(err.to_string()))?;
     Ok(())

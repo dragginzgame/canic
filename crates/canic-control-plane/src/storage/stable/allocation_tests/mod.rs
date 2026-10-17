@@ -13,7 +13,7 @@ use super::{
 use crate::ids::{TemplateChunkKey, TemplateId, TemplateReleaseKey, TemplateVersion};
 use canic_contracts::dto::memory::MemoryAllocationBinding;
 use canic_core::{
-    api::{memory::MemoryQuery, runtime::MemoryRuntimeApi},
+    api::memory::MemoryQuery,
     cdk::{
         bounded_cell::BoundedCell,
         structures::{BTreeMap, Memory, Storable, Vec as StableVec, VectorMemory, storable::Bound},
@@ -126,7 +126,8 @@ fn template_payload_layout_tradeoff_is_measured() {
 
 #[test]
 fn bootstrap_keeps_control_plane_stores_lazy_until_selected_access() {
-    MemoryRuntimeApi::bootstrap_registry().expect("commit control-plane declarations");
+    canic_core::memory::bootstrap(crate::memory::framework())
+        .expect("commit control-plane declarations");
     let before = MemoryQuery::allocations().unwrap();
     let fixture = before
         .memories

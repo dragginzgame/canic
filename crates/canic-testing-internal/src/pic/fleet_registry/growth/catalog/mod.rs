@@ -57,7 +57,11 @@ fn retain_catalog(workspace: &Path, source: SyntheticCatalog) {
         now,
     )
     .with_minimum_assurance(CatalogAssurance::MultiEndpointAgreement);
-    load_subnet_catalog_detailed_with_source(&request, &source)
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("synthetic catalog runtime")
+        .block_on(load_subnet_catalog_detailed_with_source(&request, &source))
         .expect("validate both synthetic endpoint snapshots and publish the catalog");
     canic_host::subnet_catalog::load_cached_mainnet_subnet_catalog(workspace, now)
         .expect("validate synthetic placement before generator refresh can occur");

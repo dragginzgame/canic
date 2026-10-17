@@ -108,7 +108,13 @@ if find crates/canic-core/src/access -name '*.rs' -print0 \
     failed=1
 fi
 
-if rg "pub use .*Record" crates/canic-core/src | rg -v "pub\\(crate\\)"; then
+# Storage-local reexports inherit the crate-private module boundary.
+if ! rg -q '^pub\(crate\) mod storage;' crates/canic-core/src/lib.rs; then
+    echo "the storage module must remain crate-private" >&2
+    failed=1
+fi
+
+if rg "pub use .*Record" crates/canic-core/src --glob '!crates/canic-core/src/storage/**' | rg -v "pub\\(crate\\)"; then
     echo "record types must not be publicly re-exported" >&2
     failed=1
 fi

@@ -13,9 +13,10 @@ use std::{
     cell::RefCell,
     cmp::Ordering,
     collections::BTreeMap,
-    future::{Future, poll_fn},
-    pin::pin,
+    future::Future,
+    pin::{Pin, pin},
     rc::Rc,
+    task::{Context, Poll},
 };
 
 thread_local! {
@@ -23,7 +24,7 @@ thread_local! {
     static ACTIVE_CONTEXT: RefCell<Option<Rc<RefCell<PerfContext>>>> = const { RefCell::new(None) };
 
     /// Aggregated perf counters keyed by kind (endpoint vs timer) and label.
-    static PERF_TABLE: RefCell<BTreeMap<PerfKey, PerfSlot>> = const { RefCell::new(BTreeMap::new()) };
+    static PERF_TABLE: RefCell<BTreeMap<PerfKey, ic_metrics::MeasurementAggregate>> = const { RefCell::new(BTreeMap::new()) };
 
 
 }
@@ -168,16 +169,6 @@ struct PerfFrame {
 }
 
 ///
-/// PerfSlot
-///
-
-#[derive(Default)]
-struct PerfSlot {
-    count: u64,
-    total_instructions: u64,
-}
-
-///
 /// PerfEntry
 /// Aggregated perf counters keyed by kind (endpoint vs timer) and label.
 ///
@@ -186,7 +177,7 @@ struct PerfSlot {
 pub struct PerfEntry {
     pub key: PerfKey,
     pub count: u64,
-    pub total_instructions: u64,
+    pub total_instructions: u128,
 }
 
 /// Record a counter under the provided key.
@@ -194,7 +185,7 @@ pub fn record(key: PerfKey, delta: u64) {
     PERF_TABLE.with(|table| {
         let mut table = table.borrow_mut();
         let slot = table.entry(key).or_default();
-        ic_metrics::record_sample(&mut slot.count, &mut slot.total_instructions, delta);
+        slot.record(delta);
     });
 }
 
@@ -219,7 +210,7 @@ fn record_borrowed(key: PerfKeyRef<'_>, delta: u64) {
         } else {
             table.entry(key.into_owned()).or_default()
         };
-        ic_metrics::record_sample(&mut slot.count, &mut slot.total_instructions, delta);
+        slot.record(delta);
     });
 }
 
@@ -251,6 +242,7 @@ impl ContextActivation {
 }
 
 impl Drop for ContextActivation {
+    #[inline(never)]
     fn drop(&mut self) {
         ACTIVE_CONTEXT.with_borrow_mut(|active| *active = self.previous.take());
     }
@@ -306,13 +298,69 @@ impl Drop for EndpointScope {
     reason = "IC futures and invocation contexts stay on one canister thread"
 )]
 pub async fn with_async_context<F: Future>(future: F) -> F::Output {
-    let context = PerfContext::new();
-    let mut future = pin!(future);
-    poll_fn(|task| {
-        let _activation = ContextActivation::enter(Rc::clone(&context));
-        future.as_mut().poll(task)
-    })
+    PerfFuture {
+        future: pin!(future),
+        measurement: AsyncMeasurement::new(None),
+    }
     .await
+}
+
+/// Shared accounting across concrete endpoint and background future types.
+struct AsyncMeasurement {
+    context: Rc<RefCell<PerfContext>>,
+    call: Option<EndpointCall>,
+    scope: Option<EndpointScope>,
+}
+
+impl AsyncMeasurement {
+    // Keep frame management out of each handler's monomorphized poll body.
+    #[inline(never)]
+    fn new(call: Option<EndpointCall>) -> Self {
+        Self {
+            context: PerfContext::new(),
+            call,
+            scope: None,
+        }
+    }
+
+    #[inline(never)]
+    fn enter(&mut self) -> ContextActivation {
+        let activation = ContextActivation::enter(Rc::clone(&self.context));
+        if self.call.is_some() && self.scope.is_none() {
+            self.scope = Some(EndpointScope::start_at(
+                Rc::clone(&self.context),
+                perf_counter(),
+            ));
+        }
+        activation
+    }
+
+    #[inline(never)]
+    fn finish(&mut self) {
+        if let Some(scope) = self.scope.take() {
+            scope.finish_at(self.call.expect("measured endpoint call"), perf_counter());
+        }
+    }
+}
+
+/// The handler is pinned by its async owner; only polling depends on its type.
+struct PerfFuture<F> {
+    future: F,
+    measurement: AsyncMeasurement,
+}
+
+impl<F: Future + Unpin> Future for PerfFuture<F> {
+    type Output = F::Output;
+
+    fn poll(self: Pin<&mut Self>, task: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.get_mut();
+        let _activation = this.measurement.enter();
+        let result = Pin::new(&mut this.future).poll(task);
+        if result.is_ready() {
+            this.measurement.finish();
+        }
+        result
+    }
 }
 
 pub(crate) fn measure_endpoint<T>(call: EndpointCall, invoke: impl FnOnce() -> T) -> T {
@@ -330,15 +378,17 @@ pub(crate) fn measure_endpoint<T>(call: EndpointCall, invoke: impl FnOnce() -> T
     clippy::future_not_send,
     reason = "IC endpoint futures retain single-threaded invocation state"
 )]
+#[expect(
+    clippy::redundant_async_block,
+    reason = "the owned await drops the handler inside its active measurement scope"
+)]
 pub(crate) async fn measure_endpoint_async<F: Future>(call: EndpointCall, future: F) -> F::Output {
-    with_async_context(async {
-        let context =
-            ACTIVE_CONTEXT.with_borrow(|active| active.clone().expect("active future poll"));
-        let scope = EndpointScope::start_at(context, perf_counter());
-        let result = future.await;
-        scope.finish_at(call, perf_counter());
-        result
-    })
+    PerfFuture {
+        // Own the await so the handler is dropped inside the active poll,
+        // before its final instruction count is recorded.
+        future: pin!(async { future.await }),
+        measurement: AsyncMeasurement::new(Some(call)),
+    }
     .await
 }
 
@@ -380,8 +430,8 @@ pub fn entries() -> Vec<PerfEntry> {
             .iter()
             .map(|(key, slot)| PerfEntry {
                 key: key.clone(),
-                count: slot.count,
-                total_instructions: slot.total_instructions,
+                count: slot.samples(),
+                total_instructions: slot.total(),
             })
             .collect()
     })
@@ -409,8 +459,8 @@ pub(crate) fn bounded_entries(limit: usize) -> Result<Vec<PerfEntry>, crate::Int
                 }
                 Ok(PerfEntry {
                     key: key.clone(),
-                    count: slot.count,
-                    total_instructions: slot.total_instructions,
+                    count: slot.samples(),
+                    total_instructions: slot.total(),
                 })
             })
             .collect()
@@ -430,6 +480,54 @@ pub fn reset() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::{cell::Cell, future::poll_fn};
+
+    /// Observes the context when an owned, completed future is destroyed.
+    struct DropObservedFuture {
+        context: Option<Rc<RefCell<PerfContext>>>,
+        dropped_in_scope: Rc<Cell<bool>>,
+    }
+
+    impl Future for DropObservedFuture {
+        type Output = ();
+
+        fn poll(mut self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<()> {
+            self.context = ACTIVE_CONTEXT.with_borrow(Clone::clone);
+            Poll::Ready(())
+        }
+    }
+
+    impl Drop for DropObservedFuture {
+        fn drop(&mut self) {
+            let in_scope = ACTIVE_CONTEXT.with_borrow(|active| {
+                active
+                    .as_ref()
+                    .zip(self.context.as_ref())
+                    .is_some_and(|(active, owned)| {
+                        Rc::ptr_eq(active, owned) && owned.as_ref().borrow().frames.len() == 1
+                    })
+            });
+            self.dropped_in_scope.set(in_scope);
+        }
+    }
+
+    #[test]
+    fn completed_endpoint_future_drops_before_accounting_finishes() {
+        reset();
+        let dropped_in_scope = Rc::new(Cell::new(false));
+        let mut future = Box::pin(measure_endpoint_async(
+            call("drop_work", EndpointCallKind::Update),
+            DropObservedFuture {
+                context: None,
+                dropped_in_scope: Rc::clone(&dropped_in_scope),
+            },
+        ));
+        let mut task = Context::from_waker(futures::task::noop_waker_ref());
+        assert!(future.as_mut().poll(&mut task).is_ready());
+        assert!(dropped_in_scope.get());
+        assert_eq!(entry_for(EndpointCallKind::Update, "drop_work").count, 1);
+        assert!(ACTIVE_CONTEXT.with_borrow(Option::is_none));
+    }
 
     fn call(name: &'static str, kind: EndpointCallKind) -> EndpointCall {
         EndpointCall {
@@ -526,7 +624,7 @@ mod tests {
                 == expected
         );
         assert_eq!(observed[0].count, 2);
-        assert_eq!(observed[0].total_instructions, u64::MAX);
+        assert_eq!(observed[0].total_instructions, u128::from(u64::MAX) + 1);
         assert_eq!(observed[5].count, 2);
         assert_eq!(observed[5].total_instructions, 3);
         assert_eq!(observed[6].count, 1);
@@ -654,6 +752,114 @@ mod tests {
         assert!(!entries().iter().any(|entry| matches!(&entry.key,
             PerfKey::Checkpoint { scope, label } if scope == "cancelled" && label == "resume")));
         assert!(ACTIVE_CONTEXT.with_borrow(Option::is_none));
+    }
+
+    #[test]
+    fn async_endpoint_completion_and_cancellation_preserve_the_enclosing_context() {
+        reset();
+        let parent = PerfContext::new();
+        let _active = ContextActivation::enter(Rc::clone(&parent));
+        let owned = Rc::new(RefCell::new(None));
+        let observed = Rc::clone(&owned);
+        let mut pending = true;
+        let mut completed = Box::pin(measure_endpoint_async(
+            call("completed", EndpointCallKind::Update),
+            poll_fn(move |_| {
+                ACTIVE_CONTEXT.with_borrow(|active| {
+                    let context = active.as_ref().unwrap();
+                    assert_eq!(context.as_ref().borrow().frames.len(), 1);
+                    *observed.borrow_mut() = Some(Rc::clone(context));
+                });
+                measure_endpoint(call("nested", EndpointCallKind::Query), || {});
+                if std::mem::take(&mut pending) {
+                    Poll::Pending
+                } else {
+                    Poll::Ready(String::from("result"))
+                }
+            }),
+        ));
+        let cancelled_context = Rc::new(RefCell::new(None));
+        let observed = Rc::clone(&cancelled_context);
+        let mut cancelled = Box::pin(measure_endpoint_async(
+            call("cancelled", EndpointCallKind::Update),
+            poll_fn(move |_| {
+                *observed.borrow_mut() = ACTIVE_CONTEXT.with_borrow(Clone::clone);
+                Poll::<()>::Pending
+            }),
+        ));
+        let mut task = Context::from_waker(futures::task::noop_waker_ref());
+        // Construction is lazy, and pending/cancelled invocations have no sample.
+        assert!(owned.as_ref().borrow().is_none());
+        assert!(completed.as_mut().poll(&mut task).is_pending());
+        assert!(cancelled.as_mut().poll(&mut task).is_pending());
+        assert!(ACTIVE_CONTEXT.with_borrow(|active| Rc::ptr_eq(active.as_ref().unwrap(), &parent)));
+        drop(cancelled);
+        assert!(
+            cancelled_context
+                .as_ref()
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .borrow()
+                .frames
+                .is_empty()
+        );
+        assert_eq!(
+            completed.as_mut().poll(&mut task),
+            Poll::Ready(String::from("result"))
+        );
+        assert!(ACTIVE_CONTEXT.with_borrow(|active| Rc::ptr_eq(active.as_ref().unwrap(), &parent)));
+        assert!(
+            owned
+                .as_ref()
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .borrow()
+                .frames
+                .is_empty()
+        );
+        assert_eq!(entry_for(EndpointCallKind::Update, "completed").count, 1);
+        assert_eq!(entry_for(EndpointCallKind::Query, "nested").count, 2);
+        assert!(!entries().iter().any(|entry| matches!(&entry.key,
+            PerfKey::Endpoint { name, .. } if name == "cancelled")));
+    }
+
+    #[test]
+    fn async_endpoint_unwind_restores_parent_and_discards_its_frame() {
+        reset();
+        let parent = PerfContext::new();
+        let _active = ContextActivation::enter(Rc::clone(&parent));
+        let owned = Rc::new(RefCell::new(None));
+        let observed = Rc::clone(&owned);
+        let mut future = Box::pin(measure_endpoint_async(
+            call("panicked", EndpointCallKind::Update),
+            poll_fn(move |_| -> Poll<()> {
+                *observed.borrow_mut() = ACTIVE_CONTEXT.with_borrow(Clone::clone);
+                panic!("fixture unwind");
+            }),
+        ));
+        let mut task = Context::from_waker(futures::task::noop_waker_ref());
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            future.as_mut().poll(&mut task)
+        }));
+        assert!(result.is_err());
+        assert!(ACTIVE_CONTEXT.with_borrow(|active| Rc::ptr_eq(active.as_ref().unwrap(), &parent)));
+        drop(future);
+        assert!(
+            owned
+                .as_ref()
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .borrow()
+                .frames
+                .is_empty()
+        );
+        assert!(entries().is_empty());
     }
 
     #[test]

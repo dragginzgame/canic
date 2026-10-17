@@ -1076,6 +1076,98 @@ fn json_workflow_errors_keep_machine_output_and_typed_source() {
 }
 
 #[test]
+fn json_workflow_errors_resume_exact_approved_provisioning_with_dependency_evidence() {
+    use canic_contracts::{
+        dto::component_provisioning::ProvisioningFailureStage,
+        values::provisioning_failure::ProvisioningDependencyFailure,
+    };
+    let digest = "ab".repeat(32);
+    for reinstall in [false, true] {
+        let args = vec![
+            "ensure",
+            "miner",
+            "--__canic-environment",
+            "staging",
+            "--identity",
+            "operator",
+            "--__canic-icp",
+            "custom-icp",
+            "--desired",
+            "miner.toml",
+            "--source",
+            "source.json",
+            "--seed",
+            "seed.json",
+            "--apply",
+            &digest,
+            "--json",
+        ];
+        let mut options = EnsureOptions::parse(args.into_iter().map(OsString::from)).unwrap();
+        options.reinstall = reinstall;
+        let dependency = ProvisioningDependencyFailure {
+            target: candid::Principal::from_slice(&[2]),
+            method: canic_contracts::protocol::CANIC_WASM_STORE_COMMAND.into(),
+            step: "inspect_template".into(),
+            rejection_code: Some(5),
+            rejection_detail: Some("Store is stopped".into()),
+        };
+        let error = json_error(
+            FleetCommandError::Workflow(Box::new(EnsureWorkflowError::ProvisioningRetryPending {
+                root: candid::Principal::from_slice(&[1]),
+                stage: ProvisioningFailureStage::StoreStatus,
+                target: dependency.target,
+                operation_id: [3; 32],
+                diagnostic_code: 66,
+                dependency: Some(Box::new(dependency.clone())),
+                observations: 36,
+                failed_at_ns: 99,
+            })),
+            Some(&options),
+        );
+        let FleetCommandError::JsonReported { report, source } = error else {
+            panic!("JSON boundary")
+        };
+        assert!(matches!(source.as_ref(), FleetCommandError::Workflow(error)
+            if matches!(error.as_ref(), EnsureWorkflowError::ProvisioningRetryPending { operation_id, .. } if *operation_id == [3; 32])));
+        let json: serde_json::Value = serde_json::from_str(&report).unwrap();
+        assert_eq!(
+            json["provisioning_failure"]["dependency"],
+            serde_json::to_value(dependency).unwrap()
+        );
+        assert_eq!(
+            json["provisioning_failure"]["operation_id"],
+            "03".repeat(32)
+        );
+        assert_eq!(json["next_action"]["kind"], "resume");
+        assert_eq!(json["next_action"]["requires_approval"], false);
+        let expected = [
+            "--environment",
+            "staging",
+            "--icp",
+            "custom-icp",
+            "fleet",
+            "ensure",
+            "miner",
+            "--json",
+            "--identity",
+            "operator",
+            "--desired",
+            "miner.toml",
+            "--source",
+            "source.json",
+            "--seed",
+            "seed.json",
+            "--apply",
+            &digest,
+        ];
+        assert_eq!(
+            json["next_action"]["arguments"],
+            serde_json::to_value(expected).unwrap()
+        );
+    }
+}
+
+#[test]
 fn funding_observation_options_require_an_explicit_root_and_separate_approval() {
     let parse = |args: &[&str]| EnsureOptions::parse(args.iter().map(OsString::from));
     let review = parse(&["ensure", "staging", "--observe-funding", "root-a"]).unwrap();

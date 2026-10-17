@@ -7,8 +7,6 @@ mod process_fixture;
 use canic::{
     Error,
     api::intent::{BeginLocalIntentInput, IntentResourceKey, LocalIntentApi},
-    dto::auth::DelegatedToken,
-    ids::cap,
     prelude::*,
 };
 use std::{
@@ -85,7 +83,7 @@ fn reconstruct_application_timers() {
             *registration = Some(
                 ic_timers::register_once(
                     identity,
-                    ic_timers::DeclarationLifetime::Retained,
+                    ic_timers::TimerStart::Retained { initial: None },
                     |_context: ic_timers::OnceContext| async {
                         ic_timers::OnceRunResult::new(
                             ic_timers::TimerCompletion::no_work(),
@@ -100,7 +98,9 @@ fn reconstruct_application_timers() {
 
     let one_shot = ic_timers::register_once(
         application_timer_identity("timer-once"),
-        ic_timers::DeclarationLifetime::RemoveWhenStopped,
+        ic_timers::TimerStart::RemoveWhenStopped {
+            initial: ic_timers::TimerSchedule::After(Duration::from_secs(5)),
+        },
         |_context: ic_timers::OnceContext| async {
             timer_once().await;
             ic_timers::OnceRunResult::new(
@@ -110,9 +110,6 @@ fn reconstruct_application_timers() {
         },
     )
     .expect("register native application one-shot");
-    one_shot
-        .ensure_scheduled(ic_timers::TimerSchedule::After(Duration::from_secs(5)))
-        .expect("schedule native application one-shot");
     drop(one_shot);
 
     APPLICATION_INTERVAL_TIMER.with_borrow_mut(|current| {
@@ -120,7 +117,9 @@ fn reconstruct_application_timers() {
             application_timer_identity("timer-interval"),
             ic_timers::TimerCadence::new(Duration::from_secs(10))
                 .expect("valid native application cadence"),
-            ic_timers::DeclarationLifetime::RemoveWhenStopped,
+            ic_timers::TimerStart::RemoveWhenStopped {
+                initial: ic_timers::TimerSchedule::After(Duration::from_secs(10)),
+            },
             |_context: ic_timers::AfterCompletionContext| async {
                 timer_interval().await;
                 ic_timers::AfterCompletionRunResult::new(
@@ -130,15 +129,14 @@ fn reconstruct_application_timers() {
             },
         )
         .expect("register native application interval");
-        interval
-            .ensure_scheduled()
-            .expect("schedule native application interval");
         *current = Some(interval);
     });
 
     let cancelled = ic_timers::register_once(
         application_timer_identity("timer-cancelled"),
-        ic_timers::DeclarationLifetime::RemoveWhenStopped,
+        ic_timers::TimerStart::RemoveWhenStopped {
+            initial: ic_timers::TimerSchedule::After(Duration::from_secs(5)),
+        },
         |_context: ic_timers::OnceContext| async {
             timer_cancelled().await;
             ic_timers::OnceRunResult::new(
@@ -148,9 +146,6 @@ fn reconstruct_application_timers() {
         },
     )
     .expect("register cancellable native application timer");
-    cancelled
-        .ensure_scheduled(ic_timers::TimerSchedule::After(Duration::from_secs(5)))
-        .expect("schedule cancellable native application timer");
     cancelled.cancel().expect("cancel native application timer");
 }
 
@@ -210,7 +205,7 @@ async fn schedule_cost_probe_watchdog() -> Result<(), Error> {
             ic_timers::register_watchdog(
                 application_timer_identity("cost-watchdog"),
                 ic_timers::TimerCadence::new(Duration::from_secs(10)).expect("cost probe cadence"),
-                ic_timers::DeclarationLifetime::Retained,
+                ic_timers::TimerStart::Retained { initial: None },
                 |_context| {
                     if TRAP_COST_WATCHDOG.get() {
                         ic_cdk::trap("cost watchdog interruption probe");
@@ -272,7 +267,9 @@ async fn fill_timer_registry() -> Result<(u64, bool), Error> {
         .expect("valid capacity timer identity");
         if let Ok(registration) = ic_timers::register_once(
             identity,
-            ic_timers::DeclarationLifetime::RemoveWhenStopped,
+            ic_timers::TimerStart::RemoveWhenStopped {
+                initial: ic_timers::TimerSchedule::After(Duration::from_hours(24)),
+            },
             |_context: ic_timers::OnceContext| async {
                 ic_timers::OnceRunResult::new(
                     ic_timers::TimerCompletion::no_work(),
@@ -280,9 +277,6 @@ async fn fill_timer_registry() -> Result<(u64, bool), Error> {
                 )
             },
         ) {
-            registration
-                .ensure_scheduled(ic_timers::TimerSchedule::After(Duration::from_hours(24)))
-                .expect("schedule capacity timer");
             claims.push(registration);
             registered = registered.saturating_add(1);
         } else {
@@ -303,18 +297,6 @@ async fn reject_invalid_timer_identity() -> Result<bool, Error> {
         "x".repeat(ic_timers::MAX_TIMER_IDENTITY_COMPONENT_BYTES + 1),
     )
     .is_err())
-}
-
-#[canic_update(requires(auth::authenticated(cap::VERIFY)))]
-async fn test_verify_delegated_token(token: DelegatedToken) -> Result<(), Error> {
-    let _ = token;
-    if canic::access::env::build_network_local().is_err() {
-        return Err(Error::from_registered(
-            canic::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
-        ));
-    }
-
-    Ok(())
 }
 
 #[canic_query(public)]

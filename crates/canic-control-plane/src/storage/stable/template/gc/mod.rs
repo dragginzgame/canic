@@ -11,7 +11,7 @@ std::thread_local! {
     static WASM_STORE_GC_STATE: RefCell<
         Cell<WasmStoreGcStateRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(Cell::init(
-        canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.wasm_store.gc_state.v1"),
+        canic_core::memory::open(crate::memory::keys::WASM_STORE_GC_STATE_V1),
         WasmStoreGcStateRecord::default(),
     ));
 }

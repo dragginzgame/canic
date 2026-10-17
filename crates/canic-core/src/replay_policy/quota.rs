@@ -10,8 +10,6 @@ pub(super) const ROOT_CANISTER_SIGNATURE_PREPARE_QUOTA_V1: ReplayQuotaPolicyLabe
     ReplayQuotaPolicyLabel::new("root_canister_signature_prepare.quota.v1");
 pub(super) const ROOT_CHAIN_KEY_SIGNING_QUOTA_V1: ReplayQuotaPolicyLabel =
     ReplayQuotaPolicyLabel::new("root_chain_key_signing.quota.v1");
-pub(super) const ISSUER_CANISTER_SIGNATURE_PREPARE_QUOTA_V1: ReplayQuotaPolicyLabel =
-    ReplayQuotaPolicyLabel::new("issuer_canister_signature_prepare.quota.v1");
 pub(super) const DEPLOYMENT_QUOTA_V1: ReplayQuotaPolicyLabel =
     ReplayQuotaPolicyLabel::new("deployment.quota.v1");
 pub(super) const DEPLOYMENT_RESERVE_V1: ReplayCycleReservePolicyLabel =

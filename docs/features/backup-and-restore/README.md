@@ -44,7 +44,7 @@ digest. Malformed hashes and different artifact bytes still reject.
 IC Backup owns checksum-verified directory publication and recovery of an exact
 already-published tree. Canic retains the journal binding and only advances its
 receipt after that owner succeeds. Directory publication failures retain the
-upstream typed cause through `PersistenceError::ArtifactCommit`. This local
+upstream typed cause through `PersistenceError::Shared`. This local
 artifact support does not enable live backup creation.
 
 The local runner resolves the selected backup directory once before deriving
@@ -92,6 +92,13 @@ release its artifacts. Resume using its original journal location. Once the
 restore completes and its external commands have exited, the runner releases its
 reference. If interrupted at terminal publication, rerun the same journal to
 finish that release without repeating completed effects.
+
+Execution journals retain the original command-custody identity before dispatch.
+Retry and terminal release require that exact sidecar; a missing or replaced
+sidecar refuses without recreating custody. IC Backup owns descriptor inheritance,
+one spawn and quiescence. Host owns bounded output capture and child cleanup.
+Terminal reference release freshly validates the original journal and receipts
+while holding the original journal and command guards.
 
 Prune reports busy, restore-referenced and invalid layouts as skipped. A deletion
 failure is reported alongside any directories already removed and makes the

@@ -280,8 +280,9 @@ fn retry_deadline_changes_are_retained_without_claiming_remote_advancement() {
                     directory_confirmation_root_count: 1,
                     runtime_activated_root_count: 0,
                     component_count: 2,
-                    pending_root_failure: Some(FleetComponentProvisioningRootFailure {
+                    pending_root_failure: Some(Box::new(FleetComponentProvisioningRootFailure {
                         origin: Some(ProvisioningFailureOrigin {
+                            dependency: None,
                             failed_at_ns: 123,
                             retry_at_ns,
                             stage: ProvisioningFailureStage::ComponentMembership,
@@ -294,7 +295,7 @@ fn retry_deadline_changes_are_retained_without_claiming_remote_advancement() {
                         stage: FleetComponentProvisioningRetryStage::RuntimeActivation,
                         diagnostic_code: 137,
                         failed_at_ns: 124,
-                    }),
+                    })),
                 }),
             },
         });

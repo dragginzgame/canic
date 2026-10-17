@@ -47,8 +47,9 @@ pub struct FleetProvisioningProgress {
     /// Reviewed component occurrences with only owner-observed progress.
     pub components: Vec<FleetComponentProgress>,
     /// Latest retryable Root failure from this observation, not a new retry decision.
-    pub pending_root_failure:
-        Option<canic_contracts::dto::component_provisioning::FleetComponentProvisioningRootFailure>,
+    pub pending_root_failure: Option<
+        Box<canic_contracts::dto::component_provisioning::FleetComponentProvisioningRootFailure>,
+    >,
     pub phase: canic_contracts::dto::component_provisioning::FleetComponentProvisioningPhase,
     pub root_batch_count: u32,
     pub accepted_root_count: u32,

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared companions: scripts/ci/verify-file-checksum.sh scripts/ci/verify-evidence-checksums.sh scripts/ci/ic-tool-pins.awk
+# Shared companions: scripts/ci/verify-file-checksum.sh scripts/ci/verify-evidence-checksums.sh scripts/ci/ic-tool-pins.awk scripts/dev/tool-store.sh ci/ic-tools.tsv
 set -euo pipefail
 
 ROOT="${BASH_SOURCE[0]}"
@@ -27,9 +27,11 @@ while [[ $# -gt 0 ]]; do
 done
 [[ "$check" == false || "$preflight" == false ]] || { usage; exit 2; }
 [[ "$consumer" == /* ]] || consumer="$PWD/$consumer"
+case "$consumer" in *$'\n'*|*$'\r'*) echo 'consumer path contains CR/LF' >&2; exit 1 ;; esac
 consumer="$(cd -P "$consumer" && printf '%s/.' "$PWD")"
 consumer="${consumer%/.}"
-pins="${pins:-$consumer/ci/ic-tools.tsv}"
+case "$consumer" in *$'\n'*|*$'\r'*) echo 'resolved consumer path contains CR/LF' >&2; exit 1 ;; esac
+pins="${pins:-$ROOT/ci/ic-tools.tsv}"
 [[ -f "$pins" ]] || { echo "missing IC tool pins: $pins" >&2; exit 1; }
 [[ "$pins" == /* ]] || pins="$PWD/$pins"
 pins_name="${pins##*/}"
@@ -51,6 +53,27 @@ validate_pins() {
 selected_records="$(validate_pins "$pins")"
 # Platform and catalog admission only: no installed tools, downloads or writes.
 [[ "$preflight" == false ]] || exit 0
+# shellcheck source=scripts/dev/tool-store.sh
+source "$ROOT/scripts/dev/tool-store.sh"
+tool_store_init ic "$host
+$selected_records"
+
+ic_asset() {
+    case "$tool" in
+        quill)
+            repo=dfinity/quill; tag="v$version"; asset="quill-$os-$arch"; format=raw; member='' ;;
+        wasm-opt)
+            repo=WebAssembly/binaryen; tag="version_$version"; asset="binaryen-version_$version-$arch-$os.tar.gz"
+            format=binaryen; member="binaryen-version_$version" ;;
+        icp|didc|ic-wasm)
+            case "$tool" in
+                icp) repo=dfinity/icp-cli; tag="v$version"; package=icp-cli ;;
+                didc) repo=dfinity/candid; tag="didc-v$version"; package=didc ;;
+                ic-wasm) repo=dfinity/ic-wasm; tag="$version"; package=ic-wasm ;;
+            esac
+            asset="$package-$target.tar.xz"; format=xz; member="$package-$target/$tool" ;;
+    esac
+}
 
 version_check() {
     local executable="$1" tool="$2" version="$3" expected output
@@ -67,11 +90,51 @@ version_check() {
 }
 verify_bundle() (
     set -e
+    [[ -d "$1" && ! -L "$1" && ! -L "$1/bin" && ! -L "$1/lib" ]] || exit 1
     cd "$1" || exit 1
+    for receipt in pins.tsv host files.sha256; do
+        [[ -f "$receipt" && ! -L "$receipt" ]] || exit 1
+    done
     installed_records="$(validate_pins pins.tsv)" || exit 1
     [[ "$selected_records" == "$installed_records" ]] || exit 1
     [[ "$(cat host)" == "$host" ]] || exit 1
+    # Receipts may name only physical payloads under this bundle, never external
+    # paths or linked runtime libraries. Require every runtime file in the receipt.
+    perl -MFile::Find -e '
+        my %files;
+        find({no_chdir=>1,wanted=>sub {
+            -l $_ and die "linked IC payload\n";
+            $files{$_}=1 if -f $_;
+        }}, "bin", "lib");
+        open my $f,"<","files.sha256" or die $!;
+        while (<$f>) {
+            s/\n\z//;
+            /^[0-9a-f]{64}  ((?:bin|lib)\/[^\r\n]+)$/ or die "invalid IC receipt path\n";
+            delete $files{$1} or die "unexpected or duplicate IC payload\n";
+        }
+        keys(%files)==0 or die "unrecorded IC payload\n";
+    ' || exit 1
     bash "$ROOT/scripts/ci/verify-evidence-checksums.sh" files.sha256 >&2 || exit 1
+    # Authenticate against publisher-pinned archives too: a changed binary plus
+    # an edited local receipt must not become reusable across repositories.
+    while IFS=$'\t' read -r tool version selected_host digest || [[ -n "$tool" ]]; do
+        [[ "$tool" != \#* && "$selected_host" == "$host" ]] || continue
+        ic_asset
+        archive="$PWD/downloads/$tool/$asset"
+        [[ ! -L downloads && ! -L "downloads/$tool" && -f "$archive" && ! -L "$archive" ]] || exit 1
+        bash "$ROOT/scripts/ci/verify-file-checksum.sh" sha256 "$digest" "$archive" >&2 || exit 1
+        case "$format" in
+            raw) cmp -s "$archive" "bin/$tool" || exit 1 ;;
+            xz) tar -xOJf "$archive" "$member" | cmp -s - "bin/$tool" || exit 1 ;;
+            binaryen)
+                tar -xOzf "$archive" "$member/bin/wasm-opt" | cmp -s - bin/wasm-opt || exit 1
+                while IFS= read -r record; do
+                    file="${record#*  }"
+                    [[ "$file" == lib/* ]] || continue
+                    tar -xOzf "$archive" "$member/$file" | cmp -s - "$file" || exit 1
+                done < files.sha256 ;;
+        esac
+    done < pins.tsv
     while IFS=$'\t' read -r tool version selected_host digest || [[ -n "$tool" ]]; do
         [[ "$tool" != \#* && "$selected_host" == "$host" ]] || continue
         # Each executable must have a checksum before any version execution.
@@ -82,41 +145,18 @@ verify_bundle() (
 
 tool_root="$consumer/.tools"
 active="$tool_root/ic"
-[[ ! -L "$tool_root" ]] || { echo 'repository .tools may not be a symlink' >&2; exit 1; }
-if [[ -e "$active" && ! -L "$active" ]]; then
-    echo 'refusing to replace an unmanaged .tools/ic path' >&2; exit 1
-fi
-if [[ -L "$active" ]]; then
-    # Preserve trailing newlines so admission checks the literal link target.
-    selection="$(perl -e 'my $s=readlink($ARGV[0]); defined($s) or exit 1; print $s,"/."' "$active")"
-    selection="${selection%/.}"
-    [[ "$selection" =~ ^ic-set\.[[:alnum:]]+$ ]] || {
-        echo 'refusing an unmanaged .tools/ic link' >&2; exit 1;
-    }
-    [[ ! -L "$tool_root/$selection" ]] || { echo 'IC tool bundle may not be a symlink' >&2; exit 1; }
-    if verify_bundle "$tool_root/$selection"; then
-        printf '%s\n' "$active/bin"
-        exit 0
-    fi
+bundle="$(tool_store_verified_selection verify_bundle)"
+if [[ -n "$bundle" ]]; then
+    printf '%s\n' "$active/bin"
+    exit 0
 fi
 [[ "$check" == false ]] || { echo 'IC tools missing, changed or selected with different pins; run make install-ic-tools' >&2; exit 1; }
 for command in curl tar gzip perl; do command -v "$command" >/dev/null; done
-mkdir -p "$tool_root"
-lock="$tool_root/.ic-tools.lock"
-mkdir "$lock" 2>/dev/null || { echo "IC tool installation already locked: $lock" >&2; exit 1; }
-stage=""
-link="$lock/selected"
-finish() {
-    local status=$?
-    rm -f "$link" "$lock/owner"
-    rmdir "$lock"
-    if [[ "$status" != 0 && -n "$stage" ]]; then echo "Failed tool installation retained: $stage" >&2; fi
-}
-trap finish EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
-printf 'pid=%s\nconsumer=%s\n' "$$" "$consumer" > "$lock/owner"
-stage="$(mktemp -d "$tool_root/ic-set.XXXXXX")"
+tool_store_prepare_install verify_bundle
+if [[ -z "$stage" ]]; then
+    printf '%s\n' "$active/bin"
+    exit 0
+fi
 mkdir "$stage/bin" "$stage/lib" "$stage/downloads"
 cp "$pins" "$stage/pins.tsv"
 validate_pins "$stage/pins.tsv" >/dev/null
@@ -125,25 +165,10 @@ while IFS=$'\t' read -r tool version selected_host digest || [[ -n "$tool" ]]; d
     [[ "$tool" != \#* && "$selected_host" == "$host" ]] || continue
     scratch="$stage/downloads/$tool"
     mkdir "$scratch"
-    case "$tool" in
-        quill)
-            repo=dfinity/quill; tag="v$version"; asset="quill-$os-$arch"; format=raw; member='' ;;
-        wasm-opt)
-            repo=WebAssembly/binaryen; tag="version_$version"; asset="binaryen-version_$version-$arch-$os.tar.gz"
-            format=binaryen; member="binaryen-version_$version" ;;
-        icp|didc|ic-wasm)
-            case "$tool" in
-                icp) repo=dfinity/icp-cli; tag="v$version"; package=icp-cli ;;
-                didc) repo=dfinity/candid; tag="didc-v$version"; package=didc ;;
-                ic-wasm) repo=dfinity/ic-wasm; tag="$version"; package=ic-wasm ;;
-            esac
-            asset="$package-$target.tar.xz"; format=xz; member="$package-$target/$tool" ;;
-    esac
+    ic_asset
     archive="$scratch/$asset"
     echo "Installing $tool $version ($host)" >&2
-    curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL \
-        --connect-timeout 15 --max-time 300 -o "$archive" \
-        "https://github.com/$repo/releases/download/$tag/$asset"
+    tool_store_download "https://github.com/$repo/releases/download/$tag/$asset" "$archive"
     bash "$ROOT/scripts/ci/verify-file-checksum.sh" sha256 "$digest" "$archive"
     case "$format" in
         raw) cp "$archive" "$stage/bin/$tool" ;;
@@ -183,7 +208,5 @@ done < "$stage/pins.tsv"
 ) > "$stage/files.sha256"
 verify_bundle "$stage"
 cmp -s "$pins" "$stage/pins.tsv" || { echo 'IC tool pins changed during installation' >&2; exit 1; }
-ln -s "${stage##*/}" "$link"
-# rename(2) replaces the symlink itself on Linux and macOS, never its directory.
-perl -e 'rename($ARGV[0], $ARGV[1]) or die "activate IC tools: $!\n"' "$link" "$active"
+tool_store_activate "$stage"
 printf '%s\n' "$active/bin"

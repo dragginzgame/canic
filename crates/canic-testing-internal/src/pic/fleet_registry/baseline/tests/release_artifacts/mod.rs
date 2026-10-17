@@ -38,7 +38,7 @@ use canic_host::{
     },
 };
 use ciborium::Value;
-use ic_testkit::artifacts::{
+use ic_build::artifacts::{
     ArtifactCacheOutcome, ArtifactCachePreparation, ArtifactCacheSpec, WasmBuildSpec,
     prepare_artifact_cache, resolve_cargo_build_inputs,
 };
@@ -210,7 +210,6 @@ pub(super) fn literal_zero_release_artifact_cache_spec(
         workspace_root,
         &canic_host::canister_build::canister_build_target_root(workspace_root),
         &packages,
-        CanisterBuildProfile::Fast.target_dir_name(),
     )
     .with_cargo_profile_args(["--profile", "fast", "--locked"])
     .with_extra_env(environment);
@@ -278,7 +277,6 @@ fn bind_host_producer_inputs(
         workspace_root,
         &canic_host::canister_build::canister_build_target_root(workspace_root),
         &["canic-host"],
-        CanisterBuildProfile::Fast.target_dir_name(),
     )
     .with_cargo_profile_args(["--profile", "fast", "--locked"])
     .with_extra_env(environment.iter().copied());
@@ -643,7 +641,7 @@ pub(super) fn persist_internal_test_release_build_plan(
 
 // Stage from immutable retained inputs into this invocation's private release root.
 pub(super) fn stage_retained_release_artifacts(
-    record: &ic_testkit::artifacts::ArtifactCacheRecord,
+    record: &ic_build::artifacts::ArtifactCacheRecord,
     outputs: &BTreeMap<String, PathBuf>,
 ) {
     assert_eq!(record.artifacts().len(), outputs.len());

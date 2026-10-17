@@ -10,7 +10,7 @@ mod managed_component_group;
 
 use std::time::Duration;
 
-use ic_testkit::pic::{PocketIcBuilderExt, PocketIcStartupConfig};
+use ic_testkit::pic::PocketIcStartupConfig;
 
 pub use ic_testkit::pic::{
     CandidCallError, CandidCallExt, CanisterInstallExt, PocketIc, PocketIcBuilder,
@@ -29,11 +29,8 @@ pub use managed_component_group::{
 fn build_pocketic() -> Result<PocketIc, String> {
     let server_url = std::env::var("IC_TESTKIT_POCKET_IC_URL")
         .map_err(|error| format!("caller-owned PocketIC server URL is required: {error}"))?;
-    PocketIcBuilder::new()
-        .with_application_subnet()
-        .try_build(PocketIcStartupConfig::connect(
-            &server_url,
-            Duration::from_secs(30),
-        ))
+    PocketIcStartupConfig::connect(&server_url, Duration::from_secs(30))
+        .build_instance(PocketIcBuilder::new().with_application_subnet())
+        .map(|owned| owned.instance)
         .map_err(|error| error.to_string())
 }

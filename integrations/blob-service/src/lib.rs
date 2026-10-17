@@ -10,6 +10,7 @@ mod ops;
 
 pub mod lifecycle;
 pub mod metrics;
+pub use ops::memory::requests as memory_requests;
 #[doc(hidden)]
 pub mod workflow;
 

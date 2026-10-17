@@ -91,7 +91,7 @@ fn pending_finalize_rejects_changed_checksum_verified_staging() {
 
     std::assert_matches!(
         error,
-        BackupRunnerError::Persistence(PersistenceError::ArtifactCommit(
+        BackupRunnerError::Persistence(PersistenceError::Shared(
             ic_backup::ops::persistence::PersistenceError::Checksum(
                 ic_backup::model::artifacts::ChecksumError::ChecksumMismatch {
                 expected: error_expected,
@@ -123,7 +123,7 @@ fn pending_finalize_rejects_conflicting_canonical_directory() {
 
     std::assert_matches!(
         error,
-        BackupRunnerError::Persistence(PersistenceError::ArtifactCommit(
+        BackupRunnerError::Persistence(PersistenceError::Shared(
             ic_backup::ops::persistence::PersistenceError::ArtifactCommitPathConflict { .. }
         ))
     );

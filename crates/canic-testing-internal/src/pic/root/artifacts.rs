@@ -20,13 +20,11 @@ use canic_contracts::{
 };
 use canic_core::cdk::utils::hash::wasm_hash;
 use canic_host::release_set::AppConfigSnapshot;
-use ic_testkit::{
-    artifacts::{
-        ArtifactCacheOutcome, ArtifactCachePreparation, ArtifactCacheRecord, ArtifactCacheSpec,
-        WasmBuildSpec, prepare_artifact_cache, resolve_cargo_build_inputs,
-    },
-    pic::{CandidCallExt, PocketIc, PocketIcTimeExt},
+use ic_build::artifacts::{
+    ArtifactCacheOutcome, ArtifactCachePreparation, ArtifactCacheRecord, ArtifactCacheSpec,
+    WasmBuildSpec, prepare_artifact_cache, resolve_cargo_build_inputs,
 };
+use ic_testkit::pic::{CandidCallExt, PocketIc};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs, io,
@@ -283,7 +281,6 @@ fn root_release_cargo_build_spec(
         &spec.workspace_root,
         &spec.workspace_root.join("target/icp-build"),
         &packages,
-        spec.build_profile.target_dir_name(),
     )
     .with_cargo_profile_args(cargo_args.iter().copied())
     .with_extra_env(environment.iter().copied())
@@ -401,5 +398,5 @@ fn publish_chunk(
 
 // Read the current PocketIC wall clock in whole seconds.
 fn root_time_secs(pic: &PocketIc, _root_id: Principal) -> u64 {
-    pic.current_time_nanos() / 1_000_000_000
+    pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000
 }

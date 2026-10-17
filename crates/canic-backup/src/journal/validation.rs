@@ -4,7 +4,10 @@
 //! Does not own: journal persistence, download execution, or reporting.
 //! Boundary: returns typed validation errors for persisted journal input.
 
-use crate::journal::{ArtifactJournalEntry, ArtifactState, DownloadJournal};
+use crate::{
+    artifacts::ArtifactChecksum,
+    journal::{ArtifactJournalEntry, ArtifactState, DownloadJournal},
+};
 
 use std::{
     collections::BTreeSet,
@@ -214,11 +217,6 @@ fn validate_required_hash(
 }
 
 fn validate_hash(field: &'static str, value: &str) -> Result<(), JournalValidationError> {
-    const SHA256_HEX_LEN: usize = 64;
     validate_nonempty(field, value)?;
-    if value.len() == SHA256_HEX_LEN && value.bytes().all(|b| b.is_ascii_hexdigit()) {
-        Ok(())
-    } else {
-        Err(JournalValidationError::InvalidHash(field))
-    }
+    ArtifactChecksum::validate_hash(value).map_err(|_| JournalValidationError::InvalidHash(field))
 }

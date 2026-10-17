@@ -18,10 +18,7 @@ use std::cell::RefCell;
 std::thread_local! {
     static FLEET_ADMISSION_PROJECTION: RefCell<
         BoundedCell<Option<FleetAdmissionProjectionRecord>, RuntimeMemory<DefaultMemoryImpl>>,
-    > = RefCell::new(BoundedCell::init(crate::ic_memory_key!(
-        authority = CANIC_CORE_MEMORY_AUTHORITY,
-        key = "canic.core.fleet_admission.projection.v1",
-    ), None));
+    > = RefCell::new(BoundedCell::init(crate::memory::open(crate::memory::keys::FLEET_ADMISSION_PROJECTION_V1), None));
 }
 
 /// Stable local fence/open phase.

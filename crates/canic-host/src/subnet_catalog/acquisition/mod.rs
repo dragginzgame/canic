@@ -14,8 +14,7 @@ use ic_query::{
     subnet_catalog::{
         CatalogLoadOutcome, CatalogReadPolicy, SubnetCatalogDetailedSourceFuture,
         SubnetCatalogHostError, SubnetCatalogLoadFailure, SubnetCatalogLoadRequest,
-        SubnetCatalogSource, SubnetCatalogSourceFuture,
-        load_subnet_catalog_detailed_with_source_async,
+        SubnetCatalogSource, SubnetCatalogSourceFuture, load_subnet_catalog_detailed_with_source,
     },
 };
 use std::{
@@ -135,7 +134,7 @@ async fn load_with_assurance_repair(
     request: &SubnetCatalogLoadRequest,
     source: &dyn SubnetCatalogSource,
 ) -> Result<CatalogLoadOutcome, Box<SubnetCatalogLoadFailure>> {
-    match load_subnet_catalog_detailed_with_source_async(request, source).await {
+    match load_subnet_catalog_detailed_with_source(request, source).await {
         Err(failure)
             if matches!(
                 failure.source,
@@ -147,7 +146,7 @@ async fn load_with_assurance_repair(
                 .with_policy(CatalogReadPolicy::ForceRefresh {
                     source: mainnet_source_selection(),
                 });
-            load_subnet_catalog_detailed_with_source_async(&refresh, source).await
+            load_subnet_catalog_detailed_with_source(&refresh, source).await
         }
         result => result,
     }

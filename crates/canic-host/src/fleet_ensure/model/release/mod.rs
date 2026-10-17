@@ -69,7 +69,7 @@ pub struct FleetReleaseSourceRecord {
 pub struct FleetReleaseAccountRecord {
     pub ledger: Principal,
     pub owner: Principal,
-    #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub subaccount: Option<[u8; 32]>,
     /// Qualified current-build artifact retaining the ability to operate this account.
     pub recovery_artifact_sha256: [u8; 32],

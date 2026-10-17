@@ -5,6 +5,7 @@
 //! Boundary: exposes pure IDs, enums, and newtypes across ops, workflow, and API.
 
 mod app;
+mod application_checkpoint;
 mod build_network;
 mod caller_authority;
 mod canister;
@@ -22,6 +23,7 @@ mod release_set;
 mod subnet;
 
 pub use app::AppId;
+pub use application_checkpoint::{ApplicationCheckpointBinding, ApplicationCheckpointPhase};
 pub use build_network::BuildNetwork;
 pub use caller_authority::{
     CallerComponentInstallation, CallerInstallation, CallerReceiverAuthority, CallerRootAuthority,

@@ -5,7 +5,7 @@ use canic_contracts::{
         FleetSubnetRootFundingPolicy,
     },
 };
-use ic_testkit::pic::{PocketIc, PocketIcBuilder, PocketIcBuilderExt, PocketIcStartupConfig};
+use ic_testkit::pic::{PocketIc, PocketIcBuilder, PocketIcStartupConfig};
 use std::{
     path::{Path, PathBuf},
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -23,12 +23,12 @@ pub fn start_pocket_ic(builder: PocketIcBuilder) -> PocketIc {
                 "{POCKET_IC_SERVER_URL_ENV} must name the governed PocketIC server; use the workspace test runner"
             )
         });
-    builder
-        .try_build(PocketIcStartupConfig::connect(
-            server_url,
-            POCKET_IC_STARTUP_TIMEOUT,
-        ))
-        .unwrap_or_else(|error| panic!("start governed PocketIC instance: {error}"))
+    PocketIcStartupConfig::connect(server_url, POCKET_IC_STARTUP_TIMEOUT)
+        .build_instance(builder)
+        .map_or_else(
+            |error| panic!("start governed PocketIC instance: {error}"),
+            |owned| owned.instance,
+        )
 }
 
 pub fn fleet_subnet_root_funding_authority() -> FleetSubnetRootFundingAuthority {

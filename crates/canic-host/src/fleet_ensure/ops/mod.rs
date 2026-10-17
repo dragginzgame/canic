@@ -14,6 +14,7 @@ pub(super) mod clean_reinstall;
 pub(super) mod continuation;
 mod current_inventory;
 pub(super) mod current_protocol;
+pub(super) mod effect_evidence;
 pub(super) mod effect_preparation;
 pub(super) mod funding;
 pub(super) mod funding_observation;
@@ -47,7 +48,10 @@ use canic_contracts::{cycles::Cycles, dto::pool::CanisterPoolAssetStatus};
 use canic_core::cdk::utils::hash::sha256_hex;
 use ic_host_artifacts::artifact::ArtifactError;
 use ic_host_fs::{
-    durable::{RegularFileLockError, lock_regular_file_with_parents, write_bytes},
+    durable::{
+        PublicationMode, RegularFileLockError, WriteOptions, lock_exclusive,
+        open_regular_lock_file_with_parents, write_bytes,
+    },
     read::read_optional_file_no_follow,
 };
 use serde::{Serialize, de::DeserializeOwned};
@@ -673,7 +677,7 @@ fn lock_fleet_file(paths: &EnsurePaths) -> Result<File, EnsureStateError> {
 pub(in crate::fleet_ensure::ops) fn lock_fleet_file_without_recovery(
     paths: &EnsurePaths,
 ) -> Result<File, EnsureStateError> {
-    let lock = lock_regular_file_with_parents(&paths.lock).map_err(|error| match error {
+    let lock = open_regular_lock_file_with_parents(&paths.lock).map_err(|error| match error {
         RegularFileLockError::Io(source) => EnsureStateError::Io {
             path: paths.lock.clone(),
             source,
@@ -689,6 +693,10 @@ pub(in crate::fleet_ensure::ops) fn lock_fleet_file_without_recovery(
         RegularFileLockError::UnsupportedPlatform => EnsureStateError::Lock {
             path: paths.lock.clone(),
         },
+    })?;
+    lock_exclusive(&lock).map_err(|source| EnsureStateError::Io {
+        path: paths.lock.clone(),
+        source,
     })?;
     Ok(lock)
 }
@@ -921,12 +929,19 @@ pub fn write_plan(paths: &EnsurePaths, plan: &FleetEnsurePlan) -> Result<(), Ens
             path: paths.plan.clone(),
             source,
         })?;
-    write_bytes(&paths.plan, &bytes)
-        .map_err(crate::publication::ops::io_error)
-        .map_err(|source| EnsureStateError::Io {
-            path: paths.plan.clone(),
-            source,
-        })
+    write_bytes(
+        &paths.plan,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &bytes,
+    )
+    .map_err(crate::publication::ops::io_error)
+    .map_err(|source| EnsureStateError::Io {
+        path: paths.plan.clone(),
+        source,
+    })
 }
 
 /// Atomically retain one complete generator-owned Root-start authority.
@@ -1022,12 +1037,19 @@ fn write_current(path: &Path, value: &impl Serialize) -> Result<(), EnsureStateE
         path: path.to_path_buf(),
         source,
     })?;
-    write_bytes(path, &bytes)
-        .map_err(crate::publication::ops::io_error)
-        .map_err(|source| EnsureStateError::Io {
-            path: path.to_path_buf(),
-            source,
-        })
+    write_bytes(
+        path,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &bytes,
+    )
+    .map_err(crate::publication::ops::io_error)
+    .map_err(|source| EnsureStateError::Io {
+        path: path.to_path_buf(),
+        source,
+    })
 }
 
 fn validate_schema<T>(

@@ -119,7 +119,7 @@ pub struct RootComponentProvisioningView {
 }
 
 /// Read-only latest failure and retry state, independent of provisioning progress.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootComponentProvisioningFailureView {
     pub origin: canic_core::control_plane_support::error::ProvisioningFailureView,
     pub failed_at_ns: u64,

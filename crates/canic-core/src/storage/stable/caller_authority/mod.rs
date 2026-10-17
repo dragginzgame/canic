@@ -66,15 +66,9 @@ impl_storable_bounded!(CallerReceiverRecord, MAX_CALLER_ROW_BYTES, false);
 
 thread_local! {
     static HEADER: RefCell<BoundedCell<Option<CallerReceiverRecord>, RuntimeMemory<DefaultMemoryImpl>>> =
-        RefCell::new(BoundedCell::init(crate::ic_memory_key!(
-            authority = CANIC_CORE_MEMORY_AUTHORITY,
-            key = "canic.core.caller_authority.header.v1",
-        ), None));
+        RefCell::new(BoundedCell::init(crate::memory::open(crate::memory::keys::CALLER_AUTHORITY_HEADER_V1), None));
     static ROWS: RefCell<BTreeMap<CallerRowKey, CallerRowRecord, RuntimeMemory<DefaultMemoryImpl>>> =
-        RefCell::new(BTreeMap::init(crate::ic_memory_key!(
-            authority = CANIC_CORE_MEMORY_AUTHORITY,
-            key = "canic.core.caller_authority.rows.v1",
-        )));
+        RefCell::new(BTreeMap::init(crate::memory::open(crate::memory::keys::CALLER_AUTHORITY_ROWS_V1)));
 }
 
 /// Receiver's durable control-header owner.

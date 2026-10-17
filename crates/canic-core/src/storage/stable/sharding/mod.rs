@@ -34,8 +34,8 @@ use std::cell::RefCell;
 std::thread_local! {
     static SHARDING_CORE: RefCell<ShardingCore<RuntimeMemory<DefaultMemoryImpl>>> = RefCell::new(
         ShardingCore::new(
-            StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.sharding.registry.v1")),
-            StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.sharding.assignments.v1")),
+            StableBtreeMap::init(crate::memory::open(crate::memory::keys::SHARDING_REGISTRY_V1)),
+            StableBtreeMap::init(crate::memory::open(crate::memory::keys::SHARDING_ASSIGNMENTS_V1)),
         )
     );
 }

@@ -5,6 +5,7 @@
 //! Boundary: test-only coverage for ops-layer metrics projection.
 
 use super::*;
+
 #[cfg(feature = "sharding")]
 use crate::ops::runtime::metrics::sharding::{
     ShardingMetricOperation, ShardingMetricOutcome, ShardingMetricReason, ShardingMetrics,
@@ -19,9 +20,6 @@ use crate::{
             },
             cascade::{CascadeMetricOperation, CascadeMetricOutcome, CascadeMetricReason},
             cycles_funding::CyclesFundingDeniedReason,
-            delegated_auth::{
-                DelegatedAuthMetricOperation, DelegatedAuthMetricOutcome, DelegatedAuthMetricReason,
-            },
             icp_refill::entries_from_snapshot,
             intent::{
                 IntentMetricOperation, IntentMetricOutcome, IntentMetricReason, IntentMetricSurface,
@@ -67,26 +65,44 @@ fn endpoint_call(name: &'static str, kind: EndpointCallKind) -> EndpointCall {
 }
 
 #[test]
+fn perf_projection_keeps_exact_u64_cap_and_omits_unrepresentable_wide_totals() {
+    let snapshot = [u128::from(u64::MAX), u128::from(u64::MAX) + 1]
+        .into_iter()
+        .enumerate()
+        .map(|(index, total_instructions)| perf::PerfEntry {
+            key: PerfKey::Checkpoint {
+                scope: "wide-total".into(),
+                label: index.to_string(),
+            },
+            count: 2,
+            total_instructions,
+        })
+        .collect();
+    let entries = perf_entries_from(snapshot, &[]);
+    assert_eq!(entries.len(), 1);
+    assert_metric_count_and_u64(&entries, &["checkpoint", "wide-total", "0"], 2, u64::MAX);
+}
+#[test]
 fn auth_metrics_are_exposed_with_stable_labels() {
     reset_for_tests();
 
     AuthMetrics::record(
         AuthMetricSurface::ApplicationSession,
-        AuthMetricOperation::Establish,
-        AuthMetricOutcome::Rejected,
-        AuthMetricReason::ProofInvalid,
+        AuthMetricOperation::Cleanup,
+        AuthMetricOutcome::Failed,
+        AuthMetricReason::VerifyFailed,
     );
     AuthMetrics::record(
         AuthMetricSurface::ApplicationSession,
-        AuthMetricOperation::Establish,
+        AuthMetricOperation::Cleanup,
         AuthMetricOutcome::Completed,
-        AuthMetricReason::Created,
+        AuthMetricReason::Expired,
     );
     AuthMetrics::record(
         AuthMetricSurface::ApplicationSession,
-        AuthMetricOperation::Establish,
+        AuthMetricOperation::Cleanup,
         AuthMetricOutcome::Completed,
-        AuthMetricReason::Created,
+        AuthMetricReason::Expired,
     );
     AuthMetrics::record(
         AuthMetricSurface::Attestation,
@@ -102,9 +118,9 @@ fn auth_metrics_are_exposed_with_stable_labels() {
         &[
             "auth",
             "application_session",
-            "establish",
-            "rejected",
-            "proof_invalid",
+            "cleanup",
+            "failed",
+            "verify_failed",
         ],
         1,
     );
@@ -113,9 +129,9 @@ fn auth_metrics_are_exposed_with_stable_labels() {
         &[
             "auth",
             "application_session",
-            "establish",
+            "cleanup",
             "completed",
-            "created",
+            "expired",
         ],
         2,
     );
@@ -711,27 +727,13 @@ fn replay_metrics_are_exposed_with_stable_labels() {
 #[test]
 fn delegated_auth_metrics_are_exposed_with_stable_labels() {
     reset_for_tests();
-
-    let principal = Principal::from_slice(&[42; 29]);
-    DelegatedAuthMetrics::record_authority(principal);
+    DelegatedAuthMetrics::record_authority(Principal::from_slice(&[42; 29]));
+    DelegatedAuthMetrics::record_root_proof_prepare_started();
     DelegatedAuthMetrics::record_root_proof_prepare_completed();
-    DelegatedAuthMetrics::record_issuer_proof_prepare_completed();
-    DelegatedAuthMetrics::record_verify_started();
-    DelegatedAuthMetrics::record_verify_completed();
-    DelegatedAuthMetrics::record(
-        DelegatedAuthMetricOperation::VerifyToken,
-        DelegatedAuthMetricOutcome::Failed,
-        DelegatedAuthMetricReason::TokenExpired,
-    );
-    DelegatedAuthMetrics::record(
-        DelegatedAuthMetricOperation::VerifyToken,
-        DelegatedAuthMetricOutcome::Failed,
-        DelegatedAuthMetricReason::TokenExpired,
-    );
+    DelegatedAuthMetrics::record_root_proof_prepare_failed();
+    DelegatedAuthMetrics::record_root_proof_prepare_failed();
     DelegatedAuthMetrics::record_renewal_sweep_completed();
-
     let entries = entries(MetricsKind::Security);
-
     assert_metric_count(&entries, &["delegated_auth", "delegated_auth_authority"], 1);
     assert_metric_count(
         &entries,
@@ -740,22 +742,12 @@ fn delegated_auth_metrics_are_exposed_with_stable_labels() {
     );
     assert_metric_count(
         &entries,
-        &["delegated_auth", "prepare_issuer_proof", "completed", "ok"],
-        1,
-    );
-    assert_metric_count(
-        &entries,
-        &["delegated_auth", "verify_token", "started", "ok"],
-        1,
-    );
-    assert_metric_count(
-        &entries,
-        &["delegated_auth", "verify_token", "completed", "ok"],
-        1,
-    );
-    assert_metric_count(
-        &entries,
-        &["delegated_auth", "verify_token", "failed", "token_expired"],
+        &[
+            "delegated_auth",
+            "prepare_root_proof",
+            "failed",
+            "root_proof_prepare_failed",
+        ],
         2,
     );
     assert_metric_count(
@@ -793,9 +785,9 @@ fn seed_all_metric_families_for_reset_test() {
     AccessMetrics::increment("create_project", AccessMetricKind::Guard, "controller_only");
     AuthMetrics::record(
         AuthMetricSurface::ApplicationSession,
-        AuthMetricOperation::Establish,
+        AuthMetricOperation::Cleanup,
         AuthMetricOutcome::Completed,
-        AuthMetricReason::Created,
+        AuthMetricReason::Expired,
     );
     CanisterOpsMetrics::record(
         CanisterOpsMetricOperation::Create,

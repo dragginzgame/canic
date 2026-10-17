@@ -9,7 +9,7 @@ use crate::{
     execution::{BackupExecutionJournal, BackupExecutionOperationState},
     journal::ArtifactState,
     operational_readiness::manifest::assert_case_defined,
-    persistence::{BackupLayout, CommandLifetimeHandle},
+    persistence::{BackupLayout, CommandLifetimeLock},
     plan::{BackupExecutionPreflightReceipts, BackupOperationKind, BackupPlan},
     runner::{
         BackupRunnerCanisterStatus, BackupRunnerCommandError, BackupRunnerConfig,
@@ -335,6 +335,7 @@ pub(super) fn mark_download_pending(layout: &BackupLayout) -> BackupExecutionJou
         .next_ready_operation()
         .cloned()
         .expect("ready download operation");
+    crate::test_support::retain_original_command(layout, &mut journal, download.sequence);
     journal
         .mark_operation_pending_at(download.sequence, Some("unix:20".to_string()))
         .expect("mark download pending");
@@ -398,7 +399,7 @@ impl BackupRunnerExecutor for DownloadEffectExecutor {
     fn stop_canister(
         &mut self,
         canister_id: &str,
-        command_lifetime: CommandLifetimeHandle,
+        command_lifetime: &mut CommandLifetimeLock,
     ) -> Result<(), BackupRunnerCommandError> {
         self.delegate.stop_canister(canister_id, command_lifetime)
     }
@@ -406,7 +407,7 @@ impl BackupRunnerExecutor for DownloadEffectExecutor {
     fn start_canister(
         &mut self,
         canister_id: &str,
-        command_lifetime: CommandLifetimeHandle,
+        command_lifetime: &mut CommandLifetimeLock,
     ) -> Result<(), BackupRunnerCommandError> {
         self.delegate.start_canister(canister_id, command_lifetime)
     }
@@ -414,7 +415,7 @@ impl BackupRunnerExecutor for DownloadEffectExecutor {
     fn create_snapshot(
         &mut self,
         canister_id: &str,
-        command_lifetime: CommandLifetimeHandle,
+        command_lifetime: &mut CommandLifetimeLock,
     ) -> Result<BackupRunnerSnapshot, BackupRunnerCommandError> {
         self.delegate.create_snapshot(canister_id, command_lifetime)
     }
@@ -424,7 +425,7 @@ impl BackupRunnerExecutor for DownloadEffectExecutor {
         canister_id: &str,
         snapshot_id: &str,
         artifact_path: &Path,
-        _command_lifetime: CommandLifetimeHandle,
+        _command_lifetime: &mut CommandLifetimeLock,
     ) -> Result<(), BackupRunnerCommandError> {
         self.commands
             .push(format!("download:{canister_id}:{snapshot_id}"));

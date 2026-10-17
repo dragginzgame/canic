@@ -9,7 +9,7 @@ use crate::{
         ops::operator_mint::{
             receipts,
             receipts::{
-                CyclesLedgerBlock, DepositVerificationError, ReceiptVerificationLimits,
+                DepositVerificationError, LedgerBlock, ReceiptVerificationLimits,
                 VerifiedCyclesDeposit, icp,
                 icp::{
                     IcpReadError, IcpReadLimits, IcpReadOutcome, IcpTransferRead,
@@ -113,7 +113,7 @@ pub struct OperatorMintTransport {
 
 #[derive(CandidType, Deserialize)]
 struct BlocksReply {
-    blocks: Vec<CyclesLedgerBlock>,
+    blocks: Vec<LedgerBlock>,
 }
 
 impl OperatorMintTransport {

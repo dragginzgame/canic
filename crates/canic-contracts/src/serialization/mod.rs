@@ -63,6 +63,7 @@ mod tests {
         };
         for retry_at_ns in [Some(u64::MAX), None] {
             let origin = ProvisioningFailureOrigin {
+                dependency: None,
                 failed_at_ns: 123,
                 retry_at_ns,
                 stage: ProvisioningFailureStage::ComponentMembership,
@@ -75,7 +76,7 @@ mod tests {
                 deserialize::<ProvisioningFailureOrigin>(&serialize(&origin).unwrap()).unwrap(),
                 origin
             );
-            let ciborium::value::Value::Map(mut fields) =
+            let ciborium::value::Value::Map(fields) =
                 deserialize(&serialize(&origin).unwrap()).unwrap()
             else {
                 panic!("origin is a record");
@@ -91,9 +92,48 @@ mod tests {
                     ciborium::value::Value::Integer(value.into())
                 }),
             );
-            fields.retain(|(key, _)| key != &deadline_key);
-            let missing = serialize(&ciborium::value::Value::Map(fields)).unwrap();
-            assert!(deserialize::<ProvisioningFailureOrigin>(&missing).is_err());
+            for key in [
+                deadline_key,
+                ciborium::value::Value::Text("dependency".into()),
+            ] {
+                let mut incomplete = fields.clone();
+                incomplete.retain(|(field, _)| field != &key);
+                let missing = serialize(&ciborium::value::Value::Map(incomplete)).unwrap();
+                assert!(deserialize::<ProvisioningFailureOrigin>(&missing).is_err());
+            }
+        }
+    }
+
+    #[test]
+    fn provisioning_dependency_requires_explicit_rejection_presence() {
+        use crate::values::provisioning_failure::ProvisioningDependencyFailure;
+        for (code, detail) in [(None, None), (Some(5), Some("stopped".into()))] {
+            let dependency = ProvisioningDependencyFailure {
+                target: candid::Principal::from_slice(&[8]),
+                method: crate::protocol::CANIC_WASM_STORE_COMMAND.into(),
+                step: "inspect_template".into(),
+                rejection_code: code,
+                rejection_detail: detail,
+            };
+            assert_eq!(
+                deserialize::<ProvisioningDependencyFailure>(&serialize(&dependency).unwrap())
+                    .unwrap(),
+                dependency
+            );
+            for missing_key in ["rejection_code", "rejection_detail"] {
+                let ciborium::value::Value::Map(mut fields) =
+                    deserialize(&serialize(&dependency).unwrap()).unwrap()
+                else {
+                    panic!("record")
+                };
+                fields.retain(|(key, _)| key != &ciborium::value::Value::Text(missing_key.into()));
+                assert!(
+                    deserialize::<ProvisioningDependencyFailure>(
+                        &serialize(&ciborium::value::Value::Map(fields)).unwrap()
+                    )
+                    .is_err()
+                );
+            }
         }
     }
 

@@ -1,5 +1,6 @@
 //! Canic-owned managed lifecycle and explicit admission guard qualification.
 
+mod checkpoint;
 mod initialization;
 
 use candid::CandidType;
@@ -18,6 +19,7 @@ thread_local! {
 }
 
 canic::start!(
+    memory = initialization::memory(),
     argument_limits = initialization::LIMITS,
     lifecycle_participant(
         init = initialization::install,

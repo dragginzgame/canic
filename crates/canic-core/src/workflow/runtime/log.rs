@@ -13,8 +13,8 @@ use crate::{
     workflow::runtime::timer::{TimerError, require_active, retain_owned_once, with_owned_once},
 };
 use ic_timers::{
-    DeclarationLifetime, OnceContext, OnceDecision, OnceRegistration, OnceRunResult,
-    TimerCompletion, TimerIdentity, TimerSchedule, register_once,
+    OnceContext, OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion, TimerIdentity,
+    TimerSchedule, TimerStart, register_once,
 };
 use std::cell::RefCell;
 
@@ -94,7 +94,7 @@ impl LogRetentionWorkflow {
         }
         let registration = register_once(
             Self::timer_identity()?,
-            DeclarationLifetime::Retained,
+            TimerStart::Retained { initial: None },
             |_context: OnceContext| async { Self::run_due_batch() },
         )?;
         retain_owned_once(&LOG_RETENTION_TIMER, registration)

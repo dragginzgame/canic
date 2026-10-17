@@ -10,7 +10,25 @@ use ic_memory::{
 };
 use std::cell::RefCell;
 
-canic::memory::memory_allocation_pool!(authorities = [("test", "test.")], exclusions = []);
+const ROWS_KEY: &str = "test.user_rows.v1";
+
+canic::memory::memory_allocation_pool!(
+    provider = memory_pool,
+    authorities = [("test", "test.")],
+    exclusions = []
+);
+
+pub fn memory() -> canic::memory::MemoryBootstrap {
+    let mut input = canic::memory::framework();
+    input.pool = memory_pool().expect("fixture grants");
+    for key in [ROWS_KEY, super::fixture_importer::MEMORY_KEY] {
+        input.requests.push(
+            ic_memory::MemoryRequest::new("test", key, ic_memory::SchemaMetadata::default())
+                .expect("fixture memory request"),
+        );
+    }
+    input
+}
 
 /// One passive application row exposed by the disposable fixture.
 #[derive(candid::CandidType)]
@@ -21,7 +39,7 @@ pub struct UserRow {
 
 thread_local! {
     static ROWS: RefCell<BTreeMap<u64, u64, RuntimeMemory<DefaultMemoryImpl>>> = RefCell::new(
-        BTreeMap::init(canic::memory::ic_memory_key!(authority = "test", key = "test.user_rows.v1"))
+        BTreeMap::init(canic::memory::open(ROWS_KEY))
     );
 }
 

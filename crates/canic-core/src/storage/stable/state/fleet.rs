@@ -13,7 +13,7 @@ pub use crate::domain::state::FleetMode;
 std::thread_local! {
     static FLEET_STATE: RefCell<Cell<FleetStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.fleet.state.v1"),
+            crate::memory::open(crate::memory::keys::FLEET_STATE_V1),
             FleetStateRecord::default(),
         ));
 }

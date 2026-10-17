@@ -32,7 +32,7 @@ For example: [docs/changelog/0.33.md](../changelog/0.33.md)
 
 Every versioned patch draft and finalized patch entry must have both views:
 
-- one concise patch bullet in the root `CHANGELOG.md`;
+- a concise outcome overview in the root `CHANGELOG.md`;
 - one detailed patch section in the matching
   `docs/changelog/<major>.<minor>.md` file.
 
@@ -52,7 +52,9 @@ shape changes, and operational nuance.
   - Date
   - High-level summary sections
   - Links to detailed notes
-- Root minor-line summary entries must use exactly one concise bullet per patch version.
+- Root minor-line entries use one short bullet for a small patch and separate
+  outcome and upgrade bullets or relevant sections for a broad release. Follow
+  the readable-layout rules in [the common policy](../../rules/changelogs.md#readable-release-layout).
 - Within each minor-line section, patch entries must be ordered chronologically newest first (`x.y.9` before `x.y.8` before `x.y.7`).
 - Each root minor-line section must link to its detailed
   `docs/changelog/<major>.<minor>.md` file when that file exists.
@@ -160,11 +162,11 @@ Rules:
 8. Do not include file paths.
 9. Do not include test names.
 10. Do not include internal refactor noise.
-11. Do not exceed ~15 bullets total in the root entry.
+11. Keep root entries easy to scan; move supporting detail to the minor notes.
 12. If a section exceeds ~4 lines of explanation, move detail to `docs/changelog/<major>.<minor>.md`.
-13. For a root minor-line entry (`<major>.<minor>.x`), use exactly one bullet per patch version listed in that minor line.
-14. Each root minor-line patch bullet must be a high-level summary sentence, not an exhaustive implementation list.
-15. If a patch bullet starts becoming a multi-clause internal inventory, shorten it and move detail to `docs/changelog/<major>.<minor>.md`.
+13. For a root minor-line entry (`<major>.<minor>.x`), keep each patch overview concise; broad patches may use separate outcome and upgrade bullets.
+14. Give each bullet one coherent outcome, normally in one or two short sentences.
+15. Split independent outcomes and keep issue links beside their changes; move supporting detail to `docs/changelog/<major>.<minor>.md` instead of appending an issue inventory.
 16. Root minor-line patch bullets must be listed in descending patch order, with the newest patch first and the oldest patch last.
 17. Create or update a versioned root entry when a coherent meaningful batch
     completes. The entry remains an open draft until its matching tag exists.
@@ -336,7 +338,8 @@ Bullet and detail rules:
 
 - Prefer short bullets (1-2 sentences), with inline code formatting for API/type names when relevant.
 - Bullets do not need to be single-line if additional sentence context is needed.
-- In root minor-line summaries, prefer one short sentence per patch bullet; avoid long multi-clause bullets that enumerate every internal change.
+- In root minor-line summaries, prefer short outcome bullets; split independent
+  changes rather than compressing a broad patch into one paragraph.
 - Avoid deep implementation detail (module paths, helper names, routing internals) unless required for migration/debugging.
 - Root minor-line patch bullets should stay concise and readable. Detailed
   changelog prose may wrap naturally where it is clearest.

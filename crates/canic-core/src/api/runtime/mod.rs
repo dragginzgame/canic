@@ -10,16 +10,13 @@ use crate::{
         FailureSeverity, HealthStatus, ReadinessStatus, RuntimeCheckStatus,
         RuntimeDiagnosticSeverity, RuntimeFieldVisibility, RuntimeStateDomainStatus, RuntimeStatus,
     },
-    dto::{
-        error::Error,
-        runtime::{
-            CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, CanisterTimerStatus,
-            RUNTIME_INTROSPECTION_SCHEMA_VERSION, RuntimeAuthStatusSummary, RuntimeBuildInfo,
-            RuntimeCheck, RuntimeDiagnostic, RuntimeFeatureStatus, RuntimeReceiptCapacityStatus,
-            RuntimeStateDomainSummary, RuntimeStateSummary, RuntimeTopologyStatus,
-            RuntimeVisibilityEntry, TimerCallbackPerformanceStatus, TimerMemoryPageExtentStatus,
-            TimerMemoryPageSampleStatus,
-        },
+    dto::runtime::{
+        CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, CanisterTimerStatus,
+        RUNTIME_INTROSPECTION_SCHEMA_VERSION, RuntimeAuthStatusSummary, RuntimeBuildInfo,
+        RuntimeCheck, RuntimeDiagnostic, RuntimeFeatureStatus, RuntimeReceiptCapacityStatus,
+        RuntimeStateDomainSummary, RuntimeStateSummary, RuntimeTopologyStatus,
+        RuntimeVisibilityEntry, TimerCallbackPerformanceStatus, TimerMemoryPageExtentStatus,
+        TimerMemoryPageSampleStatus,
     },
     ops::{
         ic::{IcOps, build_network::BuildNetworkOps},
@@ -71,21 +68,6 @@ const RUNTIME_FEATURE_FLAGS: &[(&str, bool)] = &[
     ),
     ("sharding", cfg!(feature = "sharding")),
 ];
-
-///
-/// MemoryRuntimeApi
-///
-
-pub struct MemoryRuntimeApi;
-
-impl MemoryRuntimeApi {
-    /// Bootstrap Canic's stable-memory declaration snapshot.
-    pub fn bootstrap_registry() -> Result<(), Error> {
-        MemoryRegistryOps::bootstrap_registry().map_err(Error::from)?;
-
-        Ok(())
-    }
-}
 
 ///
 /// RuntimeIntrospectionApi
@@ -527,10 +509,10 @@ fn timer_callback_performance_status(
     memory: ic_timers::MemoryPageSummary,
 ) -> TimerCallbackPerformanceStatus {
     TimerCallbackPerformanceStatus {
-        instruction_samples_since_runtime_start: instructions.samples(),
+        instruction_samples_since_runtime_start: instructions.aggregate().samples(),
         instructions_latest: instructions.latest(),
-        instructions_maximum: instructions.maximum(),
-        instructions_total_since_runtime_start: instructions.total(),
+        instructions_maximum: instructions.aggregate().maximum(),
+        instructions_total_since_runtime_start: instructions.aggregate().total(),
         memory_page_samples_since_runtime_start: memory.samples(),
         memory_pages_latest: memory.latest().map(timer_memory_page_sample_status),
         maximum_wasm_memory_growth_pages: memory.maximum_wasm_growth_pages(),

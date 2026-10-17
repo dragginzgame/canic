@@ -8,35 +8,15 @@ use super::AuthApi;
 use crate::{
     dto::{
         auth::{
-            ActiveDelegationProofStatusResponse, DelegatedToken, DelegatedTokenGetRequest,
-            DelegatedTokenPrepareRequest, DelegatedTokenPrepareResponse,
-            InstallActiveDelegationProofRequest, InstallActiveDelegationProofResponse,
+            ActiveDelegationProofStatusResponse, InstallActiveDelegationProofRequest,
+            InstallActiveDelegationProofResponse,
         },
         error::Error,
     },
     ops::{auth::AuthOps, ic::IcOps},
-    workflow::runtime::auth::RuntimeAuthWorkflow,
 };
 
 impl AuthApi {
-    /// Prepare a delegated token from the issuer-local active delegation proof.
-    pub async fn prepare_delegated_token(
-        request: DelegatedTokenPrepareRequest,
-    ) -> Result<DelegatedTokenPrepareResponse, Error> {
-        Self::require_delegated_token_issuer_enabled()?;
-        RuntimeAuthWorkflow::prepare_delegated_token(request)
-            .await
-            .map_err(Self::map_auth_error)
-    }
-
-    /// Retrieve a prepared delegated token with its issuer canister-signature proof.
-    pub fn get_delegated_token(request: DelegatedTokenGetRequest) -> Result<DelegatedToken, Error> {
-        Self::require_delegated_token_issuer_enabled()?;
-
-        AuthOps::get_delegated_token_issuer_proof(request.claims_hash, IcOps::msg_caller())
-            .map_err(Self::map_auth_error)
-    }
-
     /// Install validated root-certified delegation material for issuer-local token issuance.
     pub fn install_active_delegation_proof(
         request: InstallActiveDelegationProofRequest,

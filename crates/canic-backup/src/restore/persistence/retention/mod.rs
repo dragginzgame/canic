@@ -14,8 +14,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use ic_host_artifacts::artifact::Sha256Digest;
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 
 pub(in crate::restore) fn lock_restore_layout(
     journal: &RestoreApplyJournal,
@@ -47,17 +47,111 @@ pub(in crate::restore) fn retain_restore(
     if !root_matches {
         return Err(RestorePersistenceError::BackupRootMismatch);
     }
-    layout.retain_restore(&journal_identity(path)?, &restore_authority(journal)?)?;
+    layout
+        .retain_restore(&journal_identity(path)?, &restore_authority(journal)?)
+        .map_err(crate::persistence::PersistenceError::from)?;
     Ok(())
 }
 
 pub(in crate::restore) fn release_restore(
     layout: &BackupLayoutGuard,
-    path: &Path,
-    journal: &RestoreApplyJournal,
+    journal: &crate::persistence::JournalLock,
 ) -> Result<(), RestorePersistenceError> {
-    layout.release_restore(&journal_identity(path)?, &restore_authority(journal)?)?;
+    layout.release_restore(
+        journal,
+        &CanicTerminalEvidence {
+            root: Some(layout.root()),
+        },
+    )?;
     Ok(())
+}
+
+/// Refusal of original restore terminal evidence; no refusal authorizes replay.
+#[derive(Debug, thiserror::Error)]
+pub enum RestoreTerminalEvidenceError {
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
+    #[error(transparent)]
+    Journal(#[from] crate::restore::RestoreApplyJournalError),
+    #[error(transparent)]
+    Receipt(Box<crate::restore::RestoreRunnerError>),
+    #[error(transparent)]
+    Authority(Box<RestorePersistenceError>),
+    #[error(transparent)]
+    Checksum(#[from] ic_backup::model::artifacts::ChecksumError),
+    #[error("restore source differs from its held backup layout")]
+    BackupRootMismatch,
+    #[error("original restore is not terminal")]
+    Incomplete,
+    #[error("original restore command custody is incomplete or conflicting")]
+    CommandSet,
+}
+
+struct CanicTerminalEvidence<'a> {
+    root: Option<&'a Path>,
+}
+
+impl ic_backup::ops::persistence::RestoreTerminalEvidenceProvider for CanicTerminalEvidence<'_> {
+    type Error = RestoreTerminalEvidenceError;
+
+    fn qualify_terminal(
+        &self,
+        path: &Path,
+        bytes: &[u8],
+    ) -> Result<ic_backup::view::restore_reference_release::TerminalRestoreEvidence, Self::Error>
+    {
+        let journal: RestoreApplyJournal = serde_json::from_slice(bytes)?;
+        journal.validate()?;
+        if self.root.is_some_and(|expected| {
+            journal
+                .backup_root
+                .as_deref()
+                .is_none_or(|root| Path::new(root) != expected)
+        }) {
+            return Err(RestoreTerminalEvidenceError::BackupRootMismatch);
+        }
+        crate::restore::runner::io::validate_terminal_operation_receipts(&journal)
+            .map_err(|error| RestoreTerminalEvidenceError::Receipt(Box::new(error)))?;
+        if !journal.report().complete {
+            return Err(RestoreTerminalEvidenceError::Incomplete);
+        }
+        let expected = journal
+            .operations
+            .iter()
+            .filter(|operation| {
+                matches!(
+                    operation.operation,
+                    RestoreApplyOperationKind::UploadSnapshot
+                        | RestoreApplyOperationKind::StopCanister
+                        | RestoreApplyOperationKind::LoadSnapshot
+                        | RestoreApplyOperationKind::StartCanister
+                )
+            })
+            .map(|operation| operation.sequence as u64)
+            .collect::<std::collections::BTreeSet<_>>();
+        let mut observed = std::collections::BTreeSet::new();
+        for command in &journal.command_custody {
+            if command.journal() != path
+                || !expected.contains(&command.operation_sequence())
+                || !observed.insert(command.operation_sequence())
+            {
+                return Err(RestoreTerminalEvidenceError::CommandSet);
+            }
+        }
+        if observed != expected {
+            return Err(RestoreTerminalEvidenceError::CommandSet);
+        }
+        let authority = ic_backup::model::artifacts::ArtifactChecksumRecord::from_hash(
+            &restore_authority(&journal)
+                .map_err(|error| RestoreTerminalEvidenceError::Authority(Box::new(error)))?,
+        )?;
+        Ok(
+            ic_backup::view::restore_reference_release::TerminalRestoreEvidence::new(
+                authority,
+                journal.command_custody,
+            ),
+        )
+    }
 }
 
 fn journal_identity(path: &Path) -> Result<PathBuf, RestorePersistenceError> {
@@ -99,7 +193,7 @@ fn restore_authority(journal: &RestoreApplyJournal) -> Result<String, RestorePer
     };
     let bytes =
         serde_json::to_vec(&authority).map_err(crate::persistence::PersistenceError::from)?;
-    Ok(format!("{:x}", Sha256::digest(bytes)))
+    Ok(Sha256Digest::compute(&bytes).to_string())
 }
 
 ///
@@ -133,4 +227,23 @@ struct RestoreOperationAuthority<'a> {
     artifact_checksum: Option<&'a crate::artifacts::ArtifactChecksum>,
     expected_module_hash: Option<&'a str>,
     verification_kind: Option<&'a str>,
+}
+
+// Completed external journals remain replayable after source retention, with exact custody.
+pub(in crate::restore) fn terminal_evidence_without_layout(
+    journal: &crate::persistence::JournalLock,
+) -> Result<
+    ic_backup::view::restore_reference_release::TerminalRestoreEvidence,
+    RestorePersistenceError,
+> {
+    use ic_backup::ops::persistence::RestoreTerminalEvidenceProvider as _;
+    let bytes = ic_host_fs::read::read_file_no_follow(
+        journal.journal(),
+        ic_backup::ops::persistence::MAX_RESTORE_TERMINAL_BYTES,
+    )
+    .map_err(std::io::Error::other)
+    .map_err(crate::persistence::PersistenceError::from)?;
+    CanicTerminalEvidence { root: None }
+        .qualify_terminal(journal.journal(), &bytes)
+        .map_err(RestorePersistenceError::TerminalEvidence)
 }

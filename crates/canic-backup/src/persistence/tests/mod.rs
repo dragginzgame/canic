@@ -342,6 +342,47 @@ fn integrity_verifies_durable_artifacts() {
 }
 
 #[test]
+fn integrity_accepts_equivalent_digest_case_without_rewriting_retained_records() {
+    for (upper_manifest, upper_journal) in
+        [(false, false), (true, false), (false, true), (true, true)]
+    {
+        let root = temp_dir("canic-backup-integrity-digest-case");
+        let layout = BackupLayout::new(root.clone());
+        let checksum = write_artifact(&root, b"root artifact");
+        let manifest_hash = if upper_manifest {
+            checksum.hash.to_ascii_uppercase()
+        } else {
+            checksum.hash.clone()
+        };
+        let journal_hash = if upper_journal {
+            checksum.hash.to_ascii_uppercase()
+        } else {
+            checksum.hash.clone()
+        };
+        let mut manifest = valid_manifest();
+        manifest.deployment.members[0].source_snapshot.checksum = Some(manifest_hash);
+        layout
+            .publish_manifest(&manifest)
+            .expect("publish manifest");
+        layout
+            .write_journal(&journal_with_checksum(journal_hash.clone()))
+            .expect("write journal");
+        let manifest_bytes = fs::read(layout.manifest_path()).expect("read manifest bytes");
+        let journal_bytes = fs::read(layout.journal_path()).expect("read journal bytes");
+
+        let report = layout
+            .verify_integrity()
+            .expect("verify equivalent digests");
+
+        assert!(report.verified);
+        assert_eq!(report.artifacts[0].checksum, journal_hash);
+        assert_eq!(fs::read(layout.manifest_path()).unwrap(), manifest_bytes);
+        assert_eq!(fs::read(layout.journal_path()).unwrap(), journal_bytes);
+        fs::remove_dir_all(root).expect("remove temp layout");
+    }
+}
+
+#[test]
 fn integrity_rejects_backup_id_mismatch() {
     let root = temp_dir("canic-backup-integrity-id");
     let layout = BackupLayout::new(root.clone());

@@ -1899,6 +1899,54 @@ fn member_origin_is_valid_only_under_exact_accepted_authority() {
 }
 
 #[test]
+fn provisioning_failure_rejects_unbounded_or_incomplete_dependency_without_mutation() {
+    use canic_contracts::values::provisioning_failure::{
+        MAX_PROVISIONING_REJECTION_BYTES, ProvisioningDependencyFailure,
+    };
+    use canic_core::control_plane_support::error::{
+        ProvisioningFailureStage, ProvisioningFailureView, ProvisioningRetryCategory,
+    };
+    let fixture = fixture();
+    let accepted = accept_fresh_fixture(&fixture, 100);
+    let before = RootComponentProvisioningStore::export();
+    let valid = ProvisioningDependencyFailure {
+        target: principal(8),
+        method: canic_contracts::protocol::CANIC_WASM_STORE_COMMAND.into(),
+        step: "inspect_template".into(),
+        rejection_code: Some(5),
+        rejection_detail: Some("Store stopped".into()),
+    };
+    let mut oversized = valid.clone();
+    oversized.rejection_detail = Some("x".repeat(MAX_PROVISIONING_REJECTION_BYTES + 1));
+    let mut incomplete = valid.clone();
+    incomplete.rejection_code = None;
+    let mut anonymous = valid;
+    anonymous.target = candid::Principal::anonymous();
+    for dependency in [oversized, incomplete, anonymous] {
+        let result = RootComponentProvisioningOps::record_failure(
+            accepted.operation_id,
+            accepted.plan_hash,
+            ProvisioningFailureView {
+                dependency: Some(dependency),
+                recorded_at_ns: None,
+                retry_at_ns: None,
+                stage: ProvisioningFailureStage::StoreStatus,
+                target: principal(8),
+                operation_id: accepted.operation_id,
+                diagnostic_code: 66,
+                retry_category: ProvisioningRetryCategory::Backoff,
+            },
+            100,
+        );
+        assert_eq!(
+            result.unwrap_err().public_code(),
+            Some(canic_contracts::diagnostics::codes::STATE_INVALID)
+        );
+        assert_eq!(RootComponentProvisioningStore::export(), before);
+    }
+}
+
+#[test]
 fn provisioning_failure_backoff_survives_restart_without_changing_work_receipts() {
     use canic_core::control_plane_support::error::{
         ProvisioningFailureStage, ProvisioningFailureView, ProvisioningRetryCategory,
@@ -1907,6 +1955,15 @@ fn provisioning_failure_backoff_survives_restart_without_changing_work_receipts(
     let accepted = accept_fresh_fixture(&fixture, 100);
     let initial = status_response(accepted.clone());
     let origin = ProvisioningFailureView {
+        dependency: Some(
+            canic_contracts::values::provisioning_failure::ProvisioningDependencyFailure {
+                target: principal(8),
+                method: canic_contracts::protocol::CANIC_WASM_STORE_COMMAND.into(),
+                step: "inspect_template".into(),
+                rejection_code: Some(5),
+                rejection_detail: Some("Wasm Store is stopped".into()),
+            },
+        ),
         recorded_at_ns: None,
         retry_at_ns: None,
         stage: ProvisioningFailureStage::StoreStatus,
@@ -1920,7 +1977,7 @@ fn provisioning_failure_backoff_survives_restart_without_changing_work_receipts(
         let failure = RootComponentProvisioningOps::record_failure(
             accepted.operation_id,
             accepted.plan_hash,
-            origin,
+            origin.clone(),
             now,
         )
         .unwrap();
@@ -1945,12 +2002,13 @@ fn provisioning_failure_backoff_survives_restart_without_changing_work_receipts(
         assert!(!RootComponentProvisioningOps::failure_changed(
             &view, &response
         ));
-        assert_eq!(view.last_failure, Some(failure));
+        assert_eq!(view.last_failure, Some(failure.clone()));
+        assert_eq!(failure.origin.dependency, origin.dependency);
         now = failure.retry_at_ns.unwrap();
     }
     let permanent = ProvisioningFailureView {
         retry_category: ProvisioningRetryCategory::ReviewRequired,
-        ..origin
+        ..origin.clone()
     };
     let failure = RootComponentProvisioningOps::record_failure(
         accepted.operation_id,

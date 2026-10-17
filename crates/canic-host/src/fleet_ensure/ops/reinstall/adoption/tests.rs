@@ -3,6 +3,7 @@ use crate::fleet_ensure::model::{
     CycleConservation, DesiredFleet, FleetActivationResetRecord, FleetActivationSourceRecord,
     FleetEnsureCompletion, FleetEnsurePlanScope, FleetReinstallRecord, ReviewedDesiredFleetRecord,
 };
+use ic_host_fs::durable::{PublicationMode, WriteOptions};
 use std::{collections::BTreeMap, fs};
 
 #[test]
@@ -10,7 +11,15 @@ fn completed_review_is_evidence_and_only_a_new_review_requires_execution_decodin
     let root = crate::test_support::temp_dir("completed-review-byte-identity");
     let paths = EnsurePaths::under(&root, "local", "completed-review");
     let bytes = br#"{"completed_review_evidence":"unchanged"}"#;
-    write_bytes(&review_paths(&paths).plan, bytes).unwrap();
+    write_bytes(
+        &review_paths(&paths).plan,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        bytes,
+    )
+    .unwrap();
     let record = ActivationResetAdoptionRecord {
         source_plan_sha256: "11".repeat(32),
         source_journal_sha256: "22".repeat(32),
@@ -22,7 +31,15 @@ fn completed_review_is_evidence_and_only_a_new_review_requires_execution_decodin
     write_current(&marker_path(&paths), &record).unwrap();
     assert!(review(&paths).unwrap().is_none());
     assert_eq!(fs::read(review_paths(&paths).plan).unwrap(), bytes);
-    write_bytes(&review_paths(&paths).plan, b"unbound new review").unwrap();
+    write_bytes(
+        &review_paths(&paths).plan,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        b"unbound new review",
+    )
+    .unwrap();
     assert!(matches!(
         review(&paths),
         Err(EnsureStateError::Decode { .. })
@@ -43,7 +60,15 @@ pub(in crate::fleet_ensure::ops) fn assert_review_handoff(
         (&source_paths.journal, &paths.journal),
         (&source_paths.state, &paths.state),
     ] {
-        write_bytes(to, &fs::read(from).unwrap()).unwrap();
+        write_bytes(
+            to,
+            WriteOptions {
+                mode: PublicationMode::Replace,
+                permissions: 0o666,
+            },
+            &fs::read(from).unwrap(),
+        )
+        .unwrap();
     }
     let mut plan = fixture_plan(source.clone());
     plan.reviewed_desired = Some(Box::new(ReviewedDesiredFleetRecord::capture(desired)));
@@ -88,7 +113,15 @@ fn assert_handoff(paths: &EnsurePaths, plan: FleetEnsurePlan) {
     let journal = fixture_journal(&plan);
     let mut changed = before[2].clone();
     changed.push(b' ');
-    write_bytes(&paths.state, &changed).unwrap();
+    write_bytes(
+        &paths.state,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &changed,
+    )
+    .unwrap();
     assert!(matches!(
         adopt(paths, &plan, &journal),
         Err(EnsureStateError::ActivationResetAdoptionConflict)
@@ -96,7 +129,15 @@ fn assert_handoff(paths: &EnsurePaths, plan: FleetEnsurePlan) {
     assert!(!marker_path(paths).exists());
     assert_eq!(fs::read(&paths.plan).unwrap(), before[0]);
     assert_eq!(fs::read(&paths.journal).unwrap(), before[1]);
-    write_bytes(&paths.state, &before[2]).unwrap();
+    write_bytes(
+        &paths.state,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &before[2],
+    )
+    .unwrap();
     adopt(paths, &plan, &journal).unwrap();
     assert_eq!(read_plan(paths).unwrap(), Some(plan));
     assert_eq!(
@@ -112,6 +153,14 @@ fn assert_handoff(paths: &EnsurePaths, plan: FleetEnsurePlan) {
             before[index]
         );
     }
+    assert_interrupted_handoff(paths, &completed, &before);
+}
+
+fn assert_interrupted_handoff(
+    paths: &EnsurePaths,
+    completed: &ActivationResetAdoptionRecord,
+    before: &[Vec<u8>; 3],
+) {
     // Every crash boundary after durable intent converges to the same replacement pair.
     let after = [
         fs::read(&paths.plan).unwrap(),
@@ -123,11 +172,19 @@ fn assert_handoff(paths: &EnsurePaths, plan: FleetEnsurePlan) {
         write_current(&marker_path(paths), &interrupted).unwrap();
         write_bytes(
             &paths.plan,
+            WriteOptions {
+                mode: PublicationMode::Replace,
+                permissions: 0o666,
+            },
             if replaced >= 1 { &after[0] } else { &before[0] },
         )
         .unwrap();
         write_bytes(
             &paths.journal,
+            WriteOptions {
+                mode: PublicationMode::Replace,
+                permissions: 0o666,
+            },
             if replaced >= 2 { &after[1] } else { &before[1] },
         )
         .unwrap();
@@ -137,7 +194,15 @@ fn assert_handoff(paths: &EnsurePaths, plan: FleetEnsurePlan) {
         assert!(marker(paths).unwrap().unwrap().complete);
     }
     // A completed marker must never roll back a journal that has since recorded effects.
-    write_bytes(&paths.journal, b"later journal progress").unwrap();
+    write_bytes(
+        &paths.journal,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        b"later journal progress",
+    )
+    .unwrap();
     recover(paths).unwrap();
     assert_eq!(fs::read(&paths.journal).unwrap(), b"later journal progress");
     assert!(review(paths).unwrap().is_none());
@@ -183,7 +248,15 @@ fn interrupted_adoption_rejects_drift_before_replacing_either_document() {
             complete: false,
         };
         for (index, (path, digest)) in source_documents(&paths, &intent).into_iter().enumerate() {
-            write_bytes(path, before[index]).unwrap();
+            write_bytes(
+                path,
+                WriteOptions {
+                    mode: PublicationMode::Replace,
+                    permissions: 0o666,
+                },
+                before[index],
+            )
+            .unwrap();
             retain(&paths, digest, before[index]).unwrap();
         }
         retain(&paths, &intent.replacement_plan_sha256, &replacement_plan).unwrap();
@@ -209,7 +282,15 @@ fn interrupted_adoption_rejects_drift_before_replacing_either_document() {
             "replacement" => object_path(&paths, &intent.replacement_journal_sha256),
             _ => unreachable!(),
         };
-        write_bytes(&target, b"changed").unwrap();
+        write_bytes(
+            &target,
+            WriteOptions {
+                mode: PublicationMode::Replace,
+                permissions: 0o666,
+            },
+            b"changed",
+        )
+        .unwrap();
         let original_plan = fs::read(&paths.plan).unwrap();
         let original_journal = fs::read(&paths.journal).unwrap();
         assert!(matches!(

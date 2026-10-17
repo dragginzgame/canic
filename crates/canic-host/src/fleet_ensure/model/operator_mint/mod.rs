@@ -81,14 +81,14 @@ pub struct OperatorMintIntentRecord {
 pub struct OperatorMintReviewRecord {
     pub intent: OperatorMintIntentRecord,
     pub review_sha256: String,
-    #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub transfer_argument: Option<Vec<u8>>,
-    #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub transfer_outcome: Option<OperatorMintTransferOutcomeRecord>,
-    #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub notification: Option<OperatorMintNotificationRecord>,
     /// Retained only after both Ledger transactions have been authenticated.
-    #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub receipt: Option<OperatorMintReceiptRecord>,
 }
 
@@ -103,7 +103,7 @@ pub struct OperatorMintReviewRecord {
 pub struct OperatorMintNotificationRecord {
     pub icp_block_index: u64,
     pub argument: Vec<u8>,
-    #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub outcome: Option<OperatorMintNotificationOutcomeRecord>,
 }
 
@@ -122,7 +122,7 @@ pub struct OperatorMintReceiptRecord {
     #[serde(with = "crate::fleet_ensure::model::u128_text")]
     pub deposit_block_index: u128,
     pub destination_owner: Principal,
-    #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub destination_subaccount: Option<[u8; 32]>,
     pub deposit_memo: [u8; 32],
     #[serde(with = "crate::fleet_ensure::model::u128_text")]
@@ -187,7 +187,7 @@ pub enum OperatorMintNotificationOutcomeRecord {
     Processing,
 
     Refunded {
-        #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
+        #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
         refund_block_index: Option<u64>,
         reason: String,
     },

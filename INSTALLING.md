@@ -96,18 +96,28 @@ icp --version
 make install-ic-tools
 ```
 
-Repository setup installs the reviewed common IC toolset under `.tools/ic/bin`
-and the pinned jq/yq/ripgrep/cloc set under `.tools/host/bin`. The shared Cargo
-formatter/Candid set lives under `.tools/rust/bin`. Use explicit setup and
+Repository setup selects the reviewed common IC toolset under `.tools/ic/bin`
+and the pinned jq/yq/ripgrep/cloc set under `.tools/host/bin`. Shared Tooling 0.6
+stores those verified payloads once per user, reusing matching bundles across
+checkouts. Cargo-built formatter/Candid tools and the selected Testkit CLI now
+reuse verified shared generations bound to the compiler, native environment,
+package and packaged lock. Tool builds use the canonical standard environment;
+application build settings remain local. Earlier local installations and failed
+attempts remain retained. The common set stays selected at `.tools/rust/common/bin`.
+Contributors adopting 0.6 must rerun setup for common tools and Testkit; keep
+the shared source cache available for offline checks. Use explicit setup and
 then offline verification:
 
 ```bash
 make install-tools
 make tools-check
-export PATH="$PWD/.tools/host/bin:$PWD/.tools/ic/bin:$PWD/.tools/rust/bin:$PATH"
+export PATH="$PWD/.tools/host/bin:$PWD/.tools/ic/bin:$PWD/.tools/rust/common/bin:$PATH"
 ```
 
 Make selects these paths automatically; direct shell commands need the export.
+The default shared store is `${XDG_DATA_HOME:-$HOME/.local/share}/shared-tooling/tools`.
+To override it, set an absolute `SHARED_TOOLING_STORE` consistently for setup,
+offline checks and failure evidence; see [local setup](docs/local-setup.md#shared-executable-storage).
 Ordinary validation never installs tools. Existing complete toolsets and failed
 installation candidates are retained. The reviewed matrix is `ci/ic-tools.tsv`;
 refresh its Shared Tooling snapshot to adopt changed pins. `make update-dev`

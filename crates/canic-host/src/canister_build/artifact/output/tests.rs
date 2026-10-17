@@ -1,7 +1,7 @@
 //! Cargo-selected custom targets remain exact across collisions and stale uplifted files.
 
 use super::*;
-use crate::artifact_io::CapturedWasmArtifact;
+use ic_build::artifacts::CapturedArtifact;
 use std::fs;
 
 #[test]
@@ -84,11 +84,8 @@ fn cargo_custom_lib_outputs_are_captured_before_another_workspace_overwrites_the
         let path = select(&built.stdout, &manifest).unwrap();
         assert_eq!(path.file_name().unwrap(), "custom_library.wasm");
         let bytes = fs::read(&path).unwrap();
-        let captured = CapturedWasmArtifact::capture(
-            &path,
-            &root.join("artifacts").join(format!("{workspace}.wasm")),
-        )
-        .unwrap();
+        let captured =
+            CapturedArtifact::capture(&path, &root.join("artifacts"), usize::MAX).unwrap();
         retained.push((path, bytes, captured));
     }
     assert_eq!(retained[0].0, retained[1].0);
@@ -98,5 +95,53 @@ fn cargo_custom_lib_outputs_are_captured_before_another_workspace_overwrites_the
     }
     assert_eq!(fs::read(&retained[0].0).unwrap(), retained[1].1);
     drop(retained);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn configured_library_command_cannot_build_a_colliding_binary() {
+    use crate::canister_build::{CanisterBuildProfile, WorkspaceBuildContext};
+    let root = crate::test_support::temp_dir("cargo-library-binary-collision");
+    fs::create_dir_all(root.join("src")).unwrap();
+    let manifest = root.join("Cargo.toml");
+    fs::write(&manifest, "[workspace]\n[package]\nname='collision'\nversion='0.1.0'\nedition='2024'\n[lib]\ncrate-type=['cdylib']\n[[bin]]\nname='collision'\npath='src/main.rs'\n").unwrap();
+    fs::write(
+        root.join("src/lib.rs"),
+        "#[unsafe(no_mangle)] pub extern \"C\" fn canister_marker() {}\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("src/main.rs"),
+        "compile_error!(\"colliding binary must not build\");\nfn main() {}\n",
+    )
+    .unwrap();
+    crate::test_support::generate_fixture_lockfile(&root);
+    let context = WorkspaceBuildContext {
+        role: "app".into(),
+        profile: CanisterBuildProfile::Debug,
+        environment: "local".into(),
+        build_network: canic_contracts::ids::BuildNetwork::Local,
+        workspace_root: root.clone(),
+        icp_root: root.clone(),
+        config_path: root.join("canic.toml"),
+        local_replica: None,
+        refresh_canonical_infrastructure_did: false,
+        release_build_id: None,
+    };
+    let mut command = super::super::canister_cargo_build_command(
+        &context,
+        &manifest,
+        CanisterBuildProfile::Debug,
+    );
+    command.arg("--offline").env_remove("CARGO_BUILD_BUILD_DIR");
+    let output = command.output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let path = select(&output.stdout, &manifest).unwrap();
+    assert_eq!(path.file_name().unwrap(), "collision.wasm");
+    assert!(fs::read(path).unwrap().starts_with(b"\0asm"));
     fs::remove_dir_all(root).unwrap();
 }

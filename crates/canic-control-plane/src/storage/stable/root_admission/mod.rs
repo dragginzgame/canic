@@ -19,9 +19,7 @@ std::thread_local! {
     static ROOT_ADMISSION_STATE:
         RefCell<Cell<RootAdmissionStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            canic_core::ic_memory_key!(
-                authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-                key = "canic.control_plane.root.admission.v1"),
+            canic_core::memory::open(crate::memory::keys::ROOT_ADMISSION_V1),
             RootAdmissionStateRecord::default(),
         ));
 }

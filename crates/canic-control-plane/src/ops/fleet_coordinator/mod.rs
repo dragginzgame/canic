@@ -182,6 +182,7 @@ impl FleetCoordinatorOps {
     ) -> InternalError {
         InternalError::unavailable().with_observed_provisioning_failure(
             canic_core::control_plane_support::error::ProvisioningFailureView {
+                dependency: failure.dependency,
                 recorded_at_ns: Some(failure.failed_at_ns),
                 retry_at_ns: failure.retry_at_ns,
                 stage: failure.stage,
@@ -773,6 +774,7 @@ impl FleetCoordinatorOps {
         if failed_at_ns < authority.started_at_ns
             || record
                 .last_root_failure
+                .as_ref()
                 .is_some_and(|failure| failed_at_ns < failure.failed_at_ns)
         {
             return Err(InternalError::invalid_input());
@@ -780,6 +782,7 @@ impl FleetCoordinatorOps {
         let failure = FleetComponentProvisioningRootFailure {
             origin: origin.map(|origin| {
                 canic_contracts::dto::component_provisioning::ProvisioningFailureOrigin {
+                    dependency: origin.dependency,
                     failed_at_ns: origin.recorded_at_ns.unwrap_or(failed_at_ns),
                     retry_at_ns: origin.retry_at_ns,
                     stage: origin.stage,
@@ -794,7 +797,7 @@ impl FleetCoordinatorOps {
             diagnostic_code,
             failed_at_ns,
         };
-        if record.last_root_failure == Some(failure) {
+        if record.last_root_failure.as_ref() == Some(&failure) {
             return component_provisioning_status_response(record);
         }
         let mut next = current.clone();

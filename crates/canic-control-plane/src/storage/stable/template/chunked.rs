@@ -26,7 +26,7 @@ std::thread_local! {
     static TEMPLATE_CHUNK_SETS: RefCell<
         StableBtreeMap<TemplateReleaseKeyRecord, TemplateChunkSetRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.template.chunk_sets.v1")),
+        StableBtreeMap::init(canic_core::memory::open(crate::memory::keys::TEMPLATE_CHUNK_SETS_V1)),
     );
 }
 
@@ -38,13 +38,13 @@ std::thread_local! {
     static TEMPLATE_CHUNK_REFS: RefCell<
         StableBtreeMap<TemplateChunkKeyRecord, TemplateChunkRefRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.template.chunk_refs.v1")),
+        StableBtreeMap::init(canic_core::memory::open(crate::memory::keys::TEMPLATE_CHUNK_REFS_V1)),
     );
 }
 
 std::thread_local! {
     static TEMPLATE_CHUNK_PAYLOADS_MEMORY: RuntimeMemory<DefaultMemoryImpl> =
-        canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.template.chunk_payloads.v1");
+        canic_core::memory::open(crate::memory::keys::TEMPLATE_CHUNK_PAYLOADS_V1);
 }
 
 #[cfg(any(test, feature = "wasm-store-canister"))]

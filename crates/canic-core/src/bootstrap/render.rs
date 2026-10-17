@@ -1447,6 +1447,7 @@ fn render_topup(policy: &TopupPolicy) -> TokenStream {
 fn render_canister_auth_config(config: &CanisterAuthConfig) -> TokenStream {
     let issuer = config.delegated_token_issuer;
     let verifier = config.delegated_token_verifier;
+    let allowed_token_scopes = &config.allowed_token_scopes;
     let local_application_authorization = match &config.local_application_authorization {
         None => quote!(::core::option::Option::None),
         Some(config) => {
@@ -1460,6 +1461,7 @@ fn render_canister_auth_config(config: &CanisterAuthConfig) -> TokenStream {
         ::canic::__internal::core::bootstrap::compiled::CanisterAuthConfig {
             delegated_token_issuer: #issuer,
             delegated_token_verifier: #verifier,
+            allowed_token_scopes: ::std::vec![#(#allowed_token_scopes.to_string()),*],
             local_application_authorization: #local_application_authorization,
             role_attestation_cache: #role_attestation_cache,
         }

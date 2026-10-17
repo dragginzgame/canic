@@ -8,6 +8,7 @@ use crate::fleet_ensure::{
     },
     policy::capacity_import::tests::principal,
 };
+use ic_host_fs::durable::{PublicationMode, WriteOptions};
 
 fn exhausted_survey(paths: &EnsurePaths, digest: [u8; 32]) -> std::path::PathBuf {
     let owner = CapacityImportJournalStore::open(paths).unwrap();
@@ -118,7 +119,15 @@ fn interrupted_local_grant_publication_resumes_exactly_once() {
         crate::fleet_ensure::workflow::attempt_recovery::review(&directory, "local", "survey")
             .unwrap();
     let (path, bytes) = owner::prepare(&paths, &review.owners[0]).unwrap().unwrap();
-    ic_host_fs::durable::write_bytes(&path, &bytes).unwrap();
+    ic_host_fs::durable::write_bytes(
+        &path,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &bytes,
+    )
+    .unwrap();
     crate::fleet_ensure::workflow::attempt_recovery::apply(
         &directory,
         "local",

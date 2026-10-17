@@ -1,6 +1,6 @@
 # Stable-memory layout
 
-Canic uses ic-memory 0.35 and a single MemoryManager per canister.
+Canic uses ic-memory 0.36 and a single MemoryManager per canister.
 The default allocation bucket is **16 Wasm pages (1 MiB)**. A bucket belongs to
 one virtual memory; it cannot be shared between IDs. The manager's own metadata
 page is separate. This setting reduces the minimum physical allocation of a
@@ -8,11 +8,11 @@ small populated store from 8 MiB to 1 MiB.
 
 ## Bootstrap and store access
 
-Canic’s key-only declaration macros delegate registration to ic-memory. Static
-initialization queues registration hooks; ic-memory validates the declarations
-when sealing the registry for bootstrap. Invalid registrations return a bootstrap
-error before allocation authority is published. Canic retains its authority
-constants, store-readiness checks and separate admission registration.
+Canic components return explicit request lists from the same named keys used by
+their stores. The host supplies their complete composition to ic-memory before
+any lazy store opens. Invalid or duplicate requests fail before allocation
+authority is published. Canic retains its authority constants and store-readiness
+checks; memory bootstrap has no constructor or registration hooks.
 
 Canic commits the allocation declarations and runs composed admission before
 stable-memory access. This reserves and validates the declared slots without
@@ -27,9 +27,11 @@ Application storage must follow the same bootstrap-before-access ordering.
 Early default-runtime opens return typed `RuntimeOpenError::NotBootstrapped`
 without constructing a manager or selecting its bucket size. Committed ID
 resolution and authority verification also observe only an existing runtime.
-Consumers can use `memory_id` / `default_memory_manager_memory_id` to resolve
-committed keys and `verify_authority` / `verify_default_memory_manager_authority`
-to check their key-only requirements without replaying host admission.
+Canic owns one explicit `MemoryRuntime` and opens application handles through
+`canic::memory::open`. Components contribute requests to the host composition;
+they must not construct another manager over the same backing memory. Independent
+hosts can use their runtime's `memory_id` and `verify_authority` methods to inspect
+committed keys and ownership before injecting handles into components.
 
 ### Native composed tests
 
@@ -43,12 +45,12 @@ artifact. Bootstrap through the owning framework before the database's native
 initialization helper and before opening Canic stores:
 
 ```rust
-canic::api::runtime::MemoryRuntimeApi::bootstrap_registry()
+canic::memory::bootstrap(application_memory())
     .expect("Canic composed memory bootstrap");
 // Run the application's generated database initialization helper next.
 ```
 
-The default runtime is thread-local: run this ordering on every native thread
+The Canic-owned runtime is thread-local: run this ordering on every native thread
 that uses it. A process-global `Once` or a mutex serializing test bodies does
 not initialize another thread's runtime. Request-execution wrappers and the
 database's native helper retain their own startup/convergence responsibilities.
@@ -175,9 +177,19 @@ Select the final application pool once, before bootstrap:
 
 ```rust
 canic::memory::memory_allocation_pool!(
+    provider = application_memory_pool,
     authorities = [("app", "app."), ("jobs", "jobs.")],
     exclusions = [],
 );
+
+fn application_memory() -> canic::memory::MemoryBootstrap {
+    let mut input = canic::memory::framework();
+    input.pool = application_memory_pool().expect("application grants");
+    input.requests.extend(app::memory_requests().expect("app requests"));
+    input.requests.extend(jobs::memory_requests().expect("jobs requests"));
+    input
+}
+// Pass memory = application_memory(), first in canic::start!(...).
 ```
 
 All owners share eligible IDs 10 through 254. Governance IDs 0 through 9 are
@@ -186,6 +198,28 @@ component partitions. Populated unmanaged IDs in the pool refuse bootstrap
 before commitment. Omitted, reserved and retired ledger keys retain their IDs;
 removing a component never frees its slots. Current grants determine diagnostic
 owner labels, which are not durable allocation identity.
+
+For a generated database that requires a pool-provider function, name that
+function in the same declaration:
+
+```rust
+canic::memory::memory_allocation_pool!(
+    provider = icydb_memory_pool,
+    authorities = [("icydb.app", "icydb.app.")],
+    exclusions = [],
+);
+```
+
+This emits the checked `icydb_memory_pool()` builder in the invocation module and
+supplies the host composition. Do not author a second grant/exclusion list.
+The builder returns the upstream `MemoryAllocationPool`/`MemoryAllocationPoolError`
+result, without reading a sealed runtime or registering, sealing or bootstrapping
+again. It is available before bootstrap and after warm adoption. Declare it at
+the crate root when generated IcyDB code requires `crate::icydb_memory_pool`.
+Canic still owns the composed admission and lifecycle ordering; the provider
+does not replace the database's preparation or restoration participant.
+Authored exclusion bounds retain their existing static-configuration admission:
+invalid ranges panic; namespace/pool failures return the upstream typed error.
 
 Protected allocation observations expose `pool_eligible`, independently of a
 current or retained ledger binding. Protected ledger observations include the
@@ -197,24 +231,23 @@ these retained bindings qualify same-release recovery only.
 
 ## Composed consumer admission
 
-A consuming application can register one composed admission callback for the
-entire artifact with `canic::memory::memory_bootstrap_admission!`. Supply the
-application-owned preparation function and a semantic `PolicyIdentity`; declare
-each consumer's disjoint namespace in the artifact's `memory_allocation_pool!`.
-Admission itself grants no allocation authority. The consuming application owns
-its schema, logical keys, required capacity and database-specific qualification.
+A consuming application passes a complete `canic::memory::MemoryBootstrap` to
+`canic::start!(memory = application_memory(), ...)`. Begin with
+`canic::memory::framework()`, extend its requests with each component's complete
+request factory, select the checked host pool and set its optional `admission`
+to `MemoryBootstrapAdmission::new(identity, prepare)`. Stores and request factories
+share named keys; opening a lazy store contributes no declaration.
 
-The static callback registration is sealed when Canic selects its bootstrap
-policy. Duplicate and late registrations reject. Canic invokes the callback once
-over the complete sealed snapshot on each cold bootstrap attempt, after ledger
-recovery and before commitment or eager memory opening. Warm reuse requires the
-same declarations and composed policy identity and does not rerun admission.
-The existing synchronous lifecycle participant still runs after Canic restoration.
+Canic invokes admission over the complete sealed snapshot on each cold bootstrap
+attempt, after ledger recovery and before commitment. The Memory runtime owns
+ledger persistence and capability publication. Warm reuse requires identical
+requests, pool and policy and does not rerun admission. The synchronous lifecycle
+participant still runs after Canic restoration.
 
 The callback's semantic name, version and optional configuration digest are bound
 into Canic's policy configuration digest. Change that identity when the admission
 contract changes. Hosts with multiple consumers compose them in one callback and
-propagate each rejection; they must not register a hook per database. Typed
+propagate each rejection; they supply one composed callback. Typed
 consumer errors remain available in `MemoryRegistryError::Admission`; Canic's
 existing lifecycle error boundary still maps bootstrap failures to its error code.
 A rejected attempt cannot commit the candidate allocation set.
@@ -333,7 +366,9 @@ and publication authority before application hooks.
 | `canic.core.runtime.bindings.v1` | Cell |
 | `canic.core.fleet.state.v1` | Cell |
 | `canic.core.fleet.activation.v1` | Bounded optional cell |
-| `canic.core.auth.local_application_authorization.state.v1` | Cell |
+| `canic.core.auth.local_application_authorization.state.v1` | Cell (generation and protected binding) |
+| `canic.core.auth.local_application_authorization.sessions.v1` | Bounded vector (4 KiB rows; SDK session and read-only projection) |
+| `canic.core.auth.local_application_authorization.replays.v1` | Bounded vector (512-byte consumed-proof tombstones) |
 | `canic.core.replay.receipts.v1` | B-tree |
 | `canic.core.cycles.tracker.v1` | B-tree |
 | `canic.core.cycles.topup_events.v1` | B-tree |

@@ -1298,6 +1298,14 @@ type IntentReleaseResponse = record {
 type OperationReceipt = record { operation_id : blob };
 type Page = record { total : nat64; entries : vec principal };
 type PageRequest = record { offset : nat64; limit : nat64 };
+// Protected dependency evidence, independent of public diagnostics and spending authority.
+type ProvisioningDependencyFailure = record {
+  method : text;
+  rejection_detail : opt text;
+  step : text;
+  target : principal;
+  rejection_code : opt nat32;
+};
 // Protected origin carried through outer provisioning stages without public error expansion.
 type ProvisioningFailureOrigin = record {
   // Observed owner's retry deadline in Unix nanoseconds, absent when unknown.
@@ -1306,6 +1314,7 @@ type ProvisioningFailureOrigin = record {
   operation_id : blob;
   stage : ProvisioningFailureStage;
   target : principal;
+  dependency : opt ProvisioningDependencyFailure;
   failed_at_ns : nat64;
   diagnostic_code : nat16;
 };

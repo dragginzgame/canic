@@ -53,7 +53,14 @@ pub(super) fn refresh_seed(
     }
     // A crash before the derivation record commits causes an identical reseed on retry.
     // Cargo resolution follows materialization and may legitimately change the lock bytes.
-    write_bytes(&lock, &bytes)?;
+    write_bytes(
+        &lock,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &bytes,
+    )?;
     write_with(
         &record,
         WriteOptions {

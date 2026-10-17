@@ -3,7 +3,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 WORKER_FIXTURE_TESTKIT_SERVER="$(bash "$ROOT/scripts/ci/testkit-server.sh" --check)"
 export WORKER_FIXTURE_TESTKIT_SERVER
-fixture="$(mktemp -d "${TMPDIR:-/tmp}/canic-pocketic-workers.XXXXXX")"
+# Exercise redundant temporary-parent separators on every host, then use one
+# physical fixture path for the worker and cleanup owners' exact custody checks.
+fixture="$(mktemp -d "${TMPDIR:-/tmp}//canic-pocketic-workers.XXXXXX")"
+fixture="$(cd "$fixture" && pwd -P)"
 finish() {
     local status=$?
     if [[ "$status" -ne 0 ]]; then

@@ -4,15 +4,17 @@
 //! Does not own: arbitrary Cargo feature resolution or role allocation policy.
 //! Boundary: rich metadata stays private; consumers receive compact evidence.
 
+use ic_build::cargo::observation::CargoFeatureSelection;
+use ic_build::cargo::observation::schema::{Dependency, Metadata, Node, NodeDep, Package};
+
 mod graph;
 #[cfg(test)]
 mod tests;
 
 use self::graph::{CargoGraphEdge, CargoGraphEvidence, TREE_FORMAT, correlate_package_tree};
-use crate::cargo_metadata::{
-    CargoFeatureSelection, CargoMetadata, CargoMetadataDependency, CargoMetadataNode,
-    CargoMetadataNodeDependency, CargoMetadataPackage, cargo_metadata,
-    cargo_metadata_catalog_for_manifest, cargo_metadata_for_manifest, cargo_tree_for_package,
+use crate::cargo_observation::{
+    cargo_metadata, cargo_metadata_catalog_for_manifest, cargo_metadata_for_manifest,
+    cargo_tree_for_package,
 };
 use canic_contracts::ids::CanisterRole;
 use canic_core::{
@@ -60,8 +62,8 @@ const PROTECTED_CANIC_PACKAGES: &[ProtectedCanicPackage] = &[
 ];
 
 struct ValidatedRoleDeclaration<'a> {
-    package: &'a CargoMetadataPackage,
-    direct_dependency: &'a CargoMetadataDependency,
+    package: &'a Package,
+    direct_dependency: &'a Dependency,
     dependency_key: String,
 }
 
@@ -308,7 +310,7 @@ pub fn validate_internal_test_wasm_packages(
                 ));
             }
             validate_package_manifest_with_cache(
-                &package.manifest_path,
+                package.manifest_path.as_std_path(),
                 &app,
                 &role,
                 PackageValidationMode::LockedBuild,
@@ -330,7 +332,7 @@ pub fn validate_internal_test_wasm_packages(
         };
         if evidence.role_package_name != *package_name
             || normalized_manifest_path(&evidence.role_manifest_path)
-                != normalized_manifest_path(&package.manifest_path)
+                != normalized_manifest_path(package.manifest_path.as_std_path())
         {
             return Err(unsupported_finding(format!(
                 "internal test package `{package_name}` does not match the package selected by its role configuration"
@@ -351,12 +353,9 @@ pub fn validate_internal_test_wasm_packages(
 }
 
 fn package_canic_identity(
-    package: &CargoMetadataPackage,
+    package: &Package,
 ) -> Result<Option<(String, CanisterRole)>, RoleContractFinding> {
-    let canic = package
-        .metadata
-        .as_ref()
-        .and_then(|metadata| metadata.get("canic"));
+    let canic = package.metadata.get("canic");
     let app = canic
         .and_then(|metadata| metadata.get("app"))
         .and_then(serde_json::Value::as_str);
@@ -377,11 +376,14 @@ fn package_canic_identity(
 }
 
 fn package_role_config_path(
-    package: &CargoMetadataPackage,
+    package: &Package,
     expected_app: &str,
     expected_role: &CanisterRole,
 ) -> Option<PathBuf> {
-    let manifest_dir = package.manifest_path.parent()?;
+    let manifest_dir = package
+        .manifest_path
+        .parent()
+        .map(ic_build::cargo::observation::schema::camino::Utf8Path::as_std_path)?;
     for ancestor in manifest_dir.ancestors() {
         let candidate = ancestor.join("canic.toml");
         let Ok(source) = fs::read_to_string(&candidate) else {
@@ -402,7 +404,7 @@ fn package_role_config_path(
         if normalized_manifest_path(&package_manifest_path(
             &candidate,
             declaration.package.as_deref()?,
-        )) == normalized_manifest_path(&package.manifest_path)
+        )) == normalized_manifest_path(package.manifest_path.as_std_path())
         {
             return Some(candidate);
         }
@@ -470,7 +472,7 @@ fn validate_package_manifest_with_cache(
     }
     let tree = match cargo_tree_for_package(
         manifest_path,
-        &declaration.package.id,
+        &declaration.package.id.repr,
         WASM_TARGET,
         mode.locked(),
         mode.offline(),
@@ -508,8 +510,8 @@ struct PackageValidationCache {
 
 struct CachedCargoWorkspace {
     mode: PackageValidationMode,
-    metadata: CargoMetadata,
-    catalog: CargoMetadata,
+    metadata: Metadata,
+    catalog: Metadata,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -550,6 +552,18 @@ impl CargoEvidenceFailure {
                 error.line(),
                 error.column()
             )
+        } else if let Some(error) = source.downcast_ref::<ic_host_process::tool::ToolError>() {
+            let operation = match phase {
+                CargoEvidencePhase::PackageSelectedTree => "cargo tree",
+                _ => "cargo metadata",
+            };
+            let diagnostics = error.evidence().map_or_else(String::new, |evidence| {
+                String::from_utf8_lossy(&evidence.stderr).into_owned()
+            });
+            bounded_cargo_cause(
+                manifest_path,
+                &format!("{operation} failed: {error}\n{diagnostics}"),
+            )
         } else {
             bounded_cargo_cause(manifest_path, &source.to_string())
         };
@@ -569,7 +583,7 @@ impl PackageValidationCache {
         &mut self,
         manifest_path: &Path,
         mode: PackageValidationMode,
-    ) -> Result<(&CargoMetadata, &CargoMetadata), CargoEvidenceFailure> {
+    ) -> Result<(&Metadata, &Metadata), CargoEvidenceFailure> {
         if let Some(index) = self.workspace_index(manifest_path, mode) {
             let workspace = &self.workspaces[index];
             return Ok((&workspace.metadata, &workspace.catalog));
@@ -619,7 +633,7 @@ impl PackageValidationCache {
         self.workspaces.iter().position(|workspace| {
             workspace.mode == mode
                 && workspace.metadata.packages.iter().any(|package| {
-                    normalized_manifest_path(&package.manifest_path) == manifest_path
+                    normalized_manifest_path(package.manifest_path.as_std_path()) == manifest_path
                 })
         })
     }
@@ -735,8 +749,8 @@ fn bounded_cargo_line(line: &str, limit: usize) -> String {
 }
 
 fn validate_role_declaration<'a>(
-    metadata: &CargoMetadata,
-    package: &'a CargoMetadataPackage,
+    metadata: &Metadata,
+    package: &'a Package,
     expected_app: &str,
     expected_role: &CanisterRole,
     build_contract: PackageBuildContract,
@@ -760,7 +774,7 @@ fn validate_role_declaration<'a>(
 }
 
 fn validate_resolved_package(
-    metadata: &CargoMetadata,
+    metadata: &Metadata,
     graph: &CargoGraphEvidence,
     declaration: &ValidatedRoleDeclaration<'_>,
     expected_app: &str,
@@ -773,7 +787,7 @@ fn validate_resolved_package(
     let package_by_id = metadata
         .packages
         .iter()
-        .map(|package| (package.id.as_str(), package))
+        .map(|package| (package.id.repr.as_str(), package))
         .collect::<BTreeMap<_, _>>();
     let node_by_id = metadata
         .resolve
@@ -781,12 +795,12 @@ fn validate_resolved_package(
         .ok_or_else(|| unsupported_finding("cargo metadata omitted the resolved graph"))?
         .nodes
         .iter()
-        .map(|node| (node.id.as_str(), node))
+        .map(|node| (node.id.repr.as_str(), node))
         .collect::<BTreeMap<_, _>>();
     let dependency_edge_name = cargo_dependency_edge_name(dependency_key);
     let direct_edges = graph
         .edges
-        .get(&selected.id)
+        .get(&selected.id.repr)
         .into_iter()
         .flatten()
         .filter(|dependency| dependency.alias == dependency_edge_name)
@@ -807,10 +821,10 @@ fn validate_resolved_package(
     }
 
     validate_runtime_graph(graph, direct_edge)?;
-    if canic_package.version != env!("CARGO_PKG_VERSION") {
+    if canic_package.version.to_string() != env!("CARGO_PKG_VERSION") {
         return Err(RoleContractFinding::CanicVersionMismatch {
             expected: env!("CARGO_PKG_VERSION").to_string(),
-            actual: canic_package.version.clone(),
+            actual: canic_package.version.to_string(),
         });
     }
     validate_cargo_catalog_parity(canic_package, &package_by_id, &node_by_id)?;
@@ -836,12 +850,12 @@ fn validate_resolved_package(
     Ok(RoleCargoGraphEvidence {
         app: expected_app.to_string(),
         role: expected_role.clone(),
-        role_package_name: selected.name.clone(),
-        role_package_version: selected.version.clone(),
-        role_manifest_path: selected.manifest_path.clone(),
+        role_package_name: selected.name.to_string(),
+        role_package_version: selected.version.to_string(),
+        role_manifest_path: selected.manifest_path.clone().into_std_path_buf(),
         cargo_workspace_root: graph.workspace_root.clone(),
-        canic_version: canic_package.version.clone(),
-        canic_manifest_path: canic_package.manifest_path.clone(),
+        canic_version: canic_package.version.to_string(),
+        canic_manifest_path: canic_package.manifest_path.clone().into_std_path_buf(),
         default_features_enabled,
         direct_features,
     })
@@ -850,7 +864,7 @@ fn validate_resolved_package(
 fn validate_selected_canic_features(
     graph: &CargoGraphEvidence,
     direct_edge: &CargoGraphEdge,
-    canic_package: &CargoMetadataPackage,
+    canic_package: &Package,
     direct_features: &BTreeSet<CanicFeatureKey>,
 ) -> Result<(), RoleContractFinding> {
     let canic = graph
@@ -878,7 +892,7 @@ fn validate_selected_canic_features(
 }
 
 fn selected_canic_cargo_feature_closure(
-    canic_package: &CargoMetadataPackage,
+    canic_package: &Package,
     direct_features: &BTreeSet<CanicFeatureKey>,
 ) -> BTreeSet<CanicFeatureKey> {
     let mut selected = direct_features.clone();
@@ -902,10 +916,10 @@ fn selected_canic_cargo_feature_closure(
 }
 
 fn exact_manifest_package<'a>(
-    metadata: &'a CargoMetadata,
+    metadata: &'a Metadata,
     manifest_path: &Path,
     role: &CanisterRole,
-) -> Result<&'a CargoMetadataPackage, RoleContractFinding> {
+) -> Result<&'a Package, RoleContractFinding> {
     let expected = manifest_path
         .canonicalize()
         .unwrap_or_else(|_| manifest_path.to_path_buf());
@@ -916,7 +930,7 @@ fn exact_manifest_package<'a>(
             package
                 .manifest_path
                 .canonicalize()
-                .unwrap_or_else(|_| package.manifest_path.clone())
+                .unwrap_or_else(|_| package.manifest_path.clone().into_std_path_buf())
                 == expected
         })
         .collect::<Vec<_>>();
@@ -929,14 +943,11 @@ fn exact_manifest_package<'a>(
 }
 
 fn validate_package_metadata(
-    package: &CargoMetadataPackage,
+    package: &Package,
     expected_app: &str,
     expected_role: &CanisterRole,
 ) -> Result<(), RoleContractFinding> {
-    let canic = package
-        .metadata
-        .as_ref()
-        .and_then(|metadata| metadata.get("canic"));
+    let canic = package.metadata.get("canic");
     let actual_app = canic
         .and_then(|metadata| metadata.get("app"))
         .and_then(serde_json::Value::as_str)
@@ -961,13 +972,16 @@ fn validate_package_metadata(
 }
 
 fn direct_canic_dependency<'a>(
-    package: &'a CargoMetadataPackage,
+    package: &'a Package,
     role: &CanisterRole,
-) -> Result<&'a CargoMetadataDependency, RoleContractFinding> {
+) -> Result<&'a Dependency, RoleContractFinding> {
     let dependencies = package
         .dependencies
         .iter()
-        .filter(|dependency| dependency.name == CANIC_PACKAGE && dependency.kind.is_none())
+        .filter(|dependency| {
+            dependency.name == CANIC_PACKAGE
+                && dependency.kind == ic_build::cargo::observation::schema::DependencyKind::Normal
+        })
         .collect::<Vec<_>>();
     let [dependency] = dependencies.as_slice() else {
         return if dependencies.is_empty() {
@@ -997,7 +1011,7 @@ fn direct_canic_dependency<'a>(
 }
 
 fn reject_package_feature_forwarding(
-    package: &CargoMetadataPackage,
+    package: &Package,
     dependency_key: &str,
 ) -> Result<(), RoleContractFinding> {
     let strong_prefix = format!("{dependency_key}/");
@@ -1016,16 +1030,16 @@ fn reject_package_feature_forwarding(
 }
 
 fn validate_cargo_declarations(
-    metadata: &CargoMetadata,
-    package: &CargoMetadataPackage,
-    normal_dependency: &CargoMetadataDependency,
+    metadata: &Metadata,
+    package: &Package,
+    normal_dependency: &Dependency,
     build_contract: PackageBuildContract,
 ) -> Result<(), RoleContractFinding> {
     let workspace_manifest = metadata.workspace_root.join("Cargo.toml");
-    let workspace_document = read_cargo_document(&workspace_manifest)?;
+    let workspace_document = read_cargo_document(workspace_manifest.as_std_path())?;
     validate_workspace_canic_declaration(&workspace_document)?;
 
-    let role_document = read_cargo_document(&package.manifest_path)?;
+    let role_document = read_cargo_document(package.manifest_path.as_std_path())?;
     let role_dependency = cargo_dependency_value(&role_document, "dependencies", CANIC_PACKAGE)
         .ok_or_else(|| {
             unsupported_finding(
@@ -1056,7 +1070,7 @@ fn validate_cargo_declarations(
         ));
     }
     if let Some(dependency) = package.dependencies.iter().find(|dependency| {
-        dependency.kind.as_deref() == Some("build")
+        dependency.kind == ic_build::cargo::observation::schema::DependencyKind::Build
             && dependency.name != CANIC_PACKAGE
             && protected_canic_package(&dependency.name).is_some()
     }) {
@@ -1073,7 +1087,7 @@ fn validate_cargo_declarations(
 }
 
 fn validate_compiled_config_build_contract(
-    package: &CargoMetadataPackage,
+    package: &Package,
     role_document: &toml::Value,
     workspace_document: &toml::Value,
 ) -> Result<(), RoleContractFinding> {
@@ -1081,7 +1095,9 @@ fn validate_compiled_config_build_contract(
         .dependencies
         .iter()
         .filter(|dependency| dependency.name == CANIC_PACKAGE)
-        .filter(|dependency| dependency.kind.as_deref() == Some("build"))
+        .filter(|dependency| {
+            dependency.kind == ic_build::cargo::observation::schema::DependencyKind::Build
+        })
         .collect::<Vec<_>>();
     let [build_dependency] = build_dependencies.as_slice() else {
         return Err(unsupported_finding(
@@ -1121,23 +1137,20 @@ fn validate_compiled_config_build_contract(
     Ok(())
 }
 
-fn validate_runtime_only_build_contract(
-    package: &CargoMetadataPackage,
-) -> Result<(), RoleContractFinding> {
-    if package
-        .dependencies
-        .iter()
-        .any(|dependency| dependency.kind.as_deref() == Some("build"))
-    {
+fn validate_runtime_only_build_contract(package: &Package) -> Result<(), RoleContractFinding> {
+    if package.dependencies.iter().any(|dependency| {
+        dependency.kind == ic_build::cargo::observation::schema::DependencyKind::Build
+    }) {
         return Err(unsupported_finding(
             "the built-in Fleet Coordinator package must not declare build dependencies",
         ));
     }
-    if package
-        .targets
-        .iter()
-        .any(|target| target.kind.iter().any(|kind| kind == "custom-build"))
-    {
+    if package.targets.iter().any(|target| {
+        target
+            .kind
+            .iter()
+            .any(|kind| kind == &ic_build::cargo::observation::schema::TargetKind::CustomBuild)
+    }) {
         return Err(unsupported_finding(
             "the built-in Fleet Coordinator package must not declare a build script",
         ));
@@ -1195,7 +1208,7 @@ fn explicit_feature_array<'a>(
 fn validate_dependency_source(
     dependency: &toml::map::Map<String, toml::Value>,
     workspace_document: &toml::Value,
-    metadata_dependency: &CargoMetadataDependency,
+    metadata_dependency: &Dependency,
     label: &str,
 ) -> Result<(), RoleContractFinding> {
     let effective = if dependency.get("workspace").and_then(toml::Value::as_bool) == Some(true) {
@@ -1264,20 +1277,23 @@ fn workspace_canic_dependency(
     })
 }
 
-fn validate_build_script_purpose(
-    package: &CargoMetadataPackage,
-) -> Result<(), RoleContractFinding> {
+fn validate_build_script_purpose(package: &Package) -> Result<(), RoleContractFinding> {
     let build_targets = package
         .targets
         .iter()
-        .filter(|target| target.kind.iter().any(|kind| kind == "custom-build"))
+        .filter(|target| {
+            target
+                .kind
+                .iter()
+                .any(|kind| kind == &ic_build::cargo::observation::schema::TargetKind::CustomBuild)
+        })
         .collect::<Vec<_>>();
     let [build_target] = build_targets.as_slice() else {
         return Err(unsupported_finding(
             "the Canic build dependency requires exactly one package build script",
         ));
     };
-    let source = fs::read_to_string(&build_target.src_path)
+    let source = fs::read_to_string(build_target.src_path.as_std_path())
         .map_err(|_| unsupported_finding("unable to read Canic role build script"))?;
     let syntax = syn::parse_file(&source)
         .map_err(|_| unsupported_finding("unable to parse Canic role build script"))?;
@@ -1593,18 +1609,19 @@ fn render_protected_path(graph: &CargoGraphEvidence, path: &DependencyPathEviden
     )
 }
 
-fn normal_dependencies(
-    node: &CargoMetadataNode,
-) -> impl Iterator<Item = &CargoMetadataNodeDependency> {
-    node.deps
-        .iter()
-        .filter(|dependency| dependency.dep_kinds.iter().any(|kind| kind.kind.is_none()))
+fn normal_dependencies(node: &Node) -> impl Iterator<Item = &NodeDep> {
+    node.deps.iter().filter(|dependency| {
+        dependency
+            .dep_kinds
+            .iter()
+            .any(|kind| kind.kind == ic_build::cargo::observation::schema::DependencyKind::Normal)
+    })
 }
 
 fn validate_cargo_catalog_parity(
-    canic_package: &CargoMetadataPackage,
-    package_by_id: &BTreeMap<&str, &CargoMetadataPackage>,
-    node_by_id: &BTreeMap<&str, &CargoMetadataNode>,
+    canic_package: &Package,
+    package_by_id: &BTreeMap<&str, &Package>,
+    node_by_id: &BTreeMap<&str, &Node>,
 ) -> Result<(), RoleContractFinding> {
     let cargo_public_features = canic_package
         .features
@@ -1642,7 +1659,7 @@ fn validate_cargo_catalog_parity(
     }
 
     let canic_node = node_by_id
-        .get(canic_package.id.as_str())
+        .get(canic_package.id.repr.as_str())
         .copied()
         .ok_or_else(|| cargo_catalog_drift("resolved Canic graph node is missing"))?;
     let core_dependency = canic_package
@@ -1650,7 +1667,7 @@ fn validate_cargo_catalog_parity(
         .iter()
         .find(|dependency| {
             dependency.name == CANIC_CORE_PACKAGE
-                && dependency.kind.is_none()
+                && dependency.kind == ic_build::cargo::observation::schema::DependencyKind::Normal
                 && dependency.target.is_none()
         })
         .ok_or_else(|| cargo_catalog_drift("resolved Canic core dependency is missing"))?;
@@ -1663,7 +1680,7 @@ fn validate_cargo_catalog_parity(
         .find(|dependency| dependency.name == core_edge_name)
         .ok_or_else(|| cargo_catalog_drift("resolved Canic core graph edge is missing"))?;
     let core_package = package_by_id
-        .get(core_edge.pkg.as_str())
+        .get(core_edge.pkg.repr.as_str())
         .copied()
         .ok_or_else(|| cargo_catalog_drift("resolved Canic core package is missing"))?;
 

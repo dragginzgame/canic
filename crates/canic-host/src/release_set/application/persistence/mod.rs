@@ -22,7 +22,10 @@ use crate::{
 use canic_contracts::ids::{CanisterRole, ReleaseBuildId};
 use canic_core::{bootstrap::compiled::ComponentTopology, role_contract::ProtocolProfileDigest};
 use ic_host_artifacts::artifact::ArtifactError;
-use ic_host_fs::{durable::create_new_bytes_with_parents, read::read_optional_file_no_follow};
+use ic_host_fs::{
+    durable::{PublicationMode, WriteOptions, write_bytes},
+    read::read_optional_file_no_follow,
+};
 use sha2_host::{Digest, Sha256};
 use std::{
     io,
@@ -191,8 +194,15 @@ pub fn compile_and_persist_application_artifact_union(
     }
 
     let canonical_bytes = expected.union.canonical_bytes(topology)?;
-    if let Err(source) = create_new_bytes_with_parents(&expected.path, &canonical_bytes)
-        .map_err(crate::publication::ops::io_error)
+    if let Err(source) = write_bytes(
+        &expected.path,
+        WriteOptions {
+            mode: PublicationMode::CreateNew,
+            permissions: 0o666,
+        },
+        &canonical_bytes,
+    )
+    .map_err(crate::publication::ops::io_error)
     {
         match load_optional_persisted_union(&expected.path, topology, release_build_id) {
             Ok(Some(observed)) if observed.union == expected.union => return Ok(observed),

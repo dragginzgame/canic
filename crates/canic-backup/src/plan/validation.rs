@@ -5,6 +5,7 @@
 //! Boundary: enforces plan invariants before dry-run or live execution.
 
 use super::{BackupPlan, BackupPlanError, BackupScopeKind, BackupTarget, build_backup_phases};
+use crate::artifacts::ArtifactChecksum;
 use candid::Principal;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -297,14 +298,10 @@ pub(super) fn validate_required_hash(
     value: &str,
 ) -> Result<(), BackupPlanError> {
     validate_nonempty(field, value)?;
-    if value.len() == 64 && value.chars().all(|char| char.is_ascii_hexdigit()) {
-        Ok(())
-    } else {
-        Err(BackupPlanError::InvalidTopologyHash {
-            field,
-            value: value.to_string(),
-        })
-    }
+    ArtifactChecksum::validate_hash(value).map_err(|_| BackupPlanError::InvalidTopologyHash {
+        field,
+        value: value.to_string(),
+    })
 }
 
 pub(super) fn validate_preflight_id(value: &str) -> Result<(), BackupPlanError> {
@@ -351,13 +348,10 @@ pub(super) fn validate_preflight_timestamp(
     value: &str,
 ) -> Result<u64, BackupPlanError> {
     validate_nonempty(field, value)?;
-    value
-        .strip_prefix("unix:")
-        .and_then(|seconds| seconds.parse::<u64>().ok())
-        .ok_or_else(|| BackupPlanError::InvalidTimestamp {
-            field,
-            value: value.to_string(),
-        })
+    crate::timestamp::timestamp_seconds(value).ok_or_else(|| BackupPlanError::InvalidTimestamp {
+        field,
+        value: value.to_string(),
+    })
 }
 
 fn validate_optional_principal(

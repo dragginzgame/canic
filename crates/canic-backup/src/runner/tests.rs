@@ -436,7 +436,7 @@ fn runner_rejects_unverifiable_post_publication_artifact() {
 
     std::assert_matches!(
         error,
-        BackupRunnerError::Persistence(crate::persistence::PersistenceError::ArtifactCommit(
+        BackupRunnerError::Persistence(crate::persistence::PersistenceError::Shared(
             ic_backup::ops::persistence::PersistenceError::Checksum(
                 ic_backup::model::artifacts::ChecksumError::ChecksumMismatch { .. }
             )
@@ -554,15 +554,16 @@ fn runner_preserves_pending_operation_while_command_is_in_flight() {
         .next_ready_operation()
         .cloned()
         .expect("next mutation");
+    let command_lock =
+        CommandLifetimeLock::acquire(&layout.execution_journal_path(), operation.sequence as u64)
+            .expect("retain original command before claim");
+    journal.command_custody.push(command_lock.record().clone());
     journal
         .mark_operation_pending_at(operation.sequence, Some("unix:11".to_string()))
         .expect("mark interrupted operation pending");
     layout
         .write_execution_journal(&journal)
         .expect("write pending journal");
-    let command_lock =
-        CommandLifetimeLock::acquire(&layout.execution_journal_path(), operation.sequence)
-            .expect("hold prior command lock");
 
     let mut executor = FakeExecutor::default();
     let error = backup_run_execute_with_executor(&runner_config(root.clone(), None), &mut executor)

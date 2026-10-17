@@ -4,6 +4,7 @@
 //! Does not own: stable storage access, orchestration, or platform side effects.
 //! Boundary: ops accesses model state; persisted records and views are passive projections.
 
+pub mod application_checkpoint;
 pub mod auth;
 pub mod caller_authority;
 pub mod cycles_funding;

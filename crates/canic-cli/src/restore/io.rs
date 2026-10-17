@@ -186,16 +186,26 @@ fn restore_backup_dir(
 
 // Read and decode a backup manifest from disk.
 fn read_manifest(path: &Path) -> Result<DeploymentBackupManifest, RestoreCommandError> {
-    output::read_json_file::<DeploymentBackupManifest, RestoreCommandError>(path)
+    canic_backup::persistence::read_json(path).map_err(record_read_error)
 }
 
 // Read and decode an optional source-to-target restore mapping from disk.
 pub(super) fn read_mapping(path: &Path) -> Result<RestoreMapping, RestoreCommandError> {
-    output::read_json_file::<RestoreMapping, RestoreCommandError>(path)
+    canic_backup::persistence::read_json(path).map_err(record_read_error)
 }
 
 fn read_apply_journal(path: &Path) -> Result<RestoreApplyJournal, RestoreCommandError> {
-    output::read_json_file::<RestoreApplyJournal, RestoreCommandError>(path)
+    canic_backup::persistence::read_json(path).map_err(record_read_error)
+}
+
+fn record_read_error(error: canic_backup::persistence::PersistenceError) -> RestoreCommandError {
+    match error {
+        canic_backup::persistence::PersistenceError::Io(error) => RestoreCommandError::Io(error),
+        canic_backup::persistence::PersistenceError::Json(error) => {
+            RestoreCommandError::Json(error)
+        }
+        error => RestoreCommandError::Persistence(error),
+    }
 }
 
 fn same_path(left: &Path, right: &Path) -> bool {

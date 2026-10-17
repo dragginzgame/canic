@@ -1,7 +1,11 @@
 //! Repo-only PocketIC fixtures layered on top of `ic-testkit`.
 
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+mod application_checkpoint;
 mod artifacts;
 mod audit;
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+mod blob_service;
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
 mod caller_authority;
 mod canic;
@@ -73,10 +77,7 @@ pub use canic::{
     managed_test_init_identity, report_canister_diagnostics, report_canister_diagnostics_batch,
     standalone_canister_candid, standalone_canister_wasm, wait_until_ready,
 };
-pub use delegation::{
-    create_user_shard, issue_delegated_token_from_active_proof,
-    issue_delegated_token_from_active_proof_with_request_nonce, role_grant,
-};
+pub use delegation::{create_user_shard, role_grant};
 #[cfg(all(
     feature = "pocketic-fixtures",
     any(not(test), feature = "governed-pocketic-tests")
@@ -308,6 +309,7 @@ mod governed_suite {
         // The retained timing baseline leaves this worker about 350s shorter.
         // Move the two independent support estates (~200s) without adding workers.
         let mut journeys = lifecycle::governed_support_cases();
+        journeys.extend(blob_service::governed_cases());
         journeys.extend(fleet_registry::governed_fleet_journey_cases());
         [regular, journeys]
     }
@@ -367,6 +369,7 @@ mod governed_suite {
         cases.extend(fleet_registry::governed_pocketic_cases());
         cases.extend(fleet_coordinator::governed_pocketic_cases());
         cases.extend(lifecycle::governed_support_cases());
+        cases.extend(blob_service::governed_cases());
         // Retain the recovery prefix and each worker's internal order; the
         // registry partition below owns concurrent execution, not case membership.
         cases.extend(fleet_registry::governed_fleet_journey_cases());

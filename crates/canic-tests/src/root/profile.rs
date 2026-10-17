@@ -1,6 +1,5 @@
 use canic::ids::BuildNetwork;
 use canic_testing_internal::pic::{CanicWasmBuildProfile, RootBaselineSpec};
-use ic_testkit::artifacts::workspace_root_for;
 use std::path::{Path, PathBuf};
 
 const ROOT_TOPOLOGY_RELEASE_ROLES: &[&str] = &[
@@ -50,7 +49,7 @@ impl RootSetupProfile {
 
 // Return the shared repo root for root-harness artifact and config discovery.
 fn workspace_root() -> PathBuf {
-    workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+    canic_testing_internal::workspace::discover()
         .expect("discover Canic test workspace through Cargo")
 }
 

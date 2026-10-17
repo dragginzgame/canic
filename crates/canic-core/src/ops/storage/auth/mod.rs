@@ -8,6 +8,7 @@
 //! role-attestation keys. Callers should use this facade instead of depending
 //! on stable storage implementation details.
 
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
 pub mod application_sessions;
 pub mod mapper;
 
@@ -88,19 +89,14 @@ pub struct ChainKeyRootDelegationBatch {
 /// Storage-ops facade for local application sessions and replay fencing.
 ///
 
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
 pub struct LocalApplicationAuthorizationStateOps;
 
 /// Storage-ops facade for issuer-local installed delegation proof state.
 pub struct DelegatedTokenIssuerStateOps;
 
 impl DelegatedTokenIssuerStateOps {
-    /// Restore the selected issuer authority before runtime readiness.
-    #[cfg(feature = "auth-delegated-token-issuer-state")]
-    pub fn restore() {
-        DelegatedTokenIssuerState::restore();
-    }
-
-    #[must_use]
+    #[cfg(test)]
     pub fn active_delegation_proof(now_ns: u64) -> Option<ActiveDelegationProof> {
         let proof = DelegatedTokenIssuerState::get_active_delegation_proof()
             .map(ActiveDelegationProofRecordMapper::record_to_dto)?;
@@ -108,6 +104,12 @@ impl DelegatedTokenIssuerStateOps {
             return None;
         }
         Some(proof)
+    }
+
+    /// Restore the selected issuer authority before runtime readiness.
+    #[cfg(feature = "auth-delegated-token-issuer-state")]
+    pub fn restore() {
+        DelegatedTokenIssuerState::restore();
     }
 
     #[must_use]

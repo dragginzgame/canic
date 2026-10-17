@@ -12,7 +12,7 @@ use crate::{
     execution::{
         BackupExecutionJournal, BackupExecutionJournalOperation, BackupExecutionOperationReceipt,
     },
-    persistence::{BackupLayout, CommandLifetimeHandle},
+    persistence::{BackupLayout, CommandLifetimeLock},
     plan::{BackupOperationKind, BackupPlan},
     runner::{
         BackupRunnerCommandError, BackupRunnerConfig, BackupRunnerError, BackupRunnerExecutor,
@@ -36,7 +36,7 @@ pub(super) fn execute_operation_receipt(
     plan: &BackupPlan,
     journal: &BackupExecutionJournal,
     operation: &BackupExecutionJournalOperation,
-    command_lifetime: Option<CommandLifetimeHandle>,
+    command_lifetime: Option<&mut CommandLifetimeLock>,
 ) -> Result<BackupExecutionOperationReceipt, BackupRunnerError> {
     match operation.kind {
         BackupOperationKind::Stop => execute_stop(
@@ -87,7 +87,7 @@ fn execute_stop(
     executor: &mut impl BackupRunnerExecutor,
     journal: &BackupExecutionJournal,
     operation: &BackupExecutionJournalOperation,
-    command_lifetime: CommandLifetimeHandle,
+    command_lifetime: &mut CommandLifetimeLock,
 ) -> Result<BackupExecutionOperationReceipt, BackupRunnerError> {
     let target = operation_target(operation)?;
     executor
@@ -104,7 +104,7 @@ fn execute_start(
     executor: &mut impl BackupRunnerExecutor,
     journal: &BackupExecutionJournal,
     operation: &BackupExecutionJournalOperation,
-    command_lifetime: CommandLifetimeHandle,
+    command_lifetime: &mut CommandLifetimeLock,
 ) -> Result<BackupExecutionOperationReceipt, BackupRunnerError> {
     let target = operation_target(operation)?;
     executor
@@ -117,10 +117,10 @@ fn execute_start(
     ))
 }
 
-fn required_command_lifetime(
+fn required_command_lifetime<'a>(
     operation: &BackupExecutionJournalOperation,
-    command_lifetime: Option<CommandLifetimeHandle>,
-) -> Result<CommandLifetimeHandle, BackupRunnerError> {
+    command_lifetime: Option<&'a mut CommandLifetimeLock>,
+) -> Result<&'a mut CommandLifetimeLock, BackupRunnerError> {
     command_lifetime.ok_or_else(|| BackupRunnerError::MissingCommandLifetime {
         sequence: operation.sequence,
         operation_id: operation.operation_id.clone(),

@@ -1,5 +1,5 @@
 use canic::{
-    api::{metrics::MetricsQuery, runtime::MemoryRuntimeApi},
+    api::metrics::MetricsQuery,
     dto::metrics::{MetricEntry, MetricValue, MetricsKind, QueryPerfSample},
     dto::page::PageRequest,
 };
@@ -7,7 +7,7 @@ use canic::{
 // The default memory runtime is thread-local, so each libtest worker that uses
 // stable-backed metrics must bootstrap its own runtime.
 fn bootstrap_metrics_memory_for_current_thread() {
-    MemoryRuntimeApi::bootstrap_registry().expect("metrics facade memory bootstrap");
+    canic::memory::bootstrap(canic::memory::framework()).expect("metrics facade memory bootstrap");
 }
 
 // Verify the public facade exposes query perf sampling without internal paths.

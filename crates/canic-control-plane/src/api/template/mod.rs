@@ -25,8 +25,6 @@ use crate::{
     ops::storage::state::root_wasm_store::RootWasmStoreStateOps,
     workflow::runtime::template::WasmStorePublicationWorkflow,
 };
-#[cfg(feature = "wasm-store-canister")]
-use async_trait::async_trait;
 use canic_contracts::dto::error::Error;
 #[cfg(feature = "root-control-plane")]
 use canic_contracts::dto::root_store::{RootStoreBootstrapRequest, RootStoreBootstrapResponse};
@@ -39,9 +37,8 @@ use canic_core::control_plane_support::ops::ic::IcOps;
 pub struct WasmStoreMutationCallerPredicate;
 
 #[cfg(feature = "wasm-store-canister")]
-#[async_trait]
-impl canic_core::access::expr::AsyncAccessPredicate for WasmStoreMutationCallerPredicate {
-    async fn eval(
+impl canic_core::access::expr::AccessCheck for WasmStoreMutationCallerPredicate {
+    fn eval(
         &self,
         ctx: &canic_core::access::expr::AccessContext,
     ) -> Result<(), canic_core::access::AccessError> {
@@ -54,7 +51,7 @@ impl canic_core::access::expr::AsyncAccessPredicate for WasmStoreMutationCallerP
         if caller != authority.installation_controller {
             return Err(canic_core::access::AccessError::RootRequired);
         }
-        canic_core::access::auth::is_controller(caller).await
+        canic_core::access::auth::is_controller(caller)
     }
 
     fn name(&self) -> &'static str {

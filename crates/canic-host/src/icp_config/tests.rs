@@ -495,3 +495,88 @@ fn malformed_config_cannot_hide_behind_an_implicit_environment() {
     ));
     fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn optional_config_requires_the_complete_file_within_its_budget() {
+    use ic_host_artifacts::artifact::ArtifactError;
+
+    let root = temp_dir("canic-icp-config-byte-budget");
+    fs::create_dir_all(&root).unwrap();
+    let path = root.join(ICP_CONFIG_FILE);
+    assert_eq!(
+        read_optional_icp_yaml(&path).unwrap(),
+        (String::new(), false)
+    );
+    let exact = " ".repeat(MAX_ICP_CONFIG_BYTES);
+    fs::write(&path, &exact).unwrap();
+    assert_eq!(read_optional_icp_yaml(&path).unwrap(), (exact, true));
+    fs::write(&path, " ".repeat(MAX_ICP_CONFIG_BYTES + 1)).unwrap();
+    let IcpConfigError::Io(error) = read_optional_icp_yaml(&path).unwrap_err() else {
+        panic!("expected bounded-read I/O error");
+    };
+    assert!(matches!(
+        error.get_ref().and_then(|source| source.downcast_ref::<ArtifactError>()),
+        Some(ArtifactError::LimitExceeded { limit }) if *limit == MAX_ICP_CONFIG_BYTES as u64
+    ));
+    // A valid prefix must not hide configuration after the budget boundary.
+    let oversized = format!(
+        "{}\nnetworks:\n  - name: local\n",
+        " ".repeat(MAX_ICP_CONFIG_BYTES)
+    );
+    fs::write(&path, oversized).unwrap();
+    for error in [
+        read_optional_icp_yaml(&path).unwrap_err(),
+        configured_local_gateway_port_from_root(&root).unwrap_err(),
+        resolve_icp_build_network_from_root(&root, "local").unwrap_err(),
+        inspect_canic_icp_yaml_from_root(&root, None).unwrap_err(),
+    ] {
+        let IcpConfigError::Io(error) = error else {
+            panic!("expected bounded-read I/O error before configuration interpretation");
+        };
+        assert!(matches!(
+            error.get_ref().and_then(|source| source.downcast_ref::<ArtifactError>()),
+            Some(ArtifactError::LimitExceeded { limit }) if *limit == MAX_ICP_CONFIG_BYTES as u64
+        ));
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+#[cfg(unix)]
+fn optional_config_preserves_utf8_and_followed_symlink_policy() {
+    use ic_host_artifacts::artifact::ArtifactError;
+    use std::os::unix::fs::symlink;
+
+    let root = temp_dir("canic-icp-config-admission");
+    fs::create_dir_all(&root).unwrap();
+    let path = root.join(ICP_CONFIG_FILE);
+    fs::write(&path, [0xff]).unwrap();
+    assert!(
+        matches!(read_optional_icp_yaml(&path), Err(IcpConfigError::Io(error))
+        if error.kind() == std::io::ErrorKind::InvalidData)
+    );
+    fs::write(&path, "canisters: []\n").unwrap();
+    let link = root.join("linked.yaml");
+    symlink(&path, &link).unwrap();
+    assert_eq!(
+        read_optional_icp_yaml(&link).unwrap(),
+        ("canisters: []\n".into(), true)
+    );
+    fs::remove_file(&path).unwrap();
+    assert_eq!(
+        read_optional_icp_yaml(&link).unwrap(),
+        (String::new(), false)
+    );
+    for special in [root.as_path(), Path::new("/dev/null")] {
+        let IcpConfigError::Io(error) = read_optional_icp_yaml(special).unwrap_err() else {
+            panic!("expected regular-file admission error");
+        };
+        assert!(matches!(
+            error
+                .get_ref()
+                .and_then(|source| source.downcast_ref::<ArtifactError>()),
+            Some(ArtifactError::NotRegularFile)
+        ));
+    }
+    fs::remove_dir_all(root).unwrap();
+}

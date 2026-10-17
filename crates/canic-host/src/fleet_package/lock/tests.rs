@@ -1,11 +1,13 @@
 //! Parent-only corrections, interrupted seeding and unchanged resolved graphs.
 
+use ic_build::cargo::observation::CargoFeatureSelection;
+
 use super::*;
 use std::fs;
 
 #[test]
 fn cargo_resolves_a_refreshed_parent_seed_into_the_generated_workspace() {
-    use crate::cargo_metadata::{CargoFeatureSelection, cargo_metadata_catalog_for_manifest};
+    use crate::cargo_observation::cargo_metadata_catalog_for_manifest;
     let root = crate::test_support::temp_dir("generated-lock-cargo");
     let generated = root.join("generated");
     let shared = root.join("shared");
@@ -43,7 +45,8 @@ fn cargo_resolves_a_refreshed_parent_seed_into_the_generated_workspace() {
                 .iter()
                 .find(|package| package.name == "shared")
                 .unwrap()
-                .version,
+                .version
+                .to_string(),
             version
         );
         let bytes = fs::read(generated.join("Cargo.lock")).unwrap();

@@ -79,18 +79,17 @@ pub struct MemoryLedgerResponse {
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct MemoryCommitRecoveryResponse {
-    pub slot0: MemoryCommitSlotResponse,
-    pub slot1: MemoryCommitSlotResponse,
+    pub current: MemoryCommitSnapshotResponse,
     pub authoritative_generation: Option<u64>,
     pub recovery_error: Option<MemoryCommitRecoveryErrorResponse>,
 }
 
 ///
-/// MemoryCommitSlotResponse
+/// MemoryCommitSnapshotResponse
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-pub struct MemoryCommitSlotResponse {
+pub struct MemoryCommitSnapshotResponse {
     pub present: bool,
     pub generation: Option<u64>,
     pub valid: bool,
@@ -162,7 +161,7 @@ mod tests {
 
     #[test]
     fn memory_enums_roundtrip_candid_with_existing_variant_labels() {
-        assert_enum_candid_contract(MemoryCommitRecoveryErrorResponse::InvalidCommitSlots);
+        assert_enum_candid_contract(MemoryCommitRecoveryErrorResponse::InvalidSnapshot);
         assert_enum_candid_contract(MemoryCommitRecoveryErrorResponse::UnexpectedGeneration);
         assert_enum_candid_contract(MemoryAllocationState::Retired);
     }

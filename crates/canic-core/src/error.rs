@@ -28,6 +28,9 @@ pub struct InternalError {
     code: RegisteredDiagnosticCode,
     projection: PublicProjection,
     platform_rejection: Option<String>,
+    platform_rejection_code: Option<u32>,
+    dependency_failure:
+        Option<Box<canic_contracts::values::provisioning_failure::ProvisioningDependencyFailure>>,
     provisioning_failure: Option<Box<crate::view::provisioning_failure::ProvisioningFailureView>>,
 }
 
@@ -39,7 +42,8 @@ enum PublicProjection {
 
 impl InternalError {
     /// Maximum UTF-8 bytes retained for a platform rejection.
-    pub const MAX_PLATFORM_REJECTION_BYTES: usize = 1024;
+    pub const MAX_PLATFORM_REJECTION_BYTES: usize =
+        canic_contracts::values::provisioning_failure::MAX_PROVISIONING_REJECTION_BYTES;
 
     const fn new(code: RegisteredDiagnosticCode, public_code: RegisteredDiagnosticCode) -> Self {
         Self {
@@ -47,6 +51,8 @@ impl InternalError {
             projection: PublicProjection::Registered(public_code),
             provisioning_failure: None,
             platform_rejection: None,
+            platform_rejection_code: None,
+            dependency_failure: None,
         }
     }
 
@@ -65,6 +71,8 @@ impl InternalError {
             projection: PublicProjection::Registered(public_code),
             provisioning_failure: None,
             platform_rejection: None,
+            platform_rejection_code: None,
+            dependency_failure: None,
         }
     }
 
@@ -77,17 +85,47 @@ impl InternalError {
             projection: PublicProjection::Forwarded(err),
             provisioning_failure: None,
             platform_rejection: None,
+            platform_rejection_code: None,
+            dependency_failure: None,
         }
     }
 
     /// Retain bounded platform rejection text for protected operator diagnostics only.
     #[must_use]
-    pub fn with_platform_rejection(mut self, message: &str) -> Self {
+    pub fn with_platform_rejection(mut self, code: u32, message: &str) -> Self {
         let mut end = message.len().min(Self::MAX_PLATFORM_REJECTION_BYTES);
         while !message.is_char_boundary(end) {
             end -= 1;
         }
         self.platform_rejection = Some(message[..end].to_owned());
+        self.platform_rejection_code = Some(code);
+        self
+    }
+
+    /// Retain the first failed dependency without keeping call arguments or changing retry policy.
+    #[must_use]
+    pub fn with_dependency_failure(
+        mut self,
+        target: candid::Principal,
+        method: &'static str,
+        step: &'static str,
+    ) -> Self {
+        let evidence = self.dependency_failure.get_or_insert_with(|| {
+            Box::new(
+                canic_contracts::values::provisioning_failure::ProvisioningDependencyFailure {
+                    target,
+                    method: method.to_owned(),
+                    step: step.to_owned(),
+                    rejection_code: self.platform_rejection_code,
+                    rejection_detail: self.platform_rejection.clone(),
+                },
+            )
+        });
+        if let Some(origin) = self.provisioning_failure.as_mut() {
+            origin
+                .dependency
+                .get_or_insert_with(|| evidence.as_ref().clone());
+        }
         self
     }
 
@@ -109,6 +147,7 @@ impl InternalError {
         if self.provisioning_failure.is_none() {
             self.provisioning_failure = Some(Box::new(
                 crate::view::provisioning_failure::ProvisioningFailureView {
+                    dependency: self.dependency_failure.as_deref().cloned(),
                     recorded_at_ns: None,
                     retry_at_ns: None,
                     stage,
@@ -138,7 +177,7 @@ impl InternalError {
     pub fn provisioning_failure(
         &self,
     ) -> Option<crate::view::provisioning_failure::ProvisioningFailureView> {
-        self.provisioning_failure.as_deref().copied()
+        self.provisioning_failure.as_deref().cloned()
     }
 
     #[must_use]

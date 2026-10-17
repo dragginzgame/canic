@@ -8,8 +8,10 @@ use crate::domain::provisioning_failure::{ProvisioningFailureStage, Provisioning
 use candid::Principal;
 
 /// Bounded context attached to an internal failure without exposing it publicly.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProvisioningFailureView {
+    pub dependency:
+        Option<canic_contracts::values::provisioning_failure::ProvisioningDependencyFailure>,
     /// Set when the originating owner records the failure durably.
     pub recorded_at_ns: Option<u64>,
     /// Deadline supplied by the observed retry owner; never inferred by an outer caller.

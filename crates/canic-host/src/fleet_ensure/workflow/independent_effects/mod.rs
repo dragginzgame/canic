@@ -11,8 +11,9 @@ use crate::fleet_ensure::{
     },
     ops::{
         EnsurePaths, EnsurePlatform,
+        effect_evidence::retain_observation,
         effect_preparation::prepare_effect,
-        independent_effects::{IndependentEffect, retain_observation, retain_outcome},
+        independent_effects::{IndependentEffect, retain_outcome},
         write_journal,
     },
     policy::independent_effects::batch_len,

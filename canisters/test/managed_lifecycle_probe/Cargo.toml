@@ -15,6 +15,7 @@ crate-type = ["cdylib"]
 [dependencies]
 candid = { workspace = true }
 canic = { workspace = true, features = ["internal-test-fixtures"] }
+ciborium.workspace = true
 ic-cdk = { workspace = true }
 ic-memory = { workspace = true }
 serde = { workspace = true }

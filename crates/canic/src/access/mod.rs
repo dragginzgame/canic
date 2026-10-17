@@ -2,6 +2,6 @@
 
 pub use crate::__internal::core::access::{
     AccessError, auth, caller_authority, deployment, env,
-    expr::{AccessContext, AsyncAccessPredicate, async_trait},
+    expr::{AccessCheck, AccessContext},
     fleet,
 };

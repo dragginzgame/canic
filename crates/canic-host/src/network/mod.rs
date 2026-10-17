@@ -13,7 +13,10 @@ use crate::{
 };
 use canic_contracts::ids::{BuildNetwork, CanonicalNetworkId};
 use ic_host_artifacts::artifact::{ArtifactError, Sha256Digest};
-use ic_host_fs::{durable::create_new_bytes_with_parents, read::read_optional_file_no_follow};
+use ic_host_fs::{
+    durable::{PublicationMode, WriteOptions, write_bytes},
+    read::read_optional_file_no_follow,
+};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 use std::{
     io,
@@ -418,7 +421,16 @@ fn encode_digest(digest: [u8; 32]) -> String {
 }
 
 fn create_new(path: &Path, bytes: &[u8]) -> Result<(), NetworkIdentityError> {
-    match create_new_bytes_with_parents(path, bytes).map_err(crate::publication::ops::io_error) {
+    match write_bytes(
+        path,
+        WriteOptions {
+            mode: PublicationMode::CreateNew,
+            permissions: 0o666,
+        },
+        bytes,
+    )
+    .map_err(crate::publication::ops::io_error)
+    {
         Ok(()) => Ok(()),
         Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {
             let existing = read_required_regular_file(path)?;
@@ -443,7 +455,16 @@ fn create_new_enrollment(
 ) -> Result<(), NetworkIdentityError> {
     let path = &paths.enrollment;
     let bytes = encode_json(enrollment)?;
-    match create_new_bytes_with_parents(path, &bytes).map_err(crate::publication::ops::io_error) {
+    match write_bytes(
+        path,
+        WriteOptions {
+            mode: PublicationMode::CreateNew,
+            permissions: 0o666,
+        },
+        &bytes,
+    )
+    .map_err(crate::publication::ops::io_error)
+    {
         Ok(()) => Ok(()),
         Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {
             let existing = read_required_json::<NetworkEnrollmentRecord>(path)?;
@@ -469,7 +490,16 @@ fn create_new_profile(paths: &NetworkPaths, environment: &str) -> Result<(), Net
         canonical_network_id: paths.canonical_network_id,
     };
     let bytes = encode_json(&profile)?;
-    match create_new_bytes_with_parents(path, &bytes).map_err(crate::publication::ops::io_error) {
+    match write_bytes(
+        path,
+        WriteOptions {
+            mode: PublicationMode::CreateNew,
+            permissions: 0o666,
+        },
+        &bytes,
+    )
+    .map_err(crate::publication::ops::io_error)
+    {
         Ok(()) => Ok(()),
         Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {
             let existing = read_required_profile(path)?;

@@ -53,11 +53,9 @@ mod tests {
             fleet_registry::FleetRegistryOps,
         },
     };
-    use ic_testkit::{
-        artifacts::workspace_root_for,
-        pic::{
-            CandidCallExt, PocketIc, PocketIcBuilder, PocketIcSnapshotExt, SnapshotRestoreFunding,
-        },
+    use ic_testkit::pic::{
+        CandidCallExt, CanisterSnapshotTarget, PocketIc, PocketIcBuilder, PocketIcSnapshotExt,
+        SnapshotRestoreFunding,
     };
 
     const INSTALL_CYCLES: u128 = 500_000_000_000_000;
@@ -159,8 +157,8 @@ placement.minimum_distinct_roots = 2
     #[test]
     fn coordinator_commits_joining_roots_and_replays_original_receipts() {
         let _unit_test_serial = super::super::acquire_pic_unit_test_serial_guard();
-        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
-            .expect("discover Canic test workspace through Cargo");
+        let workspace_root =
+            crate::workspace::discover().expect("discover Canic test workspace through Cargo");
         let wasm = build_canonical_fleet_coordinator_wasm(&workspace_root);
         let pic = start_pocket_ic(PocketIcBuilder::new().with_application_subnet());
         let coordinator = pic.create_canister();
@@ -254,8 +252,8 @@ placement.minimum_distinct_roots = 2
     #[test]
     fn standalone_coordinator_prepares_from_its_durable_compiled_configuration() {
         let _unit_test_serial = super::super::acquire_pic_unit_test_serial_guard();
-        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
-            .expect("discover Canic test workspace through Cargo");
+        let workspace_root =
+            crate::workspace::discover().expect("discover Canic test workspace through Cargo");
         let wasm = build_canonical_fleet_coordinator_wasm(&workspace_root);
         let pic = start_pocket_ic(PocketIcBuilder::new().with_application_subnet());
         let coordinator = pic.create_canister();
@@ -337,7 +335,7 @@ placement.minimum_distinct_roots = 2
         assert_eq!(sealed.operation_id, Some(request.operation_id));
 
         let snapshots = pic
-            .capture_controller_snapshots(coordinator, [coordinator])
+            .capture_snapshots([CanisterSnapshotTarget::new(coordinator, None)])
             .expect("Coordinator snapshot capture");
         let CoordinatorCommandResponse::ResumeAuthoritySnapshot(resumed) = command(
             pic,
@@ -349,7 +347,7 @@ placement.minimum_distinct_roots = 2
         };
         assert_eq!(resumed.phase, AuthorityRestoreFencePhase::Open);
 
-        pic.restore_snapshots_with_captured_senders_and_funding(
+        pic.restore_snapshots(
             &snapshots,
             SnapshotRestoreFunding::TopUpTo {
                 minimum_cycles: crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,

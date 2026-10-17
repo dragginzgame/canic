@@ -1,6 +1,6 @@
 #![expect(clippy::unused_async)]
 use candid::{CandidType, Principal};
-use canic::access::{AccessContext, AccessError, AsyncAccessPredicate, async_trait};
+use canic::access::{AccessCheck, AccessContext, AccessError};
 use canic::endpoint::ArgumentLimits;
 use canic::{Error, prelude::*};
 use std::cell::Cell;
@@ -67,9 +67,8 @@ struct PlainReply {
 
 struct Gate(bool);
 
-#[async_trait]
-impl AsyncAccessPredicate for Gate {
-    async fn eval(&self, _: &AccessContext) -> Result<(), AccessError> {
+impl AccessCheck for Gate {
+    fn eval(&self, _: &AccessContext) -> Result<(), AccessError> {
         // Test-only observations distinguish short-circuiting from handler dispatch.
         PREDICATE_CALLS.set(PREDICATE_CALLS.get() + 1);
         if self.0 {

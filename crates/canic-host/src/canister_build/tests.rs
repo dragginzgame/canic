@@ -258,4 +258,5 @@ fn configured_canister_build_uses_the_locked_resolver() {
         super::CanisterBuildProfile::Fast,
     );
     assert!(command.get_args().any(|argument| argument == "--locked"));
+    assert!(command.get_args().any(|argument| argument == "--lib"));
 }

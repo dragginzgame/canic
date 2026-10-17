@@ -8,9 +8,8 @@ use crate::{
     cdk::types::Principal,
     dto::auth::{
         ChainKeyAlgorithm, ChainKeyBatchHeaderV1, ChainKeyDelegationCertV1, ChainKeyKeyId,
-        DelegatedAuthRegistrySnapshotV1, DelegatedRoleGrant, DelegatedTokenClaims,
-        DelegationAudience, DelegationCert, DelegationProof, IssuerProof, IssuerProofAlgorithm,
-        IssuerProofBinding, RootKeyPolicyV1,
+        DelegatedAuthRegistrySnapshotV1, DelegatedRoleGrant, DelegationAudience, DelegationCert,
+        IssuerProofAlgorithm, IssuerProofBinding, RootKeyPolicyV1,
     },
     ops::auth::delegated::protocol,
 };
@@ -18,9 +17,6 @@ use canic_contracts::ids::{BuildNetwork, CanisterRole, FleetKey};
 use ic_auth::canonical::CanonicalAuthError as ProtocolError;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
-
-#[cfg(test)]
-pub use ic_auth::canonical::MAX_TOKEN_EXT_BYTES;
 
 const ROOT_KEY_POLICY_DOMAIN: &[u8] = b"CANIC_ROOT_KEY_POLICY_V1";
 const DELEGATED_AUTH_REGISTRY_DOMAIN: &[u8] = b"CANIC_DELEGATED_AUTH_REGISTRY_SNAPSHOT_V1";
@@ -72,18 +68,6 @@ pub fn cert_hash(cert: &DelegationCert) -> Result<[u8; 32], CanonicalAuthError> 
     Ok(ic_auth::canonical::cert_hash(&protocol::cert(cert)?)?)
 }
 
-pub fn claims_hash(claims: &DelegatedTokenClaims) -> Result<[u8; 32], CanonicalAuthError> {
-    Ok(ic_auth::canonical::claims_hash(&protocol::claims(claims)?)?)
-}
-
-pub fn proof_hash(proof: &DelegationProof) -> Result<[u8; 32], CanonicalAuthError> {
-    Ok(ic_auth::canonical::proof_hash(&protocol::proof(proof)?)?)
-}
-
-pub fn issuer_proof_hash(proof: &IssuerProof) -> Result<[u8; 32], CanonicalAuthError> {
-    Ok(ic_auth::canonical::issuer_proof_hash(proof)?)
-}
-
 pub fn chain_key_batch_header_hash(
     header: &ChainKeyBatchHeaderV1,
 ) -> Result<[u8; 32], CanonicalAuthError> {
@@ -130,10 +114,6 @@ pub fn issuer_proof_binding_hash(
         issuer_proof_alg,
         issuer_proof_binding,
     )?)
-}
-
-pub fn role_hash(role: &CanisterRole) -> Result<[u8; 32], CanonicalAuthError> {
-    Ok(ic_auth::canonical::role_hash(&protocol::role(role)?)?)
 }
 
 fn hash_bytes(bytes: &[u8]) -> [u8; 32] {
@@ -356,7 +336,7 @@ mod tests {
     use super::*;
     use crate::dto::auth::{
         ChainKeyBatchWitnessStepV1, ChainKeyBatchWitnessV1, ChainKeyRootSignatureV1,
-        IcCanisterSignatureProofV1, IcChainKeyBatchSignatureProofV1, RootProof,
+        DelegationProof, IcChainKeyBatchSignatureProofV1, RootProof,
     };
 
     fn p(id: u8) -> Principal {
@@ -533,81 +513,14 @@ mod tests {
     }
 
     #[test]
-    fn claims_hash_rejects_noncanonical_scopes() {
-        let claims = DelegatedTokenClaims {
-            presenter: p(10),
-            subject: p(10),
-            issuer_pid: p(11),
-            cert_hash: [12; 32],
-            issued_at_ns: 100,
-            expires_at_ns: 120,
-            aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
-            grants: vec![DelegatedRoleGrant {
-                target: CanisterRole::new("project_instance"),
-                scopes: vec!["Read".to_string()],
-            }],
-            nonce: [14; 16],
-            ext: None,
-        };
-
-        assert_eq!(
-            claims_hash(&claims),
-            Err(CanonicalAuthError::InvalidScope {
-                scope: "Read".to_string(),
-            })
-        );
-    }
-
-    #[test]
-    fn claims_hash_rejects_noncanonical_scope_order() {
-        let left = DelegatedTokenClaims {
-            presenter: p(10),
-            subject: p(10),
-            issuer_pid: p(11),
-            cert_hash: [12; 32],
-            issued_at_ns: 100,
-            expires_at_ns: 120,
-            aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
-            grants: vec![grant("project_instance", &["write", "read"])],
-            nonce: [14; 16],
-            ext: None,
-        };
-
-        assert_eq!(
-            claims_hash(&left),
-            Err(CanonicalAuthError::NonCanonicalScopes)
-        );
-    }
-
-    #[test]
-    fn claims_hash_binds_signed_presenter() {
-        let claims = DelegatedTokenClaims {
-            presenter: p(10),
-            subject: p(10),
-            issuer_pid: p(11),
-            cert_hash: [12; 32],
-            issued_at_ns: 100,
-            expires_at_ns: 120,
-            aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
-            grants: vec![grant("project_instance", &["read"])],
-            nonce: [14; 16],
-            ext: None,
-        };
-        let mut changed_presenter = claims.clone();
-        changed_presenter.presenter = p(9);
-
-        assert_ne!(
-            claims_hash(&claims).unwrap(),
-            claims_hash(&changed_presenter).unwrap()
-        );
-    }
-
-    #[test]
     fn role_hash_is_domain_separated_from_certificate_hash() {
         let role = CanisterRole::new("project_instance");
         let cert = sample_cert();
 
-        assert_ne!(role_hash(&role).unwrap(), cert_hash(&cert).unwrap());
+        assert_ne!(
+            ic_auth::canonical::role_hash(&protocol::role(&role).unwrap()).unwrap(),
+            cert_hash(&cert).unwrap()
+        );
     }
 
     #[test]
@@ -663,10 +576,13 @@ mod tests {
             ]
         );
         assert_eq!(
-            proof_hash(&DelegationProof {
-                cert: sample_cert(),
-                root_proof: RootProof::IcChainKeyBatchSignatureV1(proof),
-            })
+            ic_auth::canonical::proof_hash(
+                &protocol::proof(&DelegationProof {
+                    cert: sample_cert(),
+                    root_proof: RootProof::IcChainKeyBatchSignatureV1(proof),
+                })
+                .unwrap(),
+            )
             .unwrap(),
             [
                 40, 0, 43, 111, 76, 97, 74, 157, 46, 216, 136, 161, 160, 142, 247, 203, 124, 187,
@@ -743,7 +659,8 @@ mod tests {
             cert: sample_cert(),
             root_proof: RootProof::IcChainKeyBatchSignatureV1(proof.clone()),
         };
-        let base_hash = proof_hash(&delegation_proof).unwrap();
+        let base_hash =
+            ic_auth::canonical::proof_hash(&protocol::proof(&delegation_proof).unwrap()).unwrap();
         let mut changed_witness = proof.clone();
         changed_witness.issuer_witness.steps[0] =
             ChainKeyBatchWitnessStepV1::RightSibling([36; 32]);
@@ -752,88 +669,25 @@ mod tests {
 
         assert_ne!(
             base_hash,
-            proof_hash(&DelegationProof {
-                cert: sample_cert(),
-                root_proof: RootProof::IcChainKeyBatchSignatureV1(changed_witness),
-            })
+            ic_auth::canonical::proof_hash(
+                &protocol::proof(&DelegationProof {
+                    cert: sample_cert(),
+                    root_proof: RootProof::IcChainKeyBatchSignatureV1(changed_witness),
+                })
+                .unwrap(),
+            )
             .unwrap()
         );
         assert_ne!(
             base_hash,
-            proof_hash(&DelegationProof {
-                cert: sample_cert(),
-                root_proof: RootProof::IcChainKeyBatchSignatureV1(changed_public_key),
-            })
+            ic_auth::canonical::proof_hash(
+                &protocol::proof(&DelegationProof {
+                    cert: sample_cert(),
+                    root_proof: RootProof::IcChainKeyBatchSignatureV1(changed_public_key),
+                })
+                .unwrap(),
+            )
             .unwrap()
-        );
-    }
-
-    #[test]
-    fn claims_hash_binds_ext_bytes() {
-        let mut left = DelegatedTokenClaims {
-            presenter: p(10),
-            subject: p(10),
-            issuer_pid: p(11),
-            cert_hash: [12; 32],
-            issued_at_ns: 100,
-            expires_at_ns: 120,
-            aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
-            grants: vec![grant("project_instance", &["read"])],
-            nonce: [14; 16],
-            ext: Some(b"user=1".to_vec()),
-        };
-        let mut right = left.clone();
-        right.ext = Some(b"user=2".to_vec());
-
-        assert_ne!(claims_hash(&left).unwrap(), claims_hash(&right).unwrap());
-        left.ext = None;
-        assert_ne!(claims_hash(&left).unwrap(), claims_hash(&right).unwrap());
-    }
-
-    #[test]
-    fn claims_hash_rejects_oversized_ext() {
-        let claims = DelegatedTokenClaims {
-            presenter: p(10),
-            subject: p(10),
-            issuer_pid: p(11),
-            cert_hash: [12; 32],
-            issued_at_ns: 100,
-            expires_at_ns: 120,
-            aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
-            grants: vec![grant("project_instance", &["read"])],
-            nonce: [14; 16],
-            ext: Some(vec![1; MAX_TOKEN_EXT_BYTES + 1]),
-        };
-
-        assert_eq!(
-            claims_hash(&claims),
-            Err(CanonicalAuthError::TokenExtTooLarge {
-                len: MAX_TOKEN_EXT_BYTES + 1,
-                max: MAX_TOKEN_EXT_BYTES,
-            })
-        );
-    }
-
-    #[test]
-    fn issuer_proof_hash_binds_signature_and_public_key() {
-        let proof = IssuerProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
-            signature_cbor: vec![1, 2, 3],
-            public_key_der: vec![4, 5, 6],
-        });
-        let mut changed_signature = proof.clone();
-        let mut changed_public_key = proof.clone();
-        let IssuerProof::IcCanisterSignatureV1(changed) = &mut changed_signature;
-        changed.signature_cbor[0] ^= 1;
-        let IssuerProof::IcCanisterSignatureV1(changed) = &mut changed_public_key;
-        changed.public_key_der[0] ^= 1;
-
-        assert_ne!(
-            issuer_proof_hash(&proof).unwrap(),
-            issuer_proof_hash(&changed_signature).unwrap()
-        );
-        assert_ne!(
-            issuer_proof_hash(&proof).unwrap(),
-            issuer_proof_hash(&changed_public_key).unwrap()
         );
     }
 

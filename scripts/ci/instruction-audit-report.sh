@@ -10,7 +10,7 @@ source "$ROOT/tool-versions.env"
 source "$ROOT/scripts/ci/ic-tool-pins.sh"
 
 METHOD_ID="CANIC-INSTRUCTION-001"
-METHOD_VERSION="3"
+METHOD_VERSION="4"
 DEFINITION_PATH="docs/audits/recurring/system/instruction-footprint.md"
 
 usage() {
@@ -188,15 +188,15 @@ while IFS= read -r candidate_method_path; do
   fi
 done < <(
   find "$ROOT/docs/audits/reports" -type f \
-    -path '*/artifacts/instruction-footprint-v3*/method.json' -print \
+    -path '*/artifacts/instruction-footprint-v4*/method.json' -print \
     | sort -V
 )
 
-RUN_STEM="instruction-footprint-v3"
+RUN_STEM="instruction-footprint-v4"
 RUN_INDEX=1
 while [[ -e "$DAY_DIR/$RUN_STEM.md" ]]; do
   ((RUN_INDEX+=1))
-  RUN_STEM="instruction-footprint-v3-$RUN_INDEX"
+  RUN_STEM="instruction-footprint-v4-$RUN_INDEX"
 done
 
 REPORT_PATH="$DAY_DIR/$RUN_STEM.md"

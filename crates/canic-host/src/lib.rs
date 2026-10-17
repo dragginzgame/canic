@@ -35,7 +35,7 @@ pub use canister_protocol::{
     query_with_arg as query_canister_with_arg,
 };
 pub mod canister_ready;
-mod cargo_metadata;
+mod cargo_observation;
 pub mod component_initialization;
 pub mod component_operation;
 pub mod component_topology;

@@ -40,16 +40,14 @@ type ApplicationReceiptEligibilityState = (ApplicationReceiptEligibilityMap, Sta
 std::thread_local! {
     static INTENT_META: RefCell<Cell<IntentStoreMetaRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.intent.meta.v1"),
+            crate::memory::open(crate::memory::keys::INTENT_META_V1),
             IntentStoreMetaRecord::default(),
         ));
 }
 
 std::thread_local! {
     static APPLICATION_RECEIPT_ELIGIBILITY: RefCell<ApplicationReceiptEligibilityState> = {
-        let memory = crate::ic_memory_key!(
-            authority = CANIC_CORE_MEMORY_AUTHORITY,
-            key = "canic.core.application_receipt.eligibility.v1");
+        let memory = crate::memory::open(crate::memory::keys::APPLICATION_RECEIPT_ELIGIBILITY_V1);
         let map = StableBtreeMap::init(memory.clone());
         RefCell::new((map, memory))
     };
@@ -62,16 +60,14 @@ std::thread_local! {
             ReceiptBackedIntentRecord,
             RuntimeMemory<DefaultMemoryImpl>,
         >
-    > = RefCell::new(StableBtreeMap::init(crate::ic_memory_key!(
-        authority = CANIC_CORE_MEMORY_AUTHORITY,
-        key = "canic.core.intent.receipt_backed_records.v1")));
+    > = RefCell::new(StableBtreeMap::init(crate::memory::open(crate::memory::keys::INTENT_RECEIPT_BACKED_RECORDS_V1)));
 }
 
 std::thread_local! {
     static INTENT_EXPIRY_INDEX: RefCell<
         StableBtreeMap<IntentExpiryKeyRecord, IntentExpiryEntryRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.intent.expiry_index.v1")),
+        StableBtreeMap::init(crate::memory::open(crate::memory::keys::INTENT_EXPIRY_INDEX_V1)),
     );
 }
 
@@ -82,16 +78,14 @@ std::thread_local! {
             PlacementAcknowledgementEntryRecord,
             RuntimeMemory<DefaultMemoryImpl>,
         >
-    > = RefCell::new(StableBtreeMap::init(crate::ic_memory_key!(
-        authority = CANIC_CORE_MEMORY_AUTHORITY,
-        key = "canic.core.placement.acknowledgement_index.v1")));
+    > = RefCell::new(StableBtreeMap::init(crate::memory::open(crate::memory::keys::PLACEMENT_ACKNOWLEDGEMENT_INDEX_V1)));
 }
 
 std::thread_local! {
     static INTENT_RECORDS: RefCell<
         StableBtreeMap<IntentId, IntentRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.intent.records.v1")),
+        StableBtreeMap::init(crate::memory::open(crate::memory::keys::INTENT_RECORDS_V1)),
     );
 }
 
@@ -99,7 +93,7 @@ std::thread_local! {
     static INTENT_TOTALS: RefCell<
         StableBtreeMap<IntentResourceKey, IntentResourceTotalsRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.intent.totals.v1")),
+        StableBtreeMap::init(crate::memory::open(crate::memory::keys::INTENT_TOTALS_V1)),
     );
 }
 
@@ -107,7 +101,7 @@ std::thread_local! {
     static INTENT_PENDING: RefCell<
         StableBtreeMap<IntentId, IntentPendingEntryRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.intent.pending.v1")),
+        StableBtreeMap::init(crate::memory::open(crate::memory::keys::INTENT_PENDING_V1)),
     );
 }
 

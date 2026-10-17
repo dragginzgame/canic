@@ -1,13 +1,12 @@
 //! Module: memory::policy
 //!
-//! Responsibility: compose Canic memory admission and reservation policy.
+//! Responsibility: compose Canic memory bootstrap admission and policy identity.
 //! Does not own: memory-manager storage, stable schemas, or diagnostics rendering.
 //! Boundary: memory bootstrap passes this policy into `ic-memory` validation.
 
 use crate::memory::{admission::MemoryBootstrapAdmission, registry::MemoryRegistryError};
 use ic_memory::{
-    AllocationPolicy, MemoryManagerSlot, PolicyIdentity, PolicyIdentityError,
-    RuntimeBootstrapPolicy, StableKey,
+    MemoryManagerSlot, PolicyIdentity, PolicyIdentityError, RuntimeBootstrapPolicy, StableKey,
 };
 use sha2::{Digest as _, Sha256};
 
@@ -28,13 +27,13 @@ pub struct CanicMemoryManagerPolicy {
 }
 
 impl CanicMemoryManagerPolicy {
-    /// Use Canic's reservation policy without a consumer callback.
+    /// Use Canic's bootstrap identity without a consumer admission callback.
     #[must_use]
     pub const fn new() -> Self {
         Self { admission: None }
     }
 
-    /// Compose consumer admission while retaining Canic reservation checks.
+    /// Compose consumer admission with Canic's bootstrap identity.
     #[must_use]
     pub fn with_admission(mut self, admission: MemoryBootstrapAdmission) -> Self {
         self.admission = Some(admission);
@@ -42,7 +41,7 @@ impl CanicMemoryManagerPolicy {
     }
 }
 
-impl AllocationPolicy for CanicMemoryManagerPolicy {
+impl RuntimeBootstrapPolicy for CanicMemoryManagerPolicy {
     type Error = MemoryRegistryError;
 
     fn validate_key(&self, _key: &StableKey) -> Result<(), Self::Error> {
@@ -57,23 +56,6 @@ impl AllocationPolicy for CanicMemoryManagerPolicy {
         Ok(())
     }
 
-    fn validate_reserved_slot(
-        &self,
-        key: &StableKey,
-        _slot: &MemoryManagerSlot,
-    ) -> Result<(), Self::Error> {
-        if !ic_memory::is_ic_memory_stable_key(key.as_str()) && !key.as_str().starts_with("canic.")
-        {
-            return Err(MemoryRegistryError::InvalidDeclaration {
-                stable_key: key.as_str().to_string(),
-                reason: "application stable keys may not be pre-reserved by Canic",
-            });
-        }
-        Ok(())
-    }
-}
-
-impl RuntimeBootstrapPolicy for CanicMemoryManagerPolicy {
     fn prepare_bootstrap(
         &self,
         admission: &mut ic_memory::BootstrapAdmission<'_>,
@@ -119,25 +101,5 @@ mod tests {
                 .unwrap(),
             PolicyIdentity::new("canic.memory-bootstrap-policy", 1).unwrap()
         );
-    }
-
-    #[test]
-    fn framework_reservations_do_not_partition_the_pool() {
-        let policy = CanicMemoryManagerPolicy::new();
-        for id in [10, 100, 254] {
-            policy
-                .validate_reserved_slot(
-                    &StableKey::parse("canic.core.future.v1").unwrap(),
-                    &MemoryManagerSlot::new(id).unwrap(),
-                )
-                .unwrap();
-            assert!(matches!(
-                policy.validate_reserved_slot(
-                    &StableKey::parse("app.rows.v1").unwrap(),
-                    &MemoryManagerSlot::new(id).unwrap()
-                ),
-                Err(MemoryRegistryError::InvalidDeclaration { .. })
-            ));
-        }
     }
 }

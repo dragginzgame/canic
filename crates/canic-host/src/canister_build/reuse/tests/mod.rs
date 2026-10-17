@@ -50,24 +50,23 @@ fn file_fingerprint_preserves_digest_and_typed_path_refusals() {
 #[test]
 fn generated_lock_and_derivation_changes_invalidate_complete_build_inputs() {
     let (root, context) = infrastructure_build_fixture();
-    let mut files = BTreeMap::new();
-    append_generated_inputs(&context, &mut files).unwrap();
+    let capture_generated = || {
+        let mut paths = BTreeSet::new();
+        append_generated_inputs(&context, &mut paths);
+        InputEvidence::capture(&source_evidence_spec("generated", &paths)).unwrap()
+    };
+    let before = capture_generated();
     for manifest in crate::fleet_package::generated_manifests(&context.config_path) {
         let directory = manifest.parent().unwrap();
         fs::create_dir_all(directory).unwrap();
         for name in ["Cargo.lock", "lock-seed.json"] {
             let path = directory.join(name);
-            assert_eq!(files[path.to_str().unwrap()], "absent");
+            assert_eq!(before.entries()[&path], InputEvidenceValue::Missing);
             fs::write(&path, "first").unwrap();
-            let mut first = BTreeMap::new();
-            append_generated_inputs(&context, &mut first).unwrap();
+            let first = capture_generated();
             fs::write(&path, "changed").unwrap();
-            let mut changed = BTreeMap::new();
-            append_generated_inputs(&context, &mut changed).unwrap();
-            assert_ne!(
-                first[&path.to_string_lossy().into_owned()],
-                changed[&path.to_string_lossy().into_owned()]
-            );
+            let changed = capture_generated();
+            assert_ne!(first.entries()[&path], changed.entries()[&path]);
         }
     }
     fs::remove_dir_all(root).unwrap();
@@ -113,22 +112,23 @@ fn generated_packages_are_resolved_before_complete_build_inputs_are_frozen() {
         release_build_id: None,
     };
     prepare_generated_inputs(&context).unwrap();
-    let mut before = BTreeMap::new();
-    append_generated_inputs(&context, &mut before).unwrap();
+    let capture_generated = || {
+        let mut paths = BTreeSet::new();
+        append_generated_inputs(&context, &mut paths);
+        InputEvidence::capture(&source_evidence_spec("generated", &paths)).unwrap()
+    };
+    let before = capture_generated();
     for manifest in crate::fleet_package::generated_manifests(&context.config_path) {
-        assert_ne!(
-            before[manifest.with_file_name("Cargo.lock").to_str().unwrap()],
-            "absent"
-        );
-        assert_ne!(
-            before[manifest.with_file_name("lock-seed.json").to_str().unwrap()],
-            "absent"
-        );
+        for name in ["Cargo.lock", "lock-seed.json"] {
+            assert!(matches!(
+                before.entries()[&manifest.with_file_name(name)],
+                InputEvidenceValue::File { .. }
+            ));
+        }
     }
     prepare_generated_inputs(&context).unwrap();
-    let mut after = BTreeMap::new();
-    append_generated_inputs(&context, &mut after).unwrap();
-    assert_eq!(before, after);
+    let after = capture_generated();
+    assert_eq!(before.entries(), after.entries());
     fs::remove_dir_all(root).unwrap();
 }
 
@@ -161,7 +161,7 @@ fn run_with_private_cargo_target(test: fn()) {
     );
 }
 
-fn infrastructure_build_fixture() -> (PathBuf, WorkspaceBuildContext) {
+pub(super) fn infrastructure_build_fixture() -> (PathBuf, WorkspaceBuildContext) {
     let root = temp_dir("reuse-first-infrastructure");
     let app = root.join("app");
     let canic = root.join("upstream/canic");
@@ -252,7 +252,13 @@ fn compile_infrastructure_fixture(context: &WorkspaceBuildContext) {
 
 fn compile_infrastructure_fixture_at(context: &WorkspaceBuildContext, target: &Path) {
     let output = crate::cargo_command()
-        .args(["build", "--locked", "--offline", "--manifest-path"])
+        .args([
+            "build",
+            "--locked",
+            "--offline",
+            "--message-format=json-render-diagnostics",
+            "--manifest-path",
+        ])
         .arg(context.workspace_root.join("Cargo.toml"))
         .args([
             "--target",
@@ -272,6 +278,7 @@ fn compile_infrastructure_fixture_at(context: &WorkspaceBuildContext, target: &P
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
+    exports::retain(context, &output.stdout).unwrap();
 }
 
 #[test]
@@ -279,15 +286,62 @@ fn repeated_cargo_inputs_preserve_one_snapshot_and_refresh_the_next() {
     run_with_private_cargo_target(repeated_cargo_inputs);
 }
 
+#[test]
+fn selected_depfiles_ignore_other_apps_and_retain_external_input_authority() {
+    run_with_private_cargo_target(|| {
+        let (root, context) = infrastructure_build_fixture();
+        let profile =
+            crate::canister_build::cache::canister_build_target_root(&context.workspace_root)
+                .join("wasm32-unknown-unknown/fast");
+        fs::create_dir_all(&profile).unwrap();
+        let selected = BTreeSet::from(["reuse_app".to_owned()]);
+        let input = root.join("external-input");
+        fs::write(&input, "selected input").unwrap();
+        fs::write(
+            profile.join("reuse_app.d"),
+            format!("app.wasm: {}\n", input.display()),
+        )
+        .unwrap();
+        let capture = || {
+            let mut paths = BTreeSet::new();
+            dependencies::append_observed_cargo_inputs(&context, &selected, &mut paths).unwrap();
+            InputEvidence::capture(&source_evidence_spec("selected graph", &paths)).unwrap()
+        };
+        let before = capture();
+        // A parallel App may add a record under the same shared target directory.
+        fs::write(profile.join("other_app.d"), "malformed foreign record").unwrap();
+        before.validate_after(&capture()).unwrap();
+        fs::write(&input, "changed selected input").unwrap();
+        assert!(matches!(before.validate_after(&capture()),
+            Err(InputEvidenceError::ChangedInput { path }) if path == input));
+        let before_new = capture();
+        let new_input = root.join("new-input");
+        fs::write(&new_input, "new input").unwrap();
+        fs::write(
+            profile.join("reuse_app.d"),
+            format!("app.wasm: {} {}\n", input.display(), new_input.display()),
+        )
+        .unwrap();
+        let changed = capture();
+        assert!(changed.entries().contains_key(&new_input));
+        assert!(matches!(before_new.validate_after(&changed),
+            Err(InputEvidenceError::UnobservedInput { path }) if path == new_input));
+        fs::write(profile.join("reuse_app.d"), "malformed selected record").unwrap();
+        let mut paths = BTreeSet::new();
+        assert!(matches!(
+            dependencies::append_observed_cargo_inputs(&context, &selected, &mut paths),
+            Err(BuildReuseError::Evidence(_))
+        ));
+        fs::remove_dir_all(root).unwrap();
+    });
+}
+
 fn repeated_cargo_inputs() {
     let (root, context) = infrastructure_build_fixture();
     let input = context.workspace_root.join("src/lib.rs");
-    let mut files = BTreeMap::new();
-    add_file(&input, &mut files).unwrap();
-    let before = BuildInputSnapshot {
-        identity: "same build context".into(),
-        files: files.clone(),
-    };
+    let paths = BTreeSet::from([input.clone()]);
+    let before =
+        InputEvidence::capture(&source_evidence_spec("same build context", &paths)).unwrap();
     let target = crate::canister_build::cache::canister_build_target_root(&context.workspace_root)
         .join("wasm32-unknown-unknown/fast");
     fs::create_dir_all(&target).unwrap();
@@ -299,21 +353,22 @@ fn repeated_cargo_inputs() {
         .unwrap();
     }
     fs::write(&input, "pub fn changed() {}\n").unwrap();
-    dependencies::append_observed_cargo_inputs(&context, &mut files).unwrap();
-    assert_eq!(files, before.files);
-    let mut fresh = BTreeMap::new();
-    dependencies::append_observed_cargo_inputs(&context, &mut fresh).unwrap();
-    assert!(matches!(
-        before.validate_after(&BuildInputSnapshot {
-            identity: before.identity.clone(),
-            files: fresh,
-        }),
-        Err(BuildReuseError::ChangedInput(path)) if path == input
-    ));
+    let mut paths = BTreeSet::new();
+    dependencies::append_observed_cargo_inputs(
+        &context,
+        &BTreeSet::from(["root".into(), "app".into()]),
+        &mut paths,
+    )
+    .unwrap();
+    assert_eq!(paths.iter().filter(|path| **path == input).count(), 1);
+    let fresh =
+        InputEvidence::capture(&source_evidence_spec("same build context", &paths)).unwrap();
+    assert!(matches!(before.validate_after(&fresh),
+        Err(InputEvidenceError::ChangedInput { path }) if path == input));
     fs::remove_file(&input).unwrap();
-    let mut missing = BTreeMap::new();
-    dependencies::append_observed_cargo_inputs(&context, &mut missing).unwrap();
-    assert_eq!(missing[input.to_str().unwrap()], "absent");
+    let missing =
+        InputEvidence::capture(&source_evidence_spec("same build context", &paths)).unwrap();
+    assert_eq!(missing.entries()[&input], InputEvidenceValue::Missing);
     fs::remove_dir_all(root).unwrap();
 }
 
@@ -369,12 +424,12 @@ pub fn value() -> u8 { canic::value() + MODEL + AUTHORITY }
     }
     let exported = input_snapshot(&context, &[]).unwrap();
     for path in [&config, &model, &authority] {
-        assert!(exported.files.contains_key(path.to_str().unwrap()));
-        assert!(!cold.files.contains_key(path.to_str().unwrap()));
+        assert!(exported.entries().contains_key(path));
+        assert!(!cold.entries().contains_key(path));
     }
     assert!(matches!(
         cold.validate_after(&exported),
-        Err(BuildReuseError::UnobservedInput(_))
+        Err(InputEvidenceError::UnobservedInput { .. })
     ));
 
     // Force Rust recompilation while preserving build-script output, as in an
@@ -399,9 +454,35 @@ pub fn value() -> u8 { canic::value() + MODEL + AUTHORITY }
     fs::write(&config, "observed = false\n").unwrap();
     assert!(
         matches!(before.validate_after(&input_snapshot(&context, &[]).unwrap()),
-        Err(BuildReuseError::ChangedInput(path)) if path == config)
+        Err(InputEvidenceError::ChangedInput { path }) if path == config)
+    );
+    assert_foreign_cargo_exports_preserve_snapshot(
+        &context,
+        &targets,
+        &input_snapshot(&context, &[]).unwrap(),
     );
     fs::remove_dir_all(root).unwrap();
+}
+
+fn assert_foreign_cargo_exports_preserve_snapshot(
+    context: &WorkspaceBuildContext,
+    targets: &[PathBuf],
+    selected: &InputEvidence,
+) {
+    let (foreign_root, foreign_context) = infrastructure_build_fixture();
+    let input = foreign_root.join("foreign-config");
+    fs::write(&input, "foreign").unwrap();
+    fs::write(foreign_context.workspace_root.join("build.rs"), format!(
+        "fn main() {{ println!(\"cargo::rustc-env=CANIC_CONFIG_SOURCE_PATH={{}}\", {input:?}); }}\n"
+    )).unwrap();
+    for target in targets {
+        compile_infrastructure_fixture_at(&foreign_context, target);
+        fs::remove_file(target.join("wasm32-unknown-unknown/fast/reuse_app.d")).unwrap();
+    }
+    let observed = input_snapshot(context, &[]).unwrap();
+    assert!(!observed.entries().contains_key(&input));
+    selected.validate_after(&observed).unwrap();
+    fs::remove_dir_all(foreign_root).unwrap();
 }
 
 #[expect(
@@ -440,7 +521,7 @@ pub fn value() -> u8 { canic::value() }
     )
     .unwrap();
     let before = input_snapshot(&context, &[]).unwrap();
-    assert!(before.files.contains_key(producer.to_str().unwrap()));
+    assert!(before.entries().contains_key(&producer));
     for target in [
         crate::canister_build::cache::canister_build_target_root(&context.workspace_root),
         crate::canister_build::cache::declaration_target_root(&context.workspace_root),
@@ -460,12 +541,12 @@ pub fn value() -> u8 { canic::value() }
     }
     let after = input_snapshot(&context, &[]).unwrap();
     before.validate_after(&after).unwrap();
-    assert_eq!(before.digest(), after.digest());
+    assert_eq!(before.digest().unwrap(), after.digest().unwrap());
     // A warm build regenerates both declaration and runtime outputs after an
     // authored catalogue edit made before the build. Only its source is frozen.
     fs::write(&catalogue, "{ \"revision\": 2 }\n").unwrap();
     let edited = input_snapshot(&context, &[]).unwrap();
-    assert_ne!(edited.digest(), after.digest());
+    assert_ne!(edited.digest().unwrap(), after.digest().unwrap());
     for target in [
         crate::canister_build::cache::canister_build_target_root(&context.workspace_root),
         crate::canister_build::cache::declaration_target_root(&context.workspace_root),
@@ -478,7 +559,7 @@ pub fn value() -> u8 { canic::value() }
         assert!(!outputs.is_empty());
         for output in &outputs {
             assert_eq!(fs::read_to_string(output).unwrap(), "{\"revision\":1}");
-            assert!(!edited.files.contains_key(output.to_str().unwrap()));
+            assert!(!edited.entries().contains_key(output));
         }
         compile_infrastructure_fixture_at(&context, &target);
         for output in outputs {
@@ -491,13 +572,13 @@ pub fn value() -> u8 { canic::value() }
     fs::write(&catalogue, "{ \"revision\": 3 }\n").unwrap();
     assert!(
         matches!(edited.validate_after(&input_snapshot(&context, &[]).unwrap()),
-        Err(BuildReuseError::ChangedInput(path)) if path == catalogue)
+        Err(InputEvidenceError::ChangedInput { path }) if path == catalogue)
     );
     fs::write(&catalogue, "{ \"revision\": 2 }\n").unwrap();
     fs::write(&producer, "fn main() {}\n").unwrap();
     assert!(
         matches!(edited.validate_after(&input_snapshot(&context, &[]).unwrap()),
-        Err(BuildReuseError::ChangedInput(path)) if path == producer)
+        Err(InputEvidenceError::ChangedInput { path }) if path == producer)
     );
 
     // A copied Cargo output can still name generated input in another checkout.
@@ -511,11 +592,11 @@ pub fn value() -> u8 { canic::value() }
     )
     .unwrap();
     let before_foreign = input_snapshot(&context, &[]).unwrap();
-    assert!(!before_foreign.files.contains_key(foreign.to_str().unwrap()));
+    assert!(!before_foreign.entries().contains_key(&foreign));
     compile_infrastructure_fixture(&context);
     assert!(
         matches!(before_foreign.validate_after(&input_snapshot(&context, &[]).unwrap()),
-        Err(BuildReuseError::UnobservedInput(path)) if path == foreign)
+        Err(InputEvidenceError::UnobservedInput { path }) if path == foreign)
     );
     fs::remove_dir_all(root).unwrap();
 }
@@ -546,7 +627,7 @@ fn first_release_build_with_absent_cargo_input() {
     .unwrap();
     let missing = context.workspace_root.join("app/src/build.rs");
     let before = input_snapshot(&context, &[]).unwrap();
-    assert!(!before.files.contains_key(missing.to_str().unwrap()));
+    assert!(!before.entries().contains_key(&missing));
     for target in [
         crate::canister_build::cache::canister_build_target_root(&context.workspace_root),
         crate::canister_build::cache::declaration_target_root(&context.workspace_root),
@@ -562,17 +643,17 @@ fn first_release_build_with_absent_cargo_input() {
     }
     assert!(!missing.exists());
     let after = input_snapshot(&context, &[]).unwrap();
-    assert_eq!(after.files[missing.to_str().unwrap()], "absent");
+    assert_eq!(after.entries()[&missing], InputEvidenceValue::Missing);
     before.validate_after(&after).unwrap();
-    assert_ne!(before.digest(), after.digest());
+    assert_ne!(before.digest().unwrap(), after.digest().unwrap());
     compile_infrastructure_fixture(&context);
     let replay = input_snapshot(&context, &[]).unwrap();
     after.validate_after(&replay).unwrap();
-    assert_eq!(after.digest(), replay.digest());
+    assert_eq!(after.digest().unwrap(), replay.digest().unwrap());
 
     fs::write(&source, b"fn main() {}\n").unwrap();
     assert!(
-        matches!(after.validate_after(&input_snapshot(&context, &[]).unwrap()), Err(BuildReuseError::ChangedInput(path)) if path == source)
+        matches!(after.validate_after(&input_snapshot(&context, &[]).unwrap()), Err(InputEvidenceError::ChangedInput { path }) if path == source)
     );
     fs::remove_dir_all(root).unwrap();
 }
@@ -599,12 +680,12 @@ fn first_infrastructure_build_fixture_preserves_source_authority() {
             .any(|package| package.name == "canic-control-plane")
     );
     let before = input_snapshot(&context, &[]).unwrap();
-    assert!(before.files.contains_key(control_source.to_str().unwrap()));
+    assert!(before.entries().contains_key(&control_source));
     let target = crate::canister_build::cache::canister_build_target_root(&context.workspace_root);
     compile_infrastructure_fixture(&context);
     let after = input_snapshot(&context, &[]).unwrap();
     before.validate_after(&after).unwrap();
-    assert_eq!(before.digest(), after.digest());
+    assert_eq!(before.digest().unwrap(), after.digest().unwrap());
 
     // An earlier build may have recorded a now-unused external source.
     let old = root.join("previous.rs");
@@ -617,11 +698,11 @@ fn first_infrastructure_build_fixture_preserves_source_authority() {
     compile_infrastructure_fixture(&context);
     let refreshed = input_snapshot(&context, &[]).unwrap();
     stale.validate_after(&refreshed).unwrap();
-    assert_ne!(stale.digest(), refreshed.digest());
-    assert_eq!(after.digest(), refreshed.digest());
+    assert_ne!(stale.digest().unwrap(), refreshed.digest().unwrap());
+    assert_eq!(after.digest().unwrap(), refreshed.digest().unwrap());
     fs::write(&control_source, "pub const CONTROL: u8 = 2;\n").unwrap();
     assert!(
-        matches!(refreshed.validate_after(&input_snapshot(&context, &[]).unwrap()), Err(BuildReuseError::ChangedInput(path)) if path == control_source)
+        matches!(refreshed.validate_after(&input_snapshot(&context, &[]).unwrap()), Err(InputEvidenceError::ChangedInput { path }) if path == control_source)
     );
     fs::remove_dir_all(root).unwrap();
 }
@@ -656,7 +737,7 @@ fn governed_fixture_inputs_invalidate_reuse() {
     };
     let tools = [root.join("tool")];
     let original_snapshot = input_snapshot(&context, &tools).unwrap();
-    let original = original_snapshot.digest();
+    let original = original_snapshot.digest().unwrap();
     let changed_config = format!("# changed configuration input\n{REUSE_CONFIG}");
     let changed_lock = format!(
         "# changed lock authority\n{}",
@@ -684,7 +765,7 @@ fn governed_fixture_inputs_invalidate_reuse() {
     original_snapshot
         .validate_after(&restored)
         .expect("restored fixture inputs retain their original authority");
-    assert_eq!(original, restored.digest());
+    assert_eq!(original, restored.digest().unwrap());
     let external = temp_dir("build-reuse-external");
     fs::create_dir_all(&external).unwrap();
     let included = external.join("shared.rs");
@@ -720,34 +801,6 @@ fn governed_fixture_inputs_invalidate_reuse() {
     fs::write(&included, "pub const SHARED: u8 = 2;\n").unwrap();
     assert_ne!(observed, input_digest(&context, &tools).unwrap());
     fs::remove_dir_all(external).unwrap();
-    fs::remove_dir_all(root).unwrap();
-}
-
-#[test]
-fn source_bytes_additions_deletions_and_renames_change_the_input_set() {
-    let root = temp_dir("build-reuse-source");
-    fs::create_dir_all(root.join("src")).unwrap();
-    let source = root.join("src/lib.rs");
-    fs::write(&source, b"one").unwrap();
-    let collect = || {
-        let mut files = BTreeMap::new();
-        collect_files(&root, &root, &mut files, true).unwrap();
-        files
-    };
-    let original = collect();
-    fs::write(&source, b"two").unwrap();
-    assert_ne!(original, collect());
-    fs::write(&source, b"one").unwrap();
-    assert_eq!(original, collect());
-    fs::rename(&source, root.join("src/other.rs")).unwrap();
-    assert_ne!(original, collect());
-    fs::rename(root.join("src/other.rs"), &source).unwrap();
-    fs::write(root.join("src/include.txt"), b"new input").unwrap();
-    assert_ne!(original, collect());
-    fs::remove_file(root.join("src/include.txt")).unwrap();
-    fs::create_dir_all(root.join("target")).unwrap();
-    fs::write(root.join("target/build-output"), b"generated").unwrap();
-    assert_eq!(original, collect());
     fs::remove_dir_all(root).unwrap();
 }
 
@@ -821,26 +874,28 @@ fn declared_fixture_payloads_participate_in_cache_inputs_inside_excluded_directo
         refresh_canonical_infrastructure_did: false,
         release_build_id: None,
     };
-    let mut files = BTreeMap::new();
-    collect_files(&root, &root, &mut files, true).unwrap();
-    assert!(!files.contains_key(rows.to_str().unwrap()));
-    append_fixture_inputs(&context, &mut files).unwrap();
-    assert!(files.contains_key(rows.to_str().unwrap()));
-    let before = BuildInputSnapshot {
-        identity: "fixture".into(),
-        files,
-    };
+    let mut paths = BTreeSet::from([root.clone()]);
+    let ordinary = InputEvidence::capture(&source_evidence_spec("fixture", &paths)).unwrap();
+    assert!(!ordinary.entries().contains_key(&rows));
+    let expected = append_fixture_inputs(&context, &mut paths).unwrap();
+    assert!(expected.contains_key(&rows));
+    let before = InputEvidence::capture(&source_evidence_spec("fixture", &paths)).unwrap();
+    assert!(before.entries().contains_key(&rows));
     fs::write(&rows, [4; 64]).unwrap();
-    let mut files = BTreeMap::new();
-    collect_files(&root, &root, &mut files, true).unwrap();
-    append_fixture_inputs(&context, &mut files).unwrap();
-    let after = BuildInputSnapshot {
-        identity: "fixture".into(),
-        files,
-    };
-    assert_ne!(before.digest(), after.digest());
-    assert!(
-        matches!(before.validate_after(&after), Err(BuildReuseError::ChangedInput(path)) if path == rows)
-    );
+    let after = InputEvidence::capture(&source_evidence_spec("fixture", &paths)).unwrap();
+    assert_ne!(before.digest().unwrap(), after.digest().unwrap());
+    assert!(matches!(before.validate_after(&after),
+        Err(InputEvidenceError::ChangedInput { path }) if path == rows));
     fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn required_tool_absence_preserves_not_found_instead_of_optional_evidence() {
+    run_with_private_cargo_target(|| {
+        let (root, context) = infrastructure_build_fixture();
+        let missing = root.join("missing-required-tool");
+        assert!(matches!(input_snapshot(&context, &[missing]),
+            Err(BuildReuseError::Io(source)) if source.kind() == io::ErrorKind::NotFound));
+        fs::remove_dir_all(root).unwrap();
+    });
 }

@@ -19,7 +19,7 @@ use crate::{
         compiled::CompiledCanisterArtifact,
     },
     cargo_command,
-    cargo_metadata::cargo_metadata,
+    cargo_observation::cargo_metadata,
     fleet_package,
     fleet_package::{
         FleetPackageSpec, append_infrastructure_profile_args, resolved_canic_package,
@@ -125,7 +125,7 @@ fn resolve_bootstrap_fleet_coordinator_source(
     fleet_package::materialize(
         &manifest,
         &context.workspace_root,
-        &canic.manifest_path,
+        canic.manifest_path.as_std_path(),
         &dependencies,
         &FleetPackageSpec {
             package: GENERATED_WRAPPER_PACKAGE_NAME,
@@ -140,12 +140,13 @@ fn resolve_bootstrap_fleet_coordinator_source(
     Ok(BootstrapFleetCoordinatorSource {
         manifest_path: manifest,
         package_name: GENERATED_WRAPPER_PACKAGE_NAME.to_string(),
-        package_version: canic.version.clone(),
+        package_version: canic.version.to_string(),
         canonical_did_path: canic
             .manifest_path
             .parent()
             .ok_or("Canic manifest has no parent")?
-            .join("candid/fleet_coordinator.did"),
+            .join("candid/fleet_coordinator.did")
+            .into_std_path_buf(),
     })
 }
 
@@ -201,6 +202,7 @@ fn run_coordinator_cargo_build(
     );
 
     if output.status.success() {
+        crate::canister_build::retain_cargo_include_exports(context, &output.stdout)?;
         return Ok(());
     }
     Err(format!(
@@ -227,7 +229,9 @@ fn coordinator_cargo_build_command(
         .current_dir(&context.workspace_root)
         .args([
             cargo_subcommand,
+            "--lib",
             "--locked",
+            "--message-format=json-render-diagnostics",
             "--manifest-path",
             &manifest_path.display().to_string(),
             "--target",
@@ -239,7 +243,6 @@ fn coordinator_cargo_build_command(
     if force_candid_export {
         configure_declaration_command(&mut command, context);
         command.args([
-            "--lib",
             "--",
             "--cfg",
             "canic_export_candid",

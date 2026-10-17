@@ -4,7 +4,6 @@
 //! Does not own: Component Registry state, proof state, or attestation policy.
 //! Boundary: resolves protected local Registry authority before workflow delegation.
 
-use async_trait::async_trait;
 use canic_contracts::{
     dto::{
         auth::{
@@ -19,7 +18,7 @@ use canic_contracts::{
 use canic_core::{
     access::{
         AccessError,
-        expr::{AccessContext, AsyncAccessPredicate},
+        expr::{AccessCheck, AccessContext},
     },
     api::auth::AuthApi,
     control_plane_support::ops::ic::IcOps,
@@ -33,9 +32,8 @@ use canic_core::{
 
 pub struct ActiveComponentMemberPredicate;
 
-#[async_trait]
-impl AsyncAccessPredicate for ActiveComponentMemberPredicate {
-    async fn eval(&self, ctx: &AccessContext) -> Result<(), AccessError> {
+impl AccessCheck for ActiveComponentMemberPredicate {
+    fn eval(&self, ctx: &AccessContext) -> Result<(), AccessError> {
         match crate::workflow::component_auth::active_component_member_for_access(
             ctx.transport_caller(),
         ) {

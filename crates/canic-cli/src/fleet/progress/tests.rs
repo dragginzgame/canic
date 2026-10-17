@@ -316,7 +316,7 @@ fn reported_retry_is_distinct_from_waiting_and_keeps_root_evidence_in_json() {
         ..
     } = &mut event.state
     {
-        detail.pending_root_failure = Some(failure);
+        detail.pending_root_failure = Some(Box::new(failure.clone()));
     }
     assert!(render::plain(&event).contains(&failure.fleet_subnet_root.to_text()));
     let json: serde_json::Value = serde_json::from_str(&render_progress(&event, true)).unwrap();
@@ -350,8 +350,17 @@ fn observed_retry_deadlines_reach_human_and_json_output_without_advancement() {
         else {
             panic!("fixture must be awaiting provisioning");
         };
-        detail.pending_root_failure = Some(FleetComponentProvisioningRootFailure {
+        detail.pending_root_failure = Some(Box::new(FleetComponentProvisioningRootFailure {
             origin: Some(ProvisioningFailureOrigin {
+                dependency: Some(
+                    canic_contracts::values::provisioning_failure::ProvisioningDependencyFailure {
+                        target: candid::Principal::from_slice(&[8]),
+                        method: canic_contracts::protocol::CANIC_WASM_STORE_COMMAND.into(),
+                        step: "inspect_template".into(),
+                        rejection_code: Some(5),
+                        rejection_detail: Some("Store stopped\nunsafe\u{1b}\u{202e}".into()),
+                    },
+                ),
                 failed_at_ns: 123,
                 retry_at_ns,
                 stage: ProvisioningFailureStage::ComponentMembership,
@@ -364,8 +373,10 @@ fn observed_retry_deadlines_reach_human_and_json_output_without_advancement() {
             stage: FleetComponentProvisioningRetryStage::RuntimeActivation,
             diagnostic_code: 137,
             failed_at_ns: 124,
-        });
+        }));
         assert!(render::plain(&event).contains(rendered));
+        assert!(render::plain(&event).contains("inspect_template"));
+        assert!(render::plain(&event).contains("Store stopped\\nunsafe\\u{1b}\\u{202e}"));
         let mut output = Vec::new();
         terminal::Painter::default()
             .paint(
@@ -639,11 +650,11 @@ fn retry_timestamps_do_not_reset_the_last_real_transition() {
         ..
     } = &mut repeated.state
     {
-        detail.pending_root_failure = Some(canic_contracts::dto::component_provisioning::FleetComponentProvisioningRootFailure {
+        detail.pending_root_failure = Some(Box::new(canic_contracts::dto::component_provisioning::FleetComponentProvisioningRootFailure {
             origin: None, fleet_subnet_root: candid::Principal::anonymous(),
             stage: canic_contracts::dto::component_provisioning::FleetComponentProvisioningRetryStage::RuntimeActivation,
             diagnostic_code: 42, failed_at_ns: 123,
-        });
+        }));
     }
     assert_eq!(transition_identity(&event), transition_identity(&repeated));
     let mut output = ProgressOutput::default();

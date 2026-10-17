@@ -236,24 +236,53 @@ impl WasmStoreInternalClient {
     }
 
     async fn command(&self, command: StoreCommand) -> Result<StoreCommandResponse, InternalError> {
-        let call = CallOps::bounded_wait(self.store_pid, Self::COMMAND)
-            .with_arg(command)?
-            .execute()
-            .await?;
-        let result: Result<StoreCommandResponse, Error> = call.candid()?;
-        result.map_err(InternalError::observed_public)
+        let step = match &command {
+            StoreCommand::ActivateFleet(_) => "activate",
+            StoreCommand::InspectTemplate(_) => "inspect_template",
+            StoreCommand::PrepareChunkSet(_) => "prepare_chunk_set",
+            StoreCommand::PrepareFleetCredential(_) => "prepare_fleet_credential",
+            StoreCommand::PrepareFixture(_) => "prepare_fixture",
+            StoreCommand::ReclaimDeletionCycles(_) => "reclaim_deletion_cycles",
+            StoreCommand::RespondCapability(_) => "respond_capability",
+            StoreCommand::RunGc(_) => "run_gc",
+            StoreCommand::StageManifest(_) => "stage_manifest",
+            StoreCommand::SetFixtureGrant(_) => "set_fixture_grant",
+            StoreCommand::SynchronizeState(_) => "synchronize_state",
+            StoreCommand::SynchronizeTopology(_) => "synchronize_topology",
+        };
+        let result = async {
+            let call = CallOps::bounded_wait(self.store_pid, Self::COMMAND)
+                .with_arg(command)?
+                .execute()
+                .await?;
+            let result: Result<StoreCommandResponse, Error> = call.candid()?;
+            result.map_err(InternalError::observed_public)
+        }
+        .await;
+        result.map_err(|error| error.with_dependency_failure(self.store_pid, Self::COMMAND, step))
     }
 
     async fn status_request(
         &self,
         request: StoreCatalogRequest,
     ) -> Result<StoreCatalogResponse, InternalError> {
-        let call = CallOps::bounded_wait(self.store_pid, Self::STATUS)
-            .with_arg(request)?
-            .execute()
-            .await?;
-        let result: Result<StoreCatalogResponse, Error> = call.candid()?;
-        result.map_err(InternalError::observed_public)
+        let step = match &request {
+            StoreCatalogRequest::Catalog => "catalog",
+            StoreCatalogRequest::Storage => "storage_status",
+            StoreCatalogRequest::Fixture(_) => "fixture_status",
+            StoreCatalogRequest::FixtureGrant(_) => "fixture_grant",
+            StoreCatalogRequest::Template(_) => "template_status",
+        };
+        let result = async {
+            let call = CallOps::bounded_wait(self.store_pid, Self::STATUS)
+                .with_arg(request)?
+                .execute()
+                .await?;
+            let result: Result<StoreCatalogResponse, Error> = call.candid()?;
+            result.map_err(InternalError::observed_public)
+        }
+        .await;
+        result.map_err(|error| error.with_dependency_failure(self.store_pid, Self::STATUS, step))
     }
 
     async fn call_result<T, A>(&self, method: &'static str, arg: A) -> Result<T, InternalError>
@@ -261,21 +290,21 @@ impl WasmStoreInternalClient {
         T: CandidType + serde::de::DeserializeOwned,
         A: ArgumentEncoder,
     {
-        let call = CallOps::bounded_wait(self.store_pid, method)
-            .with_args(arg)
-            .map_err(|_err| {
-                InternalError::public(canic_contracts::diagnostics::codes::STATE_INVALID)
-            })?
-            .execute()
-            .await
-            .map_err(|_err| {
-                InternalError::public(canic_contracts::diagnostics::codes::STATE_UNAVAILABLE)
-            })?;
-        let call_res: Result<T, Error> = call.candid::<Result<T, Error>>().map_err(|_err| {
-            InternalError::public(canic_contracts::diagnostics::codes::STATE_INVALID)
-        })?;
-
-        call_res.map_err(InternalError::observed_public)
+        let result = async {
+            let call = CallOps::bounded_wait(self.store_pid, method)
+                .with_args(arg)?
+                .execute()
+                .await?;
+            let call_res: Result<T, Error> = call.candid()?;
+            call_res.map_err(InternalError::observed_public)
+        }
+        .await;
+        let step = if method == Self::PUBLISH_CHUNK {
+            "publish_chunk"
+        } else {
+            "read_chunk"
+        };
+        result.map_err(|error| error.with_dependency_failure(self.store_pid, method, step))
     }
 }
 

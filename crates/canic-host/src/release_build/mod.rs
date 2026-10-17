@@ -16,7 +16,7 @@ use canic_contracts::ids::{BuildNetwork, ReleaseBuildId, ReleaseBuildNonce};
 use ciborium::Value;
 use ic_host_artifacts::artifact::ArtifactError;
 use ic_host_fs::{
-    durable::{create_new_bytes_with_parents, write_bytes},
+    durable::{PublicationMode, WriteOptions, write_bytes},
     read::read_optional_file_no_follow,
 };
 use sha2_host::{Digest, Sha256};
@@ -278,12 +278,19 @@ fn plan_release_build_with_nonce_and_builder(
     };
     let path = release_build_plan_path(root, release_build_id);
     let bytes = encode_record(&record);
-    create_new_bytes_with_parents(&path, &bytes)
-        .map_err(crate::publication::ops::io_error)
-        .map_err(|source| ReleaseBuildPlanError::Io {
-            path: path.clone(),
-            source,
-        })?;
+    write_bytes(
+        &path,
+        WriteOptions {
+            mode: PublicationMode::CreateNew,
+            permissions: 0o666,
+        },
+        &bytes,
+    )
+    .map_err(crate::publication::ops::io_error)
+    .map_err(|source| ReleaseBuildPlanError::Io {
+        path: path.clone(),
+        source,
+    })?;
     Ok(PlannedReleaseBuild { record, path })
 }
 
@@ -311,7 +318,16 @@ fn finalize_release_build(
         release_set_manifest_digest,
     };
     let bytes = encode_record(&record);
-    if let Err(source) = write_bytes(&path, &bytes).map_err(crate::publication::ops::io_error) {
+    if let Err(source) = write_bytes(
+        &path,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &bytes,
+    )
+    .map_err(crate::publication::ops::io_error)
+    {
         // A final parent-sync error may still have published the complete new
         // record. Re-read the authority before projecting failure.
         match load_release_build_plan(root, release_build_id) {

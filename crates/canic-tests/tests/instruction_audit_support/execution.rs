@@ -1,6 +1,4 @@
 use super::*;
-use canic_contracts::dto::wire::projection::fixture_delegation::CanisterCommand;
-use canic_contracts::dto::wire::projection::fixture_delegation::CanisterCommandResponse;
 use canic_contracts::dto::wire::projection::fixture_instruction_audit::RootCommand;
 use canic_contracts::dto::wire::projection::fixture_instruction_audit::RootCommandResponse;
 use canic_contracts::dto::wire::projection::fixture_role_attestation::ManagedStatusRequest as RoleStatusRequest;
@@ -17,7 +15,7 @@ fn setup_for_scenario(scenario: &AuditScenario) -> root::harness::RootSetup {
     }
 }
 
-// Execute one v3 scenario in an exactly restored authoritative baseline.
+// Execute one v4 scenario in an exactly restored authoritative baseline.
 pub(super) fn run_scenario(scenario: &AuditScenario) -> ScenarioResult {
     if is_registry_auth_scenario(scenario) {
         return run_registry_auth_scenario(scenario);
@@ -50,8 +48,6 @@ fn is_registry_auth_scenario(scenario: &AuditScenario) -> bool {
     matches!(
         scenario.key,
         "root:test_provision_chain_key_delegation_proof_for_issuer:new-issuer"
-            | "issuer:canic_command.PrepareDelegatedToken:active-proof"
-            | "issuer_verifier:issuer_verify_token:valid-delegated-token"
     )
 }
 
@@ -78,7 +74,6 @@ fn prepare_registry_auth_scenario(
     setup: &ActiveComponentRegistryFixture,
     scenario: &AuditScenario,
 ) -> PreparedScenario {
-    let subject = Principal::from_slice(&[scenario.key.as_bytes()[0]; 29]);
     configure_delegation_issuer(
         setup.pic(),
         setup.root,
@@ -90,38 +85,7 @@ fn prepare_registry_auth_scenario(
         "root:test_provision_chain_key_delegation_proof_for_issuer:new-issuer" => {
             PreparedScenario {
                 target_pid: setup.root,
-                caller_pid: None,
                 issuer_pid: Some(setup.issuer.canister_id),
-                delegated_token: None,
-            }
-        }
-        "issuer:canic_command.PrepareDelegatedToken:active-proof" => {
-            provision_delegation_proof(setup.pic(), setup.root, setup.issuer.canister_id);
-            PreparedScenario {
-                target_pid: setup.issuer.canister_id,
-                caller_pid: Some(subject),
-                issuer_pid: Some(setup.issuer.canister_id),
-                delegated_token: None,
-            }
-        }
-        "issuer_verifier:issuer_verify_token:valid-delegated-token" => {
-            provision_delegation_proof(setup.pic(), setup.root, setup.issuer.canister_id);
-            let token = issue_delegated_token_from_active_proof(
-                setup.pic(),
-                setup.issuer.canister_id,
-                subject,
-                DelegationAudience::Fleet(test_fleet()),
-                vec![role_grant(
-                    setup.verifier.role.clone(),
-                    vec![cap::VERIFY.to_string()],
-                )],
-                10_000_000_000,
-            );
-            PreparedScenario {
-                target_pid: setup.verifier.canister_id,
-                caller_pid: Some(subject),
-                issuer_pid: Some(setup.issuer.canister_id),
-                delegated_token: Some(token),
             }
         }
         other => panic!("unsupported Registry-bound auth audit scenario: {other}"),
@@ -142,12 +106,6 @@ fn execute_registry_auth_scenario(
                     .issuer_pid
                     .expect("root proof scenario must prepare an issuer"),
             );
-        }
-        "issuer:canic_command.PrepareDelegatedToken:active-proof" => {
-            execute_delegated_token_prepare(setup.pic(), prepared, &setup.verifier.role);
-        }
-        "issuer_verifier:issuer_verify_token:valid-delegated-token" => {
-            execute_verifier_auth_scenario(setup.pic(), prepared.target_pid, prepared);
         }
         other => panic!("unsupported Registry-bound auth audit scenario: {other}"),
     }
@@ -261,16 +219,12 @@ fn prepare_scenario(
             execute_root_cycles_scenario(setup, target_pid);
             PreparedScenario {
                 target_pid,
-                caller_pid: None,
                 issuer_pid: None,
-                delegated_token: None,
             }
         }
         _ => PreparedScenario {
             target_pid,
-            caller_pid: None,
             issuer_pid: None,
-            delegated_token: None,
         },
     }
 }
@@ -328,63 +282,6 @@ fn provision_delegation_proof(pic: &PocketIc, root: Principal, issuer_pid: Princ
         )
         .expect("root proof provisioning transport failed");
     provisioned.expect("root proof provisioning application failed");
-}
-
-fn execute_delegated_token_prepare(
-    pic: &PocketIc,
-    prepared: &PreparedScenario,
-    verifier_role: &canic::ids::CanisterRole,
-) {
-    let subject = prepared
-        .caller_pid
-        .expect("delegated prepare scenario must have a subject");
-    let _issuer_pid = prepared
-        .issuer_pid
-        .expect("delegated prepare scenario must have an issuer");
-    let response: Result<CanisterCommandResponse, Error> = pic
-        .update_candid_as(
-            prepared.target_pid,
-            subject,
-            protocol::CANIC_COMMAND,
-            (CanisterCommand::PrepareDelegatedToken(
-                DelegatedTokenPrepareRequest {
-                    metadata: Some(AuthRequestMetadata {
-                        request_id: [92; 32],
-                        ttl_ns: 60_000_000_000,
-                    }),
-                    aud: DelegationAudience::Fleet(test_fleet()),
-                    grants: vec![role_grant(
-                        verifier_role.clone(),
-                        vec![cap::VERIFY.to_string()],
-                    )],
-                    ttl_ns: 10_000_000_000,
-                    ext: None,
-                },
-            ),),
-        )
-        .expect("delegated token prepare transport failed");
-    let CanisterCommandResponse::PrepareDelegatedToken(_) =
-        response.expect("delegated token prepare application failed");
-}
-
-// Execute delegated-token confirmation through the second issuer Component.
-fn execute_verifier_auth_scenario(
-    pic: &PocketIc,
-    target_pid: Principal,
-    prepared: &PreparedScenario,
-) {
-    let caller = prepared
-        .caller_pid
-        .expect("verifier auth audit scenario must resolve a delegated subject caller");
-    let token = prepared
-        .delegated_token
-        .clone()
-        .expect("verifier auth audit scenario must issue a delegated token");
-    let response: Result<Result<(), Error>, _> =
-        pic.update_candid_as(target_pid, caller, "issuer_verify_token", (token,));
-    response
-        .expect("issuer_verify_token transport failed")
-        .expect("issuer_verify_token application failed");
 }
 
 fn configure_delegation_issuer(
@@ -613,7 +510,7 @@ fn root_capability_response_as(
 // Read one canister's current time in nanoseconds for capability metadata issuance.
 fn target_now_ns(setup: &root::harness::RootSetup, canister_id: Principal) -> u64 {
     let _ = canister_id;
-    setup.pic.current_time_nanos()
+    setup.pic.get_time().as_nanos_since_unix_epoch()
 }
 
 // Rebuild the capability metadata tuple that the structural envelope expects.

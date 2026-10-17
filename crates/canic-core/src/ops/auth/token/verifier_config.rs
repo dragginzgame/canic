@@ -5,6 +5,7 @@
 //! Boundary: deterministic config validation and verifier-policy construction.
 
 use super::*;
+use crate::ops::runtime::env::EnvOps;
 
 pub(super) fn configured_root_canister_id(
     cfg: &DelegatedTokenConfig,
@@ -46,11 +47,17 @@ pub(super) fn configured_chain_key_root_verifier(
             "auth.delegated_tokens.chain_key_root_proof.public_key_hex is not valid hex: {err}"
         ))
     })?;
-    verify_chain_key_ecdsa_public_key_shape(&public_key).map_err(|err| {
-        AuthValidationError::Auth(format!(
-            "auth.delegated_tokens.chain_key_root_proof.public_key_hex must be a secp256k1 SEC1 public key: {err}"
-        ))
-    })?;
+    if !matches!(
+        (public_key.first(), public_key.len()),
+        (Some(2 | 3), 33) | (Some(4), 65)
+    ) {
+        return Err(AuthValidationError::Auth(
+            "chain-key public key must use compressed or uncompressed SEC1 encoding".to_owned(),
+        )
+        .into());
+    }
+    // The SDK admits the curve point during cryptographic proof verification.
+    // Live sessions compare current key bytes with that already-admitted authority.
     let key_version = required_chain_key_u64(chain_key.key_version, "key_version")?;
     let min_accepted_key_version = required_chain_key_u64(
         chain_key.min_accepted_key_version,
@@ -167,27 +174,6 @@ fn required_fixed_32_chain_key_hex(
         ))
         .into()
     })
-}
-
-pub(super) fn chain_key_policy_from_config(
-    config: &AuthChainKeyRootVerifierConfig,
-) -> ChainKeyRootVerifierPolicy {
-    ChainKeyRootVerifierPolicy {
-        root_canister_id: config.policy.root_canister_id,
-        algorithm: config.policy.algorithm,
-        key_id: config.policy.key_id.clone(),
-        derivation_path_hash: config.policy.derivation_path_hash,
-        public_key: config.policy.public_key.clone(),
-        key_version: config.policy.key_version,
-        min_accepted_key_version: config.policy.min_accepted_key_version,
-        min_accepted_proof_epoch: config.policy.min_accepted_proof_epoch,
-        min_accepted_registry_epoch: config.policy.min_accepted_registry_epoch,
-        valid_from_ns: config.policy.valid_from_ns,
-        accept_until_ns: config.policy.accept_until_ns,
-        build_network: config.policy.build_network,
-        allow_test_chain_key: config.allow_test_chain_key,
-        max_revocation_latency_ns: config.policy.max_revocation_latency_ns,
-    }
 }
 
 pub(super) fn configured_ic_root_public_key_raw(

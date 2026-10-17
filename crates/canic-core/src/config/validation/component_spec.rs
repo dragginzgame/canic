@@ -125,6 +125,23 @@ fn validate_auth(
     auth: &CanisterAuthConfig,
     canister: &CanisterRole,
 ) -> Result<(), ConfigSchemaError> {
+    if auth.allowed_token_scopes.len() > MAX_VERIFIED_APPLICATION_SCOPES {
+        return Err(ConfigSchemaError::ValidationError(format!(
+            "canister '{canister}' auth.allowed_token_scopes exceeds {MAX_VERIFIED_APPLICATION_SCOPES} entries",
+        )));
+    }
+    for (index, scope) in auth.allowed_token_scopes.iter().enumerate() {
+        ApplicationScope::parse(scope.clone()).map_err(|error| {
+            ConfigSchemaError::ValidationError(format!(
+                "canister '{canister}' auth.allowed_token_scopes[{index}] is invalid: {error}"
+            ))
+        })?;
+        if index > 0 && auth.allowed_token_scopes[index - 1] >= *scope {
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "canister '{canister}' auth.allowed_token_scopes must be sorted and unique",
+            )));
+        }
+    }
     let Some(local) = &auth.local_application_authorization else {
         return Ok(());
     };
@@ -155,6 +172,16 @@ fn validate_auth(
                 "canister '{canister}' auth.local_application_authorization.allowed_scopes must be strictly sorted and unique",
             )));
         }
+    }
+
+    if local
+        .allowed_scopes
+        .iter()
+        .any(|scope| auth.allowed_token_scopes.binary_search(scope).is_err())
+    {
+        return Err(ConfigSchemaError::ValidationError(format!(
+            "canister '{canister}' local application scopes must belong to auth.allowed_token_scopes",
+        )));
     }
 
     let hard_maximum_secs = MAX_LOCAL_APPLICATION_SESSION_TTL_NS / 1_000_000_000;

@@ -1,6 +1,7 @@
 //! Build and qualify configured canister artifacts with exact Cargo feature contracts.
 
 mod output;
+use ic_build::cargo::observation::CargoFeatureSelection;
 #[cfg(test)]
 mod tests;
 
@@ -23,14 +24,13 @@ use super::{
     },
 };
 use crate::{
-    artifact_io::{CapturedWasmArtifact, WasmArtifactFinalization, finalize_wasm_artifact},
+    artifact_io::{WasmArtifactFinalization, finalize_wasm_artifact},
     bootstrap_coordinator::{
         build_bootstrap_fleet_coordinator_artifact, compile_bootstrap_fleet_coordinator_artifact,
     },
     bootstrap_store::{build_bootstrap_wasm_store_artifact, compile_bootstrap_wasm_store_artifact},
     build_toolchain::BuildToolchain,
     cargo_command,
-    cargo_metadata::CargoFeatureSelection,
     release_set::AppConfigSnapshot,
     role_contract::{
         PackageValidationMode, RoleCargoGraphEvidence, RolePackageValidation, finding_detail,
@@ -39,6 +39,7 @@ use crate::{
     },
     should_embed_candid_metadata,
 };
+use ic_build::artifacts::CapturedArtifact;
 use std::{
     collections::BTreeMap,
     env, fmt,
@@ -416,7 +417,13 @@ fn build_workspace_canister_artifacts_from_specs_with_toolchain(
             let wasm = output::select(&messages, &spec.package_manifest_path)?;
             captured.insert(
                 spec.role.clone(),
-                CapturedWasmArtifact::capture(&wasm, &spec.wasm_path)?,
+                CapturedArtifact::capture(
+                    &wasm,
+                    spec.wasm_path
+                        .parent()
+                        .ok_or("artifact output has no parent")?,
+                    usize::MAX,
+                )?,
             );
         }
     }
@@ -535,6 +542,7 @@ fn run_canister_runtime_batch(
         )
         .into());
     }
+    super::retain_cargo_include_exports(context, &output.stdout)?;
     Ok(output.stdout)
 }
 
@@ -785,6 +793,7 @@ fn run_canister_build(
         .into());
     }
 
+    super::retain_cargo_include_exports(context, &output.stdout)?;
     Ok(output::select(&output.stdout, manifest_path)?)
 }
 
@@ -805,6 +814,7 @@ fn run_canister_profile_candid_build(
         )
         .into());
     }
+    super::retain_cargo_include_exports(context, &output.stdout)?;
     Ok(output::select(&output.stdout, manifest_path)?)
 }
 
@@ -861,6 +871,7 @@ fn run_canister_build_batch(
 
     let output = output_canister_cargo_command(&mut command, progress)?;
     if output.status.success() {
+        super::retain_cargo_include_exports(context, &output.stdout)?;
         return Ok(output.stdout);
     }
     let roles = group
@@ -896,15 +907,6 @@ pub(super) fn canister_cargo_build_command(
     manifest_path: &Path,
     profile: CanisterBuildProfile,
 ) -> Command {
-    canister_cargo_command(context, manifest_path, profile, "build")
-}
-
-fn canister_cargo_command(
-    context: &WorkspaceBuildContext,
-    manifest_path: &Path,
-    profile: CanisterBuildProfile,
-    cargo_subcommand: &str,
-) -> Command {
     let build_context = context.with_profile(profile);
     let mut command = cargo_command();
     build_context.apply_to_command(&mut command);
@@ -917,7 +919,8 @@ fn canister_cargo_command(
             canic_core::role_contract::CANONICAL_BUILD_MARKER_VALUE,
         )
         .args([
-            cargo_subcommand,
+            "build",
+            "--lib",
             "--locked",
             "--keep-going",
             "--message-format=json-render-diagnostics",

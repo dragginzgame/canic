@@ -25,7 +25,7 @@ use std::{
 
 use candid::Principal;
 use ic_host_artifacts::artifact::ArtifactError;
-use ic_host_fs::durable;
+use ic_host_fs::durable::{self, PublicationMode, WriteOptions};
 use ic_host_fs::read::hash_file_no_follow;
 use ic_testkit::pocket_ic::{PocketIc, common::rest::Topology};
 
@@ -86,8 +86,15 @@ pub fn write_record(directory: &Path, record: &LocalFleetRecord) -> Result<(), L
     if bytes.len() > 1024 * 1024 {
         return Err(LocalFleetError::Capacity);
     }
-    durable::write_bytes(&directory.join("environment.json"), &bytes)
-        .map_err(crate::publication::ops::io_error)?;
+    durable::write_bytes(
+        &directory.join("environment.json"),
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &bytes,
+    )
+    .map_err(crate::publication::ops::io_error)?;
     Ok(())
 }
 

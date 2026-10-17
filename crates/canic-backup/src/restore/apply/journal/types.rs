@@ -305,6 +305,8 @@ pub enum RestoreApplyOperationState {
 
 #[derive(Debug, ThisError)]
 pub enum RestoreApplyJournalError {
+    #[error("original command custody repeats or does not match an external operation")]
+    InvalidCommandCustody,
     #[error("restore apply journal operation {sequence} has invalid artifact checksum")]
     ArtifactChecksum {
         sequence: usize,

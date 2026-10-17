@@ -16,7 +16,7 @@ pub struct BootstrapRegistrationRecoveryRecord {
     pub review_attempts: u32,
     pub approval_attempts: u32,
     pub approved: bool,
-    #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub review: Option<BootstrapRegistrationReviewRecord>,
 }
 

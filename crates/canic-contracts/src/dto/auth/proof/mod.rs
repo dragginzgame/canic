@@ -2,15 +2,15 @@
 //!
 //! Responsibility: delegated root proof, issuer proof, and active proof DTOs.
 //! Does not own: proof verification, key validation, or storage mapping.
-//! Boundary: passive proof contracts carried by delegated tokens and issuer installs.
+//! Boundary: passive proof contracts for Root delegation and issuer installs.
 
 use super::{DelegatedRoleGrant, DelegationAudience};
 use crate::{dto::prelude::*, ids::BuildNetwork};
 
 pub use ic_auth_protocol_types::{
     ChainKeyAlgorithm, ChainKeyBatchHeaderV1, ChainKeyBatchWitnessStepV1, ChainKeyBatchWitnessV1,
-    ChainKeyKeyId, ChainKeyRootSignatureV1, IcCanisterSignatureProofV1, IssuerProof,
-    IssuerProofAlgorithm, IssuerProofBinding,
+    ChainKeyKeyId, ChainKeyRootSignatureV1, IcCanisterSignatureProofV1, IssuerProofAlgorithm,
+    IssuerProofBinding,
 };
 
 //

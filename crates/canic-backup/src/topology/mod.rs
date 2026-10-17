@@ -7,9 +7,8 @@
 #[cfg(test)]
 mod tests;
 
-use crate::hash::sha256_hex;
-
 use candid::Principal;
+use ic_host_artifacts::artifact::Sha256Digest;
 use serde::{Deserialize, Serialize};
 
 ///
@@ -55,7 +54,7 @@ impl TopologyHasher {
     #[must_use]
     pub fn hash(records: &[TopologyRecord]) -> TopologyHash {
         let input = Self::canonical_input(records);
-        let hash = sha256_hex(input.as_bytes());
+        let hash = Sha256Digest::compute(input.as_bytes()).to_string();
 
         TopologyHash {
             algorithm: "sha256".to_string(),

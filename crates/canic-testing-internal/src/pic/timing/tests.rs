@@ -3,7 +3,7 @@ use canic_host::fleet_ensure::dto::FleetObservationStage;
 
 #[test]
 fn cache_acquisition_distinguishes_build_from_reuse_and_retains_phase() {
-    use ic_testkit::artifacts::{
+    use ic_build::artifacts::{
         ArtifactCacheOutcome, ArtifactCachePreparation, ArtifactCacheSpec, prepare_artifact_cache,
     };
 
