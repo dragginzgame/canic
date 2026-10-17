@@ -4,9 +4,9 @@ use super::{
 };
 use ic_testkit::pic::{
     BaselinePoolContractError, BaselinePreparationStage, CachedPocketIcBaseline,
-    CanisterRestoreReceipt, CanisterSnapshotTarget, ControllerSnapshotError, CycleResetPolicy,
-    FailureDisposition, FixtureRecipeId, PocketIcBaselineRecipe, PreparedBaseline, RebuildReason,
-    ResetDomainPolicy, ResetReceipt, ResetRequirements, SnapshotRestoreFunding, TimeResetPolicy,
+    CanisterSnapshotTarget, ControllerSnapshotError, CycleResetPolicy, FailureDisposition,
+    FixtureRecipeId, PocketIcBaselineRecipe, PreparedBaseline, RebuildReason, ResetDomainPolicy,
+    ResetReceipt, ResetRequirements, SnapshotRestoreFunding, TimeResetPolicy,
     is_dead_pocket_ic_transport_error,
 };
 use std::{collections::BTreeMap, error::Error as StdError, fmt, path::PathBuf, time::Instant};
@@ -44,7 +44,9 @@ impl RootBaselineRecipe {
         Ok(Self {
             id: FixtureRecipeId::try_new(identity)?,
             reset_requirements: ResetRequirements::try_new(
-                CycleResetPolicy::TopUpTo(crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES),
+                SnapshotRestoreFunding::TopUpTo {
+                    minimum_cycles: crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,
+                },
                 [ResetDomainPolicy::PocketIcTime(
                     TimeResetPolicy::PreserveCurrent,
                 )],
@@ -74,17 +76,6 @@ impl PocketIcBaselineRecipe for RootBaselineRecipe {
         Ok(build_root_cached_baseline(
             &self.spec, &artifacts, root_wasm,
         ))
-    }
-
-    fn restore_canisters(
-        &self,
-        baseline: &CachedPocketIcBaseline<Self::Metadata>,
-    ) -> Result<CanisterRestoreReceipt, Self::Error> {
-        baseline
-            .restore(SnapshotRestoreFunding::TopUpTo {
-                minimum_cycles: crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,
-            })
-            .map_err(Into::into)
     }
 
     fn reset_non_snapshot_state(
@@ -139,7 +130,7 @@ impl PocketIcBaselineRecipe for RootBaselineRecipe {
     fn classify_failure(
         &self,
         stage: BaselinePreparationStage,
-        error: &Self::Error,
+        error: &(dyn std::error::Error + 'static),
     ) -> FailureDisposition {
         if is_dead_pocket_ic_transport_error(error) {
             FailureDisposition::Rebuild(RebuildReason::DeadPocketIcTransport)

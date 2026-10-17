@@ -358,9 +358,9 @@ mod tests {
     use ic_testkit::pic::{
         BaselinePoolContractError, BaselinePreparationStage, CachedPocketIcBaseline,
         CachedPocketIcBaselinePool, CachedPocketIcBaselinePoolGuard, CandidCallError,
-        CanisterRestoreReceipt, CanisterSnapshotTarget, ControllerSnapshotError, CycleResetPolicy,
-        FailureDisposition, FixtureRecipeId, PocketIcBaselineRecipe, PreparedBaseline,
-        RebuildReason, ResetDomainPolicy, ResetReceipt, ResetRequirements, SnapshotRestoreFunding,
+        CanisterSnapshotTarget, ControllerSnapshotError, CycleResetPolicy, FailureDisposition,
+        FixtureRecipeId, PocketIcBaselineRecipe, PreparedBaseline, RebuildReason,
+        ResetDomainPolicy, ResetReceipt, ResetRequirements, SnapshotRestoreFunding,
         TimeResetPolicy, is_dead_pocket_ic_transport_error,
     };
     #[cfg(test)]
@@ -1403,7 +1403,9 @@ mod tests {
             Ok(Self {
                 id: FixtureRecipeId::try_new("canic/active-component-registry/v1")?,
                 reset_requirements: ResetRequirements::try_new(
-                    CycleResetPolicy::TopUpTo(crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES),
+                    SnapshotRestoreFunding::TopUpTo {
+                        minimum_cycles: crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,
+                    },
                     [ResetDomainPolicy::PocketIcTime(
                         TimeResetPolicy::PreserveCurrent,
                     )],
@@ -1484,17 +1486,6 @@ mod tests {
             .map_err(Into::into)
         }
 
-        fn restore_canisters(
-            &self,
-            baseline: &CachedPocketIcBaseline<Self::Metadata>,
-        ) -> Result<CanisterRestoreReceipt, Self::Error> {
-            baseline
-                .restore(SnapshotRestoreFunding::TopUpTo {
-                    minimum_cycles: crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,
-                })
-                .map_err(Into::into)
-        }
-
         fn reset_non_snapshot_state(
             &self,
             baseline: &CachedPocketIcBaseline<Self::Metadata>,
@@ -1538,7 +1529,7 @@ mod tests {
         fn classify_failure(
             &self,
             stage: BaselinePreparationStage,
-            error: &Self::Error,
+            error: &(dyn std::error::Error + 'static),
         ) -> FailureDisposition {
             if is_dead_pocket_ic_transport_error(error) {
                 FailureDisposition::Rebuild(RebuildReason::DeadPocketIcTransport)

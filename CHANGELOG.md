@@ -41,7 +41,7 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 - **Pending Testkit adoption:** prepare unit-returning pool readiness/validation
   hooks, field-based fixture inputs and explicit-principal typed calls while
   preserving bootstrap, topology checks and exact senders. Normal dependency adoption
-  remains blocked on Testkit 0.51 publication and the existing 0.50 caller alignment.
+  remains blocked on Testkit 0.52 publication and the existing 0.50 caller alignment.
 
 - **Release checks:** include the shared version validator in isolated release
   fixtures so preflight and failure-recovery checks can run after tooling updates.
