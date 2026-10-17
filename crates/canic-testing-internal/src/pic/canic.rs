@@ -66,8 +66,13 @@ fn root_command(
     root: Principal,
     command: RootCommandFragment,
 ) -> Result<RootCommandResponseFragment, Error> {
-    pic.update_candid(root, protocol::CANIC_ROOT_COMMAND, (command,))
-        .expect("Root command transport")
+    pic.update_candid(
+        root,
+        candid::Principal::anonymous(),
+        protocol::CANIC_ROOT_COMMAND,
+        (command,),
+    )
+    .expect("Root command transport")
 }
 
 fn root_status(
@@ -77,6 +82,7 @@ fn root_status(
 ) -> Result<RootStatusResponseFragment, Error> {
     pic.query_candid(
         root,
+        candid::Principal::anonymous(),
         match &request {
             RootStatusRequestFragment::Readiness => protocol::CANIC_OBSERVABILITY,
             RootStatusRequestFragment::Operation(_) => protocol::CANIC_ROOT_OPERATION_STATUS,
@@ -503,6 +509,7 @@ pub(super) fn activate_managed_fleet(
     let store_response: Result<StoreStatusResponseFragment, Error> = pic
         .query_candid(
             store.principal,
+            candid::Principal::anonymous(),
             protocol::CANIC_WASM_STORE_STATUS,
             (StoreStatusRequestFragment::Operation(
                 OperationStatusRequest {
@@ -535,7 +542,7 @@ pub(super) fn activate_managed_fleet(
 pub fn wait_until_ready(pic: &PocketIc, canister_id: Principal, tick_limit: usize) {
     for _ in 0..tick_limit {
         if matches!(
-            pic.query_candid_as::<Result<RootStatusResponseFragment, Error>, _>(
+            pic.query_candid::<Result<RootStatusResponseFragment, Error>, _>(
                 canister_id,
                 Principal::anonymous(),
                 protocol::CANIC_OBSERVABILITY,
@@ -585,7 +592,13 @@ pub fn install_standalone_canister(
             instance: pocket_ic,
             server: None,
         },
-        InstallSpec::new(wasm, local_init_args(), 0).label(label),
+        InstallSpec {
+            wasm,
+            init_bytes: local_init_args(),
+            cycles: 0,
+            install_sender: None,
+            label: Some(label.into()),
+        },
     )
     .expect("install standalone canister");
     let canister_id = fixture.canister_id();
@@ -622,9 +635,13 @@ pub fn install_standalone_canister_on_pic(
 
     let wasm = standalone_canister_wasm(crate_name, profile);
     let canister_id = pic
-        .try_create_and_install(
-            InstallSpec::new(wasm, local_init_args(), 0).label(label.to_string()),
-        )
+        .try_create_and_install(InstallSpec {
+            wasm,
+            init_bytes: local_init_args(),
+            cycles: 0,
+            install_sender: None,
+            label: Some(label.to_string().into()),
+        })
         .expect("install test canister");
     pic.wait_for_ready(
         canister_id,
@@ -639,6 +656,7 @@ pub fn install_standalone_canister_on_pic(
 fn fetch_ready(pic: &PocketIc, canister_id: Principal) -> Result<bool, CandidCallError> {
     match pic.query_candid::<Result<CanisterStatusResponseFragment, Error>, _>(
         canister_id,
+        candid::Principal::anonymous(),
         protocol::CANIC_OBSERVABILITY,
         (CanisterStatusRequestFragment::Readiness,),
     ) {
@@ -653,6 +671,7 @@ fn fetch_ready(pic: &PocketIc, canister_id: Principal) -> Result<bool, CandidCal
 fn fetch_root_ready(pic: &PocketIc, canister_id: Principal) -> Result<bool, CandidCallError> {
     match pic.query_candid::<Result<RootStatusResponseFragment, Error>, _>(
         canister_id,
+        candid::Principal::anonymous(),
         protocol::CANIC_OBSERVABILITY,
         (RootStatusRequestFragment::Readiness,),
     ) {

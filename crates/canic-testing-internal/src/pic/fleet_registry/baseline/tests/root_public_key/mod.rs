@@ -11,7 +11,7 @@ use canic_contracts::dto::wire::projection::fixture_baseline_root_public_key::Re
 
 pub(super) fn assert_controller_key_discovery(pic: &PocketIc, root: Principal) {
     let key = |caller, path: Vec<Vec<u8>>| {
-        pic.update_candid_as::<Result<Response, Error>, _>(
+        pic.update_candid::<Result<Response, Error>, _>(
             root,
             caller,
             canic::protocol::CANIC_ROOT_COMMAND,

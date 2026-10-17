@@ -93,7 +93,7 @@ fn status(
     authority: &CallerReceiverAuthority,
     operation_id: [u8; 32],
 ) -> Result<CallerAuthorityStatus, FixtureError> {
-    let response: Result<StatusResponse, Error> = pic.query_candid_as(
+    let response: Result<StatusResponse, Error> = pic.query_candid(
         authority.receiver.canister(),
         root,
         CANIC_CONTROL_STATUS,
@@ -161,6 +161,6 @@ fn command(
     command: Command,
 ) -> Result<Response, FixtureError> {
     let response: Result<Response, Error> =
-        pic.update_candid_as(target, root, CANIC_COMMAND, (command,))?;
+        pic.update_candid(target, root, CANIC_COMMAND, (command,))?;
     response.map_err(FixtureError::Canic)
 }

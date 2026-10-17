@@ -47,7 +47,7 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn supplied_capacity_fences_
     root_command(&pic, root, RootCommandFragment::MaintainPool).unwrap();
     assert_eq!(root_pool_status(&pic, root).entries, initial.entries);
     let unregistered: Result<StatusResponse, Error> = pic
-        .query_candid_as(
+        .query_candid(
             root,
             operator,
             canic::protocol::CANIC_ROOT_STATUS,

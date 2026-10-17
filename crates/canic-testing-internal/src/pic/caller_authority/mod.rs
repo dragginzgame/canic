@@ -237,7 +237,7 @@ fn command(
     request: CallerAuthorityCommand,
 ) -> Result<CallerAuthorityReceipt, Error> {
     let response: Result<Response, Error> = pic
-        .update_candid_as(
+        .update_candid(
             hub,
             caller,
             canic::protocol::CANIC_COMMAND,
@@ -254,7 +254,7 @@ fn status(
     operation_id: [u8; 32],
 ) -> CallerAuthorityStatus {
     let response: Result<StatusResponse, Error> = pic
-        .query_candid_as(
+        .query_candid(
             target,
             root,
             canic::protocol::CANIC_CONTROL_STATUS,
@@ -268,7 +268,7 @@ fn status(
 }
 
 fn probe(pic: &PocketIc, hub: Principal, shard: Principal) -> Result<Principal, Error> {
-    pic.update_candid_as(hub, shard, "test_caller_probe", ())
+    pic.update_candid(hub, shard, "test_caller_probe", ())
         .unwrap()
 }
 

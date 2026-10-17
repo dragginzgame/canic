@@ -111,14 +111,13 @@ fn receipt_backed_intent_conformance() {
     println!("receipt_backed_intent: PocketIC ready");
 
     let authority_id = pic
-        .try_create_and_install(
-            InstallSpec::new(
-                authority_wasm.clone(),
-                encode_one(()).unwrap(),
-                INSTALL_CYCLES,
-            )
-            .label("intent_authority"),
-        )
+        .try_create_and_install(InstallSpec {
+            wasm: authority_wasm.clone(),
+            init_bytes: encode_one(()).unwrap(),
+            cycles: INSTALL_CYCLES,
+            install_sender: None,
+            label: Some("intent_authority".into()),
+        })
         .expect("install test canister");
     println!("receipt_backed_intent: installed authority={authority_id}");
 
@@ -547,6 +546,7 @@ fn begin_receipt(
 ) -> ReceiptBeginView {
     pic.update_candid::<Result<ReceiptBeginView, String>, _>(
         authority_id,
+        candid::Principal::anonymous(),
         "begin_receipt",
         (
             operation_seed,
@@ -573,6 +573,7 @@ fn settle_receipt(
 ) -> Result<ReceiptSettlementView, String> {
     pic.update_candid::<Result<ReceiptSettlementView, String>, _>(
         authority_id,
+        candid::Principal::anonymous(),
         "settle_receipt",
         (
             operation_seed,
@@ -593,6 +594,7 @@ fn load_receipt(
 ) -> Option<ReceiptIntentView> {
     pic.query_candid::<Result<Option<ReceiptIntentView>, String>, _>(
         authority_id,
+        candid::Principal::anonymous(),
         "load_receipt",
         (operation_seed,),
     )
@@ -601,11 +603,11 @@ fn load_receipt(
 }
 
 const fn install_retry_policy() -> RetryPolicy {
-    RetryPolicy::new(
-        std::num::NonZeroUsize::new(INSTALL_CODE_RETRY_LIMIT)
+    RetryPolicy {
+        max_attempts: std::num::NonZeroUsize::new(INSTALL_CODE_RETRY_LIMIT)
             .expect("non-zero install attempt limit"),
-        INSTALL_CODE_COOLDOWN,
-    )
+        cooldown: INSTALL_CODE_COOLDOWN,
+    }
 }
 
 fn build_canisters(workspace_root: &Path) -> &'static InternalTestWasms {

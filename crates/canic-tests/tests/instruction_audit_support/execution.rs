@@ -240,7 +240,12 @@ fn execute_scenario(
         "scale:request_cycles_from_parent:fresh" => {
             let response: Result<u128, Error> = setup
                 .pic
-                .update_candid(target_pid, "request_cycles_from_parent", (999u128,))
+                .update_candid(
+                    target_pid,
+                    candid::Principal::anonymous(),
+                    "request_cycles_from_parent",
+                    (999u128,),
+                )
                 .expect("scale request_cycles_from_parent transport failed");
             assert_eq!(
                 response.expect("scale request_cycles_from_parent application failed"),
@@ -256,6 +261,7 @@ fn execute_scenario(
                 .pic
                 .update_candid(
                     target_pid,
+                    candid::Principal::anonymous(),
                     "create_account",
                     (Principal::from_slice(&[51; 29]),),
                 )
@@ -265,7 +271,12 @@ fn execute_scenario(
         "scale_hub:create_worker:empty-pool" => {
             let created: Result<Principal, Error> = setup
                 .pic
-                .update_candid(target_pid, "create_worker", ())
+                .update_candid(
+                    target_pid,
+                    candid::Principal::anonymous(),
+                    "create_worker",
+                    (),
+                )
                 .expect("create_worker transport failed");
             created.expect("create_worker application failed");
         }
@@ -277,6 +288,7 @@ fn provision_delegation_proof(pic: &PocketIc, root: Principal, issuer_pid: Princ
     let provisioned: Result<(), Error> = pic
         .update_candid(
             root,
+            candid::Principal::anonymous(),
             "test_provision_chain_key_delegation_proof_for_issuer",
             (issuer_pid,),
         )
@@ -293,6 +305,7 @@ fn configure_delegation_issuer(
     let registered: Result<RootCommandResponse, Error> = pic
         .update_candid(
             root,
+            candid::Principal::anonymous(),
             protocol::CANIC_ROOT_COMMAND,
             (RootCommand::ConfigureIssuer(RootIssuerConfigureRequest {
                 issuer_pid,
@@ -340,6 +353,7 @@ fn perf_entries(pic: &PocketIc, canister_id: Principal) -> Vec<MetricEntry> {
     let response: Result<RoleStatusResponse, Error> = pic
         .query_candid(
             canister_id,
+            candid::Principal::anonymous(),
             protocol::CANIC_OBSERVABILITY,
             (RoleStatusRequest::Metrics(MetricsStatusRequest {
                 kind: MetricsKind::Runtime,
@@ -494,7 +508,7 @@ fn root_capability_response_as(
         },
     };
 
-    let result: Result<Result<RootCommandResponse, Error>, _> = setup.pic.update_candid_as(
+    let result: Result<Result<RootCommandResponse, Error>, _> = setup.pic.update_candid(
         target_pid,
         caller,
         protocol::CANIC_ROOT_COMMAND,

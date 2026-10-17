@@ -38,7 +38,7 @@ pub(super) fn assert_candid_contract(candid: &[u8]) {
 pub(super) fn assert_prepared_root_refuses_discovery(pic: &PocketIc, root: Principal) {
     // The ordinary Fleet fence runs before the lookup's endpoint guard and handler.
     let rejected = pic
-        .update_candid_as::<Result<RootMembershipResponse, Error>, _>(
+        .update_candid::<Result<RootMembershipResponse, Error>, _>(
             root,
             Principal::anonymous(),
             canic::protocol::CANIC_ROOT_MEMBERSHIP,
@@ -86,7 +86,7 @@ fn lookup(
     caller: Principal,
     subject: Principal,
 ) -> Result<RootMembershipResponse, Error> {
-    pic.update_candid_as(
+    pic.update_candid(
         root,
         caller,
         canic::protocol::CANIC_ROOT_MEMBERSHIP,

@@ -44,7 +44,7 @@ fn public_snapshots_preserve_observer_authority() -> Result<(), ic_testkit::pic:
     let query = |canister_id, family| {
         let response: Result<PublicStatusResponse, Error> = fixture
             .pic
-            .query_candid_as(
+            .query_candid(
                 canister_id,
                 outsider,
                 protocol::CANIC_PUBLIC_STATUS,
@@ -63,7 +63,7 @@ fn public_snapshots_preserve_observer_authority() -> Result<(), ic_testkit::pic:
         };
         snapshot
     };
-    let health: Result<PublicStatusResponse, Error> = fixture.pic.query_candid_as(
+    let health: Result<PublicStatusResponse, Error> = fixture.pic.query_candid(
         published,
         outsider,
         protocol::CANIC_PUBLIC_STATUS,
@@ -83,7 +83,12 @@ fn public_snapshots_preserve_observer_authority() -> Result<(), ic_testkit::pic:
     fixture.pic.advance_time(Duration::from_secs(11));
     let scheduled: Result<(), Error> = fixture
         .pic
-        .update_candid(published, "schedule_cost_probe_watchdog", ())
+        .update_candid(
+            published,
+            candid::Principal::anonymous(),
+            "schedule_cost_probe_watchdog",
+            (),
+        )
         .unwrap();
     scheduled.unwrap();
     for _ in 0..20 {
@@ -91,7 +96,12 @@ fn public_snapshots_preserve_observer_authority() -> Result<(), ic_testkit::pic:
     }
     let sampled: Result<(), Error> = fixture
         .pic
-        .update_candid(published, "sample_public_metrics", ())
+        .update_candid(
+            published,
+            candid::Principal::anonymous(),
+            "sample_public_metrics",
+            (),
+        )
         .expect("trusted sampling transport");
     sampled.expect("trusted sampling");
     let snapshot = query(published, PublicMetricFamily::Application);
@@ -116,7 +126,7 @@ fn public_snapshots_preserve_observer_authority() -> Result<(), ic_testkit::pic:
             .any(|row| row.name == "timer.events.scheduler_started")
     );
     for request in sensitive_observability_requests(false) {
-        let denied: Result<RoleStatusResponse, Error> = fixture.pic.query_candid_as(
+        let denied: Result<RoleStatusResponse, Error> = fixture.pic.query_candid(
             published,
             outsider,
             protocol::CANIC_OBSERVABILITY,
@@ -177,12 +187,18 @@ fn assert_timer_registration_continuity(pic: &PocketIc, canister: Principal) {
     use canic::dto::public_status::{PublicMetricKind, PublicMetricsRequest};
     let sample = || {
         let sampled: Result<(), Error> = pic
-            .update_candid(canister, "sample_public_metrics", ())
+            .update_candid(
+                canister,
+                candid::Principal::anonymous(),
+                "sample_public_metrics",
+                (),
+            )
             .unwrap();
         sampled.unwrap();
         let reply: Result<PublicStatusResponse, Error> = pic
             .query_candid(
                 canister,
+                candid::Principal::anonymous(),
                 protocol::CANIC_PUBLIC_STATUS,
                 (PublicStatusRequest::Metrics(PublicMetricsRequest {
                     family: PublicMetricFamily::Performance,
@@ -204,7 +220,14 @@ fn assert_timer_registration_continuity(pic: &PocketIc, canister: Principal) {
             .unwrap()
     };
     let invoke = |method: &str, unregister: bool| {
-        let reply: Result<(), Error> = pic.update_candid(canister, method, (unregister,)).unwrap();
+        let reply: Result<(), Error> = pic
+            .update_candid(
+                canister,
+                candid::Principal::anonymous(),
+                method,
+                (unregister,),
+            )
+            .unwrap();
         reply.unwrap();
     };
     let before = sample();
@@ -214,7 +237,12 @@ fn assert_timer_registration_continuity(pic: &PocketIc, canister: Principal) {
     assert_eq!(before.value, cancelled.value);
     invoke("set_cost_probe_trap", true);
     let reply: Result<(), Error> = pic
-        .update_candid(canister, "schedule_cost_probe_watchdog", ())
+        .update_candid(
+            canister,
+            candid::Principal::anonymous(),
+            "schedule_cost_probe_watchdog",
+            (),
+        )
         .unwrap();
     reply.unwrap();
     for _ in 0..10 {
@@ -227,7 +255,12 @@ fn assert_timer_registration_continuity(pic: &PocketIc, canister: Principal) {
     invoke("cancel_cost_probe_watchdog", true);
     for _ in 0..3 {
         let reply: Result<(), Error> = pic
-            .update_candid(canister, "schedule_cost_probe_watchdog", ())
+            .update_candid(
+                canister,
+                candid::Principal::anonymous(),
+                "schedule_cost_probe_watchdog",
+                (),
+            )
             .unwrap();
         reply.unwrap();
         for _ in 0..10 {
@@ -275,6 +308,7 @@ fn public_memory_sampling_retains_bounded_history_at_the_source_ceiling() {
             .pic
             .update_candid(
                 canister,
+                candid::Principal::anonymous(),
                 "qualify_public_metrics_sampling",
                 (if period == 0 { 4096_u16 } else { 0_u16 }, false),
             )
@@ -287,7 +321,7 @@ fn public_memory_sampling_retains_bounded_history_at_the_source_ceiling() {
         maximum = maximum.max(response.sample_instructions);
         let response: Result<PublicStatusResponse, Error> = fixture
             .pic
-            .query_candid_as(
+            .query_candid(
                 canister,
                 fixture.root,
                 protocol::CANIC_PUBLIC_STATUS,
@@ -336,7 +370,7 @@ fn optional_sampling_is_bounded_and_rejected_performance_preserves_cycle_trackin
     let query = |family| {
         let response: Result<PublicStatusResponse, Error> = fixture
             .pic
-            .query_candid_as(
+            .query_candid(
                 canister,
                 fixture.root,
                 protocol::CANIC_PUBLIC_STATUS,
@@ -358,6 +392,7 @@ fn optional_sampling_is_bounded_and_rejected_performance_preserves_cycle_trackin
         .pic
         .update_candid(
             canister,
+            candid::Principal::anonymous(),
             "qualify_public_metrics_sampling",
             (256_u16, false),
         )
@@ -369,6 +404,7 @@ fn optional_sampling_is_bounded_and_rejected_performance_preserves_cycle_trackin
         .pic
         .update_candid(
             canister,
+            candid::Principal::anonymous(),
             "qualify_public_metrics_sampling",
             (4096_u16, false),
         )
@@ -386,7 +422,12 @@ fn optional_sampling_is_bounded_and_rejected_performance_preserves_cycle_trackin
     fixture.pic.advance_time(Duration::from_secs(361));
     let rejected: Result<PublicSamplingProbe, Error> = fixture
         .pic
-        .update_candid(canister, "qualify_public_metrics_sampling", (0_u16, true))
+        .update_candid(
+            canister,
+            candid::Principal::anonymous(),
+            "qualify_public_metrics_sampling",
+            (0_u16, true),
+        )
         .unwrap();
     let rejected = rejected.expect("authorized fixture sampling");
     assert!(
@@ -409,6 +450,7 @@ fn optional_sampling_is_bounded_and_rejected_performance_preserves_cycle_trackin
         .pic
         .query_candid(
             canister,
+            candid::Principal::anonymous(),
             protocol::CANIC_OBSERVABILITY,
             (RoleStatusRequest::CycleHistory(PageRequest {
                 limit: 100,
@@ -442,7 +484,7 @@ fn exact_cycles_and_runtime_metrics_require_controller() {
         for request in sensitive_observability_requests(supports_topups) {
             let denied: Result<RoleStatusResponse, Error> = fixture
                 .pic
-                .query_candid_as(
+                .query_candid(
                     canister_id,
                     fixture.root,
                     protocol::CANIC_OBSERVABILITY,
@@ -460,6 +502,7 @@ fn exact_cycles_and_runtime_metrics_require_controller() {
                 .pic
                 .query_candid(
                     canister_id,
+                    candid::Principal::anonymous(),
                     protocol::CANIC_OBSERVABILITY,
                     (request.clone(),),
                 )
@@ -706,7 +749,12 @@ fn timer_registration_capacity_and_invalid_identity_are_leak_free() {
     let before_invalid = runtime_status(&fixture.pic, canister_id).timers.len();
     let invalid: Result<bool, Error> = fixture
         .pic
-        .update_candid(canister_id, "reject_invalid_timer_identity", ())
+        .update_candid(
+            canister_id,
+            candid::Principal::anonymous(),
+            "reject_invalid_timer_identity",
+            (),
+        )
         .expect("call invalid timer identity probe");
     assert!(invalid.expect("invalid identity probe result"));
     assert_eq!(
@@ -717,7 +765,12 @@ fn timer_registration_capacity_and_invalid_identity_are_leak_free() {
 
     let fill: Result<(u64, bool), Error> = fixture
         .pic
-        .update_candid(canister_id, "fill_timer_registry", ())
+        .update_candid(
+            canister_id,
+            candid::Principal::anonymous(),
+            "fill_timer_registry",
+            (),
+        )
         .expect("fill shared timer registry");
     let (registered, rejected) = fill.expect("capacity probe result");
     assert!(registered > 0);
@@ -812,6 +865,7 @@ fn runtime_status(pic: &PocketIc, canister_id: Principal) -> CanicRuntimeStatus 
     let result: Result<RoleStatusResponse, canic::Error> = pic
         .query_candid(
             canister_id,
+            candid::Principal::anonymous(),
             protocol::CANIC_OBSERVABILITY,
             (RoleStatusRequest::Runtime,),
         )
@@ -842,6 +896,7 @@ fn begin_intent(
 ) -> Result<u64, canic::Error> {
     pic.update_candid(
         canister_id,
+        candid::Principal::anonymous(),
         "begin_timer_probe_intent",
         (resource_seed, ttl_secs),
     )
@@ -850,7 +905,12 @@ fn begin_intent(
 
 fn counts(pic: &PocketIc, canister_id: Principal) -> (u64, u64, u64) {
     let result: Result<(u64, u64, u64), canic::Error> = pic
-        .query_candid(canister_id, "timer_probe_counts", ())
+        .query_candid(
+            canister_id,
+            candid::Principal::anonymous(),
+            "timer_probe_counts",
+            (),
+        )
         .expect("query timer probe counts");
     result.expect("timer probe counts application result")
 }
@@ -874,6 +934,7 @@ fn timer_metrics(pic: &PocketIc, canister_id: Principal) -> Vec<MetricEntry> {
     let response: Result<RoleStatusResponse, Error> = pic
         .query_candid(
             canister_id,
+            candid::Principal::anonymous(),
             protocol::CANIC_OBSERVABILITY,
             (RoleStatusRequest::Metrics(MetricsStatusRequest {
                 kind: MetricsKind::Runtime,
@@ -925,11 +986,11 @@ fn wait_for_fixture_ready(pic: &PocketIc, canister_id: Principal, context: &str)
 }
 
 const fn install_retry_policy() -> RetryPolicy {
-    RetryPolicy::new(
-        std::num::NonZeroUsize::new(INSTALL_CODE_RETRY_LIMIT)
+    RetryPolicy {
+        max_attempts: std::num::NonZeroUsize::new(INSTALL_CODE_RETRY_LIMIT)
             .expect("non-zero install attempt limit"),
-        INSTALL_CODE_COOLDOWN,
-    )
+        cooldown: INSTALL_CODE_COOLDOWN,
+    }
 }
 
 #[test]
@@ -955,7 +1016,12 @@ fn public_history_samples_without_readers_and_resets_after_restoration() {
     assert_eq!(sampler_count(restricted), 0);
     fixture
         .pic
-        .update_candid::<Result<(), Error>, _>(canister, "configure_public_sampler", (false,))
+        .update_candid::<Result<(), Error>, _>(
+            canister,
+            candid::Principal::anonymous(),
+            "configure_public_sampler",
+            (false,),
+        )
         .unwrap()
         .unwrap();
     let application = || cached_application_metrics(&fixture.pic, canister, fixture.root);
@@ -971,7 +1037,12 @@ fn public_history_samples_without_readers_and_resets_after_restoration() {
     assert_eq!(supplied.metrics.entries[0].name, "timer_completions");
     fixture
         .pic
-        .update_candid::<Result<(), Error>, _>(canister, "configure_public_sampler", (true,))
+        .update_candid::<Result<(), Error>, _>(
+            canister,
+            candid::Principal::anonymous(),
+            "configure_public_sampler",
+            (true,),
+        )
         .unwrap()
         .unwrap();
     let repeated = history();
@@ -994,7 +1065,12 @@ fn public_history_samples_without_readers_and_resets_after_restoration() {
         assert_sampling_recovers_after_rejection(&fixture, canister, &supplied, &delayed);
     fixture
         .pic
-        .update_candid::<Result<(), Error>, _>(canister, "suspend_public_sampler_fixture", ())
+        .update_candid::<Result<(), Error>, _>(
+            canister,
+            candid::Principal::anonymous(),
+            "suspend_public_sampler_fixture",
+            (),
+        )
         .unwrap()
         .unwrap();
     fixture.pic.advance_time(Duration::from_secs(601));
@@ -1049,7 +1125,12 @@ fn assert_sampling_recovers_after_rejection(
     );
     fixture
         .pic
-        .update_candid::<Result<(), Error>, _>(canister, "configure_public_sampler", (false,))
+        .update_candid::<Result<(), Error>, _>(
+            canister,
+            candid::Principal::anonymous(),
+            "configure_public_sampler",
+            (false,),
+        )
         .unwrap()
         .unwrap();
     fixture.pic.advance_time(Duration::from_secs(301));
@@ -1073,7 +1154,7 @@ fn cached_cycle_history(
     use canic::dto::public_status::{PublicHistoryRequest, PublicMetricFamily};
 
     let response: Result<PublicStatusResponse, Error> = pic
-        .query_candid_as(
+        .query_candid(
             canister,
             caller,
             protocol::CANIC_PUBLIC_STATUS,
@@ -1102,7 +1183,7 @@ fn cached_application_metrics(
     use canic::dto::public_status::PublicMetricFamily;
 
     let response: Result<PublicStatusResponse, Error> = pic
-        .query_candid_as(
+        .query_candid(
             canister,
             caller,
             protocol::CANIC_PUBLIC_STATUS,
@@ -1166,7 +1247,7 @@ fn assert_anonymous_public_boundary(pic: &PocketIc, published: Principal, contro
     pic.set_controllers(published, None, vec![controller])
         .unwrap();
     let anonymous_public: Result<PublicStatusResponse, Error> = pic
-        .query_candid_as(
+        .query_candid(
             published,
             Principal::anonymous(),
             protocol::CANIC_PUBLIC_STATUS,
@@ -1176,7 +1257,7 @@ fn assert_anonymous_public_boundary(pic: &PocketIc, published: Principal, contro
     assert!(anonymous_public.is_ok());
     for request in sensitive_observability_requests(false) {
         let denied: Result<RoleStatusResponse, Error> = pic
-            .query_candid_as(
+            .query_candid(
                 published,
                 Principal::anonymous(),
                 protocol::CANIC_OBSERVABILITY,
@@ -1269,7 +1350,12 @@ fn public_history_costs_cover_sampling_and_independent_chart_queries() {
             fixture.pic.advance_time(Duration::from_secs(301));
             let sampled: Result<u64, Error> = fixture
                 .pic
-                .update_candid(canister, "qualify_history_sampling_cost", (rows,))
+                .update_candid(
+                    canister,
+                    candid::Principal::anonymous(),
+                    "qualify_history_sampling_cost",
+                    (rows,),
+                )
                 .unwrap();
             let instructions = sampled.unwrap();
             assert!(instructions > 0);
@@ -1281,7 +1367,7 @@ fn public_history_costs_cover_sampling_and_independent_chart_queries() {
                 for limit in [1_u64, 12, 288] {
                     let cost: Result<HistoryCost, Error> = fixture
                         .pic
-                        .query_candid_as(
+                        .query_candid(
                             canister,
                             Principal::anonymous(),
                             "qualify_history_query_cost",
@@ -1308,13 +1394,18 @@ fn public_history_costs_cover_sampling_and_independent_chart_queries() {
             fixture.pic.advance_time(Duration::from_secs(gap * 300));
             let sampled: Result<u64, Error> = fixture
                 .pic
-                .update_candid(sparse, "qualify_history_sampling_cost", (rows,))
+                .update_candid(
+                    sparse,
+                    candid::Principal::anonymous(),
+                    "qualify_history_sampling_cost",
+                    (rows,),
+                )
                 .unwrap();
             let instructions = sampled.unwrap();
             assert!(instructions > 0);
             let cost: Result<HistoryCost, Error> = fixture
                 .pic
-                .query_candid_as(
+                .query_candid(
                     sparse,
                     Principal::anonymous(),
                     "qualify_history_query_cost",

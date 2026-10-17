@@ -279,7 +279,7 @@ fn missing_selected_admission_rejects_install_then_accepts_corrected_retry() {
 
 fn assert_prepared_and_not_ready(pic: &PocketIc, canister_id: Principal, root: Principal) {
     let status: Result<CanisterStatusResponse, Error> = pic
-        .query_candid_as(
+        .query_candid(
             canister_id,
             root,
             canic_contracts::protocol::CANIC_CONTROL_STATUS,
@@ -300,6 +300,7 @@ fn assert_prepared_and_not_ready(pic: &PocketIc, canister_id: Principal, root: P
     let readiness: Result<CanisterStatusResponse, Error> = pic
         .query_candid(
             canister_id,
+            candid::Principal::anonymous(),
             canic_contracts::protocol::CANIC_OBSERVABILITY,
             (CanisterStatusRequest::Readiness,),
         )
@@ -336,11 +337,11 @@ fn non_root_post_upgrade_failure_reports_phase_error() {
 }
 
 const fn install_retry_policy() -> RetryPolicy {
-    RetryPolicy::new(
-        std::num::NonZeroUsize::new(INSTALL_CODE_RETRY_LIMIT)
+    RetryPolicy {
+        max_attempts: std::num::NonZeroUsize::new(INSTALL_CODE_RETRY_LIMIT)
             .expect("non-zero install attempt limit"),
-        INSTALL_CODE_COOLDOWN,
-    )
+        cooldown: INSTALL_CODE_COOLDOWN,
+    }
 }
 
 fn replace_release_build_id(wasm: &[u8], retained: &str, replacement: &str) -> Vec<u8> {

@@ -111,7 +111,7 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
     let before = allocation(&pic, fixture.root_id, member_operation);
     assert!(before.application_initialization.is_none());
     let status_refused: Result<RootStatusResponseFragment, Error> = pic
-        .query_candid_as(
+        .query_candid(
             fixture.root_id,
             target,
             canic::protocol::CANIC_ROOT_OPERATION_STATUS,
@@ -132,7 +132,7 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
     let mut wrong = request.clone();
     wrong.initialization.target_canister = coordinator;
     let rejected: Result<RootCommandResponseFragment, Error> = pic
-        .update_candid_as(
+        .update_candid(
             fixture.root_id,
             Principal::anonymous(),
             canic::protocol::CANIC_ROOT_COMMAND,
@@ -144,7 +144,7 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
         canic::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     let refused: Result<RootCommandResponseFragment, Error> = pic
-        .update_candid_as(
+        .update_candid(
             fixture.root_id,
             target,
             canic::protocol::CANIC_ROOT_COMMAND,
@@ -192,7 +192,7 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
         Some(request.initialization.clone())
     );
     let replay: Result<RootCommandResponseFragment, Error> = pic
-        .update_candid_as(
+        .update_candid(
             fixture.root_id,
             Principal::anonymous(),
             canic::protocol::CANIC_ROOT_COMMAND,
@@ -212,7 +212,7 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
         status.root_runtime_active
     });
     let delivered: Result<Vec<u8>, Error> = pic
-        .query_candid_as(
+        .query_candid(
             target,
             Principal::anonymous(),
             "managed_initialization_bytes",
@@ -225,7 +225,7 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
         .unwrap()
         .version;
     let replay: Result<RootCommandResponseFragment, Error> = pic
-        .update_candid_as(
+        .update_candid(
             fixture.root_id,
             Principal::anonymous(),
             canic::protocol::CANIC_ROOT_COMMAND,
@@ -247,7 +247,7 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
     )
     .unwrap();
     let restored: Result<Vec<u8>, Error> = pic
-        .query_candid_as(
+        .query_candid(
             target,
             Principal::anonymous(),
             "managed_initialization_bytes",

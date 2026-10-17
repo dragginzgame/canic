@@ -6,7 +6,7 @@ use super::*;
 use ic_testkit::pocket_ic::common::rest::RawMessageId;
 
 fn probe(pic: &PocketIc, hub: Principal, caller: Principal) -> Result<Principal, Error> {
-    pic.update_candid_as(hub, caller, "test_caller_probe", ())
+    pic.update_candid(hub, caller, "test_caller_probe", ())
         .expect("caller probe transport")
 }
 
@@ -23,15 +23,15 @@ pub(super) fn qualify_live_projection(
     assert_eq!(probe(pic, hub, hub), denied);
     assert_eq!(probe(pic, hub, Principal::anonymous()), denied);
     let target: Result<Principal, Error> = pic
-        .update_candid_as(hub, root, "test_caller_target", (shard,))
+        .update_candid(hub, root, "test_caller_target", (shard,))
         .unwrap();
     assert_eq!(target, Ok(shard));
     let invalid: Result<Principal, Error> = pic
-        .update_candid_as(hub, root, "test_caller_target", (hub,))
+        .update_candid(hub, root, "test_caller_target", (hub,))
         .unwrap();
     assert_eq!(invalid, denied);
     let unauthorized_proxy: Result<Principal, Error> = pic
-        .update_candid_as(hub, shard, "test_caller_target", (shard,))
+        .update_candid(hub, shard, "test_caller_target", (shard,))
         .unwrap();
     assert_eq!(
         unauthorized_proxy,
@@ -60,7 +60,7 @@ pub(super) fn hold_effect(
     shard: Principal,
 ) -> (RawMessageId, u64) {
     assert_eq!(probe(pic, hub, shard), Ok(shard));
-    pic.update_candid_as::<Result<(), Error>, _>(hub, root, "test_caller_hold", (true,))
+    pic.update_candid::<Result<(), Error>, _>(hub, root, "test_caller_hold", (true,))
         .unwrap()
         .unwrap();
     let before = effects(pic, root, hub).1;
@@ -88,7 +88,7 @@ pub(super) fn assert_effect_fenced(
     shard: Principal,
     held: (RawMessageId, u64),
 ) {
-    pic.update_candid_as::<Result<(), Error>, _>(hub, root, "test_caller_hold", (false,))
+    pic.update_candid::<Result<(), Error>, _>(hub, root, "test_caller_hold", (false,))
         .unwrap()
         .unwrap();
     let result: Result<u64, Error> = candid::decode_one(&pic.await_call(held.0).unwrap()).unwrap();
@@ -108,7 +108,7 @@ pub(super) fn assert_effect_fenced(
 }
 
 fn effects(pic: &PocketIc, root: Principal, hub: Principal) -> (bool, u64) {
-    pic.query_candid_as::<Result<(bool, u64), Error>, _>(hub, root, "test_caller_effect_status", ())
+    pic.query_candid::<Result<(bool, u64), Error>, _>(hub, root, "test_caller_effect_status", ())
         .unwrap()
         .unwrap()
 }
@@ -144,7 +144,7 @@ pub(super) fn hold_during_pending_denial(
     root_membership::assert_child_discovery(pic, root, &binding.component, binding);
     pic.start_canister(hub, Some(root)).unwrap();
     let competing: Result<Principal, Error> = pic
-        .update_candid_as(hub, root, "test_create_fixture_child", ([0xd9_u8; 32],))
+        .update_candid(hub, root, "test_create_fixture_child", ([0xd9_u8; 32],))
         .unwrap();
     assert_eq!(
         competing,

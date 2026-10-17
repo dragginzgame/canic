@@ -94,7 +94,7 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn production_blob_initializ
             .is_none()
     );
     let refused: Result<RootCommandResponseFragment, Error> = pic
-        .update_candid_as(
+        .update_candid(
             fixture.root_id,
             service,
             canic::protocol::CANIC_ROOT_COMMAND,
@@ -108,7 +108,7 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn production_blob_initializ
     let mut wrong_target = request.clone();
     wrong_target.initialization.target_canister = coordinator;
     let refused: Result<RootCommandResponseFragment, Error> = pic
-        .update_candid_as(
+        .update_candid(
             fixture.root_id,
             Principal::anonymous(),
             canic::protocol::CANIC_ROOT_COMMAND,
@@ -150,7 +150,7 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn production_blob_initializ
     changed.project = "different-blob-project".into();
     conflicting.initialization.arguments = candid::encode_one(changed).unwrap();
     let refused: Result<RootCommandResponseFragment, Error> = pic
-        .update_candid_as(
+        .update_candid(
             fixture.root_id,
             Principal::anonymous(),
             canic::protocol::CANIC_ROOT_COMMAND,
@@ -165,7 +165,7 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn production_blob_initializ
         status.root_runtime_active
     });
     let installed: Result<HostConfigurationView, HostFailure> = pic
-        .query_candid_as(
+        .query_candid(
             service,
             input.configuration.operator,
             "blob_configuration",
@@ -183,7 +183,7 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn production_blob_initializ
         .unwrap()
         .version;
     let replay: Result<RootCommandResponseFragment, Error> = pic
-        .update_candid_as(
+        .update_candid(
             fixture.root_id,
             Principal::anonymous(),
             canic::protocol::CANIC_ROOT_COMMAND,

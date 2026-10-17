@@ -275,7 +275,10 @@ fn root_baseline_snapshot_targets(metadata: &RootBaselineMetadata) -> Vec<Canist
     }
     senders
         .into_iter()
-        .map(|(canister_id, sender)| CanisterSnapshotTarget::new(canister_id, sender))
+        .map(|(canister_id, sender)| CanisterSnapshotTarget {
+            canister_id,
+            sender,
+        })
         .collect()
 }
 

@@ -44,7 +44,7 @@ pub(super) fn initial_child_failure_reaches_coordinator_and_recovers_same_claim(
     wait_for_parent_commit(&pic, root, operation_id);
     assert_balance_control_requires_controller(&pic, root);
     let burned: u128 = pic
-        .update_candid_as(
+        .update_candid(
             root,
             Principal::anonymous(),
             "audit_recovery_balance",
@@ -386,7 +386,7 @@ fn prepare_spare(pic: &PocketIc, root: Principal) {
 
 fn pause_and_reduce_reserve(pic: &PocketIc, root: Principal) {
     let paused: Result<Response, Error> = pic
-        .update_candid_as(
+        .update_candid(
             root,
             Principal::anonymous(),
             canic::protocol::CANIC_ROOT_COMMAND,
@@ -401,7 +401,7 @@ fn pause_and_reduce_reserve(pic: &PocketIc, root: Principal) {
     assert_eq!(paused.propagation.unconfirmed_targets, 0);
     assert!(paused.reconciliation_error.is_none());
     let burned: u128 = pic
-        .update_candid_as(
+        .update_candid(
             root,
             Principal::anonymous(),
             "audit_recovery_balance",
@@ -419,7 +419,7 @@ fn provision(
     request: &RootComponentChildAllocationRequest,
 ) {
     let response: Result<Response, Error> = pic
-        .update_candid_as(
+        .update_candid(
             root,
             parent,
             canic::protocol::CANIC_ROOT_COMMAND,

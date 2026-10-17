@@ -195,7 +195,7 @@ impl EnsurePlatform for FundedCanister {
         self.calls += 1;
         let reply: Result<Nat, WithdrawError> = self
             .pic
-            .update_candid_as(
+            .update_candid(
                 Principal::from_text(ledger).unwrap(),
                 self.transport.operator().unwrap(),
                 "withdraw",
@@ -238,7 +238,9 @@ fn governed_pocketic_mint_credit_resumes_original_native_withdrawal() {
     let (pic, transport) = funded_operator();
     let operator = transport.operator().unwrap();
     let ledger = Principal::from_text(LEDGER).unwrap();
-    let fee: Nat = pic.query_candid(ledger, "icrc1_fee", ()).unwrap();
+    let fee: Nat = pic
+        .query_candid(ledger, candid::Principal::anonymous(), "icrc1_fee", ())
+        .unwrap();
     let fee: u128 = fee.0.try_into().unwrap();
     let destination = pic
         .create_canister_with_params(

@@ -22,7 +22,7 @@ pub fn create_worker(
     hub_pid: Principal,
 ) -> Result<Principal, Error> {
     let worker_pid: Result<Principal, Error> = pic
-        .update_candid(hub_pid, "create_worker", ())
+        .update_candid(hub_pid, candid::Principal::anonymous(), "create_worker", ())
         .expect("update Candid harness call");
     let worker_pid = worker_pid?;
     wait_for_worker_sync(pic, root_pid, hub_pid, worker_pid);
@@ -52,6 +52,7 @@ fn wait_for_worker_sync(
         let children: Result<CanisterStatusResponse, Error> = pic
             .query_candid(
                 hub_pid,
+                candid::Principal::anonymous(),
                 protocol::CANIC_PUBLIC_STATUS,
                 (CanisterStatusRequest::Children(PageRequest {
                     limit: 100,

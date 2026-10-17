@@ -258,7 +258,12 @@ pub(super) fn assert_issued_native_funding(input: &AutonomousFundingJourney<'_>)
     }
     let requests: u64 = input
         .pic
-        .query_candid(input.cycles_ledger, "request_count", ())
+        .query_candid(
+            input.cycles_ledger,
+            candid::Principal::anonymous(),
+            "request_count",
+            (),
+        )
         .unwrap();
     let mut replay_adapter = platform();
     let replay = apply(&planned.plan.plan_sha256, &mut replay_adapter).unwrap();
@@ -271,7 +276,12 @@ pub(super) fn assert_issued_native_funding(input: &AutonomousFundingJourney<'_>)
     );
     let replay_requests: u64 = input
         .pic
-        .query_candid(input.cycles_ledger, "request_count", ())
+        .query_candid(
+            input.cycles_ledger,
+            candid::Principal::anonymous(),
+            "request_count",
+            (),
+        )
         .unwrap();
     assert_eq!(requests, replay_requests);
     assert_eq!(read_journal(&paths).unwrap().unwrap(), terminal);
@@ -290,7 +300,7 @@ pub(super) fn assert_issued_native_funding(input: &AutonomousFundingJourney<'_>)
 fn burn_to(input: &AutonomousFundingJourney<'_>, retain: u128) {
     let burned: u128 = input
         .pic
-        .update_candid_as(
+        .update_candid(
             input.root,
             input.operator,
             "audit_recovery_balance",
@@ -306,7 +316,7 @@ fn child_status(
 ) -> canic_contracts::dto::root::RootComponentChildOperationStatus {
     let response: Result<RootStatusResponseFragment, Error> = input
         .pic
-        .query_candid_as(
+        .query_candid(
             input.root,
             input.operator,
             canic::protocol::CANIC_ROOT_OPERATION_STATUS,
@@ -346,7 +356,7 @@ fn block_initial_child(
     for attempt in 0..240 {
         let response: Result<RootStatusResponseFragment, Error> = input
             .pic
-            .query_candid_as(
+            .query_candid(
                 input.root,
                 input.operator,
                 canic::protocol::CANIC_ROOT_OPERATION_STATUS,
@@ -377,7 +387,7 @@ fn block_initial_child(
     for _ in 0..240 {
         let response: Result<CoordinatorOperationReadResponse, Error> = input
             .pic
-            .query_candid_as(
+            .query_candid(
                 coordinator,
                 input.operator,
                 canic::protocol::CANIC_COORDINATOR_OPERATION_STATUS,
@@ -416,7 +426,12 @@ fn block_initial_child(
 fn withdrawals(input: &AutonomousFundingJourney<'_>) -> u64 {
     input
         .pic
-        .query_candid(input.cycles_ledger, "withdrawal_count", ())
+        .query_candid(
+            input.cycles_ledger,
+            candid::Principal::anonymous(),
+            "withdrawal_count",
+            (),
+        )
         .unwrap()
 }
 

@@ -28,7 +28,12 @@ pub(super) fn assert_fresh_reinstall_rejection(
     let before = snapshot();
     let withdrawals: u64 = input
         .pic
-        .query_candid(ledger, "withdrawal_count", ())
+        .query_candid(
+            ledger,
+            candid::Principal::anonymous(),
+            "withdrawal_count",
+            (),
+        )
         .unwrap();
     assert!(plan.conservation.maximum_operator_debit_cycles > 0);
 
@@ -65,7 +70,12 @@ pub(super) fn assert_fresh_reinstall_rejection(
     assert_eq!(
         input
             .pic
-            .query_candid::<u64, _>(ledger, "withdrawal_count", ())
+            .query_candid::<u64, _>(
+                ledger,
+                candid::Principal::anonymous(),
+                "withdrawal_count",
+                ()
+            )
             .unwrap(),
         withdrawals
     );
@@ -85,12 +95,13 @@ fn move_fixture_balance(
     let _: () = pic
         .update_candid(
             ledger,
+            candid::Principal::anonymous(),
             "set_transfer_fee_override",
             (Some(Nat::from(0_u8)),),
         )
         .unwrap();
     let receipt: Result<Nat, QualificationIcrc1TransferError> = pic
-        .update_candid_as(
+        .update_candid(
             ledger,
             from,
             "icrc1_transfer",
@@ -109,6 +120,11 @@ fn move_fixture_balance(
         .unwrap();
     receipt.unwrap();
     let _: () = pic
-        .update_candid(ledger, "set_transfer_fee_override", (None::<Nat>,))
+        .update_candid(
+            ledger,
+            candid::Principal::anonymous(),
+            "set_transfer_fee_override",
+            (None::<Nat>,),
+        )
         .unwrap();
 }

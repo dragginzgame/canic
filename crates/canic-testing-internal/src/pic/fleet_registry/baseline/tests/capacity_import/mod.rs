@@ -452,7 +452,7 @@ pub(super) fn command(
     action: PoolImportCommand,
 ) -> Result<PoolImportStatus, Error> {
     let response: Result<Response, Error> = pic
-        .update_candid_as(
+        .update_candid(
             root,
             caller,
             canic::protocol::CANIC_ROOT_COMMAND,
@@ -464,7 +464,7 @@ pub(super) fn command(
 
 pub(super) fn context(pic: &PocketIc, root: Principal, caller: Principal) -> PoolImportContext {
     let response: Result<StatusResponse, Error> = pic
-        .query_candid_as(
+        .query_candid(
             root,
             caller,
             canic::protocol::CANIC_ROOT_STATUS,
@@ -484,7 +484,7 @@ pub(super) fn status(
     identity: PoolImportIdentity,
 ) -> PoolImportStatus {
     let response: Result<StatusResponse, Error> = pic
-        .query_candid_as(
+        .query_candid(
             root,
             caller,
             canic::protocol::CANIC_ROOT_STATUS,

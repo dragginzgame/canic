@@ -92,11 +92,11 @@ fn retry_same_release_upgrade(
     sender: Principal,
 ) {
     let args = upgrade_args();
-    let policy = RetryPolicy::new(
-        std::num::NonZeroUsize::new(INSTALL_CODE_RETRY_LIMIT)
+    let policy = RetryPolicy {
+        max_attempts: std::num::NonZeroUsize::new(INSTALL_CODE_RETRY_LIMIT)
             .expect("non-zero install attempt limit"),
-        INSTALL_CODE_COOLDOWN,
-    );
+        cooldown: INSTALL_CODE_COOLDOWN,
+    };
     pic.retry_install_code(policy, || {
         pic.upgrade_canister(canister_id, wasm.clone(), args.clone(), Some(sender))
     })
@@ -205,7 +205,7 @@ fn generic_application_subject_as(
 ) -> Result<candid::Principal, Error> {
     fixture
         .pic()
-        .query_candid_as(canister_id, caller, "issuer_application_subject", ())
+        .query_candid(canister_id, caller, "issuer_application_subject", ())
         .expect("query Candid harness call")
 }
 
@@ -216,7 +216,7 @@ fn fleet_admission_status_as(
 ) -> Result<FleetAdmissionProjectionStatusResponse, Error> {
     let response: Result<FleetAdmissionManagedStatusResponse, Error> = fixture
         .pic()
-        .query_candid_as(
+        .query_candid(
             canister_id,
             caller,
             protocol::CANIC_ADMISSION_STATUS,
@@ -238,7 +238,7 @@ fn fleet_admission_probe_as(
 ) -> Result<(), Error> {
     fixture
         .pic()
-        .query_candid_as(canister_id, caller, "issuer_fleet_admission_probe", ())
+        .query_candid(canister_id, caller, "issuer_fleet_admission_probe", ())
         .expect("query Candid harness call")
 }
 
@@ -249,7 +249,7 @@ fn closed_local_authorization_denial_partition_is_bounded() {
     let observations = LocalAuthorizationDenialProbe::ALL.map(|probe| {
         let sample: Result<QueryPerfSample<String>, Error> = fixture
             .pic()
-            .query_candid_as(
+            .query_candid(
                 fixture.verifier.canister_id,
                 caller,
                 "issuer_application_denial_perf",

@@ -30,7 +30,7 @@ pub(super) fn qualify(fixture: &super::ManagedLifecycleFixture, target: Principa
     pic.add_cycles(target, super::SNAPSHOT_RESTORE_MINIMUM_CYCLES);
     let root = fixture.root;
     let response: Result<StatusResponse, Error> = pic
-        .query_candid_as(
+        .query_candid(
             target,
             root,
             canic::protocol::CANIC_CONTROL_STATUS,
@@ -85,7 +85,10 @@ pub(super) fn qualify(fixture: &super::ManagedLifecycleFixture, target: Principa
     let prepared = view(pic, target);
     assert_eq!(prepared.prepare_runs, 1);
     let snapshots = pic
-        .capture_snapshots([CanisterSnapshotTarget::new(target, None)])
+        .capture_snapshots([CanisterSnapshotTarget {
+            canister_id: target,
+            sender: None,
+        }])
         .unwrap();
     release(pic, target, root, &first);
     assert_eq!(increment(pic, target), Ok(2));
@@ -171,14 +174,24 @@ fn verify_restore_release(
 }
 
 fn view(pic: &PocketIc, target: Principal) -> CheckpointView {
-    pic.query_candid::<Result<CheckpointView, Error>, _>(target, "checkpoint_view", ())
-        .unwrap()
-        .unwrap()
+    pic.query_candid::<Result<CheckpointView, Error>, _>(
+        target,
+        candid::Principal::anonymous(),
+        "checkpoint_view",
+        (),
+    )
+    .unwrap()
+    .unwrap()
 }
 
 fn increment(pic: &PocketIc, target: Principal) -> Result<u64, Error> {
-    pic.update_candid(target, "checkpoint_increment", ())
-        .unwrap()
+    pic.update_candid(
+        target,
+        candid::Principal::anonymous(),
+        "checkpoint_increment",
+        (),
+    )
+    .unwrap()
 }
 
 fn transition(
@@ -188,7 +201,7 @@ fn transition(
     binding: &Binding,
     phase: Phase,
 ) -> Result<Phase, Error> {
-    pic.update_candid_as(target, root, "checkpoint_transition", (binding, phase))
+    pic.update_candid(target, root, "checkpoint_transition", (binding, phase))
         .unwrap()
 }
 
@@ -210,6 +223,6 @@ fn restore(
     captured: &Binding,
     fresh: &Binding,
 ) -> Result<Phase, Error> {
-    pic.update_candid_as(target, root, "checkpoint_restore", (captured, fresh))
+    pic.update_candid(target, root, "checkpoint_restore", (captured, fresh))
         .unwrap()
 }

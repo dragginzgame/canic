@@ -343,7 +343,7 @@ fn stage_manifest(
     manifest: TemplateManifestInput,
 ) {
     let result: Result<StoreCommandResponse, Error> = pic
-        .update_candid_as(
+        .update_candid(
             store,
             installation_controller,
             protocol::CANIC_WASM_STORE_COMMAND,
@@ -364,7 +364,7 @@ fn prepare_chunk_set(
     prepare: TemplateChunkSetPrepareInput,
 ) {
     let result: Result<StoreCommandResponse, Error> = pic
-        .update_candid_as(
+        .update_candid(
             store,
             installation_controller,
             protocol::CANIC_WASM_STORE_COMMAND,
@@ -386,7 +386,7 @@ fn publish_chunk(
     chunk: TemplateChunkInput,
 ) {
     let result: Result<(), Error> = pic
-        .update_candid_as(
+        .update_candid(
             store,
             installation_controller,
             protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,

@@ -150,7 +150,7 @@ fn bound_child(status: &PlacementIndexStatusResponse) -> Principal {
 }
 
 fn startup_calls(pic: &PocketIc, root: Principal, child: Principal) -> u32 {
-    pic.query_candid_as::<Result<u32, Error>, _>(child, root, "test_startup_calls", ())
+    pic.query_candid::<Result<u32, Error>, _>(child, root, "test_startup_calls", ())
         .unwrap()
         .unwrap()
 }

@@ -16,7 +16,7 @@ pub(super) fn assert_census(
         .map(|source| pic.cycle_balance(source.canister_id))
         .collect::<Vec<_>>();
     let read = |caller| -> Result<StatusResponse, Error> {
-        pic.query_candid_as(
+        pic.query_candid(
             root,
             caller,
             canic::protocol::CANIC_ROOT_STATUS,

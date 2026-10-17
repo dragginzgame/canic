@@ -63,7 +63,7 @@ pub(super) fn child_grant_refreshes_root_funding_deadline_without_repeating_cred
     let initial_usage = child_usage(&pic, root, child);
     assert_eq!(initial_usage.accounted_cycles.to_u128(), 0);
     let denied: Result<CanisterObservabilityResponse, Error> = pic
-        .query_candid_as(
+        .query_candid(
             root,
             Principal::from_slice(&[99; 29]),
             canic::protocol::CANIC_OBSERVABILITY,
@@ -73,7 +73,7 @@ pub(super) fn child_grant_refreshes_root_funding_deadline_without_repeating_cred
     assert!(denied.is_err());
     funding(&pic, root, false);
     let burned: u128 = pic
-        .update_candid_as(
+        .update_candid(
             root,
             Principal::anonymous(),
             "audit_recovery_balance",
@@ -173,7 +173,7 @@ pub(super) fn child_grant_refreshes_root_funding_deadline_without_repeating_cred
 
 fn child_usage(pic: &PocketIc, parent: Principal, child: Principal) -> ChildFundingUsage {
     let response: Result<CanisterObservabilityResponse, Error> = pic
-        .query_candid_as(
+        .query_candid(
             parent,
             Principal::anonymous(),
             canic::protocol::CANIC_OBSERVABILITY,
@@ -189,7 +189,7 @@ fn child_usage(pic: &PocketIc, parent: Principal, child: Principal) -> ChildFund
 
 fn funding(pic: &PocketIc, root: Principal, enabled: bool) {
     let response: Result<Response, Error> = pic
-        .update_candid_as(
+        .update_candid(
             root,
             Principal::anonymous(),
             canic::protocol::CANIC_ROOT_COMMAND,

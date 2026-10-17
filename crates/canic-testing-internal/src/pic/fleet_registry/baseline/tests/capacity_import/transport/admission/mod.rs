@@ -34,7 +34,7 @@ pub(super) fn review(
     pic.set_controllers(coordinator, Some(operator), vec![operator])
         .unwrap();
     let registry: Result<CoordinatorRegistryResponse, Error> = pic
-        .query_candid_as(
+        .query_candid(
             coordinator,
             operator,
             canic::protocol::CANIC_COORDINATOR_REGISTRY,

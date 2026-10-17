@@ -65,8 +65,13 @@ mod tests {
         coordinator: Principal,
         command: CoordinatorCommand,
     ) -> Result<CoordinatorCommandResponse, Error> {
-        pic.update_candid(coordinator, protocol::CANIC_COORDINATOR_COMMAND, (command,))
-            .expect("Coordinator command transport")
+        pic.update_candid(
+            coordinator,
+            candid::Principal::anonymous(),
+            protocol::CANIC_COORDINATOR_COMMAND,
+            (command,),
+        )
+        .expect("Coordinator command transport")
     }
 
     fn command_as(
@@ -75,7 +80,7 @@ mod tests {
         caller: Principal,
         command: CoordinatorCommand,
     ) -> Result<CoordinatorCommandResponse, Error> {
-        pic.update_candid_as(
+        pic.update_candid(
             coordinator,
             caller,
             protocol::CANIC_COORDINATOR_COMMAND,
@@ -89,8 +94,13 @@ mod tests {
         coordinator: Principal,
         request: R,
     ) -> Result<R::Response, Error> {
-        pic.query_candid(coordinator, R::METHOD, (request,))
-            .expect("Coordinator status transport")
+        pic.query_candid(
+            coordinator,
+            candid::Principal::anonymous(),
+            R::METHOD,
+            (request,),
+        )
+        .expect("Coordinator status transport")
     }
 
     fn status_as<R: crate::pic::canic::CoordinatorRead>(
@@ -99,7 +109,7 @@ mod tests {
         caller: Principal,
         request: R,
     ) -> Result<R::Response, Error> {
-        pic.query_candid_as(coordinator, caller, R::METHOD, (request,))
+        pic.query_candid(coordinator, caller, R::METHOD, (request,))
             .expect("Coordinator status transport")
     }
 
@@ -335,7 +345,10 @@ placement.minimum_distinct_roots = 2
         assert_eq!(sealed.operation_id, Some(request.operation_id));
 
         let snapshots = pic
-            .capture_snapshots([CanisterSnapshotTarget::new(coordinator, None)])
+            .capture_snapshots([CanisterSnapshotTarget {
+                canister_id: coordinator,
+                sender: None,
+            }])
             .expect("Coordinator snapshot capture");
         let CoordinatorCommandResponse::ResumeAuthoritySnapshot(resumed) = command(
             pic,

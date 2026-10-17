@@ -193,7 +193,7 @@ fn retain_source(input: &ReinstallJourney<'_>) -> FleetEnsurePlan {
     for attempt in 0..240 {
         let response: Result<RootStatusResponseFragment, Error> = input
             .pic
-            .query_candid_as(
+            .query_candid(
                 input.root,
                 operator,
                 canic::protocol::CANIC_ROOT_OPERATION_STATUS,

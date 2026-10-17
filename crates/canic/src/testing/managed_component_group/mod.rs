@@ -244,7 +244,7 @@ impl ManagedComponentGroupFixture {
         target: Principal,
     ) -> Result<FleetAdmissionProjectionStatusResponse, ManagedComponentGroupQualificationError>
     {
-        let response: Result<ManagedStatusResponse, Error> = self.pic.query_candid_as(
+        let response: Result<ManagedStatusResponse, Error> = self.pic.query_candid(
             target,
             self.root(),
             CANIC_ADMISSION_STATUS,
@@ -294,7 +294,7 @@ impl ManagedComponentGroupFixture {
             expected_policy_digest: current.policy_digest,
             successor,
         };
-        let response: Result<ManagedCommandResponse, Error> = self.pic.update_candid_as(
+        let response: Result<ManagedCommandResponse, Error> = self.pic.update_candid(
             target,
             self.root(),
             CANIC_COMMAND,
@@ -314,7 +314,7 @@ impl ManagedComponentGroupFixture {
         &self,
         target: Principal,
     ) -> Result<ManagedCanisterBinding, ManagedComponentGroupQualificationError> {
-        let response: Result<ManagedStatusResponse, Error> = self.pic.query_candid_as(
+        let response: Result<ManagedStatusResponse, Error> = self.pic.query_candid(
             target,
             self.root(),
             CANIC_OBSERVABILITY,
@@ -335,7 +335,7 @@ impl ManagedComponentGroupFixture {
         target: Principal,
     ) -> Result<ComponentRuntimeOperationStatus, ManagedComponentGroupQualificationError> {
         let node = self.node(target)?;
-        let response: Result<ManagedStatusResponse, Error> = self.pic.query_candid_as(
+        let response: Result<ManagedStatusResponse, Error> = self.pic.query_candid(
             target,
             self.root(),
             CANIC_CONTROL_STATUS,
@@ -358,7 +358,7 @@ impl ManagedComponentGroupFixture {
         &self,
         target: Principal,
     ) -> Result<CanicRuntimeStatus, ManagedComponentGroupQualificationError> {
-        let response: Result<ManagedStatusResponse, Error> = self.pic.query_candid_as(
+        let response: Result<ManagedStatusResponse, Error> = self.pic.query_candid(
             target,
             self.root(),
             CANIC_OBSERVABILITY,
@@ -402,9 +402,12 @@ impl ManagedComponentGroupFixture {
     fn install_unsettled_allocations(
         &mut self,
     ) -> Result<usize, ManagedComponentGroupQualificationError> {
-        let allocations: Vec<FixtureChildAllocation> =
-            self.pic
-                .query_candid(self.root(), "testing_component_child_allocations", ())?;
+        let allocations: Vec<FixtureChildAllocation> = self.pic.query_candid(
+            self.root(),
+            candid::Principal::anonymous(),
+            "testing_component_child_allocations",
+            (),
+        )?;
         let allocation_count = allocations.len();
         for allocation in allocations {
             if self
@@ -559,9 +562,12 @@ impl ManagedComponentGroupFixture {
         &self,
         request_id: [u8; 32],
     ) -> Result<(), ManagedComponentGroupQualificationError> {
-        let settled: Result<(), Error> =
-            self.pic
-                .update_candid(self.root(), "testing_settle_component_child", (request_id,))?;
+        let settled: Result<(), Error> = self.pic.update_candid(
+            self.root(),
+            candid::Principal::anonymous(),
+            "testing_settle_component_child",
+            (request_id,),
+        )?;
         settled.map_err(ManagedComponentGroupQualificationError::Canic)
     }
 
@@ -1346,7 +1352,7 @@ fn configure_runtime(
     target: Principal,
     directory: &ComponentRuntimeDirectoryPreparationRequest,
 ) -> Result<OperationReceipt, ManagedComponentGroupQualificationError> {
-    let response: Result<ManagedCommandResponse, Error> = pic.update_candid_as(
+    let response: Result<ManagedCommandResponse, Error> = pic.update_candid(
         target,
         root,
         CANIC_COMMAND,
@@ -1374,6 +1380,7 @@ fn overview(
 ) -> Result<RoleOverviewResponse, ManagedComponentGroupQualificationError> {
     let response: Result<ManagedStatusResponse, Error> = pic.query_candid(
         target,
+        candid::Principal::anonymous(),
         CANIC_PUBLIC_STATUS,
         (ManagedStatusRequest::Overview,),
     )?;

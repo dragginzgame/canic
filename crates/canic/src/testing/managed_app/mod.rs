@@ -140,7 +140,7 @@ impl ManagedAppFixture {
 
     /// Configure the exact retained runtime directory through Canic's managed command endpoint.
     pub fn configure_runtime(&self) -> Result<OperationReceipt, ManagedAppQualificationError> {
-        let response: Result<ManagedCommandResponse, Error> = self.pic.update_candid_as(
+        let response: Result<ManagedCommandResponse, Error> = self.pic.update_candid(
             self.app,
             self.root,
             CANIC_COMMAND,
@@ -202,7 +202,7 @@ impl ManagedAppFixture {
     pub fn admission_status(
         &self,
     ) -> Result<FleetAdmissionProjectionStatusResponse, ManagedAppQualificationError> {
-        let response: Result<ManagedStatusResponse, Error> = self.pic.query_candid_as(
+        let response: Result<ManagedStatusResponse, Error> = self.pic.query_candid(
             self.app,
             self.root,
             CANIC_ADMISSION_STATUS,
@@ -246,7 +246,7 @@ impl ManagedAppFixture {
             expected_policy_digest: current.policy_digest,
             successor,
         };
-        let response: Result<ManagedCommandResponse, Error> = self.pic.update_candid_as(
+        let response: Result<ManagedCommandResponse, Error> = self.pic.update_candid(
             self.app,
             self.root,
             CANIC_COMMAND,
@@ -280,7 +280,7 @@ impl ManagedAppFixture {
     }
 
     fn runtime_is_active(&self) -> Result<bool, ManagedAppQualificationError> {
-        let response: Result<ManagedStatusResponse, Error> = self.pic.query_candid_as(
+        let response: Result<ManagedStatusResponse, Error> = self.pic.query_candid(
             self.app,
             self.root,
             CANIC_CONTROL_STATUS,

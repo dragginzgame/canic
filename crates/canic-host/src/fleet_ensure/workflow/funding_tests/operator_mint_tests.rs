@@ -480,6 +480,7 @@ pub(super) fn funded_operator() -> (ic_testkit::pocket_ic::PocketIc, OperatorMin
     let result: Result<Nat, icrc_ledger_types::icrc1::transfer::TransferError> = pic
         .update_candid(
             ledger,
+            candid::Principal::anonymous(),
             "icrc1_transfer",
             (MintTestTransfer {
                 from_subaccount: None,

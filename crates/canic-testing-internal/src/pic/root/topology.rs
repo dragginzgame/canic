@@ -210,6 +210,7 @@ fn fetch_root_children(pic: &PocketIc, root_id: Principal) -> Vec<CanisterInfo> 
         let page: Result<RootStatusResponse, Error> = pic
             .query_candid(
                 root_id,
+                candid::Principal::anonymous(),
                 protocol::CANIC_PUBLIC_STATUS,
                 (RootStatusRequest::Children(PageRequest {
                     limit: PAGE_LIMIT,
@@ -238,6 +239,7 @@ fn fetch_managed_store_pids(pic: &PocketIc, root_id: Principal) -> Vec<Principal
     let overview: Result<RootStatusResponse, canic::Error> = pic
         .query_candid(
             root_id,
+            candid::Principal::anonymous(),
             canic::protocol::CANIC_ROOT_STATUS,
             (RootStatusRequest::StoreOverview,),
         )

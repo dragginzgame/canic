@@ -30,7 +30,7 @@ pub(in crate::pic::fleet_registry::baseline) fn running_application_import_clear
     let root_before = pic.cycle_balance(root);
     let import = || {
         let response: Result<RootCommandResponseFragment, Error> = pic
-            .update_candid_as(
+            .update_candid(
                 root,
                 Principal::anonymous(),
                 canic_contracts::protocol::CANIC_ROOT_COMMAND,

@@ -66,7 +66,7 @@ pub(super) fn live_state_cascade_preserves_partial_outcomes_and_retry() {
         (store, outsider, canic::protocol::CANIC_WASM_STORE_COMMAND),
     ] {
         let response: Result<SnapshotResponse, Error> = pic
-            .update_candid_as(
+            .update_candid(
                 target,
                 caller,
                 method,
@@ -166,7 +166,7 @@ fn assert_mode_recovery(
             code,
         );
         let store_response: Result<SnapshotResponse, Error> = pic
-            .update_candid_as(
+            .update_candid(
                 store,
                 root,
                 canic::protocol::CANIC_WASM_STORE_COMMAND,
@@ -178,7 +178,7 @@ fn assert_mode_recovery(
             .expect("update Candid harness call");
         assert_error(store_response, code);
         let managed_response: Result<SnapshotResponse, Error> = pic
-            .update_candid_as(
+            .update_candid(
                 shard,
                 root,
                 canic::protocol::CANIC_COMMAND,
@@ -251,7 +251,7 @@ fn command(
     caller: Principal,
     command: StateCommand,
 ) -> Result<StateResponse, Error> {
-    pic.update_candid_as(
+    pic.update_candid(
         root,
         caller,
         canic::protocol::CANIC_ROOT_COMMAND,
@@ -275,7 +275,7 @@ fn funding(pic: &PocketIc, root: Principal, enabled: bool) -> FleetStateCommandR
 
 fn state(pic: &PocketIc, root: Principal) -> FleetStateResponse {
     let response: Result<StateQueryResponse, Error> = pic
-        .query_candid_as(
+        .query_candid(
             root,
             Principal::anonymous(),
             canic::protocol::CANIC_ROOT_STATUS,

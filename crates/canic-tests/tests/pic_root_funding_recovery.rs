@@ -301,6 +301,7 @@ fn emergency_refill_recovery_floor_covers_transfer_and_notify_response_loss() {
 
     let transfer_loss: Result<EmergencyRefillOperation, _> = pic.update_candid(
         root,
+        candid::Principal::anonymous(),
         "root_funding_probe_emergency_refill_transfer_then_trap",
         (),
     );
@@ -310,6 +311,7 @@ fn emergency_refill_recovery_floor_covers_transfer_and_notify_response_loss() {
 
     let notify_loss: Result<EmergencyRefillOperation, _> = pic.update_candid(
         root,
+        candid::Principal::anonymous(),
         "root_funding_probe_emergency_refill_notify_then_trap",
         (),
     );
@@ -321,7 +323,12 @@ fn emergency_refill_recovery_floor_covers_transfer_and_notify_response_loss() {
     );
 
     let completed: EmergencyRefillOperation = pic
-        .update_candid(root, "root_funding_probe_emergency_refill", ())
+        .update_candid(
+            root,
+            candid::Principal::anonymous(),
+            "root_funding_probe_emergency_refill",
+            (),
+        )
         .expect("update Candid harness call");
     assert_eq!(
         completed.phase,
@@ -411,8 +418,12 @@ fn attached_cycles_recover_across_intent_call_and_receipt_boundaries() {
 
     let coordinator_before_fresh = pic.cycle_balance(coordinator);
     let root_before_fresh = pic.cycle_balance(root);
-    let trapped: Result<IssueResult, _> =
-        pic.update_candid(coordinator, "root_funding_probe_issue_then_trap", ());
+    let trapped: Result<IssueResult, _> = pic.update_candid(
+        coordinator,
+        candid::Principal::anonymous(),
+        "root_funding_probe_issue_then_trap",
+        (),
+    );
     assert!(trapped.is_err(), "receipt-boundary callback must trap");
 
     let expected_receipt = GrantReceipt {
@@ -546,16 +557,20 @@ fn assert_and_report_headroom(prepared: &GrantIntent, balance: BalanceObservatio
 }
 
 fn install_probe(pic: &PocketIc, wasm: Vec<u8>, init: ProbeInit, cycles: u128) -> Principal {
-    pic.try_create_and_install(
-        InstallSpec::new(wasm, encode_one(init).expect("encode probe init"), cycles)
-            .label("root_funding_probe"),
-    )
+    pic.try_create_and_install(InstallSpec {
+        wasm,
+        init_bytes: encode_one(init).expect("encode probe init"),
+        cycles,
+        install_sender: None,
+        label: Some("root_funding_probe".into()),
+    })
     .expect("install test canister")
 }
 
 fn prepare(pic: &PocketIc, coordinator: Principal, root: Principal) -> GrantIntent {
     pic.update_candid(
         coordinator,
+        candid::Principal::anonymous(),
         "root_funding_probe_prepare",
         (root, OPERATION_ID, GRANT_CYCLES),
     )
@@ -563,13 +578,19 @@ fn prepare(pic: &PocketIc, coordinator: Principal, root: Principal) -> GrantInte
 }
 
 fn issue(pic: &PocketIc, coordinator: Principal) -> IssueResult {
-    pic.update_candid(coordinator, "root_funding_probe_issue", ())
-        .expect("update Candid harness call")
+    pic.update_candid(
+        coordinator,
+        candid::Principal::anonymous(),
+        "root_funding_probe_issue",
+        (),
+    )
+    .expect("update Candid harness call")
 }
 
 fn issue_root_accept_then_trap(pic: &PocketIc, coordinator: Principal) -> IssueResult {
     pic.update_candid(
         coordinator,
+        candid::Principal::anonymous(),
         "root_funding_probe_issue_root_accept_then_trap",
         (),
     )
@@ -577,28 +598,53 @@ fn issue_root_accept_then_trap(pic: &PocketIc, coordinator: Principal) -> IssueR
 }
 
 fn request_from_root(pic: &PocketIc, root: Principal) -> RootRequestObservation {
-    pic.update_candid(root, "root_funding_probe_request", ())
-        .expect("update Candid harness call")
+    pic.update_candid(
+        root,
+        candid::Principal::anonymous(),
+        "root_funding_probe_request",
+        (),
+    )
+    .expect("update Candid harness call")
 }
 
 fn intent(pic: &PocketIc, coordinator: Principal) -> Option<GrantIntent> {
-    pic.query_candid(coordinator, "root_funding_probe_intent", ())
-        .expect("query Candid harness call")
+    pic.query_candid(
+        coordinator,
+        candid::Principal::anonymous(),
+        "root_funding_probe_intent",
+        (),
+    )
+    .expect("query Candid harness call")
 }
 
 fn receipt(pic: &PocketIc, root: Principal) -> Option<GrantReceipt> {
-    pic.query_candid(root, "root_funding_probe_receipt", ())
-        .expect("query Candid harness call")
+    pic.query_candid(
+        root,
+        candid::Principal::anonymous(),
+        "root_funding_probe_receipt",
+        (),
+    )
+    .expect("query Candid harness call")
 }
 
 fn acceptance_observation(pic: &PocketIc, root: Principal) -> Option<AcceptanceObservation> {
-    pic.query_candid(root, "root_funding_probe_acceptance_observation", ())
-        .expect("query Candid harness call")
+    pic.query_candid(
+        root,
+        candid::Principal::anonymous(),
+        "root_funding_probe_acceptance_observation",
+        (),
+    )
+    .expect("query Candid harness call")
 }
 
 fn emergency_operation(pic: &PocketIc, root: Principal) -> Option<EmergencyRefillOperation> {
-    pic.query_candid(root, "root_funding_probe_emergency_operation", ())
-        .expect("query Candid harness call")
+    pic.query_candid(
+        root,
+        candid::Principal::anonymous(),
+        "root_funding_probe_emergency_operation",
+        (),
+    )
+    .expect("query Candid harness call")
 }
 
 fn build_canisters(workspace_root: &Path) -> &'static InternalTestWasms {

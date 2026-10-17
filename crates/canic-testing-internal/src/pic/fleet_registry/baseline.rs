@@ -482,7 +482,7 @@ mod tests {
         caller: Principal,
         command: RootCommandFragment,
     ) -> Result<RootCommandResponseFragment, Error> {
-        pic.update_candid_as(
+        pic.update_candid(
             root,
             caller,
             canic::protocol::CANIC_ROOT_COMMAND,
@@ -536,6 +536,7 @@ mod tests {
     ) -> Result<RootStatusResponseFragment, Error> {
         pic.query_candid(
             root,
+            candid::Principal::anonymous(),
             match &request {
                 RootStatusRequestFragment::Operation(_) => {
                     canic::protocol::CANIC_ROOT_OPERATION_STATUS
@@ -581,7 +582,7 @@ mod tests {
     where
         F: Fn() -> RootStatusRequestFragment,
     {
-        let denied: Result<RootStatusResponseFragment, Error> = pic.query_candid_as(
+        let denied: Result<RootStatusResponseFragment, Error> = pic.query_candid(
             root,
             outsider,
             canic::protocol::CANIC_OBSERVABILITY,
@@ -616,7 +617,7 @@ mod tests {
     where
         F: Fn() -> StoreObservabilityRequest,
     {
-        let denied: Result<StoreObservabilityResponse, Error> = pic.query_candid_as(
+        let denied: Result<StoreObservabilityResponse, Error> = pic.query_candid(
             store,
             outsider,
             canic::protocol::CANIC_OBSERVABILITY,
@@ -627,7 +628,7 @@ mod tests {
                 "Store sensitive observability accepted a non-controller".to_string(),
             ));
         }
-        let response: Result<StoreObservabilityResponse, Error> = pic.query_candid_as(
+        let response: Result<StoreObservabilityResponse, Error> = pic.query_candid(
             store,
             controller,
             canic::protocol::CANIC_OBSERVABILITY,
@@ -699,7 +700,7 @@ mod tests {
             matches_store_cycle_history,
         )?;
 
-        let direct_denied: Result<ManagedStatusResponseFragment, Error> = pic.query_candid_as(
+        let direct_denied: Result<ManagedStatusResponseFragment, Error> = pic.query_candid(
             metadata.issuer.canister_id,
             outsider,
             canic::protocol::CANIC_OBSERVABILITY,
@@ -717,7 +718,7 @@ mod tests {
                 request: CanisterObservabilityRequest::CycleHistory(page()),
             })
         };
-        let relay_denied: Result<RootCommandResponseFragment, Error> = pic.update_candid_as(
+        let relay_denied: Result<RootCommandResponseFragment, Error> = pic.update_candid(
             metadata.root,
             outsider,
             canic::protocol::CANIC_ROOT_COMMAND,
@@ -730,6 +731,7 @@ mod tests {
         }
         let relayed: Result<RootCommandResponseFragment, Error> = pic.update_candid(
             metadata.root,
+            candid::Principal::anonymous(),
             canic::protocol::CANIC_ROOT_COMMAND,
             (relay_request(),),
         )?;
@@ -778,7 +780,7 @@ mod tests {
         canister: Principal,
     ) -> ManagedCanisterBinding {
         let response: Result<ManagedStatusResponseFragment, Error> = pic
-            .query_candid_as(
+            .query_candid(
                 canister,
                 root,
                 canic::protocol::CANIC_OBSERVABILITY,
@@ -889,7 +891,7 @@ mod tests {
         caller: Principal,
     ) -> CanisterPoolResponse {
         let response: Result<RootStatusResponseFragment, Error> = pic
-            .query_candid_as(
+            .query_candid(
                 root,
                 caller,
                 canic::protocol::CANIC_ROOT_STATUS,
@@ -990,6 +992,7 @@ mod tests {
     ) -> Result<RoleOverviewReadinessObservation, CandidCallError> {
         match pic.query_candid::<Result<RoleOverviewStatusResponseFragment, Error>, _>(
             canister_id,
+            candid::Principal::anonymous(),
             canic::protocol::CANIC_PUBLIC_STATUS,
             (RoleOverviewStatusRequestFragment::Overview,),
         ) {
@@ -1015,6 +1018,7 @@ mod tests {
     ) -> Result<CoordinatorCommandResponse, Error> {
         pic.update_candid(
             coordinator,
+            candid::Principal::anonymous(),
             canic::protocol::CANIC_COORDINATOR_COMMAND,
             (command,),
         )
@@ -1026,8 +1030,13 @@ mod tests {
         coordinator: Principal,
         request: R,
     ) -> Result<R::Response, Error> {
-        pic.query_candid(coordinator, R::METHOD, (request,))
-            .expect("Coordinator status transport")
+        pic.query_candid(
+            coordinator,
+            candid::Principal::anonymous(),
+            R::METHOD,
+            (request,),
+        )
+        .expect("Coordinator status transport")
     }
 
     #[cfg(test)]
@@ -1049,7 +1058,7 @@ mod tests {
         let mut last_phase = String::new();
         for _ in 0..128 {
             let status: Result<CoordinatorOperationReadResponse, Error> = pic
-                .query_candid_as(
+                .query_candid(
                     coordinator,
                     caller,
                     canic::protocol::CANIC_COORDINATOR_OPERATION_STATUS,
@@ -1220,7 +1229,7 @@ mod tests {
         root: Principal,
     ) -> FleetAdmissionProjectionStatusResponse {
         let response: Result<ManagedAdmissionStatusResponseFragment, Error> = pic
-            .query_candid_as(
+            .query_candid(
                 canister_id,
                 root,
                 canic::protocol::CANIC_ADMISSION_STATUS,
@@ -1243,7 +1252,7 @@ mod tests {
         caller: Principal,
         command: StoreCommand,
     ) -> Result<StoreCommandResponse, Error> {
-        pic.update_candid_as(
+        pic.update_candid(
             store,
             caller,
             canic::protocol::CANIC_WASM_STORE_COMMAND,
@@ -1443,11 +1452,26 @@ mod tests {
                 pool_assets,
             };
             let snapshot_targets = [
-                CanisterSnapshotTarget::new(metadata.coordinator, None),
-                CanisterSnapshotTarget::new(metadata.root, None),
-                CanisterSnapshotTarget::new(metadata.wasm_store, Some(metadata.root)),
-                CanisterSnapshotTarget::new(metadata.issuer.canister_id, Some(metadata.root)),
-                CanisterSnapshotTarget::new(metadata.verifier.canister_id, Some(metadata.root)),
+                CanisterSnapshotTarget {
+                    canister_id: metadata.coordinator,
+                    sender: None,
+                },
+                CanisterSnapshotTarget {
+                    canister_id: metadata.root,
+                    sender: None,
+                },
+                CanisterSnapshotTarget {
+                    canister_id: metadata.wasm_store,
+                    sender: Some(metadata.root),
+                },
+                CanisterSnapshotTarget {
+                    canister_id: metadata.issuer.canister_id,
+                    sender: Some(metadata.root),
+                },
+                CanisterSnapshotTarget {
+                    canister_id: metadata.verifier.canister_id,
+                    sender: Some(metadata.root),
+                },
             ];
             CachedPocketIcBaseline::capture(
                 ic_testkit::pic::PocketIcInstance {
@@ -3256,7 +3280,12 @@ exec icp "$@"
         let cycles_ledger = Principal::from_text("um5iw-rqaaa-aaaaq-qaaba-cai")
             .expect("canonical Cycles Ledger principal");
         let request_count: u64 = pic
-            .query_candid(cycles_ledger, "request_count", ())
+            .query_candid(
+                cycles_ledger,
+                candid::Principal::anonymous(),
+                "request_count",
+                (),
+            )
             .expect("query pool creation request count");
         assert_eq!(request_count, 5);
     }
@@ -3274,7 +3303,7 @@ exec icp "$@"
         target: Principal,
     ) -> canic::dto::runtime::CanicReadinessStatus {
         let response: Result<FixtureReadinessResponse, Error> = pic
-            .query_candid_as(
+            .query_candid(
                 target,
                 root,
                 canic::protocol::CANIC_OBSERVABILITY,
@@ -3301,7 +3330,7 @@ exec icp "$@"
             .filter(|entry| matches!(entry.status, CanisterPoolAssetStatus::Workload { .. }))
             .filter_map(|entry| {
                 let response = pic
-                    .query_candid_as::<Result<ManagedStatusResponseFragment, Error>, _>(
+                    .query_candid::<Result<ManagedStatusResponseFragment, Error>, _>(
                         entry.canister_id,
                         root,
                         canic::protocol::CANIC_OBSERVABILITY,
@@ -3394,12 +3423,18 @@ exec icp "$@"
         );
         assert_eq!(readiness.fixture, Err(FixtureImportError::NotReady));
         assert!(
-            pic.query_candid::<Result<String, Error>, _>(hub, "test_recovery_generation", ())
-                .is_err()
+            pic.query_candid::<Result<String, Error>, _>(
+                hub,
+                candid::Principal::anonymous(),
+                "test_recovery_generation",
+                ()
+            )
+            .is_err()
         );
         assert!(
             pic.update_candid::<Result<Principal, Error>, _>(
                 hub,
+                candid::Principal::anonymous(),
                 "create_account",
                 (Principal::anonymous(),)
             )
@@ -3435,7 +3470,7 @@ exec icp "$@"
             Err(FixtureImportError::NotReady)
         );
         assert_root_waits_for_fixture_membership(pic, fixture.root_id, operation_id);
-        pic.update_candid_as::<(), _>(hub, fixture.root_id, "test_release_fixture", ())
+        pic.update_candid::<(), _>(hub, fixture.root_id, "test_release_fixture", ())
             .unwrap();
     }
 
@@ -3593,7 +3628,12 @@ exec icp "$@"
         for index in 1..capacity {
             let user = Principal::from_slice(&index.to_be_bytes());
             let assigned: Result<Principal, Error> = pic
-                .update_candid(hub, "create_account", (user,))
+                .update_candid(
+                    hub,
+                    candid::Principal::anonymous(),
+                    "create_account",
+                    (user,),
+                )
                 .expect("fill the configured initial Shard capacity");
             assert_eq!(assigned.unwrap(), initial_shard);
         }
@@ -3610,7 +3650,12 @@ exec icp "$@"
             .expect("interrupt retained source access");
         let user = Principal::from_slice(&[0xe4; 29]);
         let interrupted: Result<Principal, Error> = pic
-            .update_candid(hub, "create_account", (user,))
+            .update_candid(
+                hub,
+                candid::Principal::anonymous(),
+                "create_account",
+                (user,),
+            )
             .expect("source outage returns an application result");
         assert!(
             interrupted.is_err(),
@@ -3622,7 +3667,12 @@ exec icp "$@"
         let mut assigned = None;
         for _ in 0..120 {
             let result: Result<Principal, Error> = pic
-                .update_candid(hub, "create_account", (user,))
+                .update_candid(
+                    hub,
+                    candid::Principal::anonymous(),
+                    "create_account",
+                    (user,),
+                )
                 .expect("retry the same account allocation");
             match result {
                 Ok(shard) => {
@@ -3640,7 +3690,7 @@ exec icp "$@"
         assert_eq!(after.workload, before.workload + 1);
         assert_eq!(after.failed, before.failed);
         let response: Result<StoreCatalogResponse, Error> = pic
-            .query_candid_as(
+            .query_candid(
                 store,
                 fixture.root_id,
                 canic::protocol::CANIC_WASM_STORE_CATALOG,
@@ -3683,8 +3733,14 @@ exec icp "$@"
             source.descriptor.completion_summary
         );
         // Discard the first successful assignment response and reconcile by the same key.
-        let replay: Result<Principal, Error> =
-            pic.update_candid(hub, "create_account", (user,)).unwrap();
+        let replay: Result<Principal, Error> = pic
+            .update_candid(
+                hub,
+                candid::Principal::anonymous(),
+                "create_account",
+                (user,),
+            )
+            .unwrap();
         assert_eq!(replay.unwrap(), shard);
         assert_eq!(root_pool_status(pic, fixture.root_id), after);
         let first_removal =
@@ -3834,7 +3890,7 @@ exec icp "$@"
     ) {
         let read_grant = || {
             let response: Result<StoreCatalogResponse, Error> = pic
-                .query_candid_as(
+                .query_candid(
                     store,
                     root,
                     canic::protocol::CANIC_WASM_STORE_CATALOG,
@@ -3901,7 +3957,7 @@ exec icp "$@"
         let mut replacement = None;
         for _ in 0..120 {
             let result: Result<Principal, Error> = pic
-                .update_candid_as(hub, root, "test_create_fixture_child", (operation_id,))
+                .update_candid(hub, root, "test_create_fixture_child", (operation_id,))
                 .unwrap();
             match result {
                 Ok(canister) => {
@@ -3923,7 +3979,7 @@ exec icp "$@"
         );
         let store = fixture.response.wasm_store;
         let response: Result<StoreCatalogResponse, Error> = pic
-            .query_candid_as(
+            .query_candid(
                 store,
                 root,
                 canic::protocol::CANIC_WASM_STORE_CATALOG,
@@ -3953,7 +4009,7 @@ exec icp "$@"
         };
         assert_eq!(receipt.binding, grant.binding);
         let replay: Result<Principal, Error> = pic
-            .update_candid_as(hub, root, "test_create_fixture_child", (operation_id,))
+            .update_candid(hub, root, "test_create_fixture_child", (operation_id,))
             .unwrap();
         assert_eq!(replay.unwrap(), shard);
         assert_retired_shard_routing_unavailable(pic, hub);
@@ -4082,7 +4138,7 @@ exec icp "$@"
         };
         assert_eq!(*stale, Err(FixtureStoreError::Conflict));
         let response: Result<StoreCatalogResponse, Error> = pic
-            .query_candid_as(
+            .query_candid(
                 store,
                 root,
                 canic::protocol::CANIC_WASM_STORE_CATALOG,
@@ -4100,14 +4156,25 @@ exec icp "$@"
     fn assert_retired_shard_routing_unavailable(pic: &PocketIc, hub: Principal) {
         let user = Principal::from_slice(&[0xe4; 29]);
         let plan: Result<String, Error> = pic
-            .query_candid(hub, "plan_create_account", (user,))
+            .query_candid(
+                hub,
+                candid::Principal::anonymous(),
+                "plan_create_account",
+                (user,),
+            )
             .unwrap();
         assert_eq!(
             plan.unwrap_err().code(),
             canic::diagnostics::codes::POSITION_UNAVAILABLE.raw_code()
         );
-        let result: Result<Principal, Error> =
-            pic.update_candid(hub, "create_account", (user,)).unwrap();
+        let result: Result<Principal, Error> = pic
+            .update_candid(
+                hub,
+                candid::Principal::anonymous(),
+                "create_account",
+                (user,),
+            )
+            .unwrap();
         assert_eq!(
             result.unwrap_err().code(),
             canic::diagnostics::codes::POSITION_UNAVAILABLE.raw_code()
@@ -4356,7 +4423,7 @@ exec icp "$@"
                 .filter_map(|operation_id| {
                     workload_callers.iter().find_map(|caller| {
                         let response: Result<RootStatusResponseFragment, Error> = pic
-                            .query_candid_as(
+                            .query_candid(
                                 fixture.root_id,
                                 *caller,
                                 canic::protocol::CANIC_ROOT_OPERATION_STATUS,
@@ -4532,7 +4599,7 @@ exec icp "$@"
             .iter()
             .filter_map(|(canister, binding)| {
                 let response: Result<StoreCatalogResponse, Error> = pic
-                    .query_candid_as(
+                    .query_candid(
                         store,
                         controller,
                         canic::protocol::CANIC_WASM_STORE_CATALOG,
@@ -4569,7 +4636,7 @@ exec icp "$@"
                 );
                 assert_eq!(grant.binding.content_id, source.content_id);
                 let runtime: Result<ManagedStatusResponseFragment, Error> = pic
-                    .query_candid_as(
+                    .query_candid(
                         *canister,
                         fixture.root_id,
                         canic::protocol::CANIC_CONTROL_STATUS,
@@ -4619,7 +4686,12 @@ exec icp "$@"
         let user = Principal::from_slice(&[0xe3; 29]);
         for _ in 0..2 {
             let assigned: Result<Principal, Error> = pic
-                .update_candid(*hub, "create_account", (user,))
+                .update_candid(
+                    *hub,
+                    candid::Principal::anonymous(),
+                    "create_account",
+                    (user,),
+                )
                 .expect("ready Hub application dispatch");
             assert_eq!(assigned.unwrap(), child_binding.canister_id);
         }
@@ -4728,7 +4800,7 @@ exec icp "$@"
         assert_eq!(workloads(replayed_pool), workloads(replay_pool));
         for (canister, grant) in grants {
             let response: Result<StoreCatalogResponse, Error> = pic
-                .query_candid_as(
+                .query_candid(
                     store,
                     controller,
                     canic::protocol::CANIC_WASM_STORE_CATALOG,
@@ -4796,7 +4868,7 @@ exec icp "$@"
         let store = fixture.response.wasm_store;
         for source in &fixture.response.fixtures {
             let retained: Result<StoreCatalogResponse, Error> = pic
-                .query_candid_as(
+                .query_candid(
                     store,
                     fixture.root_id,
                     canic::protocol::CANIC_WASM_STORE_CATALOG,
@@ -4937,14 +5009,14 @@ exec icp "$@"
         kind: FixtureHeldReply,
     ) {
         assert!(
-            pic.update_candid_as::<bool, _>(store, root, "canic_test_fixture_reply_arm", (kind,))
+            pic.update_candid::<bool, _>(store, root, "canic_test_fixture_reply_arm", (kind,))
                 .unwrap()
         );
     }
 
     #[cfg(test)]
     fn fixture_replies_waiting(pic: &PocketIc, store: Principal, root: Principal) -> u32 {
-        pic.query_candid_as(store, root, "canic_test_fixture_reply_waiting", ())
+        pic.query_candid(store, root, "canic_test_fixture_reply_waiting", ())
             .unwrap()
     }
 
@@ -4971,7 +5043,7 @@ exec icp "$@"
         target: Principal,
     ) -> canic::dto::fixture_provisioning::FixtureGrant {
         let response: Result<StoreCatalogResponse, Error> = pic
-            .query_candid_as(
+            .query_candid(
                 store,
                 root,
                 canic::protocol::CANIC_WASM_STORE_CATALOG,
@@ -5065,7 +5137,7 @@ exec icp "$@"
 
     #[cfg(test)]
     fn release_fixture_reply(pic: &PocketIc, store: Principal, root: Principal) {
-        pic.update_candid_as::<(), _>(store, root, "canic_test_fixture_reply_release", ())
+        pic.update_candid::<(), _>(store, root, "canic_test_fixture_reply_release", ())
             .unwrap();
         for _ in 0..40 {
             if fixture_replies_waiting(pic, store, root) == 0 {
@@ -5274,7 +5346,7 @@ exec icp "$@"
             Err(canic::dto::fixture_provisioning::FixtureImportError::NotReady)
         );
         let selected = selected_fixture_targets(&pic, fixture.root_id);
-        pic.update_candid_as::<(), _>(hub, fixture.root_id, "test_release_fixture", ())
+        pic.update_candid::<(), _>(hub, fixture.root_id, "test_release_fixture", ())
             .unwrap();
         for _ in 0..240 {
             if fixture_readiness(&pic, fixture.root_id, hub).status
@@ -5341,7 +5413,7 @@ exec icp "$@"
         target: Principal,
     ) -> Vec<canic::dto::cycles::CycleTopupEvent> {
         let response: Result<CanisterObservabilityResponse, Error> = pic
-            .query_candid_as(
+            .query_candid(
                 target,
                 root,
                 canic::protocol::CANIC_OBSERVABILITY,
@@ -5473,6 +5545,7 @@ exec icp "$@"
         let assigned: Result<Principal, Error> = pic
             .update_candid(
                 installed_component_binding(&hub).canister_id,
+                candid::Principal::anonymous(),
                 "create_account",
                 (Principal::from_slice(&[0xe3; 29]),),
             )
@@ -5678,7 +5751,7 @@ exec icp "$@"
                     installation_controller
                 ));
                 let status: Result<StoreCatalogResponse, Error> = pic
-                    .query_candid_as(
+                    .query_candid(
                         wasm_store,
                         installation_controller,
                         canic::protocol::CANIC_WASM_STORE_CATALOG,
@@ -5729,7 +5802,7 @@ exec icp "$@"
             bytes: chunks[index].clone(),
         };
         let prepared: Result<(), Error> = pic
-            .update_candid_as(
+            .update_candid(
                 store,
                 caller,
                 canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
@@ -5770,7 +5843,7 @@ exec icp "$@"
         let mut conflicting = request(2);
         conflicting.bytes[0] ^= 1;
         let response: Result<(), Error> = pic
-            .update_candid_as(
+            .update_candid(
                 store,
                 caller,
                 canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
@@ -5782,7 +5855,7 @@ exec icp "$@"
             canic_contracts::diagnostics::codes::DIGEST_CONFLICT.raw_code()
         );
         let replay: Result<(), Error> = pic
-            .update_candid_as(
+            .update_candid(
                 store,
                 caller,
                 canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
@@ -6216,7 +6289,7 @@ exec icp "$@"
                 assert_eq!(first.operation_id, expected_operation);
                 assert!(!failed.root_runtime_active);
                 let forbidden: Result<RootStatusResponseFragment, Error> = pic
-                    .query_candid_as(
+                    .query_candid(
                         installed.root_id,
                         Principal::from_slice(&[0x92; 29]),
                         canic::protocol::CANIC_ROOT_OPERATION_STATUS,
@@ -7431,7 +7504,7 @@ esac
         )
         .expect("replay exact completed admission");
         let registry: Result<CoordinatorRegistryResponse, Error> = pic
-            .query_candid_as(
+            .query_candid(
                 coordinator,
                 operator,
                 canic::protocol::CANIC_COORDINATOR_REGISTRY,
@@ -7677,7 +7750,7 @@ esac
             let response: Result<RootStatusResponseFragment, Error> = self
                 .fixture
                 .pic()
-                .query_candid_as(self.fixture.root, self.caller, method, (request,))
+                .query_candid(self.fixture.root, self.caller, method, (request,))
                 .expect("operator Root query transport");
             response.map_err(|error| {
                 canic_host::CanisterProtocolError::Response {
@@ -8795,7 +8868,12 @@ esac
                 "lost response and replay must not repeat a controller effect"
             );
             let request_count: u64 = pic
-                .query_candid(cycles_ledger, "request_count", ())
+                .query_candid(
+                    cycles_ledger,
+                    candid::Principal::anonymous(),
+                    "request_count",
+                    (),
+                )
                 .expect("query literal-zero creation count");
             assert_eq!(
                 request_count,
@@ -8891,7 +8969,12 @@ esac
                     canic_host::fleet_ensure::ops::IcpEnsurePlatformError::FundingInspectionAuthorityConflict { .. }
                 ))));
                 let before: u64 = pic
-                    .query_candid(cycles_ledger, "withdrawal_count", ())
+                    .query_candid(
+                        cycles_ledger,
+                        candid::Principal::anonymous(),
+                        "withdrawal_count",
+                        (),
+                    )
                     .unwrap();
                 assert_eq!(before, 0);
                 pic.set_controllers(pools[1], Some(operator), vec![root])
@@ -8912,7 +8995,12 @@ esac
                     "lose one completed withdrawal reply: {lost_funding:?}"
                 );
                 let withdrawals: u64 = pic
-                    .query_candid(cycles_ledger, "withdrawal_count", ())
+                    .query_candid(
+                        cycles_ledger,
+                        candid::Principal::anonymous(),
+                        "withdrawal_count",
+                        (),
+                    )
                     .expect("query withdrawal receipts");
                 assert_eq!(withdrawals, 1);
                 let funded_ceiling = native_before_funding + funded_assets[&pools[0].to_text()];
@@ -9001,7 +9089,12 @@ esac
                 "protected Ready status must prevent replaying a completed reset"
             );
             let withdrawals: u64 = pic
-                .query_candid(cycles_ledger, "withdrawal_count", ())
+                .query_candid(
+                    cycles_ledger,
+                    candid::Principal::anonymous(),
+                    "withdrawal_count",
+                    (),
+                )
                 .expect("query repaired withdrawal receipts");
             assert_eq!(
                 withdrawals,
@@ -9258,7 +9351,12 @@ esac
             "protocol convergence and terminal replay must not repeat controller effects"
         );
         let replay_withdrawals: u64 = pic
-            .query_candid(cycles_ledger, "withdrawal_count", ())
+            .query_candid(
+                cycles_ledger,
+                candid::Principal::anonymous(),
+                "withdrawal_count",
+                (),
+            )
             .expect("query replayed withdrawal receipts");
         assert_eq!(replay_withdrawals, withdrawals);
         assert_eq!(
@@ -9379,7 +9477,7 @@ esac
     ) {
         for source in &fixtures.manifest.entries {
             let status: Result<StoreCatalogResponse, Error> = pic
-                .query_candid_as(
+                .query_candid(
                     store,
                     operator,
                     canic::protocol::CANIC_WASM_STORE_CATALOG,
@@ -9441,7 +9539,7 @@ esac
         target: Principal,
     ) -> canic::dto::public_status::PublicMetricsSnapshot {
         let response: Result<PublicMemoryResponse, Error> = pic
-            .query_candid_as(
+            .query_candid(
                 target,
                 Principal::anonymous(),
                 canic::protocol::CANIC_PUBLIC_STATUS,
@@ -9515,7 +9613,7 @@ esac
         operator: Principal,
     ) -> String {
         let health: Result<PublicMemoryResponse, Error> = pic
-            .query_candid_as(
+            .query_candid(
                 target,
                 Principal::anonymous(),
                 canic::protocol::CANIC_PUBLIC_STATUS,
@@ -9577,7 +9675,7 @@ esac
                 .all(|row| row.canister_id.is_none() && row.observed_at_ns > 0)
         );
         let denied: Result<CanisterObservabilityResponse, Error> = pic
-            .query_candid_as(
+            .query_candid(
                 target,
                 Principal::anonymous(),
                 canic::protocol::CANIC_OBSERVABILITY,
@@ -9587,7 +9685,7 @@ esac
         assert!(controller_authority_unavailable(&denied));
         let controller = if target == root { operator } else { root };
         let diagnostic: Result<CanisterObservabilityResponse, Error> = pic
-            .query_candid_as(
+            .query_candid(
                 target,
                 controller,
                 canic::protocol::CANIC_OBSERVABILITY,
@@ -9696,7 +9794,12 @@ esac
         let rows = |id| {
             input
                 .pic
-                .query_candid::<Result<Vec<ReinstallUserRow>, Error>, _>(id, "test_user_rows", ())
+                .query_candid::<Result<Vec<ReinstallUserRow>, Error>, _>(
+                    id,
+                    candid::Principal::anonymous(),
+                    "test_user_rows",
+                    (),
+                )
                 .ok()
                 .and_then(Result::ok)
         };
@@ -9711,7 +9814,12 @@ esac
             for (key, value) in [(0_u64, 99_u64), (42, 1001)] {
                 let result: Result<(), Error> = input
                     .pic
-                    .update_candid(id, "test_set_user_row", (key, value))
+                    .update_candid(
+                        id,
+                        candid::Principal::anonymous(),
+                        "test_set_user_row",
+                        (key, value),
+                    )
                     .unwrap();
                 result.unwrap();
             }
@@ -9841,7 +9949,7 @@ esac
         let operator = Principal::from_text(&input.desired.operator).unwrap();
         let ledger = Principal::from_text(&input.desired.cycles_ledger).unwrap();
         let transfer: Result<Nat, QualificationIcrc1TransferError> = pic
-            .update_candid_as(
+            .update_candid(
                 ledger,
                 operator,
                 "icrc1_transfer",
@@ -10076,6 +10184,7 @@ exec '{}' "$@"
         let unknown: Result<JourneySubnetPayload, String> = pic
             .query_candid(
                 registry,
+                candid::Principal::anonymous(),
                 "get_subnet_for_canister",
                 (JourneySubnetRequest {
                     principal: Principal::from_slice(&[0x99; 29]),
@@ -10562,6 +10671,7 @@ exec '{}' "$@"
             .pic
             .update_candid(
                 input.cycles_ledger,
+                candid::Principal::anonymous(),
                 "set_transfer_fee_override",
                 (Some(Nat::from(MAINNET_REFILL_LEDGER_FEE * 2)),),
             )
@@ -10584,7 +10694,12 @@ exec '{}' "$@"
         );
         let transfers: u64 = input
             .pic
-            .query_candid(input.cycles_ledger, "transfer_count", ())
+            .query_candid(
+                input.cycles_ledger,
+                candid::Principal::anonymous(),
+                "transfer_count",
+                (),
+            )
             .unwrap();
         assert_eq!(transfers, 0);
         assert_eq!(
@@ -10599,6 +10714,7 @@ exec '{}' "$@"
             .pic
             .update_candid(
                 input.cycles_ledger,
+                candid::Principal::anonymous(),
                 "set_transfer_fee_override",
                 (None::<Nat>,),
             )
@@ -10625,7 +10741,12 @@ exec '{}' "$@"
         );
         let transfers: u64 = input
             .pic
-            .query_candid(input.cycles_ledger, "transfer_count", ())
+            .query_candid(
+                input.cycles_ledger,
+                candid::Principal::anonymous(),
+                "transfer_count",
+                (),
+            )
             .unwrap();
         assert_eq!(transfers, 1);
         assert_eq!(
@@ -10749,7 +10870,12 @@ exec '{}' "$@"
         }
         let requests: u64 = input
             .pic
-            .query_candid(input.cycles_ledger, "request_count", ())
+            .query_candid(
+                input.cycles_ledger,
+                candid::Principal::anonymous(),
+                "request_count",
+                (),
+            )
             .unwrap();
         assert_eq!(
             requests,
@@ -10774,11 +10900,21 @@ exec '{}' "$@"
         assert_eq!(replay.effects_applied, 0);
         let transfers: u64 = input
             .pic
-            .query_candid(input.cycles_ledger, "transfer_count", ())
+            .query_candid(
+                input.cycles_ledger,
+                candid::Principal::anonymous(),
+                "transfer_count",
+                (),
+            )
             .unwrap();
         let replay_requests: u64 = input
             .pic
-            .query_candid(input.cycles_ledger, "request_count", ())
+            .query_candid(
+                input.cycles_ledger,
+                candid::Principal::anonymous(),
+                "request_count",
+                (),
+            )
             .unwrap();
         assert_eq!((transfers, replay_requests), (1, requests));
         let replay_pool = root_pool_status_as(input.pic, input.root, input.operator);
@@ -10869,7 +11005,12 @@ exec '{}' "$@"
         );
         let transfers: u64 = input
             .pic
-            .query_candid(input.cycles_ledger, "transfer_count", ())
+            .query_candid(
+                input.cycles_ledger,
+                candid::Principal::anonymous(),
+                "transfer_count",
+                (),
+            )
             .unwrap();
         assert_eq!(transfers, 0);
         progress_elapsed("Workloads active with no Ready reserve", started_at);
@@ -10919,15 +11060,30 @@ exec '{}' "$@"
         let counts = || {
             let withdrawals: u64 = input
                 .pic
-                .query_candid(input.cycles_ledger, "withdrawal_count", ())
+                .query_candid(
+                    input.cycles_ledger,
+                    candid::Principal::anonymous(),
+                    "withdrawal_count",
+                    (),
+                )
                 .unwrap();
             let transfers: u64 = input
                 .pic
-                .query_candid(input.cycles_ledger, "transfer_count", ())
+                .query_candid(
+                    input.cycles_ledger,
+                    candid::Principal::anonymous(),
+                    "transfer_count",
+                    (),
+                )
                 .unwrap();
             let creates: u64 = input
                 .pic
-                .query_candid(input.cycles_ledger, "request_count", ())
+                .query_candid(
+                    input.cycles_ledger,
+                    candid::Principal::anonymous(),
+                    "request_count",
+                    (),
+                )
                 .unwrap();
             (withdrawals, transfers, creates)
         };
@@ -11710,7 +11866,7 @@ cycles = "80T"
                 request, expected, ..
             } => {
                 let response: Result<Result<FixtureSourceStatus, FixtureStoreError>, Error> = pic
-                    .update_candid_as(
+                    .update_candid(
                         step.target,
                         store_controller,
                         canic::protocol::CANIC_WASM_STORE_PUBLISH_FIXTURE,
@@ -11748,7 +11904,7 @@ cycles = "80T"
             }
             CurrentFleetProtocolAction::PublishStoreChunk { request } => {
                 let response: Result<(), Error> = pic
-                    .update_candid_as(
+                    .update_candid(
                         step.target,
                         store_controller,
                         canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
@@ -11892,6 +12048,7 @@ cycles = "80T"
                 let status: Result<Result<FixtureSourceStatus, FixtureStoreError>, Error> = pic
                     .query_candid(
                         step.target,
+                        candid::Principal::anonymous(),
                         canic::protocol::CANIC_ROOT_FIXTURE_STATUS,
                         (source.content_id,),
                     )
@@ -11901,7 +12058,7 @@ cycles = "80T"
             }
             CurrentFleetProtocolAction::PublishStoreFixtureChunk { expected, .. } => {
                 let response: Result<canic_contracts::dto::template::StoreCatalogResponse, Error> =
-                    pic.query_candid_as(
+                    pic.query_candid(
                         step.target,
                         store_controller,
                         canic::protocol::CANIC_WASM_STORE_CATALOG,
@@ -11993,7 +12150,7 @@ cycles = "80T"
         version: &TemplateVersion,
     ) -> TemplateStagingStatusResponse {
         let response: Result<StoreCatalogResponse, Error> = pic
-            .query_candid_as(
+            .query_candid(
                 store,
                 caller,
                 canic::protocol::CANIC_WASM_STORE_CATALOG,
@@ -12287,7 +12444,7 @@ cycles = "80T"
         };
         let replay: Result<CoordinatorCommandResponse, Error> = fixture
             .pic
-            .update_candid_as(
+            .update_candid(
                 fixture.coordinator,
                 fixture.root,
                 canic::protocol::CANIC_COORDINATOR_COMMAND,
@@ -12682,7 +12839,7 @@ cycles = "80T"
         let cmc =
             Principal::from_text("rkp4c-7iaaa-aaaaa-aaaca-cai").expect("canonical CMC principal");
         let fee: Nat = pic
-            .query_candid(ledger, "icrc1_fee", ())
+            .query_candid(ledger, candid::Principal::anonymous(), "icrc1_fee", ())
             .expect("query production ICP Ledger fee");
         let request = QualificationIcrc1TransferArg {
             from_subaccount: None,
@@ -12696,11 +12853,21 @@ cycles = "80T"
             amount: Nat::from(100_000_000_u64),
         };
         let first: Result<Nat, QualificationIcrc1TransferError> = pic
-            .update_candid(ledger, "icrc1_transfer", (&request,))
+            .update_candid(
+                ledger,
+                candid::Principal::anonymous(),
+                "icrc1_transfer",
+                (&request,),
+            )
             .expect("execute production ICP Ledger transfer");
         let block_index = first.expect("first production transfer must succeed");
         let duplicate: Result<Nat, QualificationIcrc1TransferError> = pic
-            .update_candid(ledger, "icrc1_transfer", (&request,))
+            .update_candid(
+                ledger,
+                candid::Principal::anonymous(),
+                "icrc1_transfer",
+                (&request,),
+            )
             .expect("replay production ICP Ledger transfer");
         assert!(matches!(
             duplicate,
@@ -12718,7 +12885,12 @@ cycles = "80T"
         };
         let cycles_before = pic.cycle_balance(target);
         let first_notify: Result<Nat, QualificationNotifyTopUpError> = pic
-            .update_candid(cmc, "notify_top_up", (&notify,))
+            .update_candid(
+                cmc,
+                candid::Principal::anonymous(),
+                "notify_top_up",
+                (&notify,),
+            )
             .expect("execute production CMC notification");
         let minted = first_notify.expect("first production CMC notification must succeed");
         assert!(minted > 0_u8);
@@ -12726,7 +12898,12 @@ cycles = "80T"
         assert!(cycles_after_first > cycles_before);
 
         let replay: Result<Nat, QualificationNotifyTopUpError> = pic
-            .update_candid(cmc, "notify_top_up", (&notify,))
+            .update_candid(
+                cmc,
+                candid::Principal::anonymous(),
+                "notify_top_up",
+                (&notify,),
+            )
             .expect("replay production CMC notification");
         assert!(replay.is_ok());
         assert_eq!(pic.cycle_balance(target), cycles_after_first);
@@ -13231,6 +13408,7 @@ cycles = "80T"
         let transfer: Result<Nat, QualificationIcrc1TransferError> = pic
             .update_candid(
                 ledger,
+                candid::Principal::anonymous(),
                 "icrc1_transfer",
                 (QualificationIcrc1TransferArg {
                     from_subaccount: None,
@@ -13252,6 +13430,7 @@ cycles = "80T"
     fn ledger_account_balance(pic: &PocketIc, ledger: Principal, owner: Principal) -> Nat {
         pic.query_candid(
             ledger,
+            candid::Principal::anonymous(),
             "icrc1_balance_of",
             (QualificationIcrc1Account {
                 owner,
@@ -13700,12 +13879,22 @@ cycles = "80T"
         }
         let request_count: u64 = fixture
             .pic
-            .query_candid(fixture.cycles_ledger, "request_count", ())
+            .query_candid(
+                fixture.cycles_ledger,
+                candid::Principal::anonymous(),
+                "request_count",
+                (),
+            )
             .expect("query ledger request count");
         assert_eq!(request_count, expected_request_count);
         let requested_amounts: Vec<Nat> = fixture
             .pic
-            .query_candid(fixture.cycles_ledger, "requested_amounts", ())
+            .query_candid(
+                fixture.cycles_ledger,
+                candid::Principal::anonymous(),
+                "requested_amounts",
+                (),
+            )
             .expect("query exact Ledger creation amounts");
         assert_eq!(
             requested_amounts,
@@ -13729,7 +13918,12 @@ cycles = "80T"
         };
         let replay_request_count: u64 = fixture
             .pic
-            .query_candid(fixture.cycles_ledger, "request_count", ())
+            .query_candid(
+                fixture.cycles_ledger,
+                candid::Principal::anonymous(),
+                "request_count",
+                (),
+            )
             .expect("query replayed ledger request count");
         assert_eq!(replay_request_count, expected_request_count);
     }
@@ -13958,7 +14152,7 @@ cycles = "80T"
         assert!(retained.complete);
         assert_eq!(retained.stored_chunk_hashes, vec![Some(wasm_hash(payload))]);
         let replay: Result<(), Error> = pic
-            .update_candid_as(
+            .update_candid(
                 fixture.response.wasm_store,
                 retained_installation_controller,
                 canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
@@ -14842,7 +15036,10 @@ cycles = "80T"
         );
         let snapshots = fixture
             .pic()
-            .capture_snapshots([CanisterSnapshotTarget::new(fixture.root, None)])
+            .capture_snapshots([CanisterSnapshotTarget {
+                canister_id: fixture.root,
+                sender: None,
+            }])
             .expect("root authority snapshot capture");
         let RootCommandResponseFragment::ResumeAuthoritySnapshot(resumed) = root_command(
             fixture.pic(),
@@ -15104,7 +15301,7 @@ cycles = "80T"
             fixture.pic.advance_time(Duration::from_secs(1));
         }
         let terminal = terminal.unwrap_or_else(|| {
-            let storage: Result<StoreCatalogResponse, Error> = fixture.pic.query_candid_as(
+            let storage: Result<StoreCatalogResponse, Error> = fixture.pic.query_candid(
                 fixture.wasm_store, fixture.root,
                 canic::protocol::CANIC_WASM_STORE_CATALOG,
                 (StoreCatalogRequest::Storage,),
@@ -15230,7 +15427,12 @@ cycles = "80T"
         assert!(ledger_receipt.block_index.is_some());
         let transfers: u64 = fixture
             .pic
-            .query_candid(cycles_ledger, "transfer_count", ())
+            .query_candid(
+                cycles_ledger,
+                candid::Principal::anonymous(),
+                "transfer_count",
+                (),
+            )
             .expect("one transfer despite lost reply");
         assert_eq!(transfers, 1);
         assert_eq!(
@@ -15279,7 +15481,7 @@ cycles = "80T"
             maximum_ledger_fee: 100_000_000,
         };
         let call = |request| -> Result<CoordinatorCommandResponse, Error> {
-            pic.update_candid_as(
+            pic.update_candid(
                 fixture.coordinator,
                 operator,
                 canic::protocol::CANIC_COORDINATOR_COMMAND,
@@ -15309,7 +15511,12 @@ cycles = "80T"
             Nat::from(900_000_000_u128)
         );
         let (): () = pic
-            .update_candid(ledger, "lose_next_transfer_reply", ())
+            .update_candid(
+                ledger,
+                candid::Principal::anonymous(),
+                "lose_next_transfer_reply",
+                (),
+            )
             .expect("lose Coordinator transfer reply");
         assert!(call(request.clone()).is_err());
         assert_eq!(
@@ -15340,7 +15547,7 @@ cycles = "80T"
         };
         assert_eq!(replayed, completed);
         let transfers: u64 = pic
-            .query_candid(ledger, "transfer_count", ())
+            .query_candid(ledger, candid::Principal::anonymous(), "transfer_count", ())
             .expect("exact transfer count");
         assert_eq!(transfers, 2);
         for asset in fixture.pool_assets {
@@ -15488,7 +15695,7 @@ cycles = "80T"
             Nat::from(0_u128)
         );
         let transfers: u64 = pic
-            .query_candid(ledger, "transfer_count", ())
+            .query_candid(ledger, candid::Principal::anonymous(), "transfer_count", ())
             .expect("Ledger transfer count");
         drop(fixture);
         assert_eq!(transfers, 0);
@@ -15556,7 +15763,12 @@ cycles = "80T"
             None,
         );
         let (): () = pic
-            .update_candid(ledger, "lose_next_transfer_reply", ())
+            .update_candid(
+                ledger,
+                candid::Principal::anonymous(),
+                "lose_next_transfer_reply",
+                (),
+            )
             .expect("lose committed transfer reply");
         ledger
     }
@@ -15883,7 +16095,7 @@ cycles = "80T"
 
         for canister in [fixture.root, target] {
             let denied: Result<CanisterObservabilityResponse, Error> = pic
-                .query_candid_as(
+                .query_candid(
                     canister,
                     outsider,
                     canic::protocol::CANIC_OBSERVABILITY,
@@ -15895,6 +16107,7 @@ cycles = "80T"
         let root_report: Result<CanisterObservabilityResponse, Error> = pic
             .query_candid(
                 fixture.root,
+                candid::Principal::anonymous(),
                 canic::protocol::CANIC_OBSERVABILITY,
                 (CanisterObservabilityRequest::MemoryAllocations,),
             )
@@ -15926,7 +16139,7 @@ cycles = "80T"
             })
         };
         let denied: Result<RootCommandResponseFragment, Error> = pic
-            .update_candid_as(
+            .update_candid(
                 fixture.root,
                 outsider,
                 canic::protocol::CANIC_ROOT_COMMAND,
@@ -15944,6 +16157,7 @@ cycles = "80T"
             let response: Result<RootCommandResponseFragment, Error> = pic
                 .update_candid(
                     fixture.root,
+                    candid::Principal::anonymous(),
                     canic::protocol::CANIC_ROOT_COMMAND,
                     (relay_request(),),
                 )
@@ -16063,7 +16277,7 @@ cycles = "80T"
             (&metadata.issuer, metadata.issuer_runtime_operation_id),
             (&metadata.verifier, metadata.verifier_runtime_operation_id),
         ] {
-            let runtime: Result<ManagedStatusResponseFragment, Error> = pic.query_candid_as(
+            let runtime: Result<ManagedStatusResponseFragment, Error> = pic.query_candid(
                 binding.canister_id,
                 metadata.root,
                 canic::protocol::CANIC_CONTROL_STATUS,
@@ -17163,7 +17377,7 @@ cycles = "80T"
             bytes: b"reviewed fixture source".to_vec(),
         };
         let uploaded: Result<Result<FixtureSourceStatus, FixtureStoreError>, Error> = pic
-            .update_candid_as(
+            .update_candid(
                 store,
                 controller,
                 canic::protocol::CANIC_WASM_STORE_PUBLISH_FIXTURE,
@@ -17173,7 +17387,7 @@ cycles = "80T"
         let uploaded = uploaded.unwrap().unwrap();
         assert!(uploaded.complete);
         let replayed: Result<Result<FixtureSourceStatus, FixtureStoreError>, Error> = pic
-            .update_candid_as(
+            .update_candid(
                 store,
                 controller,
                 canic::protocol::CANIC_WASM_STORE_PUBLISH_FIXTURE,
@@ -17591,7 +17805,7 @@ cycles = "80T"
         prepared.expect("prepare staged payload");
         for (chunk_index, bytes) in chunks.into_iter().enumerate() {
             let published: Result<(), Error> = pic
-                .update_candid_as(
+                .update_candid(
                     store,
                     installation_controller,
                     canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
