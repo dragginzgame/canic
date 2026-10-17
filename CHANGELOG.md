@@ -43,6 +43,7 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
   feature/phase values and one batch API. Validate a fresh post-build input recipe
   once, retaining complete-release checks and typed rejection diagnostics.
   Read Testkit baseline outcome fields through their current public contract.
+  Render retained file hashes through the canonical digest Display contract.
 
 - **Release checks:** include the shared version validator in isolated release
   fixtures so preflight and failure-recovery checks can run after tooling updates.

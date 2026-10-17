@@ -509,7 +509,7 @@ fn validate_snapshot_evidence(
         }
     }
     for (path, expected) in fixture_hashes {
-        if !matches!(evidence.entries().get(path), Some(InputEvidenceValue::File { sha256 }) if sha256.to_hex() == *expected)
+        if !matches!(evidence.entries().get(path), Some(InputEvidenceValue::File { sha256 }) if sha256.to_string() == *expected)
         {
             return Err(BuildReuseError::ChangedInput(path.clone()));
         }
@@ -724,7 +724,7 @@ fn output_files(root: &Path) -> Result<BTreeMap<String, String>, BuildReuseError
                 let key = relative
                     .to_str()
                     .ok_or_else(|| BuildReuseError::Unsupported(path.clone()))?;
-                files.insert(key.to_owned(), sha256.to_hex());
+                files.insert(key.to_owned(), sha256.to_string());
             }
             InputEvidenceValue::Directory => {}
             InputEvidenceValue::Missing => {

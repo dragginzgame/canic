@@ -2,6 +2,20 @@
 
 ## Build 0.14 registry adoption — 2026-10-17
 
+The follow-up replaces three raw-file-hash `to_hex()` calls with canonical
+`Display`/`to_string()`, preserving retained output keys, fixture comparison and
+rejection diagnostics. Registry Build 0.14 / Host 0.25 still passes actual Rust
+1.91 library checks and strict development all-target Clippy for Host and Testing
+Internal. A separate frozen Build candidate with direct Host file hashes passes
+those checks and all 44 enabled reuse cases; its source patch SHA-256 is
+`e6ac51fa032f1cfe6c77fa04a532d6b22f4c2f5d5f302c16d754ca0661d42c25`.
+The opt-in measurement remains ignored; no PocketIC instance or native macOS
+qualification is implied. Logs: `/tmp/ic-build-representation-cuts-20261017/`.
+That rehearsal kept Host 0.25 and changed only Build's source/checksum lock row;
+the registry lock is restored byte-for-byte. No path override or unpublished
+requirement is committed. Build's concurrent Host 0.26 adoption requires its own
+matching consumer graph after publication; this PR retains the published pair.
+
 The isolated [PR #593](https://github.com/dragginzgame/canic/pull/593) extends
 `5181a159` from pushed main `53f1f22`, selecting registry Build 0.14.0 and
 Host 0.25.1. It excludes the normal checkout's dirty integration batch; own
