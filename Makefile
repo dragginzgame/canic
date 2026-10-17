@@ -23,13 +23,19 @@ include tool-versions.env
 include ci/tool-versions.env
 override SHARED_TOOLING_ROOT := $(CURDIR)
 CLOC_REPORT := $(CURDIR)/scripts/dev/report-cloc.sh
-LOCAL_TOOL_INSTALL_TARGETS += install-testkit-server
-LOCAL_TOOL_CHECK_TARGETS += testkit-server-check
+LOCAL_TOOL_INSTALL_TARGETS += install-candid-extractor install-testkit-server
+LOCAL_TOOL_CHECK_TARGETS += candid-extractor-check testkit-server-check
 FORMAT_WRITE_COMMAND = bash scripts/ci/run-canic-formatters.sh --write $(CANIC_BLOB_WORKSPACES)
 FORMAT_CHECK_COMMAND = bash scripts/ci/run-canic-formatters.sh --check $(CANIC_BLOB_WORKSPACES)
 include make/consumer.mk
 
-.PHONY: install-testkit-server testkit-server-check
+.PHONY: install-candid-extractor candid-extractor-check install-testkit-server testkit-server-check
+install-candid-extractor:
+	@bash scripts/dev/candid-extractor.sh
+
+candid-extractor-check:
+	@bash scripts/dev/candid-extractor.sh --check
+
 install-testkit-server:
 	@runner="$$(bash scripts/ci/testkit-server.sh)" && "$$runner" setup
 
