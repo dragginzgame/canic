@@ -108,7 +108,8 @@ ic-query = { version = "0.59", default-features = false, features = [
 ] }
 ic-secp256k1 = "=0.3.0"
 ic-signature-verification = "0.3.0"
-ic-testkit = { version = "0.49" }
+ic-testkit = { version = "0.52" }
+ic-testkit-candid = "0.52"
 ic-timers = "0.25"
 ic-verify-bls-signature = { version = "0.6.0", default-features = false, features = [
     "alloc",

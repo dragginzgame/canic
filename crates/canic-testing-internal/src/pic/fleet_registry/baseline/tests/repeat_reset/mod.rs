@@ -127,10 +127,16 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, previous_operation: &s
         .into_iter()
         .filter(|action| matches!(action, EnsureAction::Fund { .. }))
         .count();
-    let withdrawals: u64 = input
-        .pic
-        .query_candid(ledger, "withdrawal_count", ())
-        .unwrap();
+    let withdrawals: u64 = ::ic_testkit::pic::query_candid_args(
+        &input.pic,
+        ledger,
+        candid::Principal::anonymous(),
+        "withdrawal_count",
+        (),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap();
     let funding_lost = root.join("lost-funding-response");
     if funding_count > 0 {
         operator_shortfall::assert_fresh_reinstall_rejection(&input, &infrastructure.plan);
@@ -157,10 +163,16 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, previous_operation: &s
         );
         if funding_interrupted {
             assert_eq!(
-                input
-                    .pic
-                    .query_candid::<u64, _>(ledger, "withdrawal_count", ())
-                    .unwrap(),
+                ::ic_testkit::pic::query_candid_args::<(u64,), _>(
+                    &input.pic,
+                    ledger,
+                    candid::Principal::anonymous(),
+                    "withdrawal_count",
+                    (),
+                    ::canic::testing::CANDID_REPLY_LIMITS
+                )
+                .map(|(reply,)| reply)
+                .unwrap(),
                 withdrawals + 1
             );
         }
@@ -176,10 +188,16 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, previous_operation: &s
     };
     assert!(initialized.terminal);
     assert_eq!(
-        input
-            .pic
-            .query_candid::<u64, _>(ledger, "withdrawal_count", ())
-            .unwrap(),
+        ::ic_testkit::pic::query_candid_args::<(u64,), _>(
+            &input.pic,
+            ledger,
+            candid::Principal::anonymous(),
+            "withdrawal_count",
+            (),
+            ::canic::testing::CANDID_REPLY_LIMITS
+        )
+        .map(|(reply,)| reply)
+        .unwrap(),
         withdrawals + u64::try_from(funding_count).unwrap()
     );
     let mut debit = infrastructure

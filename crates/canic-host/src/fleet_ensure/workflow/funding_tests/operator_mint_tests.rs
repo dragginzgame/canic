@@ -24,7 +24,7 @@ use candid::{CandidType, Nat, Principal};
 use canic_core::cdk::utils::hash::decode_hex;
 use ic_agent::{Agent, identity::BasicIdentity};
 use ic_testkit::{
-    pic::{CandidCallExt, PocketIcBuilder},
+    pic::PocketIcBuilder,
     pocket_ic::common::rest::{IcpFeatures, IcpFeaturesConfig},
 };
 use serde::Deserialize;
@@ -477,9 +477,11 @@ pub(super) fn funded_operator() -> (ic_testkit::pocket_ic::PocketIc, OperatorMin
         .unwrap();
     agent.set_root_key(pic.root_key().unwrap());
     let operator = agent.get_principal().unwrap();
-    let result: Result<Nat, icrc_ledger_types::icrc1::transfer::TransferError> = pic
-        .update_candid(
+    let result: Result<Nat, icrc_ledger_types::icrc1::transfer::TransferError> =
+        ::ic_testkit::pic::update_candid_args(
+            &pic,
             ledger,
+            candid::Principal::anonymous(),
             "icrc1_transfer",
             (MintTestTransfer {
                 from_subaccount: None,
@@ -492,7 +494,9 @@ pub(super) fn funded_operator() -> (ic_testkit::pocket_ic::PocketIc, OperatorMin
                 memo: None,
                 created_at_time: None,
             },),
+            ::canic::testing::CANDID_REPLY_LIMITS,
         )
+        .map(|(reply,)| reply)
         .unwrap();
     result.unwrap();
     let transport = OperatorMintTransport::from_test_agent(agent);

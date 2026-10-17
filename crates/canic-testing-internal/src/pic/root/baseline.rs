@@ -4,16 +4,14 @@ use super::{
 };
 use ic_testkit::pic::{
     BaselinePoolContractError, BaselinePreparationStage, CachedPocketIcBaseline,
-    CanisterRestoreReceipt, CanisterSnapshotTarget, ControllerSnapshotError, CycleResetPolicy,
-    FailureDisposition, FixtureRecipeId, PocketIcBaselineRecipe, PreparedBaseline,
-    ReadinessReceipt, RebuildReason, ResetDomainPolicy, ResetReceipt, ResetRequirements,
-    SnapshotRestoreFunding, TimeResetPolicy, ValidationReceipt, is_dead_pocket_ic_transport_error,
+    CanisterSnapshotTarget, ControllerSnapshotError, FailureDisposition, PocketIcBaselineRecipe,
+    PreparedBaseline, RebuildReason, ResetDomainPolicy, ResetReceipt, ResetRequirements,
+    SnapshotRestoreFunding, TimeResetPolicy, is_dead_pocket_ic_transport_error,
 };
 use std::{collections::BTreeMap, error::Error as StdError, fmt, path::PathBuf, time::Instant};
 
 /// Typed lifecycle recipe for one reusable root topology profile.
 pub struct RootBaselineRecipe {
-    id: FixtureRecipeId,
     reset_requirements: ResetRequirements,
     spec: RootBaselineSpec<'static>,
 }
@@ -36,15 +34,13 @@ impl RootBaselineRecipe {
     ///
     /// # Errors
     ///
-    /// Returns an error when the identity or mandatory reset contract is invalid.
-    pub fn try_new(
-        identity: impl Into<String>,
-        spec: RootBaselineSpec<'static>,
-    ) -> Result<Self, BaselinePoolContractError> {
+    /// Returns an error when the mandatory reset contract is invalid.
+    pub fn try_new(spec: RootBaselineSpec<'static>) -> Result<Self, BaselinePoolContractError> {
         Ok(Self {
-            id: FixtureRecipeId::try_new(identity)?,
             reset_requirements: ResetRequirements::try_new(
-                CycleResetPolicy::TopUpTo(crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES),
+                SnapshotRestoreFunding::TopUpTo {
+                    minimum_cycles: crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,
+                },
                 [ResetDomainPolicy::PocketIcTime(
                     TimeResetPolicy::PreserveCurrent,
                 )],
@@ -57,10 +53,6 @@ impl RootBaselineRecipe {
 impl PocketIcBaselineRecipe for RootBaselineRecipe {
     type Metadata = RootBaselineMetadata;
     type Error = RootBaselineRecipeError;
-
-    fn id(&self) -> &FixtureRecipeId {
-        &self.id
-    }
 
     fn reset_requirements(&self) -> &ResetRequirements {
         &self.reset_requirements
@@ -76,17 +68,6 @@ impl PocketIcBaselineRecipe for RootBaselineRecipe {
         ))
     }
 
-    fn restore_canisters(
-        &self,
-        baseline: &CachedPocketIcBaseline<Self::Metadata>,
-    ) -> Result<CanisterRestoreReceipt, Self::Error> {
-        baseline
-            .restore(SnapshotRestoreFunding::TopUpTo {
-                minimum_cycles: crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,
-            })
-            .map_err(Into::into)
-    }
-
     fn reset_non_snapshot_state(
         &self,
         _baseline: &CachedPocketIcBaseline<Self::Metadata>,
@@ -100,7 +81,7 @@ impl PocketIcBaselineRecipe for RootBaselineRecipe {
     fn drive_to_readiness(
         &self,
         baseline: &CachedPocketIcBaseline<Self::Metadata>,
-    ) -> Result<ReadinessReceipt, Self::Error> {
+    ) -> Result<(), Self::Error> {
         wait_for_bootstrap(
             &self.spec,
             baseline.pocket_ic(),
@@ -118,14 +99,14 @@ impl PocketIcBaselineRecipe for RootBaselineRecipe {
             baseline.metadata().root_id,
             &baseline.metadata().snapshot_pids,
         );
-        ReadinessReceipt::try_new("root-and-managed-children-ready").map_err(Into::into)
+        Ok(())
     }
 
     fn validate(
         &self,
         baseline: &CachedPocketIcBaseline<Self::Metadata>,
         _preparation: &PreparedBaseline,
-    ) -> Result<ValidationReceipt, Self::Error> {
+    ) -> Result<(), Self::Error> {
         for canister_id in baseline.snapshot_canister_ids() {
             if !baseline.pocket_ic().canister_exists(canister_id) {
                 return Err(RootBaselineRecipeError::Invariant(format!(
@@ -133,14 +114,13 @@ impl PocketIcBaselineRecipe for RootBaselineRecipe {
                 )));
             }
         }
-        ValidationReceipt::try_new(self.id.clone(), "captured-root-topology-exists")
-            .map_err(Into::into)
+        Ok(())
     }
 
     fn classify_failure(
         &self,
         stage: BaselinePreparationStage,
-        error: &Self::Error,
+        error: &(dyn std::error::Error + 'static),
     ) -> FailureDisposition {
         if is_dead_pocket_ic_transport_error(error) {
             FailureDisposition::Rebuild(RebuildReason::DeadPocketIcTransport)
@@ -276,7 +256,10 @@ fn root_baseline_snapshot_targets(metadata: &RootBaselineMetadata) -> Vec<Canist
     }
     senders
         .into_iter()
-        .map(|(canister_id, sender)| CanisterSnapshotTarget::new(canister_id, sender))
+        .map(|(canister_id, sender)| CanisterSnapshotTarget {
+            canister_id,
+            sender,
+        })
         .collect()
 }
 
@@ -300,11 +283,11 @@ mod tests {
         let targets = root_baseline_snapshot_targets(&metadata);
 
         assert_eq!(targets.len(), 3);
-        assert_eq!(targets[0].canister_id(), root_id);
-        assert_eq!(targets[0].sender(), None);
-        assert_eq!(targets[1].canister_id(), child_id);
-        assert_eq!(targets[1].sender(), Some(root_id));
-        assert_eq!(targets[2].canister_id(), store_id);
-        assert_eq!(targets[2].sender(), Some(root_id));
+        assert_eq!(targets[0].canister_id, root_id);
+        assert_eq!(targets[0].sender, None);
+        assert_eq!(targets[1].canister_id, child_id);
+        assert_eq!(targets[1].sender, Some(root_id));
+        assert_eq!(targets[2].canister_id, store_id);
+        assert_eq!(targets[2].sender, Some(root_id));
     }
 }

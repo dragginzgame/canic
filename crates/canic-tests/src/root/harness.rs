@@ -81,16 +81,16 @@ fn root_baseline_pool(
     static SCALING: OnceLock<CachedPocketIcBaselinePool<RootBaselineRecipe>> = OnceLock::new();
     static SHARDING: OnceLock<CachedPocketIcBaselinePool<RootBaselineRecipe>> = OnceLock::new();
 
-    let (pool, identity) = match profile {
-        RootSetupProfile::Topology => (&TOPOLOGY, "canic/root-audit/topology/v1"),
-        RootSetupProfile::Capability => (&CAPABILITY, "canic/root-audit/capability/v1"),
-        RootSetupProfile::Scaling => (&SCALING, "canic/root-audit/scaling/v1"),
-        RootSetupProfile::Sharding => (&SHARDING, "canic/root-audit/sharding/v1"),
+    let pool = match profile {
+        RootSetupProfile::Topology => &TOPOLOGY,
+        RootSetupProfile::Capability => &CAPABILITY,
+        RootSetupProfile::Scaling => &SCALING,
+        RootSetupProfile::Sharding => &SHARDING,
     };
     pool.get_or_init(|| {
         CachedPocketIcBaselinePool::new(
             NonZeroUsize::new(1).expect("one is nonzero"),
-            RootBaselineRecipe::try_new(identity, spec).expect("valid root baseline recipe"),
+            RootBaselineRecipe::try_new(spec).expect("valid root baseline recipe"),
         )
     })
 }

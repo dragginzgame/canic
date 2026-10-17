@@ -11,9 +11,12 @@ pub fn try_start_pocket_ic(builder: PocketIcBuilder) -> Result<PocketIc, PocketI
     // An absent/non-Unicode URL is rejected by shared URL admission. Keep
     // explicit connect mode so an executable selection cannot spawn a server.
     let server_url = std::env::var(POCKET_IC_SERVER_URL_ENV).unwrap_or_default();
-    PocketIcStartupConfig::connect(server_url, POCKET_IC_STARTUP_TIMEOUT)
-        .build_instance(builder)
-        .map(|owned| owned.instance)
+    PocketIcStartupConfig::Connect {
+        server_url,
+        timeout: POCKET_IC_STARTUP_TIMEOUT,
+    }
+    .build_instance(builder)
+    .map(|owned| owned.instance)
 }
 
 /// Start one PocketIC instance or stop the current test with structured diagnostics.

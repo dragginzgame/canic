@@ -43,14 +43,16 @@ pub(super) fn initial_child_failure_reaches_coordinator_and_recovers_same_claim(
     .unwrap();
     wait_for_parent_commit(&pic, root, operation_id);
     assert_balance_control_requires_controller(&pic, root);
-    let burned: u128 = pic
-        .update_candid_as(
-            root,
-            Principal::anonymous(),
-            "audit_recovery_balance",
-            (800_000_000_000_u128,),
-        )
-        .expect("update Candid harness call");
+    let burned: u128 = ::ic_testkit::pic::update_candid_args(
+        &pic,
+        root,
+        Principal::anonymous(),
+        "audit_recovery_balance",
+        (800_000_000_000_u128,),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("update Candid harness call");
     assert!(burned > 0);
     let origin = (0..240).find_map(|_| {
         let status = provisioning_status(&pic, coordinator, operation_id);
@@ -385,29 +387,33 @@ fn prepare_spare(pic: &PocketIc, root: Principal) {
 }
 
 fn pause_and_reduce_reserve(pic: &PocketIc, root: Principal) {
-    let paused: Result<Response, Error> = pic
-        .update_candid_as(
-            root,
-            Principal::anonymous(),
-            canic::protocol::CANIC_ROOT_COMMAND,
-            (Command::SetCyclesFunding(
-                canic::dto::state::SetCyclesFundingRequest { enabled: false },
-            ),),
-        )
-        .expect("update Candid harness call");
+    let paused: Result<Response, Error> = ::ic_testkit::pic::update_candid_args(
+        pic,
+        root,
+        Principal::anonymous(),
+        canic::protocol::CANIC_ROOT_COMMAND,
+        (Command::SetCyclesFunding(
+            canic::dto::state::SetCyclesFundingRequest { enabled: false },
+        ),),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("update Candid harness call");
     let Response::SetCyclesFunding(paused) = paused.unwrap() else {
         panic!("funding response")
     };
     assert_eq!(paused.propagation.unconfirmed_targets, 0);
     assert!(paused.reconciliation_error.is_none());
-    let burned: u128 = pic
-        .update_candid_as(
-            root,
-            Principal::anonymous(),
-            "audit_recovery_balance",
-            (800_000_000_000_u128,),
-        )
-        .expect("update Candid harness call");
+    let burned: u128 = ::ic_testkit::pic::update_candid_args(
+        pic,
+        root,
+        Principal::anonymous(),
+        "audit_recovery_balance",
+        (800_000_000_000_u128,),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("update Candid harness call");
     assert!(burned > 0);
     assert!(pic.cycle_balance(root) < 1_000_000_000_000);
 }
@@ -418,14 +424,16 @@ fn provision(
     parent: Principal,
     request: &RootComponentChildAllocationRequest,
 ) {
-    let response: Result<Response, Error> = pic
-        .update_candid_as(
-            root,
-            parent,
-            canic::protocol::CANIC_ROOT_COMMAND,
-            (Command::ProvisionChild(request.clone()),),
-        )
-        .expect("update Candid harness call");
+    let response: Result<Response, Error> = ::ic_testkit::pic::update_candid_args(
+        pic,
+        root,
+        parent,
+        canic::protocol::CANIC_ROOT_COMMAND,
+        (Command::ProvisionChild(request.clone()),),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("update Candid harness call");
     let Response::OperationAccepted(receipt) = response.unwrap() else {
         panic!("accepted child")
     };

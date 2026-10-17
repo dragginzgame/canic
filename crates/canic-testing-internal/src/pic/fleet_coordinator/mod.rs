@@ -54,7 +54,7 @@ mod tests {
         },
     };
     use ic_testkit::pic::{
-        CandidCallExt, CanisterSnapshotTarget, PocketIc, PocketIcBuilder, PocketIcSnapshotExt,
+        CanisterSnapshotTarget, PocketIc, PocketIcBuilder, PocketIcSnapshotExt,
         SnapshotRestoreFunding,
     };
 
@@ -65,8 +65,16 @@ mod tests {
         coordinator: Principal,
         command: CoordinatorCommand,
     ) -> Result<CoordinatorCommandResponse, Error> {
-        pic.update_candid(coordinator, protocol::CANIC_COORDINATOR_COMMAND, (command,))
-            .expect("Coordinator command transport")
+        ::ic_testkit::pic::update_candid_args(
+            pic,
+            coordinator,
+            candid::Principal::anonymous(),
+            protocol::CANIC_COORDINATOR_COMMAND,
+            (command,),
+            ::canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)
+        .expect("Coordinator command transport")
     }
 
     fn command_as(
@@ -75,12 +83,15 @@ mod tests {
         caller: Principal,
         command: CoordinatorCommand,
     ) -> Result<CoordinatorCommandResponse, Error> {
-        pic.update_candid_as(
+        ::ic_testkit::pic::update_candid_args(
+            pic,
             coordinator,
             caller,
             protocol::CANIC_COORDINATOR_COMMAND,
             (command,),
+            ::canic::testing::CANDID_REPLY_LIMITS,
         )
+        .map(|(reply,)| reply)
         .expect("Coordinator command transport")
     }
 
@@ -89,8 +100,16 @@ mod tests {
         coordinator: Principal,
         request: R,
     ) -> Result<R::Response, Error> {
-        pic.query_candid(coordinator, R::METHOD, (request,))
-            .expect("Coordinator status transport")
+        ::ic_testkit::pic::query_candid_args(
+            pic,
+            coordinator,
+            candid::Principal::anonymous(),
+            R::METHOD,
+            (request,),
+            ::canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)
+        .expect("Coordinator status transport")
     }
 
     fn status_as<R: crate::pic::canic::CoordinatorRead>(
@@ -99,8 +118,16 @@ mod tests {
         caller: Principal,
         request: R,
     ) -> Result<R::Response, Error> {
-        pic.query_candid_as(coordinator, caller, R::METHOD, (request,))
-            .expect("Coordinator status transport")
+        ::ic_testkit::pic::query_candid_args(
+            pic,
+            coordinator,
+            caller,
+            R::METHOD,
+            (request,),
+            ::canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)
+        .expect("Coordinator status transport")
     }
 
     fn command_error(
@@ -335,7 +362,10 @@ placement.minimum_distinct_roots = 2
         assert_eq!(sealed.operation_id, Some(request.operation_id));
 
         let snapshots = pic
-            .capture_snapshots([CanisterSnapshotTarget::new(coordinator, None)])
+            .capture_snapshots([CanisterSnapshotTarget {
+                canister_id: coordinator,
+                sender: None,
+            }])
             .expect("Coordinator snapshot capture");
         let CoordinatorCommandResponse::ResumeAuthoritySnapshot(resumed) = command(
             pic,

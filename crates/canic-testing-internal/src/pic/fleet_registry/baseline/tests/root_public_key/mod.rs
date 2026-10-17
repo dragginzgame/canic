@@ -11,7 +11,8 @@ use canic_contracts::dto::wire::projection::fixture_baseline_root_public_key::Re
 
 pub(super) fn assert_controller_key_discovery(pic: &PocketIc, root: Principal) {
     let key = |caller, path: Vec<Vec<u8>>| {
-        pic.update_candid_as::<Result<Response, Error>, _>(
+        ::ic_testkit::pic::update_candid_args::<(Result<Response, Error>,), _>(
+            pic,
             root,
             caller,
             canic::protocol::CANIC_ROOT_COMMAND,
@@ -21,7 +22,9 @@ pub(super) fn assert_controller_key_discovery(pic: &PocketIc, root: Principal) {
                     derivation_path: path,
                 },
             ),),
+            ::canic::testing::CANDID_REPLY_LIMITS,
         )
+        .map(|(reply,)| reply)
         .expect("Root public-key command transport")
     };
     let outsider = Principal::self_authenticating(b"uncontrolled public-key requester");

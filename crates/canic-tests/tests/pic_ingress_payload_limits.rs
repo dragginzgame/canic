@@ -11,8 +11,8 @@ use canic_testing_internal::pic::{
 };
 use ic_testkit::pic::{
     CachedPocketIcBaseline, CachedPocketIcBaselinePool, CachedPocketIcBaselinePoolGuard,
-    CandidCallErrorKind, CandidCallExt, CanisterInstallExt, ErrorCode, FixtureRecipeId, RejectCode,
-    RetryPolicy, SnapshotRestoreFunding, StandaloneCanisterFixture, StandaloneCanisterRecipe,
+    CandidCallError, CanisterInstallExt, ErrorCode, RejectCode, RetryPolicy,
+    SnapshotRestoreFunding, StandaloneCanisterFixture, StandaloneCanisterRecipe,
 };
 
 const PROBE_CRATE: &str = "payload_limit_probe";
@@ -27,16 +27,29 @@ struct PlainReply {
 }
 
 fn counts(fixture: &CachedPocketIcBaseline<Principal>) -> PlainReply {
-    fixture
-        .pocket_ic()
-        .query_candid(*fixture.metadata(), "dispatch_counts", ())
-        .expect("Candid harness call")
+    ::ic_testkit::pic::query_candid_args(
+        fixture.pocket_ic(),
+        *fixture.metadata(),
+        candid::Principal::anonymous(),
+        "dispatch_counts",
+        (),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("Candid harness call")
 }
 
 fn denied_count(fixture: &CachedPocketIcBaseline<Principal>, method: &str) -> u64 {
-    let metrics: Result<Vec<canic::dto::metrics::MetricEntry>, Error> = fixture
-        .pocket_ic()
-        .query_candid(*fixture.metadata(), "access_counts", ())
+    let metrics: Result<Vec<canic::dto::metrics::MetricEntry>, Error> =
+        ::ic_testkit::pic::query_candid_args(
+            fixture.pocket_ic(),
+            *fixture.metadata(),
+            candid::Principal::anonymous(),
+            "access_counts",
+            (),
+            ::canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)
         .expect("Candid harness call");
     metrics
         .unwrap()
@@ -99,10 +112,16 @@ fn guarded_plain_reply_and_result_reply_keep_denial_metrics_and_short_circuiting
     );
     assert_eq!(denied_count(&fixture, "plain_commit"), 1);
 
-    let accepted: Result<PlainReply, Error> = fixture
-        .pocket_ic()
-        .update_candid(*fixture.metadata(), "result_commit", (true,))
-        .expect("Candid harness call");
+    let accepted: Result<PlainReply, Error> = ::ic_testkit::pic::update_candid_args(
+        fixture.pocket_ic(),
+        *fixture.metadata(),
+        candid::Principal::anonymous(),
+        "result_commit",
+        (true,),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("Candid harness call");
     assert_eq!(
         accepted.unwrap(),
         PlainReply {
@@ -111,10 +130,16 @@ fn guarded_plain_reply_and_result_reply_keep_denial_metrics_and_short_circuiting
         }
     );
     assert_eq!(denied_count(&fixture, "result_commit"), 0);
-    let denied: Result<PlainReply, Error> = fixture
-        .pocket_ic()
-        .update_candid(*fixture.metadata(), "result_commit", (false,))
-        .expect("Candid harness call");
+    let denied: Result<PlainReply, Error> = ::ic_testkit::pic::update_candid_args(
+        fixture.pocket_ic(),
+        *fixture.metadata(),
+        candid::Principal::anonymous(),
+        "result_commit",
+        (false,),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("Candid harness call");
     assert!(denied.is_err());
     assert_eq!(
         counts(&fixture),
@@ -138,6 +163,10 @@ fn handler_log_count(fixture: &CachedPocketIcBaseline<Principal>) -> usize {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Keep this chronological qualification scenario together with explicit call budgets"
+)]
 fn bounded_queries_and_inter_canister_updates_refuse_before_dispatch() {
     let fixture = acquire_probe_fixture();
     let relay = install_standalone_canister_on_pic(
@@ -147,10 +176,16 @@ fn bounded_queries_and_inter_canister_updates_refuse_before_dispatch() {
         CanicWasmBuildProfile::Fast,
         "bounded-relay",
     );
-    let query: PlainReply = fixture
-        .pocket_ic()
-        .query_candid(*fixture.metadata(), "bounded_query", ("valid",))
-        .expect("Candid harness call");
+    let query: PlainReply = ::ic_testkit::pic::query_candid_args(
+        fixture.pocket_ic(),
+        *fixture.metadata(),
+        candid::Principal::anonymous(),
+        "bounded_query",
+        ("valid",),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("Candid harness call");
     assert_eq!(query.committed, 1);
     let before = handler_log_count(&fixture);
     for bytes in [
@@ -170,18 +205,20 @@ fn bounded_queries_and_inter_canister_updates_refuse_before_dispatch() {
         assert_eq!(error.error_code, ErrorCode::CanisterCalledTrap);
     }
     assert_eq!(handler_log_count(&fixture), before);
-    let accepted: Result<bool, Error> = fixture
-        .pocket_ic()
-        .update_candid(
-            relay,
-            "relay_bounded",
-            (
-                *fixture.metadata(),
-                "bounded_update",
-                encode_args(("valid",)).unwrap(),
-            ),
-        )
-        .expect("Candid harness call");
+    let accepted: Result<bool, Error> = ::ic_testkit::pic::update_candid_args(
+        fixture.pocket_ic(),
+        relay,
+        candid::Principal::anonymous(),
+        "relay_bounded",
+        (
+            *fixture.metadata(),
+            "bounded_update",
+            encode_args(("valid",)).unwrap(),
+        ),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("Candid harness call");
     assert!(accepted.unwrap());
     for (method, bytes) in [
         ("bounded_work", encode_args((Vec::<()>::new(),)).unwrap()),
@@ -189,10 +226,16 @@ fn bounded_queries_and_inter_canister_updates_refuse_before_dispatch() {
         ("bounded_types", encode_args((Vec::<u8>::new(),)).unwrap()),
         ("bounded_header", encode_args((0_u64,)).unwrap()),
     ] {
-        let accepted: Result<bool, Error> = fixture
-            .pocket_ic()
-            .update_candid(relay, "relay_bounded", (*fixture.metadata(), method, bytes))
-            .expect("Candid harness call");
+        let accepted: Result<bool, Error> = ::ic_testkit::pic::update_candid_args(
+            fixture.pocket_ic(),
+            relay,
+            candid::Principal::anonymous(),
+            "relay_bounded",
+            (*fixture.metadata(), method, bytes),
+            ::canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)
+        .expect("Candid harness call");
         assert!(
             accepted.unwrap(),
             "{method} accepts its ordinary bounded input"
@@ -218,10 +261,16 @@ fn bounded_queries_and_inter_canister_updates_refuse_before_dispatch() {
             encode_args((0_u64, Vec::<Vec<u8>>::new())).unwrap(),
         ),
     ] {
-        let refused: Result<bool, Error> = fixture
-            .pocket_ic()
-            .update_candid(relay, "relay_bounded", (*fixture.metadata(), method, bytes))
-            .expect("Candid harness call");
+        let refused: Result<bool, Error> = ::ic_testkit::pic::update_candid_args(
+            fixture.pocket_ic(),
+            relay,
+            candid::Principal::anonymous(),
+            "relay_bounded",
+            (*fixture.metadata(), method, bytes),
+            ::canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)
+        .expect("Candid harness call");
         assert!(refused.is_err(), "{method} must refuse the bounded input");
         assert_eq!(counts(&fixture), initial);
         assert_eq!(
@@ -258,10 +307,10 @@ fn lifecycle_bounds_run_before_init_and_post_upgrade_participants() {
         before > 0,
         "successful init must emit the participant witness"
     );
-    let retry = RetryPolicy::new(
-        std::num::NonZeroUsize::new(4).expect("non-zero install attempt limit"),
-        std::time::Duration::from_mins(5),
-    );
+    let retry = RetryPolicy {
+        max_attempts: std::num::NonZeroUsize::new(4).expect("non-zero install attempt limit"),
+        cooldown: std::time::Duration::from_mins(5),
+    };
     let witness = fixture
         .pocket_ic()
         .retry_install_code(retry, || {
@@ -346,7 +395,6 @@ static PROBE_FIXTURES: LazyLock<CachedPocketIcBaselinePool<ProbeRecipe>> = LazyL
     CachedPocketIcBaselinePool::new(
         NonZeroUsize::new(1).expect("one is nonzero"),
         StandaloneCanisterRecipe::new(
-            FixtureRecipeId::try_new("canic/payload-limit-probe").unwrap(),
             SnapshotRestoreFunding::TopUpTo {
                 minimum_cycles: SNAPSHOT_RESTORE_MINIMUM_CYCLES,
             },
@@ -396,27 +444,31 @@ fn raw_update_adapter_rejects_oversized_inter_canister_payload_before_decode() {
     );
     let exact_payload_len = string_len_for_wire_size(EXPLICIT_ECHO_MAX_BYTES);
 
-    let accepted: Result<usize, Error> = target
-        .pocket_ic()
-        .update_candid(
-            relay,
-            "relay_explicit_echo",
-            (*target.metadata(), exact_payload_len),
-        )
-        .expect("Candid harness call");
+    let accepted: Result<usize, Error> = ::ic_testkit::pic::update_candid_args(
+        target.pocket_ic(),
+        relay,
+        candid::Principal::anonymous(),
+        "relay_explicit_echo",
+        (*target.metadata(), exact_payload_len),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("Candid harness call");
     assert_eq!(
         accepted.expect("exact-boundary inter-canister payload"),
         exact_payload_len
     );
 
-    let rejected: Result<usize, Error> = target
-        .pocket_ic()
-        .update_candid(
-            relay,
-            "relay_explicit_echo",
-            (*target.metadata(), exact_payload_len + 1),
-        )
-        .expect("Candid harness call");
+    let rejected: Result<usize, Error> = ::ic_testkit::pic::update_candid_args(
+        target.pocket_ic(),
+        relay,
+        candid::Principal::anonymous(),
+        "relay_explicit_echo",
+        (*target.metadata(), exact_payload_len + 1),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("Candid harness call");
     drop(target);
     assert!(
         rejected.is_err(),
@@ -435,10 +487,16 @@ fn acquire_probe_fixture() -> CachedPocketIcBaselinePoolGuard<'static, ProbeReci
 // Assert one ingress update reaches the canister and returns the echoed length.
 fn assert_echo_ok(fixture: &CachedPocketIcBaseline<Principal>, method: &str, len: usize) {
     let payload = payload(len);
-    let response: Result<usize, Error> = fixture
-        .pocket_ic()
-        .update_candid(*fixture.metadata(), method, (payload,))
-        .expect("Candid harness call");
+    let response: Result<usize, Error> = ::ic_testkit::pic::update_candid_args(
+        fixture.pocket_ic(),
+        *fixture.metadata(),
+        candid::Principal::anonymous(),
+        method,
+        (payload,),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("Candid harness call");
 
     assert_eq!(response.expect("endpoint should accept payload"), len);
 }
@@ -446,13 +504,18 @@ fn assert_echo_ok(fixture: &CachedPocketIcBaseline<Principal>, method: &str, len
 // Assert one ingress update is rejected before endpoint execution.
 fn assert_rejected(fixture: &CachedPocketIcBaseline<Principal>, method: &str, len: usize) {
     let payload = payload(len);
-    let err = fixture
-        .pocket_ic()
-        .update_candid::<Result<usize, Error>, _>(*fixture.metadata(), method, (payload,))
-        .expect_err("transport should reject oversized ingress");
+    let err = ::ic_testkit::pic::update_candid_args::<(Result<usize, Error>,), _>(
+        fixture.pocket_ic(),
+        *fixture.metadata(),
+        candid::Principal::anonymous(),
+        method,
+        (payload,),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect_err("transport should reject oversized ingress");
 
-    assert_eq!(err.kind, CandidCallErrorKind::CanisterReject);
-    assert!(err.reject_response.is_some());
+    assert!(matches!(err, CandidCallError::CanisterReject { .. }));
 }
 
 // Build one ASCII string payload with exact byte length.
@@ -526,10 +589,16 @@ fn compiled_payload_contract_matches_actual_ingress_boundaries() {
         );
         let length = string_len_for_wire_size(limit);
         if method == "bare_echo" {
-            let result: usize = fixture
-                .pocket_ic()
-                .update_candid(*fixture.metadata(), method, (payload(length),))
-                .expect("Candid harness call");
+            let result: usize = ::ic_testkit::pic::update_candid_args(
+                fixture.pocket_ic(),
+                *fixture.metadata(),
+                candid::Principal::anonymous(),
+                method,
+                (payload(length),),
+                ::canic::testing::CANDID_REPLY_LIMITS,
+            )
+            .map(|(reply,)| reply)
+            .expect("Candid harness call");
             assert_eq!(result, length);
         } else {
             assert_echo_ok(&fixture, method, length);

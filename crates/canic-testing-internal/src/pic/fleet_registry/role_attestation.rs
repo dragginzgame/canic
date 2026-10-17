@@ -18,7 +18,7 @@ use canic::dto::rpc::RootRequestMetadata;
 use canic::ids::CanisterRole;
 use canic::ids::ComponentBinding;
 use canic::protocol::CANIC_ROOT_COMMAND;
-use ic_testkit::pic::{CandidCallExt, PocketIc};
+use ic_testkit::pic::PocketIc;
 use std::time::Duration;
 
 use canic_contracts::dto::wire::projection::fixture_role_attestation::RootCommand;
@@ -212,14 +212,16 @@ fn assert_role_prepare_forbidden(
     request: RoleAttestationRequest,
     expected_code: canic_contracts::diagnostics::DiagnosticCode,
 ) {
-    let response: Result<RootCommandResponse, Error> = pic
-        .update_candid_as(
-            root,
-            caller,
-            CANIC_ROOT_COMMAND,
-            (RootCommand::PrepareRoleAttestation(request),),
-        )
-        .expect("role attestation rejection transport");
+    let response: Result<RootCommandResponse, Error> = ::ic_testkit::pic::update_candid_args(
+        pic,
+        root,
+        caller,
+        CANIC_ROOT_COMMAND,
+        (RootCommand::PrepareRoleAttestation(request),),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("role attestation rejection transport");
     assert_eq!(
         response
             .expect_err("invalid Component attestation request must fail")
@@ -250,28 +252,32 @@ fn issue_requested_role_attestation(
     issuer: &ComponentBinding,
     request: RoleAttestationRequest,
 ) -> SignedRoleAttestation {
-    let prepared: Result<RootCommandResponse, Error> = pic
-        .update_candid_as(
-            root,
-            issuer.canister_id,
-            CANIC_ROOT_COMMAND,
-            (RootCommand::PrepareRoleAttestation(request),),
-        )
-        .expect("role attestation prepare transport");
+    let prepared: Result<RootCommandResponse, Error> = ::ic_testkit::pic::update_candid_args(
+        pic,
+        root,
+        issuer.canister_id,
+        CANIC_ROOT_COMMAND,
+        (RootCommand::PrepareRoleAttestation(request),),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("role attestation prepare transport");
     let RootCommandResponse::PrepareRoleAttestation(prepared) =
         prepared.expect("role attestation prepare");
-    let signed: Result<RootStatusResponse, Error> = pic
-        .query_candid_as(
-            root,
-            issuer.canister_id,
-            canic_contracts::protocol::CANIC_ROOT_AUTH_STATUS,
-            (RootStatusRequest::RoleAttestation(
-                RoleAttestationGetRequest {
-                    payload_hash: prepared.payload_hash,
-                },
-            ),),
-        )
-        .expect("role attestation retrieval transport");
+    let signed: Result<RootStatusResponse, Error> = ::ic_testkit::pic::query_candid_args(
+        pic,
+        root,
+        issuer.canister_id,
+        canic_contracts::protocol::CANIC_ROOT_AUTH_STATUS,
+        (RootStatusRequest::RoleAttestation(
+            RoleAttestationGetRequest {
+                payload_hash: prepared.payload_hash,
+            },
+        ),),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("role attestation retrieval transport");
     let RootStatusResponse::RoleAttestation(attestation) =
         signed.expect("role attestation retrieval");
     attestation
@@ -283,12 +289,15 @@ fn require_attested_local_subnet(
     caller: Principal,
     attestation: SignedRoleAttestation,
 ) -> Result<(), Error> {
-    pic.update_candid_as(
+    ::ic_testkit::pic::update_candid_args(
+        pic,
         verifier,
         caller,
         "issuer_require_attested_local_subnet",
         (attestation,),
+        ::canic::testing::CANDID_REPLY_LIMITS,
     )
+    .map(|(reply,)| reply)
     .expect("attested local-Subnet access transport")
 }
 
@@ -299,12 +308,15 @@ fn verify_role_attestation(
     attestation: SignedRoleAttestation,
     minimum_epoch: u64,
 ) -> Result<(), Error> {
-    pic.update_candid_as(
+    ::ic_testkit::pic::update_candid_args(
+        pic,
         verifier,
         caller,
         "issuer_verify_role_attestation",
         (attestation, minimum_epoch),
+        ::canic::testing::CANDID_REPLY_LIMITS,
     )
+    .map(|(reply,)| reply)
     .expect("role attestation verification transport")
 }
 
@@ -312,9 +324,16 @@ fn assert_issuer_guard_metrics(pic: &PocketIc, root: Principal, issuer: Principa
     let denial_labels = ["access", "issuer_guard_is_root", "auth", "caller_is_root"];
     let before_denial =
         metric_count_for_labels(pic, root, issuer, MetricsKind::Security, &denial_labels);
-    let denied: Result<(), Error> = pic
-        .update_candid_as(issuer, Principal::anonymous(), "issuer_guard_is_root", ())
-        .expect("issuer root-guard denial transport");
+    let denied: Result<(), Error> = ::ic_testkit::pic::update_candid_args(
+        pic,
+        issuer,
+        Principal::anonymous(),
+        "issuer_guard_is_root",
+        (),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("issuer root-guard denial transport");
     assert_eq!(
         denied.expect_err("anonymous root guard").code(),
         canic_contracts::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
@@ -327,9 +346,16 @@ fn assert_issuer_guard_metrics(pic: &PocketIc, root: Principal, issuer: Principa
     let success_labels = ["perf", "endpoint", "update", "issuer_guard_is_root"];
     let before_success =
         metric_count_for_labels(pic, root, issuer, MetricsKind::Runtime, &success_labels);
-    let allowed: Result<(), Error> = pic
-        .update_candid_as(issuer, root, "issuer_guard_is_root", ())
-        .expect("issuer root-guard success transport");
+    let allowed: Result<(), Error> = ::ic_testkit::pic::update_candid_args(
+        pic,
+        issuer,
+        root,
+        "issuer_guard_is_root",
+        (),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("issuer root-guard success transport");
     allowed.expect("Fleet Subnet Root caller must satisfy issuer root guard");
     assert_eq!(
         metric_count_for_labels(pic, root, issuer, MetricsKind::Runtime, &success_labels),
@@ -367,20 +393,22 @@ fn query_metric_entries(
     canister: Principal,
     kind: MetricsKind,
 ) -> Vec<MetricEntry> {
-    let response: Result<ManagedStatusResponse, Error> = pic
-        .query_candid_as(
-            canister,
-            caller,
-            canic_contracts::protocol::CANIC_OBSERVABILITY,
-            (ManagedStatusRequest::Metrics(MetricsStatusRequest {
-                kind,
-                page: PageRequest {
-                    limit: 10_000,
-                    offset: 0,
-                },
-            }),),
-        )
-        .expect("controller-authenticated metrics query transport");
+    let response: Result<ManagedStatusResponse, Error> = ::ic_testkit::pic::query_candid_args(
+        pic,
+        canister,
+        caller,
+        canic_contracts::protocol::CANIC_OBSERVABILITY,
+        (ManagedStatusRequest::Metrics(MetricsStatusRequest {
+            kind,
+            page: PageRequest {
+                limit: 10_000,
+                offset: 0,
+            },
+        }),),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("controller-authenticated metrics query transport");
     let ManagedStatusResponse::Metrics(page) =
         response.expect("controller-authenticated metrics query");
     page.entries

@@ -19,9 +19,16 @@ pub(super) fn set_refusal(
     ledger: Principal,
     refusal: Option<CreationRetryRefusal>,
 ) {
-    let (): () = pic
-        .update_candid(ledger, "set_creation_retry_refusal", (refusal,))
-        .unwrap();
+    let (): () = ::ic_testkit::pic::update_candid_args(
+        pic,
+        ledger,
+        candid::Principal::anonymous(),
+        "set_creation_retry_refusal",
+        (refusal,),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap();
 }
 
 fn uncertain(fixture: &MainnetRefillFixture) -> CanisterPoolCreation {
@@ -92,10 +99,16 @@ pub(super) fn uncertain_creation_retains_custody_across_retry_refusals() {
         assert_eq!(retained.ledger_fee, original.ledger_fee);
         assert_eq!(retained.root, original.root);
         assert_eq!(retained.placement_subnet, original.placement_subnet);
-        let amounts: Vec<Nat> = fixture
-            .pic
-            .query_candid(fixture.cycles_ledger, "requested_amounts", ())
-            .unwrap();
+        let amounts: Vec<Nat> = ::ic_testkit::pic::query_candid_args(
+            &fixture.pic,
+            fixture.cycles_ledger,
+            candid::Principal::anonymous(),
+            "requested_amounts",
+            (),
+            ::canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)
+        .unwrap();
         assert_eq!(amounts, vec![Nat::from(original.ledger_amount.to_u128())]);
     }
     set_refusal(&fixture.pic, fixture.cycles_ledger, None);
@@ -105,9 +118,15 @@ pub(super) fn uncertain_creation_retains_custody_across_retry_refusals() {
             .pending_creation
             .is_none()
     );
-    let requests: u64 = fixture
-        .pic
-        .query_candid(fixture.cycles_ledger, "request_count", ())
-        .unwrap();
+    let requests: u64 = ::ic_testkit::pic::query_candid_args(
+        &fixture.pic,
+        fixture.cycles_ledger,
+        candid::Principal::anonymous(),
+        "request_count",
+        (),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap();
     assert_mainnet_refill_result(&fixture, 1, requests);
 }
