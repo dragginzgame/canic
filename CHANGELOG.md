@@ -42,6 +42,8 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
   hooks, field-based fixture inputs and bounded argument-sequence Candid calls.
   Qualification replies use explicit test-owned wire/work/type/header ceilings;
   bootstrap, topology checks, exact senders and pool-owned restoration remain intact.
+  Prepare fixed-field reset coverage for the pending Testkit 0.53 hard cut;
+  normal adoption of that contract awaits its publication.
 
 - **Release checks:** include the shared version validator in isolated release
   fixtures so preflight and failure-recovery checks can run after tooling updates.

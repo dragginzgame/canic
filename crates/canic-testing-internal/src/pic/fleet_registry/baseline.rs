@@ -356,12 +356,11 @@ mod tests {
     #[cfg(test)]
     use ic_testkit::pic::PocketIcSnapshotExt;
     use ic_testkit::pic::{
-        BaselinePoolContractError, BaselinePreparationStage, CachedPocketIcBaseline,
-        CachedPocketIcBaselinePool, CachedPocketIcBaselinePoolGuard, CandidCallError,
-        CanisterSnapshotTarget, ControllerSnapshotError, FailureDisposition,
-        PocketIcBaselineRecipe, PreparedBaseline, RebuildReason, ResetDomainPolicy, ResetReceipt,
-        ResetRequirements, SnapshotRestoreFunding, TimeResetPolicy,
-        is_dead_pocket_ic_transport_error,
+        BaselinePreparationStage, CachedPocketIcBaseline, CachedPocketIcBaselinePool,
+        CachedPocketIcBaselinePoolGuard, CandidCallError, CanisterSnapshotTarget,
+        ControllerSnapshotError, FailureDisposition, PocketIcBaselineRecipe, PreparedBaseline,
+        RebuildReason, ResetPolicies, ResetReceipt, ResetRequirements, SnapshotRestoreFunding,
+        TimeResetPolicy, is_dead_pocket_ic_transport_error,
     };
     #[cfg(test)]
     use ic_testkit::pocket_ic::{
@@ -1443,7 +1442,6 @@ mod tests {
             context: String,
             failures: Vec<RoleOverviewQueryFailure>,
         },
-        Contract(BaselinePoolContractError),
         Invariant(String),
         Snapshot(ControllerSnapshotError),
     }
@@ -1456,17 +1454,18 @@ mod tests {
     }
 
     impl ActiveComponentRegistryBaselineRecipe {
-        fn new() -> Result<Self, BaselinePoolContractError> {
-            Ok(Self {
-                reset_requirements: ResetRequirements::try_new(
-                    SnapshotRestoreFunding::TopUpTo {
+        fn new() -> Self {
+            Self {
+                reset_requirements: ResetRequirements {
+                    funding: SnapshotRestoreFunding::TopUpTo {
                         minimum_cycles: crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,
                     },
-                    [ResetDomainPolicy::PocketIcTime(
-                        TimeResetPolicy::PreserveCurrent,
-                    )],
-                )?,
-            })
+                    policies: ResetPolicies {
+                        pocket_ic_time: Some(TimeResetPolicy::PreserveCurrent),
+                        ..ResetPolicies::default()
+                    },
+                },
+            }
         }
     }
 
@@ -1543,10 +1542,12 @@ mod tests {
             baseline: &CachedPocketIcBaseline<Self::Metadata>,
         ) -> Result<ResetReceipt, Self::Error> {
             reset_unclaimed_pool_assets(baseline)?;
-            ResetReceipt::try_new([ResetDomainPolicy::PocketIcTime(
-                TimeResetPolicy::PreserveCurrent,
-            )])
-            .map_err(Into::into)
+            Ok(ResetReceipt {
+                policies: ResetPolicies {
+                    pocket_ic_time: Some(TimeResetPolicy::PreserveCurrent),
+                    ..ResetPolicies::default()
+                },
+            })
         }
 
         fn drive_to_readiness(
@@ -1591,12 +1592,6 @@ mod tests {
         }
     }
 
-    impl From<BaselinePoolContractError> for ActiveComponentRegistryBaselineError {
-        fn from(error: BaselinePoolContractError) -> Self {
-            Self::Contract(error)
-        }
-    }
-
     impl From<CandidCallError> for ActiveComponentRegistryBaselineError {
         fn from(error: CandidCallError) -> Self {
             Self::Call(error)
@@ -1624,7 +1619,6 @@ mod tests {
                     }
                     Ok(())
                 }
-                Self::Contract(error) => error.fmt(formatter),
                 Self::Invariant(message) => formatter.write_str(message),
                 Self::Snapshot(error) => error.fmt(formatter),
             }
@@ -1638,7 +1632,6 @@ mod tests {
                 Self::Calls { failures, .. } => failures
                     .first()
                     .map(|failure| &failure.error as &(dyn StdError + 'static)),
-                Self::Contract(error) => Some(error),
                 Self::Invariant(_) => None,
                 Self::Snapshot(error) => Some(error),
             }
@@ -16148,8 +16141,7 @@ cycles = "80T"
         POOL.get_or_init(|| {
             CachedPocketIcBaselinePool::new(
                 NonZeroUsize::new(1).expect("one is nonzero"),
-                ActiveComponentRegistryBaselineRecipe::new()
-                    .expect("valid active Component Registry baseline recipe"),
+                ActiveComponentRegistryBaselineRecipe::new(),
             )
         })
     }
