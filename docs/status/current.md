@@ -1,5 +1,186 @@
 # Current handoff — 2026-10-14
 
+## PR #599 CI admission repairs — 2026-10-18
+
+Hosted source `039173ed18e57cb070ceb70c9d54c2404ba2210b` passes preflight,
+security, checks and MSRV, but ordinary tests expose a missing shared validator
+in release-flow sandboxes. The PocketIC job refuses the stale embedded allocation
+peer before starting its suites; macOS arm64 setup rejects Binaryen's valid bundle
+because its resolved executable has a different parent from the ic-wasm entry.
+Those failures retain their identities in
+[the hosted run](https://github.com/dragginzgame/canic/actions/runs/39137659353).
+
+The sandbox now copies the canonical validator. Tool installation compares its
+public publication paths while retaining checksum/version/library admission and
+resolved executable handles. The canonical embedded-peer generator updates the
+Wasm and structured evidence together; its read-only verifier passes. Four
+embedded-root units and the explicit real-Wasm path/version reproduction pass,
+including corrupt-input refusal and unchanged live manifest/lock assertions.
+All 17 release-flow tests, eight installer tests (including relative-library
+execution and rejected-candidate retention) and the existing build-toolchain
+warning test pass. Strict selected Host library/tests and release-target Clippy
+pass. Logs are `/tmp/canic-pr599-{embedded-*,release-*,install-*,build-toolchain-*,ci-host-clippy}.log`.
+
+These are focused Linux receipts. Fresh hosted native macOS, complete ordinary
+and PocketIC acceptance remain separate; the failed preflight is not an executed
+PocketIC result. Package versions, manifests and selected dependencies remain
+unchanged. The normal dirty integration checkout remains untouched.
+
+## Scalar diagnostic quality — 2026-10-18
+
+The isolated PR #599 now uses published Metrics 0.11.7 `MeasurementCounter` for
+Canic-owned runtime diagnostic scalar accumulation, removing the 19 copied
+saturating-add sites. Keys, attribution, labels and reset/lifecycle owners remain.
+Protected `Count` and `U128` payloads carry wide values and explicit exactness;
+public process/operation rows preserve actual source and merge overflow into
+existing history admission. Forwarded untracked timer/refill counts remain
+conservative at their cap. CLI preserves lower bounds and wide JSON values,
+never invents scalar means, and retains inexact zero under `--nonzero`.
+Authoritative balances, quotas, budgets, records and paid-effect policy are not
+metric arithmetic. Package versions, manifests and locked selections are unchanged.
+
+Focused qualification passes 101 tests: 42 runtime metric, 27 public projection/
+cache/history, 21 CLI, three facade, one sharding and seven directly affected
+access/call/lifecycle/funding cases. Strict native Core, CLI, test-support,
+affected ingress/timer targets and facade Clippy pass, as do selected Core
+sharding and Wasm lint. Test-support library/tests also pass strict lint with
+`governed-pocketic-tests`, covering the changed membership/attestation callers. Actual Rust 1.91 Core/CLI/test-support library checks and
+Core Wasm checking pass. The extra 1.91 all-target attempt fails at existing
+`std::assert_matches!` development tests; their authored compiler remains 1.99.
+That failed attempt is retained separately, not relabelled as floor acceptance.
+Logs are `/tmp/canic-scalar-*.log`; formatting, affected links and diff checks pass.
+
+Rust 1.91 layout inspection of selected Metrics 0.11.7 shows a 32-byte counter on
+native and Wasm, versus eight-byte event and sixteen-byte cycle totals. This is
+value storage only, excluding map padding/allocations. LLVM receipts are under
+`target/maintenance-scalar/`. No recording-instruction, IC-cycle or Wasm-size
+improvement is claimed; [#535](https://github.com/dragginzgame/canic/issues/535)
+retains owner review of the storage and recording-cost tradeoffs.
+
+A subsequent focused Linux run at code source `b3a0500` passes all ten
+`timer_authority` integration tests through `make test-pocketic-case`. The
+lock-selected Testkit CLI and checksum-admitted PocketIC 16.1.0 own the server;
+the governed builder produced the Canic/intent/runtime-probe Wasm fixtures.
+The cases qualify controller/public authorization, native timer lifecycle and
+same-source restoration, bounded source sampling, history retention/rollover and
+registration behavior. Raw evidence is `/tmp/canic-next-timer-authority.log` and
+`target/test-runs/20261018T143641Z-3977657.KqXedr/1.log`. The reported IC sampling/
+history instructions are callback measurements, not a scalar recording-cost
+comparison. Native macOS, full release/installed-Fleet and held-HTTP acceptance
+remain separate. The complete 0.112 integration retains its owning Auth/release
+blockers; this contribution does not declare that batch ready to release.
+
+The same fixture now returns `scalar_record_instructions` separately from total
+sampling cost. Its first explicit Wasm-store record measures 2,851 IC instructions;
+the warm record measures 1,482. Both include the public facade, HashMap work and
+measurement overhead. The selected case also confirms the two records publish
+an exact count of two. These are current-workload observations, not a comparison
+against the old recorder, arithmetic-only cost or an application budget. Counter
+value layout remains 32 bytes; whole-table heap allocation is not measured.
+
+All ten timer-authority cases pass again with that fixture change over `b3a0500`,
+using the governed Fast Wasm build and selected locked graph. Raw evidence is
+`/tmp/canic-next-recording-cost.log` and
+`target/test-runs/20261018T144528Z-4074544.QjGztV/1.log`. Strict native probe/all-target
+and selected timer-target Clippy pass; the probe's actual Rust 1.91 all-target
+check passes. The first caller lint attempt exceeded the existing function-size
+limit; its final assertion grouping clears the warning without suppression.
+The 0.112 notes describe the fixture field and client actions. No dependency or
+own-version change, production endpoint or fresh registry/recorder abstraction
+is introduced.
+
+The latest failed hosted source `fbcbda4` also exposed one more stale structured
+Testkit rejection assertion and the same physical temporary-path assumption in
+IC Wasm fixtures on both macOS architectures. Those callers are corrected;
+test-support strict lint and six IC Wasm cases through a symlinked temporary
+parent pass locally. Historical failed CI attempts keep their own identities.
+The normal dirty integration checkout remains untouched.
+
+## Native CI fixture qualification — 2026-10-18
+
+PR #599's Linux checks and macOS arm64 job exposed two pre-existing fixture
+mismatches in its public-main base. The ingress test now matches the selected
+Testkit 0.49 structured rejection variant. Optimizer fixtures resolve their
+temporary parent before comparing SDK-owned physical executable paths.
+Both selected Clippy gates pass; all seven Binaryen tests pass through an
+explicitly symlinked temporary parent on Linux. The ingress target links without
+starting PocketIC. Receipts are `/tmp/canic-consolidation-*.log`; native macOS,
+full CI and installed-runtime acceptance remain separate. Product code, graphs
+and own versions are unchanged by this qualification repair. The normal dirty
+integration checkout remains untouched.
+
+## Runtime probe and facade caller repairs — 2026-10-18
+
+The earlier PR #599 hosted MSRV job exposed a missed `PerfEntry` caller in
+`runtime_probe::perf_context`. The probe now reads the full aggregate and excludes
+overflowed or unrepresentable totals from its existing `u64` test report. Zero
+and exact-cap observations remain admitted; the report's Candid shape is unchanged.
+The focused native regression, strict all-target package Clippy and actual Rust
+1.91 all-target package check pass, with locked dependencies and no artifact-guard
+bypass. Formatting, affected local links and diff checks pass. Receipts are under
+`/tmp/canic-pr599-probe-*.log`. The failed hosted source keeps its original result;
+new hosted and governed runtime acceptance remain separate. A later hosted
+all-target Clippy job exposed stale facade macro test assertions. They now assert
+aggregate count/total and exact source quality. Facade all-target strict Clippy,
+the named public-macro regression and actual Rust 1.91 all-target checking pass;
+receipts are under `/tmp/canic-pr599-facade-*.log`. No maintained Rust access to
+the retired `total_instructions` field remains. Both repairs stay in the existing
+0.112 draft without a version or dependency change.
+
+## Public operation projection — 2026-10-18
+
+The existing metrics contribution now reads public operations from typed owners,
+with units and history kinds assigned before publication. It removes the generic
+protected-row translation and name-based interpretation. Four fixed global
+funding groups bypass child-principal cardinality; child funding and refill-target
+amounts remain protected. Refill status identities normalize trigger kind/phase
+before indexing and limits, preserving counts across replacement and index rebuild.
+The internal metric-count view changes, but durable refill records, financial
+policy/recovery and public Candid shapes do not. These changes extend the existing
+0.112 draft; own versions and dependency selections remain unchanged.
+
+Focused qualification passes 43 selected Core units across public operations,
+refill storage/indexing, protected metric projections, process counters and public
+cache/history. Strict native Core library/test and Wasm library Clippy and actual
+Core Rust 1.91 native/Wasm checks pass. Receipts and retained failed attempts are
+under `/tmp/metrics-canic-projection.bQp3J0/operations-*.log`. Governed canister
+artifact, installed-runtime, full CI and native macOS qualification remain separate.
+
+## Typed metric projection — 2026-10-18
+
+The existing 0.112 draft now covers both public and protected reports. One
+`PerfEntry` retains its full Metrics aggregate; protected DTOs carry the wide
+total and independent count/total overflow flags. Public sampling consumes the
+same source state and timer registration without passing through diagnostic DTOs.
+Timer starts and latest armed delay have separate scalar rows, preserving absent
+versus measured-zero delay. CLI means apply only to measurement cohorts and
+preserve nearest-half-up rounding through shared ratio arithmetic. Public and
+protected authorization, reset/registration identity and exclusive/async recording
+are unchanged. The direct `PerfEntry` shape and protected Candid/JSON contract
+require the coordinated client update documented in the 0.112 changelog.
+
+The isolated contribution starts at public main
+`53f1f22d2e23a16c5566b8590f3b0a2a643b6d84`, retaining locked Metrics 0.11.7 and
+Timers 0.25.2. CLI adds an edge to that already selected Metrics package; no
+external version or own package version is advanced. The normal dirty Canic
+checkout is untouched. Focused qualification passes 59 selected tests across
+metric projections, public performance projection, CLI rendering/codecs, exclusive
+attribution and Host timer comparison. Strict Core native library/test and Wasm
+library Clippy, CLI all-target Clippy, affected testing callers, and actual Rust
+1.91 Core native/Wasm and CLI library checks pass. Two stale Testkit field-accessor
+calls in the affected test support were corrected without changing dependencies.
+Formatting, local links and whitespace checks pass. Receipts remain under
+`/tmp/metrics-canic-projection.bQp3J0/`.
+
+The direct minimal-metrics canister check reached the required `canic build`
+artifact guard; that guard was preserved. Governed artifact/Candid-export and
+installed-runtime qualification are not claimed. Complete release, hosted/native
+macOS, held-HTTP runtime and live IC/cost qualification remain separate. Unchanged
+Contracts' Wasm enum-size warning stays with
+[#598](https://github.com/dragginzgame/canic/issues/598); Core's selected Wasm lint
+checks this package with `--no-deps`.
+
+
 **Canic 0.111.0 is live; the integration batch remains uncommitted.** The maintainer
 explicitly waived the 0.111 closeout audit for completing Auth, Backup and Blob
 integration, then a cleanup slice to reduce Canic's surface. That decision is

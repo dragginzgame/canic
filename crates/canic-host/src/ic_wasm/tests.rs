@@ -157,10 +157,13 @@ fn temp_root(label: &str) -> PathBuf {
         .duration_since(SystemTime::UNIX_EPOCH)
         .expect("system time after epoch")
         .as_nanos();
-    std::env::temp_dir().join(format!(
-        "canic-ic-wasm-{label}-{}-{nanos}",
-        std::process::id()
-    ))
+    std::env::temp_dir()
+        .canonicalize()
+        .expect("resolve temporary directory")
+        .join(format!(
+            "canic-ic-wasm-{label}-{}-{nanos}",
+            std::process::id()
+        ))
 }
 
 #[cfg(unix)]

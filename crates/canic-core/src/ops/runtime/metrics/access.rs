@@ -5,10 +5,11 @@
 //! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
 use canic_contracts::ids::AccessMetricKind;
+use ic_metrics::MeasurementCounter;
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
-    static ACCESS_METRICS: RefCell<HashMap<AccessMetricKey, u64>> = RefCell::new(HashMap::new());
+    static ACCESS_METRICS: RefCell<HashMap<AccessMetricKey, MeasurementCounter>> = RefCell::new(HashMap::new());
 }
 
 ///
@@ -19,7 +20,7 @@ thread_local! {
 
 #[derive(Clone)]
 pub struct AccessMetricsSnapshot {
-    pub entries: Vec<(AccessMetricKey, u64)>,
+    pub entries: Vec<(AccessMetricKey, MeasurementCounter)>,
 }
 
 ///
@@ -54,8 +55,8 @@ impl AccessMetrics {
                 predicate: predicate.to_string(),
             };
 
-            let entry = counts.entry(key).or_insert(0);
-            *entry = entry.saturating_add(1);
+            let entry = counts.entry(key).or_default();
+            entry.add(1);
         });
     }
 
@@ -83,11 +84,16 @@ impl AccessMetrics {
 mod tests {
     use super::*;
 
-    fn snapshot_map() -> HashMap<(String, AccessMetricKind, String), u64> {
+    fn snapshot_map() -> HashMap<(String, AccessMetricKind, String), u128> {
         AccessMetrics::snapshot()
             .entries
             .into_iter()
-            .map(|(key, count)| ((key.endpoint, key.kind, key.predicate), count))
+            .map(|(key, count)| {
+                (
+                    (key.endpoint, key.kind, key.predicate),
+                    count.exact_total().unwrap(),
+                )
+            })
             .collect()
     }
 

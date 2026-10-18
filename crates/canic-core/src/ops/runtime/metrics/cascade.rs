@@ -5,10 +5,11 @@
 //! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
 use crate::{InternalError, ops::runtime::metrics::error::MetricErrorKind};
+use ic_metrics::MeasurementCounter;
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
-    static CASCADE_METRICS: RefCell<HashMap<CascadeMetricKey, u64>> =
+    static CASCADE_METRICS: RefCell<HashMap<CascadeMetricKey, MeasurementCounter>> =
         RefCell::new(HashMap::new());
 }
 
@@ -180,14 +181,14 @@ impl CascadeMetrics {
                 outcome,
                 reason,
             };
-            let entry = counts.entry(key).or_insert(0);
-            *entry = entry.saturating_add(1);
+            let entry = counts.entry(key).or_default();
+            entry.add(1);
         });
     }
 
     /// Snapshot the current cascade metric table as stable rows.
     #[must_use]
-    pub fn snapshot() -> Vec<(CascadeMetricKey, u64)> {
+    pub fn snapshot() -> Vec<(CascadeMetricKey, MeasurementCounter)> {
         CASCADE_METRICS
             .with_borrow(std::clone::Clone::clone)
             .into_iter()
@@ -210,8 +211,11 @@ mod tests {
     use super::*;
 
     // Convert snapshots into a map for concise count assertions.
-    fn snapshot_map() -> HashMap<CascadeMetricKey, u64> {
-        CascadeMetrics::snapshot().into_iter().collect()
+    fn snapshot_map() -> HashMap<CascadeMetricKey, u128> {
+        CascadeMetrics::snapshot()
+            .into_iter()
+            .map(|(key, count)| (key, count.exact_total().unwrap()))
+            .collect()
     }
 
     // Verify cascade metrics accumulate by operation, snapshot, outcome, and reason.

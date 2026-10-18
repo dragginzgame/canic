@@ -260,8 +260,15 @@ and become stale normally; successful families still refresh. Optional sampling
 errors do not change cycle-tracking or funding decisions.
 
 Collection bounds apply before formatting and sorting. Operations read at most
-257 entries from each of four counter owners and each of the three ICP-refill
-aggregate indexes. Each target entry yields at most two refill rows. Performance
+257 entries from lifecycle, canister-operation and top-up owners. Global funding
+uses four fixed enum groups with at most the fixed denial-reason set; ordered
+range lookup skips all child-principal groups before applying its row limit.
+Root reads bounded prefixes of the three ICP-refill indexes, but publishes only
+normalized status/error counts. Per-child funding and per-target refill amounts
+remain in protected Core diagnostics. Refill status grouping removes automatic
+sequences and folds error phases before bounded selection, preserving one emitted
+identity. Public operation units and counter/gauge interpretation come from
+these typed projections; display names do not recover either fact. Performance
 reads at most 129 recorded counters plus the upstream timer inventory, capped by
 ic-timers at 64 registrations with bounded identities. Each registration yields
 separate scheduler and work entries; the performance path builds no protected
@@ -419,8 +426,11 @@ new projections.
 Each of the four enum-keyed owners admits at most 256 source rows for a sample.
 An oversized owner rejects the operations sample before allocation or scanning;
 previous cached data ages and other selected families continue. Aggregation uses
-fixed outcome labels and saturating counts. Counts use the existing heap counter
-window (`window_id = 0`); heap coverage and canister version delimit resets.
+fixed outcome labels and IC Metrics wide counters. Both source and grouped
+actual-overflow flags reach public history; an exact numeric cap remains exact.
+Diagnostic funding totals use the same arithmetic with cycle units. Counts use
+the existing heap counter window (`window_id = 0`); heap coverage and canister
+version delimit resets.
 The common 256-row snapshot and global history budgets still apply.
 
 `operations` also includes `timer.state.{disabled,idle,active,retrying,failed}`
@@ -437,6 +447,12 @@ Timer performance uses `perf.timer.<owner>.<subsystem>.<name>.scheduler` and
 `.work`, in instructions, with a `.calls` row for each phase's completed
 measurement samples. This is a hard cut of the previous work-only metric name.
 The protected performance projection uses the same explicit phase labels.
+The public sampler reads typed source measurements directly: instruction totals
+retain `u128`, and count/total saturation flags report actual overflow. Reaching
+an exact numeric cap alone does not mark an observation saturated. Registration
+is carried from the timer snapshot, never recovered from the formatted name.
+The protected diagnostic view also retains wide totals and source overflow flags
+in its explicit measurement payload; neither view narrows those totals to `u64`.
 `timer.events.scheduler_started` and `timer.events.work_started` independently
 count starts across the current registry; starts need not equal completed
 measurement samples. Scheduler and work measurements cover the timer owner's
@@ -449,7 +465,10 @@ count from the same inventory observation. Cancellation preserves that identity;
 unregister/re-register changes it. Public history retains raw samples without
 deriving timer rates. Aggregate timer event and state rows remain gauges.
 The host's offline comparison admits timer deltas only for an unchanged
-registration, advancing exact source times and unsaturated fields. A full registry can
+registration, advancing exact source times and unsaturated fields. Instruction
+totals retain the full `u128` range; sample counts remain `u64`. Host comparison
+uses the carried actual-overflow flag rather than treating an exact cap as loss.
+A full registry can
 exceed the existing public row budget; truncation remains explicit and missing
 rows are not zero.
 No extra sampler or polling schedule is introduced. The private

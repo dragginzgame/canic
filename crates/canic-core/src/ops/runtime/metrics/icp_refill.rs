@@ -7,8 +7,10 @@
 use crate::{
     cdk::types::Principal,
     dto::metrics::{MetricEntry, MetricValue},
-    ops::storage::icp_refill::{IcpRefillMetricSnapshot, IcpRefillRecordOps},
-    storage::stable::icp_refill::{IcpRefillRecordErrorCode, IcpRefillRecordStatus},
+    ops::storage::icp_refill::{
+        IcpRefillMetricSnapshot, IcpRefillRecordOps, metric_error_label, metric_error_phase,
+        metric_status_label,
+    },
 };
 
 ///
@@ -34,10 +36,10 @@ pub(super) fn entries_from_snapshot(snapshot: &IcpRefillMetricSnapshot) -> Vec<M
             count_entry(
                 vec![
                     "icp_refill".to_string(),
-                    trigger_label(status.trigger).to_string(),
-                    record_phase(status.status, status.error_code).to_string(),
+                    status.trigger_label.to_string(),
+                    status.phase.to_string(),
                     "status".to_string(),
-                    status_label(status.status).to_string(),
+                    metric_status_label(status.status).to_string(),
                 ],
                 status.count,
             )
@@ -47,9 +49,9 @@ pub(super) fn entries_from_snapshot(snapshot: &IcpRefillMetricSnapshot) -> Vec<M
         count_entry(
             vec![
                 "icp_refill".to_string(),
-                error_phase(error.error_code).to_string(),
+                metric_error_phase(error.error_code).to_string(),
                 "error".to_string(),
-                error_label(error.error_code).to_string(),
+                metric_error_label(error.error_code).to_string(),
             ],
             error.count,
         )
@@ -83,18 +85,14 @@ pub(super) fn entries_from_snapshot(snapshot: &IcpRefillMetricSnapshot) -> Vec<M
     entries
 }
 
-const fn trigger_label(trigger: crate::domain::icp_refill::IcpRefillTrigger) -> &'static str {
-    match trigger {
-        crate::domain::icp_refill::IcpRefillTrigger::Automatic { .. } => "automatic",
-        crate::domain::icp_refill::IcpRefillTrigger::Manual => "manual",
-    }
-}
-
 const fn count_entry(labels: Vec<String>, count: u64) -> MetricEntry {
     MetricEntry {
         labels,
         principal: None,
-        value: MetricValue::Count(count),
+        value: MetricValue::Count {
+            count: count as u128,
+            exact: count != u64::MAX,
+        },
     }
 }
 
@@ -106,72 +104,6 @@ const fn principal_u128_entry(
     MetricEntry {
         labels,
         principal: Some(principal),
-        value: MetricValue::U128(value),
-    }
-}
-
-const fn record_phase(
-    status: IcpRefillRecordStatus,
-    error_code: Option<IcpRefillRecordErrorCode>,
-) -> &'static str {
-    match status {
-        IcpRefillRecordStatus::Requested => "preflight",
-        IcpRefillRecordStatus::Transferred
-        | IcpRefillRecordStatus::NotifyProcessing
-        | IcpRefillRecordStatus::Completed
-        | IcpRefillRecordStatus::InvalidTransaction
-        | IcpRefillRecordStatus::Refunded
-        | IcpRefillRecordStatus::TransactionTooOld => "notify",
-        IcpRefillRecordStatus::Failed => match error_code {
-            Some(error_code) => error_phase(error_code),
-            None => "transfer",
-        },
-    }
-}
-
-const fn error_phase(error: IcpRefillRecordErrorCode) -> &'static str {
-    match error {
-        IcpRefillRecordErrorCode::BadFee
-        | IcpRefillRecordErrorCode::Duplicate
-        | IcpRefillRecordErrorCode::InvalidLedgerBlockIndex
-        | IcpRefillRecordErrorCode::LedgerTransferFailed
-        | IcpRefillRecordErrorCode::TransferWindowStale => "transfer",
-        IcpRefillRecordErrorCode::CyclesSentOverflow
-        | IcpRefillRecordErrorCode::InvalidTransaction
-        | IcpRefillRecordErrorCode::NotifyFailed
-        | IcpRefillRecordErrorCode::NotifyMaxAttempts
-        | IcpRefillRecordErrorCode::Processing
-        | IcpRefillRecordErrorCode::Refunded
-        | IcpRefillRecordErrorCode::TransactionTooOld => "notify",
-    }
-}
-
-const fn status_label(status: IcpRefillRecordStatus) -> &'static str {
-    match status {
-        IcpRefillRecordStatus::Completed => "completed",
-        IcpRefillRecordStatus::Failed => "failed",
-        IcpRefillRecordStatus::InvalidTransaction => "invalid_transaction",
-        IcpRefillRecordStatus::NotifyProcessing => "notify_processing",
-        IcpRefillRecordStatus::Refunded => "refunded",
-        IcpRefillRecordStatus::Requested => "requested",
-        IcpRefillRecordStatus::TransactionTooOld => "transaction_too_old",
-        IcpRefillRecordStatus::Transferred => "transferred",
-    }
-}
-
-const fn error_label(error: IcpRefillRecordErrorCode) -> &'static str {
-    match error {
-        IcpRefillRecordErrorCode::BadFee => "bad_fee",
-        IcpRefillRecordErrorCode::CyclesSentOverflow => "cycles_sent_overflow",
-        IcpRefillRecordErrorCode::Duplicate => "duplicate",
-        IcpRefillRecordErrorCode::InvalidLedgerBlockIndex => "invalid_ledger_block_index",
-        IcpRefillRecordErrorCode::InvalidTransaction => "invalid_transaction",
-        IcpRefillRecordErrorCode::LedgerTransferFailed => "ledger_transfer_failed",
-        IcpRefillRecordErrorCode::NotifyFailed => "notify_failed",
-        IcpRefillRecordErrorCode::NotifyMaxAttempts => "notify_max_attempts",
-        IcpRefillRecordErrorCode::Processing => "processing",
-        IcpRefillRecordErrorCode::Refunded => "refunded",
-        IcpRefillRecordErrorCode::TransactionTooOld => "transaction_too_old",
-        IcpRefillRecordErrorCode::TransferWindowStale => "transfer_window_stale",
+        value: MetricValue::U128 { value, exact: true },
     }
 }

@@ -4,11 +4,11 @@
   "target": "wasm32-unknown-unknown",
   "profile": "fast",
   "fixture_version": "0.0.0",
-  "source_input_digest": "2c84d50f5bf571f1017403653b7564d020e3c099d4cc3cefd161e6a51be01646",
-  "build_fingerprint": "1d1afa4cbded1a1570fdb357473c005c0763652a209e2a974d1a278a23323299",
-  "lock_sha256": "ed9cb3a18384897a293a6d60d3b5dd374fc9424db62f042c9dd030fb9c09a155",
-  "producer_lock_sha256": "ab101a30f157fb1cf75c0e6ad101b3bb3a7637bc0f0dddd00a502ac5322700f8",
-  "artifact_sha256": "156323af73a3039a12122ccd37917d38b39b01ac5739bac2072f69312cbde4ac",
+  "source_input_digest": "556ea31e7fe2eb9fb172251b5243ca5b9864180bbc86810c383a01dd9e07d1b7",
+  "build_fingerprint": "68b24154522b0beb341dfd00f6464c126b605858ab8aaddf9b7981b3717adf1c",
+  "lock_sha256": "45e9d6c08b1187a65538f5461819f53e0385fa50260455e4d90df1566fa2303c",
+  "producer_lock_sha256": "20fab20ac6bb500b05634fdbf0a5487990956b67b502e64a4e25f1a3719c108d",
+  "artifact_sha256": "2f8b80825ad2acd9d135483290eee179457642c898da900586867e8d0e3cc3b0",
   "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)\nrelease: 1.99.0\ncommit-hash: 5f94df4789f005f9a352888e8355ffc645b7ed0e\ncommit-date: 2026-08-27\nhost: x86_64-unknown-linux-gnu\nlibgit2: 1.9.6 (sys:0.21.0 vendored)\nlibcurl: 8.21.0-DEV (sys:0.4.90+curl-8.21.0 vendored ssl:OpenSSL/3.6.3)\nssl: OpenSSL 3.6.3 9 Jun 2026\nos: Linux Mint 22.3.0 (zena) [64-bit]\n",
   "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.0\nLLVM version: 23.1.1\n"
 }

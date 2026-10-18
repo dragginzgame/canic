@@ -5,10 +5,11 @@
 //! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
 use crate::cdk::types::Principal;
+use ic_metrics::MeasurementCounter;
 use std::{cell::RefCell, collections::BTreeMap};
 
 thread_local! {
-    static CYCLES_FUNDING_METRICS: RefCell<BTreeMap<CyclesFundingMetricStorageKey, u128>> =
+    static CYCLES_FUNDING_METRICS: RefCell<BTreeMap<CyclesFundingMetricStorageKey, MeasurementCounter>> =
         const { RefCell::new(BTreeMap::new()) };
 }
 
@@ -116,8 +117,8 @@ impl CyclesFundingMetrics {
                 child_principal,
                 reason,
             };
-            let entry = counts.entry(key).or_insert(0);
-            *entry = entry.saturating_add(cycles);
+            let entry = counts.entry(key).or_default();
+            entry.add(cycles);
         });
     }
 
@@ -196,7 +197,7 @@ impl CyclesFundingMetrics {
         CyclesFundingMetricKey,
         Option<Principal>,
         Option<CyclesFundingDeniedReason>,
-        u128,
+        MeasurementCounter,
     )> {
         CYCLES_FUNDING_METRICS.with_borrow(|counts| {
             counts
@@ -204,6 +205,40 @@ impl CyclesFundingMetrics {
                 .take(limit)
                 .map(|(key, cycles)| (key.metric, key.child_principal, key.reason, *cycles))
                 .collect()
+        })
+    }
+
+    /// Read fixed global metric groups without walking child-principal rows.
+    pub(crate) fn bounded_aggregate_snapshot(
+        limit: usize,
+    ) -> Vec<(
+        CyclesFundingMetricKey,
+        Option<CyclesFundingDeniedReason>,
+        MeasurementCounter,
+    )> {
+        CYCLES_FUNDING_METRICS.with_borrow(|counts| {
+            [
+                CyclesFundingMetricKey::DeniedGlobalKillSwitch,
+                CyclesFundingMetricKey::DeniedTotal,
+                CyclesFundingMetricKey::GrantedTotal,
+                CyclesFundingMetricKey::RequestedTotal,
+            ]
+            .into_iter()
+            .flat_map(|metric| {
+                let start = CyclesFundingMetricStorageKey {
+                    metric,
+                    child_principal: None,
+                    reason: None,
+                };
+                counts
+                    .range(start..)
+                    .take_while(move |(key, _)| {
+                        key.metric == metric && key.child_principal.is_none()
+                    })
+                    .map(|(key, amount)| (key.metric, key.reason, *amount))
+            })
+            .take(limit)
+            .collect()
         })
     }
 
@@ -237,7 +272,10 @@ mod tests {
         CyclesFundingMetrics::bounded_snapshot(usize::MAX)
             .into_iter()
             .map(|(metric, child_principal, reason, cycles)| {
-                ((metric, child_principal, reason), cycles)
+                (
+                    (metric, child_principal, reason),
+                    cycles.exact_total().unwrap(),
+                )
             })
             .collect()
     }

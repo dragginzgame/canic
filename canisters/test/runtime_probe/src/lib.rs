@@ -345,6 +345,7 @@ async fn sample_public_metrics() -> Result<(), canic::Error> {
 #[derive(candid::CandidType)]
 struct PublicSamplingProbe {
     sample_instructions: u64,
+    scalar_record_instructions: u64,
     sample: Result<(), canic::Error>,
     cycle_tracking: Result<(), canic::Error>,
     allocation_unchanged: bool,
@@ -367,7 +368,7 @@ async fn qualify_public_metrics_sampling(
     if reject_family {
         canic::__internal::core::perf::record_checkpoint(&"a".repeat(128), "accepted_label", 7);
     }
-    process_fixture::record();
+    let scalar_record_instructions = process_fixture::record();
     let before = canic::__internal::core::api::memory::MemoryQuery::allocations()?;
     let start = ic_cdk::api::performance_counter(0);
     let sample = canic::api::public_status::PublicStatusApi::sample_metrics();
@@ -380,6 +381,7 @@ async fn qualify_public_metrics_sampling(
         canic::__internal::core::api::runtime::root_funding::RootFundingTimerApi::reconcile();
     Ok(PublicSamplingProbe {
         sample_instructions,
+        scalar_record_instructions,
         sample,
         cycle_tracking,
         allocation_unchanged,

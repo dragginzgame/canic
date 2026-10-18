@@ -8,9 +8,39 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- **CI tool and fixture admission:** admit macOS Binaryen's verified bundle
+  layout, refresh the embedded allocation peer through its canonical producer,
+  and include the shared input validator in release-flow sandboxes.
+
+- **Public performance metrics:** project typed source measurements directly,
+  retaining wide totals, actual overflow quality and timer registration without
+  reconstructing identity from display labels.
+
+- **Refill status metrics:** aggregate published identities before bounded
+  selection, so automatic sequences and equivalent failure phases produce one
+  count instead of duplicate public rows
+  ([#97 — Aggregate refill metric identities before selection](https://github.com/dragginzgame/canic/issues/97)).
+
 Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
 ### ⚠️ Breaking
+
+- **Scalar metric quality:** use shared wide counters for Canic-owned diagnostic
+  accumulators. Protected scalars now carry `u128` values and an explicit `exact`
+  flag; update Candid/JSON clients. Public process/operation counters preserve
+  actual overflow, while forwarded untracked readings remain conservative
+  ([#535 — Shared scalar diagnostic counters](https://github.com/dragginzgame/canic/issues/535)).
+
+- **Public operation metrics:** publish only anonymous aggregate counters.
+  Per-child funding and per-target refill amounts remain in protected Core
+  diagnostics; clients needing those rows must use the protected endpoint
+  ([#104 — Keep principal-scoped funding out of public operations](https://github.com/dragginzgame/canic/issues/104)).
+
+- **Protected metric payloads:** replace generic numeric pairs with explicit
+  wide measurements and source overflow flags. Timer starts and latest delays
+  become separate scalar rows; update Candid/JSON clients and `PerfEntry` callers.
+  Public and protected authorization remain separate
+  ([#600 — Separate timer delay from measurement averages](https://github.com/dragginzgame/canic/issues/600)).
 
 - **Memory runtime:** adopt Memory 0.44 with one Canic-owned runtime and injected
   component handles. Allocation reports derive byte totals from measured pages
@@ -37,6 +67,13 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
   across releases. Same-release interruption recovery remains supported.
 
 ### 🔧 Changed
+
+- **Metric cost evidence:** report first-use and warm scalar-recording instructions
+  separately from complete public-sampling work
+  ([#535 — Shared scalar diagnostic counters](https://github.com/dragginzgame/canic/issues/535)).
+
+- **Native qualification:** use physical temporary paths for optimizer admission
+  and the selected Testkit release's structured canister-rejection contract.
 
 - **Release checks:** include the shared version validator in isolated release
   fixtures so preflight and failure-recovery checks can run after tooling updates.

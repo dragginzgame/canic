@@ -8,6 +8,7 @@ mod attestation;
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
 mod sessions;
 
+use ic_metrics::MeasurementCounter;
 use std::{cell::RefCell, collections::HashMap};
 
 pub use attestation::{record_attestation_epoch_rejected, record_attestation_verify_failed};
@@ -17,7 +18,7 @@ pub use sessions::{
 };
 
 thread_local! {
-    static AUTH_METRICS: RefCell<HashMap<AuthMetricKey, u64>> = RefCell::new(HashMap::new());
+    static AUTH_METRICS: RefCell<HashMap<AuthMetricKey, MeasurementCounter>> = RefCell::new(HashMap::new());
 }
 
 ///
@@ -168,14 +169,14 @@ impl AuthMetrics {
                 outcome,
                 reason,
             };
-            let entry = counts.entry(key).or_insert(0);
-            *entry = entry.saturating_add(1);
+            let entry = counts.entry(key).or_default();
+            entry.add(1);
         });
     }
 
     /// Snapshot the current auth metric table as stable rows.
     #[must_use]
-    pub fn snapshot() -> Vec<(AuthMetricKey, u64)> {
+    pub fn snapshot() -> Vec<(AuthMetricKey, MeasurementCounter)> {
         AUTH_METRICS
             .with_borrow(std::clone::Clone::clone)
             .into_iter()
@@ -198,7 +199,7 @@ mod tests {
         operation: AuthMetricOperation,
         outcome: AuthMetricOutcome,
         reason: AuthMetricReason,
-    ) -> u64 {
+    ) -> u128 {
         AuthMetrics::snapshot()
             .into_iter()
             .find_map(|(key, count)| {
@@ -207,7 +208,7 @@ mod tests {
                     && key.outcome == outcome
                     && key.reason == reason
                 {
-                    Some(count)
+                    Some(count.exact_total().unwrap())
                 } else {
                     None
                 }
@@ -220,12 +221,42 @@ mod tests {
         operation: AuthMetricOperation,
         outcome: AuthMetricOutcome,
         reason: AuthMetricReason,
-        expected: u64,
+        expected: u128,
     ) {
         assert_eq!(
             auth_metric_count(surface, operation, outcome, reason),
             expected
         );
+    }
+
+    #[test]
+    fn recorder_preserves_exact_cap_and_sticky_overflow_until_reset() {
+        AuthMetrics::reset();
+        let key = AuthMetricKey {
+            surface: AuthMetricSurface::Attestation,
+            operation: AuthMetricOperation::Verify,
+            outcome: AuthMetricOutcome::Failed,
+            reason: AuthMetricReason::VerifyFailed,
+        };
+        AUTH_METRICS.with_borrow_mut(|counts| {
+            counts.insert(
+                key,
+                MeasurementCounter::from_parts(u128::MAX - 1, false).unwrap(),
+            );
+        });
+        record_attestation_verify_failed();
+        let exact = AuthMetrics::snapshot()[0].1;
+        assert_eq!(exact.exact_total(), Ok(u128::MAX));
+        record_attestation_verify_failed();
+        let clipped = AuthMetrics::snapshot()[0].1;
+        assert_eq!(clipped.total(), u128::MAX);
+        assert!(clipped.total_overflowed());
+        record_attestation_verify_failed();
+        assert!(AuthMetrics::snapshot()[0].1.total_overflowed());
+        AuthMetrics::reset();
+        assert!(AuthMetrics::snapshot().is_empty());
+        record_attestation_verify_failed();
+        assert_eq!(AuthMetrics::snapshot()[0].1.exact_total(), Ok(1));
     }
 
     #[test]

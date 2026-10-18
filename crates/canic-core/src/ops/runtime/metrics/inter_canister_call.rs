@@ -5,13 +5,14 @@
 //! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
 use crate::ops::{prelude::*, runtime::metrics::system::SystemMetrics};
+use ic_metrics::MeasurementCounter;
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
     /// Thread-local storage for inter-canister call counters.
     ///
     /// Keyed by `(target, method)` and holding the number of calls observed.
-    static INTER_CANISTER_CALL_METRICS: RefCell<HashMap<InterCanisterCallMetricKey, u64>> =
+    static INTER_CANISTER_CALL_METRICS: RefCell<HashMap<InterCanisterCallMetricKey, MeasurementCounter>> =
         RefCell::new(HashMap::new());
 }
 
@@ -23,7 +24,7 @@ thread_local! {
 
 #[derive(Clone)]
 pub struct InterCanisterCallMetricsSnapshot {
-    pub entries: Vec<(InterCanisterCallMetricKey, u64)>,
+    pub entries: Vec<(InterCanisterCallMetricKey, MeasurementCounter)>,
 }
 
 ///
@@ -56,8 +57,8 @@ impl InterCanisterCallMetrics {
                 method: method.to_string(),
             };
 
-            let entry = counts.entry(key).or_insert(0);
-            *entry = entry.saturating_add(1);
+            let entry = counts.entry(key).or_default();
+            entry.add(1);
         });
     }
 
@@ -99,10 +100,11 @@ mod tests {
     use super::*;
     use crate::ops::runtime::metrics::system::SystemMetrics;
 
-    fn snapshot_map() -> HashMap<InterCanisterCallMetricKey, u64> {
+    fn snapshot_map() -> HashMap<InterCanisterCallMetricKey, u128> {
         InterCanisterCallMetrics::snapshot()
             .entries
             .into_iter()
+            .map(|(key, count)| (key, count.exact_total().unwrap()))
             .collect()
     }
 
@@ -165,6 +167,6 @@ mod tests {
             Some(&2)
         );
 
-        assert_eq!(SystemMetrics::count(), 2);
+        assert_eq!(SystemMetrics::count().exact_total(), Ok(2));
     }
 }
