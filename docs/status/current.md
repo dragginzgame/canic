@@ -1,5 +1,18 @@
 # Current handoff — 2026-10-14
 
+## Runtime probe caller repair — 2026-10-18
+
+The earlier PR #599 hosted MSRV job exposed a missed `PerfEntry` caller in
+`runtime_probe::perf_context`. The probe now reads the full aggregate and excludes
+overflowed or unrepresentable totals from its existing `u64` test report. Zero
+and exact-cap observations remain admitted; the report's Candid shape is unchanged.
+The focused native regression, strict all-target package Clippy and actual Rust
+1.91 all-target package check pass, with locked dependencies and no artifact-guard
+bypass. Formatting, affected local links and diff checks pass. Receipts are under
+`/tmp/canic-pr599-probe-*.log`. The failed hosted source keeps its original result;
+new hosted and governed runtime acceptance remain separate. This completes the
+caller propagation inside the existing 0.112 draft without a version change.
+
 ## Public operation projection — 2026-10-18
 
 The existing metrics contribution now reads public operations from typed owners,
