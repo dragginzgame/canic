@@ -1,6 +1,6 @@
 //! Module: blob_service::ops
 //!
-//! Responsibility: own service borrowing and observe platform-version continuity.
+//! Responsibility: borrow the host installation and supply platform observations.
 //! Does not own: tenant policy, provider workflows or framework lifecycle.
 //! Boundary: one service installation borrows grants from Canic’s committed runtime.
 
@@ -18,7 +18,7 @@ use ic_blob_storage_contracts::{
     configuration::ServiceInstallationCandidate, dto::configuration::ServiceInstallationInput,
 };
 
-/// Application owner of the shared service and its observed platform version.
+/// Application owner of the shared service installation.
 pub struct Host {
     installation: ServiceInstallation<Memory>,
 }

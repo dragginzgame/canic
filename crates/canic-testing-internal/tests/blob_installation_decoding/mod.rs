@@ -3,21 +3,22 @@
 
 use candid::{CandidType, Principal};
 use canic::endpoint::ArgumentDecodeError;
+use canic_blob_service::__private::ic_blob_storage_contracts::wire;
 use canic_blob_service::{
     dto::configuration::{
         ServiceBillingInput, ServiceConfigurationInput, ServiceFundingInput,
         ServiceInstallationInput, ServiceReadInput, ServiceResourceInput,
     },
-    lifecycle::{CONFIGURATION_LIMITS, REQUEST_LIMITS},
+    lifecycle::CONFIGURATION_LIMITS,
 };
 
 #[derive(CandidType, Debug, serde::Deserialize, PartialEq)]
 struct EmbeddedInput {
     initial_count: u64,
-    blob: ServiceInstallationInput,
+    blob: Vec<u8>,
 }
 
-#[derive(CandidType)]
+#[derive(serde::Serialize)]
 struct UnmodeledInstallationInput {
     configuration: ServiceConfigurationInput,
     project: String,
@@ -28,7 +29,8 @@ struct UnmodeledInstallationInput {
 #[derive(CandidType)]
 struct UnmodeledEmbeddedInput {
     initial_count: u64,
-    blob: UnmodeledInstallationInput,
+    blob: Vec<u8>,
+    unmodeled: Principal,
 }
 
 fn installation() -> ServiceInstallationInput {
@@ -93,53 +95,65 @@ fn unmodeled(input: &ServiceInstallationInput) -> UnmodeledInstallationInput {
 }
 
 #[test]
-fn dedicated_configuration_is_exact_while_ordinary_requests_keep_bounded_skipping() {
+fn dedicated_configuration_is_exact_and_bounded_cbor() {
     let input = installation();
-    let current = candid::encode_one(&input).unwrap();
+    let current = wire::encode(&input).unwrap();
     assert_eq!(
-        CONFIGURATION_LIMITS.decode::<(ServiceInstallationInput,)>(&current),
-        Ok((input.clone(),))
+        wire::decode::<ServiceInstallationInput>(&current, CONFIGURATION_LIMITS.max_bytes),
+        Ok(input.clone())
     );
-    let extra = candid::encode_args((&input, "small")).unwrap();
-    let field = candid::encode_one(unmodeled(&input)).unwrap();
-    for bytes in [field, extra.clone()] {
-        assert!(bytes.len() < CONFIGURATION_LIMITS.max_bytes);
-        assert_eq!(
-            CONFIGURATION_LIMITS.decode::<(ServiceInstallationInput,)>(&bytes),
-            Err(ArgumentDecodeError::InvalidCandid)
-        );
-    }
+    let field = wire::encode(unmodeled(&input)).unwrap();
     assert_eq!(
-        REQUEST_LIMITS.decode::<(ServiceInstallationInput,)>(&extra),
-        Ok((input,))
+        wire::decode::<ServiceInstallationInput>(&field, CONFIGURATION_LIMITS.max_bytes),
+        Err(wire::Error::Invalid)
+    );
+    let mut extra = current.clone();
+    extra.push(0xf6);
+    assert_eq!(
+        wire::decode::<ServiceInstallationInput>(&extra, CONFIGURATION_LIMITS.max_bytes),
+        Err(wire::Error::Trailing)
+    );
+    assert_eq!(
+        wire::decode::<ServiceInstallationInput>(&current, current.len() - 1),
+        Err(wire::Error::Limit)
     );
 }
 
 #[test]
-fn embedded_configuration_refuses_unknown_nested_fields_and_extra_arguments() {
+fn embedded_configuration_bounds_its_own_envelope_and_nested_blob_bytes() {
+    let blob = installation();
     let input = EmbeddedInput {
         initial_count: 41,
-        blob: installation(),
+        blob: wire::encode(&blob).unwrap(),
     };
     let current = candid::encode_one(&input).unwrap();
+    let (decoded,): (EmbeddedInput,) = CONFIGURATION_LIMITS.decode(&current).unwrap();
+    assert_eq!(decoded, input);
     assert_eq!(
-        CONFIGURATION_LIMITS
-            .decode::<(EmbeddedInput,)>(&current)
-            .unwrap()
-            .0,
-        input
+        wire::decode::<ServiceInstallationInput>(&decoded.blob, CONFIGURATION_LIMITS.max_bytes),
+        Ok(blob.clone())
     );
     let field = candid::encode_one(UnmodeledEmbeddedInput {
         initial_count: input.initial_count,
-        blob: unmodeled(&input.blob),
+        blob: input.blob.clone(),
+        unmodeled: Principal::anonymous(),
     })
     .unwrap();
     let extra = candid::encode_args((&input, "small")).unwrap();
     for bytes in [field, extra] {
-        assert!(bytes.len() < CONFIGURATION_LIMITS.max_bytes);
         assert_eq!(
             CONFIGURATION_LIMITS.decode::<(EmbeddedInput,)>(&bytes),
             Err(ArgumentDecodeError::InvalidCandid)
         );
     }
+    let nested = candid::encode_one(EmbeddedInput {
+        initial_count: 41,
+        blob: wire::encode(unmodeled(&blob)).unwrap(),
+    })
+    .unwrap();
+    let (decoded,): (EmbeddedInput,) = CONFIGURATION_LIMITS.decode(&nested).unwrap();
+    assert_eq!(
+        wire::decode::<ServiceInstallationInput>(&decoded.blob, CONFIGURATION_LIMITS.max_bytes),
+        Err(wire::Error::Invalid)
+    );
 }

@@ -11,6 +11,25 @@ remain **0.111.0**. The objective is to delete duplicate mechanisms in favor of
 upstream owners; moving declarations alone does not demonstrate faster builds.
 
 
+## Blob dispatcher contribution — 2026-10-18
+
+The isolated Blob contribution binds managed endpoints to the published Blob
+0.33 `ServiceWorkflow` and canonical per-method codecs. It deletes the second
+workflow/provider-access/checkpoint owner and preserves Canic's endpoint admission,
+async measurement, lifecycle, memory runtime and metrics ownership. The dedicated
+and embedded consumer catalogs/locks now resolve Blob 0.33.0, Memory 0.48.2 and
+Storage 0.5.3. Their installation refusal fixtures use exact nested CBOR.
+
+All 48 actual macro cases, strict macro lint, published native/Wasm endpoint
+expansion (including Rust 1.91 Wasm), and two isolated installation byte-contract
+cases pass. Full adapter checking now gets
+past registry resolution and stops at 15 Canic Core Memory caller errors; complete
+the existing Memory adoption before running the actual dedicated and embedded
+managed journeys. Framework substitutes in the isolated checks provide shape and
+byte-contract evidence only, never installed composition acceptance. The normal
+Canic working checkout was not edited; package versions and releases are unchanged.
+
+
 ## IcyDB native host adapter — 2026-10-17
 
 The dedicated [#590 contribution](https://github.com/dragginzgame/canic/pull/591)

@@ -98,7 +98,7 @@ pub(super) fn expand_entry(
     expand::expand(kind, validated, func).into()
 }
 
-/// Protocol-neutral synchronous entrypoint; the consumer owns bounded IO/replies.
+/// Protocol-neutral entrypoint; the consumer owns bounded IO/replies.
 #[expect(
     clippy::redundant_pub_crate,
     reason = "the parent proc-macro entrypoints consume this private-module function"

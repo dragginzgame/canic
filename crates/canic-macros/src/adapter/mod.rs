@@ -249,7 +249,7 @@ pub(crate) fn raw_declaration(
     })
 }
 
-/// Validate the synchronous zero-argument body owned by a raw adapter.
+/// Validate a zero-argument unit handler; only managed updates may be async.
 #[expect(
     clippy::redundant_pub_crate,
     reason = "shared by native and framework adapters"
