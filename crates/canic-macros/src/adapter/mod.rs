@@ -72,12 +72,6 @@ impl RawAdapter<'_> {
         let name = &self.signature.ident;
         let adapter_name = format_ident!("__canic_raw_{}", name);
         let lifecycle = matches!(self.kind, EntryKind::Init | EntryKind::PostUpgrade);
-        let export = if lifecycle {
-            self.kind.export().to_string()
-        } else {
-            format!("{} {}", self.kind.export(), self.method)
-        };
-        let host_export = export.replace(' ', ".").replace(['-', '<', '>'], "_");
         let mut names = Vec::new();
         let mut types = Vec::new();
         for input in &self.signature.inputs {
@@ -122,20 +116,13 @@ impl RawAdapter<'_> {
         } else {
             execute
         };
-        let executor = if matches!(self.kind, EntryKind::Query | EntryKind::CompositeQuery) {
-            format_ident!("in_query_executor_context")
-        } else {
-            format_ident!("in_executor_context")
-        };
-        Ok(quote! {
-            #[cfg_attr(target_family = "wasm", unsafe(export_name = #export))]
-            #[cfg_attr(not(target_family = "wasm"), unsafe(export_name = #host_export))]
-            fn #adapter_name() {
-                ::canic::__internal::cdk::futures::internals::#executor(|| {
-                    #execute
-                });
-            }
-        })
+        Ok(entrypoint(
+            &self.kind,
+            &self.method,
+            &adapter_name,
+            quote!(::canic::__internal::cdk),
+            execute,
+        ))
     }
 
     fn decode(&self, names: &[syn::Ident], types: &[&Type]) -> TokenStream {
@@ -193,4 +180,95 @@ impl RawAdapter<'_> {
             ::canic::__internal::cdk::api::msg_reply(__canic_reply);
         }
     }
+}
+
+/// Emit only the IC export and executor context, independent of payload protocol.
+#[expect(
+    clippy::redundant_pub_crate,
+    reason = "shared by sibling endpoint expansion modules"
+)]
+pub(crate) fn entrypoint(
+    kind: &EntryKind,
+    method: &str,
+    name: &syn::Ident,
+    sdk: TokenStream,
+    execute: TokenStream,
+) -> TokenStream {
+    let export = if matches!(kind, EntryKind::Init | EntryKind::PostUpgrade) {
+        kind.export().to_string()
+    } else {
+        format!("{} {}", kind.export(), method)
+    };
+    let host_export = export.replace(' ', ".").replace(['-', '<', '>'], "_");
+    let executor = if matches!(kind, EntryKind::Query | EntryKind::CompositeQuery) {
+        format_ident!("in_query_executor_context")
+    } else {
+        format_ident!("in_executor_context")
+    };
+    quote! {
+        #[cfg_attr(target_family = "wasm", unsafe(export_name = #export))]
+        #[cfg_attr(not(target_family = "wasm"), unsafe(export_name = #host_export))]
+        fn #name() {
+            #sdk::futures::internals::#executor(|| { #execute });
+        }
+    }
+}
+
+/// Bind one protocol-neutral method declaration to the shared export owner.
+#[expect(
+    clippy::redundant_pub_crate,
+    reason = "shared by native and framework adapters"
+)]
+pub(crate) fn raw_declaration(
+    kind: &EntryKind,
+    method: &str,
+    signature: &Signature,
+) -> syn::Result<TokenStream> {
+    let mode = match kind {
+        EntryKind::Query => 1,
+        EntryKind::Update => 2,
+        EntryKind::CompositeQuery => 3,
+        EntryKind::Init | EntryKind::PostUpgrade => return Ok(TokenStream::new()),
+    };
+    let length = u16::try_from(method.len())
+        .map_err(|_| syn::Error::new_spanned(signature, "raw endpoint name is too long"))?;
+    if method.is_empty() || method.chars().any(char::is_control) {
+        return Err(syn::Error::new_spanned(
+            signature,
+            "raw endpoint name must be nonempty without controls",
+        ));
+    }
+    let mut declaration = vec![mode];
+    declaration.extend_from_slice(&length.to_le_bytes());
+    declaration.extend_from_slice(method.as_bytes());
+    let declaration_length = declaration.len();
+    Ok(quote! {
+        #[used]
+        #[unsafe(link_section = "canic:raw")]
+        static DECLARATION: [u8; #declaration_length] = [#(#declaration),*];
+    })
+}
+
+/// Validate the synchronous zero-argument body owned by a raw adapter.
+#[expect(
+    clippy::redundant_pub_crate,
+    reason = "shared by native and framework adapters"
+)]
+pub(crate) fn validate_raw_signature(sig: &Signature) -> syn::Result<()> {
+    if sig.asyncness.is_some()
+        || sig.constness.is_some()
+        || sig.abi.is_some()
+        || sig.variadic.is_some()
+        || sig.generics.where_clause.is_some()
+        || !matches!(sig.safety, syn::Safety::Default)
+        || !sig.inputs.is_empty()
+        || !sig.generics.params.is_empty()
+        || !matches!(sig.output, syn::ReturnType::Default)
+    {
+        return Err(syn::Error::new_spanned(
+            sig,
+            "raw entrypoints require a synchronous safe fn() with an implicit unit result",
+        ));
+    }
+    Ok(())
 }

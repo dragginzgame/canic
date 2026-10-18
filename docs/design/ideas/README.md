@@ -18,6 +18,7 @@ Supporting implementation evidence does not belong here.
 - `estate-budget-replenishment/`
 - `immutable-test-checkout-lease/`
 - `inspect-message-admission/`
+- [`icydb-endpoint-adapter/`](icydb-endpoint-adapter/design.md)
 - `openchat-scale-application-support/`
 - `operator-funding-conversion-authority/`
 - `release-binding-finalization/`

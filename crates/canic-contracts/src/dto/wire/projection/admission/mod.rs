@@ -28,6 +28,10 @@ pub enum RemoteCoordinatorStatusRequest {
 
 /// Bounded RemoteCoordinatorStatusResponse wire projection for admission.
 #[derive(CandidType, Deserialize)]
+#[allow(
+    clippy::large_enum_variant,
+    reason = "layout differs across host/Wasm builds, so expect is unfulfilled in the host build; retain this public projection without adding allocation or changing its Rust API"
+)]
 pub enum RemoteCoordinatorStatusResponse {
     Admission(FleetAdmissionStatusResponse),
     Registry(FleetRegistry),

@@ -162,7 +162,7 @@ fn finalize_audit_root(output: &CanisterArtifactBuildOutput, runtime: &Path, can
         "{}",
         String::from_utf8_lossy(&metadata.stderr)
     );
-    canic_host::canister_build::validate_wasm_candid_endpoints(&output.wasm_path, &output.did_path)
+    canic_host::canister_build::validate_wasm_endpoints(&output.wasm_path, &output.did_path)
         .unwrap();
     std::fs::write(
         &output.wasm_gz_path,

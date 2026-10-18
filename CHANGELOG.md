@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
+- Share Canic's exact committed memory runtime with the IcyDB lifecycle
+  participant, retaining one host bootstrap and exclusive allocation leases.
+
+- Align the standalone IcyDB host adapter with Timer 0.27 so consuming
+  applications resolve one timer runtime; share Canic's operator-health
+  projection between runtime status and metrics.
+
 ### ⚠️ Breaking
 
 - **Memory runtime:** adopt Memory 0.44 with one Canic-owned runtime and injected
@@ -37,6 +44,13 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
   across releases. Same-release interruption recovery remains supported.
 
 ### 🔧 Changed
+
+- Add authenticated protocol-neutral endpoints for bounded application codecs;
+  artifact validation checks their declarations alongside Candid endpoints.
+- Provide the `canic-icydb` host adapter for native IcyDB endpoints, lifecycle
+  scheduling and secure boot entropy. Consumers explicitly mount their IcyDB
+  binding; the adapter creates no framework memory runtime. Application Wire
+  exports use the same owner, with shared bounded sync/async raw transport.
 
 - **Release checks:** include the shared version validator in isolated release
   fixtures so preflight and failure-recovery checks can run after tooling updates.

@@ -11,6 +11,8 @@ canic-core	stable_memory_abi_guard	full	parallel	ordinary
 canic-core	timer_inventory_guard	full	parallel	ordinary
 canic-core	trap_guard	full	parallel	ordinary
 canic-host	ci_authority	full	parallel	ordinary
+canic-icydb	runtime_binding	full	parallel	ordinary
+canic-icydb	standalone_memory	full	parallel	ordinary
 canic-testing-internal	fixture_payloads	full	parallel	ordinary
 canic	build_cfg_surface	full	parallel	ordinary
 canic	call_facade	full	parallel	ordinary

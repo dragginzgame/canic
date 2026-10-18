@@ -11,7 +11,7 @@ use canic_testing_internal::pic::{
 };
 use ic_testkit::pic::{
     CachedPocketIcBaseline, CachedPocketIcBaselinePool, CachedPocketIcBaselinePoolGuard,
-    CandidCallErrorKind, CandidCallExt, CanisterInstallExt, ErrorCode, FixtureRecipeId, RejectCode,
+    CandidCallError, CandidCallExt, CanisterInstallExt, ErrorCode, FixtureRecipeId, RejectCode,
     RetryPolicy, SnapshotRestoreFunding, StandaloneCanisterFixture, StandaloneCanisterRecipe,
 };
 
@@ -451,8 +451,7 @@ fn assert_rejected(fixture: &CachedPocketIcBaseline<Principal>, method: &str, le
         .update_candid::<Result<usize, Error>, _>(*fixture.metadata(), method, (payload,))
         .expect_err("transport should reject oversized ingress");
 
-    assert_eq!(err.kind, CandidCallErrorKind::CanisterReject);
-    assert!(err.reject_response.is_some());
+    assert!(matches!(err, CandidCallError::CanisterReject { .. }));
 }
 
 // Build one ASCII string payload with exact byte length.
@@ -547,4 +546,58 @@ fn resolve_type(ty: &EndpointType) -> &EndpointType {
         } => resolve_type(inner),
         _ => ty,
     }
+}
+
+#[test]
+fn protocol_neutral_exports_preserve_raw_bytes_admission_and_trap_rollback() {
+    let fixture = acquire_probe_fixture();
+    let pic = fixture.pocket_ic();
+    let canister = *fixture.metadata();
+    let controller = Principal::anonymous();
+    let outsider = Principal::self_authenticating([0x72; 32]);
+    let read = || {
+        pic.query_call(canister, controller, "raw_counts", vec![0])
+            .unwrap()
+    };
+    assert_eq!(read(), 0_u64.to_le_bytes());
+    for bytes in [vec![], vec![0, 0], vec![0; 17]] {
+        assert!(
+            pic.update_call(canister, controller, "raw_commit", bytes)
+                .is_err()
+        );
+        assert_eq!(read(), 0_u64.to_le_bytes());
+    }
+    let denied = pic
+        .update_call(canister, outsider, "raw_commit", vec![0])
+        .unwrap_err();
+    assert_eq!(denied.reject_code, RejectCode::CanisterReject);
+    assert_eq!(read(), 0_u64.to_le_bytes());
+    for _ in 0..2 {
+        let failure = pic
+            .update_call(canister, controller, "raw_commit", vec![2])
+            .unwrap_err();
+        assert_eq!(failure.reject_code, RejectCode::CanisterError);
+        assert_eq!(read(), 0_u64.to_le_bytes());
+    }
+    assert_eq!(
+        pic.update_call(canister, controller, "raw_commit", vec![1])
+            .unwrap(),
+        vec![1]
+    );
+    assert_eq!(read(), 0_u64.to_le_bytes());
+    let mut expected = vec![0];
+    expected.extend_from_slice(&1_u64.to_le_bytes());
+    assert_eq!(
+        pic.update_call(canister, controller, "raw_commit", vec![0])
+            .unwrap(),
+        expected
+    );
+    let retained = read();
+    assert_eq!(retained, 1_u64.to_le_bytes());
+    assert_eq!(
+        read(),
+        retained,
+        "identical queries preserve exact reply bytes"
+    );
+    drop(fixture);
 }
