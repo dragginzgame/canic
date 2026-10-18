@@ -14,6 +14,12 @@ upstream owners; moving declarations alone does not demonstrate faster builds.
 
 ## Installed checkpoint and Root model integration — 2026-10-18
 
+The recovery fixtures create and canonicalize temporary directories before
+constructing retained paths, matching the production workflow. All three focused
+attempt-recovery tests pass under a symlinked TMPDIR on the locked Testkit 0.53
+graph. Production path/integrity checks are unchanged; native macOS confirmation
+remains with hosted CI. Evidence: `/tmp/canic-pr592-fix/attempt-recovery.log`.
+
 On PR #592's published Testkit 0.53 graph, the exact governed checkpoint case
 passes with a freshly built managed application Wasm. The driver now issues
 bindings through the canonical Root journal and round-trips its progress outside
@@ -28,8 +34,8 @@ Host/fixture lint and actual Rust 1.91 libraries with governed fixtures enabled.
 Root authority remains fixture-held and its sender is supplied by the test
 driver. This qualifies the installed participant/model composition, not production
 Root storage, discovery, RPC dispatch or paid snapshot effects. Live create stays
-unavailable. PR #546 owns the outstanding reproducible-peer and native-path CI
-prerequisites. Evidence: `/tmp/canic-pr592-combined-checkpoint-pic.log` and
+unavailable. PR #592 now owns the reproducible-peer and native-path CI
+prerequisites retained from superseded PR #546. Evidence: `/tmp/canic-pr592-combined-checkpoint-pic.log` and
 `target/test-runs/20261018T161904Z-3555103.IM53SK/`. The complete 0.112 batch remains
 unfinished; no version, release, deployment or live IC effect is included.
 
