@@ -120,7 +120,7 @@ fn raw_entry(
 ) -> syn::Result<proc_macro2::TokenStream> {
     let func: ItemFn = syn::parse2(item)?;
     let sig = &func.sig;
-    crate::adapter::validate_raw_signature(sig)?;
+    crate::adapter::validate_raw_signature(sig, matches!(kind, EndpointKind::Update))?;
     let mut parsed = parse::parse_args(attr)?;
     if parsed.decode.is_some() || parsed.reject_access {
         return Err(syn::Error::new_spanned(
@@ -237,5 +237,43 @@ mod raw_tests {
             // Candid's service registration, decoder or reply path.
             assert!(!text.contains("candid"));
         }
+    }
+}
+
+#[cfg(test)]
+mod async_raw_tests {
+    use super::*;
+    use quote::quote;
+    #[test]
+    fn raw_async_updates_keep_admission_before_spawn_and_measure_the_entire_future() {
+        let expanded = raw_entry(
+            EndpointKind::Update,
+            quote!(public, payload(max_bytes = 512)),
+            quote!(
+                async fn blob_update() {
+                    work().await;
+                }
+            ),
+        )
+        .unwrap();
+        syn::parse2::<syn::File>(expanded.clone()).unwrap();
+        let text = expanded.to_string();
+        assert!(
+            text.find("eval_default_fleet_guard").unwrap() < text.find("futures :: spawn").unwrap()
+        );
+        assert!(text.contains("measure_endpoint_async"));
+        assert!(!text.contains("measure_endpoint ("));
+        assert!(text.contains("msg_arg_data_size"));
+        assert!(!text.contains("candid"));
+        assert!(
+            raw_entry(
+                EndpointKind::Query,
+                quote!(public, payload(max_bytes = 512)),
+                quote!(
+                    async fn blob_query() {}
+                ),
+            )
+            .is_err()
+        );
     }
 }

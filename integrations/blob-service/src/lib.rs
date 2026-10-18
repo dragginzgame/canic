@@ -7,12 +7,12 @@
 
 mod endpoints;
 mod ops;
+#[doc(hidden)]
+pub mod transport;
 
 pub mod lifecycle;
 pub mod metrics;
 pub use ops::memory::requests as memory_requests;
-#[doc(hidden)]
-pub mod workflow;
 
 /// Host namespace owner for the service’s permanent memory requests.
 pub const MEMORY_AUTHORITY: &str = "blob-service";
@@ -26,7 +26,8 @@ pub use ic_blob_storage_contracts::dto;
 /// Dependencies used by the canister composition macro.
 #[doc(hidden)]
 pub mod __private {
-    pub use crate::ops::memory;
+    pub use crate::ops::{Workflow, memory};
+    pub use crate::transport;
     pub use ic_blob_storage_contracts;
     pub use ic_cdk;
     pub use ic_memory;

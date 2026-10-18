@@ -8,9 +8,9 @@ use ic_blob_storage::ops::service::{
     installation::{self, INSTALLATION_MEMORY_KEY, ServiceInstallationMemories},
     stores::grants,
 };
-use ic_memory::{RuntimeMemory, ic_stable_structures::DefaultMemoryImpl};
+use ic_memory::{DefaultMemoryImpl, RuntimeMemory};
 
-pub(super) type Memory = RuntimeMemory<DefaultMemoryImpl>;
+pub(super) type Memory = DefaultMemoryImpl;
 
 /// Complete service requests for the composing host; no registration or bootstrap.
 pub fn requests() -> Result<Vec<ic_memory::MemoryRequest>, ic_memory::MemoryDeclarationError> {
@@ -36,7 +36,7 @@ pub fn host() -> canic::memory::MemoryBootstrap {
     input
 }
 
-pub(super) fn open() -> ServiceInstallationMemories<Memory> {
+pub(super) fn open() -> ServiceInstallationMemories<RuntimeMemory<Memory>> {
     let lookup = |key: &str| Ok::<_, ic_memory::RuntimeOpenError>(canic::memory::open(key));
     ServiceInstallationMemories {
         configuration: lookup(INSTALLATION_MEMORY_KEY).expect("configuration grant"),

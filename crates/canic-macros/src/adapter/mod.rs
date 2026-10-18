@@ -254,8 +254,8 @@ pub(crate) fn raw_declaration(
     clippy::redundant_pub_crate,
     reason = "shared by native and framework adapters"
 )]
-pub(crate) fn validate_raw_signature(sig: &Signature) -> syn::Result<()> {
-    if sig.asyncness.is_some()
+pub(crate) fn validate_raw_signature(sig: &Signature, allow_async: bool) -> syn::Result<()> {
+    if (!allow_async && sig.asyncness.is_some())
         || sig.constness.is_some()
         || sig.abi.is_some()
         || sig.variadic.is_some()
@@ -267,7 +267,7 @@ pub(crate) fn validate_raw_signature(sig: &Signature) -> syn::Result<()> {
     {
         return Err(syn::Error::new_spanned(
             sig,
-            "raw entrypoints require a synchronous safe fn() with an implicit unit result",
+            "raw entrypoints require a safe zero-argument function with an implicit unit result",
         ));
     }
     Ok(())

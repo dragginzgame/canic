@@ -55,7 +55,7 @@ pub(super) fn expand(attr: TokenStream, item: TokenStream) -> syn::Result<TokenS
     let Arguments { kind, name, sdk } = syn::parse2(attr)?;
     let func: ItemFn = syn::parse2(item)?;
     let sig = &func.sig;
-    crate::adapter::validate_raw_signature(sig)?;
+    crate::adapter::validate_raw_signature(sig, false)?;
     let declaration = raw_declaration(&kind, &name.value(), sig)?;
     let attrs = func.attrs;
     let body = func.block;

@@ -3,19 +3,14 @@
 use std::cell::RefCell;
 
 use canic::dto::public_status::{PublicMetric, PublicMetricKind};
-use ic_memory::{
-    RuntimeMemory,
-    ic_stable_structures::{Cell, DefaultMemoryImpl, Memory},
-};
+use ic_memory::{DefaultMemoryImpl, Memory};
+use ic_storage::adapter::StableCell;
 
 const KEY: &str = "embedded_app.counter.v1";
-type Counter = Cell<u64, RuntimeMemory<DefaultMemoryImpl>>;
+type Counter = StableCell<u64, DefaultMemoryImpl>;
 
 pub(super) fn memory_requests() -> Vec<ic_memory::MemoryRequest> {
-    vec![
-        ic_memory::MemoryRequest::new("embedded-app", KEY, ic_memory::SchemaMetadata::default())
-            .unwrap(),
-    ]
+    vec![ic_memory::MemoryRequest::new("embedded-app", KEY).unwrap()]
 }
 
 thread_local! {
@@ -25,13 +20,13 @@ thread_local! {
 pub(super) fn install(initial: u64) {
     let memory = canic::memory::open(KEY);
     assert_eq!(memory.size(), 0, "fresh counter memory");
-    COUNTER.with_borrow_mut(|counter| *counter = Some(Cell::init(memory, initial)));
+    COUNTER.with_borrow_mut(|counter| *counter = Some(StableCell::init(memory, initial)));
 }
 
 pub(super) fn restore() {
     let memory = canic::memory::open(KEY);
     assert!(memory.size() > 0, "retained counter memory");
-    COUNTER.with_borrow_mut(|counter| *counter = Some(Cell::init(memory, 0)));
+    COUNTER.with_borrow_mut(|counter| *counter = Some(StableCell::init(memory, 0)));
 }
 
 pub(super) fn count() -> u64 {

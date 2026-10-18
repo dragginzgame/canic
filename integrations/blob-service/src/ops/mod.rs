@@ -4,8 +4,6 @@
 //! Does not own: tenant policy, provider workflows or framework lifecycle.
 //! Boundary: one service installation borrows grants from Canic’s committed runtime.
 
-pub mod account;
-pub mod gateways;
 pub mod memory;
 pub mod metrics;
 
@@ -13,19 +11,16 @@ use crate::ops::memory::Memory;
 
 use std::cell::RefCell;
 
-use ic_blob_storage::ops::service::{
-    installation::{ServiceInstallation, ValidatedServiceInstallation},
-    stores::ServiceStores,
+use ic_blob_storage::ops::service::installation::{
+    ServiceInstallation, ValidatedServiceInstallation,
 };
 use ic_blob_storage_contracts::{
-    configuration::ServiceInstallationCandidate, download::scope::CaffeineDownloadScope,
-    dto::configuration::ServiceInstallationInput, upload::completion::CompletionAuthority,
+    configuration::ServiceInstallationCandidate, dto::configuration::ServiceInstallationInput,
 };
 
 /// Application owner of the shared service and its observed platform version.
-struct Host {
+pub struct Host {
     installation: ServiceInstallation<Memory>,
-    last_platform_version: u64,
 }
 thread_local! {
     static HOST: RefCell<Option<Host>> = const { RefCell::new(None) };
@@ -46,10 +41,7 @@ pub fn install(input: &ServiceInstallationInput) {
     assert_uninitialized();
     let installation =
         ServiceInstallation::install(memory::open(), candidate).expect("service installation");
-    publish(Host {
-        installation,
-        last_platform_version: ic_cdk::api::canister_version(),
-    });
+    publish(Host { installation });
 }
 pub fn restore() {
     assert_uninitialized();
@@ -59,10 +51,7 @@ pub fn restore() {
         ic_blob_storage::LIBRARY_VERSION,
     )
     .expect("service restoration");
-    publish(Host {
-        installation,
-        last_platform_version: ic_cdk::api::canister_version(),
-    });
+    publish(Host { installation });
 }
 fn assert_uninitialized() {
     HOST.with_borrow(|host| assert!(host.is_none(), "host initialization is not reset"));
@@ -70,112 +59,40 @@ fn assert_uninitialized() {
 fn publish(host: Host) {
     HOST.with_borrow_mut(|state| *state = Some(host));
 }
-// Management changes can restore an old heap without a lifecycle hook. A gap
-// enters a one-way fence; only fresh IC history can later prove continuity.
-pub fn observe_version() {
-    let version = ic_cdk::api::canister_version();
-    HOST.with_borrow_mut(|state| {
-        let host = state.as_mut().expect("initialized host");
-        host.installation
-            .observe_platform_version(&mut host.last_platform_version, version);
-    });
-}
-pub fn read<R>(f: impl FnOnce(&ServiceStores<Memory>) -> R) -> R {
-    observe_version();
-    HOST.with_borrow(|host| {
-        f(host
-            .as_ref()
-            .expect("initialized host")
-            .installation
-            .stores())
-    })
-}
-pub fn mutate<R>(f: impl FnOnce(&mut ServiceStores<Memory>) -> R) -> R {
-    observe_version();
-    HOST.with_borrow_mut(|host| {
-        f(host
-            .as_mut()
-            .expect("initialized host")
-            .installation
-            .stores_mut())
-    })
-}
-pub fn with_completion<R>(
-    f: impl FnOnce(&mut ServiceStores<Memory>, CompletionAuthority) -> R,
-) -> R {
-    observe_version();
-    HOST.with_borrow_mut(|state| {
-        let installation = &mut state.as_mut().expect("initialized host").installation;
-        let authority = installation.completion_authority();
-        f(installation.stores_mut(), authority)
-    })
-}
-pub fn with_download<R>(
-    f: impl FnOnce(
-        &ic_blob_storage::ops::service::uploads::StableUploads<Memory>,
-        &CaffeineDownloadScope,
-    ) -> R,
-) -> R {
-    observe_version();
-    HOST.with_borrow(|host| {
-        let installation = &host.as_ref().expect("initialized host").installation;
-        f(
-            &installation.stores().uploads,
-            installation.download_scope(),
-        )
-    })
-}
-pub fn with_verification<R>(
-    f: impl FnOnce(
-        &ic_blob_storage::ops::service::uploads::StableUploads<Memory>,
-        CompletionAuthority,
-        &CaffeineDownloadScope,
-    ) -> R,
-) -> R {
-    observe_version();
-    HOST.with_borrow(|host| {
-        let installation = &host.as_ref().expect("initialized host").installation;
-        f(
-            &installation.stores().uploads,
-            installation.completion_authority(),
-            installation.download_scope(),
-        )
-    })
-}
-pub fn with_installation<R>(f: impl FnOnce(&ServiceInstallation<Memory>) -> R) -> R {
-    observe_version();
-    HOST.with_borrow(|host| {
-        let installation = &host.as_ref().expect("initialized host").installation;
-        f(installation)
-    })
-}
-pub fn with_certificate<R>(f: impl FnOnce(&mut ServiceInstallation<Memory>) -> R) -> R {
-    observe_version();
-    HOST.with_borrow_mut(|host| f(&mut host.as_mut().expect("initialized host").installation))
-}
-/// Mutable installation access used by the shared current-instance workflow.
-pub struct RecoveryHost;
-impl ic_blob_storage::ops::service::recovery::RecoveryInstallationAccess for RecoveryHost {
+/// Explicit endpoint catalog binding; this alias registers nothing.
+pub type Workflow = ic_blob_storage::workflow::service::ServiceWorkflow<Host>;
+impl ic_blob_storage::workflow::service::ServiceHost for Host {
     type Memory = Memory;
-    fn with_installation<R>(
-        &self,
-        operation: impl FnOnce(&mut ServiceInstallation<Memory>) -> R,
-    ) -> R {
-        with_certificate(operation)
-    }
-}
-impl ic_blob_storage::ops::service::recovery::ContinuityInstallationAccess for RecoveryHost {
-    fn observe_version(&self) {
-        observe_version();
-    }
-    fn prepare_active_continuity(
-        &self,
-    ) -> Option<ic_blob_storage::ops::service::recovery::ActiveContinuityRequest> {
-        let version = ic_cdk::api::canister_version();
+    fn with_installation<R>(operation: impl FnOnce(&mut ServiceInstallation<Memory>) -> R) -> R {
         HOST.with_borrow_mut(|state| {
-            let host = state.as_mut().expect("initialized host");
-            host.installation
-                .prepare_active_continuity(&mut host.last_platform_version, version)
+            operation(&mut state.as_mut().expect("initialized host").installation)
         })
+    }
+    fn platform_version() -> u64 {
+        ic_cdk::api::canister_version()
+    }
+    fn time() -> u64 {
+        ic_cdk::api::time()
+    }
+    fn limits() -> ic_blob_storage::workflow::service::ServiceExecutionLimits {
+        use ic_blob_storage::ops::caffeine::decoding::CaffeineReplyLimits;
+        ic_blob_storage::workflow::service::ServiceExecutionLimits {
+            timeout: 30.try_into().unwrap(),
+            gateways: CaffeineReplyLimits {
+                max_bytes: 65_536.try_into().unwrap(),
+                decoding_quota: 500_000.try_into().unwrap(),
+                skipping_quota: 1000.try_into().unwrap(),
+                max_type_entries: 32.try_into().unwrap(),
+            },
+            account: CaffeineReplyLimits {
+                max_bytes: 4096.try_into().unwrap(),
+                decoding_quota: 500_000.try_into().unwrap(),
+                skipping_quota: 1000.try_into().unwrap(),
+                max_type_entries: 64.try_into().unwrap(),
+            },
+            history_scan: 64.try_into().unwrap(),
+            history_results: 32.try_into().unwrap(),
+            funding_results: 32.try_into().unwrap(),
+        }
     }
 }

@@ -9,7 +9,7 @@ use canic_blob_service::{dto::configuration::ServiceInstallationInput, lifecycle
 #[derive(candid::CandidType, serde::Deserialize)]
 struct InstallationInput {
     initial_count: u64,
-    blob: ServiceInstallationInput,
+    blob: Vec<u8>,
 }
 
 // The artifact grants both namespaces in one shared physical allocation pool.
@@ -55,7 +55,10 @@ fn install() {
         )
         .expect("bounded application configuration");
     app::install(input.initial_count);
-    lifecycle::install(&input.blob);
+    let blob: ServiceInstallationInput =
+        canic_blob_service::__private::ic_blob_storage_contracts::wire::decode(&input.blob, 16_384)
+            .expect("bounded Blob installation");
+    lifecycle::install(&blob);
     register_metrics();
 }
 

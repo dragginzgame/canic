@@ -149,7 +149,13 @@ pub(super) fn expand_raw(
     let call_decl = call_decl(kind, args.query_mode, &call, &exported);
     let preflight = preflight(&name);
     let access = access_stage(&plan, &call);
-    let dispatch = dispatch_call(false, &call, impl_name.clone(), &[]);
+    let asynchronous = func.sig.asyncness.is_some();
+    let dispatch = dispatch_call(asynchronous, &call, impl_name.clone(), &[]);
+    let dispatch = if asynchronous {
+        quote!(::canic::__internal::cdk::futures::spawn(async move { #dispatch; }))
+    } else {
+        dispatch
+    };
     let registration = payload_registration(kind, &args, &name);
     let max_bytes = args
         .payload_max_bytes

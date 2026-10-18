@@ -39,6 +39,7 @@ canic = { workspace = true, features = [] }
 canic-blob-service.workspace = true
 ic-cdk.workspace = true
 ic-memory.workspace = true
+ic-storage.workspace = true
 serde.workspace = true
 
 [build-dependencies]

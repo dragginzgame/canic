@@ -1,24 +1,48 @@
-//! Emit service endpoints into the owning canister's Candid and dispatch scope.
+//! Emit owned raw endpoints and the external provider Candid contract.
 
 /// Host attributes used by the shared service declaration owner.
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __canic_blob_endpoint {
     ($d:tt) => {
-        // A lexical emitter registers methods before Canic exports Candid.
+        // A lexical emitter registers the provider contract before Candid export.
         // An imported macro alias can defer those registrations past the export.
+        macro_rules! decode {
+            (tenant_inspection, $d bytes:expr) => { ic_blob_storage_contracts::wire::tenant::decode_inspection_request($d bytes).expect("tenant inspection") };
+            (tenant_update, $d bytes:expr) => { ic_blob_storage_contracts::wire::tenant::decode_update_request($d bytes).expect("tenant update") };
+            ($d category:ident, $d bytes:expr) => { ic_blob_storage_contracts::wire::decode($d bytes, bound!($d category)).expect("Blob CBOR request") };
+        }
+        macro_rules! encode {
+            (tenant_inspection, $d value:expr) => { ic_blob_storage_contracts::wire::tenant::inspection_response($d value).expect("tenant inspection reply") };
+            (tenant_update, $d value:expr) => { ic_blob_storage_contracts::wire::tenant::update_response($d value).expect("tenant update reply") };
+            ($d category:ident, $d value:expr) => { ic_blob_storage_contracts::wire::encode($d value).expect("Blob CBOR reply") };
+        }
+        macro_rules! bound {
+            (tenant_inspection) => { ic_blob_storage_contracts::wire::tenant::MAX_REQUEST_BYTES };
+            (tenant_update) => { ic_blob_storage_contracts::wire::tenant::MAX_REQUEST_BYTES };
+            (manifest) => { 131_072 };
+            (request) => { 4096 };
+        }
+        macro_rules! arguments {
+            ($d category:ident;) => { let _: () = decode!($d category, &$crate::__private::transport::arguments(bound!($d category))); };
+            ($d category:ident; $d arg:ident : $d ty:ty) => { let $d arg: $d ty = decode!($d category, &$crate::__private::transport::arguments(bound!($d category))); };
+        }
         macro_rules! endpoint {
-            (query, request, $d($d item:tt)*) => {
-                #[canic::canic_query(public, on_access_denied = "reject", decode = REQUEST_LIMITS)]
-                $d($d item)*
+            (query, $d category:ident, fn $d name:ident($d($d arg:ident : $d ty:ty),* $d(,)?) -> $d reply:ty $d body:block) => {
+                #[canic::canic_raw_query(public, payload(max_bytes = bound!($d category)))]
+                fn $d name() {
+                    arguments!($d category; $d($d arg : $d ty),*);
+                    let response: $d reply = (|| $d body)();
+                    ic_cdk::api::msg_reply(encode!($d category, response));
+                }
             };
-            (update, request, $d($d item:tt)*) => {
-                #[canic::canic_update(public, on_access_denied = "reject", decode = REQUEST_LIMITS)]
-                $d($d item)*
-            };
-            (update, manifest, $d($d item:tt)*) => {
-                #[canic::canic_update(public, on_access_denied = "reject", decode = MANIFEST_LIMITS)]
-                $d($d item)*
+            (update, $d category:ident, async fn $d name:ident($d($d arg:ident : $d ty:ty),* $d(,)?) -> $d reply:ty $d body:block) => {
+                #[canic::canic_raw_update(public, payload(max_bytes = bound!($d category)))]
+                async fn $d name() {
+                    arguments!($d category; $d($d arg : $d ty),*);
+                    let response: $d reply = (async move $d body).await;
+                    ic_cdk::api::msg_reply(encode!($d category, response));
+                }
             };
             (certificate, request, $d wire_name:literal, $d($d item:tt)*) => {
                 #[canic::canic_update(public, on_access_denied = "reject", decode = REQUEST_LIMITS, name = $d wire_name)]
@@ -52,8 +76,8 @@ macro_rules! mount {
         mod __canic_blob_endpoints {
             pub(super) use $crate::__private::{ic_blob_storage_contracts, ic_cdk};
             use $crate::{
-                lifecycle::{MANIFEST_LIMITS, REQUEST_LIMITS},
-                workflow,
+                lifecycle::REQUEST_LIMITS,
+                __private::Workflow as workflow,
             };
             fn context() -> ic_blob_storage_contracts::upload::binding::UploadContext {
                 ic_blob_storage_contracts::upload::binding::UploadContext {

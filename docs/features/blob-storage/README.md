@@ -12,7 +12,7 @@ The shared [package-adapter boundary](../../architecture/independent-package-ada
 also covers backup.
 
 The adapter selects published `ic-blob-storage` and uses the contracts package's
-shared endpoint declarations from 0.22.11. Canic supplies endpoint authentication,
+shared endpoint declarations and codec contracts. Canic supplies endpoint authentication,
 bounded decoders, actual caller context and synchronous lifecycle participants. It registers
 its service memory grants before Canic bootstraps the sole memory runtime. Its
 managed lifecycle retains Fleet admission.
@@ -25,7 +25,8 @@ Fleet, lifecycle and memory tests. The upstream service suite owns blob authorit
 certificate replies, restoration, provider behavior and accounting; those results
 do not establish deployment qualification for an arbitrary wrapper.
 
-The root catalog requires published Blob Storage/contracts 0.22.11 and Memory 0.35.
+The pending adapter requires published Blob Storage/contracts 0.33 and Memory 0.48.
+Its dependency publication and actual managed acceptance remain prerequisites.
 Timers and arithmetic-only Metrics follow the selected Canic runtime in the root
 and independent consumer lockfiles.
 Each complete managed artifact must share one Memory and Timers runtime.
@@ -145,7 +146,7 @@ Compose `canic_blob_service::metrics::sample()?` with application rows in the
 host's one `ApplicationMetricsSampler`. Register that callback after installation
 and restoration. This preserves both families rather than replacing either
 sampler; Canic retains the timer, limits and cache. Export blob endpoints in the
-same Candid scope as application endpoints, and avoid duplicate method names.
+provider Candid scope alongside separate raw endpoint declarations, and avoid duplicate method names.
 
 The complete [embedded example](../../../integrations/blob-service/embedded-consumer/src/lib.rs)
 has its own persistent counter, endpoints, combined installation input and metrics
@@ -220,7 +221,7 @@ supply that identity. Use the emitted release manifest and its qualified artifac
 union for installation proof.
 
 Installation requires `canic_blob_service::dto::configuration::ServiceInstallationInput`
-as Candid bytes nested after Canic's protected init payload. Its configured
+as CBOR bytes nested after Canic's protected Candid init payload. Its configured
 service Principal must equal the actual allocated canister ID; the adapter
 validates this before publishing the installed service. Construct these bytes
 after allocation, without rewriting that identity inside the adapter. The public
@@ -275,7 +276,7 @@ provider-readiness verdict.
 The consuming App selects Fleet admission and public metrics in its own config.
 The library's normal dependency graph contains no App-specific compiled topology.
 The owning shell compiles its exact topology and emits endpoints into the same
-Candid declaration scope as Canic's framework endpoints.
+provider Candid declaration scope alongside the raw method roster.
 
 The source cut removes Canic's embedded blob runtime, feature flags, billing
 commands and passive Medic inspection. Use the service's own operator tools for
