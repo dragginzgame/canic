@@ -38,6 +38,9 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
 ### 🔧 Changed
 
+- **Contributor tools:** select and check Candid extractor explicitly through the
+  shared Cargo installer, publishing its admitted PATH for native CI/build callers.
+  See [extractor setup](docs/candid-extractor.md) before narrowing common setup.
 - **Release checks:** include the shared version validator in isolated release
   fixtures so preflight and failure-recovery checks can run after tooling updates.
   Align record-export checks with the crate-private storage boundary.

@@ -103,9 +103,12 @@ jobs:
           make install-host-tools
           echo "$GITHUB_WORKSPACE/.tools/host/bin" >> "$GITHUB_PATH"
           export PATH="$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
-          make install-rust-tools
+          make install-rust-tools install-candid-extractor
           echo "$GITHUB_WORKSPACE/.tools/rust/common/bin" >> "$GITHUB_PATH"
           export PATH="$GITHUB_WORKSPACE/.tools/rust/common/bin:$PATH"
+          extractor="$(make --no-print-directory candid-extractor-check)"
+          echo "${extractor%/*}" >> "$GITHUB_PATH"
+          export PATH="${extractor%/*}:$PATH"
           make install-ic-tools install-testkit-server
           echo "$GITHUB_WORKSPACE/.tools/ic/bin" >> "$GITHUB_PATH"
           make testkit-server-check
@@ -373,9 +376,12 @@ jobs:
           make install-host-tools
           echo "$GITHUB_WORKSPACE/.tools/host/bin" >> "$GITHUB_PATH"
           export PATH="$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
-          make install-rust-tools
+          make install-rust-tools install-candid-extractor
           echo "$GITHUB_WORKSPACE/.tools/rust/common/bin" >> "$GITHUB_PATH"
           export PATH="$GITHUB_WORKSPACE/.tools/rust/common/bin:$PATH"
+          extractor="$(make --no-print-directory candid-extractor-check)"
+          echo "${extractor%/*}" >> "$GITHUB_PATH"
+          export PATH="${extractor%/*}:$PATH"
       - name: Install wasm target
         shell: bash
         run: |
