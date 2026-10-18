@@ -57,6 +57,9 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
 ### 🔧 Changed
 
+- **Native qualification:** use physical temporary paths for optimizer admission
+  and the selected Testkit release's structured canister-rejection contract.
+
 - **Release checks:** include the shared version validator in isolated release
   fixtures so preflight and failure-recovery checks can run after tooling updates.
   Align record-export checks with the crate-private storage boundary.

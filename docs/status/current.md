@@ -1,5 +1,18 @@
 # Current handoff — 2026-10-14
 
+## Native CI fixture qualification — 2026-10-18
+
+PR #599's Linux checks and macOS arm64 job exposed two pre-existing fixture
+mismatches in its public-main base. The ingress test now matches the selected
+Testkit 0.49 structured rejection variant. Optimizer fixtures resolve their
+temporary parent before comparing SDK-owned physical executable paths.
+Both selected Clippy gates pass; all seven Binaryen tests pass through an
+explicitly symlinked temporary parent on Linux. The ingress target links without
+starting PocketIC. Receipts are `/tmp/canic-consolidation-*.log`; native macOS,
+full CI and installed-runtime acceptance remain separate. Product code, graphs
+and own versions are unchanged by this qualification repair. The normal dirty
+integration checkout remains untouched.
+
 ## Runtime probe and facade caller repairs — 2026-10-18
 
 The earlier PR #599 hosted MSRV job exposed a missed `PerfEntry` caller in
