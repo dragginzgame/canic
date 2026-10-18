@@ -14,24 +14,29 @@ synchronous reconstruction without a Canic timer wrapper.
 ## Use One Provider
 
 Every timer-owning crate linked into a canister must resolve the same exact
-package identity:
+package identity. In this workspace, inherit the selected provider from the
+[root dependency catalog](../../../Cargo.toml):
 
 ```toml
 [dependencies]
-ic-timers = "0.9"
+ic-timers.workspace = true
 ```
 
-Canic's locked deployed graph must contain one provider identity. Compatible
+An independent application owns its root catalog and must select a requirement
+compatible with its chosen Canic release. Canic's locked deployed graph must
+contain one provider identity. Compatible
 version requirements are supported; an exact manifest pin is not required.
 Check the composed graph, not only each direct manifest:
 
 ```text
-cargo tree -d
-cargo tree -i ic-timers@0.9.1
+cargo tree --locked --target wasm32-unknown-unknown -d
+cargo tree --locked --target wasm32-unknown-unknown -i ic-timers
 ```
 
-Use the provider version from your selected deployed graph in the inverse lookup;
-recheck it when dependencies change. Two resolved versions contain two independent
+Run these commands with the same package and feature selection as deployment.
+If the inverse lookup is ambiguous, use the exact `ic-timers@VERSION` identities
+reported by Cargo to inspect both paths and align them before deployment.
+Recheck the graph when dependencies change. Two resolved versions contain two independent
 sets of library statics and
 therefore two inventories. Do not combine a direct `ic-cdk-timers` consumer
 with this design without separately inventorying and qualifying that second
@@ -119,7 +124,7 @@ Use the policy that matches the failure boundary:
   synchronous work. Use it only when that stronger recovery protocol is
   required.
 
-`ic-timers 0.8` gives Watchdog lifecycle reconstruction its own
+`ic-timers` gives Watchdog lifecycle reconstruction its own
 `WatchdogReconcileState`. Use `ScheduledImmediately`,
 `ensure_scheduled_immediately()` or `WatchdogDecision::ContinueImmediately`
 only when durable authority proves actionable work should continue without a
