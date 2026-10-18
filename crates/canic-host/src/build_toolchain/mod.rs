@@ -10,12 +10,12 @@ mod tests;
 use crate::{
     binaryen::{
         BinaryenExecutable, BinaryenToolError, current_binaryen_authority,
-        install_required_binaryen, resolve_required_binaryen,
+        default_binaryen_install_path, install_required_binaryen, resolve_required_binaryen,
     },
     build_profile::CanisterBuildProfile,
     ic_wasm::{
-        IcWasmExecutable, IcWasmToolError, current_ic_wasm_authority, install_required_ic_wasm,
-        resolve_required_ic_wasm,
+        IcWasmExecutable, IcWasmToolError, current_ic_wasm_authority, default_ic_wasm_install_path,
+        install_required_ic_wasm, resolve_required_ic_wasm,
     },
 };
 use std::{
@@ -196,22 +196,25 @@ pub fn install_required_build_toolchain() -> Result<InstalledBuildToolchain, Bui
     current_binaryen_authority()?;
     current_ic_wasm_authority()?;
 
-    let ic_wasm = install_required_ic_wasm()?;
-    let binaryen = install_required_binaryen()?;
-    let ic_wasm_directory = ic_wasm
-        .path()
+    // Compare publication paths: macOS Binaryen resolves inside its admitted
+    // runtime-library bundle rather than alongside the public ic-wasm entry.
+    let ic_wasm_path = default_ic_wasm_install_path()?;
+    let binaryen_path = default_binaryen_install_path()?;
+    let ic_wasm_directory = ic_wasm_path
         .parent()
         .map(Path::to_path_buf)
         .ok_or_else(|| BuildToolchainError::SplitInstallDirectories {
-            ic_wasm: ic_wasm.path().to_path_buf(),
-            binaryen: binaryen.path().to_path_buf(),
+            ic_wasm: ic_wasm_path.clone(),
+            binaryen: binaryen_path.clone(),
         })?;
-    if binaryen.path().parent() != Some(ic_wasm_directory.as_path()) {
+    if binaryen_path.parent() != Some(ic_wasm_directory.as_path()) {
         return Err(BuildToolchainError::SplitInstallDirectories {
-            ic_wasm: ic_wasm.path().to_path_buf(),
-            binaryen: binaryen.path().to_path_buf(),
+            ic_wasm: ic_wasm_path,
+            binaryen: binaryen_path,
         });
     }
+    let ic_wasm = install_required_ic_wasm()?;
+    let binaryen = install_required_binaryen()?;
     Ok(InstalledBuildToolchain {
         ic_wasm,
         binaryen,

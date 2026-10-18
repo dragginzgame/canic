@@ -1,5 +1,31 @@
 # Current handoff — 2026-10-14
 
+## PR #599 CI admission repairs — 2026-10-18
+
+Hosted source `039173ed18e57cb070ceb70c9d54c2404ba2210b` passes preflight,
+security, checks and MSRV, but ordinary tests expose a missing shared validator
+in release-flow sandboxes. The PocketIC job refuses the stale embedded allocation
+peer before starting its suites; macOS arm64 setup rejects Binaryen's valid bundle
+because its resolved executable has a different parent from the ic-wasm entry.
+Those failures retain their identities in
+[the hosted run](https://github.com/dragginzgame/canic/actions/runs/39137659353).
+
+The sandbox now copies the canonical validator. Tool installation compares its
+public publication paths while retaining checksum/version/library admission and
+resolved executable handles. The canonical embedded-peer generator updates the
+Wasm and structured evidence together; its read-only verifier passes. Four
+embedded-root units and the explicit real-Wasm path/version reproduction pass,
+including corrupt-input refusal and unchanged live manifest/lock assertions.
+All 17 release-flow tests, eight installer tests (including relative-library
+execution and rejected-candidate retention) and the existing build-toolchain
+warning test pass. Strict selected Host library/tests and release-target Clippy
+pass. Logs are `/tmp/canic-pr599-{embedded-*,release-*,install-*,build-toolchain-*,ci-host-clippy}.log`.
+
+These are focused Linux receipts. Fresh hosted native macOS, complete ordinary
+and PocketIC acceptance remain separate; the failed preflight is not an executed
+PocketIC result. Package versions, manifests and selected dependencies remain
+unchanged. The normal dirty integration checkout remains untouched.
+
 ## Scalar diagnostic quality — 2026-10-18
 
 The isolated PR #599 now uses published Metrics 0.11.7 `MeasurementCounter` for

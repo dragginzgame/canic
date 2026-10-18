@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- **CI tool and fixture admission:** admit macOS Binaryen's verified bundle
+  layout, refresh the embedded allocation peer through its canonical producer,
+  and include the shared input validator in release-flow sandboxes.
+
 - **Public performance metrics:** project typed source measurements directly,
   retaining wide totals, actual overflow quality and timer registration without
   reconstructing identity from display labels.
