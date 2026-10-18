@@ -59,6 +59,7 @@ impl ComponentRegistryOps {
             }
             if let Some(failure) = allocation.last_failure {
                 return Ok(Some(ProvisioningFailureView {
+                    dependency: None,
                     recorded_at_ns: Some(failure.failed_at_ns),
                     retry_at_ns: Some(failure.retry_at_ns),
                     stage: ProvisioningFailureStage::ComponentChildAllocation,

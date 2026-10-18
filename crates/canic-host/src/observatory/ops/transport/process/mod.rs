@@ -1,8 +1,11 @@
-//! Bounded query process ownership; no tool diagnostics enter published views.
+//! Module: observatory::ops::transport::process
+//!
+//! Responsibility: capture bounded query output and project typed failures.
+//! Boundary: shared process ownership; no tool diagnostics enter published views.
 
 use crate::observatory::view::ObservationFailure;
 use ic_host_process::tool::{
-    ExecutionEvidence, ExecutionFailure, InvalidInvocation, OutputLimit, OutputLimits, ToolError,
+    CompletedExecution, ExecutionFailure, InvalidInvocation, OutputLimit, OutputLimits, ToolError,
     capture_command,
 };
 use std::{process::Command, time::Duration};
@@ -20,7 +23,8 @@ pub fn query_output(
             timeout: Some(timeout),
         },
     )
-    .and_then(ExecutionEvidence::require_complete)
+    .and_then(CompletedExecution::require_success)
+    .and_then(CompletedExecution::require_complete)
     .map_err(|error| observation_failure(&error))?;
     String::from_utf8(output.stdout).map_err(|_| ObservationFailure::InvalidResponse)
 }

@@ -1,17 +1,13 @@
 //! Module: memory::pool
 //!
-//! Responsibility: select and seal the artifact owner's host-wide allocation pool.
+//! Responsibility: build host grants and retain a read-only projection after successful bootstrap.
 //! Does not own: allocation placement, storage, admission callbacks or lifecycle.
-//! Boundary: the artifact registers explicit component grants before bootstrap.
+//! Boundary: the artifact supplies explicit component grants at bootstrap.
 
-use crate::memory::{
-    CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, CANIC_CORE_MEMORY_AUTHORITY,
-    registry::MemoryRegistryError,
-};
+use crate::memory::{CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, CANIC_CORE_MEMORY_AUTHORITY};
 use ic_memory::{
     MemoryAllocationPool, MemoryAllocationPoolError, MemoryAuthority, MemoryManagerIdRange,
 };
-use std::sync::Mutex;
 
 /// Add mandatory framework grants to the artifact's explicit component grants.
 /// Exclusions are physical unmanaged custody, never per-component partitions.
@@ -30,71 +26,19 @@ pub fn framework_pool(
     MemoryAllocationPool::new(authorities, exclusions)
 }
 
-#[derive(Default)]
-struct Registration {
-    pool: Option<MemoryAllocationPool>,
-    sealed: bool,
+thread_local! {
+    static COMMITTED_POOL: std::cell::RefCell<Option<MemoryAllocationPool>> = const { std::cell::RefCell::new(None) };
 }
 
-impl Registration {
-    fn register(&mut self, pool: MemoryAllocationPool) -> Result<(), MemoryRegistryError> {
-        if self.sealed || self.pool.is_some() {
-            return Err(MemoryRegistryError::PoolRegistration {
-                reason: "duplicate or sealed host pool",
-            });
-        }
-        self.pool = Some(pool);
-        Ok(())
-    }
-
-    fn seal(&mut self) -> Result<MemoryAllocationPool, MemoryRegistryError> {
-        if self.pool.is_none() {
-            self.pool = Some(framework_pool(Vec::new(), Vec::new())?);
-        }
-        self.sealed = true;
-        Ok(self.pool.as_ref().expect("selected host pool").clone())
-    }
+pub(super) fn remember(pool: MemoryAllocationPool) {
+    COMMITTED_POOL.with_borrow_mut(|selected| *selected = Some(pool));
 }
 
-static POOL: Mutex<Registration> = Mutex::new(Registration {
-    pool: None,
-    sealed: false,
-});
-
-/// Static artifact registration boundary; use `memory_allocation_pool!`.
-#[doc(hidden)]
-pub fn register(pool: MemoryAllocationPool) -> Result<(), MemoryRegistryError> {
-    POOL.lock()
-        .map_err(|_| MemoryRegistryError::PoolRegistration {
-            reason: "poisoned host pool",
-        })?
-        .register(pool)
-}
-
-pub(super) fn seal() -> Result<MemoryAllocationPool, MemoryRegistryError> {
-    POOL.lock()
-        .map_err(|_| MemoryRegistryError::PoolRegistration {
-            reason: "poisoned host pool",
-        })?
-        .seal()
-}
-
-pub(super) fn selected() -> Result<MemoryAllocationPool, MemoryRegistryError> {
-    let registration = POOL
-        .lock()
-        .map_err(|_| MemoryRegistryError::PoolRegistration {
-            reason: "poisoned host pool",
-        })?;
-    if !registration.sealed {
-        return Err(MemoryRegistryError::PoolRegistration {
-            reason: "host pool not sealed",
-        });
-    }
-    Ok(registration
-        .pool
-        .as_ref()
-        .expect("sealed host pool")
-        .clone())
+pub(super) fn selected()
+-> Result<MemoryAllocationPool, crate::memory::registry::MemoryRegistryError> {
+    COMMITTED_POOL
+        .with_borrow(Clone::clone)
+        .ok_or(crate::memory::registry::MemoryRegistryError::PoolUnavailable)
 }
 
 #[cfg(test)]
@@ -113,7 +57,7 @@ mod tests {
 
     fn requests(entries: &[(&str, &str)]) -> SealedDeclarationSnapshot {
         SealedDeclarationSnapshot::new(
-            &entries
+            entries
                 .iter()
                 .map(|(owner, key)| {
                     MemoryRequest::new(*owner, key, SchemaMetadata::default()).unwrap()
@@ -294,29 +238,6 @@ mod tests {
                 "other"
             ),
             Err(MemoryAllocationPoolError::UnclaimedKey { .. })
-        ));
-    }
-
-    #[test]
-    fn host_selection_is_single_and_cannot_change_after_sealing() {
-        let pool = framework_pool(Vec::new(), Vec::new()).unwrap();
-        let mut registration = Registration::default();
-        registration.register(pool.clone()).unwrap();
-        assert!(matches!(
-            registration.register(pool.clone()),
-            Err(MemoryRegistryError::PoolRegistration { .. })
-        ));
-        assert_eq!(registration.seal().unwrap(), pool);
-        assert_eq!(registration.seal().unwrap(), pool);
-        assert!(matches!(
-            registration.register(pool.clone()),
-            Err(MemoryRegistryError::PoolRegistration { .. })
-        ));
-        let mut empty = Registration::default();
-        assert_eq!(empty.seal().unwrap(), pool);
-        assert!(matches!(
-            empty.register(pool),
-            Err(MemoryRegistryError::PoolRegistration { .. })
         ));
     }
 }

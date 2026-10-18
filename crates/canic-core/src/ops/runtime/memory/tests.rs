@@ -3,12 +3,12 @@
 use super::*;
 use crate::storage::stable::env::{Env, EnvData, EnvRecord};
 use ic_memory::{
-    AllocationDeclaration, AllocationLedger, AllocationRetirement, MemoryManagerSlot,
-    SchemaMetadata,
+    AllocationDeclaration, MemoryManagerSlot, SchemaMetadata,
     ic_stable_structures::{
         Memory, VectorMemory,
         memory_manager::{MemoryId, MemoryManager},
     },
+    testing::allocation_record,
 };
 
 #[test]
@@ -21,6 +21,19 @@ fn bootstrap_retains_declarations_and_opens_only_the_accessed_store() {
         .filter(|entry| matches!(entry.binding, MemoryAllocationBinding::Current { .. }))
         .collect::<Vec<_>>();
     assert!(!declared.is_empty());
+    let requested = memory::requests()
+        .unwrap()
+        .into_iter()
+        .map(|request| request.stable_key().as_str().to_owned())
+        .collect::<std::collections::BTreeSet<_>>();
+    let committed = declared
+        .iter()
+        .filter_map(|entry| match &entry.binding {
+            MemoryAllocationBinding::Current { stable_key, .. } => Some(stable_key.clone()),
+            _ => None,
+        })
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(committed, requested);
     assert!(
         declared
             .iter()
@@ -35,8 +48,10 @@ fn bootstrap_retains_declarations_and_opens_only_the_accessed_store() {
         },
     });
     let after = MemoryRegistryOps::allocation_snapshot().unwrap();
-    let bindings_id =
-        ic_memory::default_memory_manager_memory_id("canic.core.runtime.bindings.v1").unwrap();
+    let bindings_id = memory::runtime::with_runtime(|runtime| {
+        Ok(runtime.memory_id("canic.core.runtime.bindings.v1").unwrap())
+    })
+    .unwrap();
     for entry in &after.memories {
         if entry.memory_manager_id == bindings_id {
             assert!(entry.virtual_extent.wasm_pages > 0);
@@ -145,9 +160,12 @@ fn allocation_projection_preserves_unknown_owners_and_measured_nondefault_bucket
     let report = runtime
         .memory_allocations()
         .expect("bounded unbound allocations");
-    assert_eq!(report.bucket_size_pages, 16);
-    assert_eq!(report.unknown_binding_bytes, 1_048_576);
-    let entry = memory_allocation_entry_response(report.memories[200].clone());
+    assert_eq!(report.summary.bucket_size_pages, 16);
+    assert_eq!(report.summary.unknown_binding_bytes(), 1_048_576);
+    let entry = memory_allocation_entry_response(
+        report.memories[200].clone(),
+        report.summary.bucket_size_pages,
+    );
     assert_eq!(entry.binding, MemoryAllocationBinding::Unknown);
     assert_eq!(entry.virtual_extent.bytes, 65_536);
     assert_eq!(entry.allocated_bytes, 1_048_576);
@@ -181,26 +199,26 @@ fn ledger_snapshot_reads_the_bootstrapped_ic_memory_runtime() {
 }
 
 #[test]
-fn commit_slot_response_maps_runtime_variants_exactly() {
+fn commit_snapshot_response_maps_runtime_variants_exactly() {
     assert_eq!(
-        commit_slot_response(CommitSlotDiagnostic::Empty),
-        MemoryCommitSlotResponse {
+        commit_snapshot_response(CommitSnapshotDiagnostic::Empty),
+        MemoryCommitSnapshotResponse {
             present: false,
             generation: None,
             valid: false,
         }
     );
     assert_eq!(
-        commit_slot_response(CommitSlotDiagnostic::Valid { generation: 7 }),
-        MemoryCommitSlotResponse {
+        commit_snapshot_response(CommitSnapshotDiagnostic::Valid { generation: 7 }),
+        MemoryCommitSnapshotResponse {
             present: true,
             generation: Some(7),
             valid: true,
         }
     );
     assert_eq!(
-        commit_slot_response(CommitSlotDiagnostic::Invalid { generation: 8 }),
-        MemoryCommitSlotResponse {
+        commit_snapshot_response(CommitSnapshotDiagnostic::Invalid { generation: 8 }),
+        MemoryCommitSnapshotResponse {
             present: true,
             generation: Some(8),
             valid: false,
@@ -209,20 +227,14 @@ fn commit_slot_response_maps_runtime_variants_exactly() {
 }
 
 #[test]
-fn commit_recovery_response_maps_invalid_slots_without_unknown_fallback() {
-    let response = commit_recovery_response(Some(CommitStoreDiagnostic {
-        slot0: CommitSlotDiagnostic::Invalid { generation: 3 },
-        slot1: CommitSlotDiagnostic::Empty,
-        recovery: Err(CommitRecoveryError::InvalidCommitSlots {
-            slot0_invalid: true,
-            slot1_invalid: false,
-        }),
-    }));
+fn commit_recovery_response_maps_invalid_snapshot_without_unknown_fallback() {
+    let response =
+        commit_recovery_response(Some(CommitSnapshotDiagnostic::Invalid { generation: 3 }));
 
     assert_eq!(response.authoritative_generation, None);
     assert_eq!(
         response.recovery_error,
-        Some(MemoryCommitRecoveryErrorResponse::InvalidCommitSlots)
+        Some(MemoryCommitRecoveryErrorResponse::InvalidSnapshot)
     );
 }
 
@@ -231,16 +243,11 @@ fn memory_allocation_record_response_includes_live_backing_memory_size() {
     let declaration = AllocationDeclaration::new(
         "app.users.v1",
         MemoryManagerSlot::new(100).expect("usable slot"),
-        None,
         SchemaMetadata::new(Some(7)).expect("current schema"),
     )
     .expect("declaration");
-    let ledger = AllocationLedger::new(0, Vec::new())
-        .expect("genesis ledger")
-        .stage_reservation_generation(&[declaration])
-        .expect("reservation generation");
     let record = DiagnosticRecord {
-        allocation: ledger.records()[0].clone(),
+        allocation: allocation_record(&declaration, AllocationState::Reserved),
         memory_size: Some(DiagnosticMemorySize::from_wasm_pages(3)),
     };
 
@@ -273,16 +280,11 @@ fn memory_allocation_record_response_omits_unmeasured_sizes() {
     let declaration = AllocationDeclaration::new(
         "app.users.v1",
         MemoryManagerSlot::new(100).expect("usable slot"),
-        None,
         SchemaMetadata::default(),
     )
     .expect("declaration");
-    let ledger = AllocationLedger::new(0, Vec::new())
-        .expect("genesis ledger")
-        .stage_reservation_generation(&[declaration])
-        .expect("reservation generation");
     let record = DiagnosticRecord {
-        allocation: ledger.records()[0].clone(),
+        allocation: allocation_record(&declaration, AllocationState::Reserved),
         memory_size: None,
     };
 
@@ -321,49 +323,44 @@ impl Memory for RefusableMemory {
 }
 
 #[test]
-fn early_default_access_preserves_configured_bootstrap_and_authority() {
-    // A fresh thread isolates the default runtime from other native store tests.
+fn early_access_preserves_configured_bootstrap_and_authority() {
     std::thread::spawn(|| {
-        use ic_memory::{RuntimeAdoptionError, RuntimeDiagnosticError, RuntimeOpenError};
-        let key = "canic.core.runtime.bindings.v1";
-        let declarations = ic_memory::sealed_declaration_snapshot().unwrap();
-        assert!(matches!(
-            ic_memory::open_default_memory_manager_memory(key),
-            Err(RuntimeOpenError::NotBootstrapped)
-        ));
-        assert_eq!(
-            ic_memory::default_memory_manager_memory_id(key),
-            Err(RuntimeOpenError::NotBootstrapped)
-        );
-        assert_eq!(
-            ic_memory::verify_default_memory_manager_authority(
-                &declarations,
-                memory::CANIC_CORE_MEMORY_AUTHORITY,
-            ),
-            Err(RuntimeAdoptionError::Open(
-                RuntimeOpenError::NotBootstrapped
-            ))
-        );
-        assert!(matches!(
-            ic_memory::default_memory_manager_memory_allocation_summary(),
-            Err(RuntimeDiagnosticError::NotBootstrapped)
-        ));
+        assert!(!MemoryRegistryOps::is_initialized().unwrap());
+        assert!(MemoryRegistryOps::allocation_summary().is_err());
         assert!(!MemoryRegistryOps::is_initialized().unwrap());
         let pool = memory::pool::framework_pool(Vec::new(), Vec::new()).unwrap();
-        ic_memory::bootstrap_default_memory_manager_with_config(
-            ic_memory::MemoryManagerConfig::new(1).unwrap(),
-            &pool,
-            &memory::CanicMemoryManagerPolicy::new(),
-        )
+        memory::bootstrap(memory::MemoryBootstrap {
+            requests: memory::requests().unwrap(),
+            pool: pool.clone(),
+            admission: None,
+        })
         .unwrap();
         let before = MemoryRegistryOps::allocation_snapshot().unwrap();
-        assert_eq!(before.bucket_size_pages, 1);
-        let id = ic_memory::default_memory_manager_memory_id(key).unwrap();
-        assert!(pool.contains(id));
-        ic_memory::verify_default_memory_manager_authority(
-            &declarations,
-            memory::CANIC_CORE_MEMORY_AUTHORITY,
-        )
+        assert_eq!(before.bucket_size_pages, memory::configured_bucket_pages());
+        let declarations =
+            ic_memory::SealedDeclarationSnapshot::new(memory::requests().unwrap()).unwrap();
+        memory::runtime::with_runtime(|runtime| {
+            let id = runtime.memory_id("canic.core.runtime.bindings.v1").unwrap();
+            assert!(pool.contains(id));
+            runtime
+                .verify_authority(&declarations, memory::CANIC_CORE_MEMORY_AUTHORITY)
+                .unwrap();
+            Ok(())
+        })
+        .unwrap();
+        memory::runtime::with_runtime(|_| {
+            assert!(matches!(
+                memory::bootstrap(memory::MemoryBootstrap {
+                    requests: memory::requests().unwrap(),
+                    pool: pool.clone(),
+                    admission: None,
+                }),
+                Err(memory::MemoryBootstrapError::Access(
+                    ic_memory::RuntimeDiagnosticError::ReentrantAccess
+                ))
+            ));
+            Ok(())
+        })
         .unwrap();
         assert_eq!(MemoryRegistryOps::allocation_snapshot().unwrap(), before);
     })
@@ -379,7 +376,8 @@ fn ledger_growth_refusal_publishes_no_authority_and_retries_canic_bootstrap() {
         ic_memory::MemoryManagerConfig::new(1).unwrap(),
     )
     .unwrap();
-    let declarations = ic_memory::sealed_declaration_snapshot().unwrap();
+    let declarations =
+        ic_memory::SealedDeclarationSnapshot::new(memory::requests().unwrap()).unwrap();
     let policy = memory::CanicMemoryManagerPolicy::new();
     let pool = memory::pool::framework_pool(Vec::new(), Vec::new()).unwrap();
     let before = backing.bytes.borrow().clone();
@@ -419,7 +417,7 @@ fn application_growth_refusal_preserves_shared_extents_and_retry() {
     .unwrap();
     runtime
         .bootstrap(
-            &ic_memory::sealed_declaration_snapshot().unwrap(),
+            &ic_memory::SealedDeclarationSnapshot::new(memory::requests().unwrap()).unwrap(),
             &memory::pool::framework_pool(Vec::new(), Vec::new()).unwrap(),
             &memory::CanicMemoryManagerPolicy::new(),
         )
@@ -528,21 +526,10 @@ fn ledger_snapshot_preserves_anchor_commit_evidence_and_current_schema_over_cand
 fn retired_allocation_projection_keeps_its_slot_and_latest_schema() {
     let slot = MemoryManagerSlot::new(100).unwrap();
     let key = "app.users.v1";
-    let declaration = AllocationDeclaration::new(
-        key,
-        slot.clone(),
-        None,
-        SchemaMetadata::new(Some(7)).unwrap(),
-    )
-    .unwrap();
-    let ledger = AllocationLedger::new(0, Vec::new())
-        .unwrap()
-        .stage_reservation_generation(&[declaration])
-        .unwrap()
-        .stage_retirement_generation(&AllocationRetirement::new(key, slot).unwrap())
-        .unwrap();
+    let declaration =
+        AllocationDeclaration::new(key, slot, SchemaMetadata::new(Some(7)).unwrap()).unwrap();
     let response = memory_allocation_record_response(DiagnosticRecord {
-        allocation: ledger.records()[0].clone(),
+        allocation: allocation_record(&declaration, AllocationState::Retired),
         memory_size: None,
     });
     assert_eq!(response.memory_manager_id, Some(100));

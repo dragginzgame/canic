@@ -7,9 +7,8 @@
 use crate::replay_policy::{
     quota::{
         DEPLOYMENT_QUOTA_V1, DEPLOYMENT_RESERVE_V1, DURABLE_PUBLISH_QUOTA_V1,
-        DURABLE_PUBLISH_RESERVE_V1, ISSUER_CANISTER_SIGNATURE_PREPARE_QUOTA_V1,
-        ROOT_CANISTER_SIGNATURE_PREPARE_QUOTA_V1, ROOT_CHAIN_KEY_SIGNING_QUOTA_V1,
-        VALUE_TRANSFER_QUOTA_V1, VALUE_TRANSFER_RESERVE_V1,
+        DURABLE_PUBLISH_RESERVE_V1, ROOT_CANISTER_SIGNATURE_PREPARE_QUOTA_V1,
+        ROOT_CHAIN_KEY_SIGNING_QUOTA_V1, VALUE_TRANSFER_QUOTA_V1, VALUE_TRANSFER_RESERVE_V1,
     },
     types::{
         CommandReplayPolicy, CostClass, ReplayCommandKindLabel, ReplayCommandManifestLabel,
@@ -332,7 +331,6 @@ pub const MANAGED_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &[
         None,
         None,
     ),
-    response_idempotent("ApplicationSession", "auth.application_session.v1"),
     replay_protected(
         "CallerAuthority",
         "caller_authority.publication.v1",
@@ -352,13 +350,6 @@ pub const MANAGED_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &[
         "fleet_admission.open_target.v1",
         CostClass::None,
         None,
-        None,
-    ),
-    replay_protected(
-        "PrepareDelegatedToken",
-        "auth.prepare_delegated_token.v1",
-        CostClass::IssuerCanisterSignaturePrepare,
-        Some(ISSUER_CANISTER_SIGNATURE_PREPARE_QUOTA_V1),
         None,
     ),
     replay_protected(

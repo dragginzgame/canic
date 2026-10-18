@@ -135,7 +135,7 @@ fn perf_context_metrics() -> Vec<PerfProbeMetric> {
             Some(PerfProbeMetric {
                 name,
                 count: entry.count,
-                instructions: entry.total_instructions,
+                instructions: u64::try_from(entry.total_instructions).ok()?,
             })
         })
         .collect()

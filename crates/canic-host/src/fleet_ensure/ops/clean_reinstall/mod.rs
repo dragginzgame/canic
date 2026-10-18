@@ -21,7 +21,7 @@ use crate::fleet_ensure::{
         read_current, write_current,
     },
 };
-use ic_host_fs::durable::write_bytes;
+use ic_host_fs::durable::{PublicationMode, WriteOptions, write_bytes};
 use ic_host_fs::read::read_optional_file_no_follow;
 
 use candid::Principal;
@@ -197,12 +197,19 @@ pub(in crate::fleet_ensure) fn import_request(
     })? {
         Some(existing) if existing == bytes => {}
         Some(_) => return Err(EnsureStateError::InvalidTerminalSource),
-        None => write_bytes(&declarations, &bytes)
-            .map_err(crate::publication::ops::io_error)
-            .map_err(|source| EnsureStateError::Io {
-                path: declarations.clone(),
-                source,
-            })?,
+        None => write_bytes(
+            &declarations,
+            WriteOptions {
+                mode: PublicationMode::Replace,
+                permissions: 0o666,
+            },
+            &bytes,
+        )
+        .map_err(crate::publication::ops::io_error)
+        .map_err(|source| EnsureStateError::Io {
+            path: declarations.clone(),
+            source,
+        })?,
     }
     let maximum_root_paid_calls =
         canic_core::control_plane_support::policy::pool_import::recommended_calls(samples.len())

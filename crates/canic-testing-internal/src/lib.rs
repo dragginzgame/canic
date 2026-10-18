@@ -6,3 +6,4 @@
 pub mod canister;
 pub mod embedded_root;
 pub mod pic;
+pub mod workspace;

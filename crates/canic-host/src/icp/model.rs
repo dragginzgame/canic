@@ -42,7 +42,6 @@ pub struct IcpCli {
     pub(super) environment: Option<String>,
     pub(super) cwd: Option<PathBuf>,
     pub(super) local_replica: Option<LocalReplicaTarget>,
-    pub(super) inherited_fd: Option<i32>,
     pub(super) identity_password_file: Option<PathBuf>,
     pub(super) selected_identity: std::sync::Arc<std::sync::OnceLock<String>>,
     pub(super) compatible_version: std::sync::Arc<std::sync::Mutex<Option<String>>>,
@@ -120,7 +119,6 @@ struct IcpCommandIdentity<'a> {
     environment: Option<&'a str>,
     cwd: Option<&'a std::path::Path>,
     local_replica: Option<&'a LocalReplicaTarget>,
-    inherited_fd: Option<i32>,
     identity_password_file: Option<&'a std::path::Path>,
     selected_identity: Option<&'a str>,
 }
@@ -132,7 +130,6 @@ impl IcpCli {
             environment: self.environment.as_deref(),
             cwd: self.cwd.as_deref(),
             local_replica: self.local_replica.as_ref(),
-            inherited_fd: self.inherited_fd,
             identity_password_file: self.identity_password_file.as_deref(),
             selected_identity: self.selected_identity.get().map(String::as_str),
         }

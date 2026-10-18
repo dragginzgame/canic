@@ -7,7 +7,7 @@
 mod artifact;
 mod constants;
 mod execute;
-mod io;
+pub(in crate::restore) mod io;
 mod precondition;
 mod preview;
 mod status;

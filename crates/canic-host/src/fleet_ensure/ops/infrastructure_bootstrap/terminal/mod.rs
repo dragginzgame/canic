@@ -9,7 +9,10 @@ use crate::fleet_ensure::{
     ops::{EnsurePaths, infrastructure_bootstrap::InfrastructureBootstrapError},
     view::infrastructure_bootstrap::InfrastructureBootstrapObservation,
 };
-use ic_host_fs::{durable::write_bytes, read::read_optional_file_no_follow};
+use ic_host_fs::{
+    durable::{PublicationMode, WriteOptions, write_bytes},
+    read::read_optional_file_no_follow,
+};
 use serde::Serialize;
 use sha2_host::{Digest, Sha256};
 use std::path::PathBuf;
@@ -83,7 +86,15 @@ pub(in crate::fleet_ensure) fn retain(
         }
         return Ok(());
     }
-    write_bytes(&destination, &bytes).map_err(crate::publication::ops::io_error)?;
+    write_bytes(
+        &destination,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &bytes,
+    )
+    .map_err(crate::publication::ops::io_error)?;
     Ok(())
 }
 

@@ -1,7 +1,7 @@
 //! Retain upstream cache phase timings without combining nested durations.
 
 use super::{ACTIVE, emit};
-use ic_testkit::artifacts::ArtifactCacheOutcome;
+use ic_build::artifacts::ArtifactCacheOutcome;
 use serde::Serialize;
 
 /// One completed cache acquisition, bound to its owning journey phase/process.

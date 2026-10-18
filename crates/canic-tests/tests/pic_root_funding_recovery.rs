@@ -4,10 +4,7 @@ use candid::{CandidType, Deserialize, Principal, encode_one};
 use canic_testing_internal::pic::{
     CanicWasmBuildProfile, InternalTestWasms, build_internal_test_wasm_canisters, start_pocket_ic,
 };
-use ic_testkit::{
-    artifacts::{test_target_dir, workspace_root_for},
-    pic::{CandidCallExt, InstallSpec, PocketIc, PocketIcBuilder, prelude::*},
-};
+use ic_testkit::pic::{CandidCallExt, InstallSpec, PocketIc, PocketIcBuilder, prelude::*};
 use std::{
     path::{Path, PathBuf},
     sync::OnceLock,
@@ -323,8 +320,9 @@ fn emergency_refill_recovery_floor_covers_transfer_and_notify_response_loss() {
         EmergencyRefillPhase::Transferred { block_index: 77 }
     );
 
-    let completed: EmergencyRefillOperation =
-        pic.update_candid_or_panic(root, "root_funding_probe_emergency_refill", ());
+    let completed: EmergencyRefillOperation = pic
+        .update_candid(root, "root_funding_probe_emergency_refill", ())
+        .expect("update Candid harness call");
     assert_eq!(
         completed.phase,
         EmergencyRefillPhase::Completed {
@@ -548,55 +546,64 @@ fn assert_and_report_headroom(prepared: &GrantIntent, balance: BalanceObservatio
 }
 
 fn install_probe(pic: &PocketIc, wasm: Vec<u8>, init: ProbeInit, cycles: u128) -> Principal {
-    pic.create_and_install(
+    pic.try_create_and_install(
         InstallSpec::new(wasm, encode_one(init).expect("encode probe init"), cycles)
             .label("root_funding_probe"),
     )
+    .expect("install test canister")
 }
 
 fn prepare(pic: &PocketIc, coordinator: Principal, root: Principal) -> GrantIntent {
-    pic.update_candid_or_panic(
+    pic.update_candid(
         coordinator,
         "root_funding_probe_prepare",
         (root, OPERATION_ID, GRANT_CYCLES),
     )
+    .expect("update Candid harness call")
 }
 
 fn issue(pic: &PocketIc, coordinator: Principal) -> IssueResult {
-    pic.update_candid_or_panic(coordinator, "root_funding_probe_issue", ())
+    pic.update_candid(coordinator, "root_funding_probe_issue", ())
+        .expect("update Candid harness call")
 }
 
 fn issue_root_accept_then_trap(pic: &PocketIc, coordinator: Principal) -> IssueResult {
-    pic.update_candid_or_panic(
+    pic.update_candid(
         coordinator,
         "root_funding_probe_issue_root_accept_then_trap",
         (),
     )
+    .expect("update Candid harness call")
 }
 
 fn request_from_root(pic: &PocketIc, root: Principal) -> RootRequestObservation {
-    pic.update_candid_or_panic(root, "root_funding_probe_request", ())
+    pic.update_candid(root, "root_funding_probe_request", ())
+        .expect("update Candid harness call")
 }
 
 fn intent(pic: &PocketIc, coordinator: Principal) -> Option<GrantIntent> {
-    pic.query_candid_or_panic(coordinator, "root_funding_probe_intent", ())
+    pic.query_candid(coordinator, "root_funding_probe_intent", ())
+        .expect("query Candid harness call")
 }
 
 fn receipt(pic: &PocketIc, root: Principal) -> Option<GrantReceipt> {
-    pic.query_candid_or_panic(root, "root_funding_probe_receipt", ())
+    pic.query_candid(root, "root_funding_probe_receipt", ())
+        .expect("query Candid harness call")
 }
 
 fn acceptance_observation(pic: &PocketIc, root: Principal) -> Option<AcceptanceObservation> {
-    pic.query_candid_or_panic(root, "root_funding_probe_acceptance_observation", ())
+    pic.query_candid(root, "root_funding_probe_acceptance_observation", ())
+        .expect("query Candid harness call")
 }
 
 fn emergency_operation(pic: &PocketIc, root: Principal) -> Option<EmergencyRefillOperation> {
-    pic.query_candid_or_panic(root, "root_funding_probe_emergency_operation", ())
+    pic.query_candid(root, "root_funding_probe_emergency_operation", ())
+        .expect("query Candid harness call")
 }
 
 fn build_canisters(workspace_root: &Path) -> &'static InternalTestWasms {
     BUILD_ONCE.get_or_init(|| {
-        let target_dir = test_target_dir(workspace_root, "pic-runtime-wasm");
+        let target_dir = workspace_root.join("target").join("pic-runtime-wasm");
         build_internal_test_wasm_canisters(
             workspace_root,
             &target_dir,
@@ -607,6 +614,6 @@ fn build_canisters(workspace_root: &Path) -> &'static InternalTestWasms {
 }
 
 fn workspace_root() -> PathBuf {
-    workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+    canic_testing_internal::workspace::discover()
         .expect("discover Canic test workspace through Cargo")
 }

@@ -15,26 +15,14 @@ use crate::fleet_ensure::{
     model::operator_mint::{OperatorMintIntentRecord, OperatorMintNotificationOutcomeRecord},
     ops::operator_mint::{OperatorMintWireError, validate_intent},
 };
-use candid::{CandidType, Nat};
 use ic_agent::Agent;
-use icrc_ledger_types::{icrc::generic_value::Value, icrc3::blocks::ICRC3DataCertificate};
-use serde::Deserialize;
+use icrc_ledger_types::icrc3::blocks::ICRC3DataCertificate;
 use sha2_host::{Digest, Sha256};
 use thiserror::Error;
 
 pub use certificate::CertificateVerificationError;
 
-/// Exact block projection returned by the reviewed Cycles Ledger wire contract.
-///
-/// Ops retains upstream `Value`, including its declared `Nat64` alternative;
-/// the narrower `ICRC3Value` is not this Ledger's declared response type.
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct CyclesLedgerBlock {
-    /// Ledger-local block index; bounded before admission.
-    pub id: Nat,
-    /// Untrusted generic block, authenticated only by the receipt verifier.
-    pub block: Value,
-}
+pub use ic_query::ledger_evidence::LedgerBlock;
 
 /// Ops-owned work bounds selected by the receipt reader before consuming evidence.
 /// The transport must separately bound response bytes before Candid decoding.
@@ -152,7 +140,7 @@ pub fn verify_cycles_deposit(
     intent: &OperatorMintIntentRecord,
     outcome: &OperatorMintNotificationOutcomeRecord,
     evidence: &ICRC3DataCertificate,
-    chain: &[CyclesLedgerBlock],
+    chain: &[LedgerBlock],
     limits: ReceiptVerificationLimits,
 ) -> Result<VerifiedCyclesDeposit, DepositVerificationError> {
     validate_intent(intent)?;
@@ -168,13 +156,24 @@ pub fn verify_cycles_deposit(
     if network_identity_sha256(&root_key) != intent.authority.network_identity_sha256 {
         return Err(DepositVerificationError::NetworkMismatch);
     }
-    blocks::check_budget(chain, limits)?;
+    let admitted = ic_query::ledger_evidence::BoundedLedgerBlocks::admit(
+        chain,
+        ic_query::ledger_evidence::BlockEvidenceLimits {
+            blocks: limits.blocks,
+            nodes: limits.value_nodes,
+            bytes: limits.value_bytes,
+            depth: limits.depth,
+        },
+    )
+    .map_err(blocks::evidence_error)?;
     let tip = certificate::verify(agent, intent.authority.cycles_ledger, evidence, limits)?;
     // Detect configuration changes while the Agent was authenticating evidence.
     if agent.read_root_key() != root_key {
         return Err(DepositVerificationError::NetworkMismatch);
     }
-    let deposit = blocks::verify_chain(chain, &tip, *deposit_block_index)?;
+    let deposit = admitted
+        .verify_chain(&tip, *deposit_block_index)
+        .map_err(blocks::evidence_error)?;
     let (net_credit_cycles, deposit_fee_cycles) =
         blocks::deposit_amounts(deposit, intent, *gross_minted_cycles)?;
     Ok(VerifiedCyclesDeposit {

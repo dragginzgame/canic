@@ -235,7 +235,7 @@ fn observe_build_environment(root: &Path) {
             "cargo_probe_micros": cargo_micros,
             "synthetic_sealing_micros": sealing_started.elapsed().as_micros(),
             "elapsed_micros": started.elapsed().as_micros(),
-            "inputs": reuse.inputs.digest(),
+            "inputs": reuse.inputs.digest().unwrap().to_hex(),
             "release": release,
             "reused": reused,
             "miss_reason": miss_reason,

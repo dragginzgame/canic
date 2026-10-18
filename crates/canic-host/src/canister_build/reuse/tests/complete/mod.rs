@@ -80,7 +80,7 @@ fn prepared_reuse_with_progress(
         record_path: context
             .icp_root
             .join(".canic/build-reuse")
-            .join(format!("{}.json", inputs.digest())),
+            .join(format!("{}.json", inputs.digest().unwrap())),
         inputs,
         tool_paths: vec![],
         lock,

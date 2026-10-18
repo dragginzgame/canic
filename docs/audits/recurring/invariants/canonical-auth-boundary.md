@@ -3,7 +3,7 @@
 ## Method Contract
 
 - Audit ID: `CANIC-AUTH-BOUNDARY-001`
-- Method version: `1`
+- Method version: `2`
 - Disposition: `revise`
 - Owner: authenticated entrypoint convergence and endpoint verifier boundary
 - Kind/profile: security `invariant`
@@ -16,388 +16,43 @@
   full boundary
 - Shared contract: [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
 
-## Purpose
-
-Ensure every authenticated request enters through one canonical verification boundary.
-
-This audit distinguishes the current auth boundaries:
-
-- public delegated-token endpoint auth through `auth::authenticated(...)`,
-  which must run the full endpoint pipeline below;
-- signed role-attestation verification through explicit
-  `SignedRoleAttestation` verification helpers/endpoints, which must verify
-  the embedded root canister-signature proof and must not be treated as
-  delegated-token endpoint auth;
-- root proof provisioning and issuer-local delegated-token issuance endpoints,
-  which must remain explicit provisioning/issuer surfaces and must not become
-  alternate endpoint-auth verifier paths.
-
-## Risk Model / Invariant
-
-All authenticated execution paths must pass through the canonical authentication verifier before authorization or handler logic executes.
-
-No alternate entrypoint may perform partial or weaker authentication.
-
-The canonical boundary must perform or invoke verification stages for:
-
-- token signature validation
-- trust-chain validation
-- stable audience verification
-- local-role grant authorization
-- subject-caller binding
-- required-scope validation
-- freshness / expiry verification
-- bearer-token verification without verifier-local token-use writes
-
-## Why This Matters
-
-Auth fragmentation creates bypass risk when internal helpers, macros, or special endpoints apply weaker checks.
-
-## Canonical Authentication Pipeline
-
-The canonical endpoint authentication pipeline must follow this structure:
-
-`token verification -> subject binding -> required-scope validation -> authorization success -> handler execution`
-
-Token-material verification is not by itself the endpoint boundary. Any helper
-that verifies signatures, freshness, audience, or scopes without also binding
-the verified subject to the caller must remain private to a narrower workflow
-and must not be exported as endpoint authorization. Domain replay protection is
-not part of delegated-token verification.
-
-## Relationship to Other Invariants
-
-This invariant verifies that all authenticated execution paths converge on the canonical authentication verifier.
-
-Other invariants verify the correctness of individual verification stages:
-
-- Token Trust Chain Invariant
-- Subject-Caller Binding Invariant
-- Audience Target Binding Invariant
-- Expiry / Replay / Single-Use Invariant
-
-## Run This Audit After
-
-- endpoint or dispatcher changes
-- macro / DSL auth wiring changes
-- signed role-attestation verification changes
-- internal/admin endpoint additions
-- migration or recovery auth-flow updates
-- delegated-token audience DTO changes
-
-## Report Preamble (Required)
-
-Every report generated from this audit must include:
-
-- Scope
-- Compared baseline report path
-- Code snapshot identifier
-- Method tag/version: `CANIC-AUTH-BOUNDARY-001/v1`
-- Comparability status
-
-## Audit Checklist
-
-### 1. Map Entrypoints
-
-Identify all authenticated start points:
-
-- public update/query endpoints
-- `#[canic_query]` / `#[canic_update]` generated wrappers
-- dispatcher helpers
-- internal/admin service endpoints
-- migration/recovery entrypoints
-- macro-generated authenticated handlers
-- delegated-session bootstrap ingress
-- root proof provisioning endpoints
-- role-attestation prepare/get/verify endpoints or helpers
-
-### 2. Verify Convergence
-
-Search terms:
-
-```bash
-rg -n 'authenticated\(|delegated_token_verified|resolve_authenticated_identity|verify_token|verify_token_material|require_auth|admin_|internal_|system_' \
-  crates/canic-core/src crates/canic-macros/src crates/canic/src -g '*.rs'
-```
-
-Current primary paths to inspect:
-
-```bash
-rg -n 'access_stage|resolve_authenticated_identity|eval_access|auth::authenticated' \
-  crates/canic-macros/src/endpoint -g '*.rs'
-
-rg -n 'SignedRoleAttestation|verify_role_attestation|canic_prepare_role_attestation|canic_get_role_attestation|RoleAttestation' \
-  crates/canic-macros/src/endpoint crates/canic-core/src/api crates/canic/src/macros/endpoints -g '*.rs'
-
-rg -n 'delegated_token_verified|AuthOps::verify_token|enforce_subject_binding|enforce_required_scope' \
-  crates/canic-core/src/access/auth crates/canic-core/src/ops/auth -g '*.rs'
-```
-
-Confirm:
-
-- all authenticated paths call the canonical verifier directly, or through a thin wrapper that does not alter verification semantics
-- no special-case endpoint duplicates weaker auth logic
-- no internal-only path assumes prior verification without proof
-- no public helper exposes partial "verified token" semantics without caller
-  binding and endpoint-required scope enforcement
-- delegated-token verification remains bearer-token verification; domain replay
-  protection must live in command operation receipts, not verifier-local token
-  use state
-- endpoint audience handling is limited to the current `Canister`,
-  `CanicSubnet`, and `Project` variants
-- signed role-attestation helpers verify root canister-signature proof
-  material before accepting role claims
-
-### 3. Verify Ordering
-
-Confirm canonical stage ordering:
-
-`token verification -> subject binding -> required-scope validation -> authorization success -> handler execution`
-
-The generated endpoint wrapper must resolve transport caller and authenticated
-subject before access evaluation, and handler code must run only after
-`eval_access(...)` succeeds.
-
-### 4. Verify Non-Production Paths
-
-Confirm debug, migration, test-only, and feature-flagged code cannot weaken production auth behavior.
-
-### 5. Test Expectations
-
-- integration test for canonical dispatcher flow
-- regression test proving alternate entrypoints cannot bypass verifier
-
-## Structural Hotspots
-
-List concrete files/modules/structs that carry boundary convergence risk.
-
-Detection commands (run and record output references):
-
-```bash
-rg '^use ' crates/ -g '*.rs'
-rg 'crate::workflow|crate::ops|crate::api|crate::policy' crates/ -g '*.rs'
-rg 'pub struct|impl ' crates/ -g '*.rs'
-git log --name-only -n 20 -- crates/
-```
-
-| File / Module | Struct / Function | Reason | Risk Contribution |
-| --- | --- | --- | --- |
-| `crates/canic-macros/src/endpoint/expand/access.rs` | `access_stage`, `build_access_plan` | macro entrypoint convergence wiring | High |
-| `crates/canic-core/src/access/expr/mod.rs` | `AccessContext`, `eval_access` | central auth dispatch boundary | High |
-| `crates/canic-core/src/access/expr/evaluators.rs` | `AuthenticatedEvaluator` | routes authenticated predicates into delegated-token verification | High |
-| `crates/canic-core/src/access/auth/token.rs` | `delegated_token_verified`, `verify_token` | endpoint auth ordering owner | High |
-| `crates/canic-core/src/ops/auth/token/mod.rs` | `AuthOps::verify_token` | token-material verification | High |
-| `crates/canic-core/src/api/auth/mod.rs` | `verify_token_material` | private partial verifier for delegated-session bootstrap only | Medium |
-| `crates/canic-core/src/api/auth/mod.rs` | `verify_role_attestation` | explicit signed role-attestation verification helper | Medium |
-
-If none are detected in a given run, state: No structural hotspots detected in this run.
-
-## Hub Module Pressure
-
-Detect modules trending toward gravity-well behavior from import fan-in, cross-layer coupling, and edit frequency.
-
-| Module | Import Tokens | Unique Subsystems | Cross-Layer Count | Pressure Score |
-| --- | --- | ---: | ---: | ---: |
-| `<module>` | `<top import tokens>` | `<n>` | `<n>` | `<1-10>` |
-
-Pressure score guidance:
-
-- 1-3 = low
-- 4-6 = moderate
-- 7-10 = high
-
-## Red Flags
-
-- duplicated auth logic in endpoint-local code
-- internal/admin bypasses around canonical verifier
-- ordering drift where authorization can execute before identity binding
-- endpoint performs authorization without calling canonical verifier
-- internal service path trusts upstream verification without proof
-- public `AuthApi::verify_token`-style helper returning verified-token
-  semantics without endpoint caller binding and required-scope enforcement
-- `verify_token_material` becoming public or being used as endpoint
-  authorization
-- endpoint macro accepting authenticated endpoints without a first
-  `DelegatedToken` argument
-- endpoint auth accepting an audience outside `Canister`, `CanicSubnet`, or
-  `Project`
-- endpoint auth authorizing from audience without checking the signed local-role
-  grant
-- signed role-attestation acceptance paths reaching role claims without
-  `verify_role_attestation` or equivalent root-proof verification
-
-## Severity
-
-High to Critical depending on bypass scope.
-
-## Early Warning Signals
-
-Detect predictive architecture-decay patterns before they appear as friction or failures.
-
-Detection scans (run and record output references):
-
-```bash
-rg 'enum ' crates/ -g '*.rs'
-rg 'pub struct|pub fn' crates/ -g '*.rs'
-rg '^use ' crates/ -g '*.rs'
-git log --name-only -n 20 -- crates/
-```
-
-| Signal | Location | Evidence | Risk |
-| --- | --- | --- | --- |
-| `<signal>` | `<path or module>` | `<scan evidence>` | `<Low/Medium/High>` |
-| `dependency fan-in hub` | `<module path>` | `imported by <n> files across <subsystems>` | `<Low/Medium/High>` |
-
-### Enum Shock Radius
-
-| Enum | Defined In | Reference Files | Risk |
-| --- | --- | ---: | --- |
-| `<EnumName>` | `<path>` | `<count>` | `<Low/Medium/High>` |
-
-Thresholds:
-
-- `0-5` references = normal
-- `6-10` = coupling forming
-- `10+` = architectural shock radius
-
-### Cross-Layer Struct Spread
-
-| Struct | Defined In | Layers Referencing | Risk |
-| --- | --- | --- | --- |
-| `<StructName>` | `<path>` | `<api/workflow/ops/policy>` | `<Low/Medium/High>` |
-
-### Growing Hub Modules
-
-| Module | Subsystems Imported | Recent Commits | Risk |
-| --- | --- | ---: | --- |
-| `<path>` | `<subsystems>` | `<count>` | `<Low/Medium/High>` |
-
-### Capability Surface Growth
-
-| Module | Public Items | Risk |
-| --- | ---: | --- |
-| `<path>` | `<count pub fn + pub struct>` | `<Low/Medium/High>` |
-
-Thresholds:
-
-- `0-10` = normal
-- `10-20` = growing surface
-- `20+` = risk
-
-If no predictive signals are detected, state: No predictive architectural signals detected in this run.
-
-## Dependency Fan-In Pressure
-
-Detect modules and structs becoming architectural gravity wells before friction increases.
-
-Detection scans (run and record output references):
-
-```bash
-rg "use crate::" crates/ -g "*.rs"
-rg "pub struct" crates/ -g "*.rs"
-# then: rg "<StructName>" crates/ -g "*.rs"
-```
-
-### Module Fan-In
-
-Count how many files import each module; flag modules imported by `6+` files.
-
-| Module | Import Count | Subsystems Referencing | Pressure Level |
-| --- | ---: | --- | --- |
-| `<module path>` | `<count>` | `<api/workflow/ops/policy/...>` | `<Low/Medium/High>` |
-
-Pressure level rules:
-
-- `0-3` imports = normal
-- `4-6` imports = rising pressure
-- `7-10` imports = hub forming
-- `10+` imports = architectural gravity well
-
-### Struct Fan-In
-
-Count references for public structs; flag structs referenced in `6+` files.
-
-| Struct | Defined In | Reference Count | Risk |
-| --- | --- | ---: | --- |
-| `<StructName>` | `<path>` | `<count>` | `<Low/Medium/High>` |
-
-Interpretation:
-
-- `6-8` references = coupling forming
-- `9-12` = hub abstraction
-- `12+` = system dependency center
-
-If no modules exceed the fan-in threshold, state: No fan-in pressure detected in this run.
-
-## Risk Score
-
-Risk Score: **X / 10**
-
-Interpretation scale:
-
-- 0-2 = negligible risk
-- 3-4 = low risk
-- 5-6 = moderate risk
-- 7-8 = high risk
-- 9-10 = critical architectural risk
-
-Score must be justified using checklist findings and Structural Hotspots evidence.
-
-Derivation guidance (deterministic):
-
-- start at `0`
-- add `+4` for any confirmed boundary bypass
-- add `+2` per medium/high hotspot contribution (max `+4`)
-- add `+2` if any hub module pressure score is `>= 7`
-- add `+1` if enum shock radius is detected (`> 6` reference files)
-- add `+1` if cross-layer struct spread is detected (`>= 3` architecture layers)
-- add `+2` if growing hub module signal is detected
-- add `+1` if capability public surface is `> 20` items
-- add `+1` for fan-in `6-8` across multiple subsystems
-- add `+2` for fan-in `9-12` across multiple subsystems
-- add `+3` for fan-in `12+` across multiple subsystems
-- clamp to `0..10`
-
-If no confirmed findings and no hotspot/hub signals are present, score must remain `0-2`.
-
-## Verification Readout
-
-Use command outcomes with normalized statuses:
-
-- `PASS`
-- `FAIL`
-- `BLOCKED`
-
-Expected focused validation commands:
-
-```bash
-cargo test -p canic-macros authenticated -- --nocapture
-cargo test -p canic-core --lib verify_delegated_token -- --nocapture
-cargo test -p canic-core --lib resolve_authenticated_identity -- --nocapture
-cargo test -p canic-core --lib caller_predicates_use_transport_caller_not_authenticated_subject -- --nocapture
-cargo test -p canic-core --lib required_scope_rejects_when_scope_missing -- --nocapture
-cargo test -p canic-core --lib subject_binding_rejects_mismatched_subject_and_caller -- --nocapture
-cargo test -p canic-core --lib role_attestation -- --nocapture
-```
-
-## Follow-up Actions
-
-If result is `FAIL`/`PARTIAL` or risk score is `>= 5`, include owner, action, and target report run.
-
-If no action is needed, state: `No follow-up actions required.`
-
-## Reporting Template
-
-- Scope:
-- Commit:
-- Canonical verifier reference:
-- Entrypoints reviewed:
-- Result: `PASS` | `FAIL` | `PARTIAL`
-- Divergent path list:
-- Structural Hotspots:
-- Hub Module Pressure:
-- Early Warning Signals:
-- Dependency Fan-In Pressure:
-- Risk Score:
-- Verification Readout:
-- Follow-up actions:
+## Current Scope
+
+Audit transport/topology guards, receiver-local caller authority, Root proof
+provisioning and signed role attestations. Portable application session admission
+is unfinished and must refuse. Root proof readiness and retained session storage
+are not evidence of a working application login service.
+
+Use [authentication architecture](../../../architecture/authentication.md) and
+[access contracts](../../../contracts/ACCESS_ARCHITECTURE.md) for the maintained
+boundaries. Follow the shared report and finding rules in
+[AUDIT-HOWTO.md](../../AUDIT-HOWTO.md).
+
+## Invariant and Trace
+
+Every reachable guarded endpoint executes its declared admission checks before
+handler effects. Trace exported wrappers through access evaluation to the
+canonical attestation or caller-authority verifier. Root provisioning requires
+its explicit controller/registered-caller authority; submitted proof material
+cannot select the trusted Root or expand configured grants.
+
+Inspect `crates/canic/src/macros/endpoints/role.rs`, the endpoint macro access
+expansion, `crates/canic-core/src/access/` and the called auth ops. Confirm that
+proof helpers are not alternate public admission paths. Supplied role attestations
+bind the transport caller and receiving subnet; endpoints separately enforce the
+required role. Root installation verifies configured key policy before storage.
+
+## Focused Evidence
+
+Select endpoint macro, public protocol, role-attestation and caller-authority
+regressions for the paths changed. Record exact source and selected feature graph,
+positive/refusal outcomes and any unexecuted installed case. Portable Auth's
+unfinished integration stays an explicit completion gap in issue #491.
+
+## Report
+
+Include scope, source identity, method version/fingerprint, compared baseline,
+trace paths, focused evidence, findings, residual risk and owner/action. Classify
+results as PASS, FAIL, PARTIAL or BLOCKED with reasons. This revision follows the
+current product surface; historical reports retain their original product and
+method identities and are not relabeled or directly compared as current evidence.

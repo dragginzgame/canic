@@ -12,7 +12,8 @@ for name in bump-version require-jq read-workspace-version read-cargo-workspace-
     next-release-version check-release-draft-ready sync-release-surface-version; do
     cp "$ROOT/scripts/ci/$name.sh" "$fixture/base/scripts/ci/"
 done
-cp "$ROOT/scripts/ci/rewrite-local-lock-versions.pl" "$ROOT/scripts/ci/finalize-release-changelog.awk" "$fixture/base/scripts/ci/"
+cp "$ROOT/scripts/ci/rewrite-local-lock-versions.pl" "$ROOT/scripts/ci/finalize-release-changelog.awk" \
+    "$ROOT/scripts/ci/validate-release-inputs.pl" "$fixture/base/scripts/ci/"
 cp "$ROOT/scripts/release/rewrite-owned-lock.sh" "$fixture/base/scripts/release/"
 cp "$ROOT/scripts/release/adapter.sh" "$fixture/base/scripts/release/"
 cat > "$fixture/base/Cargo.toml" <<'TOML'

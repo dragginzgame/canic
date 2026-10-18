@@ -49,10 +49,10 @@ pub struct CapacityImportOperationRecord {
     pub review: CapacityImportOperationReviewRecord,
     pub submissions: BTreeMap<String, u32>,
     pub inspections: BTreeMap<String, u32>,
-    #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub settled_status_candid_hex: Option<String>,
     pub publication_started: bool,
     pub publication_complete: bool,
-    #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub released_status_candid_hex: Option<String>,
 }

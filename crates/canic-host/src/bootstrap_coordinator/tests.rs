@@ -28,6 +28,7 @@ fn coordinator_declaration_pass_exports_candid_only_from_the_selected_leaf() {
     assert_eq!(local.first().map(String::as_str), Some("rustc"));
     assert_eq!(local.iter().filter(|arg| *arg == "--lib").count(), 1);
     assert!(local.contains(&"--locked".to_string()));
+    assert_eq!(local.iter().filter(|arg| *arg == "--lib").count(), 1);
     assert!(
         local
             .windows(2)
@@ -52,6 +53,7 @@ fn coordinator_declaration_pass_exports_candid_only_from_the_selected_leaf() {
     assert_eq!(ic.first().map(String::as_str), Some("build"));
     assert_eq!(ic.iter().filter(|arg| *arg == "--lib").count(), 1);
     assert!(ic.contains(&"--locked".to_string()));
+    assert_eq!(ic.iter().filter(|arg| *arg == "--lib").count(), 1);
     assert_eq!(
         coordinator_cargo_build_command(&context, manifest, false)
             .get_envs()

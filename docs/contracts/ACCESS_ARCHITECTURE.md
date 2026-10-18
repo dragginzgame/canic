@@ -7,7 +7,7 @@ endpoint boundaries.
 
 Access checks are grouped into three policy families:
 - `fleet`: Fleet mode gates (update/query availability).
-- `auth`: caller/topology/registry checks and delegated-token verification.
+- `auth`: caller/topology/registry checks and role-attestation verification.
 - `env`: environment/build/network predicates.
 
 Implementation root:
@@ -29,34 +29,10 @@ separate policy family.
 
 - Parent, child, root, self, controller, whitelist, and subnet-registry checks
   use the raw transport caller, not delegated user identity.
-- Canister-to-canister service authorization uses explicit
-  `SignedRoleAttestation` verification or public delegated-token authenticated
-  endpoints.
-- Subnet-registry caller predicates are internal-only endpoint rules. Public
-  user ingress should use `auth::authenticated(...)`.
-
-## Service Call Recipes
-
-For application calls, expose a public delegated-token authenticated endpoint:
-
-```rust
-#[canic::canic_update(requires(auth::authenticated("project.assign")))]
-async fn assign_project(token: canic::dto::auth::DelegatedToken, request: AssignRequest)
-    -> Result<(), canic::Error>
-{
-    let _ = token;
-    assign_project_impl(request).await
-}
-```
-
-Raw `icp canister call` commands must call public, non-internal application
-endpoints. For external scripts, expose a public endpoint and call it with
-ordinary Candid:
-
-```bash
-env -u ICP_NETWORK icp canister call <shard> public_assign_project \
-  '(principal "<user>", principal "<project>")' -e academic
-```
+- Canister-to-canister service authorization uses exact receiver-local authority
+  or explicit `SignedRoleAttestation` verification with the required role.
+- Application session admission remains unavailable while portable Auth is wired.
+  A service-authority guard must not be substituted for application account auth.
 
 ## Error Boundary
 
@@ -73,57 +49,23 @@ env -u ICP_NETWORK icp canister call <shard> public_assign_project \
 - Both modes use the same short-circuit evaluator and default Fleet guards.
   `public` keeps the Fleet guard; application endpoints must not select `internal`
   to obtain a plain reply. Refusal prevents handler execution.
-- A synchronous handler is supported with either mode. Predicates may await
-  before dispatch; once a synchronous handler starts, the wrapper introduces no
-  await between its durable effects and reply. Custom predicates should remain
-  free of application effects.
+- Endpoint admission is synchronous in both modes. Builtin and custom checks
+  use local authority and supplied proofs; they cannot await network I/O. Custom
+  checks implement `canic::access::AccessCheck` with synchronous `eval` and
+  remain free of application effects. Generated wrappers are async only when
+  the handler is async. Proof issuance, provisioning and renewal may still await
+  external calls outside admission.
 
 See [endpoint argument and reply controls](../features/runtime/update-payload-limits.md#bounded-decoding-and-plain-replies)
 for the public API.
 
-## Endpoint Types
+## Supplied role attestations
 
-### Direct endpoints (supported)
-- Caller provides a delegated token as the first candid argument.
-- Endpoint guards apply `auth::authenticated("<required_scope>")`.
-- Verification binds identity to transport principal:
-  `verified.subject == ic_cdk::caller()`.
-
-### Relayed endpoints (not supported)
-- No relay authentication envelope is supported.
-- No `presenter_pid` model is supported.
-- No mode-branching between direct and relayed auth paths is supported.
-
-## Delegated Auth Checks at Access Boundary
-
-`access::auth::authenticated` enforces:
-- token decode from ingress first argument succeeds
-- root authority principal is available from env
-- delegated token cryptographic and structural verification succeeds
-- `token.claims.subject == caller`
-- required scope exists in the token grant for the local canister role
-
-Cryptographic and structural verification is delegated to
-`ops::auth::AuthOps::verify_token`.
-
-When the endpoint selects `decode = LIMITS`, delegated-token and role-attestation
-predicates consume its already bounded, decoded first argument. They do not read
-or decode the message again. Caller, audience, authority, scope and cryptographic
-checks are unchanged. Other custom predicates may also use decoded arguments.
-
-## Audience Binding
-
-Audience answers which Canic boundary may accept the token:
-- `Fleet(FleetKey)` is accepted only when the verifier's immutable protected
-  Fleet binding matches the canonical network and generated Fleet ID exactly.
-
-Authorization is carried by signed role grants:
-- token audience must be accepted locally and be a subset of cert audience
-- token grants must be a subset of cert grants
-- local canister role must have a token grant
-- endpoint required scopes must be present in the local-role grant
-
-This is enforced in `ops::auth` before access is granted.
+`auth::attested_local_subnet()` binds a `SignedRoleAttestation` to the caller
+and the receiving subnet. The endpoint also checks the required role. With
+`decode = LIMITS`, the guard consumes the bounded decoded first argument without
+reading or decoding the message again. Root signature, audience, time and epoch
+checks remain local.
 
 ## Root Authority Source
 

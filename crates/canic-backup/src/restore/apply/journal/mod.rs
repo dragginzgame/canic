@@ -64,10 +64,35 @@ pub struct RestoreApplyJournal {
     pub completed_operations: usize,
     pub failed_operations: usize,
     pub operations: Vec<RestoreApplyJournalOperation>,
+    pub command_custody: Vec<ic_backup::model::command_custody::CommandCustodyRecord>,
     pub operation_receipts: Vec<RestoreApplyOperationReceipt>,
 }
 
 impl RestoreApplyJournal {
+    /// Retain one exact original command identity before any external dispatch.
+    pub(crate) fn retain_command_custody(
+        &mut self,
+        record: &ic_backup::model::command_custody::CommandCustodyRecord,
+    ) -> Result<(), RestoreApplyJournalError> {
+        if let Some(original) = self
+            .command_custody
+            .iter()
+            .find(|original| original.operation_sequence() == record.operation_sequence())
+        {
+            return if original == record {
+                Ok(())
+            } else {
+                Err(RestoreApplyJournalError::InvalidCommandCustody)
+            };
+        }
+        self.command_custody.push(record.clone());
+        if let Err(error) = self.validate() {
+            self.command_custody.pop();
+            return Err(error);
+        }
+        Ok(())
+    }
+
     /// Build the initial no-mutation restore apply journal from a dry-run.
     pub fn from_dry_run(dry_run: &RestoreApplyDryRun) -> Result<Self, RestoreApplyJournalError> {
         dry_run.validate()?;
@@ -115,6 +140,7 @@ impl RestoreApplyJournal {
             completed_operations: 0,
             failed_operations: 0,
             operations,
+            command_custody: Vec::new(),
             operation_receipts: Vec::new(),
         };
         journal.validate()?;
@@ -170,6 +196,25 @@ impl RestoreApplyJournal {
         validate_apply_journal_sequences(&self.operations)?;
         for operation in &self.operations {
             operation.validate()?;
+        }
+        let mut command_sequences = BTreeSet::new();
+        for record in &self.command_custody {
+            let operation = self
+                .operations
+                .iter()
+                .find(|operation| operation.sequence as u64 == record.operation_sequence());
+            let external_operation = operation.is_some_and(|operation| {
+                matches!(
+                    operation.operation,
+                    RestoreApplyOperationKind::UploadSnapshot
+                        | RestoreApplyOperationKind::StopCanister
+                        | RestoreApplyOperationKind::LoadSnapshot
+                        | RestoreApplyOperationKind::StartCanister
+                )
+            });
+            if !external_operation || !command_sequences.insert(record.operation_sequence()) {
+                return Err(RestoreApplyJournalError::InvalidCommandCustody);
+            }
         }
         self.validate_operation_receipt_attempts()?;
         for receipt in &self.operation_receipts {

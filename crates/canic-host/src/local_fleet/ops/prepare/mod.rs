@@ -10,7 +10,7 @@ use crate::{
 use candid::Principal;
 use canic_contracts::ids::CanonicalNetworkId;
 use canic_core::cdk::utils::hash::sha256_hex;
-use ic_host_fs::durable;
+use ic_host_fs::durable::{self, PublicationMode, WriteOptions};
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
@@ -118,8 +118,15 @@ fn save(directory: &Path, record: &LocalPreparationRecord) -> Result<(), LocalFl
     if bytes.len() > 4 * 1024 * 1024 {
         return Err(LocalFleetError::Capacity);
     }
-    durable::write_bytes(&directory.join("preparation.json"), &bytes)
-        .map_err(crate::publication::ops::io_error)?;
+    durable::write_bytes(
+        &directory.join("preparation.json"),
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &bytes,
+    )
+    .map_err(crate::publication::ops::io_error)?;
     Ok(())
 }
 
@@ -386,8 +393,15 @@ pub fn finish(
         return Err(LocalFleetError::Identity);
     }
     let (bytes, _) = desired_document(desired)?;
-    durable::write_bytes(&directory.join("desired.toml"), &bytes)
-        .map_err(crate::publication::ops::io_error)?;
+    durable::write_bytes(
+        &directory.join("desired.toml"),
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &bytes,
+    )
+    .map_err(crate::publication::ops::io_error)?;
     let mut next_preparation = preparation.clone();
     next_preparation.complete = true;
     save(directory, &next_preparation)?;
@@ -452,7 +466,15 @@ pub fn enroll(
     let key =
         canic_core::cdk::utils::hash::decode_hex(&record.root_key_der_hex).map_err(failure)?;
     let path = directory.join("root-key.der");
-    durable::write_bytes(&path, &key).map_err(crate::publication::ops::io_error)?;
+    durable::write_bytes(
+        &path,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &key,
+    )
+    .map_err(crate::publication::ops::io_error)?;
     crate::network::enroll_network(crate::network::NetworkEnrollmentOptions {
         workspace_root: workspace,
         environment,

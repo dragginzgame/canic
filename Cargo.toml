@@ -77,6 +77,8 @@ ciborium = "0.2"
 clap = { version = "4.6.1", features = ["derive"] }
 crc32fast = "1.5.2"
 criterion = "0.8"
+ctor = { version = "1.0", default-features = false, features = ["proc_macro"] }
+ed25519-dalek = { version = "3.0", default-features = false }
 flate2 = { version = "1.1", default-features = false, features = [
     "rust_backend",
 ] }
@@ -84,28 +86,30 @@ futures = "0.3"
 getrandom = "0.4"
 hmac = "0.13.0"
 ic-agent = "=0.49.2"
-ic-auth = { version = "0.3", default-features = false }
-ic-auth-protocol-types = "0.3"
-ic-backup = { version = "0.15", default-features = false }
-ic-blob-storage = "0.22.2"
-ic-blob-storage-contracts = "0.22.2"
+ic-auth = { version = "0.7", default-features = false }
+ic-auth-protocol-types = "0.7"
+ic-backup = { version = "0.27", default-features = false }
+ic-blob-storage = "0.30"
+ic-blob-storage-contracts = "0.30"
+ic-build = { version = "0.11" }
 ic-canister-sig-creation = "1.3.1"
 ic-cdk = "0.20.3"
 ic-certification = "3.0"
-ic-host-artifacts = { version = "0.12", default-features = false }
-ic-host-fs = { version = "0.12", default-features = false }
-ic-host-process = { version = "0.12", default-features = false }
-ic-host-tools = "0.12"
+ic-host-artifacts = { version = "0.23", default-features = false }
+ic-host-fs = { version = "0.23", default-features = false }
+ic-host-process = { version = "0.23", default-features = false }
+ic-host-text = "0.23"
+ic-host-tools = "0.23"
 ic-management-canister-types = "0.11"
-ic-memory = "0.35"
-ic-metrics = "0.5"
-ic-query = { version = "0.54", default-features = false, features = [
+ic-memory = "0.44"
+ic-metrics = "0.11"
+ic-query = { version = "0.59", default-features = false, features = [
     "subnet-catalog-host",
 ] }
 ic-secp256k1 = "=0.3.0"
 ic-signature-verification = "0.3.0"
-ic-testkit = "0.33"
-ic-timers = "0.17"
+ic-testkit = { version = "0.49" }
+ic-timers = "0.25"
 ic-verify-bls-signature = { version = "0.6.0", default-features = false, features = [
     "alloc",
 ] }

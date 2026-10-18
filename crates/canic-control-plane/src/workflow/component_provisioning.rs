@@ -26,6 +26,7 @@ use crate::{
     },
 };
 use candid::Principal;
+use canic_contracts::diagnostics::codes;
 use canic_contracts::dto::component_provisioning::RootComponentActivationEvidence;
 use canic_contracts::dto::component_provisioning::RootComponentActivationRequest;
 use canic_contracts::dto::component_provisioning::RootComponentProvisioningAcceptanceRequest;
@@ -210,7 +211,7 @@ async fn advance_scheduled_provisioning(operation_id: [u8; 32], plan_hash: [u8; 
     else {
         return;
     };
-    if let Some(failure) = current.last_failure {
+    if let Some(failure) = &current.last_failure {
         let Some(retry_at_ns) = failure.retry_at_ns else {
             return;
         };
@@ -915,7 +916,15 @@ async fn advance_member_claim(
         member.member_operation_id,
     )?;
 
-    let store = root_store::status(registry.store_bootstrap.clone()).await?;
+    let store = root_store::status(registry.store_bootstrap.clone())
+        .await
+        .map_err(|error| {
+            provisioning_store_failure(
+                authority.wasm_store_authority.wasm_store,
+                request.operation_id,
+                error,
+            )
+        })?;
     let revalidated = current_registry_for_progress(authority, root, current)?;
     if revalidated.store_bootstrap != registry.store_bootstrap {
         return Err(InternalError::conflict());
@@ -947,6 +956,32 @@ async fn advance_member_claim(
     RootComponentProvisioningOps::mark_member_claimed(request, &claimed)
 }
 
+fn provisioning_store_failure(
+    store: Principal,
+    operation_id: [u8; 32],
+    error: InternalError,
+) -> InternalError {
+    let authority_refusal = error.public_code().is_some_and(|code| {
+        [
+            codes::AUTHORITY_UNAUTHORIZED,
+            codes::STATE_CONFLICT,
+            codes::STATE_INVALID,
+        ]
+        .contains(&code)
+    });
+    let retry = if authority_refusal {
+        ProvisioningRetryCategory::ReviewRequired
+    } else {
+        ProvisioningRetryCategory::Backoff
+    };
+    error.with_provisioning_failure(
+        ProvisioningFailureStage::StoreStatus,
+        store,
+        operation_id,
+        retry,
+    )
+}
+
 async fn advance_member_install(
     authority: &FleetSubnetRootAuthority,
     root: Principal,
@@ -969,7 +1004,15 @@ async fn advance_member_install(
         RootComponentProvisioningOps::member_deployment_context(current, &member, &allocation)?;
     validate_group_member_context(&deployment)?;
 
-    let store = root_store::status(registry.store_bootstrap.clone()).await?;
+    let store = root_store::status(registry.store_bootstrap.clone())
+        .await
+        .map_err(|error| {
+            provisioning_store_failure(
+                authority.wasm_store_authority.wasm_store,
+                request.operation_id,
+                error,
+            )
+        })?;
     let revalidated = current_registry_for_progress(authority, root, current)?;
     if revalidated.store_bootstrap != registry.store_bootstrap {
         return Err(InternalError::conflict());
@@ -1051,7 +1094,15 @@ async fn advance_member_registry_commit(
         RootComponentProvisioningOps::member_deployment_context(current, &member, &allocation)?;
     validate_group_member_context(&deployment)?;
 
-    let store = root_store::status(registry.store_bootstrap.clone()).await?;
+    let store = root_store::status(registry.store_bootstrap.clone())
+        .await
+        .map_err(|error| {
+            provisioning_store_failure(
+                authority.wasm_store_authority.wasm_store,
+                request.operation_id,
+                error,
+            )
+        })?;
     let revalidated = current_registry_for_progress(authority, root, current)?;
     if revalidated.store_bootstrap != registry.store_bootstrap {
         return Err(InternalError::conflict());
@@ -1611,6 +1662,7 @@ fn validate_store_artifacts(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use canic_contracts::diagnostics::codes;
 
     #[test]
     fn only_the_exact_protected_coordinator_is_authorized() {
@@ -1784,5 +1836,39 @@ mod tests {
             ),
             None
         );
+    }
+    #[test]
+    fn provisioning_store_failure_keeps_temporary_unavailability_retryable() {
+        for (code, category) in [
+            (
+                codes::PLATFORM_UNAVAILABLE,
+                ProvisioningRetryCategory::Backoff,
+            ),
+            (codes::STATE_UNAVAILABLE, ProvisioningRetryCategory::Backoff),
+            (
+                codes::AUTHORITY_UNAUTHORIZED,
+                ProvisioningRetryCategory::ReviewRequired,
+            ),
+            (
+                codes::STATE_CONFLICT,
+                ProvisioningRetryCategory::ReviewRequired,
+            ),
+            (
+                codes::STATE_INVALID,
+                ProvisioningRetryCategory::ReviewRequired,
+            ),
+        ] {
+            let error = provisioning_store_failure(
+                Principal::from_slice(&[8]),
+                [9; 32],
+                InternalError::public(code),
+            );
+            let origin = error.provisioning_failure().unwrap();
+            assert_eq!(origin.retry_category, category);
+            assert_eq!(origin.target, Principal::from_slice(&[8]));
+            assert_eq!(origin.stage, ProvisioningFailureStage::StoreStatus);
+            assert_eq!(origin.operation_id, [9; 32]);
+            assert_eq!(error.public_code(), Some(code));
+        }
     }
 }

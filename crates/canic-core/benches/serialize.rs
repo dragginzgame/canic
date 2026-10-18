@@ -2,10 +2,8 @@ use canic_contracts::{
     dto::auth::{
         ChainKeyAlgorithm, ChainKeyBatchHeaderV1, ChainKeyBatchWitnessStepV1,
         ChainKeyBatchWitnessV1, ChainKeyDelegationCertV1, ChainKeyKeyId, ChainKeyRootSignatureV1,
-        DelegatedRoleGrant, DelegatedToken, DelegatedTokenClaims, DelegationAudience,
-        DelegationCert, DelegationProof, IcCanisterSignatureProofV1,
-        IcChainKeyBatchSignatureProofV1, IssuerProof, IssuerProofAlgorithm, IssuerProofBinding,
-        RootProof,
+        DelegatedRoleGrant, DelegationAudience, DelegationCert, DelegationProof,
+        IcChainKeyBatchSignatureProofV1, IssuerProofAlgorithm, IssuerProofBinding, RootProof,
     },
     ids::{CanisterRole, CanonicalNetworkId, FleetId, FleetKey},
 };
@@ -20,123 +18,26 @@ fn fleet() -> FleetKey {
     }
 }
 
-#[cfg(all(
-    feature = "auth-root-canister-sig-create",
-    feature = "auth-root-canister-sig-verify"
-))]
-const ROOT_SIG_DOMAIN: &[u8] = b"canic-root-delegation-cert";
+fn bench_delegation_proof_serialization(criterion: &mut Criterion) {
+    let proof = DelegationProof {
+        cert: sample_cert(),
+        root_proof: sample_chain_key_root_proof(),
+    };
+    let encoded = candid::encode_one(&proof).expect("sample delegation proof must encode");
 
-fn bench_delegated_token_serialization(criterion: &mut Criterion) {
-    let token = sample_delegated_token();
-    let encoded = candid::encode_one(&token).expect("sample delegated token must encode");
-
-    criterion.bench_function("delegated_token_candid_encode", |bench| {
-        bench.iter(|| candid::encode_one(black_box(&token)).expect("token encodes"));
+    criterion.bench_function("delegation_proof_candid_encode", |bench| {
+        bench.iter(|| candid::encode_one(black_box(&proof)).expect("proof encodes"));
     });
 
-    criterion.bench_function("delegated_token_candid_decode", |bench| {
+    criterion.bench_function("delegation_proof_candid_decode", |bench| {
         bench.iter(|| {
-            candid::decode_one::<DelegatedToken>(black_box(&encoded)).expect("token decodes")
+            candid::decode_one::<DelegationProof>(black_box(&encoded)).expect("proof decodes")
         });
     });
 
-    criterion.bench_function("delegated_token_encoded_size_bytes", |bench| {
+    criterion.bench_function("delegation_proof_encoded_size_bytes", |bench| {
         bench.iter(|| black_box(encoded.len()));
     });
-}
-
-#[cfg(all(
-    feature = "auth-root-canister-sig-create",
-    feature = "auth-root-canister-sig-verify"
-))]
-fn bench_canister_signature_verification(criterion: &mut Criterion) {
-    use ic_canister_sig_creation::CanisterSigPublicKey;
-    use ic_certification::{HashTree, leaf};
-    use serde::Serialize;
-    use serde_bytes::Bytes;
-
-    #[derive(Serialize)]
-    struct CanisterSignatureCbor<'a> {
-        certificate: &'a Bytes,
-        tree: HashTree,
-    }
-
-    let payload_hash = [8; 32];
-    let message = root_canister_sig_verification_message(payload_hash);
-    let public_key_der = CanisterSigPublicKey::new(p(1), ROOT_SIG_DOMAIN.to_vec()).to_der();
-    let certificate = self_describing_cbor(&ciborium::Value::Null);
-    let signature = CanisterSignatureCbor {
-        certificate: Bytes::new(&certificate),
-        tree: leaf(Vec::<u8>::new()),
-    };
-    let signature_cbor = self_describing_cbor(&signature);
-    let ic_root_public_key_raw = vec![9; 96];
-
-    criterion.bench_function("root_canister_sig_verify_invalid_certificate", |bench| {
-        bench.iter(|| {
-            let result = ic_signature_verification::verify_canister_sig(
-                black_box(&message),
-                black_box(&signature_cbor),
-                black_box(&public_key_der),
-                black_box(&ic_root_public_key_raw),
-            );
-            black_box(result).expect_err("fixture intentionally has invalid certificate")
-        });
-    });
-}
-
-#[cfg(all(
-    feature = "auth-root-canister-sig-create",
-    feature = "auth-root-canister-sig-verify"
-))]
-fn root_canister_sig_verification_message(payload_hash: [u8; 32]) -> Vec<u8> {
-    let mut message = Vec::with_capacity(1 + ROOT_SIG_DOMAIN.len() + payload_hash.len());
-    message.push(u8::try_from(ROOT_SIG_DOMAIN.len()).expect("domain length fits in u8"));
-    message.extend_from_slice(ROOT_SIG_DOMAIN);
-    message.extend_from_slice(&payload_hash);
-    message
-}
-
-#[cfg(all(
-    feature = "auth-root-canister-sig-create",
-    feature = "auth-root-canister-sig-verify"
-))]
-fn self_describing_cbor<T: serde::Serialize>(value: &T) -> Vec<u8> {
-    let mut encoded = vec![0xd9, 0xd9, 0xf7];
-    ciborium::ser::into_writer(value, &mut encoded).expect("fixture must encode");
-    encoded
-}
-
-fn sample_delegated_token() -> DelegatedToken {
-    let cert = sample_cert();
-    let claims = DelegatedTokenClaims {
-        presenter: p(9),
-        subject: p(9),
-        issuer_pid: cert.issuer_pid,
-        cert_hash: [8; 32],
-        issued_at_ns: 120_000_000_000,
-        expires_at_ns: 180_000_000_000,
-        aud: DelegationAudience::Fleet(fleet()),
-        grants: vec![
-            grant("project_hub", &["read", "upload"]),
-            grant("project_instance", &["read"]),
-            grant("user_shard", &["session"]),
-        ],
-        nonce: [7; 16],
-        ext: Some(b"user_id=42;session=primary".to_vec()),
-    };
-
-    DelegatedToken {
-        claims,
-        proof: DelegationProof {
-            cert,
-            root_proof: sample_chain_key_root_proof(),
-        },
-        issuer_proof: IssuerProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
-            signature_cbor: vec![3; 256],
-            public_key_der: vec![4; 96],
-        }),
-    }
 }
 
 fn sample_chain_key_root_proof() -> RootProof {
@@ -227,11 +128,6 @@ const fn p(id: u8) -> Principal {
 
 fn main() {
     let mut criterion = Criterion::default();
-    bench_delegated_token_serialization(&mut criterion);
-    #[cfg(all(
-        feature = "auth-root-canister-sig-create",
-        feature = "auth-root-canister-sig-verify"
-    ))]
-    bench_canister_signature_verification(&mut criterion);
+    bench_delegation_proof_serialization(&mut criterion);
     criterion.final_summary();
 }

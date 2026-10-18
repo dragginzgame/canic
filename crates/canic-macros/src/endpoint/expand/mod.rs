@@ -34,7 +34,6 @@ pub(super) fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) 
         return syn::Error::new_spanned(&orig_sig.ident, message).to_compile_error();
     }
 
-    let wrapper_async = impl_async || access_plan.requires_async();
     let uses_raw_adapter =
         args.payload_max_bytes.is_some() || args.decode.is_some() || args.reject_access;
 
@@ -63,7 +62,7 @@ pub(super) fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) 
     });
     let payload_registration = payload_registration(kind, &args, &orig_name);
 
-    let wrapper_sig = wrapper_signature(&orig_sig, wrapper_async, args.reject_access);
+    let wrapper_sig = wrapper_signature(&orig_sig, impl_async, args.reject_access);
 
     let call_ident = format_ident!("__canic_call");
     let exported_method = exported_method(&args, &orig_name);
@@ -89,15 +88,9 @@ pub(super) fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) 
         Err(e) => return e.to_compile_error(),
     };
 
-    let dispatch_call = dispatch_call(
-        wrapper_async,
-        impl_async,
-        &call_ident,
-        impl_name,
-        &call_args,
-    );
+    let dispatch_call = dispatch_call(impl_async, &call_ident, impl_name, &call_args);
     let raw_adapter = if uses_raw_adapter {
-        match raw_adapter(kind, &args, &orig_sig, wrapper_async) {
+        match raw_adapter(kind, &args, &orig_sig, impl_async) {
             Ok(adapter) => adapter,
             Err(err) => return err.to_compile_error(),
         }
@@ -302,13 +295,12 @@ fn first_typed_arg_ident(sig: &Signature) -> Option<syn::Ident> {
 //
 
 fn dispatch_call(
-    wrapper_async: bool,
     impl_async: bool,
     call: &syn::Ident,
     impl_name: syn::Ident,
     args: &[TokenStream2],
 ) -> TokenStream2 {
-    if wrapper_async && impl_async {
+    if impl_async {
         quote! {
             ::canic::__internal::core::dispatch::measure_endpoint_async(
                 #call, async { #impl_name(#(#args),*).await }

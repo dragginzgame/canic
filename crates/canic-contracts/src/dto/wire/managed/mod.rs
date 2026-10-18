@@ -23,9 +23,7 @@ macro_rules! __canic_managed_wire_types {
         automatic_topup_attributes = [$($automatic_topup_attributes:tt)*],
         logs_attributes = [$($logs_attributes:tt)*],
         diagnostics_attributes = [$($diagnostics_attributes:tt)*],
-        local_auth_attributes = [$($local_auth_attributes:tt)*],
         token_issuer_attributes = [$($token_issuer_attributes:tt)*],
-        application_authorization_attributes = [$($application_authorization_attributes:tt)*],
         caller_authority_attributes = [$($caller_authority_attributes:tt)*],
         fleet_admission_attributes = [$($fleet_admission_attributes:tt)*],
     ) => {
@@ -112,38 +110,28 @@ macro_rules! __canic_managed_wire_types {
             Runtime($crate::dto::runtime::CanicRuntimeStatus),
         }
 
-$($local_auth_attributes)*
+$($token_issuer_attributes)*
         #[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
         #[serde(crate = $serde_crate)]
         /// AuthStatusRequest wire union selected from the role's compiled capabilities.
         pub enum AuthStatusRequest {
             $($token_issuer_attributes)*
             ActiveDelegationProof,
-            $($application_authorization_attributes)*
-            ApplicationSession,
-            $($token_issuer_attributes)*
-            DelegatedToken($crate::dto::auth::DelegatedTokenGetRequest),
         }
 
-$($local_auth_attributes)*
+$($token_issuer_attributes)*
         #[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
         #[serde(crate = $serde_crate)]
         /// AuthStatusResponse wire union selected from the role's compiled capabilities.
         pub enum AuthStatusResponse {
             $($token_issuer_attributes)*
             ActiveDelegationProof($crate::dto::auth::ActiveDelegationProofStatusResponse),
-            $($application_authorization_attributes)*
-            ApplicationSession($crate::dto::auth::ApplicationSessionStatus),
-            $($token_issuer_attributes)*
-            DelegatedToken($crate::dto::auth::DelegatedToken),
         }
 
 #[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
         #[serde(crate = $serde_crate)]
         /// ControlStatusRequest wire union selected from the role's compiled capabilities.
         pub enum ControlStatusRequest {
-            $($application_authorization_attributes)*
-            ApplicationSessionAudit($crate::dto::page::PageRequest),
             $($caller_authority_attributes)*
             CallerAuthority($crate::dto::role::OperationStatusRequest),
             Operation($crate::dto::role::OperationStatusRequest),
@@ -153,8 +141,6 @@ $($local_auth_attributes)*
         #[serde(crate = $serde_crate)]
         /// ControlStatusResponse wire union selected from the role's compiled capabilities.
         pub enum ControlStatusResponse {
-            $($application_authorization_attributes)*
-            ApplicationSessionAudit($crate::dto::auth::ApplicationSessionAuditResponse),
             $($caller_authority_attributes)*
             CallerAuthority($crate::dto::caller_authority::CallerAuthorityStatus),
             Operation(CanisterOperationStatusResponse),
@@ -190,9 +176,7 @@ crate::__canic_managed_wire_types! {
     automatic_topup_attributes = [],
     logs_attributes = [],
     diagnostics_attributes = [],
-    local_auth_attributes = [],
     token_issuer_attributes = [],
-    application_authorization_attributes = [],
     caller_authority_attributes = [],
     fleet_admission_attributes = [],
 }

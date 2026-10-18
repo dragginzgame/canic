@@ -14,9 +14,7 @@ use crate::{
     log::Topic,
 };
 use canic_contracts::ids::{AccessMetricKind, EndpointCall};
-use std::{future::Future, pin::Pin, sync::Arc};
-
-pub use async_trait::async_trait;
+use std::sync::Arc;
 
 ///
 /// AccessContext
@@ -69,14 +67,14 @@ pub enum AccessExpr {
 ///
 /// AccessPredicate
 ///
-/// Leaf access predicate backed by a builtin guard or custom async predicate.
+/// Leaf access predicate backed by a builtin guard or custom synchronous predicate.
 /// Owned by access expressions and evaluated by the expression interpreter.
 ///
 
 #[derive(Clone)]
 pub enum AccessPredicate {
     Builtin(BuiltinPredicate),
-    Custom(Arc<dyn AsyncAccessPredicate>),
+    Custom(Arc<dyn AccessCheck>),
 }
 
 ///
@@ -88,24 +86,13 @@ pub enum AccessPredicate {
 
 #[derive(Clone, Debug)]
 pub enum BuiltinPredicate {
-    CallerPermission {
-        permission: &'static str,
-    },
+    CallerPermission { permission: &'static str },
     Fleet(FleetPredicate),
     Caller(CallerPredicate),
     Environment(EnvironmentPredicate),
-    Authenticated {
-        required_scope: Option<&'static str>,
-    },
     AttestedLocalSubnet,
-    AuthenticatedArgument {
-        token: Arc<crate::dto::auth::DelegatedToken>,
-        required_scope: Option<&'static str>,
-    },
     AttestedLocalSubnetArgument(Arc<crate::dto::auth::SignedRoleAttestation>),
-    ServiceAuthority {
-        service: &'static str,
-    },
+    ServiceAuthority { service: &'static str },
 }
 
 impl BuiltinPredicate {
@@ -168,15 +155,20 @@ pub enum EnvironmentPredicate {
     BuildLocalOnly,
 }
 
-#[async_trait]
-pub trait AsyncAccessPredicate: Send + Sync {
+///
+/// AccessCheck
+///
+/// Synchronous custom admission check evaluated before endpoint dispatch.
+/// Implementations inspect supplied proofs and local authority without network I/O.
+///
+pub trait AccessCheck: Send + Sync {
     ///
     /// Custom predicate contract:
-    /// - May be async and perform I/O.
+    /// - Runs synchronously using supplied proofs and local authority; no network I/O.
     /// - May depend on Fleet state.
     /// - Must be side-effect free, idempotent, and must not panic.
     ///
-    async fn eval(&self, ctx: &AccessContext) -> Result<(), AccessError>;
+    fn eval(&self, ctx: &AccessContext) -> Result<(), AccessError>;
     fn name(&self) -> &'static str;
 }
 
@@ -210,10 +202,10 @@ pub fn not(expr: AccessExpr) -> AccessExpr {
 
 /// custom
 ///
-/// Wrap a custom async predicate as an access expression leaf.
+/// Wrap a custom synchronous predicate as an access expression leaf.
 pub fn custom<P>(pred: P) -> AccessExpr
 where
-    P: AsyncAccessPredicate + 'static,
+    P: AccessCheck + 'static,
 {
     AccessExpr::Pred(AccessPredicate::Custom(Arc::new(pred)))
 }
@@ -299,20 +291,8 @@ pub mod env {
 
 pub mod auth {
     use super::{AccessExpr, BuiltinPredicate, builtin};
-    use crate::dto::auth::{DelegatedToken, SignedRoleAttestation};
+    use crate::dto::auth::SignedRoleAttestation;
     use std::sync::Arc;
-
-    /// Verify the proof already decoded under the endpoint's argument policy.
-    #[must_use]
-    pub fn authenticated_argument(
-        token: &DelegatedToken,
-        required_scope: Option<&'static str>,
-    ) -> AccessExpr {
-        builtin(BuiltinPredicate::AuthenticatedArgument {
-            token: Arc::new(token.clone()),
-            required_scope,
-        })
-    }
 
     /// Verify an already decoded role attestation without reading the message again.
     #[must_use]
@@ -325,16 +305,6 @@ pub mod auth {
     #[must_use]
     pub const fn attested_local_subnet() -> AccessExpr {
         builtin(BuiltinPredicate::AttestedLocalSubnet)
-    }
-
-    #[must_use]
-    pub const fn authenticated(required_scope: Option<&'static str>) -> AccessExpr {
-        builtin(BuiltinPredicate::Authenticated { required_scope })
-    }
-
-    #[must_use]
-    pub const fn authenticated_with_scope(required_scope: &'static str) -> AccessExpr {
-        authenticated(Some(required_scope))
     }
 }
 
@@ -366,8 +336,8 @@ pub fn eval_application_startup(call: EndpointCall) -> Result<(), AccessError> {
 }
 
 /// Evaluate an access expression and record a normalized denial on failure.
-pub async fn eval_access(expr: &AccessExpr, ctx: &AccessContext) -> Result<(), AccessError> {
-    eval_access_selected::<true>(expr, ctx).await
+pub fn eval_access(expr: &AccessExpr, ctx: &AccessContext) -> Result<(), AccessError> {
+    eval_access_selected::<true>(expr, ctx)
 }
 
 /// Evaluate a generated expression with its statically selected admission reader.
@@ -376,17 +346,15 @@ pub async fn eval_access(expr: &AccessExpr, ctx: &AccessContext) -> Result<(), A
 /// Manually composed expressions use `eval_access`, which supports every predicate.
 /// A mismatched selection is terminal and cannot be inverted by `not` or `any`.
 #[doc(hidden)]
-pub async fn eval_access_selected<const FLEET_ADMISSION: bool>(
+pub fn eval_access_selected<const FLEET_ADMISSION: bool>(
     expr: &AccessExpr,
     ctx: &AccessContext,
 ) -> Result<(), AccessError> {
-    match eval_access_inner::<FLEET_ADMISSION>(expr, ctx).await {
+    match eval_access_inner::<FLEET_ADMISSION>(expr, ctx) {
         Ok(()) => Ok(()),
         Err(failure) => Err(record_access_failure(ctx.call, failure)),
     }
 }
-
-type AccessEvalFuture<'a> = Pin<Box<dyn Future<Output = Result<(), AccessFailure>> + Send + 'a>>;
 
 /// eval_default_fleet_guard
 ///
@@ -419,62 +387,59 @@ pub fn eval_default_fleet_guard(
     }
 }
 
-fn eval_access_inner<'a, const FLEET_ADMISSION: bool>(
-    expr: &'a AccessExpr,
-    ctx: &'a AccessContext,
-) -> AccessEvalFuture<'a> {
-    Box::pin(async move {
-        match expr {
-            AccessExpr::All(exprs) => {
-                if exprs.is_empty() {
-                    return Err(AccessFailure::no_predicates("all"));
-                }
-                for expr in exprs {
-                    if let Err(failure) = eval_access_inner::<FLEET_ADMISSION>(expr, ctx).await {
-                        return Err(failure.with_context("all"));
-                    }
-                }
-                Ok(())
+fn eval_access_inner<const FLEET_ADMISSION: bool>(
+    expr: &AccessExpr,
+    ctx: &AccessContext,
+) -> Result<(), AccessFailure> {
+    match expr {
+        AccessExpr::All(exprs) => {
+            if exprs.is_empty() {
+                return Err(AccessFailure::no_predicates("all"));
             }
-            AccessExpr::Any(exprs) => {
-                if exprs.is_empty() {
-                    return Err(AccessFailure::no_predicates("any"));
+            for expr in exprs {
+                if let Err(failure) = eval_access_inner::<FLEET_ADMISSION>(expr, ctx) {
+                    return Err(failure.with_context("all"));
                 }
-                let mut last = None;
-                for expr in exprs {
-                    match eval_access_inner::<FLEET_ADMISSION>(expr, ctx).await {
-                        Ok(()) => return Ok(()),
-                        Err(failure) if failure.terminal => return Err(failure),
-                        Err(failure) => last = Some(failure.with_context("any")),
-                    }
-                }
-                Err(last.unwrap_or_else(|| AccessFailure::no_predicates("any")))
             }
-            AccessExpr::Not(expr) => match eval_access_inner::<FLEET_ADMISSION>(expr, ctx).await {
-                Ok(()) => Err(AccessFailure::negated()),
-                Err(failure) if failure.terminal => Err(failure),
-                Err(_) => Ok(()),
-            },
-            AccessExpr::Pred(pred) => match pred {
-                AccessPredicate::Builtin(builtin) => {
-                    evaluators::evaluate::<FLEET_ADMISSION>(builtin, ctx)
-                        .await
-                        .map_err(|failure| match failure {
-                            evaluators::BuiltinFailure::Denied(error) => {
-                                AccessFailure::from_builtin(builtin, error)
-                            }
-                            evaluators::BuiltinFailure::Unselected => {
-                                AccessFailure::unselected(builtin)
-                            }
-                        })
-                }
-                AccessPredicate::Custom(custom) => custom
-                    .eval(ctx)
-                    .await
-                    .map_err(|err| AccessFailure::from_custom(custom.name(), err)),
-            },
+            Ok(())
         }
-    })
+        AccessExpr::Any(exprs) => {
+            if exprs.is_empty() {
+                return Err(AccessFailure::no_predicates("any"));
+            }
+            let mut last = None;
+            for expr in exprs {
+                match eval_access_inner::<FLEET_ADMISSION>(expr, ctx) {
+                    Ok(()) => return Ok(()),
+                    Err(failure) if failure.terminal => return Err(failure),
+                    Err(failure) => last = Some(failure.with_context("any")),
+                }
+            }
+            Err(last.unwrap_or_else(|| AccessFailure::no_predicates("any")))
+        }
+        AccessExpr::Not(expr) => match eval_access_inner::<FLEET_ADMISSION>(expr, ctx) {
+            Ok(()) => Err(AccessFailure::negated()),
+            Err(failure) if failure.terminal => Err(failure),
+            Err(_) => Ok(()),
+        },
+        AccessExpr::Pred(pred) => match pred {
+            AccessPredicate::Builtin(builtin) => {
+                evaluators::evaluate::<FLEET_ADMISSION>(builtin, ctx).map_err(|failure| {
+                    match failure {
+                        evaluators::BuiltinFailure::Denied(error) => {
+                            AccessFailure::from_builtin(builtin, error)
+                        }
+                        evaluators::BuiltinFailure::Unselected => {
+                            AccessFailure::unselected(builtin)
+                        }
+                    }
+                })
+            }
+            AccessPredicate::Custom(custom) => custom
+                .eval(ctx)
+                .map_err(|err| AccessFailure::from_custom(custom.name(), err)),
+        },
+    }
 }
 
 const fn builtin(pred: BuiltinPredicate) -> AccessExpr {
@@ -644,12 +609,12 @@ mod tests {
             call: test_call(),
         };
 
-        let expr_parent = futures::executor::block_on(eval_access(&expr, &ctx_parent));
-        let auth_parent = futures::executor::block_on(access::auth::is_parent(parent));
+        let expr_parent = eval_access(&expr, &ctx_parent);
+        let auth_parent = access::auth::is_parent(parent);
         assert_eq!(expr_parent.is_ok(), auth_parent.is_ok());
 
-        let expr_other = futures::executor::block_on(eval_access(&expr, &ctx_other));
-        let auth_other = futures::executor::block_on(access::auth::is_parent(other));
+        let expr_other = eval_access(&expr, &ctx_other);
+        let auth_other = access::auth::is_parent(other);
         assert_eq!(expr_other.is_ok(), auth_other.is_ok());
     }
 
@@ -671,7 +636,7 @@ mod tests {
                     ..FleetStateRecord::default()
                 },
             });
-            let expr_result = futures::executor::block_on(eval_access(&expr, &ctx));
+            let expr_result = eval_access(&expr, &ctx);
             let direct_result = access::fleet::guard_fleet_update();
             assert_eq!(
                 expr_result.is_ok(),
@@ -699,7 +664,7 @@ mod tests {
                     ..FleetStateRecord::default()
                 },
             });
-            let expr_result = futures::executor::block_on(eval_access(&expr, &ctx));
+            let expr_result = eval_access(&expr, &ctx);
             let direct_result = access::fleet::guard_fleet_query();
             assert_eq!(
                 expr_result.is_ok(),
@@ -716,11 +681,11 @@ mod tests {
             call: test_call(),
         };
 
-        let expr_local = futures::executor::block_on(eval_access(&env::build_local_only(), &ctx));
+        let expr_local = eval_access(&env::build_local_only(), &ctx);
         let direct_local = access::env::build_network_local();
         assert_eq!(expr_local.is_ok(), direct_local.is_ok());
 
-        let expr_ic = futures::executor::block_on(eval_access(&env::build_ic_only(), &ctx));
+        let expr_ic = eval_access(&env::build_ic_only(), &ctx);
         let direct_ic = access::env::build_network_ic();
         assert_eq!(expr_ic.is_ok(), direct_ic.is_ok());
     }
@@ -752,7 +717,7 @@ mod tests {
             call: test_call(),
         };
 
-        let result = futures::executor::block_on(eval_access(&expr, &ctx));
+        let result = eval_access(&expr, &ctx);
         assert!(result.is_ok());
     }
 
@@ -768,7 +733,7 @@ mod tests {
             any([caller::is_fleet_admitted(), not(all([]))]),
             not(all([caller::is_fleet_admitted()])),
         ] {
-            let result = futures::executor::block_on(eval_access_selected::<false>(&expr, &ctx));
+            let result = eval_access_selected::<false>(&expr, &ctx);
             std::assert_matches!(result, Err(AccessError::ExpressionRuleRequired));
         }
     }
@@ -780,9 +745,8 @@ mod tests {
             succeeds: bool,
             calls: Arc<Mutex<Vec<u8>>>,
         }
-        #[async_trait]
-        impl AsyncAccessPredicate for Probe {
-            async fn eval(&self, _: &AccessContext) -> Result<(), AccessError> {
+        impl AccessCheck for Probe {
+            fn eval(&self, _: &AccessContext) -> Result<(), AccessError> {
                 self.calls.lock().unwrap().push(self.id);
                 if self.succeeds {
                     Ok(())
@@ -832,9 +796,9 @@ mod tests {
                 calls.lock().unwrap().clear();
                 MetricStore::reset();
                 let result = if full {
-                    futures::executor::block_on(eval_access(&expr, &ctx))
+                    eval_access(&expr, &ctx)
                 } else {
-                    futures::executor::block_on(eval_access_selected::<false>(&expr, &ctx))
+                    eval_access_selected::<false>(&expr, &ctx)
                 };
                 assert_eq!(result.is_ok(), allowed);
                 assert_eq!(*calls.lock().unwrap(), expected_calls);

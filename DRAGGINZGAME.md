@@ -45,27 +45,39 @@ Consumer choices described in those guides remain subject to this baseline.
 
 - Work within the authorized repositories and preserve unrelated dirty work.
   Re-read dirty files before editing. Agents working in one repository must not
-  edit code or other files in any other repository unless the maintainer expressly
-  authorizes that target repository and the intended change. This includes Shared
-  Tooling, upstream dependencies and downstream consumers, whether edits are made
-  directly, by delegated agents, or through scripts, formatters and generators.
-  Changing directories, shared ownership, dependency fixes, inspection requests
-  and issue-reporting authority do not grant cross-repository edit permission.
-  Without that authorization, keep other repositories read-only and report the
-  proposed fix under the GitHub issue authorization below.
-  Prefer owning-repository issues for sibling findings. Explicit scoped
-  authorization is an exception to this read-only default, and remains valid
-  through the necessary implementation and qualification of that change.
+  edit another contributor's sibling checkout in place. Relevant cross-repository
+  fixes and adoption work in `dragginzgame/*` have standing authorization through
+  the [isolated PR workflow](rules/contributions.md#cross-repository-pull-requests):
+  use a separate worktree or clone, topic branch, scoped edits and checks, commits,
+  branch push and PR. Do not ask for separate permission for those steps.
+  Preserve explicit read-only instructions, repository exclusions and active
+  ownership. Other GitHub owners require explicit target/action authorization.
+  Direct sibling-checkout edits require an express exception naming that checkout
+  and change; shared ownership or a PR contribution never supplies that exception.
+- Staging, commits and release execution are user-owned by default. During
+  ordinary implementation, leave the real checkout's index, package/application
+  release versions and Git refs alone. Do not run `git add .`, `git add -A`,
+  `git commit`, version-bump helpers, `git tag`, pushes, `make release-*` or
+  mutating release adapters to finish a coding task. This includes release
+  recovery and indirect calls from scripts or Make targets. "Keep going",
+  "prepare the release", "work on 0.4" and "ready to push?" authorize no such
+  effects. Prepare source, numbered changelog notes and validation, then hand
+  them to the user. Explicit delegation and the standing isolated PR exception
+  follow the contribution rules below;
+  a maintainer-only local release boundary must not be bypassed by inference.
 - Follow the [contribution rules](rules/contributions.md): ordinary contributions
   from people and agents use branches and pull requests. Agents may create
   scoped commits when asked to commit or deliver a PR. A PR request includes the
   branch, commits, branch push and PR creation/update needed to deliver it;
   do not require the maintainer to commit first or approve each substep again.
+  The standing cross-repository PR workflow supplies the same scoped authority
+  without a separate PR request. Neither route authorizes release versions or tags.
 - A PR request does not authorize merging, pushing directly to `main`, `master`
   or another integration/release branch, or rewriting shared history. Those
   effects require explicit authorization. Preserve branch protections and
   required reviews/checks. Ordinary repair or continuation requests authorize
-  local work, not an unsolicited commit or push.
+  local work in the current repository; the standing cross-repository PR workflow
+  separately authorizes only its isolated contribution commits and branch pushes.
 - Agents may execute package/manifest version changes, tags, pushes, publication,
   deployment and paid effects when explicitly authorized for their target and effect.
   Authorization includes the necessary documented substeps of the requested
@@ -84,7 +96,8 @@ Consumer choices described in those guides remain subject to this baseline.
   require explicit maintainer authorization for that destination and action;
   searching and reading issues remain permitted. Prepare external issue content
   for review before requesting authorization. This does not authorize
-  cross-repository file edits, unrelated messages or release effects.
+  unrelated messages or release effects. Cross-repository source contributions
+  use the separate isolated PR authority above, not issue-posting authority.
 
 ## Ownership and simplification
 
@@ -123,15 +136,15 @@ Consumer choices described in those guides remain subject to this baseline.
 - Remove superseded paths completely when their obligations permit retirement.
   Name any remaining consumer or deployment blocker and the evidence needed to
   close it. Do not leave replacement and old implementation indefinitely active.
-- When cleaning up code, list every removed function, method and type only in the
-  final response to the maintainer in the Codex app, including private symbols
-  and those inside deleted files.
-  Give exact names, their former file or module, why each was removed and its
-  replacement when applicable. Distinguish deletions from moves or renames.
-  Shared reasons may be grouped, but every removed name must still be listed.
-  Do not copy this inventory into repository files, changelogs, reports, commit
-  messages, PRs or issues. Continue documenting meaningful public API removals
-  and required consumer actions at their normal owners.
+- Follow the [change-reporting rules](rules/change-reporting.md) in every completed
+  maintainer report, including inspection and issue-only work. Include scoped
+  Rust, type-declaration and documentation added/removed/net metrics, with explicit
+  zeroes or unavailable evidence. Keep Git line churn separate from semantic
+  deletion counts. In the final Codex app handoff, use **symbol changes** with
+  genuinely created and deleted functions, methods and types only. Omit moved,
+  renamed and edited declaration inventories and counts; retained identities are
+  not creations or deletions. Keep the compact inventory in that handoff only. Ordinary
+  public API removal and consumer-action documentation stays at its normal owner.
 - Complete changelog maintenance under the [common changelog rules](rules/changelogs.md)
   as part of the coherent batch, including automatically selecting and maintaining
   the numbered next release at the top. Do not wait for a separate notes request.
@@ -148,6 +161,14 @@ Consumer choices described in those guides remain subject to this baseline.
   a hard cut does not make an incompatible patch acceptable. Select the pending
   changelog version automatically under the common rules; changing package
   versions or executing a release remains an explicitly authorized consumer action.
+- Classify compatibility at the released package's own consumer boundary. An
+  upstream minor/hard cut does not automatically require downstream minor bumps.
+  Contributor-only CI, hooks, formatting, tool installation and local PATH changes
+  are compatible for a library whose published API, behavior and supported build
+  requirements remain unchanged. Shared Tooling's commands are its product
+  interface; adopting their changes does not turn them into a library API break.
+  Apply the [package-impact rules](rules/changelogs.md#classify-the-released-packages-own-impact),
+  including exposed dependency types and coordinated workspace versions.
 - Never reuse a wire/storage discriminator for an incompatible layout or interpret
   retained bytes under a new layout merely because both contracts use V1.
   A hard cut identifies the frozen format,
@@ -166,22 +187,51 @@ Consumer choices described in those guides remain subject to this baseline.
   structural and module reviews. Keep product invariants and validation commands
   in consumer overlays. Audit adoption adds no automatic broad gate or schedule;
   findings do not supply repair authority. Preserve historical reports locally.
-- Run the smallest relevant checks automatically during authorized development.
-  Before delivering a completed code change as ready, run the repository's
-  documented full validation suite. This is standing validation authority within
-  the authorized repository; no separate request is needed. Local command lists
-  must distinguish focused development checks, the full delivery suite and release
-  commands. Reuse passing evidence for unchanged inputs; rerun affected checks
-  after further changes. Documentation-only changes need link, consistency and
-  diff checks, unless the repository documents additional relevant validation.
-  Inspection-only tasks do not authorize a full suite. Release execution,
+- Run the smallest meaningful checks automatically during authorized development
+  and before handoff: changed packages, modules, scripts and directly affected
+  consumers or contracts. Include relevant failure/recovery cases. Broaden the
+  selected checks when the change crosses boundaries, not merely because a batch
+  is complete, touches shared code or spans several files. Preserve explicit
+  maintainer-approved local restrictions on even focused execution.
+- Reserve agent-run local full repository/workspace suites and broad validation
+  gates for an explicitly authorized release or an explicit request for those
+  checks. Implementation, continuation, PR preparation and readiness wording do
+  not authorize a full suite. Focused passing evidence is sufficient for ordinary
+  handoff; an unrun full suite alone is not a blocker. Report the tested scope and
+  remaining release checks without claiming full-suite or native-host coverage.
+  Configured CI and required branch checks remain independent and unchanged;
+  this local execution policy does not weaken the release runner's full gate.
+- Local command lists must distinguish focused development/handoff checks from
+  full release validation and release execution. Reuse passing evidence for
+  unchanged inputs; rerun affected checks after changes or failures. Documentation-
+  only work needs link, consistency and diff checks, not code test suites.
+  Inspection-only work does not activate broad validation. Release execution,
   publication and deployment retain their separate explicit authorization.
+- Shared Tooling owns this validation cadence. Consumer overlays name local
+  commands and product-specific qualification requirements; link to this section
+  rather than duplicating its trigger rules. During adoption, remove conflicting
+  full-suite-before-handoff wording from active local instructions and guides.
+  Keep reviewed snapshots intact. If the pinned baseline still requires that
+  cadence, record a scoped maintainer-approved exception until a reviewed
+  snapshot containing this policy is adopted, then retire the redundant exception.
+- Shared Tooling owns regression tests for its implementation. Consumers qualify
+  snapshot integrity, their actual callers and product contracts, and applicable
+  native tool behavior. Adopting shared code does not require replaying its full
+  producer regression matrix in every consumer gate. Retain an upstream fixture
+  when it supplies a named consumer proof that is otherwise missing; review that
+  proof before retiring any dispatch. Follow the
+  [consumer qualification selection](docs/consuming-snapshots.md#consumer-qualification-selection)
+  when changing test rosters; this does not automatically change existing gates.
 - Check for active builds before compilation or source mutation. Do not change
   source under active validation or compete for its build lock. Use the owning
   repository's build directory; preserve unrelated artifacts.
-- For offline validation, prepare caches for the selected lockfile explicitly
-  before validation or release mutation. Preserve lock selection and report
-  preparation failures. An authorized dependency update includes the registry/Git
+- Authorized development, tests and validation include `cargo fetch --locked`
+  for missing dependency sources in the affected workspace's existing lockfile;
+  no separate maintainer approval is needed. Preserve lock selection and report
+  preparation failures. A missing or inconsistent lockfile does not authorize
+  an unlocked update. Honour explicit offline settings and actual environment
+  network restrictions. For offline gates, prepare caches before validation.
+  An authorized dependency update includes the registry/Git
   access needed for that selected update; do not require separate network approval
   or add `--offline`, `--frozen` or `CARGO_NET_OFFLINE=true` by habit. Offline
   validation is not a blanket policy for dependency preparation. Follow the
@@ -191,8 +241,10 @@ Consumer choices described in those guides remain subject to this baseline.
   A selected standard release includes its documented locked cache and selected
   executable-tool preparation under the [release contract](docs/releases.md),
   including required cache preparation before compiled
-  adapter startup. Explicit offline settings remain authoritative; ordinary
-  checks and standalone helper reads do not gain network permission.
+  adapter startup. Locked source preparation does not authorize executable-tool
+  installation, runtime network access, new credentials/targets, paid operations
+  or release effects. Keep offline checks and standalone helper reads offline;
+  prepare missing sources separately rather than adding implicit fetches to them.
 - Test maintained observable behavior, typed failures and genuine architectural
   boundaries. Delete tests that only prohibit a removed name or remember an old
   implementation. Source inspection can enforce a live architectural invariant;
@@ -223,8 +275,9 @@ Consumer choices described in those guides remain subject to this baseline.
   default; PR delivery prepares a review branch and validates the admitted merged
   commit afresh before tagging. Never select another policy to bypass a rejected
   push or branch protection.
-- These one-shot commands require an explicit request to run the selected release
-  for the selected repository and destination. That request authorizes the
+- These one-shot commands are user-operated by default. An agent needs explicit
+  delegation to run the selected release for the selected repository and
+  destination. That request authorizes the
   documented gate, version preparation and selected delivery effects. Direct
   delivery includes the release commit, tag and atomic branch/tag push; PR
   delivery includes the release branch/PR and, after separately authorized merge,
@@ -247,7 +300,10 @@ Consumer choices described in those guides remain subject to this baseline.
   Squash/rebase merges require fresh complete validation of the exact merged
   commit with the unchanged prepared tree. Late evidence checks use
   `RELEASE_COMMIT`, which may precede HEAD. Select unfinished intent before
-  computing another increment; stop for identity, payload, destination or concurrency conflicts.
+  computing another increment. A newer clean descendant commit can supersede
+  direct preparation before staging: archive its local-metadata-only intent,
+  select the requested increment from current metadata, and repeat preflight and
+  complete validation. Stop for identity, payload, destination or concurrency conflicts.
   Do not force-push, overwrite tags, silently bump again or add implicit package
   publication, deployment or post-release cleanup.
 
@@ -277,13 +333,34 @@ Consumer choices described in those guides remain subject to this baseline.
   including tools it does not currently use. The host set includes pinned jq,
   Mike Farah yq, ripgrep with PCRE2 and cloc under `.tools/host/bin`; the Cargo
   set includes cargo-sort, cargo-sort-derives and candid-extractor under
-  `.tools/rust/bin`. Aggregates run host, IC and Rust steps in order, stopping on
+  `.tools/rust/common/bin`. Common and selected Cargo tools share versioned-slot
+  receipt and byte admission; common PATH activation requires the complete set.
+  Aggregates run host, IC and Rust steps in order, stopping on
   failure. Consumer-specific setup/check targets extend the ordered lists in
   `make/tools.mk`, not unordered aggregate prerequisites. Make/CI callers select
   their own checkout's local paths; document interactive shell PATH setup,
   prepared Rust toolchains and system bootstrap packages separately.
-  Adopt `make/tools.mk` from the reviewed snapshot for these common commands
-  and LOC reporting, replacing copied recipes; CI calls the same targets.
+  Adopt the [consumer Make interface](docs/make-interface.md) from the reviewed
+  snapshot for common commands and LOC reporting, replacing copied recipes;
+  CI calls the same targets. Keep product inputs and adapters local. Use paired
+  formatter command inputs for extra workspaces/frontends instead of replacing
+  the shared recipes; preserve all existing checks during adoption.
+- Shared Tooling owns common executable storage as well as installation commands.
+  Its reviewed snapshot also owns the default common tool versions and digests.
+  Adopt those catalogs with the installers; do not maintain independent default
+  copies. A consumer exception requires an explicitly selected catalog and a
+  documented reason and native qualification. Host, IC and Rust exceptions are
+  independent. Product tools, PocketIC selection and compiler policy stay local.
+  Host, IC and Cargo installers share verified bundles per user across checkouts
+  while retaining each repository's pinned selection. Cargo tools use the standard
+  tool-build environment and exact build identities; application compiler flags
+  and wrappers remain repository-owned and do not configure these tool builds. Consumers
+  must not create independent stores or new bespoke `.tools` installers. Follow
+  the [shared storage adoption boundary](docs/local-setup.md#shared-executable-storage)
+  through reviewed canonical tooling; `.tools/host` and `.tools/ic` select shared
+  bundles without storing new executable copies in the checkout. This does not
+  authorize deleting
+  existing installations or replacing them with a mutable sibling PATH.
 - Provide the [common local IC executable setup](docs/ic-tools.md) through
   `make install-ic-tools` and offline `make ic-tools-check`. Keep the common tool
   names available under the checkout's `.tools/ic/bin`, with one reviewed pin
@@ -333,12 +410,18 @@ Consumer choices described in those guides remain subject to this baseline.
 - Keep shell wrappers small and declare dependencies and effects. Use the
   project's maintained implementation language for substantial tooling. Do not
   add Python tooling. Fail on invalid inputs rather than hiding broken assumptions.
+- Do not use directory paths containing carriage returns or newlines (CR/LF)
+  for checkouts, tooling, state or artifacts. Reject those inputs before trimming
+  or normalizing them, and check resolved directory aliases as well. Never repair
+  an invalid path by stripping characters: that can select a different directory.
+  This restriction does not prohibit ordinary spaces in paths.
 - CI/release tools use [reviewed snapshots](docs/consuming-snapshots.md), not symlinks
   or mutable sibling/network sources. Do not patch vendored copies; fix upstream
   or keep an explicit consumer-owned adapter outside the snapshot.
 - Portable scripts use Bash strict mode and preserve Bash 3.2 compatibility unless
   the support matrix is deliberately changed. Downloaded executables need exact
-  consumer-owned versions, pinned digests, HTTPS, verification before extraction
+  reviewed snapshot versions or explicit consumer exceptions, pinned digests,
+  HTTPS, verification before extraction
   and a version check before installation. No implicit credentials or targets.
 
 ## Host support
@@ -389,13 +472,21 @@ Consumer choices described in those guides remain subject to this baseline.
   symptom, focused evidence, smallest proposal and disposition. Identify dirty
   source separately from a committed revision. Include affected callers/hosts
   and the smallest useful verification.
-- Track upstream acceptance separately from verified consumer adoption. Resolve
-  product-specific feedback locally instead of promoting it to universal policy.
+- Track upstream acceptance separately from verified consumer adoption. Close
+  producer issues when their own delivered implementation and required checks
+  are complete; keep outstanding adoption in linked consumer-owned issues.
+  Do not keep or reopen a completed producer issue solely for fleet adoption,
+  or create a second open tracker for the same consumer obligations. The
+  [issue maintenance procedure](rules/agent-maintenance.md#issue-review-and-repair)
+  defines closure evidence and retirement of redundant coordination trackers.
+  Resolve product-specific feedback locally instead of promoting it to universal
+  policy.
   For another repository's finding, search its issues and file or update the
   matching issue under the issue authorization above. Include a concrete fix or
   patch where feasible and its actual validation results. Keep shared snapshots
   intact; repair at the source owner and adopt a reviewed committed revision.
-  Other cross-repository changes retain their separate authority.
+  Relevant repairs may proceed through the standing isolated PR workflow;
+  sibling working checkouts remain untouched.
   If issue access or a remote is unavailable, report the finding and blocker to
   the maintainer without inventing an issue URL or creating a local tracker.
 - Report the outcome, changed files, relevant verification, skipped checks,

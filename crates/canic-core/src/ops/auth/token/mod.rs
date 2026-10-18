@@ -1,227 +1,35 @@
 //! Module: ops::auth::token
 //!
-//! Responsibility: prepare issuer-local delegated tokens and verify delegated tokens.
+//! Responsibility: resolve configured Root proof verification authority.
 //! Does not own: endpoint authorization, active-proof storage, or auth policy records.
-//! Boundary: auth ops facade for delegated-token workflows, config, metrics, and proof helpers.
+//! Boundary: auth ops facade for Root proof configuration and verification helpers.
 
-mod error;
-mod retention;
+#[cfg(test)]
 mod verification;
 mod verifier_config;
 
-use super::{
-    AuthChainKeyRootVerifierConfig, AuthOps, AuthProofVerifierConfig,
-    PrepareDelegatedTokenIssuerProofInput, PreparedDelegatedTokenIssuerProof,
-    VerifyDelegatedTokenRuntimeInput,
-    delegated::{
-        cache::{
-            CachedDelegatedTokenProofValidity, delegated_token_cache_key, positive_cache_get,
-            positive_cache_insert, positive_cache_remove,
-        },
-        canonical::claims_hash,
-        cert_rules::DelegatedAuthTtlLimits,
-        chain_key::{
-            ChainKeyRootProofError, ChainKeyRootVerifierPolicy, VerifyChainKeyBatchRootProofInput,
-            verify_chain_key_batch_root_proof, verify_chain_key_ecdsa_public_key_shape,
-            verify_chain_key_ecdsa_signature,
-        },
-        prepare::{
-            PrepareDelegatedTokenError, PrepareDelegatedTokenInput, finish_delegated_token,
-            prepare_delegated_token,
-        },
-        verify::{
-            VerifyDelegatedTokenError, VerifyDelegatedTokenInput, verify_delegated_token,
-            verify_delegated_token_cached_proof_identity,
-        },
-    },
-};
+use super::{AuthChainKeyRootVerifierConfig, AuthOps, AuthProofVerifierConfig};
 use crate::{
     InternalError,
     cdk::{types::Principal, utils::hash::decode_hex},
     config::schema::DelegatedTokenConfig,
     domain::auth::{IC_ROOT_PUBLIC_KEY_RAW_LENGTH, is_mainnet_ic_root_public_key_raw},
-    dto::auth::{
-        ActiveDelegationProofStatus, ChainKeyAlgorithm, ChainKeyKeyId, DelegatedToken,
-        DelegationCert, RootKeyPolicyV1, RootProof,
-    },
-    model::auth::application_authorization::VerifiedApplicationAuthority,
-    ops::{
-        auth::{AuthScopeError, AuthValidationError},
-        config::ConfigOps,
-        ic::IcOps,
-        runtime::{
-            env::EnvOps,
-            metrics::delegated_auth::{DelegatedAuthMetricReason, DelegatedAuthMetrics},
-        },
-        storage::{StorageOpsError, fleet_activation::FleetActivationOps},
-    },
+    dto::auth::{ChainKeyAlgorithm, ChainKeyKeyId, RootKeyPolicyV1},
+    ops::{auth::AuthValidationError, config::ConfigOps},
 };
-use canic_contracts::ids::{BuildNetwork, CanisterRole, FleetKey};
-use error::{
-    active_delegation_proof_unavailable_error, delegated_auth_reason_from_verify_error,
-    map_prepare_delegated_token_error, map_verify_delegated_token_error,
-};
+use canic_contracts::ids::BuildNetwork;
 #[cfg(test)]
-use verification::map_chain_key_root_proof_error;
-use verification::{
-    auth_proof_verifier_config_for_verification, delegated_token_local_context,
-    delegated_tokens_config_for_verification, insert_positive_verification_cache,
-    require_current_canister_delegated_token_verifier, verify_from_positive_cache,
-    verify_with_embedded_proofs,
-};
+use verification::map_root_delegation_proof_error;
 use verifier_config::{
     configured_chain_key_root_verifier, configured_ic_root_public_key_raw,
     configured_root_canister_id,
 };
 
-pub use error::DelegatedTokenIssuerPrepareError;
-
-const DEFAULT_DELEGATED_AUTH_MAX_TTL_SECS: u64 = 24 * 60 * 60;
-const NS_PER_SEC: u64 = 1_000_000_000;
-
 impl AuthOps {
-    /// Return the canonical signed-claims identity used by replay policy.
-    pub(crate) fn delegated_token_claims_fingerprint(
-        token: &DelegatedToken,
-    ) -> Result<[u8; 32], InternalError> {
-        claims_hash(&token.claims).map_err(|_| InternalError::invalid_input())
-    }
-
-    /// Resolve the current delegated-token verifier lifetime ceiling.
-    pub(crate) fn delegated_token_max_ttl_ns() -> Result<u64, InternalError> {
-        let cfg = ConfigOps::delegated_tokens_config()?;
-        if !cfg.enabled {
-            return Err(AuthValidationError::DelegatedTokenAuthDisabled.into());
-        }
-        cfg.max_ttl_secs
-            .unwrap_or(DEFAULT_DELEGATED_AUTH_MAX_TTL_SECS)
-            .checked_mul(NS_PER_SEC)
-            .ok_or_else(|| InternalError::public(crate::diagnostics::codes::TIME_CAPACITY))
-    }
-
-    pub(crate) const fn delegated_token_replay_retention_limits()
-    -> crate::ops::replay::receipt::ReplayReceiptRetentionLimits {
-        retention::DELEGATED_TOKEN_REPLAY_RETENTION_LIMITS
-    }
-
-    /// Prepare delegated-token claims before issuer canister-signature retrieval.
-    pub(crate) fn prepare_delegated_token_issuer_proof(
-        input: PrepareDelegatedTokenIssuerProofInput,
-        operation_id: [u8; 32],
-        prepared_by: Principal,
-    ) -> Result<PreparedDelegatedTokenIssuerProof, DelegatedTokenIssuerPrepareError> {
-        let local = IcOps::canister_self();
-        let now_ns = IcOps::now_nanos();
-        retention::prune_and_admit(prepared_by, now_ns)?;
-        let active_proof = Self::active_delegation_proof(now_ns)?;
-        let Some(active_proof) = active_proof else {
-            let status = Self::active_delegation_proof_status(now_ns)?.status;
-            return Err(match status {
-                ActiveDelegationProofStatus::Missing => {
-                    DelegatedTokenIssuerPrepareError::MissingProof
-                }
-                _ => active_delegation_proof_unavailable_error(status).into(),
-            });
-        };
-
-        if active_proof.proof.cert.issuer_pid != local {
-            return Err(InternalError::from(AuthScopeError::IssuerPidMismatch {
-                expected: local,
-                found: active_proof.proof.cert.issuer_pid,
-            })
-            .into());
-        }
-
-        let prepared = prepare_delegated_token(PrepareDelegatedTokenInput {
-            proof: &active_proof.proof,
-            authority_expires_at_ns: active_proof.expires_at_ns,
-            operation_id,
-            prepared_by,
-            audience: input.audience,
-            grants: input.grants,
-            ttl_ns: input.ttl_ns,
-            ext: input.ext,
-            now_ns,
-        })
-        .map_err(map_prepare_delegated_token_error)?;
-
-        let claims_hash = prepared.claims_hash;
-        let issuer_proof_prepare = Self::prepare_issuer_canister_signature(claims_hash, now_ns)?;
-
-        retention::insert(
-            retention::RetainedDelegatedTokenKey::new(claims_hash, prepared_by),
-            retention::RetainedDelegatedToken {
-                prepared: prepared.clone(),
-                retrieval_expires_at_ns: issuer_proof_prepare.retrieval_expires_at_ns,
-            },
-        );
-
-        Ok(PreparedDelegatedTokenIssuerProof {
-            prepared,
-            claims_hash,
-            retrieval_expires_at_ns: issuer_proof_prepare.retrieval_expires_at_ns,
-        })
-    }
-
-    /// Retrieve a prepared delegated token with its issuer canister-signature proof.
-    pub(crate) fn get_delegated_token_issuer_proof(
-        claims_hash: [u8; 32],
-        prepared_by: Principal,
-    ) -> Result<DelegatedToken, InternalError> {
-        let retained = retention::get(
-            &retention::RetainedDelegatedTokenKey::new(claims_hash, prepared_by),
-            IcOps::now_nanos(),
-        )
-        .map_err(|err| AuthValidationError::Auth(err.to_string()))?;
-        let issuer_proof =
-            Self::get_issuer_canister_signature_proof(claims_hash, IcOps::canister_self())?;
-
-        Ok(finish_delegated_token(retained.prepared, issuer_proof))
-    }
-
     /// Resolve verifier-local trust anchors for canister-signature auth proofs.
     pub(crate) fn auth_proof_verifier_config() -> Result<AuthProofVerifierConfig, InternalError> {
         let cfg = ConfigOps::delegated_tokens_config()?;
         Self::auth_proof_verifier_config_from(&cfg)
-    }
-
-    /// Verify a self-contained delegated token without local proof lookup.
-    pub fn verify_token(
-        input: VerifyDelegatedTokenRuntimeInput<'_>,
-    ) -> Result<VerifiedApplicationAuthority, InternalError> {
-        DelegatedAuthMetrics::record_verify_started();
-
-        let cfg = delegated_tokens_config_for_verification()?;
-        require_current_canister_delegated_token_verifier()?;
-        let ctx = delegated_token_local_context()?;
-        crate::perf!("delegated_token_resolve_context");
-
-        let cache_key = match delegated_token_cache_key(input.token, input.caller) {
-            Ok(key) => key,
-            Err(err) => {
-                let err: VerifyDelegatedTokenError = VerifyDelegatedTokenError::Canonical(err);
-                DelegatedAuthMetrics::record_verify_failed(
-                    delegated_auth_reason_from_verify_error(&err),
-                );
-                return Err(map_verify_delegated_token_error(err));
-            }
-        };
-        crate::perf!("delegated_token_hash_cache_key");
-
-        if let Some(verified) = verify_from_positive_cache(&input, &ctx, cache_key)? {
-            crate::perf!("delegated_token_verify_cached");
-            DelegatedAuthMetrics::record_verify_completed();
-            return Ok(verified);
-        }
-
-        let verifier_cfg = auth_proof_verifier_config_for_verification(&cfg)?;
-        crate::perf!("delegated_token_resolve_root_policy");
-        let verified = verify_with_embedded_proofs(&input, &ctx, &verifier_cfg)?;
-        crate::perf!("delegated_token_verify_embedded_proofs");
-        insert_positive_verification_cache(&input, cache_key);
-        crate::perf!("delegated_token_cache_verified");
-        DelegatedAuthMetrics::record_verify_completed();
-        Ok(verified)
     }
 
     fn auth_proof_verifier_config_from(
@@ -232,6 +40,7 @@ impl AuthOps {
         let chain_key_root =
             configured_chain_key_root_verifier(cfg, root_canister_id, build_network)?;
         Ok(AuthProofVerifierConfig {
+            #[cfg(test)]
             build_network,
             root_canister_id,
             ic_root_public_key_raw: configured_ic_root_public_key_raw(cfg, build_network)?,

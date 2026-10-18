@@ -500,7 +500,7 @@ fn semantic_inventory_counts_macro_generated_native_calls() {
         "synthetic.rs",
         r"
             macro_rules! schedule {
-                () => { ic_timers::register_once(identity(), lifetime(), callback()) };
+                () => { ic_timers::register_once(identity(), lifetime(), initial(), callback()) };
             }
         ",
     );

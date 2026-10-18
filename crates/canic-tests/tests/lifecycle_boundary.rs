@@ -335,9 +335,12 @@ fn non_root_post_upgrade_failure_reports_phase_error() {
     assert_phase_error("post_upgrade", &upgrade_err);
 }
 
-fn install_retry_policy() -> RetryPolicy {
-    RetryPolicy::try_new(INSTALL_CODE_RETRY_LIMIT, INSTALL_CODE_COOLDOWN)
-        .expect("install retry policy")
+const fn install_retry_policy() -> RetryPolicy {
+    RetryPolicy::new(
+        std::num::NonZeroUsize::new(INSTALL_CODE_RETRY_LIMIT)
+            .expect("non-zero install attempt limit"),
+        INSTALL_CODE_COOLDOWN,
+    )
 }
 
 fn replace_release_build_id(wasm: &[u8], retained: &str, replacement: &str) -> Vec<u8> {

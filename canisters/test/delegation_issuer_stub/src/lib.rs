@@ -12,13 +12,12 @@ use canic::{
     api::call::Call,
     api::metrics::MetricsQuery,
     dto::{
-        auth::{DelegatedToken, SignedRoleAttestation},
+        auth::SignedRoleAttestation,
         component_registry::RootPeerComponentAllocationRequest,
         metrics::{MetricEntry, QueryPerfSample},
         page::{Page, PageRequest},
         role::OperationReceipt,
     },
-    ids::cap,
     prelude::*,
     protocol::CANIC_ROOT_COMMAND,
 };
@@ -71,7 +70,19 @@ impl LocalAuthorizationDenialProbe {
     }
 }
 
-canic::start!();
+canic::start!(lifecycle_participant(
+    init = compose_application_certification,
+    post_upgrade = compose_application_certification
+),);
+
+// A trusted application branch shares the actual IC certification root with /sig.
+// Both install and same-release restoration reapply it before deferred work.
+fn compose_application_certification() {
+    AuthApi::set_canister_signature_siblings(vec![canic::api::auth::SignatureSibling::Left(
+        [0x3c; 32],
+    )])
+    .expect("compose application certification with Canic signatures");
+}
 
 /// Run no-op setup for the delegation issuer stub.
 async fn canic_setup() {}
@@ -81,18 +92,6 @@ async fn canic_install(_args: Option<Vec<u8>>) {}
 
 /// Run no-op upgrade handling for the delegation issuer stub.
 async fn canic_upgrade() {}
-
-#[canic_update(requires(auth::authenticated(cap::VERIFY)))]
-async fn issuer_verify_token(token: DelegatedToken) -> Result<(), Error> {
-    let _ = token;
-    Ok(())
-}
-
-#[canic_update(requires(auth::authenticated()))]
-async fn issuer_verify_token_any(token: DelegatedToken) -> Result<(), Error> {
-    let _ = token;
-    Ok(())
-}
 
 /// Exercise the generic synchronous application guard without changing its application ABI.
 #[canic_query(public)]
@@ -158,33 +157,31 @@ fn application_subject() -> Result<Principal, Error> {
 }
 
 #[canic_update(public)]
-async fn issuer_verify_role_attestation(
+fn issuer_verify_role_attestation(
     attestation: SignedRoleAttestation,
     min_accepted_epoch: u64,
 ) -> Result<(), Error> {
-    AuthApi::verify_role_attestation(&attestation, min_accepted_epoch).await
+    AuthApi::verify_role_attestation(&attestation, min_accepted_epoch)
 }
 
 #[canic_update(requires(auth::attested_local_subnet()))]
-async fn issuer_require_attested_local_subnet(
-    attestation: SignedRoleAttestation,
-) -> Result<(), Error> {
+fn issuer_require_attested_local_subnet(attestation: SignedRoleAttestation) -> Result<(), Error> {
     let _ = attestation;
     Ok(())
 }
 
 #[canic_update(requires(caller::is_root()))]
-async fn issuer_guard_is_root() -> Result<(), Error> {
+fn issuer_guard_is_root() -> Result<(), Error> {
     Ok(())
 }
 
 #[canic_update(requires(caller::is_controller()))]
-async fn issuer_guard_is_controller() -> Result<(), Error> {
+fn issuer_guard_is_controller() -> Result<(), Error> {
     Ok(())
 }
 
 #[canic_update(requires(caller::is_parent()))]
-async fn issuer_guard_is_parent() -> Result<(), Error> {
+fn issuer_guard_is_parent() -> Result<(), Error> {
     Ok(())
 }
 

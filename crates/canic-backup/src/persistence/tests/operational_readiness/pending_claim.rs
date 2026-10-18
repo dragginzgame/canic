@@ -62,6 +62,7 @@ fn pending_claim_publication_selects_the_exact_restart_policy() {
         .cloned()
         .expect("next pending-claim operation");
     assert_eq!(backup_operation_label(&operation.kind), operation_label);
+    crate::test_support::retain_original_command(&layout, &mut journal, operation.sequence);
     if operation.kind == BackupOperationKind::CreateSnapshot {
         journal
             .mark_snapshot_create_pending_at(

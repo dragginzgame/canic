@@ -25,8 +25,8 @@ use crate::{
     },
 };
 use ic_timers::{
-    DeclarationLifetime, OnceContext, OnceDecision, OnceRegistration, OnceRunResult,
-    TimerCompletion, TimerIdentity, TimerSchedule, register_once,
+    OnceContext, OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion, TimerIdentity,
+    TimerSchedule, TimerStart, register_once,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -269,7 +269,7 @@ impl PlacementAcknowledgementWorkflow {
         }
         let registration = register_once(
             Self::timer_identity()?,
-            DeclarationLifetime::Retained,
+            TimerStart::Retained { initial: None },
             |_context: OnceContext| async { Self::run_registered().await },
         )?;
         retain_owned_once(&ACKNOWLEDGEMENT_TIMER, registration)

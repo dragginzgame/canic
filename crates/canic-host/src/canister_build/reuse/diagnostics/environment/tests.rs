@@ -1,5 +1,6 @@
 use super::*;
 use crate::test_support::temp_dir;
+use ic_host_fs::durable::{PublicationMode, WriteOptions};
 use sha2_host::Digest as _;
 use std::fs;
 
@@ -129,7 +130,15 @@ fn missing_corrupt_shared_and_linked_keys_disable_comparison_without_replacement
     assert_eq!(fs::read(&path).unwrap(), b"truncated");
     fs::remove_file(&path).unwrap();
     let target = root.join("private-target");
-    create_private_bytes_with_parents(&target, &original).unwrap();
+    write_bytes(
+        &target,
+        WriteOptions {
+            mode: PublicationMode::CreateNew,
+            permissions: 0o600,
+        },
+        &original,
+    )
+    .unwrap();
     symlink(&target, &path).unwrap();
     prepare_key(&root);
     assert_eq!(

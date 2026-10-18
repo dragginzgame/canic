@@ -5,18 +5,20 @@
 //! Boundary: captures Cargo bytes synchronously before another compilation starts.
 
 use crate::{
-    artifact_io::{CapturedWasmArtifact, WasmArtifactFinalization, finalize_wasm_artifact},
+    artifact_io::{WasmArtifactFinalization, finalize_wasm_artifact},
     build_toolchain::BuildToolchain,
     canister_build::{CanisterArtifactBuildOutput, CanisterBuildProfile, WorkspaceBuildContext},
     should_embed_candid_metadata,
 };
 use canic_contracts::ids::BuildNetwork;
+use ic_build::artifacts::CapturedArtifact;
+use ic_host_fs::durable::{PublicationMode, WriteOptions};
 use std::path::{Path, PathBuf};
 
 /// Compiled input and private output metadata awaiting the existing finalization pipeline.
 
 pub struct CompiledCanisterArtifact {
-    source: CapturedWasmArtifact,
+    source: CapturedArtifact,
     output: CanisterArtifactBuildOutput,
     candid: Vec<u8>,
     profile: CanisterBuildProfile,
@@ -34,7 +36,14 @@ impl CompiledCanisterArtifact {
         profile_marker: Option<PathBuf>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(Self {
-            source: CapturedWasmArtifact::capture(source, &output.wasm_path)?,
+            source: CapturedArtifact::capture(
+                source,
+                output
+                    .wasm_path
+                    .parent()
+                    .ok_or("artifact output has no parent")?,
+                usize::MAX,
+            )?,
             output,
             candid,
             profile: context.profile,
@@ -65,7 +74,14 @@ impl CompiledCanisterArtifact {
             toolchain,
         )?;
         if let Some(path) = &self.profile_marker {
-            ic_host_fs::durable::write_bytes(path, self.profile.target_dir_name().as_bytes())?;
+            ic_host_fs::durable::write_bytes(
+                path,
+                WriteOptions {
+                    mode: PublicationMode::Replace,
+                    permissions: 0o666,
+                },
+                self.profile.target_dir_name().as_bytes(),
+            )?;
         }
         Ok(self.output)
     }

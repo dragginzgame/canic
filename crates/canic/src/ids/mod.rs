@@ -1,11 +1,11 @@
 //! Public identifiers and the passive types needed by their fields and constructors.
 
 pub use canic_contracts::ids::{
-    AccessMetricKind, AppId, BuildNetwork, COMPONENT_GROUP_MEMBER_PATH_MAX_SEGMENTS,
-    CallerComponentInstallation, CallerInstallation, CallerReceiverAuthority, CallerRootAuthority,
-    CanisterRole, CanonicalNetworkId, CanonicalNetworkIdParseError,
-    CanonicalNetworkTrustAnchorError, ComponentBinding, ComponentChildBinding,
-    ComponentDeploymentConfigurationDigest, ComponentDeploymentIdParseError,
+    AccessMetricKind, AppId, ApplicationCheckpointBinding, BuildNetwork,
+    COMPONENT_GROUP_MEMBER_PATH_MAX_SEGMENTS, CallerComponentInstallation, CallerInstallation,
+    CallerReceiverAuthority, CallerRootAuthority, CanisterRole, CanonicalNetworkId,
+    CanonicalNetworkIdParseError, CanonicalNetworkTrustAnchorError, ComponentBinding,
+    ComponentChildBinding, ComponentDeploymentConfigurationDigest, ComponentDeploymentIdParseError,
     ComponentGroupDeploymentId, ComponentGroupMemberId, ComponentGroupMemberPath,
     ComponentGroupMemberPathError, ComponentGroupPlacementId, ComponentGroupSpecId,
     ComponentInstanceId, ComponentInstanceIdParseError, ComponentSpecAdmission, ComponentSpecId,

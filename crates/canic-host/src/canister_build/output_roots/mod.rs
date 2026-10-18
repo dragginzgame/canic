@@ -19,7 +19,8 @@ struct OutputRootObservation {
 
 impl OutputRootObservation {
     fn observe(workspace: &Path, selected: PathBuf) -> Self {
-        let resolved = ic_host_fs::path::canonicalize_allow_missing(&selected, workspace).ok();
+        let resolved =
+            ic_host_fs::path::canonicalize_allow_missing(&selected, workspace, usize::MAX).ok();
         let workspace = fs::canonicalize(workspace).ok();
         let shared_workspace = resolved.as_ref().and_then(|output| {
             let workspace = workspace.as_ref()?;

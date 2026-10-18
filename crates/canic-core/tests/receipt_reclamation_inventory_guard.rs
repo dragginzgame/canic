@@ -86,30 +86,22 @@ fn ownership_scan_excludes_inline_tests_but_keeps_production_calls() {
 
 #[test]
 fn receipt_backed_stable_allocations_remain_single_owner() {
-    let root = workspace_root();
-    let storage = read(&root.join("crates/canic-core/src/storage/stable/intent.rs"));
-
-    assert_eq!(
-        storage
-            .matches("canic.core.intent.receipt_backed_records.v1")
-            .count(),
-        1,
-        "receipt-backed primary stable authority must have one allocation",
-    );
-    assert_eq!(
-        storage
-            .matches("canic.core.placement.acknowledgement_index.v1")
-            .count(),
-        1,
-        "placement acknowledgement must retain one separate derived index",
-    );
-    assert_eq!(
-        storage
-            .matches("canic.core.application_receipt.eligibility.v1")
-            .count(),
-        1,
-        "application terminal eligibility must have one ordered allocation",
-    );
+    let requests = canic_core::memory::requests().expect("framework memory requests");
+    for key in [
+        intent::INTENT_RECEIPT_BACKED_RECORDS_KEY,
+        placement::PLACEMENT_ACKNOWLEDGEMENT_INDEX_KEY,
+        application_receipt::APPLICATION_RECEIPT_ELIGIBILITY_KEY,
+    ] {
+        let owners = requests
+            .iter()
+            .filter(|request| request.stable_key().as_str() == key)
+            .collect::<Vec<_>>();
+        assert_eq!(owners.len(), 1, "one framework allocation for {key}");
+        assert_eq!(
+            owners[0].authority(),
+            canic_core::memory::CANIC_CORE_MEMORY_AUTHORITY,
+        );
+    }
     assert_eq!(
         intent::INTENT_RECEIPT_BACKED_RECORDS_KEY,
         "canic.core.intent.receipt_backed_records.v1"

@@ -1,0 +1,606 @@
+<a id="rechain"></a>
+# Rechain: State and Recorded History
+
+## The Stack: reading order
+
+These three lessons explain one application from local state changes to transport and durable workflows:
+
+1. [Rechain](rechain.md#rechain): reducers, atomic dispatch, recorded history, archives and verified reads.
+2. [Reactor](reactor.md#reactor): typed endpoints, batched delivery, scheduling, results and events.
+3. [Takt](takt.md#takt): typed workflow graphs, decisions, parallel work, recovery and inspection.
+
+The [combined reference](thestack.md) is these three files concatenated in that order.
+
+## Contents
+
+- [Rechain's role](#rechain-role)
+- [Follow one dispatch](#rechain-dispatch)
+- [Reducers, selectors and thunks](#rechain-reducers)
+- [One runtime, independent chains](#rechain-runtime)
+- [Blocks, hashes and public reads](#rechain-blocks)
+- [Certification and reader trust](#rechain-certification)
+- [Archives and recovery](#rechain-archives)
+- [Replay, projections and debugging](#rechain-replay)
+- [Bounded idempotency](#rechain-idempotency)
+- [Listeners and the shared scheduler](#rechain-integration)
+- [Persistence and operational checklist](#rechain-operations)
+- [Sources](#rechain-sources)
+
+<a id="rechain-role"></a>
+## Rechain's role
+
+Rechain organizes changes to one canister's business state. The application submits an **action**. Its reducers either prepare the change together or reject it. A recorded chain also preserves the accepted action in an ordered, hash-linked history.
+
+The three libraries divide responsibility:
+
+| Machine | Owns | Example |
+| --- | --- | --- |
+| Rechain | Local business state transitions and optional recorded history | Debit Alice and credit Bob in one dispatch |
+| [Reactor](reactor.md#reactor-role) | Scheduling and batched communication between participating canisters | Carry a transfer request and its eventual result |
+| [Takt](takt.md#takt-role) | Persisted workflow progress and decisions across steps | Collect payment, deliver an NFT, then pay its seller |
+
+```text
+one canister
+  Takt workflow step ──synchronous dispatch──> Rechain reducers + history
+       │
+       └──Reactor request──> another canister's registered endpoint
+```
+
+Takt's progress is separate from reducer-owned business state. Reactor's transport acknowledgement is separate from business success. Rechain supplies the local transition; it does not make the remote part of this diagram atomic.
+
+Think of business state as named folders, each owned by one reducer. The balances reducer owns balances; an offers reducer owns listings. A **selector** reads one owner's state without exposing mutable storage. An optional **thunk** reads selectors, decides which action to dispatch and returns an application result. A **commit function** is the callback returned by an accepting reducer; executing it performs that reducer's writes.
+
+These are application boundaries, not a magical restriction on all Motoko code. Keep memories private and follow the [ownership conventions](../../rechain/conventions.md). Rechain cannot prevent an endpoint from modifying a mutable reference that the application improperly exposes.
+
+<a id="rechain-dispatch"></a>
+## Follow one dispatch
+
+Suppose Alice and Bob are accounts in the same canister, and a balances reducer owns both. A transfer action says to move 5 tokens from Alice to Bob. The reducer checks Alice's available balance and prepares a callback that will subtract 5 and add 5. Preparing this callback changes nothing.
+
+Other reducers registered on that chain receive the same action. Each may inspect its own state and return:
+
+| Response | Meaning |
+| --- | --- |
+| `#Pass` | This reducer has no change for this action |
+| `#Ok(commit)` | Accepted; execute this callback if the dispatch succeeds |
+| `#Err(error)` | Reject the entire dispatch |
+
+For a recorded chain, [the implementation](../../rechain/src/lib.mo) follows this order:
+
+1. Call reducers in registration order and collect their callbacks.
+2. Stop immediately if any reducer rejects; discard the callbacks.
+3. Encode the action and append its block within configured storage limits.
+4. Execute the prepared callbacks in registration order, passing the block ID.
+5. Advance the action counter, update or schedule certification, schedule archival if needed, and invoke the optional listener.
+
+The append happens **before** the callbacks so a storage failure cannot leave the business change without its record. All of this is synchronous, with no `await`. Other messages cannot observe the interval between these operations. The lesson animation spreads them out to show their relationship; it is one local dispatch.
+
+If Alice has only 3 tokens, the balances reducer returns an error. If a later reducer rejects, Alice and Bob still remain unchanged. If encoding or storage fails after every reducer accepts, no prepared business write runs. A successful action can also have only `#Pass` responses: recording an accepted action does not require a state mutation.
+
+This atomic boundary is **one dispatch**. A sequence of dispatches is not automatically an all-or-nothing group: returning an error from the second does not undo the first. Independent chains and remote canisters are outside this guarantee. A sharded transfer needs a [workflow and an explicit participant recovery contract](takt.md#takt-remote).
+
+Expected failures return typed errors. Traps are programming failures, subject to Motoko's message rollback behavior; they are not a normal rejection result. Validate fallible prerequisites before returning a commit, and keep commit callbacks and listeners bounded and nontrapping. Never invoke a prepared callback yourself. The [example reducer tests](../../rechain/test/example_reducers.test.mo) deliberately discard prepared callbacks to check that preparation has no effect.
+
+<a id="rechain-reducers"></a>
+## Reducers, selectors and thunks
+
+Here is the essential reducer from the actual [counter example](../../rechain/examples/basic/rechain/reducers/counter/lib.mo), with its surrounding class omitted:
+
+```motoko
+public func reducer(action : T.Action) : Rechain.ReducerResponse<T.Error> {
+  let #Add(amount) = action else return #Pass;
+  if (amount == 0) return #Err(#ZeroIncrement);
+  #Ok(func(_blockId) { memory.value += amount })
+};
+```
+
+The last line returns a function. It does not increment `memory.value` until Rechain executes that function. A real balances reducer uses the same pattern: read and validate its owned accounts, then return the debit/credit writes in one callback.
+
+During preparation, a reducer may read only the action, its own memory and immutable configuration. It must not mutate a cache, perform cleanup, read another reducer's state, read the clock, call another canister or schedule a timer. Capture authenticated caller identity and timestamps at the host boundary and put required external inputs in the action. Validate those inputs appropriately; accepting a user-supplied caller field is not authentication.
+
+Selectors expose immutable values, records or arrays. The [counter selector](../../rechain/examples/basic/rechain/reducers/counter/selectors/lib.mo) returns `memory.value` through `get()`. It does not return the memory shell, a mutable map or a write callback. A thunk may combine several selectors; one reducer must not use another reducer's selector to validate its own action. This keeps state ownership and replay rules understandable.
+
+A thunk is an ordinary synchronous application function, not another Rechain execution engine. The native [creation thunk](../../rechain/examples/basic/Thunks.mo) performs this sequence:
+
+```text
+create(name)
+  read this chain's next block ID
+  derive the object's DCID from canister principal + block ID
+  dispatch Create({id; name})
+  return {id; blockId; name} on success
+```
+
+No await or intervening dispatch occurs between reading that ID and using it. The action contains the derived ID; the reducer validates and stores it. Replay does not rerun the original thunk decision. The ordinary API and a registered Reactor endpoint can call this same thunk. Direct actions can bypass it.
+
+The example's [application mixin](../../rechain/examples/basic/rechain/lib.mo) owns persistent memory shells and reconstructs transient reducers and selectors. Public code receives a facade exposing dispatch and read-only selectors. This arrangement makes the ownership rules concrete.
+
+<a id="rechain-runtime"></a>
+## One runtime, independent chains
+
+Construct one `Rechain.Runtime` per canister and share it among typed `Rechain.Chain<A,E>` handles. The runtime owns physical storage, the certification tree and archive fleet. A handle binds a numeric chain ID, unique name, action type, error type, encoder, reducers and settings.
+
+This abbreviated composition fragment follows the [basic example](../../rechain/examples/basic/rechain/lib.mo). `Action`, `AppError`, `balances`, `memory` and `reactor` stand for application-owned objects:
+
+```motoko
+transient let runtime = Rechain.Runtime<system>({
+  xmem = memory; settings = null;
+});
+runtime.useScheduler<system>(reactor.scheduler);
+
+transient let payments = Rechain.Chain<system, Action, AppError>({
+  runtime; id = 0; name = "payments"; description = "Payment actions";
+  encodePayload = func(action) { CandidX.encode(action) };
+  reducers = [balances.reducer];
+  settings = null;
+});
+// Inside an update/endpoint:
+// payments.dispatch<system>(action)
+```
+
+Chain IDs are `Nat8` values, 0–255. Each chain starts block numbering at zero and maintains its own parent hash. An unrelated audit chain therefore does not consume payment IDs. Equal action histories can have equal hashes across chains; certified paths bind the chain identity. Reconstruct handles with the same IDs after upgrade and preserve each ID's action meaning. Duplicate IDs or names are rejected during binding.
+
+There are two useful operating modes:
+
+| Setting | Behavior |
+| --- | --- |
+| `recordTransactions = true` | Commit accepted actions and store/certify their blocks; archival can be enabled separately |
+| `recordTransactions = false` | Commit accepted actions and advance the local action counter, without encoding, logging or archiving them |
+
+An unrecorded chain is useful for reducer-owned maintenance or ephemeral projections, but those changes cannot be recovered from its nonexistent action log. Its certified state is explicitly `#Unrecorded`. Its `stats().lastIndex` advances while `get_blocks(...).log_length` remains zero. Recording mode cannot change after the action counter becomes nonzero.
+
+With recording enabled but `archiveEnabled = false`, history remains local until capacity is exhausted; this setting does not discard old history. See the [multi-chain example](../../rechain/examples/multi-chain/README.md) for different retention policies sharing one runtime.
+
+<a id="rechain-blocks"></a>
+## Blocks, hashes and public reads
+
+The current wire block has exactly two fields:
+
+```motoko
+public type Block = { payload : Blob; phash : ?Blob };
+```
+
+`payload` is the original canonical CandidX encoding of the action. `phash` is the preceding block's hash, absent at genesis. Block ID and chain ID travel in surrounding response fields. Rechain uses its own typed protocol; ICRC-3 is a design reference, not a claim that these endpoints implement the ICRC-3 wire interface.
+
+The [V2 hash format](../../rechain/src/Block.mo) is fixed:
+
+```text
+genesis: SHA256(UTF8("rc") || 0x00 || payload)
+later:   SHA256(UTF8("rc") || 0x01 || phash || payload)
+```
+
+A present parent hash must contain 32 bytes. The outer Candid encoding of a query response is not part of this hash. Verify the original payload bytes before decoding into an application type: decoding and re-encoding through an older, narrower schema can drop fields and change the bytes.
+
+The [public API](../../rechain/src/types.mo) supplies:
+
+| Runtime call | Use |
+| --- | --- |
+| `get_blocks(ranges, chain)` | Read local blocks and redirects for archived ranges |
+| `get_chain_info({from}, chain)` | Discover metadata, format, local bounds and paginated archive ranges |
+| `get_tip_certificate(chain)` | Obtain proof of selected published tips |
+| `get_format()` | Identify payload encoding/profile and block hash version |
+| `stats(chain)` / `runtime_stats()` | Inspect per-chain and shared storage/maintenance state |
+
+For ordinary runtime reads, `null` selects chain 0. For `get_tip_certificate(null)`, it selects **all configured chains**. Unknown IDs return `#Err(#UnknownChain(id))`. Bound handles already know their ID and expose selected results directly.
+
+Reads can return a bounded prefix. Resume from the first missing block ID and follow redirects with their chain ID intact. Archive discovery uses `from`/`next_archive`; pass the last returned principal as the next cursor until a following page is empty. Do not infer missing history from one short response.
+
+<a id="rechain-certification"></a>
+## Certification and reader trust
+
+A hash chain detects edits relative to a trusted hash. An attacker can still invent an entirely different internally consistent chain unless the reader authenticates its anchor.
+
+Rechain publishes a Merkle root in the canister's `certified_data`. Its witness proves these paths for a selected chain:
+
+```text
+rechain / chains / <one-byte chain ID> / state
+rechain / chains / <one-byte chain ID> / last_block_index
+rechain / chains / <one-byte chain ID> / last_block_hash
+```
+
+The state distinguishes empty, unrecorded and nonempty recorded chains. A nonempty tip includes its index and hash. Thus the certified value is not simply the raw previous-hash field.
+
+A client requiring authenticated history must verify the IC certificate for the intended canister and acceptable freshness, verify the witness against its certified root, check the selected chain's leaves, and verify the block hashes against that tip. A missing query certificate is represented by a successful result containing `null`; it is not a proof. Correct verification detects a middleman changing the verified history, without making claims about whether the application's business logic is correct.
+
+The [certification manager](../../rechain/src/internal/TipCertification.mo) may defer publication during busy periods. The first deferred write sets a fixed one-second publication deadline; later writes do not keep moving it. Until publication, returned proofs and tip snapshots describe the older published tip consistently. A newly returned block can therefore be ahead of the certified tip. Freshness policy belongs to the reader.
+
+The library's polling Reader validates payload canonicality, consecutive IDs and parent hashes. **It does not verify IC certificates.** A reader starting at an arbitrary nonzero block also needs a separately trusted anchor for authenticated history. Certificate verification is an additional client responsibility; [certificate tests](../../rechain/test/cert.spec.ts) exercise real signatures, witnesses and tampering.
+
+<a id="rechain-archives"></a>
+## Archives and recovery
+
+Archive canisters hold older blocks while the source keeps a recent local suffix. One runtime coordinator fills one active archive with batches from different chains; each chain keeps independent contiguous ranges and parent links. When that destination reaches its configured record or page capacity, the coordinator rotates to another archive, subject to fleet limits.
+
+Retention can be triggered by record count, optional byte thresholds, record age or storage pressure. A coalescing delay lets nearby writes accumulate. Once cleanup starts, its target becomes an absolute persisted endpoint, so retries and upgrades continue the same bounded work. Quiet chains can still reach their age deadline without another dispatch.
+
+The critical handoff is:
+
+```text
+source retains blocks → archive receives batch → source validates ACK
+                                           → source removes acknowledged prefix
+```
+
+Validation checks destination, chain, accepted count, contiguous endpoint and capacity bounds. A lost reply does not authorize source deletion. Retrying overlap compares the exact existing payload and parent hash. A partial `#Full` result can acknowledge a prefix; the source retains the rest and rotates the full destination. An empty archive unable to hold even the first block stops automatic retries rather than looping indefinitely.
+
+`runtime.clean_up(null)` advances one fair bounded batch; `clean_up(?id)` selects a chain. Results distinguish moved work, idle, disabled, busy and errors. Failed calls or invalid acknowledgements preserve unconfirmed records and can suspend automatic retries until a later dispatch, explicit retry or reconstruction. Monitor this rather than assuming archival always catches up. A writable existing archive remains usable even when the fleet registry is full.
+
+The protocol is implemented in [ArchiveManager](../../rechain/src/internal/ArchiveManager.mo) and the [archive canister](../../rechain/src/internal/archive.mo), with [lost-reply and recovery tests](../../rechain/test/archive_recovery_fuzz.spec.ts). Host APIs must authorize archive administration. These native archive calls do not become Reactor batches merely because maintenance uses Reactor's scheduler.
+
+<a id="rechain-replay"></a>
+## Replay, projections and debugging
+
+Recorded actions can rebuild a state projection when you have the correct starting state, complete ordered history and the corresponding reducer semantics/configuration. Replay the accepted actions, not original thunk decisions or remote side effects. A third party can build a different projection for analytics, inspect changes, decide what to do, and call the public API under its normal authorization rules.
+
+The [Reader](../../rechain/src/reader.mo) binds persistent memory to one source canister and one chain. Reconstruction with a different binding is refused. It follows bounded archive redirects, sorts IDs, rejects conflicting duplicates and validates a contiguous prefix before typed decoding and application. It never advances over a gap.
+
+Its application callback is:
+
+```motoko
+onRead : <system>([Action], Nat) -> {
+  #Ok : Nat;
+  #Err : { accepted : Nat; error : E };
+}
+```
+
+The second argument is the first block ID. The returned count acknowledges a **leading prefix**, including when a later application error occurs. `#Ok(0)` defers the whole batch. Apply only the prefix you acknowledge; reporting more accepted actions than supplied traps. The saved cursor and last hash advance exactly through the acknowledged prefix and survive upgrades. The [Reader fixture](../../rechain/test/reader_fuzz.test.mo) demonstrates partial application and errors.
+
+For debugging, compare an action and block ID with state before and after its replay. A recorded history contains accepted actions; rejected attempts need separate application or workflow diagnostics. Also distinguish business history from [Takt execution history](takt.md#takt-inspector): a block says which local transition committed; the workflow explains which step requested it and what happened before or after.
+
+<a id="rechain-idempotency"></a>
+## Bounded idempotency
+
+A caller may not know whether a transfer committed after a reply is lost. Blindly creating another transfer can double the effect. Rechain's optional [Idempotency reducer](../../rechain/src/reducers/idempotency/lib.mo) recognizes retained retries and returns the original block ID.
+
+Install it **before** reducers that validate mutable balances, ownership, approvals or reservations. Otherwise a valid retry may fail against the state changed by its first success. It uses separate persistent memory per chain and pure adapters to select:
+
+- The authenticated caller and current host receipt timestamp.
+- Original metadata: `memo`, `created_at_time`, `expireAt`.
+- Deterministic identity bytes containing every field that defines the effect, including operation kind and normalized accounts.
+
+The caller must save and reuse the original request, metadata and identity encoding. The host receipt timestamp changes on retry and is excluded from stable identity. Changing a recipient, amount, metadata or selected bytes identifies another operation. Preserve saved bytes or a frozen encoder across upgrades; a different ordinary-Candid type table can change identity bytes even for apparently equal values.
+
+The current implementation's rules are deliberately bounded:
+
+| Condition | Result |
+| --- | --- |
+| Retained duplicate within the creation window | Mapped `#DuplicateOf(originalBlockId)` application error; no new commit or block |
+| Creation time in the future | `#CreatedInFuture`; no future-drift allowance |
+| At or beyond creation time + 24 hours | `#TooOld` |
+| Fresh admission at/after `expireAt` | `#TransactionExpired` |
+| Memo without creation time | `#CreatedAtTimeRequired` |
+| No metadata, or expiry-only metadata | No deduplication; each successful dispatch is a new effect |
+
+A retained duplicate is reported even after `expireAt`: that deadline prevents new admission, not recognition of existing success. The default index cap is 100,000 entries. Successful commits reclaim at most 1,000 expired entries; rejected calls do not mutate cleanup state. Live entries are not evicted to admit new work. A capacity error prevents the business commit.
+
+Rechain reports duplicates through ordinary reducer errors; it does not automatically turn them into API success. An application adapter can map a validated duplicate to its original successful block reference.
+
+This is not a permanent receipt service. `#TooOld`, a missing dedup entry or an elapsed deadline by itself cannot prove an earlier attempt had no effect. A participant's `#TransactionExpired` can establish rejection only under its documented contract: the unchanged request remains within full duplicate-retention coverage, retained success is checked first, and the deadline prevents any later new effect. Reactor's envelope `#Expired` does not supply that participant proof. See [Takt's Rechain adapter](../../takt/src/adapters/Rechain.mo) for that classification.
+
+After an uncertain operation loses its safe replay window, retain the workflow obligation and reconcile against immutable blocks or authoritative participant state. Do not refresh its timestamp or refund merely because retry admission has expired. [Takt's remote-effect rules](takt.md#takt-remote) explain that boundary.
+
+<a id="rechain-integration"></a>
+## Listeners and the shared scheduler
+
+`chain.listen(listener)` binds one transient listener to a recorded chain. It runs synchronously after storage, all reducer commits, the next-ID update and recorded-tip handling. It can observe committed state and queue a notification. It does not run for rejection, storage failure or an idempotency duplicate.
+
+The listener has no preparation phase or error return. It cannot reject dispatch because a downstream queue lacks capacity. Keep it bounded and nontrapping, compose multiple notifications inside that one listener, and rebind it after upgrade. Unrecorded chains refuse listeners. Reliable downstream delivery needs the [Reactor event/queue contract](reactor.md#reactor-events), not the assumption that calling a listener proves remote completion. See the [listener tests](../../rechain/test/listeners.spec.ts).
+
+Attach Rechain and any Readers to the host's existing `reactor.scheduler` during composition, before asynchronous work starts. Certification uses Control scheduling; archive work and Reader polling use Maintenance scheduling. A host without Reactor transport may construct the scheduler directly. Do not create a competing scheduler just for Rechain when Takt and Reactor already share one.
+
+Scheduling determines when maintenance runs. It does not turn dispatch into an async operation, alter reducer ownership or automatically batch native calls. [Reactor's scheduling reference](reactor.md#reactor-scheduler) describes priorities and callback reservations.
+
+<a id="rechain-operations"></a>
+## Persistence and operational checklist
+
+Persistent memory holds business state, history, chain counters/hashes, archive ranges and pending transfers. Runtime objects, caches, listeners and timer handles are reconstructed. Reclaimed stable-region pages can serve another chain, but the allocated region cannot shrink. Cache eviction removes cached copies, not recorded history.
+
+Useful current defaults include a 1,000,000-byte payload cap, 1,000 cached blocks per chain, count-triggered archival at 1,000,000 local records down toward 500,000, a 30-second coalescing delay, and at most 1,000 records per archive transfer. Wire-byte and storage limits still constrain a batch. These are source-version defaults, not capacity or throughput promises; see [settings](../../rechain/README.md#storage-and-configuration).
+
+Dispatch distinguishes application errors from library errors: `#PayloadEncodingFailed`, `#TransactionTooLarge`, `#StorageFull` and `#StorageUnavailable` appear under `#Err(#Rechain(...))`. Storage pressure may schedule cleanup even while the rejected action leaves business state unchanged.
+
+Before relying on the machine:
+
+- Keep each reducer's persisted schema self-contained and its memory private. Reconstruct handles consistently, using one runtime and scheduler.
+- Test that preparing or discarding a callback changes nothing, and that a late reducer rejection or storage failure leaves every prepared write unapplied.
+- Handle bounded reads, archive backlogs and capacity errors; protect administrative APIs.
+- Choose which chains must be replayable. Keep action codecs, historical semantics and trusted anchors needed by those readers.
+- Retain exact retry identities and evidence for outstanding workflows. Test duplicate handling after state changes and upgrades.
+- Rebind listeners, and verify that restored maintenance deadlines and pending archive work continue correctly.
+
+The current repository is a development V2 format with plugin-enabled compiler dependencies. It does not supply a single-chain V1-to-V2 migration. Version persisted schemas deliberately and plan upgrades around live requests and historical decoding; do not infer compatibility from these examples. In particular, the current idempotency fingerprint format replaced an earlier development format without a legacy path: unresolved old-format requests require reconciliation and a planned cutover, not clearing their index.
+
+<a id="rechain-sources"></a>
+## Sources
+
+Researched against local Rechain commit **`e3e0f24e2f01`**, a development source snapshot. The links above and below point to the working source repositories and may later change; this reference is not a published compatibility guarantee.
+
+| Reference | Best use |
+| --- | --- |
+| [README](../../rechain/README.md), [public implementation](../../rechain/src/lib.mo), [types](../../rechain/src/types.mo) | API contracts, defaults and dispatch ordering |
+| [Conventions](../../rechain/conventions.md), [basic example](../../rechain/examples/basic/README.md) | Reducer ownership, selectors, thunks and application layout |
+| [Block](../../rechain/src/Block.mo), [certification](../../rechain/src/internal/TipCertification.mo) | Exact bytes and proof publication |
+| [Archive manager](../../rechain/src/internal/ArchiveManager.mo), [Reader](../../rechain/src/reader.mo) | Handoff, bounded reads and replay |
+| [Idempotency](../../rechain/src/reducers/idempotency/lib.mo), [fingerprint](../../rechain/src/reducers/idempotency/Fingerprint.mo) | Request identity, expiry and bounded evidence |
+| [Runtime memory](../../rechain/src/memory/rechain/v2.mo), [test guide](../../rechain/test/README.md) | Persistence and regression evidence |
+
+Continue with [Reactor: Scheduling and Batched Communication](reactor.md#reactor), then [Takt: Durable, Typed Workflows](takt.md#takt).
+
+
+<a id="reactor"></a>
+# Reactor: Scheduling and Batched Communication
+
+Read with [Rechain](rechain.md#rechain) and [Takt](takt.md#takt), or use the [combined reference](thestack.md).
+
+## Contents
+
+- [Reactor's role](#reactor-role)
+- [Follow a request and its result](#reactor-delivery)
+- [Compose one runtime and authenticate peers](#reactor-composition)
+- [Typed endpoints and caller authority](#reactor-endpoints)
+- [Requests, results, notifications and events](#reactor-messages)
+- [Scheduling, priorities and concurrency](#reactor-scheduler)
+- [Batching, limits and admission](#reactor-batching)
+- [Identity, retries and uncertain outcomes](#reactor-recovery)
+- [Events from committed business state](#reactor-events)
+- [Persistence and fleet upgrades](#reactor-upgrades)
+- [A workflow across canisters](#reactor-integration)
+- [Diagnostics and operational checklist](#reactor-operations)
+- [Sources](#reactor-sources)
+
+<a id="reactor-role"></a>
+## Reactor's role
+
+Reactor lets many small operations share an intercanister call. It also gives the participating libraries one scheduler for ready work, deadlines and outgoing-call capacity. Put one Reactor instance in each participating canister; those instances form the application's communication mesh.
+
+Think of a purchase workflow that reads an offer, reserves an NFT, collects payment and pays a seller. These are separate business operations. When several workflows have operations ready for the same peer, Reactor puts their messages into batches. The workflow still receives its own addressed result.
+
+| Owner | Responsibility |
+| --- | --- |
+| Application | Authentication, authorization, concrete endpoint contracts and business rules. |
+| [Rechain](rechain.md#rechain) | Local reducer validation, atomic business commits and optional recorded history. |
+| [Takt](takt.md#takt) | Workflow steps, dependencies, waits, business recovery and execution inspection. |
+| Reactor | Shared scheduling, priorities, physical call budgets and durable batched delivery. |
+
+The package is currently a development package named `n-reactor`, imported as `mo:n-reactor`, and is not published to Mops. Reactor can run independently of Takt and Rechain. It carries requests between state owners; it does not copy a peer's business state into the sender. [Source: package and integration overview](../../reactor/README.md).
+
+<a id="reactor-delivery"></a>
+## Follow a request and its result
+
+Suppose a workflow in A needs B to perform a local action.
+
+1. A's adapter prepares the concrete input, preserves its operation identity and queues it with a result address. The public API can return a pending workflow ID.
+2. Reactor gathers available messages for B into a physical batch. It sends when scheduled, without waiting for the batch to fill.
+3. B authenticates A and stores an accepted prefix of the batch in its durable inbox. The reply acknowledges **storage**, not the outcome of the action.
+4. B's scheduler runs the endpoint handler synchronously. The handler can read selectors, dispatch a Rechain action or admit a workflow. Its local effect, inbox removal and result enqueue commit in the same synchronous message.
+5. B sends the business result in a separate batch. A acknowledges its storage, then deposits it into the exact waiting address.
+6. The address's wake hook queues the owning workflow. Takt interprets the result, updates progress and consumes the mailbox together, then follows the graph.
+
+```mermaid
+sequenceDiagram
+    participant A as Reactor in A
+    participant B as Reactor in B
+    A->>B: Batch of requests
+    B-->>A: Stored-prefix ACK
+    Note over B: Run synchronous endpoint handlers
+    B->>A: Batch of addressed results
+    A-->>B: Stored-prefix ACK
+    Note over A: Resume each matching workflow
+```
+
+There are two durable delivery legs: requests and results. Only the short batch/acknowledgement exchange occupies a physical transport slot. Waiting for a business result does not keep that slot occupied throughout a long workflow.
+
+Several handlers can run in one scheduler message. Their changes share that message's commit boundary, so a synchronous trap rolls back the turn. Handlers must be bounded and use typed returns for expected errors. This local atomicity does not create an atomic transaction spanning A and B.
+
+Transport sequencing also does not establish business dependencies: an older deferred operation can finish after later independent work. Put necessary order in the workflow graph. [Sources: request lifecycle](../../reactor/README.md#a-request-from-start-to-finish), [transport processing](../../reactor/src/Transport.mo).
+
+<a id="reactor-composition"></a>
+## Compose one runtime and authenticate peers
+
+Persist Reactor's memory and reconstruct its behavior once per actor lifetime. This is a composition excerpt; the application still supplies its concrete routes and permission policy:
+
+```motoko
+import Principal "mo:core/Principal";
+import Reactor "mo:n-reactor";
+
+persistent actor class Example(owner : Principal) = this {
+  let reactorMemory = Reactor.newMemory(Reactor.DEFAULT_SETTINGS);
+  transient let reactor = Reactor.Reactor<system>(
+    reactorMemory, Principal.fromActor(this), 1
+  );
+
+  public shared ({caller}) func addPeer(peer : Principal) : async Bool {
+    if (caller != owner or Principal.isAnonymous(peer)) return false;
+    reactor.addPeer<system>(peer);
+    true
+  };
+
+  public shared ({caller}) func reactor_receive(
+    batch : Reactor.Batch
+  ) : async Reactor.Acknowledgement {
+    reactor.receive<system>(caller, batch)
+  };
+}
+```
+
+The constructor's final argument is the installed fleet reader generation, explained under [upgrades](#reactor-upgrades). Register routes during composition, before scheduled work can run. Authorize peers in both directions because the business result travels back through another batch call.
+
+Peer membership is persistent and append-only. Adding a duplicate is a no-op; there is no peer-removal or cursor-reset API. Membership protects this trusted internal wire, while public ingress remains an application API.
+
+Construct Takt's runtime with `reactor.scheduler` and attach Rechain and its Readers to that same scheduler. Rechain attachment cancels private maintenance timers; Takt already uses the supplied scheduler. Each library registers its workers while retaining ownership of its own persisted work. Takt's Rechain cleanup adapter also uses the shared scheduler. Ordinary actor methods are not intercepted: a business operation uses batching only when explicitly exposed through a typed Reactor adapter. [Sources: composition](../../reactor/README.md#compose-one-runtime-per-canister), [Takt runtime construction](../../takt/guide.md#model), [public API](../../reactor/src/lib.mo).
+
+<a id="reactor-endpoints"></a>
+## Typed endpoints and caller authority
+
+An `Endpoint<Input, Output>` combines a stable route with concrete encoders and decoders. Both sides import the same contract. This simple endpoint module illustrates the actual API:
+
+```motoko
+import Reactor "mo:n-reactor";
+
+module {
+  public type Input = {name : Text};
+  public type Output = {greeting : Text; caller : Principal};
+
+  public let greet : Reactor.Endpoint<Input, Output> = {
+    route = "greet";
+    input = {
+      encode = func(value : Input) : Blob {to_candid(value)};
+      decode = func(bytes : Blob) : ?Input {from_candid(bytes)};
+    };
+    output = {
+      encode = func(value : Output) : Blob {to_candid(value)};
+      decode = func(bytes : Blob) : ?Output {from_candid(bytes)};
+    };
+  };
+}
+```
+
+With that module imported as `Greeting`, the receiving actor registers a synchronous handler:
+
+```motoko
+reactor.router.register<Greeting.Input, Greeting.Output>(
+  Greeting.greet,
+  func<system>(context : Reactor.Context, input : Greeting.Input)
+    : Greeting.Output {
+    {greeting = "Hello " # input.name; caller = context.origin.caller}
+  }
+);
+```
+
+Reactor uses ordinary Candid serialization. Rechain's canonical block hashing is a separate contract. Durable retry sends saved bytes unchanged rather than decoding and reconstructing the request.
+
+The handler receives several identities with different meanings:
+
+| Context field | Meaning |
+| --- | --- |
+| `peer` | Immediate sending canister, authenticated by the IC and membership list. |
+| `origin.caller` | Original authenticated user, forwarded through trusted services. |
+| `origin.issuer` | Canister that issued this operation. |
+| `origin.operation` | Saved operation identity, distinct from packet sequence and workflow attempt. |
+| `request` | Optional response address; absent for notifications. |
+
+`reactor.origin(caller, operation)` sets this canister as issuer. A new downstream operation gets its own identity while retaining the user; forwarding an existing operation preserves its saved origin.
+
+Ingress obtains the user from Motoko's authenticated `caller`, never an arbitrary client-supplied origin. A handler still checks application permissions. A trusted peer forwarding Alice's identity does not automatically acquire Alice's token allowance or permission to spend from an escrow account.
+
+`registerDeferred` additionally allows `#Later` and `#Blocked`. These outcomes must make no business effect. Use an ordinary synchronous handler for a bounded operation; for long work, admit a workflow and return its reference. [Sources: typed router](../../reactor/src/Typed.mo), [caller contract](../../reactor/README.md#caller-and-authorization).
+
+<a id="reactor-messages"></a>
+## Requests, results, notifications and events
+
+These messages share transport but serve different purposes:
+
+| Kind | Purpose | Completion |
+| --- | --- | --- |
+| Request | Run a typed endpoint operation. | An addressed response, containing reply bytes or `#Expired`. |
+| Response | Deliver the operation's result to its requester. | Stored in the original result address. |
+| Notification | Run a typed operation without an ordinary response. | No request-result mailbox; use an explicit event contract if needed. |
+| Event | Deliver a producer's publication to a subscribed interest. | Stored in an event address for that expected producer. |
+
+`request` and `requestUntil` return `#ok(address)` after local enqueue, or `#err(error)` where the error is `#UnknownPeer` or `#TooLarge`. They do not return the business result. For the greeting contract above, a sender with an authorized `peer` and a prepared authenticated `origin` uses:
+
+```motoko
+let queued = reactor.request<system, Greeting.Input, Greeting.Output>(
+  peer, #Interactive, origin, Greeting.greet, {name = "Ada"}
+);
+```
+
+The `#ok(address)` branch saves that address with durable progress and waits for its result; `#err(error)` means this local enqueue did not happen. `requestUntil` additionally takes an optional absolute admission expiry in nanoseconds.
+
+`result(address)` peeks at a completion. `takeResult(address)` removes it and its watcher; call it in the same synchronous boundary that saves the consumer's progress. `watch(address, dispatcher)` arranges a wake when the result arrives. Use a shared dispatcher that queues the addressed work, leaving decoding and state changes to its consumer. Registering a watcher after arrival immediately signals the saved result.
+
+Completion matching checks the expected producer, kind and, for ordinary requests, route. A second distinct completion cannot overwrite the first. Addresses belong to one canister and are never recycled for unresolved work. [Sources: message types](../../reactor/src/memory/v1.mo), [request and mailbox API](../../reactor/src/Transport.mo), [addressed-wake tests](../../reactor/test/addressed-wake.test.mjs).
+
+<a id="reactor-scheduler"></a>
+## Scheduling, priorities and concurrency
+
+Reactor runs eligible work in three priority classes:
+
+| Priority | Work |
+| --- | --- |
+| Control | Library replies, events and integrated required cleanup. |
+| Interactive | Operations affecting the user's current flow. |
+| Maintenance | Ordinary background work. |
+
+Application request APIs allow Interactive or Maintenance. Control is reserved for library obligations, so user operations cannot promote themselves above the work needed to complete existing exchanges.
+
+The scheduler selects priority **between driver batches**. A selected driver runs at most 32 synchronous commands before rotating behind peers in its class. It stops earlier when blocked, when its priority changes, when launching a native call, or when the instruction budget is reached. Thirty-two is a rotation quantum, not the total work allowed in one message.
+
+The whole-message instruction counter is checked between commands. The default soft threshold is one billion instructions. Remaining ready work continues in a fresh message. A single expensive command cannot be preempted; each command must stay bounded. Maintenance may wait indefinitely while higher-priority work stays continuously ready.
+
+Ready work uses one coalesced immediate wake. Sustained ready work uses a serial continuation controller, while future work uses a separate timer for the earliest absolute deadline. An idle scheduler starts no polling loop; waiting only for replies does not create polling.
+
+Drivers retain their own typed queues and publish readiness changes through `lease.changed()` or `lease.refresh()`. The scheduler does not scan every registered worker to rediscover changes. Drivers whose readiness depends on callback permits declare that dependency. Prepared drivers can perform synchronous work and then explicitly launch native calls.
+
+Local execution stays sequential. Exchanges with different peers can overlap; each peer has at most one live batch. A logical workflow timeout does not release a physical call that is still outstanding. [Sources: scheduling contract](../../reactor/README.md#scheduling-priorities-and-parallelism), [scheduler implementation](../../reactor/src/Scheduler.mo), [priority and recovery tests](../../reactor/test/scheduler.test.mjs).
+
+<a id="reactor-batching"></a>
+## Batching, limits and admission
+
+Batching lets one physical call carry many logical operations. Each peer has independent priority lanes with their own sequences and acknowledgement cursors. A physical batch can contain several lanes, bounded by its total items and bytes.
+
+| Setting | Current default | What it bounds |
+| --- | --- | --- |
+| `maxBatchItems` | 64 | Logical frames across one batch. |
+| `maxBatchBytes` | 1,900,000 bytes | Conservative encoded-wire accounting. |
+| `scheduler.instructionBudget` | 1,000,000,000 | Soft whole-message threshold between commands. |
+| `scheduler.maxCallbacks` | 40 weighted units | Managed physical callback reservations. |
+| `scheduler.reservedControl` | 4 of those units | Capacity reserved for Control work. |
+| `callTimeoutMillis` | 10,000 ms | Batch/ACK exchange timeout. |
+| `retryMillis` / `maxRetryMillis` | 1,000 / 60,000 ms | Initial delivery backoff and cap. |
+
+The implementation accepts item limits up to 1,024 and byte limits up to 1,900,000. A demonstration sending hundreds of messages in one batch therefore needs a larger configured item limit than the default. Both peers need compatible limits. Available work sends without waiting for a full batch; items beyond an accepted prefix remain with the sender.
+
+A transport exchange reserves two weighted callback units for its wrapper and peer call. These units are managed accounting, not an exact count of every live compiler callback. Timers, continuation machinery and other native calls also need headroom. Keep the default callback budget unless measurements justify a different value.
+
+**Reactor has no inbox/outbox memory quotas, capacity credits, backlog rejection or eviction.** Wire limits and callback permits control transport and execution resources; they do not bound retained backlog. Accepted work and committed notifications are preserved. Application admission and [Takt execution limits](takt.md#takt-storage) are separate responsibilities.
+
+Settings are persisted when memory is created. Changing a source default does not alter an existing canister's saved settings. Batching improves use of physical calls; it does not promise a universal throughput number or that a workflow finishes within one IC round. [Sources: defaults](../../reactor/src/memory/v1.mo), [settings validation and transport](../../reactor/src/Transport.mo).
+
+<a id="reactor-recovery"></a>
+## Identity, retries and uncertain outcomes
+
+Keep these identifiers separate:
+
+| Identity | Identifies | Retry rule |
+| --- | --- | --- |
+| Peer + priority lane + sequence | One transport frame in a durable stream. | Resend the same frame without changing its sequence. |
+| Address `{canister; id}` | One response or event mailbox. | Keep the address attached to its unresolved operation. |
+| `origin.issuer` + `origin.operation` | The issued application operation. | Preserve it when forwarding or retrying that operation. |
+| Participant transaction metadata | The participant's idempotency/replay contract. | Preserve its required caller, request, timestamp and memo within that contract. |
+
+The sender keeps each frame until the receiver acknowledges storing it. Lost acknowledgement causes the same frames to be resent. Durable lane cursors suppress duplicate acceptance. Once an operation is processed, the receiver owns its queued result until the original sender stores that result and acknowledges it.
+
+Retries preserve the frame's exact bytes, sequence, origin, operation identity and reader generation. Each lane backs off when it makes no progress; contact failures also delay the peer. Delay grows by roughly 1.5 times up to the configured cap. New traffic does not reset an offline peer's delay, and other peers can continue. Delivery retries have no attempt limit.
+
+This is transport retry, not a new business attempt. An independently submitted transfer still needs the participant's transaction idempotency. Preserve its exact memo, timestamp, request and replay horizon; a new packet sequence does not make an unsafe financial retry safe. See [Rechain's bounded idempotency](rechain.md#rechain-idempotency) and [Takt's remote-effect contracts](takt.md#takt-remote).
+
+`#Expired` means the receiver declined to begin this request because its admission deadline had passed. It does not prove the outcome of an earlier related attempt. Takt's Reactor adapter treats it as uncertainty. Likewise, a timeout does not prove rejection and cannot authorize a refund or replacement effect.
+
+This transport outcome is distinct from a participant's `#TransactionExpired` response. The latter is interpreted under that participant's documented replay contract, including duplicate-first lookup and retention guarantees; the two errors are not interchangeable.
+
+After explicit authoritative reconciliation, `fence(address)` retires its business consumer while allowing a unique late result to drain. Watching again cannot reactivate the fenced address. Until resolution or such reconciliation, keep the original address attached to the operation.
+
+Unknown routes, invalid input and incompatible result handling remain available for repair. Register a missing route, or upgrade a faulty decoder or handler, then explicitly resume the blocked inbox entry. An already registered route cannot be replaced by calling `register` again. Oversized committed results stay queued rather than disappearing. Progress depends on reachable peers, compatible contracts and bounded handlers; preservation alone cannot guarantee eventual completion. [Sources: recovery contract](../../reactor/README.md#retries-uncertainty-and-cleanup), [transport tests](../../reactor/test/transport.test.mjs), [Takt Reactor adapter](../../takt/src/adapters/Reactor.mo).
+
+<a id="reactor-events"></a>
+## Events from committed business state
+
+A parent sometimes needs a particular committed fact rather than an immediate operation reply. For example, a child can publish a block confirming its audit completed. Reactor's events provide one-shot addressed interests:
+
+1. The waiting canister opens an event address for the expected producer.
+2. A typed request registers that address on the producer's topic **before** starting the child or effect that can publish.
+3. A successful [Rechain commit listener](rechain.md#rechain-integration) calls `publish(origin, topic, payload)` synchronously.
+4. Publication detaches the current recipient set. Scheduled work fans out durable Control events one recipient at a time.
+5. Delivery deposits each event into its exact address, even if the workflow has not reached its wait node yet.
+
+The listener does not loop over subscribers or reject the committed block because of transport backlog. Later subscribe/unsubscribe calls cannot change the set captured by that publication.
+
+Use one address for one interest. Registration is idempotent only while that address remains in the same topic's current recipient set. Do not register it under another topic or reuse it after publication. A topic names an application-defined fact; observing one block does not inherently prove an entire child workflow terminated successfully.
+
+Takt's generated `ScheduleWorkflow` / `AwaitEvent` integration uses `notifyWithEvent` to allocate the address and enqueue the child request atomically. The producer subscribes before admission, avoiding a child that finishes before its parent is listening. See [Takt events and children](takt.md#takt-events). [Sources: event implementation](../../reactor/src/Events.mo), [coordination adapter](../../takt/src/adapters/ReactorCoordination.mo).
+
+<a id="reactor-upgrades"></a>
+## Persistence and fleet upgrades
+
+Reactor persists peer membership, lane cursors, exact frames, retry deadlines, inbox entries, completion mailboxes, subscriptions and pending publication recipients. Timer IDs, drivers, watchers and scheduling indexes are transient and rebuilt on binding. Absolute deadlines retain elapsed time rather than restarting their duration.
+
+Durable queues do not make a live Motoko continuation upgradeable. Physical callbacks mus... (43 KB left)

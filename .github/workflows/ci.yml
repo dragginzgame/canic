@@ -104,8 +104,8 @@ jobs:
           echo "$GITHUB_WORKSPACE/.tools/host/bin" >> "$GITHUB_PATH"
           export PATH="$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
           make install-rust-tools
-          echo "$GITHUB_WORKSPACE/.tools/rust/bin" >> "$GITHUB_PATH"
-          export PATH="$GITHUB_WORKSPACE/.tools/rust/bin:$PATH"
+          echo "$GITHUB_WORKSPACE/.tools/rust/common/bin" >> "$GITHUB_PATH"
+          export PATH="$GITHUB_WORKSPACE/.tools/rust/common/bin:$PATH"
           make install-ic-tools install-testkit-server
           echo "$GITHUB_WORKSPACE/.tools/ic/bin" >> "$GITHUB_PATH"
           make testkit-server-check
@@ -127,6 +127,9 @@ jobs:
           cargo test --locked -p canic-host --lib binaryen::
           cargo test --locked -p canic-host --lib ic_wasm::
           cargo run --locked -p canic-cli --bin canic -- toolchain install
+      - name: Qualify bounded ICP configuration reads
+        run: |
+          bash scripts/ci/run-nonempty-cargo-test.sh --locked -p canic-host --lib icp_config::tests::
       - name: Qualify native durability and backup recovery
         shell: bash
         run: |
@@ -237,8 +240,8 @@ jobs:
           echo "$GITHUB_WORKSPACE/.tools/host/bin" >> "$GITHUB_PATH"
           export PATH="$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
           make install-rust-tools
-          echo "$GITHUB_WORKSPACE/.tools/rust/bin" >> "$GITHUB_PATH"
-          export PATH="$GITHUB_WORKSPACE/.tools/rust/bin:$PATH"
+          echo "$GITHUB_WORKSPACE/.tools/rust/common/bin" >> "$GITHUB_PATH"
+          export PATH="$GITHUB_WORKSPACE/.tools/rust/common/bin:$PATH"
       - name: Check formatting tools
         shell: bash
         run: |
@@ -371,8 +374,8 @@ jobs:
           echo "$GITHUB_WORKSPACE/.tools/host/bin" >> "$GITHUB_PATH"
           export PATH="$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
           make install-rust-tools
-          echo "$GITHUB_WORKSPACE/.tools/rust/bin" >> "$GITHUB_PATH"
-          export PATH="$GITHUB_WORKSPACE/.tools/rust/bin:$PATH"
+          echo "$GITHUB_WORKSPACE/.tools/rust/common/bin" >> "$GITHUB_PATH"
+          export PATH="$GITHUB_WORKSPACE/.tools/rust/common/bin:$PATH"
       - name: Install wasm target
         shell: bash
         run: |

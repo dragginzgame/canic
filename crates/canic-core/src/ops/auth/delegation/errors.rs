@@ -35,24 +35,16 @@ pub(super) fn map_install_active_delegation_proof_error(
             InternalError::public(crate::diagnostics::codes::SECURITY_INVALID_STATE)
         }
         InstallActiveDelegationProofError::CertExpired => InternalError::auth_proof_expired(),
+        // Preserve installation's existing retry classification; token presentation
+        // maps inconsistent submitted metadata to invalid input at its own boundary.
         #[cfg(any(feature = "auth-chain-key-ecdsa", test))]
-        InstallActiveDelegationProofError::RootProofInvalid(cause) => match cause {
-            ic_auth::token::TokenVerificationError::Expired {
-                target: "root_key_policy",
-            }
-            | ic_auth::token::TokenVerificationError::StaleAuthority { .. }
-            | ic_auth::token::TokenVerificationError::BindingMismatch {
-                field:
-                    "key_id" | "root_public_key" | "key_version" | "derivation_path_hash" | "algorithm",
-            } => InternalError::auth_material_stale(),
-            ic_auth::token::TokenVerificationError::Expired { .. } => {
-                InternalError::auth_proof_expired()
-            }
-            ic_auth::token::TokenVerificationError::NotYetValid { .. } => {
-                InternalError::auth_proof_pending()
-            }
-            _ => InternalError::invalid_input(),
-        },
+        InstallActiveDelegationProofError::RootProofInvalid(
+            ic_auth::token::TokenVerificationError::RootSignatureBindingMismatch { .. },
+        ) => InternalError::auth_material_stale(),
+        #[cfg(any(feature = "auth-chain-key-ecdsa", test))]
+        InstallActiveDelegationProofError::RootProofInvalid(cause) => {
+            crate::ops::auth::delegated::root_proof::map_verification_error(cause)
+        }
         #[cfg(any(feature = "auth-chain-key-ecdsa", test))]
         InstallActiveDelegationProofError::RootPolicyRejected => InternalError::invalid_input(),
         #[cfg(not(any(feature = "auth-chain-key-ecdsa", test)))]
@@ -95,17 +87,21 @@ mod tests {
 
     #[test]
     fn active_proof_install_preserves_typed_root_proof_cause() {
-        let mapped = map_install_active_delegation_proof_error(
-            InstallActiveDelegationProofError::RootProofInvalid(
-                ic_auth::token::TokenVerificationError::StaleAuthority {
-                    field: "proof_epoch",
-                },
-            ),
-        );
-
-        assert_eq!(
-            mapped.public_error().code(),
-            crate::diagnostics::codes::SECURITY_CONFLICT.raw_code()
-        );
+        use ic_auth::token::TokenVerificationError;
+        for cause in [
+            TokenVerificationError::StaleAuthority {
+                field: "proof_epoch",
+            },
+            TokenVerificationError::RootSignatureBindingMismatch { field: "key_id" },
+            TokenVerificationError::RootKeyPolicyBindingMismatch { field: "key_id" },
+        ] {
+            let mapped = map_install_active_delegation_proof_error(
+                InstallActiveDelegationProofError::RootProofInvalid(cause),
+            );
+            assert_eq!(
+                mapped.public_error().code(),
+                crate::diagnostics::codes::SECURITY_CONFLICT.raw_code()
+            );
+        }
     }
 }

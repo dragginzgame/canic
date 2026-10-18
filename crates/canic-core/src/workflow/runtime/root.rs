@@ -36,6 +36,11 @@ pub fn init_root_canister(
 ) -> Result<(), InternalError> {
     // --- Phase 1: Init base systems ---
     MemoryRegistryOps::bootstrap_registry().map_err(|_err| InternalError::invariant())?;
+    #[cfg(any(
+        feature = "auth-root-canister-sig-create",
+        feature = "auth-issuer-canister-sig-create"
+    ))]
+    crate::ops::auth::signature_store::reset()?;
     AuthorityRestoreWorkflow::initialize(IcOps::canister_self())?;
     rebuild_root_derived_storage_indexes()?;
     FleetActivationRuntimeOps::set_managed();
@@ -104,6 +109,11 @@ pub fn init_root_canister(
 pub fn post_upgrade_root_canister_after_memory_init(
     embedded_release_build_id: Option<&str>,
 ) -> Result<bool, InternalError> {
+    #[cfg(any(
+        feature = "auth-root-canister-sig-create",
+        feature = "auth-issuer-canister-sig-create"
+    ))]
+    crate::ops::auth::signature_store::reset()?;
     FleetActivationOps::select_root_storage();
     let embedded_release_build_id =
         ReleaseBuildOps::embedded_release_build_id(embedded_release_build_id)?;

@@ -97,7 +97,6 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
             );
             if controller_command {
                 $crate::__internal::core::access::auth::is_controller(caller)
-                    .await
                     .map_err(::canic::Error::from)?;
             }
             let recovery_command = matches!(
@@ -120,7 +119,7 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
         }
 
         #[$crate::canic_query(public)]
-        async fn canic_public_status(
+        fn canic_public_status(
             request: PublicStatusRequest,
         ) -> Result<PublicStatusResponse, ::canic::Error> {
             match request {
@@ -152,7 +151,7 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
 
 
         #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_observability(
+        fn canic_observability(
             request: CoordinatorObservabilityRequest,
         ) -> Result<CoordinatorObservabilityResponse, ::canic::Error> {
             match request {
@@ -193,7 +192,7 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
 
 
         #[$crate::canic_query(public)]
-        async fn canic_coordinator_operation_status(
+        fn canic_coordinator_operation_status(
             request: CoordinatorOperationReadRequest,
         ) -> Result<CoordinatorOperationReadResponse, ::canic::Error> {
             match request {
@@ -208,7 +207,7 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
 
 
         #[$crate::canic_query(requires(custom(::canic::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorRegistryCallerPredicate)))]
-        async fn canic_coordinator_registry(
+        fn canic_coordinator_registry(
             request: CoordinatorRegistryRequest,
         ) -> Result<CoordinatorRegistryResponse, ::canic::Error> {
             match request {

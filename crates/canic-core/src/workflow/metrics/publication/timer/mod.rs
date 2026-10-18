@@ -14,8 +14,8 @@ use crate::{
     },
 };
 use ic_timers::{
-    DeclarationLifetime, OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion,
-    TimerIdentity, TimerSchedule, register_once,
+    OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion, TimerIdentity, TimerSchedule,
+    TimerStart, register_once,
 };
 use std::cell::RefCell;
 
@@ -54,7 +54,7 @@ impl PublicSamplingTimer {
         if with_owned_once(&SAMPLING_TIMER, |_| ())?.is_none() {
             let registration = register_once(
                 Self::timer_identity()?,
-                DeclarationLifetime::Retained,
+                TimerStart::Retained { initial: None },
                 |_context| async { Self::run() },
             )
             .map_err(TimerError::from)?;

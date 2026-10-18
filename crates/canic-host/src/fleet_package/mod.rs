@@ -4,14 +4,13 @@
 //! infrastructure artifacts. Runtime behavior and artifact finalization remain
 //! with their existing owners.
 
+use ic_build::cargo::observation::schema::{Metadata, Package};
+
 mod lock;
 #[cfg(test)]
 mod tests;
 
-use crate::{
-    canister_build::CanisterBuildProfile,
-    cargo_metadata::{CargoMetadata, CargoMetadataPackage},
-};
+use crate::canister_build::CanisterBuildProfile;
 
 use std::{
     collections::BTreeMap,
@@ -21,7 +20,7 @@ use std::{
     process::Command,
 };
 
-use ic_host_fs::durable::write_bytes;
+use ic_host_fs::durable::{PublicationMode, WriteOptions, write_bytes};
 
 const CANIC_FAMILY_CRATES: &[&str] = &[
     "canic-contracts",
@@ -135,7 +134,14 @@ pub fn generated_manifests(config: &Path) -> [PathBuf; 3] {
 
 fn write_if_changed(path: &Path, bytes: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
     if fs::read(path).ok().as_deref() != Some(bytes) {
-        write_bytes(path, bytes)?;
+        write_bytes(
+            path,
+            WriteOptions {
+                mode: PublicationMode::Replace,
+                permissions: 0o666,
+            },
+            bytes,
+        )?;
     }
     Ok(())
 }
@@ -153,9 +159,7 @@ pub fn append_infrastructure_profile_args(command: &mut Command, profile: Canist
     }
 }
 
-pub fn resolved_canic_package(
-    metadata: &CargoMetadata,
-) -> Result<&CargoMetadataPackage, Box<dyn std::error::Error>> {
+pub fn resolved_canic_package(metadata: &Metadata) -> Result<&Package, Box<dyn std::error::Error>> {
     let matches = metadata
         .packages
         .iter()
@@ -172,24 +176,24 @@ pub fn resolved_canic_package(
 }
 
 pub fn resolved_wrapper_dependencies(
-    metadata: &CargoMetadata,
-    canic_package: &CargoMetadataPackage,
+    metadata: &Metadata,
+    canic_package: &Package,
 ) -> Result<GeneratedWrapperDependencies, Box<dyn std::error::Error>> {
     let canic_core = resolved_normal_dependency(metadata, canic_package, "canic-core")?;
     let candid = resolved_normal_dependency(metadata, canic_core, "candid")?;
     let ic_cdk = resolved_normal_dependency(metadata, canic_core, "ic-cdk")?;
     Ok(GeneratedWrapperDependencies {
-        canic_version: canic_package.version.clone(),
-        candid_version: candid.version.clone(),
-        ic_cdk_version: ic_cdk.version.clone(),
+        canic_version: canic_package.version.to_string(),
+        candid_version: candid.version.to_string(),
+        ic_cdk_version: ic_cdk.version.to_string(),
     })
 }
 
 fn resolved_normal_dependency<'a>(
-    metadata: &'a CargoMetadata,
-    parent: &CargoMetadataPackage,
+    metadata: &'a Metadata,
+    parent: &Package,
     dependency_name: &str,
-) -> Result<&'a CargoMetadataPackage, Box<dyn std::error::Error>> {
+) -> Result<&'a Package, Box<dyn std::error::Error>> {
     let resolve = metadata
         .resolve
         .as_ref()
@@ -207,7 +211,11 @@ fn resolved_normal_dependency<'a>(
     let matches = node
         .deps
         .iter()
-        .filter(|dependency| dependency.dep_kinds.iter().any(|kind| kind.kind.is_none()))
+        .filter(|dependency| {
+            dependency.dep_kinds.iter().any(|kind| {
+                kind.kind == ic_build::cargo::observation::schema::DependencyKind::Normal
+            })
+        })
         .filter_map(|dependency| {
             metadata
                 .packages

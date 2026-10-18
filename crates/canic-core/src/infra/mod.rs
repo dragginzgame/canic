@@ -16,7 +16,7 @@ impl From<ic::IcInfraError> for InternalError {
             &err
         {
             return Self::public(codes::PLATFORM_UNAVAILABLE)
-                .with_platform_rejection(&rejection.to_string());
+                .with_platform_rejection(rejection.raw_reject_code(), &rejection.to_string());
         }
         let code = match err {
             ic::IcInfraError::CandidDecode(_) => codes::CODEC_INVALID,
@@ -70,6 +70,30 @@ mod tests {
         )));
         assert_eq!(error.public_code(), Some(codes::PLATFORM_UNAVAILABLE));
         assert_eq!(error.platform_rejection(), Some(expected.as_str()));
+        let target = candid::Principal::from_slice(&[9]);
+        let error = error
+            .with_dependency_failure(target, "canic_wasm_store_command", "inspect_template")
+            .with_provisioning_failure(
+                crate::domain::provisioning_failure::ProvisioningFailureStage::StoreStatus,
+                target,
+                [7; 32],
+                crate::domain::provisioning_failure::ProvisioningRetryCategory::Backoff,
+            )
+            .with_dependency_failure(
+                candid::Principal::from_slice(&[8]),
+                "outer_method",
+                "outer_step",
+            );
+        let origin = error.provisioning_failure().unwrap();
+        let dependency = origin.dependency.unwrap();
+        assert_eq!(dependency.target, target);
+        assert_eq!(dependency.method, "canic_wasm_store_command");
+        assert_eq!(dependency.step, "inspect_template");
+        assert_eq!(dependency.rejection_code, Some(5));
+        assert_eq!(
+            dependency.rejection_detail.as_deref(),
+            Some(expected.as_str())
+        );
         let public = Error::from(error);
         assert_eq!(
             public,
@@ -77,7 +101,7 @@ mod tests {
         );
 
         let message = "€".repeat(InternalError::MAX_PLATFORM_REJECTION_BYTES);
-        let bounded = InternalError::unavailable().with_platform_rejection(&message);
+        let bounded = InternalError::unavailable().with_platform_rejection(5, &message);
         let retained = bounded.platform_rejection().unwrap();
         assert!(retained.len() <= InternalError::MAX_PLATFORM_REJECTION_BYTES);
         assert!(retained.len() > InternalError::MAX_PLATFORM_REJECTION_BYTES - 3);

@@ -21,7 +21,10 @@ use crate::{
 use canic_contracts::ids::{BuildNetwork, ReleaseBuildId};
 use canic_core::bootstrap::compiled::ComponentTopology;
 use ic_host_artifacts::artifact::ArtifactError;
-use ic_host_fs::{durable::create_new_bytes_with_parents, read::read_optional_file_no_follow};
+use ic_host_fs::{
+    durable::{PublicationMode, WriteOptions, write_bytes},
+    read::read_optional_file_no_follow,
+};
 use serde::{Deserialize, Serialize};
 use sha2_host::{Digest, Sha256};
 use std::{
@@ -192,8 +195,15 @@ pub fn compile_and_persist_current_release_set_manifest(
         };
     }
     let bytes = expected.canonical_bytes()?;
-    if let Err(source) =
-        create_new_bytes_with_parents(&path, &bytes).map_err(crate::publication::ops::io_error)
+    if let Err(source) = write_bytes(
+        &path,
+        WriteOptions {
+            mode: PublicationMode::CreateNew,
+            permissions: 0o666,
+        },
+        &bytes,
+    )
+    .map_err(crate::publication::ops::io_error)
     {
         if let Ok(Some(existing)) = load_optional(&path, release_build_id)
             && existing.manifest == expected

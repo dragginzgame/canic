@@ -28,9 +28,7 @@ std::thread_local! {
     static ROOT_FLEET_REGISTRY_MIRROR:
         RefCell<Cell<RootFleetRegistryMirrorStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            canic_core::ic_memory_key!(
-                authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-                key = "canic.control_plane.root.fleet_registry_mirror.v1"),
+            canic_core::memory::open(crate::memory::keys::ROOT_FLEET_REGISTRY_MIRROR_V1),
             RootFleetRegistryMirrorStateRecord::default(),
         ));
 }

@@ -15,8 +15,8 @@ use crate::{
     workflow::runtime::timer::{TimerError, require_active, retain_owned_once, with_owned_once},
 };
 use ic_timers::{
-    DeclarationLifetime, OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion,
-    TimerIdentity, TimerSchedule, register_once,
+    OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion, TimerIdentity, TimerSchedule,
+    TimerStart, register_once,
 };
 use std::{cell::RefCell, future::Future, time::Duration};
 
@@ -79,7 +79,7 @@ pub fn schedule<F: Future<Output = ()> + 'static>(
         let claim = register_once(
             TimerIdentity::try_new("canic", "application", "initialize")
                 .map_err(TimerError::from)?,
-            DeclarationLifetime::Retained,
+            TimerStart::Retained { initial: None },
             move |_| run(hook),
         )
         .map_err(TimerError::from)?;

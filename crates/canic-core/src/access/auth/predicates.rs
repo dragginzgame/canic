@@ -15,8 +15,7 @@ use ic_cdk::api::{canister_self, is_controller as caller_is_controller};
 
 /// Require that the caller controls the current canister.
 /// Allows controller-only maintenance calls.
-#[expect(clippy::unused_async)]
-pub(super) async fn is_controller(caller: Principal) -> Result<(), AccessError> {
+pub(super) fn is_controller(caller: Principal) -> Result<(), AccessError> {
     if caller_is_controller(&caller) {
         Ok(())
     } else {
@@ -43,16 +42,15 @@ fn require_fleet_admission_decision(
 }
 
 /// Require controller authority first, then the exact stable Root binding.
-pub(super) async fn is_controller_or_root(caller: Principal) -> Result<(), AccessError> {
-    if is_controller(caller).await.is_ok() {
+pub(super) fn is_controller_or_root(caller: Principal) -> Result<(), AccessError> {
+    if is_controller(caller).is_ok() {
         return Ok(());
     }
-    is_root(caller).await
+    is_root(caller)
 }
 
 /// Require that the caller is a direct child of the current canister.
-#[expect(clippy::unused_async)]
-pub(super) async fn is_child(caller: Principal) -> Result<(), AccessError> {
+pub(super) fn is_child(caller: Principal) -> Result<(), AccessError> {
     if CanisterChildrenOps::contains_pid(&caller) {
         Ok(())
     } else {
@@ -61,8 +59,7 @@ pub(super) async fn is_child(caller: Principal) -> Result<(), AccessError> {
 }
 
 /// Require that the caller is the configured parent canister.
-#[expect(clippy::unused_async)]
-pub(super) async fn is_parent(caller: Principal) -> Result<(), AccessError> {
+pub(super) fn is_parent(caller: Principal) -> Result<(), AccessError> {
     let parent_pid = EnvOps::parent_pid().map_err(dependency_unavailable)?;
 
     if parent_pid == caller {
@@ -73,8 +70,7 @@ pub(super) async fn is_parent(caller: Principal) -> Result<(), AccessError> {
 }
 
 /// Require that the caller equals the configured root canister.
-#[expect(clippy::unused_async)]
-pub(super) async fn is_root(caller: Principal) -> Result<(), AccessError> {
+pub(super) fn is_root(caller: Principal) -> Result<(), AccessError> {
     let root_pid = EnvOps::root_pid().map_err(dependency_unavailable)?;
 
     if caller == root_pid {
@@ -85,8 +81,7 @@ pub(super) async fn is_root(caller: Principal) -> Result<(), AccessError> {
 }
 
 /// Require that the caller is the currently executing canister.
-#[expect(clippy::unused_async)]
-pub(super) async fn is_same_canister(caller: Principal) -> Result<(), AccessError> {
+pub(super) fn is_same_canister(caller: Principal) -> Result<(), AccessError> {
     if caller == canister_self() {
         Ok(())
     } else {

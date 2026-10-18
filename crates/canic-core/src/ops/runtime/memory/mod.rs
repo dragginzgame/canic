@@ -15,14 +15,13 @@ use crate::{
     dto::memory::{
         MemoryAllocationEntry, MemoryAllocationPoolEntry, MemoryAllocationRecordEntry,
         MemoryAllocationSizeEntry, MemoryAllocationsResponse, MemoryAuthorityEntry,
-        MemoryCommitRecoveryResponse, MemoryCommitSlotResponse, MemoryExcludedRangeEntry,
+        MemoryCommitRecoveryResponse, MemoryCommitSnapshotResponse, MemoryExcludedRangeEntry,
         MemoryLedgerMemoryEntry, MemoryLedgerResponse,
     },
     memory::{self, ledger, registry::MemoryRegistryError},
 };
 use ic_memory::{
-    AllocationState, CommitRecoveryError, CommitSlotDiagnostic, CommitStoreDiagnostic,
-    DiagnosticMemorySize, DiagnosticRecord,
+    AllocationState, CommitSnapshotDiagnostic, DiagnosticMemorySize, DiagnosticRecord,
 };
 use thiserror::Error as ThisError;
 
@@ -41,13 +40,10 @@ pub enum MemoryRegistryOpsError {
     Registry(#[from] MemoryRegistryError),
     // this error comes from the generic ic-memory runtime boundary
     #[error(transparent)]
-    Runtime(#[from] ic_memory::RuntimeBootstrapError<MemoryRegistryError>),
+    Runtime(#[from] memory::MemoryBootstrapError),
     // this error comes from the generic ic-memory runtime diagnostic boundary
     #[error(transparent)]
     Diagnostic(#[from] ic_memory::RuntimeDiagnosticError),
-    // this error comes from entering the default ic-memory TLS runtime
-    #[error(transparent)]
-    State(#[from] ic_memory::RuntimeStateError),
 }
 
 impl From<MemoryRegistryOpsError> for InternalError {
@@ -59,7 +55,6 @@ impl From<MemoryRegistryOpsError> for InternalError {
                 crate::diagnostics::codes::STORAGE_INVALID_STATE
             }
             MemoryRegistryOpsError::Diagnostic(_)
-            | MemoryRegistryOpsError::State(_)
             | MemoryRegistryOpsError::Ledger(ledger::MemoryLedgerError::Diagnostic(_)) => {
                 crate::diagnostics::codes::STATE_INVALID
             }
@@ -85,7 +80,7 @@ impl MemoryRegistryOps {
 
     /// Share the bounded owner report without constructing protected response rows.
     pub(crate) fn allocation_report() -> Result<ic_memory::MemoryAllocations, InternalError> {
-        ic_memory::default_memory_manager_memory_allocations()
+        memory::runtime::with_runtime(ic_memory::MemoryRuntime::memory_allocations)
             .map_err(MemoryRegistryOpsError::from)
             .map_err(Into::into)
     }
@@ -93,14 +88,14 @@ impl MemoryRegistryOps {
     /// Collect numeric allocation totals without constructing per-ID rows or copying names.
     pub(crate) fn allocation_summary() -> Result<ic_memory::MemoryAllocationSummary, InternalError>
     {
-        ic_memory::default_memory_manager_memory_allocation_summary()
+        memory::runtime::with_runtime(ic_memory::MemoryRuntime::memory_allocation_summary)
             .map_err(MemoryRegistryOpsError::from)
             .map_err(Into::into)
     }
 
     // Initialize the stable-memory registry for this crate and summarize the layout.
     pub(crate) fn init_registry() -> Result<(), InternalError> {
-        memory::bootstrap_default_memory_manager().map_err(MemoryRegistryOpsError::from)?;
+        memory::bootstrap_framework().map_err(MemoryRegistryOpsError::from)?;
         Ok(())
     }
 
@@ -153,46 +148,52 @@ impl MemoryRegistryOps {
 fn memory_allocations_response(
     report: ic_memory::MemoryAllocations,
 ) -> Result<MemoryAllocationsResponse, InternalError> {
-    let current_generation = report
+    let ic_memory::MemoryAllocations { summary, memories } = report;
+    let current_generation = summary
         .current_generation
         .ok_or_else(|| InternalError::public(crate::diagnostics::codes::STATE_INVALID))?;
     Ok(MemoryAllocationsResponse {
         current_generation,
-        manager_layout_version: report.manager_layout_version,
-        bucket_size_pages: report.bucket_size_pages,
-        bucket_size_bytes: report.bucket_size_bytes,
-        bucket_capacity: report.bucket_capacity,
-        allocated_buckets: report.allocated_buckets,
-        remaining_buckets: report.remaining_buckets,
-        maximum_bucket_bytes: report.maximum_bucket_bytes,
-        physical_extent: memory_allocation_size_response(report.physical_extent),
-        virtual_extent: memory_allocation_size_response(report.virtual_extent),
-        manager_metadata_bytes: report.manager_metadata_bytes,
-        manager_header_bytes: report.manager_header_bytes,
-        manager_bucket_table_bytes: report.manager_bucket_table_bytes,
-        manager_padding_bytes: report.manager_padding_bytes,
-        allocated_bucket_bytes: report.allocated_bucket_bytes,
-        bucket_slack_bytes: report.bucket_slack_bytes,
-        known_binding_bytes: report.known_binding_bytes,
-        unknown_binding_bytes: report.unknown_binding_bytes,
-        unmanaged_bytes: report.unmanaged_bytes,
-        metadata_bytes_read: report.metadata_bytes_read,
-        memories: report
-            .memories
+        manager_layout_version: ic_memory::MemoryAllocationSummary::MANAGER_LAYOUT_VERSION,
+        bucket_size_pages: summary.bucket_size_pages,
+        bucket_size_bytes: summary.bucket_size_bytes(),
+        bucket_capacity: ic_memory::MemoryAllocationSummary::BUCKET_CAPACITY,
+        allocated_buckets: summary.allocated_buckets,
+        remaining_buckets: summary.remaining_buckets(),
+        maximum_bucket_bytes: summary.maximum_bucket_bytes(),
+        physical_extent: memory_allocation_size_response(summary.physical_extent),
+        virtual_extent: memory_allocation_size_response(summary.virtual_extent),
+        manager_metadata_bytes: ic_memory::MemoryAllocationSummary::MANAGER_METADATA_BYTES,
+        manager_header_bytes: ic_memory::MemoryAllocationSummary::MANAGER_HEADER_BYTES,
+        manager_bucket_table_bytes: ic_memory::MemoryAllocationSummary::MANAGER_BUCKET_TABLE_BYTES,
+        manager_padding_bytes: ic_memory::MemoryAllocationSummary::MANAGER_PADDING_BYTES,
+        allocated_bucket_bytes: summary.allocated_bucket_bytes(),
+        bucket_slack_bytes: summary.bucket_slack_bytes(),
+        known_binding_bytes: summary.known_binding_bytes(),
+        unknown_binding_bytes: summary.unknown_binding_bytes(),
+        unmanaged_bytes: summary.unmanaged_bytes(),
+        metadata_bytes_read: ic_memory::MemoryAllocationSummary::METADATA_BYTES_READ,
+        memories: memories
             .into_iter()
-            .map(memory_allocation_entry_response)
+            .map(|entry| memory_allocation_entry_response(entry, summary.bucket_size_pages))
             .collect(),
     })
 }
 
-fn memory_allocation_entry_response(entry: ic_memory::MemoryAllocation) -> MemoryAllocationEntry {
+fn memory_allocation_entry_response(
+    entry: ic_memory::MemoryAllocation,
+    bucket_size_pages: u16,
+) -> MemoryAllocationEntry {
+    let allocated_bytes = entry.allocated_bytes(bucket_size_pages);
+    let bucket_slack_bytes = entry.bucket_slack_bytes(bucket_size_pages);
     let binding = match entry.binding {
         ic_memory::AllocationBinding::Current { stable_key, owner } => {
             MemoryAllocationBinding::Current { stable_key, owner }
         }
-        ic_memory::AllocationBinding::Ledger { stable_key, owner } => {
-            MemoryAllocationBinding::Ledger { stable_key, owner }
-        }
+        ic_memory::AllocationBinding::Ledger => MemoryAllocationBinding::Ledger {
+            stable_key: ic_memory::IC_MEMORY_LEDGER_STABLE_KEY.to_owned(),
+            owner: ic_memory::IC_MEMORY_AUTHORITY_OWNER.to_owned(),
+        },
         ic_memory::AllocationBinding::Unknown => MemoryAllocationBinding::Unknown,
     };
     MemoryAllocationEntry {
@@ -201,27 +202,29 @@ fn memory_allocation_entry_response(entry: ic_memory::MemoryAllocation) -> Memor
         pool_eligible: entry.pool_eligible,
         virtual_extent: memory_allocation_size_response(entry.virtual_extent),
         allocated_buckets: entry.allocated_buckets,
-        allocated_bytes: entry.allocated_bytes,
-        bucket_slack_bytes: entry.bucket_slack_bytes,
-        payload_bytes: entry.payload_bytes,
+        allocated_bytes,
+        bucket_slack_bytes,
+        payload_bytes: None,
     }
 }
 
 fn commit_recovery_response(
-    diagnostic: Option<CommitStoreDiagnostic>,
+    diagnostic: Option<CommitSnapshotDiagnostic>,
 ) -> MemoryCommitRecoveryResponse {
-    let diagnostic = diagnostic.unwrap_or(CommitStoreDiagnostic {
-        slot0: CommitSlotDiagnostic::Empty,
-        slot1: CommitSlotDiagnostic::Empty,
-        recovery: Err(CommitRecoveryError::NoValidGeneration),
-    });
-    let (authoritative_generation, recovery_error) = match diagnostic.recovery {
-        Ok(generation) => (Some(generation), None),
-        Err(error) => (None, Some(commit_recovery_error_response(error))),
+    let diagnostic = diagnostic.unwrap_or(CommitSnapshotDiagnostic::Empty);
+    let (authoritative_generation, recovery_error) = match diagnostic {
+        CommitSnapshotDiagnostic::Valid { generation } => (Some(generation), None),
+        CommitSnapshotDiagnostic::Empty => (
+            None,
+            Some(MemoryCommitRecoveryErrorResponse::NoValidGeneration),
+        ),
+        CommitSnapshotDiagnostic::Invalid { .. } => (
+            None,
+            Some(MemoryCommitRecoveryErrorResponse::InvalidSnapshot),
+        ),
     };
     MemoryCommitRecoveryResponse {
-        slot0: commit_slot_response(diagnostic.slot0),
-        slot1: commit_slot_response(diagnostic.slot1),
+        current: commit_snapshot_response(diagnostic),
         authoritative_generation,
         recovery_error,
     }
@@ -286,7 +289,7 @@ fn memory_allocation_pool_response(
 const fn memory_allocation_size_response(size: DiagnosticMemorySize) -> MemoryAllocationSizeEntry {
     MemoryAllocationSizeEntry {
         wasm_pages: size.wasm_pages,
-        bytes: size.bytes,
+        bytes: size.bytes(),
     }
 }
 
@@ -298,45 +301,22 @@ const fn memory_allocation_state_response(state: AllocationState) -> MemoryAlloc
     }
 }
 
-const fn commit_slot_response(slot: CommitSlotDiagnostic) -> MemoryCommitSlotResponse {
+const fn commit_snapshot_response(slot: CommitSnapshotDiagnostic) -> MemoryCommitSnapshotResponse {
     match slot {
-        CommitSlotDiagnostic::Empty => MemoryCommitSlotResponse {
+        CommitSnapshotDiagnostic::Empty => MemoryCommitSnapshotResponse {
             present: false,
             generation: None,
             valid: false,
         },
-        CommitSlotDiagnostic::Valid { generation } => MemoryCommitSlotResponse {
+        CommitSnapshotDiagnostic::Valid { generation } => MemoryCommitSnapshotResponse {
             present: true,
             generation: Some(generation),
             valid: true,
         },
-        CommitSlotDiagnostic::Invalid { generation } => MemoryCommitSlotResponse {
+        CommitSnapshotDiagnostic::Invalid { generation } => MemoryCommitSnapshotResponse {
             present: true,
             generation: Some(generation),
             valid: false,
         },
-    }
-}
-
-const fn commit_recovery_error_response(
-    err: CommitRecoveryError,
-) -> MemoryCommitRecoveryErrorResponse {
-    match err {
-        CommitRecoveryError::NoValidGeneration => {
-            MemoryCommitRecoveryErrorResponse::NoValidGeneration
-        }
-        CommitRecoveryError::InvalidCommitSlots { .. } => {
-            MemoryCommitRecoveryErrorResponse::InvalidCommitSlots
-        }
-        CommitRecoveryError::AmbiguousGeneration { .. } => {
-            MemoryCommitRecoveryErrorResponse::AmbiguousGeneration
-        }
-        CommitRecoveryError::GenerationOverflow { .. } => {
-            MemoryCommitRecoveryErrorResponse::GenerationOverflow
-        }
-        CommitRecoveryError::UnexpectedGeneration { .. } => {
-            MemoryCommitRecoveryErrorResponse::UnexpectedGeneration
-        }
-        _ => MemoryCommitRecoveryErrorResponse::Unknown,
     }
 }

@@ -132,7 +132,7 @@ pub enum FleetComponentProvisioningRetryStage {
 }
 
 /// Bounded typed diagnostic retained for the Root call that remains retryable.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetComponentProvisioningRootFailure {
     pub origin: Option<ProvisioningFailureOrigin>,
@@ -450,9 +450,11 @@ pub struct RootComponentProvisioningStatusResponse {
 }
 
 /// Protected origin carried through outer provisioning stages without public error expansion.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProvisioningFailureOrigin {
+    #[serde(deserialize_with = "crate::serialization::required_option")]
+    pub dependency: Option<crate::values::provisioning_failure::ProvisioningDependencyFailure>,
     pub failed_at_ns: u64,
     /// Observed owner's retry deadline in Unix nanoseconds, absent when unknown.
     #[serde(deserialize_with = "crate::serialization::required_option")]
@@ -465,9 +467,11 @@ pub struct ProvisioningFailureOrigin {
 }
 
 /// Latest protected originating failure and the existing scheduler's bounded retry state.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct RootComponentProvisioningFailure {
+    #[serde(deserialize_with = "crate::serialization::required_option")]
+    pub dependency: Option<crate::values::provisioning_failure::ProvisioningDependencyFailure>,
     pub stage: ProvisioningFailureStage,
     pub target: Principal,
     pub operation_id: [u8; 32],

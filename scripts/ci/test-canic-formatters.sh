@@ -4,15 +4,15 @@ unset MAKEFLAGS MFLAGS MAKEOVERRIDES GNUMAKEFLAGS MAKEFILES
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/canic-formatters.XXXXXX")"
 trap 'if [[ $? == 0 ]]; then rm -rf -- "$fixture"; else printf "Formatter fixture retained: %s\n" "$fixture" >&2; fi' EXIT
-mkdir -p "$fixture/make" "$fixture/ci" "$fixture/scripts/ci" "$fixture/.tools/rust/bin"
+mkdir -p "$fixture/make" "$fixture/ci" "$fixture/scripts/ci" "$fixture/.tools/rust/common/bin"
 cp "$ROOT/Makefile" "$ROOT/tool-versions.env" "$fixture/"
-cp "$ROOT/make/tools.mk" "$ROOT/make/execution.mk" "$ROOT/make/release.mk" "$fixture/make/"
+cp "$ROOT/make/tools.mk" "$ROOT/make/execution.mk" "$ROOT/make/release.mk" "$ROOT/make/consumer.mk" "$ROOT/make/rust-format.mk" "$fixture/make/"
 cp "$ROOT/ci/tool-versions.env" "$ROOT/ci/ic-tools.tsv" "$fixture/ci/"
 cp "$ROOT/scripts/ci/check-make-execution.sh" "$ROOT/scripts/ci/check-format-tools.sh" \
     "$ROOT/scripts/ci/run-formatting.sh" "$ROOT/scripts/ci/run-canic-formatters.sh" \
     "$ROOT/scripts/ci/ic-tool-pins.sh" "$fixture/scripts/ci/"
 mkdir -p "$fixture/integrations/blob-service/consumer" "$fixture/integrations/blob-service/embedded-consumer"
-cat > "$fixture/.tools/rust/bin/cargo" <<'CARGO'
+cat > "$fixture/.tools/rust/common/bin/cargo" <<'CARGO'
 #!/usr/bin/env bash
 set -euo pipefail
 [[ "$CARGO_NET_OFFLINE" == true && "$RUSTUP_AUTO_INSTALL" == 0 ]]
@@ -23,7 +23,7 @@ case "$*" in
        [[ "$*" != "${CANIC_FORMAT_FAIL:-}" ]] || exit 23 ;;
 esac
 CARGO
-chmod +x "$fixture/.tools/rust/bin/cargo"
+chmod +x "$fixture/.tools/rust/common/bin/cargo"
 export CANIC_FORMAT_EVENTS="$fixture/events" RUNNER_TEMP="$fixture"
 for target in fmt fmt-check; do
     : > "$CANIC_FORMAT_EVENTS"

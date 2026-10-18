@@ -18,29 +18,44 @@ pub const LIMITS: ArgumentLimits = ArgumentLimits {
 };
 
 canic::memory::memory_allocation_pool!(
+    provider = memory_pool,
     authorities = [("managed-probe", "managed_probe.")],
     exclusions = []
 );
-ic_memory::ic_memory_declaration!(
-    authority = "managed-probe",
-    key = "managed_probe.initialization.v1"
-);
+pub fn memory() -> canic::memory::MemoryBootstrap {
+    let mut input = canic::memory::framework();
+    input.pool = memory_pool().expect("fixture grants");
+    input.requests.push(
+        ic_memory::MemoryRequest::new("managed-probe", KEY, ic_memory::SchemaMetadata::default())
+            .unwrap(),
+    );
+    input.requests.push(
+        ic_memory::MemoryRequest::new(
+            "managed-probe",
+            super::checkpoint::KEY,
+            ic_memory::SchemaMetadata::default(),
+        )
+        .unwrap(),
+    );
+    input
+}
 
 thread_local! {
     static EVIDENCE: RefCell<Option<Evidence>> = const { RefCell::new(None) };
 }
 
 pub fn install() {
+    super::checkpoint::open();
     let (_, args): (CanisterInitPayload, Option<Vec<u8>>) =
         LIMITS.read().expect("bounded init envelope");
-    let memory = ic_memory::open_default_memory_manager_memory(KEY).expect("application grant");
+    let memory = canic::memory::open(KEY);
     assert_eq!(memory.size(), 0);
     EVIDENCE.with_borrow_mut(|cell| *cell = Some(Cell::init(memory, args.unwrap_or_default())));
 }
 
 pub fn restore() {
-    let memory =
-        ic_memory::open_default_memory_manager_memory(KEY).expect("retained application grant");
+    super::checkpoint::open();
+    let memory = canic::memory::open(KEY);
     assert!(memory.size() > 0);
     EVIDENCE.with_borrow_mut(|cell| *cell = Some(Cell::init(memory, Vec::new())));
 }

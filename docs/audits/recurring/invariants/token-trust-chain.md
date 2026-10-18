@@ -50,7 +50,7 @@ proof can produce an accepted delegated token.
 - canister-signature verification changes
 - canonical cert/claims encoding changes
 - active root delegation proof install/status changes
-- delegated-token verifier or positive-cache changes
+- delegated-token verifier changes
 - delegated-token config or root-key handling changes
 - endpoint macro or access guard ordering changes
 - role-attestation proof verification changes
@@ -97,8 +97,8 @@ Search terms:
 
 ```text
 RootProof::IcChainKeyBatchSignatureV1
-verify_chain_key_batch_root_proof
-ChainKeyRootVerifierPolicy
+verify_root_delegation_proof
+AuthChainKeyRootVerifierConfig
 ChainKeyBatchHeaderV1
 ChainKeyDelegationCertV1
 RoleAttestationRootProof
@@ -112,6 +112,8 @@ Confirm:
 - delegation cert hash is canonical and recomputed by the verifier
 - `cert.root_pid` matches the configured root canister id before proof acceptance
 - root canister-signature public key DER names the expected root canister id
+- the shared canister-signature adapter rejects short and noncanonical DER
+  wrappers before protected signer/seed binding and cryptography
 - the role-attestation root proof uses the one canonical root seed/domain
 - root proof verification uses the configured raw IC root public key
 - role attestation uses a distinct root payload seed/domain
@@ -148,8 +150,6 @@ Search terms:
 ```text
 AuthOps::verify_token
 verify_delegated_token
-verify_delegated_token_cached_proof_identity
-positive_cache_get
 delegated_token_verified
 enforce_subject_binding
 enforce_required_scope
@@ -159,9 +159,8 @@ Confirm:
 
 - delegated-token verifier config and verifier-canister gate run before proof
   acceptance
-- positive cache keys bind proof hash, claims hash, issuer proof hash, and caller
-- positive cache hits still rerun canonical token checks, local audience/grant
-  checks, and required-scope checks
+- every invocation checks complete root and issuer proofs against current
+  verifier policy, canonical token data, local audience/grants and required scopes
 - endpoint access guard verifies token material before subject binding and scope
   authorization
 
@@ -197,7 +196,7 @@ Confirm rejection for:
 - issuer pid mismatch
 - issuer proof binding hash drift
 - noncanonical cert or claims data
-- missing proof bytes outside explicit positive-cache identity checks
+- missing proof bytes
 - role-attestation subject, audience, epoch, expiry, and proof failures
 
 ### 7. Test Expectations
@@ -222,8 +221,7 @@ Current suggested commands:
 ```bash
 cargo test --locked -p canic-core --lib verify_delegated_token -- --nocapture
 cargo test --locked -p canic-core --lib auth_proof_verifier_config -- --nocapture
-cargo test --locked -p canic-core --lib root_canister_sig -- --nocapture
-cargo test --locked -p canic-core --lib issuer_canister_sig -- --nocapture
+cargo test --locked -p canic-core --lib --features auth-root-canister-sig-verify,auth-issuer-canister-sig-verify -- canister_signature::tests root_canister_sig::tests issuer_canister_sig::tests
 cargo test --locked -p canic-core --lib cert_rules -- --nocapture
 cargo test --locked -p canic-core --lib install_active_delegation_proof -- --nocapture
 cargo test --locked -p canic-core --lib delegated_auth_guard_preserves_verify_bind_scope_order -- --nocapture
@@ -244,7 +242,7 @@ Detection commands (run and record output references):
 
 ```bash
 rg -n 'AuthProofVerifierConfig|auth_proof_verifier_config|validate_build_network_root_key_pair|ic_root_public_key_raw|root_canister_id' crates/canic-core/src -g '*.rs'
-rg -n 'verify_chain_key_batch_root_proof|ChainKeyRootVerifierPolicy|RootProof::IcChainKeyBatchSignatureV1|ChainKeyBatchHeaderV1|ChainKeyDelegationCertV1' crates/canic-core/src -g '*.rs'
+rg -n 'verify_root_delegation_proof|AuthChainKeyRootVerifierConfig|RootProof::IcChainKeyBatchSignatureV1|ChainKeyBatchHeaderV1|ChainKeyDelegationCertV1' crates/canic-core/src -g '*.rs'
 rg -n 'RoleAttestationRootProof|verify_root_canister_signature_proof|ROOT_CANISTER_SIG_SEED|ROOT_CANISTER_SIG_DOMAIN' crates/canic-core/src -g '*.rs'
 rg -n 'verify_issuer_canister_signature_proof|issuer_canister_sig_seed_hash|ISSUER_CANISTER_SIG_SEED|ISSUER_CANISTER_SIG_DOMAIN|IssuerProof::IcCanisterSignatureV1' crates/canic-core/src -g '*.rs'
 rg -n 'cert_hash|claims_hash|issuer_proof_binding_hash|VerifyDelegatedTokenError|IssuerPidMismatch|CertHashMismatch' crates/canic-core/src/ops/auth -g '*.rs'
@@ -255,11 +253,12 @@ git log --name-only -n 20 -- crates/canic-core/src/ops/auth crates/canic-core/sr
 | --- | --- | --- | --- |
 | `crates/canic-core/src/ops/auth/token/mod.rs` | `AuthOps::verify_token`, `auth_proof_verifier_config_from`, `verify_with_embedded_proofs` | runtime config, root key, root proof, and issuer proof orchestration | High |
 | `crates/canic-core/src/ops/auth/delegated/verify.rs` | `verify_delegated_token`, `verify_claims` | pure cert/claims/root/issuer verification ordering | High |
-| `crates/canic-core/src/ops/auth/delegated/chain_key.rs` | `verify_chain_key_batch_root_proof` | delegated root proof policy, chain-key public key, signature, Merkle witness, and certificate equality | High |
+| `crates/canic-core/src/ops/auth/delegated/root_proof/mod.rs` | `verify_root_delegation_proof` | protected context and network admission into IC Auth's Root-proof verifier; policy, signature, witness and certificate acceptance owned upstream | High |
 | `crates/canic-core/src/ops/auth/root_canister_sig.rs` | `verify_root_canister_signature_proof` | role-attestation root proof canister id, seed/domain, message, and IC root-key verification | Medium |
 | `crates/canic-core/src/ops/auth/issuer_canister_sig.rs` | `verify_issuer_canister_signature_proof` | issuer proof canister id, seed/domain, message, and IC root-key verification | High |
+| `crates/canic-core/src/ops/auth/canister_signature/mod.rs` | `verify_canister_signature`, `validate_public_key` | shared bounded canonical DER admission, protected signer/seed binding, upstream domain framing and cryptography | High |
 | `crates/canic-core/src/ops/auth/delegated/cert_rules.rs` | `validate_cert_issuance_rules` | root pid, TTL, audience/grant shape, and issuer binding hash checks | High |
-| `crates/canic-core/src/ops/auth/delegated/canonical.rs` | `cert_hash`, `claims_hash`, `issuer_proof_binding_hash` | canonical hash material for root and issuer signatures | High |
+| `crates/canic-core/src/ops/auth/delegated/canonical/mod.rs` | `cert_hash`, `claims_hash`, `issuer_proof_binding_hash` | canonical hash material for root and issuer signatures | High |
 | `crates/canic-core/src/ops/auth/delegated/active_proof.rs` | `install_active_delegation_proof` | issuer-local active proof validation before storage | Medium |
 | `crates/canic-core/src/access/auth/token.rs` | `delegated_token_verified`, `verify_token` | endpoint guard integration after trust-chain verification | Medium |
 | `crates/canic-core/src/ops/auth/attestation.rs` | `verify_role_attestation_cached` | role-attestation root proof verification uses the same trust-anchor config | Medium |
@@ -301,7 +300,7 @@ Pressure score guidance:
 - claims accepted without matching issuer pid and cert hash
 - issuer proof binding hash drift is accepted
 - canonical cert/claims encoding accepts unsorted or malformed data
-- positive cache bypasses local canonical, audience, grant, or scope checks
+- repeated token use bypasses current proof policy or local authorization checks
 - passive DTOs gain behavior or validation methods
 
 ## Severity
@@ -317,7 +316,7 @@ Detection scans (run and record output references):
 
 ```bash
 rg -l 'AuthProofVerifierConfig|auth_proof_verifier_config|ic_root_public_key_raw|validate_build_network_root_key_pair' crates canisters fleets -g '*.rs' | wc -l
-rg -l 'verify_chain_key_batch_root_proof|RootProof::IcChainKeyBatchSignatureV1|ChainKeyRootVerifierPolicy|ChainKeyBatchHeaderV1|ChainKeyDelegationCertV1' crates canisters fleets -g '*.rs' | wc -l
+rg -l 'verify_root_delegation_proof|RootProof::IcChainKeyBatchSignatureV1|AuthChainKeyRootVerifierConfig|ChainKeyBatchHeaderV1|ChainKeyDelegationCertV1' crates canisters fleets -g '*.rs' | wc -l
 rg -l 'RoleAttestationRootProof|verify_root_canister_signature_proof|ROOT_CANISTER_SIG_SEED|ROOT_CANISTER_SIG_DOMAIN' crates canisters fleets -g '*.rs' | wc -l
 rg -l 'verify_issuer_canister_signature_proof|IssuerProof::IcCanisterSignatureV1|issuer_canister_sig_' crates canisters fleets -g '*.rs' | wc -l
 rg -l 'cert_hash|claims_hash|issuer_proof_binding_hash|DelegationCert|DelegatedTokenClaims' crates canisters fleets -g '*.rs' | wc -l

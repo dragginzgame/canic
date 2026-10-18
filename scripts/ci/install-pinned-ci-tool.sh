@@ -5,6 +5,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 # shellcheck source=/dev/null
 source "$ROOT/tool-versions.env"
+# shellcheck source=/dev/null
+source "$ROOT/ci/tool-versions.env"
 [[ $# == 1 ]] || { echo 'usage: install-pinned-ci-tool.sh <actionlint|shellcheck|sccache>' >&2; exit 2; }
 tool="$1"
 case "$tool" in
@@ -32,7 +34,14 @@ if [[ "$tool" == shellcheck ]]; then
 elif [[ "$tool" == sccache ]]; then suffix=LINUX_X64; fi
 version_key="${prefix}_VERSION"
 digest_key="${prefix}_SHA256_${suffix}"
-binary="$(bash "$ROOT/scripts/ci/install-$tool.sh" --version "${!version_key}" \
+if [[ "$tool" != sccache ]]; then
+    shared_prefix="${prefix/CANIC/SHARED_TOOLING}"
+    version_key="${shared_prefix}_VERSION"
+    if [[ "$suffix" == LINUX_AMD64 || "$suffix" == LINUX_X86_64 ]]; then
+        digest_key="${shared_prefix}_SHA256_${suffix}"
+    fi
+fi
+binary="$(bash "$ROOT/scripts/ci/install-ci-tool.sh" "$tool" --version "${!version_key}" \
     --sha256 "${!digest_key}" --install-dir "$directory")"
 if [[ "$tool" == sccache && -n "${GITHUB_PATH:-}" ]]; then
     printf '%s\n' "$directory" >> "$GITHUB_PATH"

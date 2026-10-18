@@ -7,12 +7,12 @@
 use crate::{artifacts::ArtifactChecksum, persistence::resolve_backup_artifact_path};
 
 use std::{
-    fs::{self, DirBuilder},
+    fs,
     path::{Path, PathBuf},
 };
 
 #[cfg(unix)]
-use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+use std::os::unix::fs::PermissionsExt;
 
 use super::{
     RestoreApplyJournal, RestoreApplyJournalOperation, RestoreApplyOperationKind,
@@ -235,12 +235,15 @@ fn ensure_private_directory_metadata(
 }
 
 fn create_private_directory(path: &Path) -> Result<(), RestoreRunnerError> {
-    let mut builder = DirBuilder::new();
-    #[cfg(unix)]
-    builder.mode(0o700);
-    builder
-        .create(path)
-        .map_err(|source| stage_io(path.to_path_buf(), source))
+    ic_host_fs::durable::create_private_directory(path)
+        .map(drop)
+        .map_err(|source| {
+            let kind = match &source {
+                ic_host_fs::durable::DirectoryCreationError::BeforeCreation(error)
+                | ic_host_fs::durable::DirectoryCreationError::AfterCreation(error) => error.kind(),
+            };
+            stage_io(path.to_path_buf(), std::io::Error::new(kind, source))
+        })
 }
 
 fn remove_stale_operation_root(path: &Path) -> Result<(), RestoreRunnerError> {

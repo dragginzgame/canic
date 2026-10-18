@@ -898,7 +898,7 @@ async fn advance_scheduled_component_provisioning(operation_id: [u8; 32], plan_h
     if status.phase == FleetComponentProvisioningPhase::RuntimesActivated {
         return;
     }
-    if status.pending_root_failure.and_then(|failure| failure.origin).is_some_and(|origin|
+    if status.pending_root_failure.as_ref().and_then(|failure| failure.origin.as_ref()).is_some_and(|origin|
         origin.retry_category == canic_contracts::dto::component_provisioning::ProvisioningRetryCategory::ReviewRequired)
     {
         return;
@@ -1265,9 +1265,10 @@ async fn query_root_component_provisioning(
         RemoteRootStatusResponse::Operation(
             RemoteRootOperationStatusResponse::ProvisionComponents(response),
         ) if response.operation_id == operation_id && response.plan_hash == plan_hash => {
-            if let Some(error) =
-                FleetCoordinatorOps::observed_root_failure(response.phase, response.last_failure)
-            {
+            if let Some(error) = FleetCoordinatorOps::observed_root_failure(
+                response.phase,
+                response.last_failure.clone(),
+            ) {
                 return Err(error);
             }
             Ok(*response)

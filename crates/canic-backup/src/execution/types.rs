@@ -27,6 +27,7 @@ pub struct BackupExecutionJournal {
     pub preflight_accepted: bool,
     pub restart_required: bool,
     pub operations: Vec<BackupExecutionJournalOperation>,
+    pub command_custody: Vec<ic_backup::model::command_custody::CommandCustodyRecord>,
     pub operation_receipts: Vec<BackupExecutionOperationReceipt>,
 }
 
@@ -156,6 +157,8 @@ pub struct BackupExecutionResumeSummary {
 
 #[derive(Debug, ThisError)]
 pub enum BackupExecutionJournalError {
+    #[error("original command custody repeats or does not match an external operation")]
+    InvalidCommandCustody,
     #[error("invalid backup plan for execution journal: {0}")]
     InvalidPlan(String),
 

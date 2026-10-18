@@ -56,7 +56,7 @@ mod tests {
         fs::write(second.join("tool"), b"nonexecutable").unwrap();
         assert_eq!(
             resolve(Path::new("tool"), &[first.clone(), second.clone()]).unwrap(),
-            Some(target)
+            Some(fs::canonicalize(&target).unwrap())
         );
         fs::remove_file(first.join("tool")).unwrap();
         assert_eq!(resolve(Path::new("tool"), &[first, second]).unwrap(), None);
@@ -75,7 +75,10 @@ mod tests {
             resolve(&root.join("missing/tool"), std::slice::from_ref(&root)).unwrap(),
             None
         );
-        assert_eq!(resolve(&candidate, &[]).unwrap(), Some(candidate));
+        assert_eq!(
+            resolve(&candidate, &[]).unwrap(),
+            Some(fs::canonicalize(&candidate).unwrap())
+        );
         fs::remove_dir_all(root).unwrap();
     }
 

@@ -13,7 +13,7 @@ use std::{collections::BTreeSet, convert::Infallible};
 
 struct FixturePolicy;
 
-impl ic_memory::AllocationPolicy for FixturePolicy {
+impl ic_memory::RuntimeBootstrapPolicy for FixturePolicy {
     type Error = Infallible;
 
     fn validate_key(&self, _: &ic_memory::StableKey) -> Result<(), Infallible> {
@@ -28,16 +28,6 @@ impl ic_memory::AllocationPolicy for FixturePolicy {
         Ok(())
     }
 
-    fn validate_reserved_slot(
-        &self,
-        _: &ic_memory::StableKey,
-        _: &ic_memory::MemoryManagerSlot,
-    ) -> Result<(), Infallible> {
-        Ok(())
-    }
-}
-
-impl ic_memory::RuntimeBootstrapPolicy for FixturePolicy {
     fn runtime_bootstrap_identity(
         &self,
     ) -> Result<ic_memory::PolicyIdentity, ic_memory::PolicyIdentityError> {
@@ -60,7 +50,7 @@ fn measured_nondefault_buckets_cover_every_usable_id_without_growth() {
     .unwrap();
     runtime
         .bootstrap(
-            &ic_memory::SealedDeclarationSnapshot::new(&[]).unwrap(),
+            &ic_memory::SealedDeclarationSnapshot::new(Vec::new()).unwrap(),
             &ic_memory::MemoryAllocationPool::new(
                 Vec::new(),
                 vec![ic_memory::MemoryManagerIdRange::new(10, 254).unwrap()],
@@ -79,10 +69,12 @@ fn measured_nondefault_buckets_cover_every_usable_id_without_growth() {
         u128::from(ic_memory::MEMORY_MANAGER_INVALID_ID)
     );
     assert_eq!(
-        report.memories_measured,
+        MemoryAllocationSummary::MEMORIES_MEASURED,
         u16::from(ic_memory::MEMORY_MANAGER_INVALID_ID)
     );
-    assert!(report.virtual_extent.wasm_pages >= u64::from(report.memories_measured));
+    assert!(
+        report.virtual_extent.wasm_pages >= u64::from(MemoryAllocationSummary::MEMORIES_MEASURED)
+    );
     assert!(value(&rows, "unknown_binding") > 0);
     assert_eq!(value(&rows, "physical_extent"), before.len() as u128);
 }
@@ -161,15 +153,13 @@ fn unknown_binding_does_not_change_public_label_inventory() {
     source.current_binding = ic_memory::MemoryBindingSummary::default();
     source.ledger_binding = ic_memory::MemoryBindingSummary::default();
     source.unknown_binding = ic_memory::MemoryBindingSummary {
-        allocated_bytes: source.allocated_bucket_bytes,
-        bucket_slack_bytes: source.bucket_slack_bytes,
+        allocated_buckets: source.allocated_buckets,
+        virtual_extent: source.virtual_extent,
     };
-    source.known_binding_bytes = 0;
-    source.unknown_binding_bytes = source.allocated_bucket_bytes;
     let rows = project(&source, 20).unwrap();
     assert_eq!(
         value(&rows, "unknown_binding"),
-        u128::from(source.allocated_bucket_bytes)
+        u128::from(source.allocated_bucket_bytes())
     );
     assert_eq!(value(&rows, "known_binding"), 0);
     assert_eq!(
@@ -181,15 +171,14 @@ fn unknown_binding_does_not_change_public_label_inventory() {
 #[test]
 fn incomplete_or_inconsistent_reports_fail_each_conservation_partition() {
     let good = report();
-    let mutations: [fn(&mut MemoryAllocationSummary); 8] = [
-        |r| r.physical_extent.bytes += 1,
-        |r| r.virtual_extent.bytes += 1,
-        |r| r.known_binding_bytes += 1,
-        |r| r.remaining_buckets += 1,
-        |r| r.bucket_size_bytes += 1,
-        |r| r.memories_measured -= 1,
-        |r| r.current_binding.allocated_bytes += 1,
-        |r| r.ledger_binding.bucket_slack_bytes += 1,
+    let mutations: [fn(&mut MemoryAllocationSummary); 7] = [
+        |r| r.physical_extent.wasm_pages = 0,
+        |r| r.virtual_extent.wasm_pages += 1,
+        |r| r.allocated_buckets += 1,
+        |r| r.bucket_size_pages = 0,
+        |r| r.current_generation = None,
+        |r| r.current_binding.allocated_buckets += 1,
+        |r| r.ledger_binding.virtual_extent.wasm_pages = u64::MAX,
     ];
     for mutate in mutations {
         let mut source = good;
@@ -244,24 +233,32 @@ fn first_collection_failure_has_no_fabricated_zero_measurements() {
 fn numeric_summary_preserves_detailed_accounting_and_read_bound() {
     let summary = report();
     let detailed = MemoryRegistryOps::allocation_report().unwrap();
-    assert_eq!(summary.current_generation, detailed.current_generation);
-    assert_eq!(summary.metadata_bytes_read, 34_848);
-    assert_eq!(summary.metadata_bytes_read, detailed.metadata_bytes_read);
     assert_eq!(
-        usize::from(summary.memories_measured),
+        summary.current_generation,
+        detailed.summary.current_generation
+    );
+    assert_eq!(MemoryAllocationSummary::METADATA_BYTES_READ, 34_848);
+    assert_eq!(
+        usize::from(MemoryAllocationSummary::MEMORIES_MEASURED),
         detailed.memories.len()
     );
     let rows = project(&summary, 10).unwrap();
     for (name, expected) in [
-        ("physical_extent", detailed.physical_extent.bytes),
-        ("bucket_size", detailed.bucket_size_bytes),
-        ("allocated_bucket_bytes", detailed.allocated_bucket_bytes),
-        ("virtual_extent", detailed.virtual_extent.bytes),
-        ("bucket_slack", detailed.bucket_slack_bytes),
-        ("manager_metadata", detailed.manager_metadata_bytes),
-        ("known_binding", detailed.known_binding_bytes),
-        ("unknown_binding", detailed.unknown_binding_bytes),
-        ("unmanaged", detailed.unmanaged_bytes),
+        ("physical_extent", detailed.summary.physical_extent.bytes()),
+        ("bucket_size", detailed.summary.bucket_size_bytes()),
+        (
+            "allocated_bucket_bytes",
+            detailed.summary.allocated_bucket_bytes(),
+        ),
+        ("virtual_extent", detailed.summary.virtual_extent.bytes()),
+        ("bucket_slack", detailed.summary.bucket_slack_bytes()),
+        (
+            "manager_metadata",
+            MemoryAllocationSummary::MANAGER_METADATA_BYTES,
+        ),
+        ("known_binding", detailed.summary.known_binding_bytes()),
+        ("unknown_binding", detailed.summary.unknown_binding_bytes()),
+        ("unmanaged", detailed.summary.unmanaged_bytes()),
     ] {
         assert_eq!(value(&rows, name), u128::from(expected));
     }
@@ -269,11 +266,11 @@ fn numeric_summary_preserves_detailed_accounting_and_read_bound() {
     for entry in detailed.memories {
         let index = match entry.binding {
             ic_memory::AllocationBinding::Current { .. } => 0,
-            ic_memory::AllocationBinding::Ledger { .. } => 1,
+            ic_memory::AllocationBinding::Ledger => 1,
             ic_memory::AllocationBinding::Unknown => 2,
         };
-        groups[index].allocated_bytes += entry.allocated_bytes;
-        groups[index].bucket_slack_bytes += entry.bucket_slack_bytes;
+        groups[index].allocated_buckets += entry.allocated_buckets;
+        groups[index].virtual_extent.wasm_pages += entry.virtual_extent.wasm_pages;
     }
     assert_eq!(
         groups,

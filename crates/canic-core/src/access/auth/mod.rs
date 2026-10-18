@@ -9,7 +9,6 @@ mod identity;
 #[cfg(feature = "internal-test-fixtures")]
 mod measurement;
 mod predicates;
-mod token;
 
 use crate::{
     access::AccessError,
@@ -18,7 +17,7 @@ use crate::{
         LocalApplicationAuthorizationPolicyInput,
         authorize_local_application as authorize_local_application_policy,
     },
-    ops::{auth::AuthOps, ic::IcOps, storage::auth::LocalApplicationAuthorizationStateOps},
+    ops::ic::IcOps,
 };
 use std::fmt;
 
@@ -43,7 +42,8 @@ pub struct LocalApplicationAuthorizationRequest<'a> {
     pub required_scope: ApplicationScopeRef<'a>,
 }
 
-/// Authorize one local application call without parsing payloads or mutating state.
+/// Return a closed application admission decision until portable Auth is integrated.
+/// Caller mismatches retain their typed refusal; no session can grant access.
 #[must_use]
 pub fn authorize_local_application(
     request: LocalApplicationAuthorizationRequest<'_>,
@@ -55,30 +55,8 @@ pub fn authorize_local_application(
         return authorize_with_values(request, actual_caller, now_ns, false, None, None, false);
     }
 
-    let authority = match AuthOps::local_application_authorization_authority() {
-        Ok(Some(authority)) => authority,
-        Ok(None) => {
-            return authorize_with_values(request, actual_caller, now_ns, false, None, None, false);
-        }
-        Err(_) => {
-            return authorize_with_values(request, actual_caller, now_ns, true, None, None, false);
-        }
-    };
-    let Ok(session) = LocalApplicationAuthorizationStateOps::application_session(actual_caller)
-    else {
-        return authorize_with_values(request, actual_caller, now_ns, true, None, None, false);
-    };
-    let subject_admissible = session.as_ref().is_some_and(|session| {
-        validate_application_subject(session.authenticated_subject()).is_ok()
-    });
-    authorize_with_values(
-        request,
-        actual_caller,
-        now_ns,
-        true,
-        Some(&authority.snapshot),
-        session.as_ref(),
-        subject_admissible,
+    LocalApplicationAuthorizationDecision::Deny(
+        LocalApplicationAuthorizationDenial::AuthorityUnavailable,
     )
 }
 
@@ -147,26 +125,19 @@ pub fn validate_application_subject(subject: Principal) -> Result<(), Applicatio
     identity::validate_application_subject(subject)
 }
 
-pub(crate) fn delegated_token_verified(
-    authenticated_subject: Principal,
-    required_scope: Option<&str>,
-) -> Result<Principal, AccessError> {
-    token::delegated_token_verified(authenticated_subject, required_scope)
-}
-
 // -----------------------------------------------------------------------------
 // Caller & topology predicates
 // -----------------------------------------------------------------------------
 
 /// Require that the caller controls the current canister.
 /// Allows controller-only maintenance calls.
-pub async fn is_controller(caller: Principal) -> Result<(), AccessError> {
-    predicates::is_controller(caller).await
+pub fn is_controller(caller: Principal) -> Result<(), AccessError> {
+    predicates::is_controller(caller)
 }
 
 /// Require the actual caller to be a controller or the exact stable Root.
-pub async fn is_controller_or_root(caller: Principal) -> Result<(), AccessError> {
-    predicates::is_controller_or_root(caller).await
+pub fn is_controller_or_root(caller: Principal) -> Result<(), AccessError> {
+    predicates::is_controller_or_root(caller)
 }
 
 /// Require that the caller appears in the exact open Fleet projection.
@@ -183,43 +154,35 @@ pub fn require_fleet_admitted_caller() -> Result<Principal, AccessError> {
 }
 
 /// Require that the caller is a direct child of the current canister.
-pub async fn is_child(caller: Principal) -> Result<(), AccessError> {
-    predicates::is_child(caller).await
+pub fn is_child(caller: Principal) -> Result<(), AccessError> {
+    predicates::is_child(caller)
 }
 
 /// Require that the caller is the configured parent canister.
-pub async fn is_parent(caller: Principal) -> Result<(), AccessError> {
-    predicates::is_parent(caller).await
+pub fn is_parent(caller: Principal) -> Result<(), AccessError> {
+    predicates::is_parent(caller)
 }
 
 /// Require that the caller equals the configured root canister.
-pub async fn is_root(caller: Principal) -> Result<(), AccessError> {
-    predicates::is_root(caller).await
+pub fn is_root(caller: Principal) -> Result<(), AccessError> {
+    predicates::is_root(caller)
 }
 
 /// Require that the caller is the currently executing canister.
-pub async fn is_same_canister(caller: Principal) -> Result<(), AccessError> {
-    predicates::is_same_canister(caller).await
+pub fn is_same_canister(caller: Principal) -> Result<(), AccessError> {
+    predicates::is_same_canister(caller)
 }
 
 /// Require a root-signed caller attestation bound to this canister's live Subnet.
-pub async fn is_attested_local_subnet(caller: Principal) -> Result<(), AccessError> {
-    attestation::is_attested_local_subnet(caller).await
+pub fn is_attested_local_subnet(caller: Principal) -> Result<(), AccessError> {
+    attestation::is_attested_local_subnet(caller)
 }
 
-pub(crate) fn verify_decoded_token(
-    token: &crate::dto::auth::DelegatedToken,
-    caller: Principal,
-    required_scope: Option<&str>,
-) -> Result<Principal, AccessError> {
-    token::verify_token(token, caller, IcOps::now_nanos(), required_scope)
-}
-
-pub(crate) async fn verify_decoded_attestation(
+pub(crate) fn verify_decoded_attestation(
     attestation: &crate::dto::auth::SignedRoleAttestation,
     caller: Principal,
 ) -> Result<(), AccessError> {
-    attestation::verify_attestation(attestation, caller).await
+    attestation::verify_attestation(attestation, caller)
 }
 
 const fn dependency_unavailable(error: crate::InternalError) -> AccessError {

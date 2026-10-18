@@ -1,41 +1,6 @@
 use super::*;
 use canic_contracts::ids::BuildNetwork;
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
 use std::time::{SystemTime, UNIX_EPOCH};
-
-#[test]
-fn captured_cargo_input_survives_replacement_and_cleans_up() {
-    let root = unique_temp_dir("canic-captured-cargo-output");
-    fs::create_dir_all(&root).expect("create capture root");
-    let source = root.join("cargo.wasm");
-    let destination = root.join("published.wasm");
-    fs::write(&source, b"compiled first role").expect("write compiled input");
-    fs::write(&destination, b"previous artifact").expect("write prior output");
-    let captured = CapturedWasmArtifact::capture(&source, &destination).expect("capture input");
-
-    fs::write(&source, b"later compilation").expect("replace Cargo output");
-    assert_eq!(fs::read(captured.path()).unwrap(), b"compiled first role");
-    assert_eq!(fs::read(&destination).unwrap(), b"previous artifact");
-    fs::remove_file(&source).expect("remove Cargo output");
-    assert_eq!(fs::read(captured.path()).unwrap(), b"compiled first role");
-
-    drop(captured);
-    assert_no_artifact_stage(&root);
-    fs::remove_dir_all(root).expect("remove capture root");
-}
-
-#[test]
-fn failed_cargo_input_capture_leaves_no_stage_or_published_changes() {
-    let root = unique_temp_dir("canic-failed-cargo-capture");
-    fs::create_dir_all(&root).expect("create capture root");
-    let destination = root.join("published.wasm");
-    fs::write(&destination, b"previous artifact").expect("write prior output");
-    assert!(CapturedWasmArtifact::capture(&root.join("missing.wasm"), &destination).is_err());
-    assert_no_artifact_stage(&root);
-    assert_eq!(fs::read(&destination).unwrap(), b"previous artifact");
-    fs::remove_dir_all(root).expect("remove capture root");
-}
 
 #[test]
 fn install_limit_failure_preserves_the_published_artifact_set() {
@@ -271,6 +236,25 @@ fn sidecar_only_runtime_matches_declared_methods_without_candid_payload() {
         .expect("sidecar and runtime methods must agree");
 
     fs::remove_dir_all(root).expect("remove temp dir");
+}
+
+#[test]
+fn sidecar_only_runtime_compares_modes_and_projects_oneway() {
+    let root = unique_temp_dir("canic-sidecar-method-modes");
+    fs::create_dir_all(&root).unwrap();
+    let wasm_path = root.join("test.wasm");
+    let did_path = root.join("test.did");
+    fs::write(
+        &wasm_path,
+        minimal_wasm_with_exports(&["canister_update read"]),
+    )
+    .unwrap();
+    fs::write(&did_path, b"service : { read : () -> () query }").unwrap();
+    validate_sidecar_only_candid_artifact(&wasm_path, &did_path).expect_err("mode mismatch");
+    fs::write(&did_path, b"service : { read : () -> () oneway }").unwrap();
+    validate_sidecar_only_candid_artifact(&wasm_path, &did_path)
+        .expect("oneway uses update exports");
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -647,7 +631,7 @@ fn assert_no_artifact_stage(root: &Path) {
             entry
                 .file_name()
                 .to_string_lossy()
-                .starts_with(".canic-artifact-stage-")
+                .starts_with(".ic-build-artifact-stage-")
         });
     assert!(!staged, "artifact staging directory must be removed");
 }
@@ -662,12 +646,51 @@ fn unique_temp_dir(label: &str) -> std::path::PathBuf {
 
 #[cfg(unix)]
 fn write_executable(path: &Path, contents: &str) {
-    let staged_path = path.with_extension("staged");
-    fs::write(&staged_path, contents).expect("write staged fake executable");
-    let mut permissions = fs::metadata(&staged_path)
-        .expect("read fake executable metadata")
-        .permissions();
-    permissions.set_mode(0o755);
-    fs::set_permissions(&staged_path, permissions).expect("make fake executable runnable");
-    fs::rename(staged_path, path).expect("publish closed fake executable");
+    ic_host_process::testing::write_executable_script(path, contents)
+        .expect("write closed executable test script");
+}
+
+#[test]
+fn qualified_set_publishes_matching_wasm_candid_and_gzip_after_admission() {
+    let root = unique_temp_dir("canic-qualified-artifact-set");
+    fs::create_dir_all(&root).unwrap();
+    let source = root.join("source.wasm");
+    let wasm_path = root.join("app.wasm");
+    let did_path = root.join("app.did");
+    let gzip_path = root.join("app.wasm.gz");
+    let wasm = minimal_wasm_with_exports(&["canister_query read"]);
+    let candid = b"service : { read : () -> () query; }";
+    fs::write(&source, &wasm).unwrap();
+    fs::write(&wasm_path, b"previous wasm").unwrap();
+    fs::write(&did_path, b"previous candid").unwrap();
+    fs::write(&gzip_path, b"previous gzip").unwrap();
+    let finalization = WasmArtifactFinalization {
+        release_build_id: None,
+        profile: CanisterBuildProfile::Fast,
+        build_network: BuildNetwork::Local,
+        embed_candid: false,
+        validate_sidecar_only: true,
+        source_wasm_path: &source,
+        candid,
+        wasm_path: &wasm_path,
+        did_path: &did_path,
+        wasm_gz_path: &gzip_path,
+    };
+    stage_and_publish_artifact_set(&finalization, |staged| {
+        assert_eq!(fs::read(&wasm_path).unwrap(), b"previous wasm");
+        assert_eq!(fs::read(&did_path).unwrap(), b"previous candid");
+        assert_eq!(fs::read(&gzip_path).unwrap(), b"previous gzip");
+        enforce_wasm_install_limits(BuildNetwork::Local, &staged.wasm_path)?;
+        validate_sidecar_only_candid_artifact(&staged.wasm_path, &staged.did_path)?;
+        write_gzip_artifact(&staged.wasm_path, &staged.wasm_gz_path)
+    })
+    .unwrap();
+    assert_eq!(fs::read(&wasm_path).unwrap(), wasm);
+    assert_eq!(fs::read(&did_path).unwrap(), candid);
+    let gzip = fs::read(&gzip_path).unwrap();
+    let mut decoded = Vec::new();
+    std::io::Read::read_to_end(&mut flate2::read::GzDecoder::new(&gzip[..]), &mut decoded).unwrap();
+    assert_eq!(decoded, wasm);
+    assert_no_artifact_stage(&root);
+    fs::remove_dir_all(root).unwrap();
 }

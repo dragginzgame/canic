@@ -1013,10 +1013,10 @@ fn validate_component_provisioning_estate_funding_pause(
 fn validate_component_provisioning_root_failure(
     record: &FleetComponentProvisioningRecord,
 ) -> Result<(), InternalError> {
-    let Some(failure) = record.last_root_failure else {
+    let Some(failure) = &record.last_root_failure else {
         return Ok(());
     };
-    if failure.origin.is_some_and(|origin| {
+    if failure.origin.as_ref().is_some_and(|origin| {
         origin.operation_id == [0; 32]
             || origin.target == Principal::anonymous()
             || origin.diagnostic_code == 0

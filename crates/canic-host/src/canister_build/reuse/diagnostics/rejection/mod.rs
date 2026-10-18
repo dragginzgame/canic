@@ -7,10 +7,11 @@
 use crate::canister_build::{
     WorkspaceBuildContext,
     cache::{canister_build_target_root, declaration_target_root},
-    reuse::{BuildReuseError, snapshot::BuildInputSnapshot},
+    reuse::BuildReuseError,
 };
 use canic_contracts::ids::ReleaseBuildId;
-use ic_host_fs::durable::write_bytes;
+use ic_build::artifacts::InputEvidence;
+use ic_host_fs::durable::{PublicationMode, WriteOptions, write_bytes};
 use serde::Serialize;
 use std::{
     collections::BTreeMap,
@@ -85,8 +86,8 @@ enum RejectionKind {
 struct RejectedInput<'a> {
     path: &'a Path,
     // Null means the path is absent from that inventory, not that the file is absent.
-    before_snapshot_value: Option<&'a str>,
-    after_snapshot_value: Option<&'a str>,
+    before_snapshot_value: Option<String>,
+    after_snapshot_value: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -107,8 +108,8 @@ pub(in crate::canister_build::reuse) fn retain_rejection(
     context: &WorkspaceBuildContext,
     release_build_id: ReleaseBuildId,
     before_locations: &InputLocations,
-    before: &BuildInputSnapshot,
-    after: &BuildInputSnapshot,
+    before: &InputEvidence,
+    after: &InputEvidence,
     error: &BuildReuseError,
 ) -> Option<PathBuf> {
     let (kind, path) = match error {
@@ -121,22 +122,16 @@ pub(in crate::canister_build::reuse) fn retain_rejection(
         schema_version: 1,
         release_build_id,
         kind,
-        before_inputs_sha256: before.digest(),
-        after_inputs_sha256: after.digest(),
-        before_input_count: before.files.len(),
-        after_input_count: after.files.len(),
+        before_inputs_sha256: before.digest().ok()?.to_hex(),
+        after_inputs_sha256: after.digest().ok()?.to_hex(),
+        before_input_count: before.entries().len(),
+        after_input_count: after.entries().len(),
         before_locations,
         after_locations: InputLocations::capture(context),
         affected_input: path.map(|path| RejectedInput {
             path,
-            before_snapshot_value: path
-                .to_str()
-                .and_then(|key| before.files.get(key))
-                .map(String::as_str),
-            after_snapshot_value: path
-                .to_str()
-                .and_then(|key| after.files.get(key))
-                .map(String::as_str),
+            before_snapshot_value: before.entries().get(path).map(super::value_text),
+            after_snapshot_value: after.entries().get(path).map(super::value_text),
         }),
     };
     let bytes = serde_json::to_vec(&evidence).ok()?;
@@ -147,6 +142,14 @@ pub(in crate::canister_build::reuse) fn retain_rejection(
         .icp_root
         .join(".canic/build-reuse")
         .join(format!("rejected-{release_build_id}.json"));
-    write_bytes(&path, &bytes).ok()?;
+    write_bytes(
+        &path,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &bytes,
+    )
+    .ok()?;
     Some(path)
 }

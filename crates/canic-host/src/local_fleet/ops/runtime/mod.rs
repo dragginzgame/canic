@@ -13,7 +13,7 @@ use crate::{
 use candid::{Nat, Principal};
 use canic_contracts::dto::wire::projection::local_authority::{Request, Response};
 use ic_testkit::{
-    pic::{PocketIcBuilderExt, PocketIcManagedServer, PocketIcStartupConfig},
+    pic::{PocketIcManagedServer, PocketIcStartupConfig},
     pocket_ic::{
         PocketIc, PocketIcBuilder,
         common::rest::{IcpFeatures, IcpFeaturesConfig, InstanceHttpGatewayConfig},
@@ -63,19 +63,20 @@ pub fn instance(
         .with_auto_progress()
         .with_state_dir(directory.to_path_buf())
         .with_max_request_time_ms(Some(u64::from(config.request_timeout_secs) * 1000));
-    builder
-        .try_build(PocketIcStartupConfig::connect(
-            server.url(),
-            Duration::from_secs(u64::from(config.request_timeout_secs)),
-        ))
-        .map_err(|source| {
-            let output = server.output();
-            LocalFleetError::InstanceStartup {
-                source: Box::new(source),
-                stdout: output.stdout().into(),
-                stderr: output.stderr().into(),
-            }
-        })
+    PocketIcStartupConfig::connect(
+        server.url(),
+        Duration::from_secs(u64::from(config.request_timeout_secs)),
+    )
+    .build_instance(builder)
+    .map(|owned| owned.instance)
+    .map_err(|source| {
+        let output = server.output();
+        LocalFleetError::InstanceStartup {
+            source: Box::new(source),
+            stdout: output.stdout().into(),
+            stderr: output.stderr().into(),
+        }
+    })
 }
 
 /// Expose one selected loopback port; the instance owns its gateway lifecycle.

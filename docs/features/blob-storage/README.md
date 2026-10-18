@@ -11,8 +11,9 @@ and [current handoff](../../status/current.md) for implementation evidence.
 The shared [package-adapter boundary](../../architecture/independent-package-adapters.md)
 also covers backup.
 
-The adapter pins the published `ic-blob-storage` library and uses public Canic
-endpoints, bounded decoders and synchronous lifecycle participants. It registers
+The adapter selects published `ic-blob-storage` and uses the contracts package's
+shared endpoint declarations from 0.22.11. Canic supplies endpoint authentication,
+bounded decoders, actual caller context and synchronous lifecycle participants. It registers
 its service memory grants before Canic bootstraps the sole memory runtime. Its
 managed lifecycle retains Fleet admission.
 
@@ -24,7 +25,7 @@ Fleet, lifecycle and memory tests. The upstream service suite owns blob authorit
 certificate replies, restoration, provider behavior and accounting; those results
 do not establish deployment qualification for an arbitrary wrapper.
 
-The root catalog selects published Blob Storage 0.22 and Memory 0.35.
+The root catalog requires published Blob Storage/contracts 0.22.11 and Memory 0.35.
 Timers and arithmetic-only Metrics follow the selected Canic runtime in the root
 and independent consumer lockfiles.
 Each complete managed artifact must share one Memory and Timers runtime.
@@ -82,12 +83,14 @@ terabyte capacity or provider qualification.
 ## Embed in an application
 
 Invoke `canic_blob_service::mount!();` once at the application's crate root.
-It mounts endpoints and registers seventeen permanent memory requests. The
+It mounts endpoints. Add the seventeen permanent requests returned by
+`canic_blob_service::memory_requests()` to the host composition. The
 artifact owns one pool with the service namespace and every other application's
 namespace explicitly granted, for example:
 
 ```rust
 canic::memory::memory_allocation_pool!(
+    provider = application_memory_pool,
     authorities = [
         ("embedded-app", "embedded_app."),
         (canic_blob_service::MEMORY_AUTHORITY, canic_blob_service::MEMORY_KEY_PREFIX),
@@ -95,6 +98,15 @@ canic::memory::memory_allocation_pool!(
     exclusions = [],
 );
 canic_blob_service::mount!();
+
+fn application_memory() -> canic::memory::MemoryBootstrap {
+    let mut input = canic::memory::framework();
+    input.pool = application_memory_pool().expect("host grants");
+    input.requests.extend(canic_blob_service::memory_requests().expect("Blob requests"));
+    // Extend with the application's complete request factory too.
+    input
+}
+// Pass memory = application_memory(), first in canic::start!(...).
 ```
 
 Core and Control Plane grants are included by Canic. All owners share eligible
@@ -137,7 +149,8 @@ same Candid scope as application endpoints, and avoid duplicate method names.
 
 The complete [embedded example](../../../integrations/blob-service/embedded-consumer/src/lib.rs)
 has its own persistent counter, endpoints, combined installation input and metrics
-sampler. Its counter uses memory 120 while blob grants use 150–166. It has a
+sampler. Its counter owns `embedded_app.counter.v1`; application and service
+keys receive physical memories from the same checked allocation pool. It has a
 separate workspace and can be built explicitly with:
 
 ```sh
@@ -165,14 +178,13 @@ The shell depends on `canic-blob-service`, `canic`, `candid` and `ic-cdk`.
 The adapter inherits Canic's package version and registry requirement from the
 main workspace, with published Blob `0.22`. Cargo's package manifest
 removes the development Canic path and excludes these private consumer fixtures.
-The local facade already uses Memory 0.35. Registry Canic
-0.110.54 uses Memory 0.31, so an aligned framework publication and selected
-registry requirement remain necessary under [Canic #33](https://github.com/dragginzgame/canic/issues/33).
+Canic and `canic-blob-service` are published together at 0.111.0, including the
+Memory 0.35 runtime. Consumers can select both from crates.io; the coherent
+family is tracked under [Canic #33](https://github.com/dragginzgame/canic/issues/33).
 A compilable package archive cannot substitute for exact managed runtime admission.
-Its first registry publication remains separate from package verification; until
-then a version-only adapter declaration cannot resolve. Checked-in qualification
-uses the matching local facade. A disposable package candidate can instead select
-registry Canic and the extracted normalized adapter, without a sibling checkout.
+Checked-in qualification uses the matching local facade. A disposable package
+candidate can instead select registry Canic and the extracted normalized adapter,
+without a sibling checkout.
 Use one Canic source throughout that graph: mixing local and registry facades is
 rejected by managed admission.
 See the [consumer manifest](../../../integrations/blob-service/consumer/Cargo.toml)
@@ -238,7 +250,15 @@ arguments to Root. `app.init_mode` controls Fleet operating mode.
 [Canic#444](https://github.com/dragginzgame/canic/issues/444) records qualified
 execution and downstream acceptance separately.
 
-The maintained adapter selects published Blob Storage 0.22.1 and Memory 0.35.
+The registered production Root case installs the dedicated service from a
+complete managed App build. It verifies controller and target refusals, a
+same-release Root restart before binding, lost-response reconciliation,
+conflicting rebinding and replay after installation, including the service's
+submitted operator, payer and limits. This is separate from the dedicated and
+embedded composition fixtures and from browser/provider or downstream application
+acceptance.
+
+The maintained adapter selects published Blob Storage 0.22 and Memory 0.35.
 Each complete managed Wasm graph must contain one Memory and Timers identity.
 Canic owns the runtime and lifecycle;
 the service participant restores synchronously before deferred work. These

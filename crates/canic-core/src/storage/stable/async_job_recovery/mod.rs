@@ -17,10 +17,7 @@ std::thread_local! {
     static ASYNC_JOB_RECOVERY: RefCell<
         Cell<AsyncJobRecoveryRecord, RuntimeMemory<DefaultMemoryImpl>>,
     > = RefCell::new(Cell::init(
-        crate::ic_memory_key!(
-            authority = CANIC_CORE_MEMORY_AUTHORITY,
-            key = "canic.core.async_job_recovery.v1",
-        ),
+        crate::memory::open(crate::memory::keys::ASYNC_JOB_RECOVERY_V1),
         AsyncJobRecoveryRecord::default(),
     ));
 }

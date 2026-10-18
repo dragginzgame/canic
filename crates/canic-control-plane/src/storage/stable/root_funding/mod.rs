@@ -21,9 +21,7 @@ std::thread_local! {
     static ROOT_FUNDING_STATE:
         RefCell<Cell<RootFundingStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            canic_core::ic_memory_key!(
-                authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-                key = "canic.control_plane.root.funding.v1"),
+            canic_core::memory::open(crate::memory::keys::ROOT_FUNDING_V1),
             RootFundingStateRecord::default(),
         ));
 }

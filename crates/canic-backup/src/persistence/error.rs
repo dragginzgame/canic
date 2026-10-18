@@ -25,15 +25,9 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum PersistenceError {
-    #[error("restore reference conflicts with retained recovery authority: {path}")]
-    RestoreReferenceConflict { path: String },
-
-    #[error("invalid restore reference record: {path}")]
-    InvalidRestoreReferences { path: String },
-
-    /// Canonical IC Backup directory-publication and integrity refusal.
+    /// Canonical IC Backup filesystem, layout and reference refusal.
     #[error(transparent)]
-    ArtifactCommit(#[from] ic_backup::ops::persistence::PersistenceError),
+    Shared(#[from] ic_backup::ops::persistence::PersistenceError),
 
     #[error("artifact path escapes backup root: {artifact_path}")]
     ArtifactPathEscapesBackup { artifact_path: String },

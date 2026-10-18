@@ -15,7 +15,7 @@ use crate::component_operation::{
     policy::validate_label,
     view::{ComponentObservation, ComponentProgressObservation},
 };
-use ic_host_fs::durable::write_bytes;
+use ic_host_fs::durable::{PublicationMode, WriteOptions, write_bytes};
 use ic_host_fs::read::read_file_no_follow;
 
 use canic_core::cdk::utils::hash::sha256_hex;
@@ -136,7 +136,15 @@ pub fn write(
     if bytes.len() > MAX_RECORD_BYTES {
         return Err(ComponentOperationError::Integrity);
     }
-    Ok(write_bytes(path, &bytes).map_err(crate::publication::ops::io_error)?)
+    Ok(write_bytes(
+        path,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &bytes,
+    )
+    .map_err(crate::publication::ops::io_error)?)
 }
 
 /// Persist one submission reservation, including attempts whose response is lost.

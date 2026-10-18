@@ -8,7 +8,7 @@ use crate::frontend::{
     ops::{MAX_FRONTEND_BUNDLE_BYTES, MAX_FRONTEND_FILE_BYTES},
     view::FrontendBundleView,
 };
-use ic_host_fs::durable::create_new_bytes_with_parents;
+use ic_host_fs::durable::{PublicationMode, WriteOptions, write_bytes};
 use ic_host_fs::read::read_file_no_follow;
 
 use canic_core::cdk::utils::hash::sha256_hex;
@@ -59,7 +59,16 @@ fn safe_file(root: &Path, relative: &str) -> Result<std::path::PathBuf, Frontend
 }
 
 fn retain_file(path: &Path, bytes: &[u8]) -> Result<(), FrontendError> {
-    match create_new_bytes_with_parents(path, bytes).map_err(crate::publication::ops::io_error) {
+    match write_bytes(
+        path,
+        WriteOptions {
+            mode: PublicationMode::CreateNew,
+            permissions: 0o666,
+        },
+        bytes,
+    )
+    .map_err(crate::publication::ops::io_error)
+    {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
             if read_file_no_follow(path, MAX_FRONTEND_FILE_BYTES).map_err(std::io::Error::from)?

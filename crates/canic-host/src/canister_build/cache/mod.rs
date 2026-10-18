@@ -7,7 +7,7 @@
 #[cfg(test)]
 mod tests;
 
-use ic_host_fs::durable::lock_regular_file_with_parents;
+use ic_host_fs::durable::{lock_exclusive, open_regular_lock_file_with_parents};
 use std::{
     env,
     ffi::OsStr,
@@ -166,7 +166,9 @@ pub fn canister_build_target_root(workspace_root: &Path) -> PathBuf {
 /// Lock the complete shared Cargo-target build and artifact-materialization boundary.
 pub fn lock_canister_build_target(workspace_root: &Path) -> io::Result<fs::File> {
     let path = workspace_root.join(CANISTER_BUILD_LOCK_RELATIVE);
-    lock_regular_file_with_parents(&path).map_err(io::Error::from)
+    let lock = open_regular_lock_file_with_parents(&path).map_err(io::Error::from)?;
+    lock_exclusive(&lock)?;
+    Ok(lock)
 }
 
 fn resolve_canister_build_target_root(

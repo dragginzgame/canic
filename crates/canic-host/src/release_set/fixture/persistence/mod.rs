@@ -18,7 +18,10 @@ use canic_contracts::dto::{
 };
 use canic_core::cdk::utils::hash::hex_bytes;
 use ic_host_artifacts::artifact::ArtifactError;
-use ic_host_fs::{durable::create_new_bytes_with_parents, read::read_optional_file_no_follow};
+use ic_host_fs::{
+    durable::{PublicationMode, WriteOptions, write_bytes},
+    read::read_optional_file_no_follow,
+};
 use sha2_host::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
@@ -208,8 +211,15 @@ fn retain_exact(
         Err(error) => return Err(error),
     }
     let path = root.join(relative);
-    if let Err(source) =
-        create_new_bytes_with_parents(&path, bytes).map_err(crate::publication::ops::io_error)
+    if let Err(source) = write_bytes(
+        &path,
+        WriteOptions {
+            mode: PublicationMode::CreateNew,
+            permissions: 0o666,
+        },
+        bytes,
+    )
+    .map_err(crate::publication::ops::io_error)
     {
         // A competing exact writer or a lost successful response may already have committed.
         if read_workspace_file(root, relative, bytes.len()).is_ok_and(|retained| retained == bytes)

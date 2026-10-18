@@ -5,6 +5,7 @@
 //! Boundary: exposes typed plan/journal writes backed by backup-owned durable IO.
 
 mod retention;
+pub use retention::RestoreTerminalEvidenceError;
 
 use super::{RestoreApplyJournal, RestoreApplyJournalError, RestorePlan, RestorePlanError};
 use crate::persistence::{
@@ -16,7 +17,9 @@ use std::{io, path::Path};
 
 use thiserror::Error as ThisError;
 
-pub(in crate::restore) use retention::{lock_restore_layout, release_restore, retain_restore};
+pub(in crate::restore) use retention::{
+    lock_restore_layout, release_restore, retain_restore, terminal_evidence_without_layout,
+};
 
 ///
 /// RestorePersistenceError
@@ -27,6 +30,13 @@ pub(in crate::restore) use retention::{lock_restore_layout, release_restore, ret
 
 #[derive(Debug, ThisError)]
 pub enum RestorePersistenceError {
+    #[error(transparent)]
+    TerminalEvidence(RestoreTerminalEvidenceError),
+    #[error(transparent)]
+    ReferenceRelease(
+        #[from]
+        ic_backup::ops::persistence::RestoreReferenceReleaseError<RestoreTerminalEvidenceError>,
+    ),
     #[error("restore journal backup root does not match the locked layout")]
     BackupRootMismatch,
 

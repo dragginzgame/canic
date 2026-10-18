@@ -4,7 +4,6 @@
 //! Does not own: endpoint DTOs, topology projection, or ICP CLI command execution.
 //! Boundary: decodes canonical Candid responses and preserves typed transport and endpoint errors.
 
-mod cbor;
 mod status;
 #[cfg(test)]
 mod tests;
@@ -39,8 +38,8 @@ pub enum ReplicaQueryError {
     #[error("{0}")]
     Canister(CanicError),
 
-    #[error("{0}")]
-    Cbor(String),
+    #[error(transparent)]
+    Agent(Box<ic_agent::AgentError>),
 
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -50,13 +49,6 @@ pub enum ReplicaQueryError {
 
     #[error("local replica rejected query: code={code} message={message}")]
     Rejected { code: u64, message: String },
-}
-
-impl From<cbor::CborError> for ReplicaQueryError {
-    // Convert CBOR encode/decode failures.
-    fn from(err: cbor::CborError) -> Self {
-        Self::Cbor(err.to_string())
-    }
 }
 
 /// Resolve whether the selected environment uses the direct replica transport.

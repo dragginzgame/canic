@@ -1,6 +1,6 @@
 #![expect(clippy::unused_async)]
 
-use canic::{Error, dto::auth::DelegatedToken, ids::cap, prelude::*};
+use canic::{Error, prelude::*};
 use std::cell::Cell;
 
 thread_local! {
@@ -59,19 +59,6 @@ fn assert_restored_lifecycle_context() {
     assert_eq!(role.as_str(), "test");
     ic_timers::timer_inventory()
         .expect("Canic must initialize the shared timer provider before the lifecycle participant");
-}
-
-#[canic_update(requires(auth::authenticated(cap::VERIFY)))]
-async fn test_verify_delegated_token(token: DelegatedToken) -> Result<(), Error> {
-    let _ = token;
-
-    if canic::access::env::build_network_local().is_err() {
-        return Err(Error::from_registered(
-            canic::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
-        ));
-    }
-
-    Ok(())
 }
 
 #[canic_query(requires(caller::is_fleet_admitted()))]

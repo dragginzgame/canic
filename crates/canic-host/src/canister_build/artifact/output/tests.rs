@@ -1,10 +1,7 @@
 //! Cargo-selected custom targets remain exact across collisions and stale uplifted files.
 
 use super::*;
-use crate::{
-    artifact_io::CapturedWasmArtifact,
-    canister_build::{CanisterBuildProfile, WorkspaceBuildContext},
-};
+use ic_build::artifacts::CapturedArtifact;
 use std::fs;
 
 #[test]
@@ -87,11 +84,8 @@ fn cargo_custom_lib_outputs_are_captured_before_another_workspace_overwrites_the
         let path = select(&built.stdout, &manifest).unwrap();
         assert_eq!(path.file_name().unwrap(), "custom_library.wasm");
         let bytes = fs::read(&path).unwrap();
-        let captured = CapturedWasmArtifact::capture(
-            &path,
-            &root.join("artifacts").join(format!("{workspace}.wasm")),
-        )
-        .unwrap();
+        let captured =
+            CapturedArtifact::capture(&path, &root.join("artifacts"), usize::MAX).unwrap();
         retained.push((path, bytes, captured));
     }
     assert_eq!(retained[0].0, retained[1].0);
@@ -106,6 +100,7 @@ fn cargo_custom_lib_outputs_are_captured_before_another_workspace_overwrites_the
 
 #[test]
 fn configured_library_command_cannot_build_a_colliding_binary() {
+    use crate::canister_build::{CanisterBuildProfile, WorkspaceBuildContext};
     let root = crate::test_support::temp_dir("cargo-library-binary-collision");
     fs::create_dir_all(root.join("src")).unwrap();
     let manifest = root.join("Cargo.toml");

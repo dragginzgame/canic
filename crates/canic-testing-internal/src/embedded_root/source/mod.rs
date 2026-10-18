@@ -2,7 +2,10 @@
 //!
 //! Normalize only the workspace's own version; external dependency requirements stay intact.
 
-use serde::Deserialize;
+use ic_build::cargo::observation::{
+    CargoFeatureSelection, CargoMetadataSpec, observe_metadata, schema::Metadata,
+};
+use ic_host_process::tool::{OutputLimit, OutputLimits};
 use std::{
     collections::BTreeMap,
     fs, io,
@@ -106,31 +109,25 @@ pub(super) fn normalize(root: &Path) -> io::Result<()> {
     change_workspace_version(root, FIXTURE_VERSION)
 }
 
-/// Cargo's inventory identifies workspace-owned packages independently of their names.
-#[derive(Deserialize)]
-struct WorkspaceInventory {
-    packages: Vec<WorkspacePackage>,
-    workspace_members: Vec<String>,
-}
-
-/// Exact package identity selected before normalizing the private snapshot.
-#[derive(Deserialize)]
-struct WorkspacePackage {
-    id: String,
-    name: String,
-    version: String,
-}
-
-fn workspace_inventory(root: &Path) -> io::Result<WorkspaceInventory> {
-    serde_json::from_slice(&output(Command::new("cargo").current_dir(root).args([
-        "metadata",
-        "--format-version",
-        "1",
-        "--no-deps",
-        "--locked",
-        "--offline",
-    ]))?)
-    .map_err(io::Error::other)
+// Cargo owns package identity and metadata decoding; the fixture owns its budget.
+fn workspace_inventory(root: &Path) -> io::Result<Metadata> {
+    observe_metadata(
+        &CargoMetadataSpec {
+            manifest_path: &root.join("Cargo.toml"),
+            include_dependencies: false,
+            filter_platform: None,
+            locked: true,
+            offline: true,
+            features: &CargoFeatureSelection::default(),
+        },
+        OutputLimits {
+            stdout: OutputLimit::Terminate(16 * 1024 * 1024),
+            stderr: OutputLimit::Terminate(1024 * 1024),
+            timeout: None,
+        },
+        Command::new("cargo"),
+    )
+    .map_err(|error| io::Error::other(error.to_string()))
 }
 
 // Rewrite local identities directly: Cargo update may select newer external
@@ -141,7 +138,7 @@ pub(super) fn change_workspace_version(root: &Path, version: &str) -> io::Result
         .packages
         .into_iter()
         .filter(|package| inventory.workspace_members.contains(&package.id))
-        .map(|package| (package.name, package.version))
+        .map(|package| (package.name.to_string(), package.version.to_string()))
         .collect();
     if owned.is_empty() {
         return Err(io::Error::other(

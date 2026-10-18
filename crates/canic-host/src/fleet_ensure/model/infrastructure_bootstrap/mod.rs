@@ -49,7 +49,7 @@ pub enum BootstrapCoordinatorSelection {
 pub struct InfrastructureBootstrapSurveyRecord {
     pub schema_version: u16,
     pub request_sha256: [u8; 32],
-    #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub source: Option<InfrastructureBootstrapRecord>,
 }
 
@@ -68,7 +68,7 @@ pub struct InfrastructureBootstrapCustodyRecord {
     pub canister: Principal,
     pub subnet: SubnetId,
     pub controllers: Vec<Principal>,
-    #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub module_sha256: Option<[u8; 32]>,
 }
 
@@ -90,10 +90,10 @@ pub struct InfrastructureBootstrapRecord {
     pub network_root_key_sha256: [u8; 32],
     pub coordinator: BootstrapCoordinatorSelection,
     /// Exact operator seed to publish after setup; creation resolves only its Coordinator slot.
-    #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub estate_seed: Option<InfrastructureBootstrapSeedRecord>,
     /// Ready selection requires an independently verified current Registry witness.
-    #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub coordinator_registry_candid_hex: Option<String>,
     /// Original operator-owned TOML; its exact bytes bind every source disposition.
     pub declarations_toml: String,
@@ -148,7 +148,7 @@ pub struct InfrastructureBootstrapTerminalRecord {
 pub struct InfrastructureBootstrapInspectionRecord {
     pub attempt_recoveries:
         Vec<crate::fleet_ensure::model::attempt_recovery::AttemptRecoveryGrantRecord>,
-    #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub registration_recovery_sha256: Option<String>,
     pub schema_version: u16,
     pub source_sha256: [u8; 32],
@@ -158,7 +158,7 @@ pub struct InfrastructureBootstrapInspectionRecord {
     pub apply_attempts: u32,
     pub terminal_attempts: u32,
     pub registration_attempts: u32,
-    #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub registration_plan_sha256: Option<String>,
     pub effect_observations: BTreeMap<String, u32>,
 }

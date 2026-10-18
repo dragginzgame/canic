@@ -158,15 +158,6 @@ fn coordinator_long_running_intents_are_operation_replay_protected() {
 
 #[test]
 fn managed_auth_effects_own_exact_replay_contracts() {
-    let application_session =
-        command_entry(MANAGED_COMMAND_REPLAY_POLICY_MANIFEST, "ApplicationSession");
-    assert_eq!(
-        application_session.replay_policy,
-        ReplayPolicy::ResponseIdempotent {
-            command_kind: replay_command_kind("auth.application_session.v1"),
-        }
-    );
-
     let install = command_entry(
         MANAGED_COMMAND_REPLAY_POLICY_MANIFEST,
         "InstallDelegationProof",
@@ -175,26 +166,6 @@ fn managed_auth_effects_own_exact_replay_contracts() {
         install.replay_policy,
         ReplayPolicy::IntentionallyNonIdempotent { .. }
     ));
-
-    let prepare = command_entry(
-        MANAGED_COMMAND_REPLAY_POLICY_MANIFEST,
-        "PrepareDelegatedToken",
-    );
-    assert!(matches!(
-        prepare.replay_policy,
-        ReplayPolicy::ReplayProtected {
-            requires_operation_id: true,
-            ..
-        }
-    ));
-    assert_eq!(
-        prepare.cost_class,
-        CostClass::IssuerCanisterSignaturePrepare
-    );
-    assert_eq!(
-        prepare.quota_policy,
-        Some(ISSUER_CANISTER_SIGNATURE_PREPARE_QUOTA_V1)
-    );
 }
 
 #[test]

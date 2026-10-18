@@ -4,32 +4,33 @@
 //! Does not own: manifest construction, journal state transitions, or backup execution.
 //! Boundary: validates data before filesystem writes and before resume integrity checks.
 
-mod command_lifetime_lock;
+mod command_custody;
 mod error;
-mod file_lock;
 mod integrity;
-mod journal_lock;
 mod json;
 mod layout;
-mod layout_lifetime;
 
-pub use command_lifetime_lock::CommandLifetimeHandle;
-pub(crate) use command_lifetime_lock::{CommandLifetimeLock, CommandLifetimeLockError};
+pub(crate) use command_custody::acquire_recorded_command;
 pub use error::PersistenceError;
+pub use ic_backup::ops::persistence::BackupLayoutGuard;
 pub(crate) use ic_backup::ops::persistence::commit_artifact_directory;
+pub use ic_backup::ops::persistence::{
+    CommandLifetimeLock, CommandLifetimeLockError, CommandQuiescenceGuard,
+};
+pub use ic_backup::ops::persistence::{JournalLock, JournalLockError};
 pub(crate) use integrity::verify_durable_artifact;
 pub use integrity::{
     ArtifactIntegrityReport, BackupExecutionIntegrityReport, BackupIntegrityReport,
     resolve_backup_artifact_path,
 };
-pub use journal_lock::{JournalLock, JournalLockError};
 #[cfg(test)]
 pub(crate) use json::{
     DurableWriteBarrier, create_json_durable_at_barriers, write_json_durable_at_barriers,
 };
-pub(crate) use json::{create_json_durable, read_json, write_json_durable};
+pub use json::{JSON_RECORD_MAX_BYTES, read_json};
+pub(crate) use json::{create_json_durable, write_json_durable};
+pub use layout::BackupExecutionGuard;
 pub use layout::BackupLayout;
-pub use layout_lifetime::{BackupExecutionGuard, BackupLayoutGuard};
 
 #[cfg(test)]
 mod tests;

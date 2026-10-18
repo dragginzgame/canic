@@ -1,3 +1,5 @@
+mod blob_installation_decoding;
+
 use candid::{decode_args, decode_one};
 use canic::{
     dto::abi::v1::{CanisterInitAuthority, CanisterInitPayload},

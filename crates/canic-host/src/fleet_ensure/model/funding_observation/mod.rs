@@ -53,7 +53,7 @@ pub struct FundingObservationRequestRecord {
     pub component: ComponentBinding,
     pub release_set: FleetSubnetRootReleaseSet,
     pub parent: Principal,
-    #[serde(deserialize_with = "super::serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub parent_role: Option<CanisterRole>,
     pub child: Principal,
     pub role: CanisterRole,
@@ -96,7 +96,7 @@ pub struct FundingObservationReviewRecord {
 #[serde(deny_unknown_fields)]
 pub struct FundingObservationAttemptRecord {
     pub request_index: usize,
-    #[serde(deserialize_with = "super::serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub outcome: Option<FundingObservationOutcomeRecord>,
 }
 

@@ -17,7 +17,7 @@ use std::cell::RefCell;
 std::thread_local! {
     static ROOT_WASM_STORE_STATE: RefCell<Cell<RootWasmStoreStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.root.wasm_store.state.v1"),
+            canic_core::memory::open(crate::memory::keys::ROOT_WASM_STORE_STATE_V1),
             RootWasmStoreStateRecord::default(),
         ));
 }

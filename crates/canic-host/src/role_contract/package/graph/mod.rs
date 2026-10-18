@@ -4,12 +4,11 @@
 //! Does not own: role dependency policy or user-facing diagnostics.
 //! Boundary: raw Cargo labels and package IDs remain inside package validation.
 
+use ic_build::cargo::observation::schema::{Metadata, Node, NodeDep, Package};
+
 #[cfg(test)]
 mod tests;
 
-use crate::cargo_metadata::{
-    CargoMetadata, CargoMetadataNode, CargoMetadataNodeDependency, CargoMetadataPackage,
-};
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::PathBuf,
@@ -47,9 +46,9 @@ pub(super) struct CargoGraphEdge {
 }
 
 pub(super) fn correlate_package_tree(
-    catalog: &CargoMetadata,
-    target_metadata: &CargoMetadata,
-    selected: &CargoMetadataPackage,
+    catalog: &Metadata,
+    target_metadata: &Metadata,
+    selected: &Package,
     tree: &str,
 ) -> Result<CargoGraphEvidence, String> {
     if tree.lines().count() > MAX_TREE_LINES {
@@ -62,7 +61,7 @@ pub(super) fn correlate_package_tree(
         .ok_or_else(|| "Cargo metadata omitted the dependency catalog".to_string())?
         .nodes
         .iter()
-        .map(|node| (node.id.as_str(), node))
+        .map(|node| (node.id.repr.as_str(), node))
         .collect::<BTreeMap<_, _>>();
     let mut state = CorrelationState {
         catalog,
@@ -85,9 +84,9 @@ pub(super) fn correlate_package_tree(
 }
 
 struct CorrelationState<'catalog, 'target> {
-    catalog: &'catalog CargoMetadata,
-    selected: &'catalog CargoMetadataPackage,
-    node_by_id: BTreeMap<&'target str, &'target CargoMetadataNode>,
+    catalog: &'catalog Metadata,
+    selected: &'catalog Package,
+    node_by_id: BTreeMap<&'target str, &'target Node>,
     packages: BTreeMap<String, CargoGraphPackage>,
     edges: BTreeMap<String, BTreeSet<CargoGraphEdge>>,
     stack: Vec<(String, bool)>,
@@ -122,19 +121,19 @@ impl CorrelationState<'_, '_> {
                     .or_default()
                     .insert(CargoGraphEdge {
                         alias,
-                        package_id: package.id.clone(),
+                        package_id: package.id.repr.clone(),
                     });
             }
         }
         self.stack.truncate(row.depth);
-        self.stack.push((package.id.clone(), is_active));
+        self.stack.push((package.id.repr.clone(), is_active));
         Ok(())
     }
 
     fn validate_position(
         &mut self,
         row: &TreeRow,
-        package: &CargoMetadataPackage,
+        package: &Package,
         line_number: usize,
     ) -> Result<(), String> {
         if !self.saw_root {
@@ -159,7 +158,7 @@ impl CorrelationState<'_, '_> {
     fn active_alias(
         &self,
         row: &TreeRow,
-        package: &CargoMetadataPackage,
+        package: &Package,
         line_number: usize,
     ) -> Result<Option<String>, String> {
         if row.depth == 0 {
@@ -174,7 +173,7 @@ impl CorrelationState<'_, '_> {
                     "target-filtered Cargo metadata omits an active parent on tree line {line_number}"
                 )
             })?;
-            target_normal_edge_alias(&parent_node.deps, &package.id).map_err(|reason| {
+            target_normal_edge_alias(&parent_node.deps, &package.id.repr).map_err(|reason| {
                 format!("{reason} on package-selected Cargo tree line {line_number}")
             })
         } else {
@@ -184,22 +183,23 @@ impl CorrelationState<'_, '_> {
 
     fn insert_active_package(
         &mut self,
-        package: &CargoMetadataPackage,
+        package: &Package,
         enabled_features: BTreeSet<String>,
         line_number: usize,
     ) -> Result<(), String> {
         let package_fact = CargoGraphPackage {
-            name: package.name.clone(),
-            version: package.version.clone(),
-            source: package.source.clone(),
-            manifest_path: package.manifest_path.clone(),
-            is_proc_macro: package
-                .targets
-                .iter()
-                .any(|target| target.kind.iter().any(|kind| kind == "proc-macro")),
+            name: package.name.to_string(),
+            version: package.version.to_string(),
+            source: package.source.as_ref().map(ToString::to_string),
+            manifest_path: package.manifest_path.clone().into_std_path_buf(),
+            is_proc_macro: package.targets.iter().any(|target| {
+                target.kind.iter().any(|kind| {
+                    kind == &ic_build::cargo::observation::schema::TargetKind::ProcMacro
+                })
+            }),
             enabled_features,
         };
-        if let Some(existing) = self.packages.get_mut(&package.id) {
+        if let Some(existing) = self.packages.get_mut(&package.id.repr) {
             if existing.name != package_fact.name
                 || existing.version != package_fact.version
                 || existing.source != package_fact.source
@@ -213,7 +213,7 @@ impl CorrelationState<'_, '_> {
                 .enabled_features
                 .extend(package_fact.enabled_features);
         } else {
-            self.packages.insert(package.id.clone(), package_fact);
+            self.packages.insert(package.id.repr.clone(), package_fact);
         }
         Ok(())
     }
@@ -223,8 +223,8 @@ impl CorrelationState<'_, '_> {
             return Err("package-selected Cargo tree is empty".to_string());
         }
         Ok(CargoGraphEvidence {
-            selected_package_id: self.selected.id.clone(),
-            workspace_root: self.catalog.workspace_root.clone(),
+            selected_package_id: self.selected.id.repr.clone(),
+            workspace_root: self.catalog.workspace_root.clone().into_std_path_buf(),
             packages: self.packages,
             edges: self
                 .edges
@@ -289,10 +289,7 @@ fn parse_tree_row(line: &str, line_number: usize) -> Result<TreeRow, String> {
     })
 }
 
-fn resolve_tree_package<'a>(
-    metadata: &'a CargoMetadata,
-    row: &TreeRow,
-) -> Result<&'a CargoMetadataPackage, String> {
+fn resolve_tree_package<'a>(metadata: &'a Metadata, row: &TreeRow) -> Result<&'a Package, String> {
     let mut candidates = metadata
         .packages
         .iter()
@@ -302,7 +299,7 @@ fn resolve_tree_package<'a>(
                 target.name == row.library_name
                     && target.kind.iter().any(|kind| {
                         matches!(
-                            kind.as_str(),
+                            kind.to_string().as_str(),
                             "lib" | "rlib" | "cdylib" | "staticlib" | "proc-macro"
                         )
                     })
@@ -312,9 +309,13 @@ fn resolve_tree_package<'a>(
 
     if candidates.len() > 1 {
         candidates.retain(|package| {
-            package.manifest_path.parent().is_some_and(|directory| {
-                row.label.ends_with(&format!(" ({})", directory.display()))
-            })
+            package
+                .manifest_path
+                .parent()
+                .map(ic_build::cargo::observation::schema::camino::Utf8Path::as_std_path)
+                .is_some_and(|directory| {
+                    row.label.ends_with(&format!(" ({})", directory.display()))
+                })
         });
     }
 
@@ -325,19 +326,23 @@ fn resolve_tree_package<'a>(
     }
 }
 
-fn package_label_matches(package: &CargoMetadataPackage, label: &str) -> bool {
+fn package_label_matches(package: &Package, label: &str) -> bool {
     let prefix = format!("{} v{}", package.name, package.version);
     label == prefix || label.starts_with(&format!("{prefix} "))
 }
 
 fn target_normal_edge_alias(
-    dependencies: &[CargoMetadataNodeDependency],
+    dependencies: &[NodeDep],
     child_package_id: &str,
 ) -> Result<Option<String>, String> {
     let aliases = dependencies
         .iter()
-        .filter(|dependency| dependency.pkg == child_package_id)
-        .filter(|dependency| dependency.dep_kinds.iter().any(|kind| kind.kind.is_none()))
+        .filter(|dependency| dependency.pkg.repr == child_package_id)
+        .filter(|dependency| {
+            dependency.dep_kinds.iter().any(|kind| {
+                kind.kind == ic_build::cargo::observation::schema::DependencyKind::Normal
+            })
+        })
         .map(|dependency| dependency.name.clone())
         .collect::<BTreeSet<_>>();
 

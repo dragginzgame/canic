@@ -66,6 +66,7 @@ fn command_preview_journal(
             expected_module_hash: None,
             verification_kind: verification_kind.map(str::to_string),
         }],
+        command_custody: Vec::new(),
         operation_receipts: Vec::new(),
     };
     journal.operation_counts =

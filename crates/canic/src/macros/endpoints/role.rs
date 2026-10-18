@@ -110,16 +110,14 @@ macro_rules! __canic_emit_managed_status_endpoint {
             automatic_topup_attributes = [#[cfg(canic_capability_automatic_topup)]],
             logs_attributes = [#[cfg(canic_capability_observability_logs)]],
             diagnostics_attributes = [#[cfg(canic_capability_observability_diagnostics)]],
-            local_auth_attributes = [#[cfg(any( canic_capability_delegated_token_issuer, canic_capability_local_application_authorization ))]],
             token_issuer_attributes = [#[cfg(canic_capability_delegated_token_issuer)]],
-            application_authorization_attributes = [#[cfg(canic_capability_local_application_authorization)]],
             caller_authority_attributes = [#[cfg(canic_capability_caller_authority)]],
             fleet_admission_attributes = [#[cfg(canic_capability_fleet_admission_projection)]],
         }
 
 
         #[$crate::canic_query(public)]
-        async fn canic_public_status(
+        fn canic_public_status(
             request: PublicStatusRequest,
         ) -> Result<PublicStatusResponse, ::canic::Error> {
             match request {
@@ -144,7 +142,7 @@ macro_rules! __canic_emit_managed_status_endpoint {
 
 
         #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_observability(
+        fn canic_observability(
             request: ObservabilityRequest,
         ) -> Result<ObservabilityResponse, ::canic::Error> {
             match request {
@@ -227,12 +225,9 @@ macro_rules! __canic_emit_managed_status_endpoint {
         }
 
 
-        #[cfg(any(
-            canic_capability_delegated_token_issuer,
-            canic_capability_local_application_authorization
-        ))]
+        #[cfg(canic_capability_delegated_token_issuer)]
         #[$crate::canic_query(public)]
-        async fn canic_auth_status(
+        fn canic_auth_status(
             request: AuthStatusRequest,
         ) -> Result<AuthStatusResponse, ::canic::Error> {
             match request {
@@ -241,30 +236,15 @@ macro_rules! __canic_emit_managed_status_endpoint {
                     $crate::__internal::core::api::auth::AuthApi::active_delegation_proof_status()
                         .map(AuthStatusResponse::ActiveDelegationProof)
                 }
-                #[cfg(canic_capability_local_application_authorization)]
-                AuthStatusRequest::ApplicationSession => {
-                    $crate::__internal::core::api::auth::AuthApi::application_session_status()
-                        .map(AuthStatusResponse::ApplicationSession)
-                }
-                #[cfg(canic_capability_delegated_token_issuer)]
-                AuthStatusRequest::DelegatedToken(request) => {
-                    $crate::__internal::core::api::auth::AuthApi::get_delegated_token(request)
-                        .map(AuthStatusResponse::DelegatedToken)
-                }
             }
         }
 
 
         #[$crate::canic_query(requires(caller::is_root()))]
-        async fn canic_control_status(
+        fn canic_control_status(
             request: ControlStatusRequest,
         ) -> Result<ControlStatusResponse, ::canic::Error> {
             match request {
-                #[cfg(canic_capability_local_application_authorization)]
-                ControlStatusRequest::ApplicationSessionAudit(page) => {
-                    $crate::__internal::core::api::auth::AuthApi::application_session_audit(page)
-                        .map(ControlStatusResponse::ApplicationSessionAudit)
-                }
                 #[cfg(canic_capability_caller_authority)]
                 ControlStatusRequest::CallerAuthority(request) => {
                     $crate::__internal::core::api::caller_authority::CallerAuthorityApi::status(request.operation_id)
@@ -283,7 +263,7 @@ macro_rules! __canic_emit_managed_status_endpoint {
 
         #[cfg(canic_capability_fleet_admission_projection)]
         #[$crate::canic_query(requires(any(caller::is_controller(), caller::is_root())))]
-        async fn canic_admission_status(
+        fn canic_admission_status(
             request: AdmissionStatusRequest,
         ) -> Result<AdmissionStatusResponse, ::canic::Error> {
             match request {
@@ -313,7 +293,7 @@ macro_rules! __canic_emit_local_status_endpoint {
         }
 
         #[$crate::canic_query(public)]
-        async fn canic_public_status(
+        fn canic_public_status(
             request: PublicStatusRequest,
         ) -> Result<PublicStatusResponse, ::canic::Error> {
             match request {
@@ -344,7 +324,7 @@ macro_rules! __canic_emit_local_status_endpoint {
         }
 
         #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_observability(
+        fn canic_observability(
             request: ObservabilityRequest,
         ) -> Result<ObservabilityResponse, ::canic::Error> {
             match request {
@@ -423,7 +403,6 @@ macro_rules! __canic_emit_managed_command_endpoint {
         ::canic::__internal::contracts::__canic_managed_command_wire_types! {
             serde_crate = "::canic::__internal::serde",
             fleet_admission_attributes = [#[cfg(canic_capability_fleet_admission_projection)]],
-            application_authorization_attributes = [#[cfg(canic_capability_local_application_authorization)]],
             caller_authority_attributes = [#[cfg(canic_capability_caller_authority)]],
             token_issuer_attributes = [#[cfg(canic_capability_delegated_token_issuer)]],
             child_provisioning_attributes = [#[cfg(canic_capability_child_provisioning)]],
@@ -476,36 +455,21 @@ macro_rules! __canic_emit_managed_command_endpoint {
                 CanisterCommand::ActivateFleetAdmission(request) => {
                     let caller = $crate::__internal::cdk::api::msg_caller();
                     $crate::__internal::core::access::auth::is_root(caller)
-                        .await
                         .map_err(::canic::Error::from)?;
                     $crate::__internal::core::api::fleet_admission_projection::FleetAdmissionProjectionApi::activate(request)
                         .map(CanisterCommandResponse::ActivateFleetAdmission)
                 }
-                #[cfg(canic_capability_local_application_authorization)]
-                CanisterCommand::ApplicationSession(command) => {
-                    let response = match command {
-                        ::canic::dto::auth::ApplicationSessionCommand::Establish(request) => {
-                            $crate::__internal::core::api::auth::AuthApi::establish_application_session(request)?
-                        }
-                        ::canic::dto::auth::ApplicationSessionCommand::Clear => {
-                            $crate::__internal::core::api::auth::AuthApi::clear_application_session()?
-                        }
-                    };
-                    Ok(CanisterCommandResponse::ApplicationSession(response))
-                }
                 #[cfg(canic_capability_caller_authority)]
                 CanisterCommand::CallerAuthority(request) => {
                     let caller = $crate::__internal::cdk::api::msg_caller();
-                    $crate::__internal::core::access::auth::is_root(caller)
-                        .await.map_err(::canic::Error::from)?;
+                    $crate::__internal::core::access::auth::is_root(caller).map_err(::canic::Error::from)?;
                     $crate::__internal::core::api::caller_authority::CallerAuthorityApi::apply(request)
                         .map(CanisterCommandResponse::CallerAuthority)
                 }
                 #[cfg(canic_capability_caller_authority)]
                 CanisterCommand::ReleaseApplicationStartup(publication) => {
                     let caller = $crate::__internal::cdk::api::msg_caller();
-                    $crate::__internal::core::access::auth::is_root(caller)
-                        .await.map_err(::canic::Error::from)?;
+                    $crate::__internal::core::access::auth::is_root(caller).map_err(::canic::Error::from)?;
                     let operation_id = publication.operation_id;
                     $crate::__internal::core::api::application_startup::ApplicationStartupApi::release(publication)?;
                     __canic_schedule_application_startup();
@@ -516,7 +480,6 @@ macro_rules! __canic_emit_managed_command_endpoint {
                 CanisterCommand::ConfigureRuntime(request) => {
                     let caller = $crate::__internal::cdk::api::msg_caller();
                     $crate::__internal::core::access::auth::is_root(caller)
-                        .await
                         .map_err(::canic::Error::from)?;
                     let operation_id = request.operation_id;
                     #[cfg(canic_capability_automatic_topup)]
@@ -535,7 +498,6 @@ macro_rules! __canic_emit_managed_command_endpoint {
                 CanisterCommand::InstallDelegationProof(request) => {
                     let caller = $crate::__internal::cdk::api::msg_caller();
                     $crate::__internal::core::access::auth::is_controller(caller)
-                        .await
                         .map_err(::canic::Error::from)?;
                     $crate::__internal::core::api::auth::AuthApi::install_active_delegation_proof(
                         request,
@@ -546,7 +508,6 @@ macro_rules! __canic_emit_managed_command_endpoint {
                 CanisterCommand::Observe(request) => {
                     let caller = $crate::__internal::cdk::api::msg_caller();
                     $crate::__internal::core::access::auth::is_controller(caller)
-                        .await
                         .map_err(::canic::Error::from)?;
                     $crate::__canic_sensitive_observability_response!(request, RelayedObservabilityResponse)
                         .map(CanisterCommandResponse::Observe)
@@ -555,22 +516,14 @@ macro_rules! __canic_emit_managed_command_endpoint {
                 CanisterCommand::OpenFleetAdmission(request) => {
                     let caller = $crate::__internal::cdk::api::msg_caller();
                     $crate::__internal::core::access::auth::is_root(caller)
-                        .await
                         .map_err(::canic::Error::from)?;
                     $crate::__internal::core::api::fleet_admission_projection::FleetAdmissionProjectionApi::open(request)
                         .map(CanisterCommandResponse::OpenFleetAdmission)
-                }
-                #[cfg(canic_capability_delegated_token_issuer)]
-                CanisterCommand::PrepareDelegatedToken(request) => {
-                    $crate::__internal::core::api::auth::AuthApi::prepare_delegated_token(request)
-                        .await
-                        .map(CanisterCommandResponse::PrepareDelegatedToken)
                 }
                 #[cfg(canic_capability_fleet_admission_projection)]
                 CanisterCommand::PrepareFleetAdmission(request) => {
                     let caller = $crate::__internal::cdk::api::msg_caller();
                     $crate::__internal::core::access::auth::is_root(caller)
-                        .await
                         .map_err(::canic::Error::from)?;
                     $crate::__internal::core::api::fleet_admission_projection::FleetAdmissionProjectionApi::prepare(request)
                         .map(CanisterCommandResponse::PrepareFleetAdmission)
@@ -586,7 +539,6 @@ macro_rules! __canic_emit_managed_command_endpoint {
                 CanisterCommand::SynchronizeState(snapshot) => {
                     let caller = $crate::__internal::cdk::api::msg_caller();
                     $crate::__internal::core::access::auth::is_parent(caller)
-                        .await
                         .map_err(::canic::Error::from)?;
                     $crate::__internal::core::api::cascade::CascadeApi::sync_state(snapshot)
                         .await

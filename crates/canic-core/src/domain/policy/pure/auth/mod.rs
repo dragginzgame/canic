@@ -2,15 +2,13 @@
 //!
 //! Responsibility: pure auth issuance policy decisions.
 //! Does not own: proof verification, storage access, replay, or signing.
-//! Boundary: called by workflow before auth ops prepare delegated-token proofs.
+//! Boundary: called by workflow before auth ops prepare Root delegation proofs.
 
 pub mod application_authorization;
 mod root_provisioning;
 
-use crate::{
-    domain::value::Principal, model::auth::application_authorization::ApplicationScopeRef,
-};
-use canic_contracts::ids::{CanisterRole, cap};
+use crate::domain::value::Principal;
+use canic_contracts::ids::CanisterRole;
 use thiserror::Error as ThisError;
 
 pub use root_provisioning::{
@@ -21,33 +19,11 @@ pub use root_provisioning::{
 };
 
 ///
-/// DelegatedRoleGrantPolicy
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct DelegatedRoleGrantPolicy {
-    pub target: CanisterRole,
-    pub scopes: Vec<String>,
-}
-
-/// Canonical application scopes explicitly declared for one target role.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct DeclaredApplicationRoleScopes {
-    pub target: CanisterRole,
-    pub scopes: Vec<String>,
-}
-
-///
 /// AuthPolicyError
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq, ThisError)]
 pub enum AuthPolicyError {
-    #[error(
-        "delegated token prepare public issuance scope '{scope}' is not self-grantable for role {role}"
-    )]
-    PublicPrepareScopeNotSelfGrantable { role: CanisterRole, scope: String },
-
     #[error("root issuer audience is not allowed for issuer {issuer_pid}")]
     RootIssuerAudienceNotAllowed { issuer_pid: Principal },
 
@@ -100,133 +76,4 @@ pub enum AuthPolicyError {
 
     #[error("enabled root issuer renewal template must include at least one grant")]
     RootIssuerRenewalGrantRequired,
-}
-
-/// Validate the public delegated-token prepare surface.
-///
-/// Open issuance is only safe for login/session scopes. Privileged grants need
-/// an issuer-authorized path that computes grants instead of trusting request
-/// payloads supplied by the caller.
-pub fn validate_public_delegated_token_prepare(
-    grants: &[DelegatedRoleGrantPolicy],
-    declared_application_scopes: &[DeclaredApplicationRoleScopes],
-) -> Result<(), AuthPolicyError> {
-    for grant in grants {
-        for scope in &grant.scopes {
-            if !public_delegated_token_prepare_scope(
-                &grant.target,
-                scope,
-                declared_application_scopes,
-            ) {
-                return Err(AuthPolicyError::PublicPrepareScopeNotSelfGrantable {
-                    role: grant.target.clone(),
-                    scope: scope.clone(),
-                });
-            }
-        }
-    }
-
-    Ok(())
-}
-
-/// Return whether a scope is safe to issue from the open prepare endpoint.
-#[must_use]
-fn public_delegated_token_prepare_scope(
-    role: &CanisterRole,
-    scope: &str,
-    declared_application_scopes: &[DeclaredApplicationRoleScopes],
-) -> bool {
-    if scope == cap::SESSION || scope == cap::VERIFY {
-        return true;
-    }
-    if ApplicationScopeRef::parse(scope).is_err() {
-        return false;
-    }
-    declared_application_scopes.iter().any(|declared| {
-        declared.target == *role
-            && declared
-                .scopes
-                .binary_search_by(|candidate| candidate.as_str().cmp(scope))
-                .is_ok()
-    })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn grant(role: &str, scopes: &[&str]) -> DelegatedRoleGrantPolicy {
-        DelegatedRoleGrantPolicy {
-            target: CanisterRole::owned(role.to_string()),
-            scopes: scopes.iter().map(|scope| (*scope).to_string()).collect(),
-        }
-    }
-
-    fn declared(role: &str, scopes: &[&str]) -> DeclaredApplicationRoleScopes {
-        DeclaredApplicationRoleScopes {
-            target: CanisterRole::owned(role.to_string()),
-            scopes: scopes.iter().map(|scope| (*scope).to_string()).collect(),
-        }
-    }
-
-    #[test]
-    fn public_prepare_allows_login_scopes_for_fleet_wide_tokens() {
-        validate_public_delegated_token_prepare(
-            &[
-                grant("user_shard", &[cap::SESSION]),
-                grant("project_instance", &[cap::VERIFY]),
-            ],
-            &[],
-        )
-        .expect("login scopes should be public-issuable");
-    }
-
-    #[test]
-    fn public_prepare_allows_only_role_declared_canonical_application_scopes() {
-        let declared = [
-            declared("project_instance", &["demo:read", "demo:write"]),
-            declared("user_shard", &["demo:read"]),
-        ];
-
-        validate_public_delegated_token_prepare(
-            &[grant("project_instance", &["demo:read", "demo:write"])],
-            &declared,
-        )
-        .expect("declared application scopes should be issuable");
-
-        for (role, scope) in [
-            ("project_instance", "demo:admin"),
-            ("user_shard", "demo:write"),
-            ("project_instance", "Demo:read"),
-        ] {
-            let err = validate_public_delegated_token_prepare(&[grant(role, &[scope])], &declared)
-                .expect_err("undeclared or noncanonical application scope must fail");
-            assert_eq!(
-                err,
-                AuthPolicyError::PublicPrepareScopeNotSelfGrantable {
-                    role: CanisterRole::owned(role.to_string()),
-                    scope: scope.to_string(),
-                }
-            );
-        }
-    }
-
-    #[test]
-    fn public_prepare_rejects_privileged_or_custom_scopes() {
-        for denied in [cap::READ, cap::WRITE, cap::ADMIN, "toko.admin"] {
-            let err = validate_public_delegated_token_prepare(
-                &[grant("project_instance", &[denied])],
-                &[],
-            )
-            .expect_err("privileged scope must not be self-grantable");
-
-            assert_eq!(
-                err,
-                AuthPolicyError::PublicPrepareScopeNotSelfGrantable {
-                    role: CanisterRole::owned("project_instance".to_string()),
-                    scope: denied.to_string(),
-                }
-            );
-        }
-    }
 }

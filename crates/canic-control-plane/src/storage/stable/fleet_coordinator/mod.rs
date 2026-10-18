@@ -80,9 +80,7 @@ std::thread_local! {
     static FLEET_COORDINATOR_STATE:
         RefCell<Cell<FleetCoordinatorStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            canic_core::ic_memory_key!(
-                authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-                key = "canic.control_plane.fleet_coordinator.registry.v1"),
+            canic_core::memory::open(crate::memory::keys::FLEET_COORDINATOR_REGISTRY_V1),
             FleetCoordinatorStateRecord::default(),
         ));
 }
@@ -92,9 +90,7 @@ std::thread_local! {
     static FLEET_COORDINATOR_FUNDING_STATE:
         RefCell<Cell<FleetCoordinatorFundingStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            canic_core::ic_memory_key!(
-                authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-                key = "canic.control_plane.fleet_coordinator.funding.v1"),
+            canic_core::memory::open(crate::memory::keys::FLEET_COORDINATOR_FUNDING_V1),
             FleetCoordinatorFundingStateRecord::default(),
         ));
 }

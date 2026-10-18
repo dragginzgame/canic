@@ -242,6 +242,22 @@ reject the snapshot. Observations are sequential and have no retained freshness
 lease; every fact can change immediately afterward. Success means the known early
 checks passed, not that deployment is affordable or approved.
 
+## Pending provisioning errors
+
+A `fleet_ensure_error` includes nullable `provisioning_failure`. For a reported
+Root retry it contains `root`, `stage`, `target`, `operation_id`, `diagnostic_code`,
+`dependency`, `retry_category`, `observations` and `failed_at_ns`. Dependency
+fields are `target`, `method`, `step`, `rejection_code` and `rejection_detail`;
+absent rejection evidence remains null. These are protected observations, not
+new spending authority or a replacement for the retained plan.
+
+An already approved pending provisioning error supplies `next_action.kind =
+"resume"`, with `requires_approval = false` and the exact existing `--apply`
+digest and input arguments. Invoke that argument vector in the same workspace.
+Resuming a retained reinstall operation uses `--apply` alone; `--reinstall`
+selects a review and conflicts with apply. Permanent binding refusals require
+review and never supply this automatic resumption action.
+
 ## Continue From Here
 
 - [Review and apply a Fleet plan](fleet-ensure-plan-and-apply.md)

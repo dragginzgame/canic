@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# Shared companions: scripts/ci/test-tool-evidence.sh
+# Shared companions: scripts/ci/test-tool-evidence.sh scripts/ci/test-tool-store.sh
 set -euo pipefail
+path_context=false
+if [[ "${1:-}" == --path-context && $# == 1 ]]; then path_context=true;
+elif [[ $# != 0 ]]; then echo 'usage: fixture [--path-context]' >&2; exit 2; fi
 ROOT="$0"
 [[ "$ROOT" == /* ]] || ROOT="$PWD/$ROOT"
 ROOT="$(cd -P "${ROOT%/*}/../.." && printf '%s/.' "$PWD")"
@@ -20,6 +23,9 @@ finish() {
     exit "$status"
 }
 trap finish EXIT
+[[ "$fixture" == /* ]] || fixture="$PWD/$fixture"
+fixture="$(cd -P "$fixture" && printf '%s/.' "$PWD")"
+fixture="${fixture%/.}"
 mkdir "$fixture/bin" "$fixture/assets" "$fixture/consumer"
 export HOST_TOOLS_FIXTURE="$fixture"
 cat > "$fixture/bin/uname" <<'SCRIPT'
@@ -97,6 +103,7 @@ printf 'export SHARED_TOOLING_CLOC_VERSION=2.10\nexport SHARED_TOOLING_CLOC_SHA2
 
 consumer="$fixture/consumer"
 install() {
+    export SHARED_TOOLING_STORE="${HOST_SHARED_STORE:-$consumer/store}"
     printf 'install %s for %s\n' "$*" "$consumer" >> "$fixture/install.log"
     bash "$ROOT/scripts/dev/install-host-tools.sh" --consumer "$consumer" --versions "$pins" "$@" >> "$fixture/install.log" 2>&1
 }
@@ -105,6 +112,30 @@ refuse install --check
 [[ ! -e "$consumer/.tools" && ! -e "$fixture/downloads" ]] || exit 1
 grep -F "tool=jq expected=1.8.2 path=$consumer/.tools/host/bin/jq reason=missing-bundle" "$fixture/install.log"
 grep -F 'make install-host-tools' "$fixture/install.log"
+# The context gate reuses assets but runs only path-sensitive lifecycle probes.
+if [[ "$path_context" == true ]]; then
+    export TEST_OS=Linux TEST_ARCH=x86_64
+    install
+    original="$(readlink "$consumer/.tools/host")"
+    before="$(wc -l < "$fixture/downloads")"
+    install --check
+    install
+    [[ "$(wc -l < "$fixture/downloads")" == "$before" ]] || exit 1
+    # Interrupted replacement retains evidence and releases only owned locks.
+    saved_consumer="$consumer"
+    consumer="$fixture/interrupted"; mkdir "$consumer"
+    export SHARED_TOOLING_STORE="$consumer/store"
+    refuse env TEST_INTERRUPT=1 bash "$ROOT/scripts/dev/install-host-tools.sh" --consumer "$consumer" --versions "$pins"
+    [[ ! -e "$consumer/.tools/host" && ! -e "$consumer/.tools/.host-tools.lock" ]] || exit 1
+    [[ -n "$(find "$SHARED_TOOLING_STORE" -name 'set.*' -type d)" ]] || exit 1
+    [[ -z "$(find "$SHARED_TOOLING_STORE" -name install.lock)" ]] || exit 1
+    consumer="$saved_consumer"
+    [[ "$(readlink "$consumer/.tools/host")" == "$original" ]] || exit 1
+    install --check
+    fixture_complete=true
+    echo 'Host path-context install, reuse, check and retained failure passed'
+    exit 0
+fi
 for host in Linux:x86_64 Linux:arm64 Darwin:x86_64 Darwin:arm64; do
     export TEST_OS="${host%:*}" TEST_ARCH="${host#*:}"
     consumer="$fixture/$host"; mkdir "$consumer"
@@ -116,6 +147,20 @@ for host in Linux:x86_64 Linux:arm64 Darwin:x86_64 Darwin:arm64; do
     [[ "$(wc -l < "$fixture/downloads")" == "$before" ]] || exit 1
 done
 original="$(readlink "$consumer/.tools/host")"
+# The direct installer uses its snapshot even with an obsolete consumer catalog.
+snapshot="$fixture/snapshot"
+mkdir -p "$snapshot/scripts/dev" "$snapshot/scripts/ci" "$snapshot/ci" "$consumer/ci"
+cp "$ROOT/scripts/dev/install-host-tools.sh" "$ROOT/scripts/dev/tool-store.sh" "$snapshot/scripts/dev/"
+cp "$ROOT/scripts/ci/verify-file-checksum.sh" "$snapshot/scripts/ci/"
+cp "$pins" "$snapshot/ci/tool-versions.env"
+printf 'exit 99\n' > "$consumer/ci/tool-versions.env"
+bash "$snapshot/scripts/dev/install-host-tools.sh" --consumer "$consumer" --check
+mv "$snapshot/ci/tool-versions.env" "$snapshot/ci/exception.env"
+refuse bash "$snapshot/scripts/dev/install-host-tools.sh" --consumer "$consumer" --check
+bash "$snapshot/scripts/dev/install-host-tools.sh" --consumer "$consumer" --versions "$pins" --check
+[[ "$(wc -l < "$fixture/downloads")" == "$before" && "$(readlink "$consumer/.tools/host")" == "$original" ]] || exit 1
+# Successful capability probes stay quiet; failures below retain diagnostics.
+if grep -F 'PCRE2 available' "$fixture/install.log"; then exit 1; fi
 # Harmless stderr does not change the established stdout version comparison.
 TEST_VERSION_WARNING=1 install --check
 for tool in jq yq rg cloc; do
@@ -124,7 +169,7 @@ for tool in jq yq rg cloc; do
     : > "$fixture/executions"
     refuse install --check
     tail -2 "$fixture/install.log" > "$fixture/diagnostic"
-    grep -F "tool=$tool expected=$expected path=$consumer/.tools/$original/bin/$tool reason=missing-or-invalid-executable" "$fixture/diagnostic"
+    grep -F "tool=$tool expected=$expected path=$(cd "$consumer/.tools/$original" && pwd -P)/bin/$tool reason=missing-or-invalid-executable" "$fixture/diagnostic"
     grep -F 'make install-host-tools' "$fixture/diagnostic"
     [[ ! -s "$fixture/executions" && "$(readlink "$consumer/.tools/host")" == "$original" ]] || exit 1
     mv "$fixture/removed-tool" "$consumer/.tools/host/bin/$tool"
@@ -255,4 +300,8 @@ for key in RIPGREP_VERSION CLOC_VERSION; do
     cp "$fixture/complete-pins" "$pins"
 done
 echo 'Complete host tool installation, offline checks and retained failure tests passed'
+export TEST_OS=Linux TEST_ARCH=x86_64
+store_test_kind=host
+# shellcheck source=scripts/ci/test-tool-store.sh
+source "$ROOT/scripts/ci/test-tool-store.sh"
 fixture_complete=true

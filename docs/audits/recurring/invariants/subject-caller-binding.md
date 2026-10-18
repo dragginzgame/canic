@@ -118,7 +118,7 @@ Search terms:
 ```text
 verify_token_material
 AuthOps::verify_token
-verify_delegated_token_cached_proof_identity
+verify_delegated_token
 presenter_pid
 relay
 envelope
@@ -128,7 +128,7 @@ Confirm:
 
 - no public helper verifies token material without caller/subject binding
 - no production endpoint accepts delegated-token proof as bearer-only material
-- positive-cache paths still rerun endpoint-local claims/scope checks
+- every invocation verifies complete proofs and endpoint-local claims/scope checks
 - private token-material helpers remain explicitly incomplete for endpoint auth
 
 ### 4. Provisioning Principal Separation
@@ -181,7 +181,7 @@ Detection commands (run and record output references):
 ```bash
 rg -n 'enforce_subject_binding|delegated_token_verified|VerifyDelegatedTokenRuntimeInput' crates/canic-core/src crates/canic-macros/src -g '*.rs'
 rg -n 'AccessContext|authenticated_caller|authenticated_subject|transport_caller|resolve_authenticated_identity' crates/canic-core/src crates/canic-macros/src -g '*.rs'
-rg -n 'verify_token_material|AuthOps::verify_token|verify_delegated_token_cached_proof_identity' crates/canic-core/src -g '*.rs'
+rg -n 'verify_token_material|AuthOps::verify_token|verify_delegated_token' crates/canic-core/src -g '*.rs'
 rg -n 'issuer_pid|installed_by|ActiveDelegationProof|install_active_delegation_proof' crates/canic-core/src crates/canic/tests -g '*.rs'
 git log --name-only -n 20 -- crates/canic-core/src/access crates/canic-core/src/api/auth crates/canic-core/src/ops/auth crates/canic-macros/src/endpoint/expand
 ```

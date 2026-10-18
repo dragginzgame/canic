@@ -6,9 +6,9 @@
 
 use crate::canister_build::WasmArtifactMetrics;
 use canic_contracts::ids::BuildNetwork;
-use ic_host_artifacts::wasm::{ExportKind, InspectionError, InspectionLimits};
+use ic_host_artifacts::wasm::{InspectionError, InspectionLimits, WasmFacts};
 use ic_host_tools::install_limits::{InstallReport, REFERENCE_LIMITS};
-use std::{collections::BTreeMap, fs, path::Path};
+use std::{fs, path::Path};
 
 const IC_WASM_CODE_SECTION_WARNING_HEADROOM_BYTES: i128 = 768 * 1024;
 #[cfg(test)]
@@ -16,18 +16,18 @@ const WASM_HEADER: &[u8; 8] = b"\0asm\x01\0\0\0";
 const PUBLIC_CANDID_METADATA_SECTION: &str = "icp:public candid:service";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(super) struct WasmContractSnapshot {
-    pub exports: BTreeMap<String, u8>,
-    pub public_candid_metadata: Vec<Vec<u8>>,
+pub(super) struct WasmContractSnapshot<'a> {
+    pub facts: WasmFacts<'a>,
+    pub public_candid_metadata: Vec<&'a [u8]>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct WasmStructure {
+struct WasmStructure<'a> {
     code_section_bytes: usize,
     data_section_bytes: usize,
     defined_functions: u32,
     install_report: InstallReport,
-    contract: WasmContractSnapshot,
+    contract: WasmContractSnapshot<'a>,
 }
 
 #[derive(Debug, Eq, thiserror::Error, PartialEq)]
@@ -104,9 +104,10 @@ fn compact_wasm_artifact_name(wasm_path: &Path) -> String {
     let Some(staging_directory) = wasm_path.parent() else {
         return file_name;
     };
-    let is_staged_artifact = staging_directory
-        .file_name()
-        .is_some_and(|name| name.to_string_lossy().starts_with(".canic-artifact-stage-"));
+    let is_staged_artifact = staging_directory.file_name().is_some_and(|name| {
+        name.to_string_lossy()
+            .starts_with(".ic-build-artifact-stage-")
+    });
     if !is_staged_artifact {
         return file_name;
     }
@@ -140,7 +141,7 @@ pub fn wasm_artifact_metrics(
 
 pub(super) fn wasm_contract_snapshot(
     wasm: &[u8],
-) -> Result<WasmContractSnapshot, Box<dyn std::error::Error>> {
+) -> Result<WasmContractSnapshot<'_>, Box<dyn std::error::Error>> {
     Ok(inspect_wasm(wasm)?.contract)
 }
 
@@ -149,7 +150,7 @@ fn wasm_code_section_size(wasm: &[u8]) -> Result<usize, InspectionError> {
     Ok(inspect_wasm(wasm)?.code_section_bytes)
 }
 
-fn inspect_wasm(wasm: &[u8]) -> Result<WasmStructure, InspectionError> {
+fn inspect_wasm(wasm: &[u8]) -> Result<WasmStructure<'_>, InspectionError> {
     // Every section/entry consumes source bytes. These bounds preserve the
     // existing artifact-size admission while bounding shared parser storage.
     let facts = ic_host_artifacts::wasm::inspect(
@@ -162,25 +163,11 @@ fn inspect_wasm(wasm: &[u8]) -> Result<WasmStructure, InspectionError> {
         },
     )?;
     let install_report = REFERENCE_LIMITS.report(&facts);
-    let exports = facts
-        .exports
-        .into_iter()
-        .map(|(name, export)| {
-            let kind = match export.kind {
-                ExportKind::Function => 0,
-                ExportKind::Table => 1,
-                ExportKind::Memory => 2,
-                ExportKind::Global => 3,
-                ExportKind::Tag => 4,
-            };
-            (name.to_owned(), kind)
-        })
-        .collect();
     let public_candid_metadata = facts
         .custom_sections
-        .into_iter()
+        .iter()
         .filter(|section| section.name == PUBLIC_CANDID_METADATA_SECTION)
-        .map(|section| section.data.to_vec())
+        .map(|section| section.data)
         .collect();
     Ok(WasmStructure {
         code_section_bytes: facts.code_section_bytes,
@@ -188,7 +175,7 @@ fn inspect_wasm(wasm: &[u8]) -> Result<WasmStructure, InspectionError> {
         defined_functions: facts.defined_functions,
         install_report,
         contract: WasmContractSnapshot {
-            exports,
+            facts,
             public_candid_metadata,
         },
     })
@@ -246,8 +233,9 @@ mod tests {
 
     #[test]
     fn staged_wasm_diagnostics_hide_disposable_paths_but_retain_the_role() {
-        let path =
-            Path::new("/tmp/operator/artifacts/root/.canic-artifact-stage-19197-2/candidate.wasm");
+        let path = Path::new(
+            "/tmp/operator/artifacts/root/.ic-build-artifact-stage-19197-2/candidate.wasm",
+        );
 
         assert_eq!(compact_wasm_artifact_name(path), "root/candidate.wasm");
         assert_eq!(format_byte_count(8_713_911), "8.31 MiB (8713911 B)");

@@ -25,10 +25,7 @@ use std::cell::RefCell;
 std::thread_local! {
     static FLEET_ADMISSION: RefCell<
         BoundedCell<Option<FleetAdmissionAuthorityRecord>, RuntimeMemory<DefaultMemoryImpl>>,
-    > = RefCell::new(BoundedCell::init(canic_core::ic_memory_key!(
-        authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-        key = "canic.control_plane.fleet_admission.v1",
-    ), None));
+    > = RefCell::new(BoundedCell::init(canic_core::memory::open(crate::memory::keys::FLEET_ADMISSION_V1), None));
 }
 
 /// Stable closed mutation action.

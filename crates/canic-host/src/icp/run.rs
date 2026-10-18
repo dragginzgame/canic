@@ -1,5 +1,9 @@
+//! Module: icp::run
+//!
+//! Responsibility: execute admitted ICP commands with bounded diagnostics.
+//! Boundary: shared process ownership handles output failures and child cleanup.
+
 use std::{
-    cell::Cell,
     io::{self, Write},
     path::Path,
     process::{Command, Stdio},
@@ -8,7 +12,7 @@ use std::{
 use ic_host_process::{
     child::OwnedChild,
     tool::{
-        ExecutionFailure, ExecutionOperation, OutputLimit, OutputLimits, SuccessfulExit, ToolError,
+        CompletedExecution, ExecutionFailure, OutputLimit, OutputLimits, SuccessfulExit, ToolError,
         communicate_child_with_observer,
     },
 };
@@ -18,7 +22,7 @@ use crate::{output_with_executable_busy_retry, with_executable_busy_retry};
 const FOREGROUND_DIAGNOSTIC_BYTES: usize = 64 * 1024;
 
 use super::{
-    command::{command_display, configure_inherited_fd, ensure_command_compatible},
+    command::{command_display, ensure_command_compatible},
     error::IcpCommandError,
     model::{IcpCli, IcpRawOutput},
     version::compatible_version_output,
@@ -137,9 +141,7 @@ fn run_status_inherit_to(
     let display = command_display(command);
     command.stdout(Stdio::inherit()).stderr(Stdio::piped());
     let mut child = with_executable_busy_retry(|| OwnedChild::spawn_direct(command))?;
-    let forwarding_failed = Cell::new(false);
-    let mut forwarding_error = None;
-    let result = communicate_child_with_observer(
+    communicate_child_with_observer(
         &mut child,
         None,
         OutputLimits {
@@ -149,29 +151,13 @@ fn run_status_inherit_to(
             timeout: None,
         },
         SuccessfulExit::Cleanup,
-        || forwarding_failed.get(),
-        |_, bytes| {
-            if let Err(source) = terminal.write_all(bytes) {
-                forwarding_error = Some(source);
-                forwarding_failed.set(true);
-            }
-        },
-    );
-    if let Some(source) = forwarding_error {
-        let kind = source.kind();
-        if let Err(ToolError::Execution(mut error)) = result {
-            error.failure = ExecutionFailure::Io {
-                operation: ExecutionOperation::ReadOutput,
-                source,
-            };
-            return Err(io::Error::new(kind, ToolError::Execution(error)).into());
-        }
-        return Err(source.into());
-    }
+        || false,
+        |_, bytes| terminal.write_all(bytes),
+    )
+    .and_then(CompletedExecution::require_success)
+    .map_err(|error| foreground_command_error(display, error))?;
     terminal.flush()?;
-    result
-        .map(|_| ())
-        .map_err(|error| foreground_command_error(display, error))
+    Ok(())
 }
 
 fn foreground_command_error(command: String, error: ToolError) -> IcpCommandError {
@@ -193,7 +179,9 @@ fn foreground_command_error(command: String, error: ToolError) -> IcpCommandErro
         return IcpCommandError::Failed { command, stderr };
     }
     let kind = match error.execution_error().map(|execution| &execution.failure) {
-        Some(ExecutionFailure::Io { source, .. }) => source.kind(),
+        Some(ExecutionFailure::Io { source, .. } | ExecutionFailure::Observer { source, .. }) => {
+            source.kind()
+        }
         _ => io::ErrorKind::Other,
     };
     IcpCommandError::Io(io::Error::new(kind, error))
@@ -205,11 +193,15 @@ pub fn run_success(command: &mut Command) -> Result<bool, IcpCommandError> {
     Ok(output_with_executable_busy_retry(command)?.status.success())
 }
 
-/// Execute a rendered ICP CLI command and return raw process output.
+/// Execute one rendered ICP command through the caller's admitted spawn boundary.
+///
+/// No spawn retry is added; the caller retains custody and uncertain-effect policy.
+/// Shared Host communication bounds output/deadline and owns direct-child cleanup.
 pub fn run_raw_output(
     program: &str,
     args: &[String],
-    inherited_fd: Option<i32>,
+    limits: OutputLimits,
+    spawn: impl FnOnce(Command) -> std::io::Result<OwnedChild>,
 ) -> Result<IcpRawOutput, std::io::Error> {
     if is_icp_program(program) {
         compatible_version_output(program, None)
@@ -217,8 +209,17 @@ pub fn run_raw_output(
     }
     let mut command = Command::new(program);
     command.args(args);
-    configure_inherited_fd(&mut command, inherited_fd);
-    let output = output_with_executable_busy_retry(&mut command)?;
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = spawn(command)?;
+    let output = communicate_child_with_observer(
+        &mut child,
+        None,
+        limits,
+        SuccessfulExit::Cleanup,
+        || false,
+        |_, _| Ok(()),
+    )
+    .map_err(io::Error::other)?;
     Ok(IcpRawOutput {
         success: output.status.success(),
         status: exit_status_label(output.status),
@@ -273,6 +274,50 @@ impl IcpCli {
 mod tests {
     use super::*;
     use std::{fs, os::unix::process::CommandExt as _};
+
+    #[test]
+    fn supplied_spawn_runs_once_and_bounded_capture_retains_typed_failure() {
+        let mut calls = 0;
+        let result = run_raw_output(
+            "sh",
+            &["-c".into(), "printf supplied".into()],
+            OutputLimits {
+                stdout: OutputLimit::Terminate(1024),
+                stderr: OutputLimit::Terminate(1024),
+                timeout: Some(std::time::Duration::from_secs(5)),
+            },
+            |mut command| {
+                calls += 1;
+                OwnedChild::spawn_direct(&mut command)
+            },
+        )
+        .unwrap();
+        assert!(result.success);
+        assert_eq!(result.stdout, b"supplied");
+        assert_eq!(calls, 1);
+        let error = run_raw_output(
+            "sh",
+            &["-c".into(), "printf overflow".into()],
+            OutputLimits {
+                stdout: OutputLimit::Terminate(1),
+                stderr: OutputLimit::Terminate(1024),
+                timeout: Some(std::time::Duration::from_secs(5)),
+            },
+            |mut command| OwnedChild::spawn_direct(&mut command),
+        )
+        .unwrap_err();
+        let execution = error
+            .get_ref()
+            .unwrap()
+            .downcast_ref::<ToolError>()
+            .unwrap()
+            .execution_error()
+            .unwrap();
+        assert!(matches!(
+            execution.failure,
+            ExecutionFailure::OutputLimit { .. }
+        ));
+    }
 
     #[test]
     fn foreground_runner_forwards_bytes_and_retains_failed_command_diagnostics() {
@@ -383,7 +428,7 @@ mod tests {
             .expect("shared cleanup evidence");
         assert!(matches!(
             &execution.failure,
-            ExecutionFailure::Io { source, .. } if source.kind() == io::ErrorKind::BrokenPipe
+            ExecutionFailure::Observer { source, .. } if source.kind() == io::ErrorKind::BrokenPipe
         ));
         assert!(execution.cleanup.is_none());
         let pid = fs::read_to_string(pid_file)

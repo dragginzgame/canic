@@ -97,11 +97,13 @@ bash .githooks/pre-commit > output
 # The index export has no .tools; lookup must use the original checkout.
 new_fixture prepared-tools
 for kind in host ic rust; do
-    mkdir -p ".tools/$kind/bin"
+    tool_bin=".tools/$kind/bin"
+    [[ "$kind" != rust ]] || tool_bin=".tools/rust/common/bin"
+    mkdir -p "$tool_bin"
     # The generated executable expands this variable when the formatter runs.
     # shellcheck disable=SC2016
-    printf '#!/usr/bin/env bash\nprintf "%%s\\n" %s >> "$FORMAT_TEST_TOOL_LOG"\n' "$kind" > ".tools/$kind/bin/fixture-$kind-tool"
-    chmod +x ".tools/$kind/bin/fixture-$kind-tool"
+    printf '#!/usr/bin/env bash\nprintf "%%s\\n" %s >> "$FORMAT_TEST_TOOL_LOG"\n' "$kind" > "$tool_bin/fixture-$kind-tool"
+    chmod +x "$tool_bin/fixture-$kind-tool"
 done
 FORMAT_TEST_PREPARED_TOOLS=yes FORMAT_TEST_TOOL_LOG="$FIXTURE/prepared-tools.log" bash .githooks/pre-commit > output
 printf 'host\nic\nrust\n' > "$FIXTURE/expected-tools.log"

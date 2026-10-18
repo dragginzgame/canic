@@ -4,17 +4,19 @@
 //! Does not own: compilation, release identity allocation, or Fleet deployment.
 //! Boundary: source bytes and admitted tools key a cache; immutable release records remain authority.
 
+use ic_build::cargo::observation::{CargoFeatureSelection, schema::Metadata};
+
 mod dependencies;
 mod diagnostics;
+mod exports;
 mod lock;
-mod snapshot;
 #[cfg(test)]
 mod tests;
 
 use crate::{
     build_toolchain::BuildToolchain,
     canister_build::WorkspaceBuildContext,
-    cargo_metadata::{CargoFeatureSelection, cargo_metadata_catalog_for_manifest},
+    cargo_observation::cargo_metadata_catalog_for_manifest,
     release_build::validate_finalized_release_build_manifest,
     release_set::{
         AppConfigSnapshot, load_persisted_application_artifact_union,
@@ -24,23 +26,25 @@ use crate::{
 };
 use canic_contracts::ids::ReleaseBuildId;
 use canic_core::cdk::utils::hash::hex_bytes;
+use ic_build::artifacts::{
+    InputEvidence, InputEvidenceError, InputEvidenceSpec, InputEvidenceValue,
+};
 use ic_host_fs::{
-    durable::write_bytes,
+    durable::{PublicationMode, WriteOptions, write_bytes},
     read::{hash_file_no_follow, read_file_no_follow},
 };
 use serde::{Deserialize, Serialize};
 use sha2_host::{Digest, Sha256};
-use snapshot::BuildInputSnapshot;
 use std::{
     collections::{BTreeMap, BTreeSet},
-    env,
-    ffi::OsStr,
-    fs, io,
+    env, fs, io,
     io::Read,
     path::{Path, PathBuf},
     time::Duration,
 };
 use thiserror::Error;
+
+pub use exports::retain as retain_cargo_include_exports;
 
 pub use lock::{
     BuildLockInspection, BuildLockOwner, BuildLockPhase, BuildLockWait, BuildProcessActivity,
@@ -59,7 +63,7 @@ const RECORD_LIMIT: usize = 4 * 1024 * 1024;
 pub struct CompleteBuildReuse {
     context: WorkspaceBuildContext,
     tool_paths: Vec<PathBuf>,
-    inputs: BuildInputSnapshot,
+    inputs: InputEvidence,
     record_path: PathBuf,
     diagnostics: diagnostics::InputDiagnostics,
     input_locations: diagnostics::InputLocations,
@@ -143,6 +147,25 @@ pub enum BuildReuseError {
     UnboundTool(PathBuf),
 }
 
+impl From<InputEvidenceError> for BuildReuseError {
+    fn from(error: InputEvidenceError) -> Self {
+        match error {
+            InputEvidenceError::IdentityChanged | InputEvidenceError::ExclusionsChanged => {
+                Self::Changed
+            }
+            InputEvidenceError::ChangedInput { path } => Self::ChangedInput(path),
+            InputEvidenceError::UnobservedInput { path } => Self::UnobservedInput(path),
+            InputEvidenceError::Io { path, source } => {
+                if source.kind() == io::ErrorKind::InvalidInput || path.to_str().is_none() {
+                    Self::Unsupported(path)
+                } else {
+                    Self::Io(source)
+                }
+            }
+        }
+    }
+}
+
 impl CompleteBuildReuse {
     pub(crate) fn prepare(
         context: &WorkspaceBuildContext,
@@ -182,7 +205,7 @@ impl CompleteBuildReuse {
         let record_path = context
             .icp_root
             .join(".canic/build-reuse")
-            .join(format!("{}.json", inputs.digest()));
+            .join(format!("{}.json", inputs.digest()?.to_hex()));
         Ok(Self {
             context: context.clone(),
             tool_paths,
@@ -213,7 +236,7 @@ impl CompleteBuildReuse {
         };
         let record: CompleteBuildReuseRecord = serde_json::from_slice(&bytes)?;
         if record.schema_version != 1
-            || record.inputs != self.inputs.digest()
+            || record.inputs != self.inputs.digest()?.to_hex()
             || record.files.is_empty()
             || record.roles.is_empty()
         {
@@ -266,19 +289,22 @@ impl CompleteBuildReuse {
         self.lock.phase(BuildLockPhase::VerifyingAndPublishing);
         verify_release(&self.context, release_build_id)?;
         let after = input_snapshot(&self.context, &self.tool_paths)?;
-        self.inputs.validate_after(&after).inspect_err(|error| {
-            if let Some(path) = diagnostics::retain_rejection(
-                &self.context,
-                release_build_id,
-                &self.input_locations,
-                &self.inputs,
-                &after,
-                error,
-            ) {
-                eprintln!("Build input rejection evidence: {}", path.display());
-            }
-        })?;
-        let inputs = after.digest();
+        self.inputs
+            .validate_after(&after)
+            .map_err(BuildReuseError::from)
+            .inspect_err(|error| {
+                if let Some(path) = diagnostics::retain_rejection(
+                    &self.context,
+                    release_build_id,
+                    &self.input_locations,
+                    &self.inputs,
+                    &after,
+                    error,
+                ) {
+                    eprintln!("Build input rejection evidence: {}", path.display());
+                }
+            })?;
+        let inputs = after.digest()?.to_hex();
         let record_path = self.record_path.with_file_name(format!("{inputs}.json"));
         let record = CompleteBuildReuseRecord {
             schema_version: 1,
@@ -287,8 +313,15 @@ impl CompleteBuildReuse {
             files: output_files(&self.release_directory(release_build_id))?,
             roles,
         };
-        write_bytes(&record_path, &serde_json::to_vec(&record)?)
-            .map_err(crate::publication::ops::io_error)?;
+        write_bytes(
+            &record_path,
+            WriteOptions {
+                mode: PublicationMode::Replace,
+                permissions: 0o666,
+            },
+            &serde_json::to_vec(&record)?,
+        )
+        .map_err(crate::publication::ops::io_error)?;
         diagnostics::InputDiagnostics::capture(&self.context, &self.tool_paths, &after)
             .retain(&self.context.icp_root.join(".canic/build-reuse"));
         Ok(())
@@ -344,7 +377,7 @@ fn verify_release(
 fn input_snapshot(
     context: &WorkspaceBuildContext,
     tools: &[PathBuf],
-) -> Result<BuildInputSnapshot, BuildReuseError> {
+) -> Result<InputEvidence, BuildReuseError> {
     let metadata = cargo_metadata_catalog_for_manifest(
         &context.workspace_root.join("Cargo.toml"),
         true,
@@ -353,15 +386,18 @@ fn input_snapshot(
     )
     .map_err(|error| BuildReuseError::Evidence(error.to_string()))?;
     let mut roots = BTreeSet::new();
-    let mut files = BTreeMap::new();
-    append_generated_inputs(context, &mut files)?;
+    let mut paths = BTreeSet::new();
+    let mut targets = dependencies::generated_target_names(context)?;
+    let producers = selected_export_producers(context, &metadata)?;
+    append_generated_inputs(context, &mut paths);
     for package in metadata.packages {
+        let manifest = package.manifest_path.into_std_path_buf();
         if package.name == "canic" {
             // Generated infrastructure enables family sources absent from the App's graph.
             roots.extend(
                 crate::fleet_package::resolved_family_roots(
-                    &package.manifest_path,
-                    &package.version,
+                    &manifest,
+                    &package.version.to_string(),
                 )
                 .map_err(|error| BuildReuseError::Evidence(error.to_string()))?
                 .into_values()
@@ -370,19 +406,20 @@ fn input_snapshot(
             );
         }
         roots.insert(
-            package
-                .manifest_path
+            manifest
                 .parent()
-                .ok_or_else(|| BuildReuseError::Unsupported(package.manifest_path.clone()))?
+                .ok_or_else(|| BuildReuseError::Unsupported(manifest.clone()))?
                 .canonicalize()?,
         );
         for target in package.targets {
-            let path = match target.src_path.canonicalize() {
+            targets.insert(target.name.replace('-', "_"));
+            let source = target.src_path.into_std_path_buf();
+            let path = match source.canonicalize() {
                 Ok(path) => path,
-                Err(error) if error.kind() == io::ErrorKind::NotFound => target.src_path,
+                Err(error) if error.kind() == io::ErrorKind::NotFound => source,
                 Err(error) => return Err(error.into()),
             };
-            add_optional(&path, &mut files)?;
+            paths.insert(path);
         }
     }
     roots.insert(
@@ -392,13 +429,15 @@ fn input_snapshot(
             .ok_or_else(|| BuildReuseError::Unsupported(context.config_path.clone()))?
             .canonicalize()?,
     );
-    for root in &roots {
-        collect_files(root, root, &mut files, true)?;
-    }
-    dependencies::append_observed_cargo_inputs(context, &mut files)?;
-    append_fixture_inputs(context, &mut files)?;
-    add_file(&context.config_path, &mut files)?;
-    for root in [&context.workspace_root, &metadata.workspace_root] {
+    paths.extend(roots.iter().cloned());
+    dependencies::append_observed_cargo_inputs(context, &targets, &mut paths)?;
+    exports::append_observed(context, &producers, &mut paths)?;
+    let fixture_hashes = append_fixture_inputs(context, &mut paths)?;
+    paths.insert(context.config_path.clone());
+    for root in [
+        context.workspace_root.as_path(),
+        metadata.workspace_root.as_std_path(),
+    ] {
         for ancestor in root.ancestors() {
             for name in [
                 "Cargo.toml",
@@ -408,7 +447,7 @@ fn input_snapshot(
                 ".cargo/config",
                 ".cargo/config.toml",
             ] {
-                add_optional(&ancestor.join(name), &mut files)?;
+                paths.insert(ancestor.join(name));
             }
         }
     }
@@ -417,18 +456,67 @@ fn input_snapshot(
         .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join(".cargo")));
     if let Some(root) = cargo_home {
         for name in ["config", "config.toml"] {
-            add_optional(&root.join(name), &mut files)?;
+            paths.insert(root.join(name));
         }
     }
-    for tool in tools {
-        add_file(tool, &mut files)?;
-    }
-    append_rust_toolchain_inputs(context, &mut files)?;
+    paths.extend(tools.iter().cloned());
+    append_rust_toolchain_inputs(context, &mut paths)?;
 
-    Ok(BuildInputSnapshot {
-        identity: input_identity(context)?,
-        files,
-    })
+    let evidence = InputEvidence::capture(&source_evidence_spec(input_identity(context)?, &paths))?;
+    for required in std::iter::once(&context.config_path).chain(tools) {
+        if !matches!(
+            evidence.entries().get(required),
+            Some(InputEvidenceValue::File { .. })
+        ) {
+            // Keep required-file absence as the original filesystem failure.
+            fs::symlink_metadata(required)?;
+            return Err(BuildReuseError::Unsupported(required.clone()));
+        }
+    }
+    for (path, expected) in fixture_hashes {
+        if !matches!(evidence.entries().get(&path), Some(InputEvidenceValue::File { sha256 }) if sha256.to_hex() == expected)
+        {
+            return Err(BuildReuseError::ChangedInput(path));
+        }
+    }
+    // Refuse the consumer's non-UTF-8 record encoding before any work or diagnostics.
+    evidence.digest()?;
+    Ok(evidence)
+}
+
+fn selected_export_producers(
+    context: &WorkspaceBuildContext,
+    metadata: &Metadata,
+) -> Result<BTreeMap<PathBuf, String>, BuildReuseError> {
+    let mut producers: BTreeMap<_, _> = metadata
+        .packages
+        .iter()
+        .map(|package| {
+            (
+                package.manifest_path.clone().into_std_path_buf(),
+                package.id.repr.clone(),
+            )
+        })
+        .collect();
+    for manifest in crate::fleet_package::generated_manifests(&context.config_path) {
+        if !manifest.is_file() {
+            continue;
+        }
+        let generated = cargo_metadata_catalog_for_manifest(
+            &manifest,
+            true,
+            true,
+            &CargoFeatureSelection::default(),
+        )
+        .map_err(|error| BuildReuseError::Evidence(error.to_string()))?;
+        producers.extend(
+            generated
+                .packages
+                .into_iter()
+                .map(|package| (package.manifest_path.into_std_path_buf(), package.id.repr)),
+        );
+    }
+    Ok(producers)
 }
 
 fn prepare_generated_inputs(context: &WorkspaceBuildContext) -> Result<(), BuildReuseError> {
@@ -451,10 +539,7 @@ fn prepare_generated_inputs(context: &WorkspaceBuildContext) -> Result<(), Build
     }
 }
 
-fn append_generated_inputs(
-    context: &WorkspaceBuildContext,
-    files: &mut BTreeMap<String, String>,
-) -> Result<(), BuildReuseError> {
+fn append_generated_inputs(context: &WorkspaceBuildContext, paths: &mut BTreeSet<PathBuf>) {
     for manifest in crate::fleet_package::generated_manifests(&context.config_path) {
         let root = manifest.parent().expect("generated package directory");
         for name in [
@@ -464,34 +549,37 @@ fn append_generated_inputs(
             "src/lib.rs",
             "build.rs",
         ] {
-            add_optional(&root.join(name), files)?;
+            paths.insert(root.join(name));
         }
     }
-    Ok(())
 }
 
 fn append_fixture_inputs(
     context: &WorkspaceBuildContext,
-    files: &mut BTreeMap<String, String>,
-) -> Result<(), BuildReuseError> {
+    paths: &mut BTreeSet<PathBuf>,
+) -> Result<BTreeMap<PathBuf, String>, BuildReuseError> {
     let fixtures = crate::release_set::fixture::load_configured_fixture_sources(
         &context.icp_root,
         &context.config_path,
     )
     .map_err(|error| BuildReuseError::Evidence(error.to_string()))?;
-    for (path, hash) in fixtures.source_files {
-        let key = path
-            .to_str()
-            .ok_or_else(|| BuildReuseError::Unsupported(path.clone()))?
-            .to_owned();
-        if files
-            .insert(key, hash.clone())
-            .is_some_and(|before| before != hash)
-        {
-            return Err(BuildReuseError::ChangedInput(path));
-        }
+    paths.extend(fixtures.source_files.keys().cloned());
+    Ok(fixtures.source_files)
+}
+
+fn source_evidence_spec(
+    identity: impl Into<Vec<u8>>,
+    paths: &BTreeSet<PathBuf>,
+) -> InputEvidenceSpec {
+    let mut spec = InputEvidenceSpec::new(identity);
+    // Canic's recipe excludes generated/control entries from recursive source roots.
+    for name in ["target", ".git", ".canic", ".icp", ".tmp"] {
+        spec = spec.with_excluded_entry_name(name);
     }
-    Ok(())
+    for path in paths {
+        spec = spec.with_input(path);
+    }
+    spec
 }
 
 fn input_identity(context: &WorkspaceBuildContext) -> Result<String, BuildReuseError> {
@@ -534,13 +622,13 @@ fn input_identity(context: &WorkspaceBuildContext) -> Result<String, BuildReuseE
 fn input_digest(
     context: &WorkspaceBuildContext,
     tools: &[PathBuf],
-) -> Result<String, BuildReuseError> {
-    Ok(input_snapshot(context, tools)?.digest())
+) -> Result<ic_build::artifacts::InputDigest, BuildReuseError> {
+    Ok(input_snapshot(context, tools)?.digest()?)
 }
 
 fn append_rust_toolchain_inputs(
     context: &WorkspaceBuildContext,
-    files: &mut BTreeMap<String, String>,
+    paths: &mut BTreeSet<PathBuf>,
 ) -> Result<(), BuildReuseError> {
     let rustc = env::var_os("RUSTC").unwrap_or_else(|| "rustc".into());
     let sysroot = crate::build_environment::command(&rustc)
@@ -556,12 +644,16 @@ fn append_rust_toolchain_inputs(
             .trim(),
     );
     for name in ["rustc", "cargo"] {
-        add_file(&sysroot.join("bin").join(name), files)?;
+        let path = sysroot.join("bin").join(name);
+        if !fs::symlink_metadata(&path)?.is_file() {
+            return Err(BuildReuseError::Unsupported(path));
+        }
+        paths.insert(path);
     }
     for entry in fs::read_dir(sysroot.join("lib"))? {
         let path = entry?.path();
         if fs::symlink_metadata(&path)?.is_file() {
-            add_file(&path, files)?;
+            paths.insert(path);
         }
     }
     let host = crate::build_environment::command(&rustc)
@@ -577,82 +669,40 @@ fn append_rust_toolchain_inputs(
         .map_err(|error| BuildReuseError::Evidence(error.to_string()))?;
     for target in [host.trim(), "wasm32-unknown-unknown"] {
         let root = sysroot.join("lib/rustlib").join(target);
-        collect_files(&root, &root, files, true)?;
+        if !fs::symlink_metadata(&root)?.is_dir() {
+            return Err(BuildReuseError::Unsupported(root));
+        }
+        paths.insert(root);
     }
 
     Ok(())
 }
 
 fn output_files(root: &Path) -> Result<BTreeMap<String, String>, BuildReuseError> {
+    let evidence = InputEvidence::capture(&InputEvidenceSpec::new(Vec::new()).with_input(root))?;
     let mut files = BTreeMap::new();
-    collect_files(root, root, &mut files, false)?;
-    Ok(files)
-}
-
-fn collect_files(
-    root: &Path,
-    path: &Path,
-    files: &mut BTreeMap<String, String>,
-    source: bool,
-) -> Result<(), BuildReuseError> {
-    let metadata = fs::symlink_metadata(path)?;
-    if metadata.is_file() {
-        let key = if source {
-            path.to_path_buf()
-        } else {
-            path.strip_prefix(root)
-                .map_err(|error| BuildReuseError::Evidence(error.to_string()))?
-                .to_path_buf()
-        };
-        files.insert(
-            key.to_str()
-                .ok_or_else(|| BuildReuseError::Unsupported(path.to_path_buf()))?
-                .to_string(),
-            file_hash(path)?,
-        );
-    } else if metadata.is_dir() {
-        if source {
-            files.insert(path.to_string_lossy().into_owned(), "directory".into());
-        }
-        for entry in fs::read_dir(path)? {
-            let entry = entry?;
-            if source && source_entry_is_excluded(&entry.file_name()) {
-                continue;
+    for (path, value) in evidence.entries() {
+        match value {
+            InputEvidenceValue::File { sha256 } => {
+                let relative = path
+                    .strip_prefix(root)
+                    .map_err(|error| BuildReuseError::Evidence(error.to_string()))?;
+                let key = relative
+                    .to_str()
+                    .ok_or_else(|| BuildReuseError::Unsupported(path.clone()))?;
+                files.insert(key.to_owned(), sha256.to_hex());
             }
-            collect_files(root, &entry.path(), files, source)?;
+            InputEvidenceValue::Directory => {}
+            InputEvidenceValue::Missing => {
+                return Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "release output root is missing",
+                )
+                .into());
+            }
         }
-    } else {
-        return Err(BuildReuseError::Unsupported(path.to_path_buf()));
     }
-    Ok(())
-}
-
-fn source_entry_is_excluded(name: &OsStr) -> bool {
-    matches!(
-        name.to_str(),
-        Some("target" | ".git" | ".canic" | ".icp" | ".tmp")
-    )
-}
-
-fn add_optional(path: &Path, files: &mut BTreeMap<String, String>) -> Result<(), BuildReuseError> {
-    match fs::symlink_metadata(path) {
-        Ok(_) => add_file(path, files),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            files.insert(path.to_string_lossy().into_owned(), "absent".to_string());
-            Ok(())
-        }
-        Err(error) => Err(error.into()),
-    }
-}
-
-fn add_file(path: &Path, files: &mut BTreeMap<String, String>) -> Result<(), BuildReuseError> {
-    files.insert(
-        path.to_str()
-            .ok_or_else(|| BuildReuseError::Unsupported(path.to_path_buf()))?
-            .to_string(),
-        file_hash(path)?,
-    );
-    Ok(())
+    Ok(files)
 }
 
 pub(super) fn file_hash(path: &Path) -> Result<String, BuildReuseError> {

@@ -4,9 +4,16 @@
 //! Does not own: token verification, storage, or endpoint authorization.
 //! Boundary: pure delegated auth helper used by cert and token validation.
 
-use super::canonical::{CanonicalAuthError, role_hash, validate_scope_label};
-use crate::dto::auth::{DelegatedRoleGrant, DelegationAudience};
-use canic_contracts::ids::{CanisterRole, FleetKey};
+use super::{
+    canonical::{CanonicalAuthError, validate_scope_label},
+    protocol,
+};
+use crate::dto::auth::DelegatedRoleGrant;
+#[cfg(test)]
+use crate::dto::auth::DelegationAudience;
+use canic_contracts::ids::CanisterRole;
+#[cfg(test)]
+use canic_contracts::ids::FleetKey;
 use thiserror::Error;
 
 pub const MAX_DELEGATED_ROLE_GRANTS: usize = 16;
@@ -19,6 +26,7 @@ pub const MAX_SCOPES_PER_ROLE_GRANT: usize = 32;
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg(test)]
 pub struct AudienceAcceptanceContext {
     pub local_fleet: FleetKey,
 }
@@ -64,7 +72,7 @@ pub fn validate_role_grants(grants: &[DelegatedRoleGrant]) -> Result<(), Audienc
 
     let mut previous = None;
     for grant in grants {
-        role_hash(&grant.target)?;
+        protocol::role(&grant.target)?;
         let current = grant.target.as_str().as_bytes();
         if previous.is_some_and(|previous| previous >= current) {
             return Err(AudienceError::NonCanonicalGrants);
@@ -89,14 +97,17 @@ pub fn validate_role_grants(grants: &[DelegatedRoleGrant]) -> Result<(), Audienc
     Ok(())
 }
 
+#[cfg(test)]
 pub fn audience_subset(child: &DelegationAudience, parent: &DelegationAudience) -> bool {
     child == parent
 }
 
+#[cfg(test)]
 pub fn audience_accepted(ctx: AudienceAcceptanceContext, audience: &DelegationAudience) -> bool {
     matches!(audience, DelegationAudience::Fleet(fleet) if *fleet == ctx.local_fleet)
 }
 
+#[cfg(test)]
 pub fn role_grants_subset(child: &[DelegatedRoleGrant], parent: &[DelegatedRoleGrant]) -> bool {
     child.iter().all(|child_grant| {
         parent
@@ -104,16 +115,6 @@ pub fn role_grants_subset(child: &[DelegatedRoleGrant], parent: &[DelegatedRoleG
             .find(|parent_grant| parent_grant.target == child_grant.target)
             .is_some_and(|parent_grant| scopes_subset(&child_grant.scopes, &parent_grant.scopes))
     })
-}
-
-pub fn scopes_for_role(
-    grants: &[DelegatedRoleGrant],
-    local_role: &CanisterRole,
-) -> Option<Vec<String>> {
-    grants
-        .iter()
-        .find(|grant| &grant.target == local_role)
-        .map(|grant| grant.scopes.clone())
 }
 
 fn validate_grant_scopes(scopes: &[String]) -> Result<(), AudienceError> {
@@ -136,6 +137,7 @@ fn validate_grant_scopes(scopes: &[String]) -> Result<(), AudienceError> {
     Ok(())
 }
 
+#[cfg(test)]
 fn scopes_subset(child: &[String], parent: &[String]) -> bool {
     child.iter().all(|scope| parent.contains(scope))
 }
@@ -192,6 +194,35 @@ mod tests {
                 grant("project_hub", &["upload"])
             ]),
             Err(AudienceError::NonCanonicalGrants)
+        );
+    }
+
+    #[test]
+    fn grant_roles_use_the_shared_identifier_syntax() {
+        validate_role_grants(&[grant("project-instance:v1_2", &["upload"])])
+            .expect("shared role syntax");
+        for role in ["", "Upper", "bad role", "é"] {
+            let expected = if role.is_empty() {
+                CanonicalAuthError::EmptyRole
+            } else {
+                CanonicalAuthError::InvalidRole {
+                    role: role.to_string(),
+                }
+            };
+            assert_eq!(
+                validate_role_grants(&[grant(role, &["upload"])]),
+                Err(AudienceError::Canonical(expected))
+            );
+        }
+    }
+
+    #[test]
+    fn invalid_grant_role_precedes_empty_scope_refusal() {
+        assert_eq!(
+            validate_role_grants(&[grant("Upper", &[])]),
+            Err(AudienceError::Canonical(CanonicalAuthError::InvalidRole {
+                role: "Upper".to_string(),
+            }))
         );
     }
 

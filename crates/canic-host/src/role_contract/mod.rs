@@ -19,7 +19,7 @@ use canic_core::{
 };
 use std::{collections::BTreeSet, path::Path};
 
-pub use crate::cargo_metadata::CargoFeatureSelection;
+pub use ic_build::cargo::observation::CargoFeatureSelection;
 pub(crate) use package::package_manifest_path;
 
 pub use descriptor::{

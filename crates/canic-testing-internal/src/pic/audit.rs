@@ -1,9 +1,6 @@
 use crate::canister::{APP, SCALE_HUB};
 use candid::Principal;
-use ic_testkit::{
-    artifacts::{test_target_dir, workspace_root_for},
-    pic::{PocketIc, PocketIcBuilder, StandaloneCanisterFixture},
-};
+use ic_testkit::pic::{PocketIc, PocketIcBuilder, StandaloneCanisterFixture};
 use std::path::{Path, PathBuf};
 
 use super::{
@@ -42,7 +39,7 @@ pub fn install_audit_scaling_probe(profile: CanicWasmBuildProfile) -> Standalone
 #[must_use]
 pub fn install_audit_root_probe(profile: CanicWasmBuildProfile) -> RootAuditProbeFixture {
     let workspace_root = workspace_root();
-    let target_dir = test_target_dir(&workspace_root, "standalone-root-probe");
+    let target_dir = workspace_root.join("target").join("standalone-root-probe");
     let root_wasm = build_probe_wasm(&workspace_root, &target_dir, "root_probe", profile);
     let wasm_store_wasm = build_generated_fleet_wasm(
         &workspace_root,
@@ -89,6 +86,5 @@ fn build_probe_wasm(
 }
 
 fn workspace_root() -> PathBuf {
-    workspace_root_for(env!("CARGO_MANIFEST_DIR"))
-        .expect("discover Canic test workspace through Cargo")
+    crate::workspace::discover().expect("discover Canic test workspace through Cargo")
 }

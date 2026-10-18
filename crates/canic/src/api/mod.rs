@@ -6,9 +6,22 @@
 /// core layout.
 ///
 
+/// Application-owned durable checkpoint participant transitions.
+pub mod application_checkpoint {
+    pub use crate::__internal::core::api::application_checkpoint::{
+        ApplicationCheckpointError, ApplicationCheckpointPhase, ApplicationCheckpointRecord,
+        ApplicationCheckpointRootPredicate, ApplicationCheckpointTransition,
+    };
+}
+
 /// Authentication workflow helpers
 pub mod auth {
     pub use crate::__internal::core::api::auth::AuthApi;
+    #[cfg(any(
+        feature = "auth-root-canister-sig-create",
+        feature = "auth-issuer-canister-sig-create"
+    ))]
+    pub use crate::__internal::core::api::auth::SignatureSibling;
 }
 
 /// Local and receipt-backed reservation helpers.
@@ -77,9 +90,9 @@ pub mod rpc {
     pub use crate::__internal::core::api::rpc::RpcApi;
 }
 
-/// Runtime bootstrap helpers
+/// Runtime readiness helpers
 pub mod runtime {
-    pub use crate::__internal::core::api::{ready::ReadyApi, runtime::MemoryRuntimeApi};
+    pub use crate::__internal::core::api::ready::ReadyApi;
 }
 
 /// Protocol runtime helpers

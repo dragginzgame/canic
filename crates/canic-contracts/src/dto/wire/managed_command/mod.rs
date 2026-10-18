@@ -20,7 +20,6 @@ macro_rules! __canic_managed_command_wire_types {
     (
         serde_crate = $serde_crate:literal,
         fleet_admission_attributes = [$($fleet_admission_attributes:tt)*],
-        application_authorization_attributes = [$($application_authorization_attributes:tt)*],
         caller_authority_attributes = [$($caller_authority_attributes:tt)*],
         token_issuer_attributes = [$($token_issuer_attributes:tt)*],
         child_provisioning_attributes = [$($child_provisioning_attributes:tt)*],
@@ -36,8 +35,6 @@ macro_rules! __canic_managed_command_wire_types {
             ActivateFleetAdmission(
                 $crate::dto::fleet_admission::FleetAdmissionActivateTargetRequest,
             ),
-            $($application_authorization_attributes)*
-            ApplicationSession($crate::dto::auth::ApplicationSessionCommand),
             $($caller_authority_attributes)*
             CallerAuthority($crate::dto::caller_authority::CallerAuthorityCommand),
             $($caller_authority_attributes)*
@@ -54,8 +51,6 @@ macro_rules! __canic_managed_command_wire_types {
             OpenFleetAdmission(
                 $crate::dto::fleet_admission::FleetAdmissionOpenTargetRequest,
             ),
-            $($token_issuer_attributes)*
-            PrepareDelegatedToken($crate::dto::auth::DelegatedTokenPrepareRequest),
             $($fleet_admission_attributes)*
             PrepareFleetAdmission(
                 $crate::dto::fleet_admission::FleetAdmissionPrepareTargetRequest,
@@ -76,8 +71,6 @@ macro_rules! __canic_managed_command_wire_types {
             ActivateFleetAdmission(
                 $crate::dto::fleet_admission::FleetAdmissionTargetReceipt,
             ),
-            $($application_authorization_attributes)*
-            ApplicationSession($crate::dto::auth::ApplicationSessionCommandResponse),
             $($caller_authority_attributes)*
             CallerAuthority($crate::dto::caller_authority::CallerAuthorityReceipt),
             $($token_issuer_attributes)*
@@ -90,8 +83,6 @@ macro_rules! __canic_managed_command_wire_types {
                 $crate::dto::fleet_admission::FleetAdmissionTargetReceipt,
             ),
             OperationAccepted($crate::dto::role::OperationReceipt),
-            $($token_issuer_attributes)*
-            PrepareDelegatedToken($crate::dto::auth::DelegatedTokenPrepareResponse),
             $($fleet_admission_attributes)*
             PrepareFleetAdmission(
                 $crate::dto::fleet_admission::FleetAdmissionTargetReceipt,
@@ -106,7 +97,6 @@ macro_rules! __canic_managed_command_wire_types {
 crate::__canic_managed_command_wire_types! {
     serde_crate = "serde",
     fleet_admission_attributes = [],
-    application_authorization_attributes = [],
     caller_authority_attributes = [],
     token_issuer_attributes = [],
     child_provisioning_attributes = [],

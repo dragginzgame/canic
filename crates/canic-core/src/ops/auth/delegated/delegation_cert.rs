@@ -7,7 +7,7 @@
 use super::{
     audience::{AudienceError, validate_role_grants},
     canonical::{CanonicalAuthError, cert_hash, issuer_proof_binding_hash},
-    cert_rules::{CertRuleError, DelegatedAuthTtlLimits},
+    cert_rules::{CertificateIssuanceValidationError, DelegatedAuthTtlLimits},
 };
 #[cfg(test)]
 use crate::dto::auth::{DelegationProof, RootProof};
@@ -81,7 +81,7 @@ pub enum PrepareDelegationCertError {
     #[error(transparent)]
     Canonical(#[from] CanonicalAuthError),
     #[error(transparent)]
-    CertRules(#[from] CertRuleError),
+    CertRules(#[from] CertificateIssuanceValidationError),
 }
 
 /// Build one self-validating delegation proof from an already-created root proof.
@@ -153,7 +153,7 @@ fn finish_delegation_proof(
 fn validate_cert_issuance_rules_for_built_cert(
     cert: &DelegationCert,
     ttl_limits: DelegatedAuthTtlLimits,
-) -> Result<(), CertRuleError> {
+) -> Result<(), CertificateIssuanceValidationError> {
     super::cert_rules::validate_cert_issuance_rules(cert, ttl_limits, cert.root_pid)
 }
 
@@ -252,10 +252,12 @@ mod tests {
         assert_eq!(
             assemble_delegation_proof_for_tests(input, root_proof(1)),
             Err(PrepareDelegationCertError::CertRules(
-                CertRuleError::CertTtlExceeded {
-                    ttl_ns: 601,
-                    max_ttl_ns: 600,
-                }
+                CertificateIssuanceValidationError::Rules(
+                    ic_auth::certificate_issuance::CertificateIssuanceError::CertTtlExceeded {
+                        ttl_ns: 601,
+                        max_ttl_ns: 600,
+                    }
+                )
             ))
         );
     }

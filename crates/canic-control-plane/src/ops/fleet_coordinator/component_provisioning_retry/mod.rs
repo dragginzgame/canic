@@ -55,7 +55,7 @@ pub(super) fn current_component_provisioning_retry_authority(
 pub(super) fn pending_component_provisioning_root_failure(
     record: &FleetComponentProvisioningRecord,
 ) -> Option<FleetComponentProvisioningRootFailure> {
-    let failure = record.last_root_failure?;
+    let failure = record.last_root_failure.as_ref()?;
     let current = current_component_provisioning_retry_authority(&record.state)?;
     let same_root = failure.fleet_subnet_root == current.fleet_subnet_root;
     let same_stage = failure.stage == current.stage;
@@ -63,5 +63,5 @@ pub(super) fn pending_component_provisioning_root_failure(
     let matches_current_retry = [same_root, same_stage, follows_current_intent]
         .into_iter()
         .all(std::convert::identity);
-    matches_current_retry.then_some(failure)
+    matches_current_retry.then(|| failure.clone())
 }

@@ -112,3 +112,11 @@ pub const fn is_ascii_snake_case(value: &str) -> bool {
 
     !previous_was_underscore
 }
+
+/// Root-owned application checkpoint identity and acknowledgement invariants.
+pub mod application_checkpoint_root {
+    pub use crate::model::application_checkpoint::root::{
+        MAX_CHECKPOINT_PARTICIPANTS, RootCheckpointError, RootCheckpointParticipantRecord,
+        RootCheckpointPhase, RootCheckpointRecord,
+    };
+}

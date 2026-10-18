@@ -1570,7 +1570,7 @@ fn validated_record(
 ) -> Result<RootComponentProvisioningView, InternalError> {
     validate_operation_and_plan_hash(record.operation_id, record.plan_hash)?;
     let state = validated_record_state(&record)?;
-    failure::validate_failure(record.last_failure, state.accepted_at_ns)?;
+    failure::validate_failure(record.last_failure.as_ref(), state.accepted_at_ns)?;
     let validation = RootComponentProvisioningBatchValidation {
         placement_count: state.placement_count,
         component_count: state.component_count,

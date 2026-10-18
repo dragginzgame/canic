@@ -6,11 +6,8 @@
 
 pub mod application_authorization;
 mod attestation;
-#[cfg(any(
-    feature = "auth-root-canister-sig-verify",
-    feature = "auth-issuer-canister-sig-verify"
-))]
-mod canister_sig_key;
+#[cfg(feature = "auth-root-canister-sig-verify")]
+mod canister_signature;
 mod crypto;
 mod delegated;
 mod delegation;
@@ -18,6 +15,11 @@ mod error;
 mod issuer_canister_sig;
 mod public_key;
 mod root_canister_sig;
+#[cfg(any(
+    feature = "auth-root-canister-sig-create",
+    feature = "auth-issuer-canister-sig-create"
+))]
+pub mod signature_store;
 mod token;
 mod types;
 mod verify;
@@ -30,13 +32,11 @@ pub use delegation::{
 pub use error::{
     AuthExpiryError, AuthOpsError, AuthScopeError, AuthSignatureError, AuthValidationError,
 };
-pub use token::DelegatedTokenIssuerPrepareError;
 pub use types::{
     AuthChainKeyRootVerifierConfig, AuthProofVerifierConfig,
     ChainKeyRootDelegationBatchSigningResult, ChainKeyRootDelegationBatchSweepResult,
-    PrepareChainKeyRootDelegationBatchInput, PrepareDelegatedTokenIssuerProofInput,
-    PrepareRootRoleAttestationInput, PreparedDelegatedTokenIssuerProof,
-    PreparedRootRoleAttestation, RootIssuerRenewalTiming, VerifyDelegatedTokenRuntimeInput,
+    PrepareChainKeyRootDelegationBatchInput, PrepareRootRoleAttestationInput,
+    PreparedRootRoleAttestation, RootIssuerRenewalTiming,
 };
 
 const ROLE_ATTESTATION_PROOF_HASH_DOMAIN: &[u8] = b"CANIC_ROLE_ATTESTATION_V1";

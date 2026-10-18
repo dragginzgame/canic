@@ -6,7 +6,7 @@
 
 use crate::{
     artifacts::ArtifactChecksumError,
-    persistence::{CommandLifetimeHandle, CommandLifetimeLock, JournalLockError},
+    persistence::{CommandLifetimeLock, CommandLifetimeLockError, JournalLockError},
 };
 
 use std::{io, path::PathBuf};
@@ -49,7 +49,7 @@ pub trait RestoreRunnerCommandExecutor {
     fn execute(
         &mut self,
         command: &RestoreApplyRunnerCommand,
-        command_lifetime: Option<CommandLifetimeHandle>,
+        command_lifetime: Option<&mut CommandLifetimeLock>,
     ) -> Result<RestoreRunnerCommandOutput, io::Error>;
 }
 
@@ -77,6 +77,10 @@ pub struct RestoreRunnerCommandOutput {
 
 #[derive(Debug, ThisError)]
 pub enum RestoreRunnerError {
+    #[error("operation {sequence} omits original issued command custody")]
+    MissingOriginalCommandCustody { sequence: usize },
+    #[error(transparent)]
+    CommandCustody(#[from] CommandLifetimeLockError),
     #[error("restore artifact staging checksum failed for operation {sequence}")]
     ArtifactStageChecksum {
         sequence: usize,

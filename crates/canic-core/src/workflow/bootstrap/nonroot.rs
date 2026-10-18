@@ -44,7 +44,7 @@ pub async fn bootstrap_init_nonroot_canister() -> Result<(), InternalError> {
 
     ScalingWorkflow::bootstrap_configured_initial_workers().await?;
 
-    RuntimeAuthWorkflow::check_issuer_canister_signature_support().await?;
+    RuntimeAuthWorkflow::check_issuer_canister_signature_support()?;
 
     log!(Topic::Init, Info, "bootstrap (nonroot): init complete");
     ReadyOps::mark_ready();
@@ -75,7 +75,7 @@ pub async fn bootstrap_post_upgrade_nonroot_canister() -> Result<(), InternalErr
 
     ScalingWorkflow::bootstrap_configured_initial_workers().await?;
 
-    RuntimeAuthWorkflow::check_issuer_canister_signature_support().await?;
+    RuntimeAuthWorkflow::check_issuer_canister_signature_support()?;
     log!(
         Topic::Init,
         Info,

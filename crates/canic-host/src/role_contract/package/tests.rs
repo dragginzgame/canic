@@ -1,5 +1,6 @@
 use super::*;
-use crate::cargo_metadata::{CargoMetadataDependencyKind, CargoMetadataNodeDependency};
+use ic_build::cargo::observation::schema::{DepKindInfo, NodeDep, Target};
+
 use serde_json::json;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -11,19 +12,19 @@ fn package_validation_cache_reuses_workspace_evidence_for_member_manifests() {
         features: CargoFeatureSelection::default(),
         workspaces: vec![CachedCargoWorkspace {
             mode: PackageValidationMode::Build,
-            metadata: CargoMetadata {
-                packages: vec![
+            metadata: serde_json::from_value::<Metadata>(json!({"workspace_members": [], "target_directory": "/workspace/target", "version": 1,
+                "packages": vec![
                     package("root", "root@1", "/workspace/root/Cargo.toml"),
                     package("hub", "hub@1", "/workspace/hub/Cargo.toml"),
                 ],
-                resolve: None,
-                workspace_root: PathBuf::from("/workspace"),
-            },
-            catalog: CargoMetadata {
-                packages: Vec::new(),
-                resolve: None,
-                workspace_root: PathBuf::from("/workspace"),
-            },
+                "resolve": null,
+                "workspace_root": PathBuf::from("/workspace"),
+            })).unwrap(),
+            catalog: serde_json::from_value::<Metadata>(json!({"workspace_members": [], "target_directory": "/workspace/target", "version": 1,
+                "packages": [],
+                "resolve": null,
+                "workspace_root": PathBuf::from("/workspace"),
+            })).unwrap(),
         }],
     };
 
@@ -453,7 +454,7 @@ fn isolated_role_workspace_accepts_a_multiline_build_macro_invocation() {
 #[test]
 fn repository_canic_runtime_closure_separates_contracts_from_protected_catalog() {
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let metadata = crate::cargo_metadata::cargo_metadata_catalog_for_manifest(
+    let metadata = crate::cargo_observation::cargo_metadata_catalog_for_manifest(
         &workspace.join("crates/canic/Cargo.toml"),
         true,
         true,
@@ -465,7 +466,7 @@ fn repository_canic_runtime_closure_separates_contracts_from_protected_catalog()
         .iter()
         .find(|package| {
             package.name == CANIC_PACKAGE
-                && normalized_manifest_path(&package.manifest_path)
+                && normalized_manifest_path(package.manifest_path.as_std_path())
                     == normalized_manifest_path(&workspace.join("crates/canic/Cargo.toml"))
         })
         .expect("workspace Canic package");
@@ -475,22 +476,22 @@ fn repository_canic_runtime_closure_separates_contracts_from_protected_catalog()
         .expect("workspace Cargo resolve")
         .nodes
         .iter()
-        .map(|node| (node.id.as_str(), node))
+        .map(|node| (node.id.repr.as_str(), node))
         .collect::<BTreeMap<_, _>>();
     let packages = metadata
         .packages
         .iter()
-        .map(|package| (package.id.as_str(), package))
+        .map(|package| (package.id.repr.as_str(), package))
         .collect::<BTreeMap<_, _>>();
-    let mut reachable = BTreeSet::from([canic.id.clone()]);
-    let mut frontier = vec![canic.id.clone()];
+    let mut reachable = BTreeSet::from([canic.id.repr.clone()]);
+    let mut frontier = vec![canic.id.repr.clone()];
     while let Some(package_id) = frontier.pop() {
         let Some(node) = nodes.get(package_id.as_str()) else {
             continue;
         };
         for dependency in normal_dependencies(node) {
-            if reachable.insert(dependency.pkg.clone()) {
-                frontier.push(dependency.pkg.clone());
+            if reachable.insert(dependency.pkg.repr.clone()) {
+                frontier.push(dependency.pkg.repr.clone());
             }
         }
     }
@@ -500,7 +501,8 @@ fn repository_canic_runtime_closure_separates_contracts_from_protected_catalog()
         .filter_map(|package_id| packages.get(package_id.as_str()))
         .filter(|package| {
             package.name.starts_with("canic")
-                && normalized_manifest_path(&package.manifest_path).starts_with(&crates_root)
+                && normalized_manifest_path(package.manifest_path.as_std_path())
+                    .starts_with(&crates_root)
         })
         .map(|package| package.name.as_str())
         .collect::<BTreeSet<_>>();
@@ -511,14 +513,14 @@ fn repository_canic_runtime_closure_separates_contracts_from_protected_catalog()
         .iter()
         .find(|package| {
             package.name == "canic-contracts"
-                && normalized_manifest_path(&package.manifest_path)
+                && normalized_manifest_path(package.manifest_path.as_std_path())
                     == normalized_manifest_path(
                         &workspace.join("crates/canic-contracts/Cargo.toml"),
                     )
         })
         .expect("canonical wire owner");
     let mut contract_closure = BTreeSet::new();
-    let mut frontier = vec![contracts.id.as_str()];
+    let mut frontier = vec![contracts.id.repr.as_str()];
     while let Some(id) = frontier.pop() {
         if !contract_closure.insert(id) {
             continue;
@@ -530,7 +532,7 @@ fn repository_canic_runtime_closure_separates_contracts_from_protected_catalog()
             "ic-cdk" | "ic-memory" | "ic-timers"
         ));
         for dependency in normal_dependencies(nodes[id]) {
-            frontier.push(dependency.pkg.as_str());
+            frontier.push(dependency.pkg.repr.as_str());
         }
     }
     let expected = PROTECTED_CANIC_PACKAGES
@@ -550,15 +552,18 @@ fn repository_canic_runtime_closure_separates_contracts_from_protected_catalog()
 #[test]
 fn direct_dependency_rejects_a_renamed_canic_key() {
     let mut package = package("role", "role@1", "/tmp/role/Cargo.toml");
-    package.dependencies.push(CargoMetadataDependency {
-        name: CANIC_PACKAGE.to_string(),
-        kind: None,
-        rename: Some("framework".to_string()),
-        optional: false,
-        uses_default_features: false,
-        features: Vec::new(),
-        target: None,
-    });
+    package.dependencies.push(
+        serde_json::from_value::<Dependency>(json!({"req": "*", "source": null,
+            "name": CANIC_PACKAGE.to_string(),
+            "kind": null,
+            "rename": Some("framework".to_string()),
+            "optional": false,
+            "uses_default_features": false,
+            "features": [],
+            "target": null,
+        }))
+        .unwrap(),
+    );
 
     assert!(matches!(
         direct_canic_dependency(&package, &CanisterRole::owned("app".to_string())),
@@ -573,15 +578,16 @@ fn direct_dependency_rejects_optional_and_target_specific_shapes() {
         (false, Some("cfg(target_arch = \"wasm32\")".to_string())),
     ] {
         let mut package = package("role", "role@1", "/tmp/role/Cargo.toml");
-        package.dependencies.push(CargoMetadataDependency {
-            name: CANIC_PACKAGE.to_string(),
-            kind: None,
-            rename: None,
-            optional,
-            uses_default_features: true,
-            features: Vec::new(),
-            target,
-        });
+        package.dependencies.push(
+            serde_json::from_value::<Dependency>(json!({"req": "*", "source": null,
+                "name": CANIC_PACKAGE.to_string(),
+                "kind": null,
+                "rename": null,"optional": optional,
+                "uses_default_features": true,
+                "features": [],"target": target,
+            }))
+            .unwrap(),
+        );
 
         assert!(matches!(
             direct_canic_dependency(&package, &CanisterRole::owned("app".to_string())),
@@ -1131,11 +1137,7 @@ fn qualification_harness_packages_are_test_only_leaves() {
     }
 }
 
-fn assert_unpublished_package_under(
-    metadata: &CargoMetadata,
-    package_name: &str,
-    required_root: &Path,
-) {
+fn assert_unpublished_package_under(metadata: &Metadata, package_name: &str, required_root: &Path) {
     let packages = metadata
         .packages
         .iter()
@@ -1149,7 +1151,8 @@ fn assert_unpublished_package_under(
         "test-only package `{package_name}` must remain under {}",
         required_root.display()
     );
-    let manifest = fs::read_to_string(&package.manifest_path).expect("read test package manifest");
+    let manifest = fs::read_to_string(package.manifest_path.as_std_path())
+        .expect("read test package manifest");
     assert!(
         manifest
             .lines()
@@ -1174,28 +1177,26 @@ fn collect_named_files(root: &Path, name: &str, files: &mut Vec<PathBuf>) {
     }
 }
 
-fn package(name: &str, id: &str, manifest_path: &str) -> CargoMetadataPackage {
-    CargoMetadataPackage {
-        id: id.to_string(),
-        name: name.to_string(),
-        version: env!("CARGO_PKG_VERSION").to_string(),
-        source: None,
-        manifest_path: PathBuf::from(manifest_path),
-        metadata: Some(json!({})),
-        dependencies: Vec::new(),
-        features: BTreeMap::new(),
-        targets: vec![crate::cargo_metadata::CargoMetadataTarget {
-            name: name.replace('-', "_"),
-            kind: vec!["lib".to_string()],
-            src_path: PathBuf::from(manifest_path).with_file_name("src/lib.rs"),
-        }],
-    }
+fn package(name: &str, id: &str, manifest_path: &str) -> Package {
+    serde_json::from_value::<Package>(json!({
+        "id": id.to_string(),
+        "name": name.to_string(),
+        "version": env!("CARGO_PKG_VERSION").to_string(),
+        "source": null,
+        "manifest_path": PathBuf::from(manifest_path),
+        "metadata": Some(json!({})),
+        "dependencies": [],
+        "features": {},
+        "targets": vec![serde_json::from_value::<Target>(json!({
+            "name": name.replace('-', "_"),
+            "kind": vec!["lib".to_string()],
+            "src_path": PathBuf::from(manifest_path).with_file_name("src/lib.rs"),
+        })).unwrap()],
+    }))
+    .unwrap()
 }
 
-fn runtime_graph(
-    packages: &[CargoMetadataPackage],
-    nodes: &[CargoMetadataNode],
-) -> CargoGraphEvidence {
+fn runtime_graph(packages: &[Package], nodes: &[Node]) -> CargoGraphEvidence {
     CargoGraphEvidence {
         selected_package_id: "role@1".to_string(),
         workspace_root: PathBuf::from("/tmp"),
@@ -1203,16 +1204,17 @@ fn runtime_graph(
             .iter()
             .map(|package| {
                 (
-                    package.id.clone(),
+                    package.id.repr.clone(),
                     graph::CargoGraphPackage {
-                        name: package.name.clone(),
-                        version: package.version.clone(),
-                        source: package.source.clone(),
-                        manifest_path: package.manifest_path.clone(),
-                        is_proc_macro: package
-                            .targets
-                            .iter()
-                            .any(|target| target.kind.iter().any(|kind| kind == "proc-macro")),
+                        name: package.name.to_string(),
+                        version: package.version.to_string(),
+                        source: package.source.as_ref().map(ToString::to_string),
+                        manifest_path: package.manifest_path.clone().into_std_path_buf(),
+                        is_proc_macro: package.targets.iter().any(|target| {
+                            target.kind.iter().any(|kind| {
+                                kind == &ic_build::cargo::observation::schema::TargetKind::ProcMacro
+                            })
+                        }),
                         enabled_features: BTreeSet::new(),
                     },
                 )
@@ -1225,42 +1227,47 @@ fn runtime_graph(
                     .deps
                     .iter()
                     .filter(|dependency| {
-                        dependency.dep_kinds.iter().any(|kind| kind.kind.is_none())
+                        dependency.dep_kinds.iter().any(|kind| {
+                            kind.kind
+                                == ic_build::cargo::observation::schema::DependencyKind::Normal
+                        })
                     })
                     .map(|dependency| CargoGraphEdge {
                         alias: dependency.name.clone(),
-                        package_id: dependency.pkg.clone(),
+                        package_id: dependency.pkg.repr.clone(),
                     })
                     .collect::<Vec<_>>();
-                (!edges.is_empty()).then(|| (node.id.clone(), edges))
+                (!edges.is_empty()).then(|| (node.id.repr.clone(), edges))
             })
             .collect(),
     }
 }
 
-fn node(id: &str, deps: Vec<CargoMetadataNodeDependency>) -> CargoMetadataNode {
-    CargoMetadataNode {
-        id: id.to_string(),
-        deps,
-    }
+fn node(id: &str, deps: Vec<NodeDep>) -> Node {
+    serde_json::from_value::<Node>(json!({"dependencies": [],
+        "id": id.to_string(),
+        "deps": deps,
+    }))
+    .unwrap()
 }
 
-fn normal_edge(name: &str, package_id: &str) -> CargoMetadataNodeDependency {
+fn normal_edge(name: &str, package_id: &str) -> NodeDep {
     edge(name, package_id, None)
 }
 
-fn build_edge(name: &str, package_id: &str) -> CargoMetadataNodeDependency {
+fn build_edge(name: &str, package_id: &str) -> NodeDep {
     edge(name, package_id, Some("build"))
 }
 
-fn edge(name: &str, package_id: &str, kind: Option<&str>) -> CargoMetadataNodeDependency {
-    CargoMetadataNodeDependency {
-        name: name.to_string(),
-        pkg: package_id.to_string(),
-        dep_kinds: vec![CargoMetadataDependencyKind {
-            kind: kind.map(ToString::to_string),
-        }],
-    }
+fn edge(name: &str, package_id: &str, kind: Option<&str>) -> NodeDep {
+    serde_json::from_value::<NodeDep>(json!({
+        "name": name.to_string(),
+        "pkg": package_id.to_string(),
+        "dep_kinds": vec![serde_json::from_value::<DepKindInfo>(json!({
+            "kind": kind.map(ToString::to_string),
+        })).unwrap()],
+    }))
+    .unwrap()
 }
 
 struct FixtureWorkspace {

@@ -95,7 +95,7 @@ fn initial_child_origin_survives_outer_failure_context_without_changing_state() 
         assert_eq!(origin.diagnostic_code, failure.diagnostic_code);
         assert_eq!(origin.retry_category, ProvisioningRetryCategory::Backoff);
         let error = parent_error
-            .with_observed_provisioning_failure(origin)
+            .with_observed_provisioning_failure(origin.clone())
             .with_provisioning_failure(
                 stage,
                 fixture.partition.binding.canister_id,
@@ -184,7 +184,8 @@ fn retained_child_failure_does_not_change_work_or_capacity() {
     let (fixture, allocation) = reserve();
     let before = RootComponentRegistryStore::export();
     let detail = "x".repeat(InternalError::MAX_PLATFORM_REJECTION_BYTES);
-    let error = InternalError::public(codes::PLATFORM_UNAVAILABLE).with_platform_rejection(&detail);
+    let error =
+        InternalError::public(codes::PLATFORM_UNAVAILABLE).with_platform_rejection(5, &detail);
     let first = ComponentRegistryOps::record_child_failure(
         fixture.component,
         allocation.operation_id,

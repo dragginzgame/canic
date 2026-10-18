@@ -9,7 +9,7 @@ use crate::canister_build::extract_candid_bytes;
 
 use std::{fs, path::Path};
 
-use ic_host_fs::durable::write_bytes;
+use ic_host_fs::durable::{PublicationMode, WriteOptions, write_bytes};
 
 /// Resolve one infrastructure canister's Candid bytes before artifact publication.
 pub fn resolve_infrastructure_candid(
@@ -38,7 +38,14 @@ pub fn resolve_infrastructure_candid(
         extract_candid_bytes(debug_wasm_path)?
     };
 
-    write_bytes(canonical_did_path, &candid)?;
+    write_bytes(
+        canonical_did_path,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &candid,
+    )?;
     Ok(candid)
 }
 

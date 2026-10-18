@@ -4,117 +4,22 @@
 //! Does not own: proof cryptography, stable records, access reads, or authorization policy.
 //! Boundary: ops supplies verified values; policy receives invariant-bearing models.
 
+#[cfg(any(
+    test,
+    feature = "auth-local-application-authorization",
+    feature = "internal-test-fixtures"
+))]
+use crate::model::auth::application_authorization::ApplicationScopeError;
 use crate::{
-    cdk::types::Principal,
-    model::auth::application_authorization::{ApplicationScopeError, CanonicalApplicationScopes},
+    cdk::types::Principal, model::auth::application_authorization::CanonicalApplicationScopes,
 };
 use canic_contracts::ids::{CanisterRole, FleetKey};
+#[cfg(any(
+    test,
+    feature = "auth-local-application-authorization",
+    feature = "internal-test-fixtures"
+))]
 use thiserror::Error;
-
-/// Verified proof authority projected into the one application-authorization model.
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct VerifiedApplicationAuthority {
-    presenter: Principal,
-    subject: Principal,
-    issuer: Principal,
-    fleet: FleetKey,
-    role: CanisterRole,
-    scopes: CanonicalApplicationScopes,
-    proof_issued_at_ns: u64,
-    proof_not_before_ns: u64,
-    proof_expires_at_ns: u64,
-    proof_fingerprint: [u8; 32],
-}
-
-impl VerifiedApplicationAuthority {
-    /// Construct authority after proof verification and protected-context acquisition.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "one constructor binds the complete authority tuple"
-    )]
-    pub fn new(
-        presenter: Principal,
-        subject: Principal,
-        issuer: Principal,
-        fleet: FleetKey,
-        role: CanisterRole,
-        scopes: CanonicalApplicationScopes,
-        proof_issued_at_ns: u64,
-        proof_not_before_ns: u64,
-        proof_expires_at_ns: u64,
-        proof_fingerprint: [u8; 32],
-    ) -> Result<Self, ApplicationAuthorityModelError> {
-        if presenter != subject {
-            return Err(ApplicationAuthorityModelError::PresenterSubjectMismatch);
-        }
-        if proof_expires_at_ns <= proof_issued_at_ns {
-            return Err(ApplicationAuthorityModelError::InvalidProofWindow);
-        }
-        Ok(Self {
-            presenter,
-            subject,
-            issuer,
-            fleet,
-            role,
-            scopes,
-            proof_issued_at_ns,
-            proof_not_before_ns,
-            proof_expires_at_ns,
-            proof_fingerprint,
-        })
-    }
-
-    #[must_use]
-    pub const fn presenter(&self) -> Principal {
-        self.presenter
-    }
-
-    #[must_use]
-    pub const fn subject(&self) -> Principal {
-        self.subject
-    }
-
-    #[must_use]
-    pub const fn issuer(&self) -> Principal {
-        self.issuer
-    }
-
-    #[must_use]
-    pub const fn fleet(&self) -> FleetKey {
-        self.fleet
-    }
-
-    #[must_use]
-    pub const fn role(&self) -> &CanisterRole {
-        &self.role
-    }
-
-    #[must_use]
-    pub const fn scopes(&self) -> &CanonicalApplicationScopes {
-        &self.scopes
-    }
-
-    #[must_use]
-    pub const fn proof_issued_at_ns(&self) -> u64 {
-        self.proof_issued_at_ns
-    }
-
-    #[must_use]
-    pub const fn proof_not_before_ns(&self) -> u64 {
-        self.proof_not_before_ns
-    }
-
-    #[must_use]
-    pub const fn proof_expires_at_ns(&self) -> u64 {
-        self.proof_expires_at_ns
-    }
-
-    #[must_use]
-    pub const fn proof_fingerprint(&self) -> [u8; 32] {
-        self.proof_fingerprint
-    }
-}
 
 /// Protected local authority used to validate retained application sessions.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -126,6 +31,11 @@ pub struct LocalApplicationAuthoritySnapshot {
 
 impl LocalApplicationAuthoritySnapshot {
     #[must_use]
+    #[cfg(any(
+        test,
+        feature = "auth-local-application-authorization",
+        feature = "internal-test-fixtures"
+    ))]
     pub const fn new(fleet: FleetKey, role: CanisterRole, generation: u64) -> Self {
         Self {
             fleet,
@@ -152,6 +62,7 @@ impl LocalApplicationAuthoritySnapshot {
 
 /// Current protected inputs whose narrowing can invalidate retained sessions.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
 pub enum LocalApplicationAuthorityBinding {
     Disabled,
     Enabled {
@@ -164,6 +75,7 @@ pub enum LocalApplicationAuthorityBinding {
     },
 }
 
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
 impl LocalApplicationAuthorityBinding {
     /// Construct one enabled protected binding from already validated inputs.
     #[must_use]
@@ -189,6 +101,7 @@ impl LocalApplicationAuthorityBinding {
 /// Canonical active local application session inspected by pure policy.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalApplicationSession {
+    shared_session: Vec<u8>,
     transport_caller: Principal,
     authenticated_subject: Principal,
     issuer: Principal,
@@ -208,6 +121,11 @@ impl LocalApplicationSession {
         clippy::too_many_arguments,
         reason = "one constructor binds the complete session tuple"
     )]
+    #[cfg(any(
+        test,
+        feature = "auth-local-application-authorization",
+        feature = "internal-test-fixtures"
+    ))]
     pub fn new(
         transport_caller: Principal,
         authenticated_subject: Principal,
@@ -221,14 +139,12 @@ impl LocalApplicationSession {
         proof_fingerprint: [u8; 32],
         establishment_request_hash: [u8; 32],
     ) -> Result<Self, ApplicationAuthorityModelError> {
-        if transport_caller != authenticated_subject {
-            return Err(ApplicationAuthorityModelError::CallerSubjectMismatch);
-        }
         if expires_at_ns <= established_at_ns {
             return Err(ApplicationAuthorityModelError::InvalidSessionWindow);
         }
         Ok(Self {
             transport_caller,
+            shared_session: Vec::new(),
             authenticated_subject,
             issuer,
             fleet,
@@ -242,6 +158,18 @@ impl LocalApplicationSession {
         })
     }
 
+    /// Attach the canonical shared session to its product-only view projection.
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
+    pub(crate) fn with_shared_session(mut self, bytes: Vec<u8>) -> Self {
+        self.shared_session = bytes;
+        self
+    }
+
+    #[cfg(test)]
+    pub(crate) fn shared_session_bytes(&self) -> &[u8] {
+        &self.shared_session
+    }
+
     #[must_use]
     pub const fn transport_caller(&self) -> Principal {
         self.transport_caller
@@ -253,6 +181,7 @@ impl LocalApplicationSession {
     }
 
     #[must_use]
+    #[cfg(test)]
     pub const fn issuer(&self) -> Principal {
         self.issuer
     }
@@ -278,6 +207,7 @@ impl LocalApplicationSession {
     }
 
     #[must_use]
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     pub const fn established_at_ns(&self) -> u64 {
         self.established_at_ns
     }
@@ -288,11 +218,13 @@ impl LocalApplicationSession {
     }
 
     #[must_use]
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     pub const fn proof_fingerprint(&self) -> [u8; 32] {
         self.proof_fingerprint
     }
 
     #[must_use]
+    #[cfg(test)]
     pub const fn establishment_request_hash(&self) -> [u8; 32] {
         self.establishment_request_hash
     }
@@ -300,39 +232,41 @@ impl LocalApplicationSession {
 
 /// Durable proof-consumption identity retained independently of an active session.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
 pub struct LocalApplicationReplay {
     proof_fingerprint: [u8; 32],
     transport_caller: Principal,
-    authenticated_subject: Principal,
     authority_generation: u64,
     remove_at_ns: u64,
 }
 
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
 impl LocalApplicationReplay {
     /// Construct one replay tombstone bound to the exact consumed proof authority.
-    pub fn new(
+    #[cfg(any(
+        test,
+        feature = "auth-local-application-authorization",
+        feature = "internal-test-fixtures"
+    ))]
+    pub const fn new(
         proof_fingerprint: [u8; 32],
         transport_caller: Principal,
-        authenticated_subject: Principal,
         authority_generation: u64,
         remove_at_ns: u64,
     ) -> Result<Self, ApplicationAuthorityModelError> {
-        if transport_caller != authenticated_subject {
-            return Err(ApplicationAuthorityModelError::CallerSubjectMismatch);
-        }
         if remove_at_ns == 0 {
             return Err(ApplicationAuthorityModelError::InvalidReplayRemovalTime);
         }
         Ok(Self {
             proof_fingerprint,
             transport_caller,
-            authenticated_subject,
             authority_generation,
             remove_at_ns,
         })
     }
 
     #[must_use]
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     pub const fn proof_fingerprint(&self) -> [u8; 32] {
         self.proof_fingerprint
     }
@@ -343,38 +277,25 @@ impl LocalApplicationReplay {
     }
 
     #[must_use]
-    pub const fn authenticated_subject(&self) -> Principal {
-        self.authenticated_subject
-    }
-
-    #[must_use]
     pub const fn authority_generation(&self) -> u64 {
         self.authority_generation
-    }
-
-    #[must_use]
-    pub const fn remove_at_ns(&self) -> u64 {
-        self.remove_at_ns
     }
 }
 
 /// Typed model invariant failure for application authority values.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
+#[cfg(any(
+    test,
+    feature = "auth-local-application-authorization",
+    feature = "internal-test-fixtures"
+))]
 pub enum ApplicationAuthorityModelError {
-    #[error("application session caller and subject differ")]
-    CallerSubjectMismatch,
-
-    #[error("application proof expiry must be after issue time")]
-    InvalidProofWindow,
-
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     #[error("application replay removal time must be nonzero")]
     InvalidReplayRemovalTime,
 
     #[error("application session expiry must be after establishment")]
     InvalidSessionWindow,
-
-    #[error("application proof presenter and subject differ")]
-    PresenterSubjectMismatch,
 
     #[error(transparent)]
     Scope(#[from] ApplicationScopeError),
@@ -399,29 +320,8 @@ mod tests {
     }
 
     #[test]
-    fn verified_authority_rejects_different_presenter_and_subject() {
-        let err = VerifiedApplicationAuthority::new(
-            p(1),
-            p(2),
-            p(3),
-            crate::test::support::fleet_key(1),
-            CanisterRole::new("component"),
-            scopes(),
-            10,
-            10,
-            20,
-            [5; 32],
-        )
-        .unwrap_err();
-        assert_eq!(
-            err,
-            ApplicationAuthorityModelError::PresenterSubjectMismatch
-        );
-    }
-
-    #[test]
-    fn local_session_rejects_different_caller_and_subject() {
-        let err = LocalApplicationSession::new(
+    fn local_session_retains_distinct_transport_and_account_identities() {
+        let session = LocalApplicationSession::new(
             p(1),
             p(2),
             p(3),
@@ -434,13 +334,18 @@ mod tests {
             [5; 32],
             [6; 32],
         )
-        .unwrap_err();
-        assert_eq!(err, ApplicationAuthorityModelError::CallerSubjectMismatch);
+        .unwrap();
+        assert_eq!(session.transport_caller(), p(1));
+        assert_eq!(session.authenticated_subject(), p(2));
+        assert_eq!(session.issuer(), p(3));
     }
 
     #[test]
-    fn replay_rejects_different_caller_and_subject() {
-        let err = LocalApplicationReplay::new([1; 32], p(1), p(2), 3, 4).unwrap_err();
-        assert_eq!(err, ApplicationAuthorityModelError::CallerSubjectMismatch);
+    fn replay_rejects_zero_removal_time() {
+        let err = LocalApplicationReplay::new([1; 32], p(1), 3, 0).unwrap_err();
+        assert_eq!(
+            err,
+            ApplicationAuthorityModelError::InvalidReplayRemovalTime
+        );
     }
 }

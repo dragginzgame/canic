@@ -1,14 +1,14 @@
-//! Tests for delegated-token preparation, verification, configuration, and typed errors.
+//! Tests for Root proof verification and configuration.
 
 use super::*;
 use crate::{
-    config::schema::{CanisterAuthConfig, CanisterKind, ChainKeyRootProofConfig},
+    config::schema::ChainKeyRootProofConfig,
     domain::auth::MAINNET_IC_ROOT_PUBLIC_KEY_RAW,
-    ops::auth::delegated::chain_key::ChainKeySignatureVerificationInput,
-    storage::stable::env::{Env, EnvData, EnvRecord},
-    test::config::{ConfigTestBuilder, install_model_for_role},
+    ops::auth::delegated::{
+        chain_key::{ChainKeySignatureVerificationInput, verify_chain_key_ecdsa_signature},
+        root_proof::RootDelegationProofError,
+    },
 };
-use canic_contracts::ids::ComponentSpecId;
 use k256::ecdsa::{
     Signature as K256TestSignature, SigningKey as K256SigningKey, signature::hazmat::PrehashSigner,
 };
@@ -75,10 +75,6 @@ fn mainnet_key() -> Vec<u8> {
     MAINNET_IC_ROOT_PUBLIC_KEY_RAW.to_vec()
 }
 
-fn p(id: u8) -> Principal {
-    Principal::from_slice(&[id; 29])
-}
-
 #[test]
 fn chain_key_ecdsa_signature_verifier_accepts_valid_prehash_signature() {
     let signing_key = K256SigningKey::from_slice(&[7; 32]).expect("test signing key should parse");
@@ -117,115 +113,62 @@ fn chain_key_ecdsa_signature_verifier_rejects_altered_signature() {
 }
 
 #[test]
-fn active_delegation_proof_unavailable_maps_to_security_unavailable() {
-    let err = active_delegation_proof_unavailable_error(ActiveDelegationProofStatus::Missing);
-    let public = err.public_error();
-
-    assert_eq!(
-        public.code(),
-        crate::diagnostics::codes::SECURITY_UNAVAILABLE.raw_code()
-    );
-}
-
-#[test]
-fn token_prepare_outliving_active_proof_maps_to_security_ordering() {
-    let err = map_prepare_delegated_token_error(PrepareDelegatedTokenError::TokenOutlivesCert);
-    let public = err.public_error();
-
-    assert_eq!(
-        public.code(),
-        crate::diagnostics::codes::SECURITY_ORDERING.raw_code()
-    );
-}
-
-#[test]
-fn token_prepare_expired_active_proof_maps_to_auth_proof_expired() {
-    let err = map_prepare_delegated_token_error(PrepareDelegatedTokenError::CertExpired);
-    let public = err.public_error();
-
-    assert_eq!(
-        public.code(),
-        crate::diagnostics::codes::AUTH_CERT_EXPIRED.raw_code()
-    );
-}
-
-#[test]
-fn delegated_token_verify_expiry_preserves_machine_readable_codes() {
-    let cases: [(
-        VerifyDelegatedTokenError,
-        crate::diagnostics::DiagnosticCode,
-    ); 2] = [
-        (
-            VerifyDelegatedTokenError::TokenExpired,
-            crate::diagnostics::codes::AUTH_TOKEN_EXPIRED.raw_code(),
-        ),
-        (
-            VerifyDelegatedTokenError::CertExpired,
-            crate::diagnostics::codes::AUTH_CERT_EXPIRED.raw_code(),
-        ),
-    ];
-
-    for (err, expected) in cases {
-        let internal = map_verify_delegated_token_error(err);
-        let public = internal.public_error();
-        assert_eq!(public.code(), expected);
-    }
-}
-
-#[test]
-fn delegated_token_verify_preserves_typed_proof_callback_causes() {
-    let root = map_verify_delegated_token_error(VerifyDelegatedTokenError::<
-        InternalError,
-        InternalError,
-    >::RootProofInvalid(
-        InternalError::auth_material_stale()
-    ));
-    let issuer = map_verify_delegated_token_error(VerifyDelegatedTokenError::<
-        InternalError,
-        InternalError,
-    >::IssuerProofInvalid(
-        InternalError::invalid_input()
-    ));
-
-    assert_eq!(
-        root.public_error().code(),
-        crate::diagnostics::codes::SECURITY_CONFLICT.raw_code()
-    );
-    assert_eq!(
-        issuer.public_error().code(),
-        crate::diagnostics::codes::REQUEST_INVALID.raw_code()
-    );
-}
-
-#[test]
 fn chain_key_root_proof_failures_keep_boundary_specific_codes() {
     let cases = [
         (
-            ChainKeyRootProofError::Expired { target: "batch" },
+            RootDelegationProofError::Verification(
+                ic_auth::token::TokenVerificationError::Expired { target: "batch" },
+            ),
             crate::diagnostics::codes::AUTH_CERT_EXPIRED.raw_code(),
         ),
         (
-            ChainKeyRootProofError::NotYetValid { target: "batch" },
+            RootDelegationProofError::Verification(
+                ic_auth::token::TokenVerificationError::NotYetValid { target: "batch" },
+            ),
             crate::diagnostics::codes::SECURITY_UNAVAILABLE.raw_code(),
         ),
         (
-            ChainKeyRootProofError::Expired {
-                target: "root_key_policy",
-            },
+            RootDelegationProofError::Verification(
+                ic_auth::token::TokenVerificationError::Expired {
+                    target: "root_key_policy",
+                },
+            ),
             crate::diagnostics::codes::SECURITY_CONFLICT.raw_code(),
         ),
         (
-            ChainKeyRootProofError::ProofEpochTooOld { min: 8, found: 7 },
+            RootDelegationProofError::Verification(
+                ic_auth::token::TokenVerificationError::StaleAuthority {
+                    field: "proof_epoch",
+                },
+            ),
             crate::diagnostics::codes::SECURITY_CONFLICT.raw_code(),
         ),
         (
-            ChainKeyRootProofError::InvalidSignatureLength { len: 3 },
+            RootDelegationProofError::Verification(
+                ic_auth::token::TokenVerificationError::RootSignatureInvalid,
+            ),
             crate::diagnostics::codes::REQUEST_INVALID.raw_code(),
+        ),
+        (
+            RootDelegationProofError::Verification(
+                ic_auth::token::TokenVerificationError::RootSignatureBindingMismatch {
+                    field: "key_id",
+                },
+            ),
+            crate::diagnostics::codes::REQUEST_INVALID.raw_code(),
+        ),
+        (
+            RootDelegationProofError::Verification(
+                ic_auth::token::TokenVerificationError::RootKeyPolicyBindingMismatch {
+                    field: "key_id",
+                },
+            ),
+            crate::diagnostics::codes::SECURITY_CONFLICT.raw_code(),
         ),
     ];
 
     for (err, expected) in cases {
-        let mapped = map_chain_key_root_proof_error(err);
+        let mapped = map_root_delegation_proof_error(err);
         assert_eq!(mapped.public_error().code(), expected);
     }
 }
@@ -333,121 +276,4 @@ fn auth_proof_verifier_config_chain_key_rejects_unapproved_local_test_key() {
 
     AuthOps::auth_proof_verifier_config_from(&cfg)
         .expect_err("local test key requires explicit opt-in");
-}
-
-#[test]
-fn delegated_token_verifier_gate_rejects_issuer_only_canister() {
-    install_verifier_test_config(false, true, false);
-
-    require_current_canister_delegated_token_verifier()
-        .expect_err("issuer-only canister must not verify delegated tokens");
-}
-
-#[test]
-fn delegated_token_verifier_gate_rejects_role_attestation_cache_without_verifier_flag() {
-    install_verifier_test_config(false, false, true);
-
-    require_current_canister_delegated_token_verifier()
-        .expect_err("role-attestation cache must not enable delegated-token verification");
-}
-
-#[test]
-fn delegated_token_verifier_gate_accepts_current_canister_verifier() {
-    install_verifier_test_config(true, false, false);
-
-    require_current_canister_delegated_token_verifier()
-        .expect("explicit verifier canister should pass the execution gate");
-}
-
-#[test]
-fn delegated_token_context_fails_closed_without_protected_fleet() {
-    let _guard = crate::test::seams::lock();
-    install_verifier_test_config(true, false, false);
-
-    let result = delegated_token_local_context();
-
-    let Err(err) = result else {
-        panic!("missing protected Fleet must reject");
-    };
-    assert_eq!(err.code(), crate::diagnostics::codes::STATE_UNAVAILABLE);
-    assert_eq!(
-        err.public_error().code(),
-        crate::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
-    );
-}
-
-fn install_verifier_test_config(
-    delegated_token_verifier: bool,
-    delegated_token_issuer: bool,
-    role_attestation_cache: bool,
-) {
-    let mut canister_cfg = ConfigTestBuilder::canister_config(CanisterKind::Service);
-    canister_cfg.auth = CanisterAuthConfig {
-        delegated_token_issuer,
-        delegated_token_verifier,
-        local_application_authorization: None,
-        role_attestation_cache,
-    };
-
-    let mut cfg = ConfigTestBuilder::new()
-        .with_default_canister("project_instance", canister_cfg)
-        .build();
-    cfg.auth.delegated_tokens.build_network = BuildNetwork::Local;
-    cfg.auth.delegated_tokens.root_canister_id = Some(root_pid().to_string());
-    cfg.auth.delegated_tokens.ic_root_public_key_raw_hex = Some(hex(local_key()));
-    cfg.auth.delegated_tokens.chain_key_root_proof.key_id = Some("key_1".to_string());
-    cfg.auth
-        .delegated_tokens
-        .chain_key_root_proof
-        .derivation_path_hash_hex =
-        Some("fe51a87b988d221227b134c48f36787e891a902dcb5d48ea5f94cff8bfed5a16".to_string());
-    cfg.auth
-        .delegated_tokens
-        .chain_key_root_proof
-        .derivation_path_hex = Some(vec![
-        "63616e6963".to_string(),
-        "64656c65676174696f6e".to_string(),
-    ]);
-    cfg.auth
-        .delegated_tokens
-        .chain_key_root_proof
-        .public_key_hex = Some("02".repeat(33));
-    cfg.auth.delegated_tokens.chain_key_root_proof.key_version = Some(4);
-    cfg.auth
-        .delegated_tokens
-        .chain_key_root_proof
-        .min_accepted_key_version = Some(4);
-    cfg.auth
-        .delegated_tokens
-        .chain_key_root_proof
-        .min_accepted_proof_epoch = Some(7);
-    cfg.auth
-        .delegated_tokens
-        .chain_key_root_proof
-        .min_accepted_registry_epoch = Some(8);
-    cfg.auth.delegated_tokens.chain_key_root_proof.valid_from_ns = Some(10);
-    cfg.auth
-        .delegated_tokens
-        .chain_key_root_proof
-        .accept_until_ns = Some(1_000);
-    cfg.auth
-        .delegated_tokens
-        .chain_key_root_proof
-        .max_revocation_latency_ns = Some(600);
-    let _config = install_model_for_role(cfg, "project_instance");
-
-    Env::import(EnvData {
-        record: EnvRecord {
-            managed_binding: None,
-            fleet_subnet_root_pid: Some(root_pid()),
-            component_spec: Some(
-                ComponentSpecId::try_from(String::from("default"))
-                    .expect("default Component Spec ID"),
-            ),
-            subnet_pid: Some(p(9)),
-            root_pid: Some(root_pid()),
-            canister_role: Some(CanisterRole::new("project_instance")),
-            parent_pid: Some(root_pid()),
-        },
-    });
 }

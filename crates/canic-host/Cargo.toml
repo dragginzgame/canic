@@ -35,12 +35,14 @@ crc32fast = { workspace = true }
 getrandom = { workspace = true }
 hmac = { workspace = true }
 ic-agent = { workspace = true }
+ic-build.workspace = true
 ic-certification = { workspace = true }
 ic-host-artifacts = { workspace = true, features = ["gzip", "wasm"] }
 ic-host-fs = { workspace = true }
 ic-host-process = { workspace = true }
-ic-host-tools = { workspace = true, features = ["ic-limits"] }
-ic-query = { workspace = true }
+ic-host-text = { workspace = true }
+ic-host-tools = { workspace = true, features = ["candid-service", "ic-interface", "ic-limits"] }
+ic-query = { workspace = true, features = ["ledger-evidence-host"] }
 ic-testkit = { workspace = true, optional = true }
 icrc-ledger-types = { workspace = true }
 prost = { workspace = true }
@@ -61,6 +63,7 @@ rustix = { workspace = true }
 
 [dev-dependencies]
 flate2 = { workspace = true }
+ic-host-process = { workspace = true, features = ["test-support"] }
 ic-testkit = { workspace = true }
 ic-verify-bls-signature = { workspace = true }
 

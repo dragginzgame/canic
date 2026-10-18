@@ -103,7 +103,11 @@ impl MgmtOps {
 
     /// Internal ops entrypoint used by workflow and other ops helpers.
     pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatus, InternalError> {
-        let status = management_call(MgmtInfra::canister_status(canister_pid)).await?;
+        let status = management_call(MgmtInfra::canister_status(canister_pid))
+            .await
+            .map_err(|error| {
+                error.with_dependency_failure(canister_pid, "canister_status", "canister_status")
+            })?;
 
         Ok(canister_status_from_infra(status))
     }

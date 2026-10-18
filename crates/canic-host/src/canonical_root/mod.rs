@@ -3,11 +3,13 @@
 //! Binds the Canic-owned entrypoint to the selected App configuration and exact
 //! Canic dependency. Runtime lifecycle and capability policy remain their owners.
 
+use ic_build::cargo::observation::CargoFeatureSelection;
+
 #[cfg(test)]
 mod tests;
 
 use crate::{
-    cargo_metadata::{CargoFeatureSelection, cargo_metadata_catalog_for_manifest},
+    cargo_observation::cargo_metadata_catalog_for_manifest,
     fleet_package,
     fleet_package::{FleetPackageSpec, resolved_canic_package, resolved_wrapper_dependencies},
     role_contract::PackageValidationMode,
@@ -59,7 +61,7 @@ fn materialize_package(
         false,
         &CargoFeatureSelection::default(),
     )?;
-    let workspace = &metadata.workspace_root;
+    let workspace = metadata.workspace_root.as_std_path();
     let canic = resolved_canic_package(&metadata)?;
     let dependencies = resolved_wrapper_dependencies(&metadata, canic)?;
     let features = required_features_for_role(config, &CanisterRole::ROOT)
@@ -70,7 +72,7 @@ fn materialize_package(
     fleet_package::materialize(
         &manifest,
         workspace,
-        &canic.manifest_path,
+        canic.manifest_path.as_std_path(),
         &dependencies,
         &FleetPackageSpec {
             package: PACKAGE,

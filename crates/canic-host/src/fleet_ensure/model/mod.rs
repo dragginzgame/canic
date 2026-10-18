@@ -13,7 +13,6 @@ pub mod infrastructure_bootstrap;
 pub mod operator_mint;
 pub mod release;
 
-pub(in crate::fleet_ensure) mod serialization;
 pub mod terminal;
 
 use serde::{Deserialize, Serialize};
@@ -453,7 +452,7 @@ pub struct ReinstallHistoryWitness {
     pub candid: String,
     pub candid_sha256: String,
     /// Exact replacement Root admitted only while reconciling its own durable intent.
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub replacement: Option<Box<ReinstallRootWitnessRecord>>,
 }
 
@@ -493,12 +492,12 @@ pub enum EnsureAction {
         snapshot_id: String,
         /// Exact inventory before this deletion, in canonical hexadecimal order.
         expected_snapshots: Vec<String>,
-        #[serde(deserialize_with = "serialization::required_option")]
+        #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
         expected_module_sha256: Option<String>,
     },
     Fund {
         /// Exact Root and lifecycle for protected inspection of a pool funding target.
-        #[serde(deserialize_with = "serialization::required_option")]
+        #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
         pool_funding: Option<PoolFundingAuthority>,
         #[serde(with = "u128_text")]
         amount: u128,
@@ -527,7 +526,7 @@ pub enum EnsureAction {
     },
     Install {
         canic_init: Option<DesiredCanisterInit>,
-        #[serde(deserialize_with = "serialization::required_option")]
+        #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
         reinstall_witness: Option<Box<ReinstallHistoryWitness>>,
         init_arg: Option<String>,
         init_arg_sha256: Option<String>,
@@ -793,7 +792,7 @@ pub struct CanisterPlan {
     pub name: String,
     #[serde(with = "u128_text")]
     pub observed_cycles: u128,
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub principal: Option<String>,
 }
 
@@ -1019,16 +1018,16 @@ impl<'de> Deserialize<'de> for ReviewedDesiredFleetRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetEnsurePlan {
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub infrastructure_bootstrap:
         Option<Box<infrastructure_bootstrap::InfrastructureBootstrapRecord>>,
     /// Informational dependent work; grants no funding or effect authority.
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub recovery_review: Option<Box<FleetRecoveryReview>>,
     /// One explicit selected-build wipe, retained through preparation and full convergence.
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub reinstall: Option<Box<FleetReinstallRecord>>,
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub continuation: Option<FleetEnsureContinuationAuthority>,
     pub canisters: Vec<CanisterPlan>,
     pub conservation: CycleConservation,
@@ -1039,17 +1038,17 @@ pub struct FleetEnsurePlan {
     pub plan_sha256: String,
     pub planned_at_time: u64,
     pub protocol_actions: Vec<EnsureAction>,
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub root_start_authority: Option<Box<RetainedRootStartAuthorityRecord>>,
     /// Exact installed Root authority approved for replacement by this plan.
     pub root_reinstall_bindings: Vec<RootManagementBinding>,
     /// Required for execution; normalization may clear it when comparing action projections.
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub reviewed_desired: Option<Box<ReviewedDesiredFleetRecord>>,
     pub schema_version: u16,
     pub scope: FleetEnsurePlanScope,
     /// Exact terminal operation that owns the currently active Registry observation.
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub terminal_inventory_operation_id: Option<String>,
 }
 
@@ -1088,7 +1087,7 @@ impl FleetEnsurePlanScope {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetReinstallRecord {
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub activation_reset: Option<Box<FleetActivationResetRecord>>,
 
     pub operation_id: String,
@@ -1127,7 +1126,7 @@ pub struct FleetActivationSourceRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetActivationResetRecord {
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub preparation: Option<ActivationPreparationEvidenceRecord>,
     pub source: FleetActivationSourceRecord,
     pub roots: Vec<RootActivationResetRecord>,
@@ -1181,7 +1180,7 @@ pub struct RootActivationResetRecord {
 #[serde(deny_unknown_fields)]
 pub struct FleetReinstallAssetRecord {
     pub controllers: Vec<String>,
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub module_sha256: Option<String>,
     pub principal: String,
     pub root: String,
@@ -1281,7 +1280,7 @@ pub struct EffectRecord {
     /// Fixture publication calls reserved before issue, including failed or lost replies.
     pub publication_attempts: u32,
     pub action_sha256: String,
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub created_principal: Option<String>,
     #[serde(with = "option_u128_text")]
     pub destination_post_cycles: Option<u128>,
@@ -1291,11 +1290,11 @@ pub struct EffectRecord {
     pub post_cycles: Option<u128>,
     #[serde(with = "option_u128_text")]
     pub pre_cycles: Option<u128>,
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub pre_canister_version: Option<u64>,
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub progress_identity: Option<String>,
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub receipt: Option<String>,
     pub state: EffectState,
 }
@@ -1393,12 +1392,12 @@ pub fn reconcile_retirement_transfer(
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetEnsureStateRecord {
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub active_registry: Option<canic_contracts::dto::fleet_registry::FleetRegistry>,
     /// Exact applied action identities for the adjacent completed reinstalls.
     pub completed_reinstall_action_sha256: BTreeMap<String, String>,
     /// Exact operation owning the adjacent completed-reinstall thresholds.
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub completed_reinstall_operation_id: Option<String>,
     /// Pre-effect version thresholds for exact journal-proved reinstalls in the
     /// immediately preceding nonterminal operation.
@@ -1416,13 +1415,13 @@ pub struct FleetEnsureStateRecord {
 #[serde(deny_unknown_fields)]
 pub struct FleetEnsureTopologyRecord {
     pub kind: DesiredCanisterKind,
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub module_hash: Option<String>,
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub parent: Option<String>,
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub protocol_binding: Option<crate::protocol_binding::RegistryProtocolBinding>,
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub role: Option<String>,
 }
 
@@ -1432,10 +1431,10 @@ pub struct FleetEnsureTopologyRecord {
 #[serde(deny_unknown_fields)]
 pub struct FleetEnsureJournalRecord {
     /// Whole-Fleet release shares this journal and the ordinary exclusive operation lock.
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub release: Option<release::FleetReleaseExecutionRecord>,
     /// An explicit extension of this operation's registration authority; null until requested.
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub bootstrap_registration_recovery: Option<
         infrastructure_bootstrap::registration_recovery::BootstrapRegistrationRecoveryRecord,
     >,
@@ -1443,7 +1442,7 @@ pub struct FleetEnsureJournalRecord {
     pub funding_reviews: Vec<FundingReviewRecord>,
     pub successor_phases: Vec<FleetEnsureSuccessorPhaseRecord>,
     pub completion: FleetEnsureCompletion,
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub estate_funding_required: Option<EstateFundingRequiredRecord>,
     pub effects: Vec<EffectRecord>,
     pub fleet: String,
@@ -1518,9 +1517,9 @@ pub struct FleetEnsureReport {
 #[serde(deny_unknown_fields)]
 pub struct FundingReviewRecord {
     pub action: EnsureAction,
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub effect: Option<EffectRecord>,
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub operator_mint: Option<operator_mint::OperatorMintReviewRecord>,
     pub pause: FundingPauseRecord,
     pub review_sha256: String,
@@ -1606,7 +1605,7 @@ impl FundingPauseRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct NativeFundingRequiredRecord {
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub observation_quote: Option<funding_observation::FundingQuoteSourceRecord>,
     #[serde(with = "u128_text")]
     pub available_cycles: u128,
@@ -1748,7 +1747,7 @@ pub struct RootStartupFundingForecast {
     #[serde(with = "u128_text")]
     pub required_native_cycles: u128,
     pub reuse_assumption: StartupFundingReuseAssumption,
-    #[serde(deserialize_with = "serialization::required_option")]
+    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
     pub unfunded_role: Option<StartupRoleShortfall>,
 }
 

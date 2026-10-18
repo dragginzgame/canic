@@ -14,6 +14,7 @@ struct InstallationInput {
 
 // The artifact grants both namespaces in one shared physical allocation pool.
 canic::memory::memory_allocation_pool!(
+    provider = memory_pool,
     authorities = [
         ("embedded-app", "embedded_app."),
         (
@@ -26,9 +27,20 @@ canic::memory::memory_allocation_pool!(
 canic_blob_service::mount!();
 
 canic::start!(
+    memory = memory(),
     argument_limits = lifecycle::ENVELOPE_LIMITS,
     lifecycle_participant(init = install, post_upgrade = restore),
 );
+
+fn memory() -> canic::memory::MemoryBootstrap {
+    let mut input = canic::memory::framework();
+    input.pool = memory_pool().unwrap();
+    input
+        .requests
+        .extend(canic_blob_service::memory_requests().unwrap());
+    input.requests.extend(app::memory_requests());
+    input
+}
 
 fn install() {
     let (_, application): (canic::dto::abi::v1::CanisterInitPayload, Option<Vec<u8>>) =

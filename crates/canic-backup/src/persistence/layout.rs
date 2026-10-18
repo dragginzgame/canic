@@ -9,8 +9,8 @@ use crate::{
     journal::DownloadJournal,
     manifest::DeploymentBackupManifest,
     persistence::{
-        BackupExecutionGuard, BackupExecutionIntegrityReport, BackupIntegrityReport,
-        BackupLayoutGuard, JournalLock, JournalLockError, PersistenceError,
+        BackupExecutionIntegrityReport, BackupIntegrityReport, BackupLayoutGuard, JournalLock,
+        JournalLockError, PersistenceError,
         integrity::{verify_execution_integrity, verify_layout_integrity},
         json::{create_json_durable, read_json, write_json_durable},
     },
@@ -240,4 +240,11 @@ impl BackupLayout {
         let journal = self.read_execution_journal()?;
         verify_execution_integrity(&plan, &journal)
     }
+}
+
+/// Holds layout lifetime and original execution-journal mutation authority.
+#[derive(Debug)]
+pub struct BackupExecutionGuard {
+    pub(super) _lifetime: BackupLayoutGuard,
+    pub(super) _journal: JournalLock,
 }

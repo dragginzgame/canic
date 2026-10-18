@@ -3,7 +3,6 @@ mod wasm;
 use crate::{
     binaryen::BinaryenExecutable,
     build_toolchain::BuildToolchain,
-    candid_endpoints::parse_candid_service_endpoints,
     canister_build::{
         ArtifactTransformKind, ArtifactTransformOutcome, ArtifactTransformOutput,
         CanisterBuildProfile, WasmTransformMetrics,
@@ -12,24 +11,26 @@ use crate::{
     output_with_executable_busy_retry,
 };
 use canic_contracts::ids::BuildNetwork;
+use ic_build::artifacts::ArtifactStagingDirectory;
 use ic_host_artifacts::artifact::encode_gzip;
 use ic_host_fs::{
     durable::{PublicationMode, WriteOptions, write_bytes, write_named_with, write_with},
     read::read_file_no_follow,
 };
+use ic_host_tools::{
+    candid::service::{self, ServiceLimits},
+    interface,
+};
 use std::{
     collections::BTreeSet,
     fs,
     path::{Path, PathBuf},
-    sync::atomic::{AtomicU64, Ordering},
     time::Instant,
 };
 
 pub use wasm::enforce_wasm_install_limits;
 pub use wasm::wasm_artifact_metrics;
 
-const ARTIFACT_STAGE_ATTEMPTS: usize = 64;
-static ARTIFACT_STAGE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 const IC_WASM_FEATURE_FLAGS: &[&str] = &[
     "--enable-bulk-memory",
     "--enable-sign-ext",
@@ -45,11 +46,6 @@ const BINARYEN_REPORTED_IC_WASM_FEATURE_FLAGS: &[&str] = &[
 
 const CANDID_POINTER_EXPORT: &str = "get_candid_pointer";
 const IC_CDK_INTERNAL_METHOD_PREFIX: &str = "<ic-cdk internal> ";
-const CANISTER_METHOD_EXPORT_PREFIXES: [&str; 3] = [
-    "canister_composite_query ",
-    "canister_query ",
-    "canister_update ",
-];
 
 /// Retain a type-erased qualification cause inside the shared publication error.
 #[derive(Debug, thiserror::Error)]
@@ -130,12 +126,26 @@ fn stage_and_publish_artifact_set<T>(
 ) -> Result<T, Box<dyn std::error::Error>> {
     let staged = StagedArtifactSet::create(finalization.wasm_path)?;
     write_wasm_artifact(finalization.source_wasm_path, &staged.wasm_path)?;
-    write_bytes(&staged.did_path, finalization.candid)?;
+    write_bytes(
+        &staged.did_path,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        finalization.candid,
+    )?;
 
     if let Some(identity) = finalization.release_build_id {
         let mut bytes = fs::read(&staged.wasm_path)?;
         crate::canister_build::release_binding::bind_release_build_id(&mut bytes, identity)?;
-        write_bytes(&staged.wasm_path, &bytes)?;
+        write_bytes(
+            &staged.wasm_path,
+            WriteOptions {
+                mode: PublicationMode::Replace,
+                permissions: 0o666,
+            },
+            &bytes,
+        )?;
     }
     let result = qualify(&staged)?;
     let wasm = fs::read(&staged.wasm_path)?;
@@ -144,38 +154,38 @@ fn stage_and_publish_artifact_set<T>(
 
     // The build lock keeps consumers behind this function's success boundary. Each complete
     // file is durably replaced only after the complete candidate set has qualified.
-    write_bytes(finalization.wasm_gz_path, &wasm_gz)?;
-    write_bytes(finalization.did_path, &candid)?;
-    write_bytes(finalization.wasm_path, &wasm)?;
+    write_bytes(
+        finalization.wasm_gz_path,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &wasm_gz,
+    )?;
+    write_bytes(
+        finalization.did_path,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &candid,
+    )?;
+    write_bytes(
+        finalization.wasm_path,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &wasm,
+    )?;
     Ok(result)
 }
 
 struct StagedArtifactSet {
-    root: PathBuf,
+    _staging: ArtifactStagingDirectory,
     wasm_path: PathBuf,
     did_path: PathBuf,
     wasm_gz_path: PathBuf,
-}
-
-/// Private copy of one completed Cargo output, retained across later compilations.
-pub struct CapturedWasmArtifact {
-    staged: StagedArtifactSet,
-}
-
-impl CapturedWasmArtifact {
-    /// Copy the selected output before another Cargo command can replace it.
-    pub(crate) fn capture(
-        source: &Path,
-        destination: &Path,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
-        let staged = StagedArtifactSet::create(destination)?;
-        write_wasm_artifact(source, &staged.wasm_path)?;
-        Ok(Self { staged })
-    }
-
-    pub(crate) fn path(&self) -> &Path {
-        &self.staged.wasm_path
-    }
 }
 
 impl StagedArtifactSet {
@@ -186,36 +196,13 @@ impl StagedArtifactSet {
                 final_wasm_path.display()
             )
         })?;
-        for _ in 0..ARTIFACT_STAGE_ATTEMPTS {
-            let sequence = ARTIFACT_STAGE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-            let root = parent.join(format!(
-                ".canic-artifact-stage-{}-{sequence}",
-                std::process::id()
-            ));
-            match fs::create_dir(&root) {
-                Ok(()) => {
-                    return Ok(Self {
-                        wasm_path: root.join("candidate.wasm"),
-                        did_path: root.join("candidate.did"),
-                        wasm_gz_path: root.join("candidate.wasm.gz"),
-                        root,
-                    });
-                }
-                Err(source) if source.kind() == std::io::ErrorKind::AlreadyExists => {}
-                Err(source) => return Err(source.into()),
-            }
-        }
-        Err(format!(
-            "failed to allocate an artifact staging directory beneath {}",
-            parent.display()
-        )
-        .into())
-    }
-}
-
-impl Drop for StagedArtifactSet {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.root);
+        let staging = ArtifactStagingDirectory::new(parent)?;
+        Ok(Self {
+            wasm_path: staging.path().join("candidate.wasm"),
+            did_path: staging.path().join("candidate.did"),
+            wasm_gz_path: staging.path().join("candidate.wasm.gz"),
+            _staging: staging,
+        })
     }
 }
 
@@ -228,7 +215,7 @@ pub fn validate_sidecar_only_candid_artifact(
     let candid = fs::read_to_string(did_path)?;
     let snapshot = wasm::wasm_contract_snapshot(&wasm)?;
 
-    if snapshot.exports.contains_key(CANDID_POINTER_EXPORT) {
+    if snapshot.facts.exports.contains_key(CANDID_POINTER_EXPORT) {
         return Err(format!(
             "sidecar-only runtime {} still exports {CANDID_POINTER_EXPORT}",
             wasm_path.display()
@@ -249,7 +236,7 @@ pub fn validate_sidecar_only_candid_artifact(
 /// Verify that a Wasm exports exactly the application methods declared in its Candid.
 ///
 /// Lifecycle and IC CDK internal exports are outside the public method inventory.
-/// This compares endpoint names; release-bound Candid hashes retain the type authority.
+/// This compares endpoint names and modes; release-bound Candid hashes retain the type authority.
 pub fn validate_wasm_candid_endpoints(
     wasm_path: &Path,
     did_path: &Path,
@@ -263,28 +250,28 @@ pub fn validate_wasm_candid_endpoints(
 fn validate_candid_methods(
     wasm_path: &Path,
     did_path: &Path,
-    snapshot: &wasm::WasmContractSnapshot,
+    snapshot: &wasm::WasmContractSnapshot<'_>,
     candid: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let declared = parse_candid_service_endpoints(candid)?
-        .into_iter()
-        .map(|endpoint| endpoint.name)
+    // Retain input-sized admission; Host limits are not parser resource quotas.
+    let methods = service::inspect(
+        candid,
+        ServiceLimits {
+            source_bytes: candid.len(),
+            methods: candid.len(),
+        },
+    )?;
+    let declared = methods
+        .iter()
+        .map(|method| method.as_export())
         .collect::<BTreeSet<_>>();
-    let exported = snapshot
-        .exports
-        .keys()
-        .filter_map(|name| {
-            CANISTER_METHOD_EXPORT_PREFIXES
-                .iter()
-                .find_map(|prefix| name.strip_prefix(prefix))
-                .filter(|name| !name.starts_with(IC_CDK_INTERNAL_METHOD_PREFIX))
-                .map(str::to_string)
-        })
+    let exported = interface::exported_methods(&snapshot.facts)
+        .filter(|method| !method.name.starts_with(IC_CDK_INTERNAL_METHOD_PREFIX))
         .collect::<BTreeSet<_>>();
 
     if declared != exported {
-        let missing = declared.difference(&exported).cloned().collect::<Vec<_>>();
-        let undeclared = exported.difference(&declared).cloned().collect::<Vec<_>>();
+        let missing = declared.difference(&exported).copied().collect::<Vec<_>>();
+        let undeclared = exported.difference(&declared).copied().collect::<Vec<_>>();
         return Err(format!(
             "runtime endpoint exports for {} do not match {}: missing={missing:?}, undeclared={undeclared:?}",
             wasm_path.display(),
@@ -303,7 +290,7 @@ fn validate_embedded_public_candid(
     let candid = fs::read(did_path)?;
     let snapshot = wasm::wasm_contract_snapshot(&wasm)?;
     if snapshot.public_candid_metadata.len() != 1
-        || snapshot.public_candid_metadata[0].as_slice() != candid.as_slice()
+        || snapshot.public_candid_metadata[0] != candid.as_slice()
     {
         return Err(format!(
             "embedded public Candid metadata for {} does not exactly match {}",
@@ -319,36 +306,43 @@ fn shrink_wasm_artifact(
     tool: &IcWasmExecutable,
     wasm_path: &Path,
 ) -> Result<ArtifactTransformOutput, Box<dyn std::error::Error>> {
-    write_named_with(wasm_path, |shrunk_path| {
-        let produce = || -> Result<_, Box<dyn std::error::Error>> {
-            let mut command = crate::build_environment::command(tool.path());
-            command
-                .arg(wasm_path)
-                .arg("-o")
-                .arg(shrunk_path)
-                .arg("shrink");
-            let output = output_with_executable_busy_retry(&mut command)?;
-            if !output.status.success() {
-                return Err(format!(
-                    "ic-wasm shrink failed using {} ({}) for {} with status {}: {}",
-                    tool.path().display(),
-                    tool.version_identity(),
-                    wasm_path.display(),
-                    output.status,
-                    String::from_utf8_lossy(&output.stderr).trim()
-                )
-                .into());
-            }
-            let bytes = read_file_no_follow(shrunk_path, crate::MAX_ARTIFACT_READ_BYTES)?;
-            wasm::wasm_contract_snapshot(&bytes)?;
-            Ok(transform_output(
-                ArtifactTransformKind::Shrink,
-                Some(tool.version_identity().to_string()),
-                ArtifactTransformOutcome::Applied,
-            ))
-        };
-        produce().map_err(TransformProducerError::from)
-    })
+    write_named_with(
+        wasm_path,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        |shrunk_path| {
+            let produce = || -> Result<_, Box<dyn std::error::Error>> {
+                let mut command = crate::build_environment::command(tool.path());
+                command
+                    .arg(wasm_path)
+                    .arg("-o")
+                    .arg(shrunk_path)
+                    .arg("shrink");
+                let output = output_with_executable_busy_retry(&mut command)?;
+                if !output.status.success() {
+                    return Err(format!(
+                        "ic-wasm shrink failed using {} ({}) for {} with status {}: {}",
+                        tool.path().display(),
+                        tool.version_identity(),
+                        wasm_path.display(),
+                        output.status,
+                        String::from_utf8_lossy(&output.stderr).trim()
+                    )
+                    .into());
+                }
+                let bytes = read_file_no_follow(shrunk_path, crate::MAX_ARTIFACT_READ_BYTES)?;
+                wasm::wasm_contract_snapshot(&bytes)?;
+                Ok(transform_output(
+                    ArtifactTransformKind::Shrink,
+                    Some(tool.version_identity().to_string()),
+                    ArtifactTransformOutcome::Applied,
+                ))
+            };
+            produce().map_err(TransformProducerError::from)
+        },
+    )
     .map_err(Into::into)
 }
 
@@ -358,7 +352,14 @@ pub fn write_wasm_artifact(
     target_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let bytes = fs::read(source_path)?;
-    write_bytes(target_path, &bytes)?;
+    write_bytes(
+        target_path,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &bytes,
+    )?;
     Ok(())
 }
 
@@ -473,20 +474,27 @@ fn optimize_release_wasm_artifact_with_tool(
     let before_gzip = deterministic_gzip_bytes(&before_bytes)?;
     let before_metrics = wasm::wasm_artifact_metrics(&before_bytes, before_gzip.len())?;
 
-    let metrics = write_named_with(wasm_path, |optimized_path| {
-        run_binaryen_optimizer(tool.path(), wasm_path, optimized_path, &before_features)
-            .and_then(|()| {
-                validate_optimized_wasm(
-                    tool.path(),
-                    wasm_path,
-                    optimized_path,
-                    &before_contract,
-                    &before_features,
-                    before_metrics,
-                )
-            })
-            .map_err(TransformProducerError::from)
-    })?;
+    let metrics = write_named_with(
+        wasm_path,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        |optimized_path| {
+            run_binaryen_optimizer(tool.path(), wasm_path, optimized_path, &before_features)
+                .and_then(|()| {
+                    validate_optimized_wasm(
+                        tool.path(),
+                        wasm_path,
+                        optimized_path,
+                        &before_contract,
+                        &before_features,
+                        before_metrics,
+                    )
+                })
+                .map_err(TransformProducerError::from)
+        },
+    )?;
     eprintln!(
         "release Wasm optimization for {}: raw {} -> {}, gzip {} -> {}, code section {} -> {}, data section {} -> {}, functions {} -> {}",
         wasm_path.display(),
@@ -548,7 +556,7 @@ fn validate_optimized_wasm(
     command_path: &Path,
     wasm_path: &Path,
     optimized_path: &Path,
-    before_contract: &wasm::WasmContractSnapshot,
+    before_contract: &wasm::WasmContractSnapshot<'_>,
     before_features: &[String],
     before_metrics: crate::canister_build::WasmArtifactMetrics,
 ) -> Result<WasmTransformMetrics, Box<dyn std::error::Error>> {
@@ -559,7 +567,18 @@ fn validate_optimized_wasm(
             wasm_path.display()
         )
     })?;
-    if after_contract.exports != before_contract.exports {
+    // Optimizers may renumber functions; compare names/kinds, not indices.
+    if !after_contract
+        .facts
+        .exports
+        .iter()
+        .map(|(name, export)| (name, export.kind))
+        .eq(before_contract
+            .facts
+            .exports
+            .iter()
+            .map(|(name, export)| (name, export.kind)))
+    {
         return Err(format!(
             "Binaryen optimization changed the export inventory for {}",
             wasm_path.display()

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared companions: scripts/ci/check-runner-disk-space.sh
+# Shared companions: scripts/ci/check-runner-disk-space.sh scripts/ci/fixture-lifecycle.sh
 set -euo pipefail
 
 ROOT="$0"
@@ -7,16 +7,12 @@ ROOT="$0"
 ROOT="$(cd -P "${ROOT%/*}/../.." && printf '%s/.' "$PWD")"
 ROOT="${ROOT%/.}"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/runner-disk-test.XXXXXX")"
-# Bash 3.2 can enter EXIT with status zero after nounset; require completion too.
+fixture="$(CDPATH="" cd -P -- "$fixture" && printf '%s/.' "$PWD")"
+fixture="${fixture%/.}"
+# shellcheck source=scripts/ci/fixture-lifecycle.sh
+source "$ROOT/scripts/ci/fixture-lifecycle.sh"
 fixture_complete=false
-finish() {
-    local status=$?
-    [[ "$fixture_complete" == true || "$status" != 0 ]] || status=1
-    if [[ "$status" == 0 ]]; then rm -rf "$fixture"
-    else printf "Disk fixtures retained: %s\n" "$fixture" >&2; fi
-    exit "$status"
-}
-trap finish EXIT
+trap 'fixture_finish "$?" "$fixture" "Disk fixtures retained"' EXIT
 checker="$ROOT/scripts/ci/check-runner-disk-space.sh"
 mkdir -p "$fixture/bin" "$fixture/workspace [one]" "$fixture/-selected"
 printf 'retained build/evidence input\n' > "$fixture/workspace [one]/artifact"

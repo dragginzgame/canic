@@ -8,13 +8,17 @@ use super::{
     RestoreApplyJournal, RestoreApplyOperationReceiptOutcome, RestoreApplyOperationState,
     types::RestoreRunnerError,
 };
-use std::{fs, path::Path};
+use std::path::Path;
 
 pub(super) fn read_apply_journal_file(
     path: &Path,
 ) -> Result<RestoreApplyJournal, RestoreRunnerError> {
-    let data = fs::read_to_string(path)?;
-    let journal: RestoreApplyJournal = serde_json::from_str(&data)?;
+    let journal: RestoreApplyJournal =
+        crate::persistence::read_json(path).map_err(|error| match error {
+            crate::persistence::PersistenceError::Io(error) => RestoreRunnerError::Io(error),
+            crate::persistence::PersistenceError::Json(error) => RestoreRunnerError::Json(error),
+            error => RestoreRunnerError::Persistence(error.into()),
+        })?;
     journal.validate()?;
     validate_terminal_operation_receipts(&journal)?;
     Ok(journal)
@@ -43,7 +47,7 @@ pub(super) fn write_apply_journal_file_at_barriers(
     Ok(())
 }
 
-fn validate_terminal_operation_receipts(
+pub(in crate::restore) fn validate_terminal_operation_receipts(
     journal: &RestoreApplyJournal,
 ) -> Result<(), RestoreRunnerError> {
     for operation in journal.operations.iter().filter(|operation| {
@@ -255,6 +259,7 @@ mod tests {
                 expected_module_hash: None,
                 verification_kind: None,
             }],
+            command_custody: Vec::new(),
             operation_receipts: Vec::new(),
         }
     }

@@ -8,7 +8,9 @@ use crate::{dto::auth, ops::auth::delegated::canonical::CanonicalAuthError};
 use canic_contracts::ids::CanisterRole;
 use ic_auth_protocol_types as protocol;
 
-pub(super) fn role(role: &CanisterRole) -> Result<protocol::AuthRole, CanonicalAuthError> {
+pub(in crate::ops::auth) fn role(
+    role: &CanisterRole,
+) -> Result<protocol::AuthRole, CanonicalAuthError> {
     role.as_str().parse().map_err(|_| {
         if role.as_str().is_empty() {
             CanonicalAuthError::EmptyRole
@@ -20,7 +22,9 @@ pub(super) fn role(role: &CanisterRole) -> Result<protocol::AuthRole, CanonicalA
     })
 }
 
-const fn audience(audience: &auth::DelegationAudience) -> protocol::DelegationAudience {
+pub(in crate::ops::auth) const fn audience(
+    audience: &auth::DelegationAudience,
+) -> protocol::DelegationAudience {
     match audience {
         auth::DelegationAudience::Fleet(fleet) => {
             protocol::DelegationAudience::Fleet(protocol::AudienceId {
@@ -33,7 +37,7 @@ const fn audience(audience: &auth::DelegationAudience) -> protocol::DelegationAu
     }
 }
 
-fn grants(
+pub(in crate::ops::auth) fn grants(
     grants: &[auth::DelegatedRoleGrant],
 ) -> Result<Vec<protocol::DelegatedRoleGrant>, CanonicalAuthError> {
     grants
@@ -65,23 +69,6 @@ pub(super) fn cert(
     })
 }
 
-pub(super) fn claims(
-    claims: &auth::DelegatedTokenClaims,
-) -> Result<protocol::DelegatedTokenClaims, CanonicalAuthError> {
-    Ok(protocol::DelegatedTokenClaims {
-        presenter: claims.presenter,
-        subject: claims.subject,
-        issuer_pid: claims.issuer_pid,
-        cert_hash: claims.cert_hash,
-        issued_at_ns: claims.issued_at_ns,
-        expires_at_ns: claims.expires_at_ns,
-        aud: audience(&claims.aud),
-        grants: grants(&claims.grants)?,
-        nonce: claims.nonce,
-        ext: claims.ext.clone(),
-    })
-}
-
 pub(super) fn chain_key_cert(
     cert: &auth::ChainKeyDelegationCertV1,
 ) -> Result<protocol::ChainKeyDelegationCertV1, CanonicalAuthError> {
@@ -102,12 +89,14 @@ pub(super) fn chain_key_cert(
     })
 }
 
-pub(super) fn proof(
-    proof: &auth::DelegationProof,
+#[cfg(any(test, feature = "auth-chain-key-ecdsa"))]
+pub(super) fn proof_parts(
+    certificate: &auth::DelegationCert,
+    root_proof: &auth::RootProof,
 ) -> Result<protocol::DelegationProof, CanonicalAuthError> {
-    let auth::RootProof::IcChainKeyBatchSignatureV1(root) = &proof.root_proof;
+    let auth::RootProof::IcChainKeyBatchSignatureV1(root) = root_proof;
     Ok(protocol::DelegationProof {
-        cert: cert(&proof.cert)?,
+        cert: cert(certificate)?,
         root_proof: protocol::RootProof::IcChainKeyBatchSignatureV1(
             protocol::IcChainKeyBatchSignatureProofV1 {
                 header: root.header.clone(),
@@ -117,4 +106,11 @@ pub(super) fn proof(
             },
         ),
     })
+}
+
+#[cfg(test)]
+pub(in crate::ops::auth) fn proof(
+    proof: &auth::DelegationProof,
+) -> Result<protocol::DelegationProof, CanonicalAuthError> {
+    proof_parts(&proof.cert, &proof.root_proof)
 }

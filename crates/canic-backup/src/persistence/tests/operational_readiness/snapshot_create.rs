@@ -9,7 +9,7 @@ use crate::{
     execution::{BackupExecutionJournal, BackupExecutionOperationState},
     journal::{ArtifactJournalEntry, ArtifactState, DownloadJournal, DownloadOperationMetrics},
     operational_readiness::manifest::assert_case_defined,
-    persistence::{BackupLayout, CommandLifetimeHandle},
+    persistence::{BackupLayout, CommandLifetimeLock},
     plan::{BackupExecutionPreflightReceipts, BackupOperationKind, BackupPlan},
     runner::{
         BackupRunnerCanisterStatus, BackupRunnerCommandError, BackupRunnerConfig,
@@ -66,6 +66,7 @@ fn exact_created_artifact_rebuilds_the_complete_execution_receipt() {
         .next_ready_operation()
         .cloned()
         .expect("ready snapshot operation");
+    crate::test_support::retain_original_command(&layout, &mut journal, operation.sequence);
     journal
         .mark_snapshot_create_pending_at(
             operation.sequence,
@@ -405,6 +406,7 @@ fn mark_snapshot_pending(
         .cloned()
         .expect("ready snapshot operation");
     let canister_id = target(&operation);
+    crate::test_support::retain_original_command(layout, &mut journal, operation.sequence);
     journal
         .mark_snapshot_create_pending_at(
             operation.sequence,
@@ -514,7 +516,7 @@ impl BackupRunnerExecutor for SnapshotEffectExecutor {
     fn stop_canister(
         &mut self,
         canister_id: &str,
-        command_lifetime: CommandLifetimeHandle,
+        command_lifetime: &mut CommandLifetimeLock,
     ) -> Result<(), BackupRunnerCommandError> {
         self.delegate.stop_canister(canister_id, command_lifetime)
     }
@@ -522,7 +524,7 @@ impl BackupRunnerExecutor for SnapshotEffectExecutor {
     fn start_canister(
         &mut self,
         canister_id: &str,
-        command_lifetime: CommandLifetimeHandle,
+        command_lifetime: &mut CommandLifetimeLock,
     ) -> Result<(), BackupRunnerCommandError> {
         self.delegate.start_canister(canister_id, command_lifetime)
     }
@@ -530,7 +532,7 @@ impl BackupRunnerExecutor for SnapshotEffectExecutor {
     fn create_snapshot(
         &mut self,
         canister_id: &str,
-        _command_lifetime: CommandLifetimeHandle,
+        _command_lifetime: &mut CommandLifetimeLock,
     ) -> Result<BackupRunnerSnapshot, BackupRunnerCommandError> {
         self.commands.push(format!("snapshot:{canister_id}"));
         if self.reject_create {
@@ -557,7 +559,7 @@ impl BackupRunnerExecutor for SnapshotEffectExecutor {
         canister_id: &str,
         snapshot_id: &str,
         artifact_path: &Path,
-        command_lifetime: CommandLifetimeHandle,
+        command_lifetime: &mut CommandLifetimeLock,
     ) -> Result<(), BackupRunnerCommandError> {
         self.delegate
             .download_snapshot(canister_id, snapshot_id, artifact_path, command_lifetime)

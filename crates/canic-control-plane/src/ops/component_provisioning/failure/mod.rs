@@ -21,7 +21,6 @@ use canic_core::control_plane_support::error::{
 };
 
 /// Durable work counters, deliberately excluding diagnostic observations.
-
 #[derive(Eq, PartialEq)]
 struct ProvisioningProgress {
     phase: canic_contracts::dto::component_provisioning::RootComponentProvisioningPhase,
@@ -40,7 +39,7 @@ impl RootComponentProvisioningOps {
         before: &RootComponentProvisioningView,
         after: &canic_contracts::dto::component_provisioning::RootComponentProvisioningStatusResponse,
     ) -> bool {
-        before.last_failure.map(failure_response) != after.last_failure
+        before.last_failure.clone().map(failure_response) != after.last_failure
     }
 
     /// Commit failure evidence while retaining every current phase and issued receipt.
@@ -56,17 +55,20 @@ impl RootComponentProvisioningOps {
         let time_is_current = now_ns >= view.accepted_at_ns
             && before
                 .last_failure
+                .as_ref()
                 .is_none_or(|failure| now_ns >= failure.failed_at_ns);
         if view.plan_hash != plan_hash || !time_is_current {
             return Err(InternalError::conflict());
         }
         let failures = before
             .last_failure
+            .as_ref()
             .map_or(1, |failure| failure.consecutive_failures.saturating_add(1));
         let retry_at_ns = retry_delay_seconds(origin.retry_category, failures)
             .and_then(|seconds| seconds.checked_mul(1_000_000_000))
             .and_then(|delay| now_ns.checked_add(delay));
         let failure = RootComponentProvisioningFailureRecord {
+            dependency: origin.dependency,
             stage: origin.stage,
             target: origin.target,
             operation_id: origin.operation_id,
@@ -76,9 +78,9 @@ impl RootComponentProvisioningOps {
             consecutive_failures: failures,
             retry_at_ns,
         };
-        validate_failure(Some(failure), view.accepted_at_ns)?;
+        validate_failure(Some(&failure), view.accepted_at_ns)?;
         let mut after = before.clone();
-        after.last_failure = Some(failure);
+        after.last_failure = Some(failure.clone());
         RootComponentProvisioningStore::replace_operation(&before, after)
             .map_err(map_commit_error)?;
         Ok(failure_view(failure))
@@ -133,11 +135,12 @@ impl RootComponentProvisioningOps {
     }
 }
 
-pub(super) const fn failure_view(
+pub(super) fn failure_view(
     record: RootComponentProvisioningFailureRecord,
 ) -> RootComponentProvisioningFailureView {
     RootComponentProvisioningFailureView {
         origin: ProvisioningFailureView {
+            dependency: record.dependency,
             recorded_at_ns: Some(record.failed_at_ns),
             retry_at_ns: record.retry_at_ns,
             stage: record.stage,
@@ -152,10 +155,11 @@ pub(super) const fn failure_view(
     }
 }
 
-pub(super) const fn failure_response(
+pub(super) fn failure_response(
     view: RootComponentProvisioningFailureView,
 ) -> RootComponentProvisioningFailure {
     RootComponentProvisioningFailure {
+        dependency: view.origin.dependency,
         stage: view.origin.stage,
         target: view.origin.target,
         operation_id: view.origin.operation_id,
@@ -169,12 +173,33 @@ pub(super) const fn failure_response(
 
 /// Validate the bounded diagnostic independently of canonical effect receipts.
 pub(super) fn validate_failure(
-    failure: Option<RootComponentProvisioningFailureRecord>,
+    failure: Option<&RootComponentProvisioningFailureRecord>,
     accepted_at_ns: u64,
 ) -> Result<(), InternalError> {
     let Some(failure) = failure else {
         return Ok(());
     };
+    if let Some(dependency) = &failure.dependency {
+        use canic_contracts::values::provisioning_failure::{
+            MAX_PROVISIONING_DEPENDENCY_METHOD_BYTES, MAX_PROVISIONING_DEPENDENCY_STEP_BYTES,
+            MAX_PROVISIONING_REJECTION_BYTES,
+        };
+        let valid_labels = !dependency.method.is_empty()
+            && dependency.method.len() <= MAX_PROVISIONING_DEPENDENCY_METHOD_BYTES
+            && !dependency.step.is_empty()
+            && dependency.step.len() <= MAX_PROVISIONING_DEPENDENCY_STEP_BYTES;
+        let valid_rejection = match (dependency.rejection_code, &dependency.rejection_detail) {
+            (Some(code), Some(detail)) => {
+                code != 0 && detail.len() <= MAX_PROVISIONING_REJECTION_BYTES
+            }
+            (None, None) => true,
+            _ => false,
+        };
+        if dependency.target == candid::Principal::anonymous() || !valid_labels || !valid_rejection
+        {
+            return Err(InternalError::invariant());
+        }
+    }
     let valid_identity = failure.target != candid::Principal::anonymous()
         && failure.operation_id != [0; 32]
         && failure.diagnostic_code != 0;

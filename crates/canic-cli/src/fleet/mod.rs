@@ -49,6 +49,7 @@ use canic_host::{
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
 };
 use clap::{ArgAction, Command};
+use ic_host_fs::durable::{PublicationMode, WriteOptions};
 use std::{
     ffi::OsString,
     fs, io,
@@ -527,19 +528,52 @@ fn json_error(source: FleetCommandError, options: Option<&EnsureOptions>) -> Fle
     }
     let successor = matches!(&source, FleetCommandError::Workflow(error) if matches!(error.as_ref(),
         EnsureWorkflowError::SuccessorReviewRequired { .. } | EnsureWorkflowError::ReplanRequiredAfterCreateBalanceDrift { .. }));
-    let next_action = options.filter(|_| successor).map(|options| {
+    let resumable = options.is_some_and(|options| options.apply.is_some())
+        && matches!(&source, FleetCommandError::Workflow(error) if matches!(error.as_ref(), EnsureWorkflowError::ProvisioningRetryPending { .. }));
+    let provisioning_failure = match &source {
+        FleetCommandError::Workflow(error) => match error.as_ref() {
+            EnsureWorkflowError::ProvisioningRetryPending {
+                root,
+                stage,
+                target,
+                operation_id,
+                diagnostic_code,
+                dependency,
+                observations,
+                failed_at_ns,
+            } => Some(serde_json::json!({
+                "root": root.to_text(), "stage": stage, "target": target.to_text(),
+                "operation_id": canic_core::cdk::utils::hash::hex_bytes(operation_id),
+                "diagnostic_code": diagnostic_code, "dependency": dependency,
+                "retry_category": "Backoff", "observations": observations,
+                "failed_at_ns": failed_at_ns,
+            })),
+            _ => None,
+        },
+        _ => None,
+    };
+    let next_action = options.filter(|_| successor || resumable).map(|options| {
         let environment = options.environment.as_deref().unwrap_or("local");
-        let args = if options.reinstall {
+        let args = if options.reinstall && !resumable {
             automation::reinstall_review_command(options, environment)
         } else {
             automation::ensure_command(options, environment)
         };
-        automation::action(automation::ActionKind::Review, args)
+        if resumable {
+            let mut args = args;
+            if let Some(digest) = &options.apply {
+                args.extend(["--apply".into(), digest.clone()]);
+            }
+            automation::action(automation::ActionKind::Resume, args)
+        } else {
+            automation::action(automation::ActionKind::Review, args)
+        }
     });
     FleetCommandError::JsonReported {
         report: serde_json::json!({"event": "fleet_ensure_error", "schema_version": 1,
             "code": if successor { "successor_review_required" } else { "operation_failed" },
-            "message": source.to_string(), "next_action": next_action})
+            "message": source.to_string(), "next_action": next_action,
+            "provisioning_failure": provisioning_failure})
         .to_string(),
         source: Box::new(source),
     }
@@ -849,8 +883,15 @@ fn publish_generated(
             if existing == bytes {
                 return Ok(());
             }
-            ic_host_fs::durable::write_bytes(&resolved, bytes)
-                .map_err(canic_host::publication::ops::io_error)?;
+            ic_host_fs::durable::write_bytes(
+                &resolved,
+                WriteOptions {
+                    mode: PublicationMode::Replace,
+                    permissions: 0o666,
+                },
+                bytes,
+            )
+            .map_err(canic_host::publication::ops::io_error)?;
             return Ok(());
         }
         Err(error) if error.kind() == io::ErrorKind::NotFound && expected_sha256.is_some() => {
@@ -861,8 +902,15 @@ fn publish_generated(
         Err(error) if error.kind() == io::ErrorKind::NotFound => {}
         Err(error) => return Err(error.into()),
     }
-    ic_host_fs::durable::create_new_bytes_with_parents(&resolved, bytes)
-        .map_err(canic_host::publication::ops::io_error)?;
+    ic_host_fs::durable::write_bytes(
+        &resolved,
+        WriteOptions {
+            mode: PublicationMode::CreateNew,
+            permissions: 0o666,
+        },
+        bytes,
+    )
+    .map_err(canic_host::publication::ops::io_error)?;
     Ok(())
 }
 

@@ -112,6 +112,21 @@ impl ManagedComponentGroupFixture {
         &self.pic
     }
 
+    /// Original successful installation bytes for one fixture node.
+    ///
+    /// Test callers may inspect or vary the nested application arguments while
+    /// retaining the exact protected envelope. This is not reset authority for
+    /// a retained installation or a replacement recovery payload.
+    ///
+    /// # Errors
+    /// Rejects a Principal that is not a node in this fixture.
+    pub fn installation_arguments(
+        &self,
+        target: Principal,
+    ) -> Result<&[u8], ManagedComponentGroupQualificationError> {
+        Ok(&self.node(target)?.initialization)
+    }
+
     /// Exact synthetic Root Principal serving the shared placement protocol.
     #[must_use]
     pub const fn root(&self) -> Principal {
@@ -475,7 +490,7 @@ impl ManagedComponentGroupFixture {
         self.pic.install_canister(
             allocation.child,
             artifact.wasm.clone(),
-            init_args,
+            init_args.clone(),
             Some(self.root()),
         );
 
@@ -493,6 +508,7 @@ impl ManagedComponentGroupFixture {
             component: component.binding.component,
             directory,
             public,
+            initialization: init_args,
         });
         self.synchronize_component_tree(component_index)?;
         self.complete_child_allocation(allocation.request_id)
@@ -917,12 +933,13 @@ impl TopLevelInstallContext<'_> {
             .enumerate()
         {
             let plan = self.compile_node(index, member, canister)?;
-            self.install_node(canister, &plan)?;
+            let initialization = self.install_node(canister, &plan)?;
             components.push(plan.component);
             nodes.push(NodeState {
                 component: public_component(&plan.public),
                 directory: plan.directory,
                 public: plan.public,
+                initialization,
             });
         }
         Ok((components, nodes))
@@ -1035,7 +1052,7 @@ impl TopLevelInstallContext<'_> {
         &self,
         canister: Principal,
         plan: &TopLevelNodePlan,
-    ) -> Result<(), ManagedComponentGroupQualificationError> {
+    ) -> Result<Vec<u8>, ManagedComponentGroupQualificationError> {
         let artifact = self.role_artifacts.get(&plan.public.role).ok_or_else(|| {
             ManagedComponentGroupQualificationError::Config(format!(
                 "no qualification artifact was supplied for Component role {}",
@@ -1051,10 +1068,10 @@ impl TopLevelInstallContext<'_> {
         self.pic.install_canister(
             canister,
             artifact.wasm.clone(),
-            init_args,
+            init_args.clone(),
             Some(self.root.fleet_subnet_root),
         );
-        Ok(())
+        Ok(init_args)
     }
 }
 
@@ -1102,6 +1119,7 @@ impl ComponentState {
 
 #[derive(Clone)]
 struct NodeState {
+    initialization: Vec<u8>,
     component: ComponentInstanceId,
     directory: ComponentRuntimeDirectoryPreparationRequest,
     public: ManagedComponentNode,

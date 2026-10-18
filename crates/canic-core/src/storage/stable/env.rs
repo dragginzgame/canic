@@ -11,7 +11,7 @@ std::thread_local! {
     //
     static ENV: RefCell<Cell<EnvRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.runtime.bindings.v1"),
+            crate::memory::open(crate::memory::keys::RUNTIME_BINDINGS_V1),
             EnvRecord::default(),
         ));
 }

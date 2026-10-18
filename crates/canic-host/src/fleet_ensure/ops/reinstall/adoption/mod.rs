@@ -19,7 +19,7 @@ use crate::fleet_ensure::{
 use canic_core::cdk::utils::hash::sha256_hex;
 use std::{io, path::Path};
 
-use ic_host_fs::durable::{create_new_bytes_with_parents, write_bytes};
+use ic_host_fs::durable::{PublicationMode, WriteOptions, write_bytes};
 
 /// Retain a new review without replacing the active source plan, journal or state.
 pub(in crate::fleet_ensure) fn stage(
@@ -145,9 +145,16 @@ pub(in crate::fleet_ensure) fn recover(paths: &EnsurePaths) -> Result<(), Ensure
         documents.push((path, exact_bytes(&object_path(paths, after), after)?));
     }
     for (path, bytes) in documents {
-        write_bytes(path, &bytes)
-            .map_err(crate::publication::ops::io_error)
-            .map_err(|source| io_error(path, source))?;
+        write_bytes(
+            path,
+            WriteOptions {
+                mode: PublicationMode::Replace,
+                permissions: 0o666,
+            },
+            &bytes,
+        )
+        .map_err(crate::publication::ops::io_error)
+        .map_err(|source| io_error(path, source))?;
     }
     intent.complete = true;
     write_current(&marker_path(paths), &intent)
@@ -269,7 +276,16 @@ fn retain(paths: &EnsurePaths, digest: &str, bytes: &[u8]) -> Result<(), EnsureS
         return Err(conflict());
     }
     let path = object_path(paths, digest);
-    match create_new_bytes_with_parents(&path, bytes).map_err(crate::publication::ops::io_error) {
+    match write_bytes(
+        &path,
+        WriteOptions {
+            mode: PublicationMode::CreateNew,
+            permissions: 0o666,
+        },
+        bytes,
+    )
+    .map_err(crate::publication::ops::io_error)
+    {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
             exact_bytes(&path, digest).map(|_| ())

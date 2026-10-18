@@ -2,7 +2,7 @@
 
 use super::test_support::{cbor, der_key, leb128, now, sign, signing_key};
 use super::{
-    CertificateVerificationError, CyclesLedgerBlock, DepositVerificationError as Error,
+    CertificateVerificationError, DepositVerificationError as Error, LedgerBlock,
     ReceiptVerificationLimits, VerifiedCyclesDeposit, network_identity_sha256,
     verify_cycles_deposit,
 };
@@ -23,7 +23,7 @@ struct Fixture {
     agent: Agent,
     intent: OperatorMintIntentRecord,
     outcome: OperatorMintNotificationOutcomeRecord,
-    chain: Vec<CyclesLedgerBlock>,
+    chain: Vec<LedgerBlock>,
 }
 
 impl Fixture {
@@ -83,11 +83,11 @@ impl Fixture {
                 historical_balance_cycles: u128::MAX,
             },
             chain: vec![
-                CyclesLedgerBlock {
+                LedgerBlock {
                     id: 1_u64.into(),
                     block: tip,
                 },
-                CyclesLedgerBlock {
+                LedgerBlock {
                     id: 0_u64.into(),
                     block,
                 },
@@ -523,7 +523,7 @@ fn block_wire_projection_matches_the_published_ledger_value_contract() {
         .unwrap();
     let expected = env.find_type("Block").unwrap().clone();
     let mut rust = candid::types::internal::TypeContainer::new();
-    let ty = rust.add::<CyclesLedgerBlock>();
+    let ty = rust.add::<LedgerBlock>();
     let actual = env.merge_type(rust.env, ty);
     candid::types::subtype::equal(
         &mut std::collections::HashSet::new(),

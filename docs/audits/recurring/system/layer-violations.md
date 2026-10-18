@@ -147,7 +147,7 @@ For this audit, `policy layer` currently means
 `crates/canic-core/src/domain/policy/**`. A top-level
 `crates/canic-core/src/policy/**` path is also in scope if it exists in a
 future tree. `access/**` is not pure policy; it is the endpoint auth guard
-boundary and may contain async auth predicate evaluation.
+boundary and evaluates local authority and supplied proofs synchronously.
 
 ### Model vs Storage Scope
 

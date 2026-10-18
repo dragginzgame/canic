@@ -15,10 +15,10 @@ finish() {
 trap finish EXIT
 real_bash="$(command -v bash)"
 real_make="$(command -v make)"
-mkdir -p "$fixture/.tools/rust/bin" "$fixture/bin" "$fixture/cargo tools" "$fixture/.tools/ic/bin" \
+mkdir -p "$fixture/.tools/rust/fixture-testkit/installed/bin" "$fixture/bin" "$fixture/cargo tools" "$fixture/.tools/ic/bin" \
     "$fixture/.tools/host/bin" "$fixture/make" "$fixture/ci" "$fixture/scripts/ci"
 cp "$ROOT/Makefile" "$ROOT/tool-versions.env" "$fixture/"
-cp "$ROOT/make/tools.mk" "$ROOT/make/execution.mk" "$ROOT/make/release.mk" "$fixture/make/"
+cp "$ROOT/make/tools.mk" "$ROOT/make/execution.mk" "$ROOT/make/release.mk" "$ROOT/make/consumer.mk" "$ROOT/make/rust-format.mk" "$fixture/make/"
 cp "$ROOT/scripts/ci/check-make-execution.sh" "$fixture/scripts/ci/"
 cp "$ROOT/ci/ic-tools.tsv" "$ROOT/ci/tool-versions.env" "$fixture/ci/"
 cp "$ROOT/scripts/ci/ic-tool-pins.sh" "$fixture/scripts/ci/"
@@ -35,7 +35,7 @@ case "$name:$*" in
         printf '%s\n' "$PWD/.tools/ic/bin" >"$INSTALL_SELECTION"
         ;;
     'bash:scripts/ci/testkit-server.sh' | 'bash:scripts/ci/testkit-server.sh --check')
-        printf '%s\n' "$PWD/.tools/rust/bin/testkit-runner"
+        printf '%s\n' "$PWD/.tools/rust/fixture-testkit/installed/bin/testkit-runner"
         ;;
     'bash:'*'/scripts/dev/install-host-tools.sh '*) exit "${FAIL_HOST_TOOLS:-0}" ;;
     'bash:'*'/scripts/dev/install-ic-tools.sh '*' --preflight') exit "${FAIL_PREFLIGHT:-0}" ;;
@@ -47,7 +47,7 @@ case "$name:$*" in
 esac
 SH
 for executable in bin/bash bin/cargo '.tools/host/bin/rg' 'cargo tools/sccache' \
-    '.tools/ic/bin/icp' '.tools/ic/bin/ic-wasm' '.tools/ic/bin/wasm-opt' '.tools/rust/bin/testkit-runner'; do
+    '.tools/ic/bin/icp' '.tools/ic/bin/ic-wasm' '.tools/ic/bin/wasm-opt' '.tools/rust/fixture-testkit/installed/bin/testkit-runner'; do
     { printf '#!%s\n' "$real_bash"; cat "$fixture/record"; } >"$fixture/$executable"
     chmod +x "$fixture/$executable"
 done
@@ -89,7 +89,7 @@ fi
 for target in install-testkit-server testkit-server-check; do
     run_recipe "$target"
     if [[ "$target" == install-testkit-server ]]; then action=setup; else action=check; fi
-    grep -Fxq "$fixture/.tools/rust/bin/testkit-runner"$'\t'"$action" "$EVENTS"
+    grep -Fxq "$fixture/.tools/rust/fixture-testkit/installed/bin/testkit-runner"$'\t'"$action" "$EVENTS"
     if FAIL_TESTKIT=17 run_recipe "$target"; then
         echo 'Testkit recipe accepted a failed owner command' >&2
         exit 1
@@ -102,14 +102,14 @@ for target in install-tools tools-check; do
     run_recipe -j8 "$target"
     {
         if [[ "$target" == install-tools ]]; then
-            printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-ic-tools.sh --consumer $fixture --pins ci/ic-tools.tsv --preflight"
-            printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-rust-tools.sh --consumer $fixture --versions ci/tool-versions.env --preflight"
+            printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-ic-tools.sh --consumer $fixture --pins $fixture/ci/ic-tools.tsv --preflight"
+            printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-rust-tools.sh --consumer $fixture --versions $fixture/ci/tool-versions.env --preflight"
         fi
-        printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-host-tools.sh --consumer $fixture --versions ci/tool-versions.env$suffix"
-        printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-ic-tools.sh --consumer $fixture --pins ci/ic-tools.tsv$suffix"
-        printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-rust-tools.sh --consumer $fixture --versions ci/tool-versions.env$suffix"
+        printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-host-tools.sh --consumer $fixture --versions $fixture/ci/tool-versions.env$suffix"
+        printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-ic-tools.sh --consumer $fixture --pins $fixture/ci/ic-tools.tsv$suffix"
+        printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-rust-tools.sh --consumer $fixture --versions $fixture/ci/tool-versions.env$suffix"
         printf '%s\t%s\n' "$fixture/bin/bash" "scripts/ci/testkit-server.sh$suffix"
-        printf '%s\t%s\n' "$fixture/.tools/rust/bin/testkit-runner" "$action"
+        printf '%s\t%s\n' "$fixture/.tools/rust/fixture-testkit/installed/bin/testkit-runner" "$action"
     } > "$fixture/aggregate-expected"
     cmp "$fixture/aggregate-expected" "$EVENTS"
     if FAIL_HOST_TOOLS=17 run_recipe -j8 "$target"; then
@@ -143,7 +143,7 @@ set -euo pipefail
 [[ $# == 10 || ( $# == 11 && "${11}" == --check ) ]] || exit 1
 selected_version=$(yq -p toml -o json -I 0 '.' "$6" | jq -r '.package[] | select(.name == "ic-testkit") | .version')
 printf '%s\n' "$selected_version ${11:-setup}" >> "$INSTALL_SELECTION"
-printf '%s\n' "$PWD/.tools/rust/bin/testkit-runner"
+printf '%s\n' "$PWD/.tools/rust/fixture-testkit/installed/bin/testkit-runner"
 SELECT
 : > "$INSTALL_SELECTION"
 for version in 99.1.0 99.2.0; do
