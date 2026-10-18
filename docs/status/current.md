@@ -12,6 +12,19 @@ remain **0.111.0**. The objective is to delete duplicate mechanisms in favor of
 upstream owners; moving declarations alone does not demonstrate faster builds.
 
 
+## Complete-unit checkpoint qualification — 2026-10-18
+
+The follow-up to #592 adds a registered governed case for two installed application
+participants. It composes the canonical Root record with real batch capture and
+same-ID restoration, partial prepare/release acknowledgements and exact retries.
+Both installed checkpoint cases and their inventory preflights pass on Linux,
+alongside strict governed fixture library/test lint. Evidence is retained in
+`/tmp/canic-unit-checkpoint-*.log` and
+`target/test-runs/20261018T171426Z-1147676.qSNSDR/`. Root records and sender
+authority remain held by the driver; production stable custody, current membership discovery, topology
+exclusion, authenticated RPC and paid-effect reconciliation remain #550. Live
+creation stays unavailable. No production capability or release is claimed.
+
 ## Installed checkpoint and Root model integration — 2026-10-18
 
 The recovery fixtures create and canonicalize temporary directories before

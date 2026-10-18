@@ -2,6 +2,8 @@
 //! The host fixture retains Root records outside snapshots; production Root storage,
 //! discovery, RPC dispatch and paid snapshot orchestration remain separate obligations.
 
+pub(super) mod unit;
+
 use candid::{CandidType, Principal};
 use canic::{Error, dto::application_checkpoint::ApplicationCheckpointParticipantStatus};
 use canic_contracts::{
@@ -33,20 +35,7 @@ pub(super) fn qualify(fixture: &super::ManagedLifecycleFixture, target: Principa
     let pic = &fixture.pic;
     pic.add_cycles(target, super::SNAPSHOT_RESTORE_MINIMUM_CYCLES);
     let root = fixture.root;
-    let response: Result<StatusResponse, Error> = ::ic_testkit::pic::query_candid_args(
-        pic,
-        target,
-        root,
-        canic::protocol::CANIC_CONTROL_STATUS,
-        (StatusRequest::CallerAuthority(OperationStatusRequest {
-            operation_id: [0; 32],
-        }),),
-        ::canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .unwrap();
-    let StatusResponse::CallerAuthority(status) = response.unwrap();
-    let mut issued = issue(None, status.authority, [1; 32]);
+    let mut issued = issue(None, vec![authority(pic, target, root)], [1; 32]);
     let first = issued.participants()[0].binding().clone();
     let invalid = Error::from_registered(canic::diagnostics::codes::AUTHORITY_INVALID_STATE);
     assert_eq!(increment(pic, target), Ok(1));
@@ -106,7 +95,7 @@ pub(super) fn qualify(fixture: &super::ManagedLifecycleFixture, target: Principa
     );
 
     // Releasing before a delayed prepare still leaves a durable high-water record.
-    issued = issue(Some(&issued), first.authority.clone(), [2; 32]);
+    issued = issue(Some(&issued), vec![first.authority.clone()], [2; 32]);
     let second = issued.participants()[0].binding().clone();
     issued = retained(&issued.release());
     release(pic, target, root, &second);
@@ -146,7 +135,7 @@ fn verify_restore_release(
     issued: RootCheckpointRecord,
 ) {
     let invalid = Error::from_registered(canic::diagnostics::codes::AUTHORITY_INVALID_STATE);
-    let mut issued = issue(Some(&issued), first.authority.clone(), [3; 32]);
+    let mut issued = issue(Some(&issued), vec![first.authority.clone()], [3; 32]);
     let fresh = issued.participants()[0].binding().clone();
     assert_eq!(fresh.sequence, 3);
     let mut wrong_source = first.clone();
@@ -201,11 +190,11 @@ fn verify_restore_release(
 // participant sequence numbers. This is host-held evidence, not a stable Root store.
 fn issue(
     previous: Option<&RootCheckpointRecord>,
-    authority: canic_contracts::ids::CallerReceiverAuthority,
+    authorities: Vec<canic_contracts::ids::CallerReceiverAuthority>,
     operation_id: [u8; 32],
 ) -> RootCheckpointRecord {
     let sequence = previous.map_or(0, |record| record.participants()[0].binding().sequence);
-    let root = authority.issuer.clone();
+    let root = authorities[0].issuer.clone();
     retained(
         &RootCheckpointRecord::begin(
             previous,
@@ -213,10 +202,31 @@ fn issue(
             sequence,
             operation_id,
             [7; 32],
-            vec![authority],
+            authorities,
         )
         .unwrap(),
     )
+}
+
+fn authority(
+    pic: &PocketIc,
+    target: Principal,
+    root: Principal,
+) -> canic_contracts::ids::CallerReceiverAuthority {
+    let response: Result<StatusResponse, Error> = ::ic_testkit::pic::query_candid_args(
+        pic,
+        target,
+        root,
+        canic::protocol::CANIC_CONTROL_STATUS,
+        (StatusRequest::CallerAuthority(OperationStatusRequest {
+            operation_id: [0; 32],
+        }),),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap();
+    let StatusResponse::CallerAuthority(status) = response.unwrap();
+    status.authority
 }
 
 fn retained(record: &RootCheckpointRecord) -> RootCheckpointRecord {

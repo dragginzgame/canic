@@ -38,6 +38,11 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
 ### 🔧 Changed
 
+- **Checkpoint qualification:** add a two-participant installed capture/restore
+  case with partial Root acknowledgements and lost release replies. Canonical Root
+  records remain fixture-held; production orchestration remains under
+  [#550](https://github.com/dragginzgame/canic/issues/550).
+
 - **Testkit qualification:** adopt published Testkit 0.53, unit-returning pool
   hooks, field-based fixture inputs and bounded argument-sequence Candid calls.
   Qualification replies use explicit test-owned wire/work/type/header ceilings;
