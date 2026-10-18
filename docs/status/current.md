@@ -11,6 +11,23 @@ remain **0.111.0**. The objective is to delete duplicate mechanisms in favor of
 upstream owners; moving declarations alone does not demonstrate faster builds.
 
 
+## Installed checkpoint and Root model integration — 2026-10-18
+
+On PR #592's published Testkit 0.53 graph, the exact governed checkpoint case
+passes with a freshly built managed application Wasm. The driver now issues
+bindings through the canonical Root journal and round-trips its progress outside
+application snapshots. Snapshot loading cannot rewind that retained sequence;
+a lost release acknowledgement retains the original binding and retries without
+rerunning completed business hooks. The inventory preflight also passes.
+
+Root authority remains fixture-held and its sender is supplied by the test
+driver. This qualifies the installed participant/model composition, not production
+Root storage, discovery, RPC dispatch or paid snapshot effects. Live create stays
+unavailable. PR #546 owns the outstanding reproducible-peer and native-path CI
+prerequisites. Evidence: `/tmp/canic-pr592-checkpoint-pic.log` and
+`target/test-runs/20261018T155504Z-3146384.d68c3y/`. The complete 0.112 batch remains
+unfinished; no version, release, deployment or live IC effect is included.
+
 ## Auth status capability emission — 2026-10-16
 
 Managed Auth status types and their endpoint now require delegation-proof issuer
