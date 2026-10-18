@@ -1,14 +1,14 @@
-use std::{env, fs, path::Path};
+use std::{ffi::OsStr, fs, path::Path};
 
 use toml::Value as TomlValue;
 
 use canic_core::cdk::utils::hash::sha256_hex;
 
-use crate::{cargo_command, evidence_envelope::file_input_fingerprint};
+use crate::evidence_envelope::file_input_fingerprint;
 
 use super::{
     inputs::{build_cargo_lock_path, cargo_config_fingerprints},
-    model::{BuildProvenanceRequest, BuildScriptInputStateV1, CargoProvenanceV1, WASM_TARGET},
+    model::{BuildProvenanceRequest, BuildScriptInputStateV1, CargoProvenanceV1},
 };
 
 pub(super) fn cargo_provenance(
@@ -48,6 +48,16 @@ pub(super) fn cargo_provenance(
         .into());
     }
 
+    let facts = &request.output.cargo_facts;
+    let version = |bytes: &[u8]| {
+        String::from_utf8_lossy(bytes)
+            .lines()
+            .next()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .map(str::to_owned)
+    };
+    let rustflags = facts.environment.get(OsStr::new("RUSTFLAGS"));
     Ok(CargoProvenanceV1 {
         cargo_lock_sha256: optional_file_sha256(&cargo_lock_path)?,
         package_manifest_sha256: Some(sha256_hex(manifest_source.as_bytes())),
@@ -55,18 +65,22 @@ pub(super) fn cargo_provenance(
         package_manifest: display_path(package_manifest, &request.workspace_root),
         package_metadata_app,
         package_metadata_role,
-        rustc_version: command_version("rustc", ["--version"]),
-        cargo_version: cargo_version(),
-        target: Some(WASM_TARGET.to_string()),
-        profile: request.profile.target_dir_name().to_string(),
-        features: Vec::new(),
-        default_features: None,
-        rustflags_digest: env::var("RUSTFLAGS")
-            .ok()
-            .map(|value| sha256_hex(value.as_bytes())),
-        rustflags_digest_algorithm: env::var_os("RUSTFLAGS")
-            .is_some()
-            .then(|| "sha256".to_string()),
+        rustc_version: version(&facts.rustc_identity),
+        cargo_version: version(&facts.cargo_identity),
+        target: Some(facts.target.clone()),
+        profile: facts
+            .selection
+            .profile
+            .as_deref()
+            .map_or(
+                "debug",
+                |profile| if profile == "dev" { "debug" } else { profile },
+            )
+            .into(),
+        features: facts.selection.features.features.iter().cloned().collect(),
+        default_features: Some(facts.selection.features.default_features),
+        rustflags_digest: rustflags.map(|value| sha256_hex(value.as_encoded_bytes())),
+        rustflags_digest_algorithm: rustflags.map(|_| "sha256".to_string()),
         cargo_config_fingerprints: cargo_config_fingerprints(&request.workspace_root)?,
         build_script_inputs: BuildScriptInputStateV1::NotRecorded,
     })
@@ -107,26 +121,4 @@ fn display_path(path: &Path, root: &Path) -> String {
         .ok()
         .and_then(|fingerprint| fingerprint.path)
         .unwrap_or_else(|| "<redacted:absolute-outside-root>".to_string())
-}
-
-fn command_version<const N: usize>(command: &str, args: [&str; N]) -> Option<String> {
-    let mut command = crate::build_environment::command(command);
-    if let Some(toolchain) = env::var_os("RUSTUP_TOOLCHAIN") {
-        command.env("RUSTUP_TOOLCHAIN", toolchain);
-    }
-    let output = command.args(args).output().ok()?;
-    output
-        .status
-        .success()
-        .then(|| String::from_utf8_lossy(&output.stdout).trim().to_string())
-        .filter(|value| !value.is_empty())
-}
-
-fn cargo_version() -> Option<String> {
-    let output = cargo_command().arg("--version").output().ok()?;
-    output
-        .status
-        .success()
-        .then(|| String::from_utf8_lossy(&output.stdout).trim().to_string())
-        .filter(|value| !value.is_empty())
 }

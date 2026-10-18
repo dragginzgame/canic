@@ -91,15 +91,15 @@ ic-auth-protocol-types = "0.7"
 ic-backup = { version = "0.27", default-features = false }
 ic-blob-storage = "0.30"
 ic-blob-storage-contracts = "0.30"
-ic-build = { version = "0.14" }
+ic-build = { version = "0.17.2" }
 ic-canister-sig-creation = "1.3.1"
 ic-cdk = "0.20.3"
 ic-certification = "3.0"
-ic-host-artifacts = { version = "0.25", default-features = false }
-ic-host-fs = { version = "0.25", default-features = false }
-ic-host-process = { version = "0.25", default-features = false }
-ic-host-text = "0.25"
-ic-host-tools = "0.25"
+ic-host-artifacts = { version = "0.27", default-features = false }
+ic-host-fs = { version = "0.27", default-features = false }
+ic-host-process = { version = "0.27", default-features = false }
+ic-host-text = "0.27"
+ic-host-tools = "0.27"
 ic-management-canister-types = "0.11"
 ic-memory = "0.44"
 ic-metrics = "0.11"

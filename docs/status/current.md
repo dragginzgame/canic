@@ -1,5 +1,29 @@
 # Current handoff — 2026-10-14
 
+## Registry Build convergence and runtime provenance — 2026-10-18
+
+This isolated contribution extends shared-execution draft `b3e760931`; it imports
+no dirty normal-checkout changes. It selects published Build 0.17.2 and matching
+Host 0.27.3. App and generated infrastructure paths retain actual custom-command
+recipe/environment and successful tool observations through finalization. The
+command environment is fixed before execution; successful exits recheck the tool
+observations. Failed build exits retain their original diagnostics. Reports now
+project selected features/defaults, profile and compiler flags instead of fresh
+probes or ambient reconstruction. Host supplies bounded execution; no second
+Cargo/cache engine, release admission or persisted evidence format is introduced.
+Generated runtime outputs are selected from exact Cargo messages before capture.
+
+All 99 selected Linux cases pass: 44 reuse, eight artifact, eight cache/command,
+seven infrastructure, 26 provenance/policy and six internal artifact cases. The
+opt-in measurement remains ignored. One first reuse run lacked global offline
+policy for nested Cargo; prepared offline execution passes. Strict all-target
+Clippy for Host, CLI and Testing Internal passes. Rust 1.91 production checks
+qualify this selected graph separately from development test execution. Full
+release/native macOS/PocketIC qualification and integration of the normal
+checkout's separate Memory/Storage migrations remain outside these results.
+Own versions stay 0.111.0. Logs and source identities are retained under
+`/tmp/ic-build-adoption-20261018/`.
+
 ## Shared Cargo execution — dependent draft, 2026-10-17
 
 This isolated branch extends PR #593 at `83976fd140891f6df0051a07be45199a90c645e8`.

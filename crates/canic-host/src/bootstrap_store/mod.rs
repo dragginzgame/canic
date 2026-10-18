@@ -9,8 +9,8 @@ use crate::{
     canister_build::{
         CanisterArtifactBuildOutput, WorkspaceBuildContext,
         cache::{
-            CargoBuildProgress, canister_build_target_root, configure_canister_cargo_command,
-            configure_declaration_command, declaration_target_root, output_canister_cargo_command,
+            CargoBuildProgress, configure_canister_cargo_command, configure_declaration_command,
+            declaration_target_root, output_runtime_cargo_command, runtime_cargo_selection,
         },
         compiled::CompiledCanisterArtifact,
     },
@@ -70,11 +70,6 @@ pub fn compile_bootstrap_wasm_store_artifact(
     let artifact_root = context.artifact_root().join(WASM_STORE_ROLE);
     fs::create_dir_all(&artifact_root)?;
 
-    let target_root = canister_build_target_root(&context.workspace_root);
-    let built_wasm_path = target_root
-        .join("wasm32-unknown-unknown")
-        .join(context.profile.target_dir_name())
-        .join(format!("{CANONICAL_WASM_STORE_CRATE_NAME}.wasm"));
     let candid = resolve_wasm_store_candid(context, &source)?;
     let capabilities = canic_core::role_contract::built_in_role_capabilities(
         canic_core::role_contract::BuiltInRoleKind::WasmStore,
@@ -85,7 +80,7 @@ pub fn compile_bootstrap_wasm_store_artifact(
         &capabilities,
         &candid,
     );
-    run_wasm_store_cargo_build(
+    let (built_wasm_path, cargo_facts) = run_wasm_store_cargo_build(
         context,
         &source.manifest_path,
         Some(profile.protocol_profile_digest),
@@ -97,6 +92,7 @@ pub fn compile_bootstrap_wasm_store_artifact(
     let did_path = artifact_root.join(format!("{WASM_STORE_ROLE}.did"));
     let profile_path = artifact_root.join(".build-profile");
     let output = CanisterArtifactBuildOutput {
+        cargo_facts,
         package_name: source.package_name,
         package_version: source.package_version.clone(),
         protocol_release_identity: source.package_version,
@@ -146,7 +142,7 @@ fn run_wasm_store_cargo_build(
     manifest_path: &Path,
     protocol_profile_digest: Option<canic_core::role_contract::ProtocolProfileDigest>,
     force_candid_export: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(PathBuf, ic_build::artifacts::CargoBuildFacts), Box<dyn std::error::Error>> {
     let mut command = wasm_store_cargo_build_command(context, manifest_path, force_candid_export);
     if let Some(digest) = protocol_profile_digest {
         command.env(
@@ -156,9 +152,13 @@ fn run_wasm_store_cargo_build(
     }
 
     let started = Instant::now();
-    let (output, messages) = output_canister_cargo_command(
+    let (output, messages, facts) = output_runtime_cargo_command(
         &mut command,
         CargoBuildProgress::batch(["bootstrap_store"], 1, 1, started),
+        runtime_cargo_selection(
+            context.profile,
+            &crate::canister_build::CanisterArtifactBuildOptions::default(),
+        ),
     )?;
     eprintln!(
         "Build phase {} bootstrap_store: {:.2}s",
@@ -172,7 +172,10 @@ fn run_wasm_store_cargo_build(
 
     if output.status.success() {
         crate::canister_build::retain_cargo_include_exports(context, &messages)?;
-        return Ok(());
+        return Ok((
+            ic_build::cargo::execution::select_cdylib_wasm(&messages, manifest_path)?,
+            facts,
+        ));
     }
 
     Err(format!(
@@ -231,7 +234,7 @@ fn resolve_wasm_store_candid(
         context.refresh_canonical_infrastructure_did,
         None,
         &selected_wasm_path,
-        || run_wasm_store_cargo_build(context, &source.manifest_path, None, true),
+        || run_wasm_store_cargo_build(context, &source.manifest_path, None, true).map(|_| ()),
     )
 }
 

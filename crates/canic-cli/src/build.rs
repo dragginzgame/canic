@@ -1771,6 +1771,13 @@ mod tests {
         fs::write(&wasm_path, wasm).expect("write wasm");
         fs::write(&wasm_gz_path, vec![0_u8; gzip_size]).expect("write gzip");
         canic_host::canister_build::CanisterArtifactBuildOutput {
+            cargo_facts: ic_build::artifacts::CargoBuildFacts {
+                selection: ic_build::cargo::selection::CargoSelection::default(),
+                environment: std::collections::BTreeMap::default(),
+                target: "wasm32-unknown-unknown".into(),
+                cargo_identity: Vec::new(),
+                rustc_identity: Vec::new(),
+            },
             package_name: format!("canister_{role}"),
             package_version: env!("CARGO_PKG_VERSION").to_string(),
             protocol_release_identity: env!("CARGO_PKG_VERSION").to_string(),

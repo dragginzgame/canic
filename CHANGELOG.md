@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Adopt registry IC Build 0.17.2 with matching Host 0.27. Custom Cargo runtime
+  commands retain observed recipe/tool facts through app and infrastructure
+  finalization. Provenance projects those facts without fresh tool probes or
+  ambient flag reconstruction; update artifact-output struct literals accordingly.
+- Select generated infrastructure Wasm from canonical Cargo messages before
+  capture rather than reconstructing its target filename. Complete-release
+  admission, source custody and declaration/runtime policies remain Canic-owned.
+
 - Prepare shared Cargo execution and typed artifact/export observations for Build
   0.17. Keep Canic's declaration/runtime recipes, release admission and finalization.
   The dependent draft needs producer publication and matching dependency/lock

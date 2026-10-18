@@ -377,11 +377,20 @@ impl InternalTestWasms {
     /// Panics if the package was not built or it did not produce exactly one Wasm.
     #[must_use]
     pub fn path(&self, package: &str) -> &Path {
-        let record = self.records.get(package).expect("built test package");
+        let record = self.record(package);
         let [path] = record.artifacts() else {
             panic!("one-package build must yield exactly one Wasm");
         };
         path
+    }
+
+    /// Borrow the authoritative record while this artifact owner retains it.
+    ///
+    /// # Panics
+    /// Panics if the package was not built.
+    #[must_use]
+    pub fn record(&self, package: &str) -> &WasmBuildRecord {
+        self.records.get(package).expect("built test package")
     }
 
     pub(super) fn extend(&mut self, other: Self) {

@@ -87,6 +87,8 @@ pub struct CanisterArtifactBuildSpec {
 
 #[derive(Clone, Debug)]
 pub struct CanisterArtifactBuildOutput {
+    /// Exact runtime recipe/tool observations, retained through finalization.
+    pub cargo_facts: ic_build::artifacts::CargoBuildFacts,
     pub package_name: String,
     pub package_version: String,
     pub protocol_release_identity: String,

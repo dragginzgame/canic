@@ -93,6 +93,7 @@ fn artifact_provenance_records_wasm_and_gzip_separately() {
     let request = sample_request(
         &root,
         CanisterArtifactBuildOutput {
+            cargo_facts: sample_cargo_facts(),
             package_name: "app-package".to_string(),
             package_version: "0.101.51".to_string(),
             protocol_release_identity: "0.101.51".to_string(),
@@ -397,6 +398,7 @@ fn write_sample_artifacts(root: &Path, role: &str) -> CanisterArtifactBuildOutpu
     fs::write(&wasm_gz_path, b"gzip").expect("write gzip");
 
     CanisterArtifactBuildOutput {
+        cargo_facts: sample_cargo_facts(),
         package_name: format!("canister_demo_{role}"),
         package_version: "0.101.51".to_string(),
         protocol_release_identity: "0.101.51".to_string(),
@@ -453,6 +455,7 @@ fn final_metrics_match_artifacts_for_both_profiles_and_section_distributions() {
             .unwrap();
             let mut request = sample_request(&root, output);
             request.profile = profile;
+            request.output.cargo_facts.selection.profile = Some(profile.target_dir_name().into());
             let envelope = build_provenance_envelope(&request).unwrap();
             let payload: BuildProvenanceV1 = serde_json::from_value(envelope.payload).unwrap();
             let metrics = payload.final_wasm_metrics;
@@ -494,6 +497,54 @@ fn final_metrics_reject_malformed_wasm_and_missing_gzip() {
     assert!(
         crate::canister_build::read_wasm_artifact_metrics(&output.wasm_path, &output.wasm_gz_path)
             .is_err()
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+fn sample_cargo_facts() -> ic_build::artifacts::CargoBuildFacts {
+    ic_build::artifacts::CargoBuildFacts {
+        selection: ic_build::cargo::selection::CargoSelection {
+            profile: Some("fast".into()),
+            ..Default::default()
+        },
+        environment: std::collections::BTreeMap::default(),
+        target: "wasm32-unknown-unknown".into(),
+        cargo_identity: b"recorded cargo\nverbose cargo details\n".to_vec(),
+        rustc_identity: b"recorded rustc\nverbose rustc details\n".to_vec(),
+    }
+}
+
+#[test]
+fn provenance_projects_the_runtime_recipe_without_ambient_reconstruction() {
+    let root = temp_dir("runtime-cargo-provenance");
+    write_sample_workspace(&root, "demo", "app");
+    let output = write_sample_artifacts(&root, "app");
+    let mut request = sample_request(&root, output);
+    let facts = &mut request.output.cargo_facts;
+    facts
+        .selection
+        .features
+        .features
+        .insert("selected-feature".into());
+    facts.selection.features.default_features = false;
+    facts
+        .environment
+        .insert("RUSTFLAGS".into(), "selected flags".into());
+    let envelope = build_provenance_envelope(&request).unwrap();
+    let payload: BuildProvenanceV1 = serde_json::from_value(envelope.payload).unwrap();
+    assert_eq!(
+        payload.cargo.cargo_version.as_deref(),
+        Some("recorded cargo")
+    );
+    assert_eq!(
+        payload.cargo.rustc_version.as_deref(),
+        Some("recorded rustc")
+    );
+    assert_eq!(payload.cargo.features, ["selected-feature"]);
+    assert_eq!(payload.cargo.default_features, Some(false));
+    assert_eq!(
+        payload.cargo.rustflags_digest,
+        Some(canic_core::cdk::utils::hash::sha256_hex(b"selected flags"))
     );
     fs::remove_dir_all(root).unwrap();
 }

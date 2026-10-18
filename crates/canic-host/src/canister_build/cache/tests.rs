@@ -250,3 +250,62 @@ fn artifact_materialization_lock_excludes_a_second_builder() {
     contender.join().expect("join lock contender");
     fs::remove_dir_all(root).expect("clean build-lock fixture");
 }
+
+#[test]
+#[cfg(unix)]
+fn runtime_facts_are_bound_to_the_command_and_tool_changes_refuse() {
+    use ic_host_process::testing::write_executable_script;
+    let root = temp_dir("runtime-cargo-facts");
+    fs::create_dir_all(&root).unwrap();
+    let cargo = root.join("cargo");
+    let rustc = root.join("rustc");
+    write_executable_script(
+        &cargo,
+        r#"#!/bin/sh
+if [ "$1" = --version ]; then
+  if [ -f changed ]; then printf 'changed cargo\n'; else printf 'selected cargo\n'; fi
+else
+  printf '{"reason":"build-finished","success":true}\n'
+  if [ "${CHANGE_TOOL-}" = 1 ]; then touch changed; fi
+fi
+"#,
+    )
+    .unwrap();
+    write_executable_script(&rustc, "#!/bin/sh\nprintf 'selected rustc\\n'\n").unwrap();
+    let mut command = Command::new(&cargo);
+    command
+        .arg("build")
+        .current_dir(&root)
+        .env("RUSTC", &rustc)
+        .env("RUSTFLAGS", "selected flags");
+    let mut options = crate::canister_build::CanisterArtifactBuildOptions {
+        default_features: false,
+        ..Default::default()
+    };
+    options.cargo_features.insert("selected".into());
+    let selection =
+        runtime_cargo_selection(crate::canister_build::CanisterBuildProfile::Fast, &options);
+    let (execution, _, facts) = output_runtime_cargo_command(
+        &mut command,
+        CargoBuildProgress::single("fixture"),
+        selection.clone(),
+    )
+    .unwrap();
+    assert!(execution.status.success());
+    assert_eq!(facts.selection, selection);
+    assert_eq!(facts.cargo_identity, b"selected cargo\n");
+    assert_eq!(facts.rustc_identity, b"selected rustc\n");
+    assert_eq!(
+        facts.environment[OsStr::new("RUSTFLAGS")],
+        OsStr::new("selected flags")
+    );
+    command.env("CHANGE_TOOL", "1");
+    let error = output_runtime_cargo_command(
+        &mut command,
+        CargoBuildProgress::single("fixture"),
+        selection,
+    )
+    .unwrap_err();
+    assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    fs::remove_dir_all(root).unwrap();
+}

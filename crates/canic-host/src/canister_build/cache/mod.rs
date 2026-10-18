@@ -7,6 +7,7 @@
 #[cfg(test)]
 mod tests;
 
+use ic_build::artifacts::CargoBuildFacts;
 use ic_build::cargo::{execution::communicate_cargo, observation::schema::Message};
 use ic_host_fs::durable::{lock_exclusive, open_regular_lock_file_with_parents};
 use ic_host_process::{
@@ -14,8 +15,9 @@ use ic_host_process::{
     tool::{OutputLimit, OutputLimits},
 };
 use std::{
+    collections::BTreeMap,
     env,
-    ffi::OsStr,
+    ffi::{OsStr, OsString},
     fs, io,
     path::{Path, PathBuf},
     process::{Command, Stdio},
@@ -224,4 +226,106 @@ fn resolve_canister_build_target_root(
             }
         },
     )
+}
+
+/// Capture the actual custom Cargo command's recipe and tool identities.
+/// Canic owns these generated/runtime recipes; Build owns the fact representation.
+pub fn output_runtime_cargo_command(
+    command: &mut Command,
+    progress: CargoBuildProgress,
+    selection: ic_build::cargo::selection::CargoSelection,
+) -> io::Result<(
+    ic_host_process::tool::CompletedExecution,
+    Vec<Message>,
+    CargoBuildFacts,
+)> {
+    crate::build_environment::apply(command);
+    let mut environment = crate::build_environment::inputs()
+        .into_iter()
+        .collect::<BTreeMap<_, _>>();
+    for (key, value) in command.get_envs() {
+        if let Some(value) = value {
+            environment.insert(key.to_owned(), value.to_owned());
+        } else {
+            environment.remove(key);
+        }
+    }
+    command.env_clear().envs(&environment);
+    let facts = runtime_cargo_facts(command, selection, environment)?;
+    let (execution, messages) = output_canister_cargo_command(command, progress)?;
+    if execution.status.success()
+        && runtime_cargo_facts(command, facts.selection.clone(), facts.environment.clone())?
+            != facts
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Cargo/compiler identity changed during compilation",
+        ));
+    }
+    Ok((execution, messages, facts))
+}
+
+fn runtime_cargo_facts(
+    command: &Command,
+    selection: ic_build::cargo::selection::CargoSelection,
+    environment: BTreeMap<OsString, OsString>,
+) -> io::Result<CargoBuildFacts> {
+    let current_dir = command
+        .get_current_dir()
+        .map(Path::to_path_buf)
+        .map_or_else(std::env::current_dir, Ok)?;
+    let probe = |program: &OsStr, arguments: &[&str]| -> io::Result<Vec<u8>> {
+        let mut probe = Command::new(program);
+        probe
+            .current_dir(&current_dir)
+            .env_clear()
+            .envs(&environment)
+            .args(arguments);
+        let output = ic_host_process::tool::capture_command(
+            &mut probe,
+            ic_host_process::tool::OutputLimits {
+                stdout: OutputLimit::Terminate(64 * 1024),
+                stderr: OutputLimit::Terminate(64 * 1024),
+                timeout: None,
+            },
+        )
+        .and_then(ic_host_process::tool::CompletedExecution::require_success)
+        .map_err(io::Error::other)?;
+        let mut identity = output.stdout;
+        identity.extend_from_slice(&output.stderr);
+        Ok(identity)
+    };
+    let cargo_identity = probe(command.get_program(), &["--version", "--verbose"])?;
+    let rustc = environment
+        .get(OsStr::new("RUSTC"))
+        .map_or_else(|| OsStr::new("rustc"), OsString::as_os_str);
+    let rustc_identity = probe(rustc, &["-vV"])?;
+    Ok(CargoBuildFacts {
+        selection,
+        environment,
+        target: "wasm32-unknown-unknown".into(),
+        cargo_identity,
+        rustc_identity,
+    })
+}
+
+pub fn runtime_cargo_selection(
+    profile: crate::canister_build::CanisterBuildProfile,
+    options: &crate::canister_build::CanisterArtifactBuildOptions,
+) -> ic_build::cargo::selection::CargoSelection {
+    use ic_build::cargo::selection::{CargoFeatureSelection, CargoSelection};
+    CargoSelection {
+        profile: match profile {
+            crate::canister_build::CanisterBuildProfile::Debug => None,
+            crate::canister_build::CanisterBuildProfile::Fast => Some("fast".into()),
+            crate::canister_build::CanisterBuildProfile::Release => Some("release".into()),
+        },
+        features: CargoFeatureSelection {
+            features: options.cargo_features.clone(),
+            default_features: options.default_features,
+            all_features: false,
+        },
+        locked: true,
+        offline: false,
+    }
 }
