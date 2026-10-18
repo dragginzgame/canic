@@ -24,11 +24,13 @@ use std::{path::Path, time::Duration};
 /// Spawn one managed server whose drop waits for that exact child.
 
 pub fn server(config: &LocalFleetConfig) -> Result<PocketIcManagedServer, LocalFleetError> {
-    Ok(PocketIcStartupConfig::spawn(
-        &config.server_binary,
-        Duration::from_secs(u64::from(config.request_timeout_secs)),
-    )
-    .with_server_hard_ttl(Duration::from_secs(u64::from(config.server_lifetime_secs)))
+    Ok(PocketIcStartupConfig::Spawn {
+        server_binary: config.server_binary.clone(),
+        timeout: Duration::from_secs(u64::from(config.request_timeout_secs)),
+        server_hard_ttl: Some(Duration::from_secs(u64::from(config.server_lifetime_secs))),
+        server_idle_ttl: None,
+        server_output_files: None,
+    }
     .start_managed_server()?)
 }
 
@@ -63,10 +65,10 @@ pub fn instance(
         .with_auto_progress()
         .with_state_dir(directory.to_path_buf())
         .with_max_request_time_ms(Some(u64::from(config.request_timeout_secs) * 1000));
-    PocketIcStartupConfig::connect(
-        server.url(),
-        Duration::from_secs(u64::from(config.request_timeout_secs)),
-    )
+    PocketIcStartupConfig::Connect {
+        server_url: server.url().into(),
+        timeout: Duration::from_secs(u64::from(config.request_timeout_secs)),
+    }
     .build_instance(builder)
     .map(|owned| owned.instance)
     .map_err(|source| {

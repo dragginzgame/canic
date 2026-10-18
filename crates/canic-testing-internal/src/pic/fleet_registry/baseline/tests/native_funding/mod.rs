@@ -256,10 +256,16 @@ pub(super) fn assert_issued_native_funding(input: &AutonomousFundingJourney<'_>)
             Some(canister)
         );
     }
-    let requests: u64 = input
-        .pic
-        .query_candid(input.cycles_ledger, "request_count", ())
-        .unwrap();
+    let requests: u64 = ::ic_testkit::pic::query_candid_args(
+        input.pic,
+        input.cycles_ledger,
+        candid::Principal::anonymous(),
+        "request_count",
+        (),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap();
     let mut replay_adapter = platform();
     let replay = apply(&planned.plan.plan_sha256, &mut replay_adapter).unwrap();
     assert!(replay.terminal);
@@ -269,10 +275,16 @@ pub(super) fn assert_issued_native_funding(input: &AutonomousFundingJourney<'_>)
         ledger_account_balance(input.pic, input.cycles_ledger, input.operator),
         after
     );
-    let replay_requests: u64 = input
-        .pic
-        .query_candid(input.cycles_ledger, "request_count", ())
-        .unwrap();
+    let replay_requests: u64 = ::ic_testkit::pic::query_candid_args(
+        input.pic,
+        input.cycles_ledger,
+        candid::Principal::anonymous(),
+        "request_count",
+        (),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap();
     assert_eq!(requests, replay_requests);
     assert_eq!(read_journal(&paths).unwrap().unwrap(), terminal);
     let replay_pool = root_pool_status_as(input.pic, input.root, input.operator);
@@ -288,15 +300,16 @@ pub(super) fn assert_issued_native_funding(input: &AutonomousFundingJourney<'_>)
 }
 
 fn burn_to(input: &AutonomousFundingJourney<'_>, retain: u128) {
-    let burned: u128 = input
-        .pic
-        .update_candid_as(
-            input.root,
-            input.operator,
-            "audit_recovery_balance",
-            (retain,),
-        )
-        .expect("update Candid harness call");
+    let burned: u128 = ::ic_testkit::pic::update_candid_args(
+        input.pic,
+        input.root,
+        input.operator,
+        "audit_recovery_balance",
+        (retain,),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("update Candid harness call");
     assert!(burned > 0);
 }
 
@@ -304,17 +317,18 @@ fn child_status(
     input: &AutonomousFundingJourney<'_>,
     operation_id: [u8; 32],
 ) -> canic_contracts::dto::root::RootComponentChildOperationStatus {
-    let response: Result<RootStatusResponseFragment, Error> = input
-        .pic
-        .query_candid_as(
-            input.root,
-            input.operator,
-            canic::protocol::CANIC_ROOT_OPERATION_STATUS,
-            (RootStatusRequestFragment::Operation(
-                OperationStatusRequest { operation_id },
-            ),),
-        )
-        .unwrap();
+    let response: Result<RootStatusResponseFragment, Error> = ::ic_testkit::pic::query_candid_args(
+        input.pic,
+        input.root,
+        input.operator,
+        canic::protocol::CANIC_ROOT_OPERATION_STATUS,
+        (RootStatusRequestFragment::Operation(
+            OperationStatusRequest { operation_id },
+        ),),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap();
     let RootStatusResponseFragment::Operation(RootOperationStatusResponse::ProvisionChild(status)) =
         response.unwrap()
     else {
@@ -344,9 +358,9 @@ fn block_initial_child(
     };
     let coordinator = Principal::from_text(principal).unwrap();
     for attempt in 0..240 {
-        let response: Result<RootStatusResponseFragment, Error> = input
-            .pic
-            .query_candid_as(
+        let response: Result<RootStatusResponseFragment, Error> =
+            ::ic_testkit::pic::query_candid_args(
+                input.pic,
                 input.root,
                 input.operator,
                 canic::protocol::CANIC_ROOT_OPERATION_STATUS,
@@ -355,7 +369,9 @@ fn block_initial_child(
                         operation_id: request.operation_id,
                     },
                 ),),
+                ::canic::testing::CANDID_REPLY_LIMITS,
             )
+            .map(|(reply,)| reply)
             .unwrap();
         if let Ok(RootStatusResponseFragment::Operation(
             RootOperationStatusResponse::ProvisionComponents(status),
@@ -375,9 +391,9 @@ fn block_initial_child(
     }
     burn_to(input, 800_000_000_000);
     for _ in 0..240 {
-        let response: Result<CoordinatorOperationReadResponse, Error> = input
-            .pic
-            .query_candid_as(
+        let response: Result<CoordinatorOperationReadResponse, Error> =
+            ::ic_testkit::pic::query_candid_args(
+                input.pic,
                 coordinator,
                 input.operator,
                 canic::protocol::CANIC_COORDINATOR_OPERATION_STATUS,
@@ -386,7 +402,9 @@ fn block_initial_child(
                         operation_id: request.operation_id,
                     },
                 ),),
+                ::canic::testing::CANDID_REPLY_LIMITS,
             )
+            .map(|(reply,)| reply)
             .unwrap();
         let CoordinatorOperationReadResponse::Operation(
             CoordinatorOperationStatusResponse::ComponentProvisioning(status),
@@ -414,10 +432,16 @@ fn block_initial_child(
 }
 
 fn withdrawals(input: &AutonomousFundingJourney<'_>) -> u64 {
-    input
-        .pic
-        .query_candid(input.cycles_ledger, "withdrawal_count", ())
-        .unwrap()
+    ::ic_testkit::pic::query_candid_args(
+        input.pic,
+        input.cycles_ledger,
+        candid::Principal::anonymous(),
+        "withdrawal_count",
+        (),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap()
 }
 
 fn assert_retained(

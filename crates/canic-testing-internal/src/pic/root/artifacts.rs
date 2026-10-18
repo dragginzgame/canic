@@ -24,7 +24,7 @@ use ic_build::artifacts::{
     ArtifactCacheOutcome, ArtifactCachePreparation, ArtifactCacheRecord, ArtifactCacheSpec,
     WasmBuildSpec, prepare_artifact_cache, resolve_cargo_build_inputs,
 };
-use ic_testkit::pic::{CandidCallExt, PocketIc};
+use ic_testkit::pic::PocketIc;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs, io,
@@ -342,14 +342,16 @@ fn stage_manifest(
     installation_controller: Principal,
     manifest: TemplateManifestInput,
 ) {
-    let result: Result<StoreCommandResponse, Error> = pic
-        .update_candid_as(
-            store,
-            installation_controller,
-            protocol::CANIC_WASM_STORE_COMMAND,
-            (StoreCommand::StageManifest(manifest),),
-        )
-        .expect("Store manifest transport");
+    let result: Result<StoreCommandResponse, Error> = ::ic_testkit::pic::update_candid_args(
+        pic,
+        store,
+        installation_controller,
+        protocol::CANIC_WASM_STORE_COMMAND,
+        (StoreCommand::StageManifest(manifest),),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("Store manifest transport");
     let StoreCommandResponse::StageManifest = result.expect("stage release manifest application")
     else {
         panic!("Store returned a differently correlated manifest response");
@@ -363,14 +365,16 @@ fn prepare_chunk_set(
     installation_controller: Principal,
     prepare: TemplateChunkSetPrepareInput,
 ) {
-    let result: Result<StoreCommandResponse, Error> = pic
-        .update_candid_as(
-            store,
-            installation_controller,
-            protocol::CANIC_WASM_STORE_COMMAND,
-            (StoreCommand::PrepareChunkSet(prepare),),
-        )
-        .expect("Store prepare transport");
+    let result: Result<StoreCommandResponse, Error> = ::ic_testkit::pic::update_candid_args(
+        pic,
+        store,
+        installation_controller,
+        protocol::CANIC_WASM_STORE_COMMAND,
+        (StoreCommand::PrepareChunkSet(prepare),),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("Store prepare transport");
     let StoreCommandResponse::PrepareChunkSet(_) =
         result.expect("prepare release chunk set application")
     else {
@@ -385,14 +389,16 @@ fn publish_chunk(
     installation_controller: Principal,
     chunk: TemplateChunkInput,
 ) {
-    let result: Result<(), Error> = pic
-        .update_candid_as(
-            store,
-            installation_controller,
-            protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
-            (chunk,),
-        )
-        .expect("Store chunk transport");
+    let result: Result<(), Error> = ::ic_testkit::pic::update_candid_args(
+        pic,
+        store,
+        installation_controller,
+        protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
+        (chunk,),
+        ::canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("Store chunk transport");
     result.expect("publish release chunk application");
 }
 

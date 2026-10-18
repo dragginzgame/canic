@@ -38,9 +38,23 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
 ### 🔧 Changed
 
-- **Release checks:** include the shared version validator in isolated release
-  fixtures so preflight and failure-recovery checks can run after tooling updates.
+- **Testkit qualification:** adopt published Testkit 0.53, unit-returning pool
+  hooks, field-based fixture inputs and bounded argument-sequence Candid calls.
+  Qualification replies use explicit test-owned wire/work/type/header ceilings;
+  bootstrap, topology checks, exact senders and pool-owned restoration remain intact.
+  Reset requirements and achieved coverage use independent fixed fields.
+  Local-fleet startup and native Host fixtures use the current startup, rejection
+  and HTTP-capture contracts.
+
+- **Build identity:** bind the shared library selector to canister commands and
+  complete-build reuse. Embedded peers use one compiler/environment recipe with
+  normalized registry and standard-library paths; retain mismatching bytes and
+  provenance before CI refusal ([#551](https://github.com/dragginzgame/canic/issues/551)).
+
+- **Release checks:** include the shared version validator in isolated shell and
+  Rust release fixtures so preflight and failure-recovery checks can run after tooling updates.
   Align record-export checks with the crate-private storage boundary.
+  Exercise optimizer admission through directory aliases and compare its canonical path.
 
 - **Diagnostic lookup:** distinguish out-of-range numbers from malformed codes
   ([#547](https://github.com/dragginzgame/canic/issues/547)).

@@ -72,7 +72,7 @@ use canic_core::role_contract::ProtocolProfileDigest;
 use canic_core::shared_support::fleet_admission_policy::compile_fleet_admission_projection;
 use canic_core::shared_support::fleet_admission_policy::compile_installed_fleet_admission_policy;
 use ic_testkit::{
-    pic::{CandidCallError, CandidCallExt, CanisterInstallExt, PocketIc},
+    pic::{CandidCallError, CanisterInstallExt, PocketIc},
     pocket_ic::common::rest::RawMessageId,
 };
 use std::{
@@ -244,7 +244,8 @@ impl ManagedComponentGroupFixture {
         target: Principal,
     ) -> Result<FleetAdmissionProjectionStatusResponse, ManagedComponentGroupQualificationError>
     {
-        let response: Result<ManagedStatusResponse, Error> = self.pic.query_candid_as(
+        let response: Result<ManagedStatusResponse, Error> = ::ic_testkit::pic::query_candid_args(
+            &self.pic,
             target,
             self.root(),
             CANIC_ADMISSION_STATUS,
@@ -252,7 +253,9 @@ impl ManagedComponentGroupFixture {
                 limit: DEFAULT_STATUS_PAGE_LIMIT,
                 offset: 0,
             }),),
-        )?;
+            crate::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)?;
         let response = response.map_err(ManagedComponentGroupQualificationError::Canic)?;
         let ManagedStatusResponse::Admission(status) = response else {
             return Err(ManagedComponentGroupQualificationError::UnexpectedResponse(
@@ -294,12 +297,16 @@ impl ManagedComponentGroupFixture {
             expected_policy_digest: current.policy_digest,
             successor,
         };
-        let response: Result<ManagedCommandResponse, Error> = self.pic.update_candid_as(
-            target,
-            self.root(),
-            CANIC_COMMAND,
-            (ManagedCommand::PrepareFleetAdmission(Box::new(request)),),
-        )?;
+        let response: Result<ManagedCommandResponse, Error> =
+            ::ic_testkit::pic::update_candid_args(
+                &self.pic,
+                target,
+                self.root(),
+                CANIC_COMMAND,
+                (ManagedCommand::PrepareFleetAdmission(Box::new(request)),),
+                crate::testing::CANDID_REPLY_LIMITS,
+            )
+            .map(|(reply,)| reply)?;
         let response = response.map_err(ManagedComponentGroupQualificationError::Canic)?;
         let ManagedCommandResponse::PrepareFleetAdmission(receipt) = response else {
             return Err(ManagedComponentGroupQualificationError::UnexpectedResponse(
@@ -314,12 +321,15 @@ impl ManagedComponentGroupFixture {
         &self,
         target: Principal,
     ) -> Result<ManagedCanisterBinding, ManagedComponentGroupQualificationError> {
-        let response: Result<ManagedStatusResponse, Error> = self.pic.query_candid_as(
+        let response: Result<ManagedStatusResponse, Error> = ::ic_testkit::pic::query_candid_args(
+            &self.pic,
             target,
             self.root(),
             CANIC_OBSERVABILITY,
             (ManagedStatusRequest::Binding,),
-        )?;
+            crate::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)?;
         let response = response.map_err(ManagedComponentGroupQualificationError::Canic)?;
         let ManagedStatusResponse::Binding(binding) = response else {
             return Err(ManagedComponentGroupQualificationError::UnexpectedResponse(
@@ -335,14 +345,17 @@ impl ManagedComponentGroupFixture {
         target: Principal,
     ) -> Result<ComponentRuntimeOperationStatus, ManagedComponentGroupQualificationError> {
         let node = self.node(target)?;
-        let response: Result<ManagedStatusResponse, Error> = self.pic.query_candid_as(
+        let response: Result<ManagedStatusResponse, Error> = ::ic_testkit::pic::query_candid_args(
+            &self.pic,
             target,
             self.root(),
             CANIC_CONTROL_STATUS,
             (ManagedStatusRequest::Operation(OperationStatusRequest {
                 operation_id: node.directory.operation_id,
             }),),
-        )?;
+            crate::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)?;
         let response = response.map_err(ManagedComponentGroupQualificationError::Canic)?;
         let ManagedStatusResponse::Operation(status) = response else {
             return Err(ManagedComponentGroupQualificationError::UnexpectedResponse(
@@ -358,12 +371,15 @@ impl ManagedComponentGroupFixture {
         &self,
         target: Principal,
     ) -> Result<CanicRuntimeStatus, ManagedComponentGroupQualificationError> {
-        let response: Result<ManagedStatusResponse, Error> = self.pic.query_candid_as(
+        let response: Result<ManagedStatusResponse, Error> = ::ic_testkit::pic::query_candid_args(
+            &self.pic,
             target,
             self.root(),
             CANIC_OBSERVABILITY,
             (ManagedStatusRequest::Runtime,),
-        )?;
+            crate::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)?;
         let response = response.map_err(ManagedComponentGroupQualificationError::Canic)?;
         let ManagedStatusResponse::Runtime(status) = response else {
             return Err(ManagedComponentGroupQualificationError::UnexpectedResponse(
@@ -402,9 +418,15 @@ impl ManagedComponentGroupFixture {
     fn install_unsettled_allocations(
         &mut self,
     ) -> Result<usize, ManagedComponentGroupQualificationError> {
-        let allocations: Vec<FixtureChildAllocation> =
-            self.pic
-                .query_candid(self.root(), "testing_component_child_allocations", ())?;
+        let allocations: Vec<FixtureChildAllocation> = ::ic_testkit::pic::query_candid_args(
+            &self.pic,
+            self.root(),
+            candid::Principal::anonymous(),
+            "testing_component_child_allocations",
+            (),
+            crate::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)?;
         let allocation_count = allocations.len();
         for allocation in allocations {
             if self
@@ -559,9 +581,15 @@ impl ManagedComponentGroupFixture {
         &self,
         request_id: [u8; 32],
     ) -> Result<(), ManagedComponentGroupQualificationError> {
-        let settled: Result<(), Error> =
-            self.pic
-                .update_candid(self.root(), "testing_settle_component_child", (request_id,))?;
+        let settled: Result<(), Error> = ::ic_testkit::pic::update_candid_args(
+            &self.pic,
+            self.root(),
+            candid::Principal::anonymous(),
+            "testing_settle_component_child",
+            (request_id,),
+            crate::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)?;
         settled.map_err(ManagedComponentGroupQualificationError::Canic)
     }
 
@@ -1346,14 +1374,17 @@ fn configure_runtime(
     target: Principal,
     directory: &ComponentRuntimeDirectoryPreparationRequest,
 ) -> Result<OperationReceipt, ManagedComponentGroupQualificationError> {
-    let response: Result<ManagedCommandResponse, Error> = pic.update_candid_as(
+    let response: Result<ManagedCommandResponse, Error> = ::ic_testkit::pic::update_candid_args(
+        pic,
         target,
         root,
         CANIC_COMMAND,
         (ManagedCommand::ConfigureRuntime(Box::new(
             directory.clone(),
         )),),
-    )?;
+        crate::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)?;
     let response = response.map_err(ManagedComponentGroupQualificationError::Canic)?;
     let ManagedCommandResponse::OperationAccepted(receipt) = response else {
         return Err(ManagedComponentGroupQualificationError::UnexpectedResponse(
@@ -1372,11 +1403,15 @@ fn overview(
     pic: &PocketIc,
     target: Principal,
 ) -> Result<RoleOverviewResponse, ManagedComponentGroupQualificationError> {
-    let response: Result<ManagedStatusResponse, Error> = pic.query_candid(
+    let response: Result<ManagedStatusResponse, Error> = ::ic_testkit::pic::query_candid_args(
+        pic,
         target,
+        candid::Principal::anonymous(),
         CANIC_PUBLIC_STATUS,
         (ManagedStatusRequest::Overview,),
-    )?;
+        crate::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)?;
     let response = response.map_err(ManagedComponentGroupQualificationError::Canic)?;
     let ManagedStatusResponse::Overview(status) = response else {
         return Err(ManagedComponentGroupQualificationError::UnexpectedResponse(

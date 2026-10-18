@@ -198,7 +198,7 @@ fn wasm_store_cargo_build_command(
         )
         .args([
             "build",
-            "--lib",
+            crate::canister_build::cache::CANISTER_CARGO_TARGET,
             "--locked",
             "--message-format=json-render-diagnostics",
             "--manifest-path",

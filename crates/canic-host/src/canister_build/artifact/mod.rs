@@ -920,7 +920,7 @@ pub(super) fn canister_cargo_build_command(
         )
         .args([
             "build",
-            "--lib",
+            crate::canister_build::cache::CANISTER_CARGO_TARGET,
             "--locked",
             "--keep-going",
             "--message-format=json-render-diagnostics",

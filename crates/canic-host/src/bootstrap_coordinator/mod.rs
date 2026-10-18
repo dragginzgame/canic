@@ -229,7 +229,7 @@ fn coordinator_cargo_build_command(
         .current_dir(&context.workspace_root)
         .args([
             cargo_subcommand,
-            "--lib",
+            crate::canister_build::cache::CANISTER_CARGO_TARGET,
             "--locked",
             "--message-format=json-render-diagnostics",
             "--manifest-path",
