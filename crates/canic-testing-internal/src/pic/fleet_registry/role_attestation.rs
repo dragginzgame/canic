@@ -354,16 +354,18 @@ fn metric_count_for_labels(
         .into_iter()
         .find_map(|entry| {
             labels_match(&entry, labels).then_some(match entry.value {
-                MetricValue::Count(count)
-                | MetricValue::Measurement {
+                MetricValue::Count { count, exact: true } => {
+                    u64::try_from(count).expect("bounded exact count")
+                }
+                MetricValue::Measurement {
                     count,
                     count_overflowed: false,
                     ..
                 } => count,
-                MetricValue::Measurement { .. } => {
+                MetricValue::Count { .. } | MetricValue::Measurement { .. } => {
                     panic!("role attestation requires an exact sample count")
                 }
-                MetricValue::U128(_) => 0,
+                MetricValue::U128 { .. } => 0,
             })
         })
         .unwrap_or(0)

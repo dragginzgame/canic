@@ -154,11 +154,13 @@ mod tests {
             .into_iter()
             .collect();
         assert_eq!(
-            counts.get(&InterCanisterCallMetricKey {
-                target,
-                method: "example".to_string(),
-            }),
-            Some(&1)
+            counts
+                .get(&InterCanisterCallMetricKey {
+                    target,
+                    method: "example".to_string(),
+                })
+                .map(|count| count.exact_total().unwrap()),
+            Some(1)
         );
     }
 }

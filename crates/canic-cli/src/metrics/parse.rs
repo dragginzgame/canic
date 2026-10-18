@@ -24,7 +24,7 @@ fn metric_entry(entry: MetricEntryDto) -> MetricEntry {
 
 const fn metric_value(value: MetricValueDto) -> MetricValue {
     match value {
-        MetricValueDto::Count(count) => MetricValue::Count { count },
+        MetricValueDto::Count { count, exact } => MetricValue::Count { count, exact },
         MetricValueDto::Measurement {
             count,
             total,
@@ -36,6 +36,6 @@ const fn metric_value(value: MetricValueDto) -> MetricValue {
             count_overflowed,
             total_overflowed,
         },
-        MetricValueDto::U128(value) => MetricValue::U128 { value },
+        MetricValueDto::U128 { value, exact } => MetricValue::U128 { value, exact },
     }
 }

@@ -4,10 +4,11 @@
 //! Does not own: workflow decisions, persisted records, or endpoint DTOs.
 //! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
+use ic_metrics::MeasurementCounter;
 use std::{cell::RefCell, collections::BTreeMap};
 
 thread_local! {
-    static CYCLES_TOPUP_METRICS: RefCell<BTreeMap<CyclesTopupMetricKey, u64>> =
+    static CYCLES_TOPUP_METRICS: RefCell<BTreeMap<CyclesTopupMetricKey, MeasurementCounter>> =
         const { RefCell::new(BTreeMap::new()) };
 }
 
@@ -52,7 +53,9 @@ pub struct CyclesTopupMetrics;
 
 impl CyclesTopupMetrics {
     /// Read a deterministic bounded prefix for optional public sampling.
-    pub(crate) fn bounded_snapshot(limit: usize) -> Vec<(CyclesTopupMetricKey, u64)> {
+    pub(crate) fn bounded_snapshot(
+        limit: usize,
+    ) -> Vec<(CyclesTopupMetricKey, MeasurementCounter)> {
         CYCLES_TOPUP_METRICS.with_borrow(|counts| {
             counts
                 .iter()
@@ -65,8 +68,8 @@ impl CyclesTopupMetrics {
     // Record one auto-top-up decision or outcome.
     fn increment(key: CyclesTopupMetricKey) {
         CYCLES_TOPUP_METRICS.with_borrow_mut(|counts| {
-            let entry = counts.entry(key).or_insert(0);
-            *entry = entry.saturating_add(1);
+            let entry = counts.entry(key).or_default();
+            entry.add(1);
         });
     }
 
@@ -101,7 +104,7 @@ impl CyclesTopupMetrics {
     }
 
     #[must_use]
-    pub fn snapshot() -> Vec<(CyclesTopupMetricKey, u64)> {
+    pub fn snapshot() -> Vec<(CyclesTopupMetricKey, MeasurementCounter)> {
         CYCLES_TOPUP_METRICS
             .with_borrow(std::clone::Clone::clone)
             .into_iter()
@@ -122,8 +125,11 @@ impl CyclesTopupMetrics {
 mod tests {
     use super::*;
 
-    fn snapshot_map() -> BTreeMap<CyclesTopupMetricKey, u64> {
-        CyclesTopupMetrics::snapshot().into_iter().collect()
+    fn snapshot_map() -> BTreeMap<CyclesTopupMetricKey, u128> {
+        CyclesTopupMetrics::snapshot()
+            .into_iter()
+            .map(|(key, count)| (key, count.exact_total().unwrap()))
+            .collect()
     }
 
     #[test]

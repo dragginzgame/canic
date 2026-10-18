@@ -21,6 +21,12 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
 ### ⚠️ Breaking
 
+- **Scalar metric quality:** use shared wide counters for Canic-owned diagnostic
+  accumulators. Protected scalars now carry `u128` values and an explicit `exact`
+  flag; update Candid/JSON clients. Public process/operation counters preserve
+  actual overflow, while forwarded untracked readings remain conservative
+  ([#535](https://github.com/dragginzgame/canic/issues/535)).
+
 - **Public operation metrics:** publish only anonymous aggregate counters.
   Per-child funding and per-target refill amounts remain in protected Core
   diagnostics; clients needing those rows must use the protected endpoint

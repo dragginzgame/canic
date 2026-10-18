@@ -112,12 +112,18 @@ fn parses_typed_metrics_page() {
             MetricEntryDto {
                 labels: vec!["lifecycle".into(), "init".into(), "started".into()],
                 principal: None,
-                value: MetricValueDto::Count(2),
+                value: MetricValueDto::Count {
+                    count: 2,
+                    exact: true,
+                },
             },
             MetricEntryDto {
                 labels: vec!["cycles_funding".into(), "minted".into()],
                 principal: Some(Principal::from_text("aaaaa-aa").expect("principal")),
-                value: MetricValueDto::U128(1_000),
+                value: MetricValueDto::U128 {
+                    value: 1_000,
+                    exact: true,
+                },
             },
             MetricEntryDto {
                 labels: vec!["timer".into(), "tick".into()],
@@ -138,9 +144,21 @@ fn parses_typed_metrics_page() {
 
     assert_eq!(entries.len(), 3);
     assert_eq!(entries[0].labels, ["lifecycle", "init", "started"]);
-    assert_eq!(entries[0].value, MetricValue::Count { count: 2 });
+    assert_eq!(
+        entries[0].value,
+        MetricValue::Count {
+            count: 2,
+            exact: true
+        }
+    );
     assert_eq!(entries[1].principal.as_deref(), Some("aaaaa-aa"));
-    assert_eq!(entries[1].value, MetricValue::U128 { value: 1_000 });
+    assert_eq!(
+        entries[1].value,
+        MetricValue::U128 {
+            value: 1_000,
+            exact: true
+        }
+    );
     assert_eq!(
         entries[2].value,
         MetricValue::Measurement {
@@ -190,5 +208,48 @@ fn metric_measurement_quality_survives_candid_and_json() {
                 total_overflowed
             }
         );
+    }
+}
+
+#[test]
+fn scalar_quality_survives_candid_and_json_at_full_width() {
+    for (value, exact) in [
+        (0, true),
+        (u128::from(u64::MAX) + 1, true),
+        (u128::MAX, true),
+        (u128::MAX, false),
+    ] {
+        let page = Page {
+            entries: vec![
+                MetricEntryDto {
+                    labels: vec!["events".into()],
+                    principal: None,
+                    value: MetricValueDto::Count {
+                        count: value,
+                        exact,
+                    },
+                },
+                MetricEntryDto {
+                    labels: vec!["cycles".into()],
+                    principal: None,
+                    value: MetricValueDto::U128 { value, exact },
+                },
+            ],
+            total: 2,
+        };
+        let wire = candid::encode_one(page).unwrap();
+        let rows = metric_page(candid::decode_one(&wire).unwrap());
+        assert_eq!(
+            rows[0].value,
+            MetricValue::Count {
+                count: value,
+                exact
+            }
+        );
+        assert_eq!(rows[1].value, MetricValue::U128 { value, exact });
+        let json = serde_json::to_string(&rows).unwrap();
+        assert!(json.contains(&format!("\"count\":{value}")));
+        assert!(json.contains(&format!("\"value\":{value}")));
+        assert_eq!(json.matches(&format!("\"exact\":{exact}")).count(), 2);
     }
 }

@@ -804,8 +804,11 @@ mod tests {
                 assert_eq!(*calls.lock().unwrap(), expected_calls);
                 let entries = MetricStore::snapshot().entries;
                 assert_eq!(
-                    entries.iter().map(|(_, count)| count).sum::<u64>(),
-                    u64::from(!allowed)
+                    entries
+                        .iter()
+                        .map(|(_, count)| count.exact_total().unwrap())
+                        .sum::<u128>(),
+                    u128::from(!allowed)
                 );
                 observations.push((
                     result.err().map(|error| std::mem::discriminant(&error)),

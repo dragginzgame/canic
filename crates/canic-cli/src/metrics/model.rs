@@ -84,7 +84,8 @@ pub(super) struct MetricEntry {
 #[serde(rename_all = "snake_case", tag = "type")]
 pub(super) enum MetricValue {
     Count {
-        count: u64,
+        count: u128,
+        exact: bool,
     },
     Measurement {
         count: u64,
@@ -94,5 +95,6 @@ pub(super) enum MetricValue {
     },
     U128 {
         value: u128,
+        exact: bool,
     },
 }

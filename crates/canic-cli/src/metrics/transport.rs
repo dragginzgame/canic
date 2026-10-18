@@ -207,14 +207,14 @@ fn metrics_failure_report(
 
 const fn metric_value_is_zero(value: &MetricValue) -> bool {
     match value {
-        MetricValue::Count { count } => *count == 0,
+        MetricValue::Count { count, exact } => *count == 0 && *exact,
         MetricValue::Measurement {
             count,
             total,
             count_overflowed,
             total_overflowed,
         } => *count == 0 && *total == 0 && !*count_overflowed && !*total_overflowed,
-        MetricValue::U128 { value } => *value == 0,
+        MetricValue::U128 { value, exact } => *value == 0 && *exact,
     }
 }
 
@@ -324,14 +324,44 @@ mod tests {
     // Ensure zero filtering treats every payload shape consistently.
     #[test]
     fn detects_zero_metric_values() {
-        assert!(metric_value_is_zero(&MetricValue::Count { count: 0 }));
+        assert!(metric_value_is_zero(&MetricValue::Count {
+            count: 0,
+            exact: true
+        }));
         assert!(metric_value_is_zero(&MetricValue::Measurement {
             count: 0,
             total: 0,
             count_overflowed: false,
             total_overflowed: false,
         }));
-        assert!(!metric_value_is_zero(&MetricValue::U128 { value: 1 }));
+        assert!(!metric_value_is_zero(&MetricValue::U128 {
+            value: 1,
+            exact: true
+        }));
+    }
+
+    #[test]
+    fn nonzero_filter_retains_unknown_scalar_quality() {
+        for value in [
+            MetricValue::Count {
+                count: 0,
+                exact: false,
+            },
+            MetricValue::U128 {
+                value: 0,
+                exact: false,
+            },
+            MetricValue::Count {
+                count: u128::MAX,
+                exact: true,
+            },
+        ] {
+            assert!(!metric_value_is_zero(&value));
+        }
+        assert!(metric_value_is_zero(&MetricValue::U128 {
+            value: 0,
+            exact: true
+        }));
     }
 
     // Ensure transport preserves the Candid metric kind vocabulary.

@@ -753,6 +753,21 @@ mod counter_tests {
                 elapsed_ns: 10
             })
         );
+        let capped = PublicHistorySample {
+            value: u128::MAX,
+            ..second
+        };
+        let near_cap = PublicHistorySample {
+            value: u128::MAX - 1,
+            ..first
+        };
+        assert_eq!(
+            counter_delta(&near_cap, &capped),
+            Some(PublicCounterDelta {
+                amount: 1,
+                elapsed_ns: 10
+            })
+        );
         for incompatible in [
             PublicHistorySample {
                 kind: PublicMetricKind::Gauge,

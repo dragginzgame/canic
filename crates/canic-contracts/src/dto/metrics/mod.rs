@@ -30,7 +30,8 @@ pub struct MetricEntry {
 
 #[derive(CandidType, Debug, Deserialize)]
 pub enum MetricValue {
-    Count(u64),
+    /// Scalar count; false exactness admits only a lower bound.
+    Count { count: u128, exact: bool },
     /// Count and accumulated total from the same admitted observation cohort.
     /// Numeric caps remain exact unless their corresponding flag is true.
     Measurement {
@@ -39,7 +40,8 @@ pub enum MetricValue {
         count_overflowed: bool,
         total_overflowed: bool,
     },
-    U128(u128),
+    /// Scalar quantity; false exactness admits only a lower bound.
+    U128 { value: u128, exact: bool },
 }
 
 //

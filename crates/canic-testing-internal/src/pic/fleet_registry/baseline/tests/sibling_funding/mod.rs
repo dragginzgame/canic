@@ -230,7 +230,7 @@ fn assert_funding_metrics(pic: &PocketIc, root: Principal, hub: Principal, child
                     entry.principal == Some(*child) && entry.labels == ["cycles_funding", label]
                 })
                 .unwrap();
-            assert!(matches!(entry.value, MetricValue::U128(value) if value == GRANT));
+            assert!(matches!(entry.value, MetricValue::U128 { value, .. } if value == GRANT));
         }
         assert!(!page.entries.iter().any(|entry| {
             entry.principal == Some(*child)

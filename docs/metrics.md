@@ -30,13 +30,24 @@ and `total_overflowed: bool` for the same admitted observation cohort. Numeric
 caps with false flags remain exact. The two flags describe source accumulation;
 labels establish the measured unit. Performance rows use instructions.
 
+`Count { count: u128, exact: bool }` and `U128 { value: u128, exact: bool }`
+carry scalar events and quantities. Canic-owned diagnostic accumulators use
+IC Metrics counters: an exact numeric cap remains exact, and actual overflow
+sets sticky lost quality. `exact: false` means only a lower bound; it does not
+assert that overflow was observed. Forwarded timer starts and retained refill
+counts do not carry source overflow state, so their numeric cap is conservatively
+inexact. Latest delay and retained target quantities remain direct observations.
+
 `canic info metrics` renders measurement rows as `COUNT` plus `AVG/CALL`,
 rounding to the nearest tenth with exact halves upward. Empty or overflowed
 means display `-`; known lower bounds use `>=` on their count or verbose total.
 Full canister IDs, principal dimensions and raw totals remain behind `--verbose`.
-Scalar `Count` and `U128` rows never acquire an average. `--json` carries the
-measurement fields with `type: "measurement"`; wide integer literals require a
-lossless numeric parser. It does not encode a clipped number as exact.
+Scalar `Count` and `U128` rows never acquire an average, and inexact scalars display
+`>=` in their existing count/amount column. `--nonzero` removes only known exact
+zero values. `--json` retains `type: "count"` / `type: "u128"` and each scalar's
+`exact` field, or measurement fields with `type: "measurement"`. Wide integer
+literals require a lossless numeric parser. It does not encode a clipped number
+as exact.
 
 ## Query Perf Samples
 

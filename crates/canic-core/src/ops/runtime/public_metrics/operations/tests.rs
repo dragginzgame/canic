@@ -77,7 +77,21 @@ fn public_funding_keeps_global_totals_without_child_dimensions_or_starvation() {
         row.kind,
         PublicMetricKind::Counter {
             window_id: 0,
-            saturated: true
+            saturated: false
+        }
+    ));
+    CyclesFundingMetrics::record_requested(Principal::anonymous(), 1);
+    let clipped = sample().unwrap();
+    let row = clipped
+        .iter()
+        .find(|row| row.name == "cycles_funding.cycles_requested_total")
+        .unwrap();
+    assert_eq!(row.value, u128::MAX);
+    assert!(matches!(
+        row.kind,
+        PublicMetricKind::Counter {
+            saturated: true,
+            ..
         }
     ));
 }
@@ -126,23 +140,18 @@ fn public_refill_counts_are_unique_gauges_without_target_amounts() {
 }
 
 #[test]
-fn scalar_count_caps_remain_conservative_counter_quality() {
-    let row = count("lifecycle.init.root.runtime.started".into(), u64::MAX);
-    assert_eq!(row.value, u128::from(u64::MAX));
-    assert!(matches!(
-        row.kind,
-        PublicMetricKind::Counter {
-            window_id: 0,
-            saturated: true
-        }
-    ));
-    let zero = count("cycles_topup.request_scheduled".into(), 0);
-    assert_eq!(zero.value, 0);
-    assert!(matches!(
-        zero.kind,
-        PublicMetricKind::Counter {
-            window_id: 0,
-            saturated: false
-        }
-    ));
+fn scalar_count_caps_preserve_actual_counter_quality() {
+    for (total, overflowed) in [
+        (0, false),
+        (u128::from(u64::MAX), false),
+        (u128::MAX, false),
+        (u128::MAX, true),
+    ] {
+        let source = MeasurementCounter::from_parts(total, overflowed).unwrap();
+        let row = count("lifecycle.init.root.runtime.started".into(), source);
+        assert_eq!(row.value, total);
+        assert!(
+            matches!(row.kind, PublicMetricKind::Counter { window_id: 0, saturated } if saturated == overflowed)
+        );
+    }
 }

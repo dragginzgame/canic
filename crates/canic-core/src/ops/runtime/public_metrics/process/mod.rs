@@ -15,6 +15,7 @@ use crate::{
         platform_call::PlatformCallMetrics, system::SystemMetrics, wasm_store::WasmStoreMetrics,
     },
 };
+use ic_metrics::MeasurementCounter;
 use std::collections::BTreeMap;
 
 const MAX_PROCESS_SOURCE_ROWS: usize = 256;
@@ -29,7 +30,7 @@ pub(super) fn operations() -> Result<Vec<PublicMetricSample>, InternalError> {
 fn process_rows() -> Result<Vec<PublicMetricSample>, InternalError> {
     let mut counts = BTreeMap::new();
     for (key, count) in PlatformCallMetrics::bounded_snapshot(MAX_PROCESS_SOURCE_ROWS)? {
-        add(
+        add_counter(
             &mut counts,
             "platform_call",
             key.outcome.metric_label(),
@@ -37,10 +38,10 @@ fn process_rows() -> Result<Vec<PublicMetricSample>, InternalError> {
         );
     }
     for (key, count) in IntentMetrics::bounded_snapshot(MAX_PROCESS_SOURCE_ROWS)? {
-        add(&mut counts, "intent", key.outcome.metric_label(), count);
+        add_counter(&mut counts, "intent", key.outcome.metric_label(), count);
     }
     for (key, count) in PlacementIndexMetrics::bounded_snapshot(MAX_PROCESS_SOURCE_ROWS)? {
-        add(
+        add_counter(
             &mut counts,
             "placement_index",
             key.outcome.metric_label(),
@@ -48,9 +49,9 @@ fn process_rows() -> Result<Vec<PublicMetricSample>, InternalError> {
         );
     }
     for (key, count) in WasmStoreMetrics::bounded_snapshot(MAX_PROCESS_SOURCE_ROWS)? {
-        add(&mut counts, "wasm_store", key.outcome.metric_label(), count);
+        add_counter(&mut counts, "wasm_store", key.outcome.metric_label(), count);
     }
-    add(
+    add_counter(
         &mut counts,
         "inter_canister_call",
         "started",
@@ -59,15 +60,24 @@ fn process_rows() -> Result<Vec<PublicMetricSample>, InternalError> {
     let rows = counts
         .into_iter()
         .map(|((owner, outcome), value)| {
-            let mut row = sample(format!("process.{owner}.{outcome}"), value, "count");
+            let mut row = sample(format!("process.{owner}.{outcome}"), value.total(), "count");
             row.kind = PublicMetricKind::Counter {
                 window_id: 0,
-                saturated: value == u64::MAX,
+                saturated: value.total_overflowed(),
             };
             row
         })
         .collect::<Vec<_>>();
     Ok(rows)
+}
+
+fn add_counter(
+    counts: &mut BTreeMap<(&'static str, &'static str), MeasurementCounter>,
+    owner: &'static str,
+    outcome: &'static str,
+    count: MeasurementCounter,
+) {
+    counts.entry((owner, outcome)).or_default().merge(count);
 }
 
 fn add(
@@ -102,7 +112,13 @@ fn timer_rows(timers: &[ic_timers::TimerSnapshot]) -> Vec<PublicMetricSample> {
     }
     counts
         .into_iter()
-        .map(|((category, name), value)| sample(format!("timer.{category}.{name}"), value, "count"))
+        .map(|((category, name), value)| {
+            sample(
+                format!("timer.{category}.{name}"),
+                u128::from(value),
+                "count",
+            )
+        })
         .collect()
 }
 
@@ -111,12 +127,12 @@ pub(super) fn memory() -> Vec<PublicMetricSample> {
     vec![
         sample(
             "memory.wasm_extent".into(),
-            (core::arch::wasm32::memory_size::<0>() as u64).saturating_mul(65_536),
+            (core::arch::wasm32::memory_size::<0>() as u128) * 65_536,
             "bytes",
         ),
         sample(
             "memory.stable_extent".into(),
-            crate::memory::stable_extent_bytes(),
+            u128::from(crate::memory::stable_extent_bytes()),
             "bytes",
         ),
     ]
@@ -127,11 +143,11 @@ pub(super) const fn memory() -> Vec<PublicMetricSample> {
     Vec::new()
 }
 
-fn sample(name: String, value: u64, unit: &str) -> PublicMetricSample {
+fn sample(name: String, value: u128, unit: &str) -> PublicMetricSample {
     PublicMetricSample {
         name,
         canister_id: None,
-        value: u128::from(value),
+        value,
         unit: unit.into(),
         observed_at_ns: 0,
         kind: PublicMetricKind::Gauge,
@@ -148,6 +164,33 @@ mod tests {
     use crate::ops::runtime::metrics::{
         intent::*, placement_index::*, platform_call::*, wasm_store::*,
     };
+
+    #[test]
+    fn grouped_counters_merge_actual_quality_without_cap_inference() {
+        let mut counts = BTreeMap::new();
+        add_counter(
+            &mut counts,
+            "intent",
+            "completed",
+            MeasurementCounter::from_parts(u128::MAX - 1, false).unwrap(),
+        );
+        let mut one = MeasurementCounter::ZERO;
+        one.add(1);
+        add_counter(&mut counts, "intent", "completed", one);
+        assert_eq!(
+            counts[&("intent", "completed")].exact_total(),
+            Ok(u128::MAX)
+        );
+        add_counter(&mut counts, "intent", "completed", one);
+        assert!(counts[&("intent", "completed")].total_overflowed());
+        add_counter(
+            &mut counts,
+            "intent",
+            "failed",
+            MeasurementCounter::from_parts(u128::MAX, true).unwrap(),
+        );
+        assert!(counts[&("intent", "failed")].total_overflowed());
+    }
 
     #[test]
     fn public_process_rows_expose_only_bounded_outcome_aggregates() {

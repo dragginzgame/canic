@@ -1,5 +1,46 @@
 # Current handoff — 2026-10-14
 
+## Scalar diagnostic quality — 2026-10-18
+
+The isolated PR #599 now uses published Metrics 0.11.7 `MeasurementCounter` for
+Canic-owned runtime diagnostic scalar accumulation, removing the 19 copied
+saturating-add sites. Keys, attribution, labels and reset/lifecycle owners remain.
+Protected `Count` and `U128` payloads carry wide values and explicit exactness;
+public process/operation rows preserve actual source and merge overflow into
+existing history admission. Forwarded untracked timer/refill counts remain
+conservative at their cap. CLI preserves lower bounds and wide JSON values,
+never invents scalar means, and retains inexact zero under `--nonzero`.
+Authoritative balances, quotas, budgets, records and paid-effect policy are not
+metric arithmetic. Package versions, manifests and locked selections are unchanged.
+
+Focused qualification passes 101 tests: 42 runtime metric, 27 public projection/
+cache/history, 21 CLI, three facade, one sharding and seven directly affected
+access/call/lifecycle/funding cases. Strict native Core, CLI, test-support,
+affected ingress/timer targets and facade Clippy pass, as do selected Core
+sharding and Wasm lint. Test-support library/tests also pass strict lint with
+`governed-pocketic-tests`, covering the changed membership/attestation callers. Actual Rust 1.91 Core/CLI/test-support library checks and
+Core Wasm checking pass. The extra 1.91 all-target attempt fails at existing
+`std::assert_matches!` development tests; their authored compiler remains 1.99.
+That failed attempt is retained separately, not relabelled as floor acceptance.
+Logs are `/tmp/canic-scalar-*.log`; formatting, affected links and diff checks pass.
+
+Rust 1.91 layout inspection of selected Metrics 0.11.7 shows a 32-byte counter on
+native and Wasm, versus eight-byte event and sixteen-byte cycle totals. This is
+value storage only, excluding map padding/allocations. LLVM receipts are under
+`target/maintenance-scalar/`. No recording-instruction, IC-cycle or Wasm-size
+improvement is claimed; [#535](https://github.com/dragginzgame/canic/issues/535)
+retains the governed IC recording-cost acceptance. Fresh hosted/native macOS,
+governed artifact/Candid-export and installed-runtime qualification remain
+separate. The complete 0.112 integration retains its owning Auth/release blockers;
+this contribution does not declare that batch ready to release.
+
+The latest failed hosted source `fbcbda4` also exposed one more stale structured
+Testkit rejection assertion and the same physical temporary-path assumption in
+IC Wasm fixtures on both macOS architectures. Those callers are corrected;
+test-support strict lint and six IC Wasm cases through a symlinked temporary
+parent pass locally. Historical failed CI attempts keep their own identities.
+The normal dirty integration checkout remains untouched.
+
 ## Native CI fixture qualification — 2026-10-18
 
 PR #599's Linux checks and macOS arm64 job exposed two pre-existing fixture

@@ -167,8 +167,12 @@ struct MetricValueColumns {
 
 fn metric_value_columns(value: &MetricValue) -> MetricValueColumns {
     match value {
-        MetricValue::Count { count } => MetricValueColumns {
-            count: count.to_string(),
+        MetricValue::Count { count, exact } => MetricValueColumns {
+            count: if *exact {
+                count.to_string()
+            } else {
+                format!(">={count}")
+            },
             average_per_count: "-".to_string(),
             total: "-".to_string(),
             amount: "-".to_string(),
@@ -196,11 +200,15 @@ fn metric_value_columns(value: &MetricValue) -> MetricValueColumns {
             },
             amount: "-".to_string(),
         },
-        MetricValue::U128 { value } => MetricValueColumns {
+        MetricValue::U128 { value, exact } => MetricValueColumns {
             count: "-".to_string(),
             average_per_count: "-".to_string(),
             total: "-".to_string(),
-            amount: value.to_string(),
+            amount: if *exact {
+                value.to_string()
+            } else {
+                format!(">={value}")
+            },
         },
     }
 }
@@ -314,7 +322,10 @@ mod tests {
                             .map(str::to_string)
                             .collect(),
                         principal: None,
-                        value: MetricValue::Count { count: 2 },
+                        value: MetricValue::Count {
+                            count: 2,
+                            exact: true,
+                        },
                     },
                     MetricEntry {
                         labels: ["cycles_funding", "attached"]
@@ -322,7 +333,10 @@ mod tests {
                             .map(str::to_string)
                             .collect(),
                         principal: None,
-                        value: MetricValue::U128 { value: 1_000 },
+                        value: MetricValue::U128 {
+                            value: 1_000,
+                            exact: true,
+                        },
                     },
                 ],
                 error: None,
@@ -371,9 +385,38 @@ mod tests {
     }
 
     #[test]
+    fn scalar_columns_preserve_exact_caps_and_label_lower_bounds() {
+        for exact in [true, false] {
+            let count = metric_value_columns(&MetricValue::Count {
+                count: u128::MAX,
+                exact,
+            });
+            let amount = metric_value_columns(&MetricValue::U128 {
+                value: u128::MAX,
+                exact,
+            });
+            let expected = if exact {
+                u128::MAX.to_string()
+            } else {
+                format!(">={}", u128::MAX)
+            };
+            assert_eq!(count.count, expected);
+            assert_eq!(amount.amount, expected);
+            assert_eq!(count.average_per_count, "-");
+            assert_eq!(amount.average_per_count, "-");
+        }
+    }
+
+    #[test]
     fn timer_scalar_rows_have_no_average() {
-        let count = metric_value_columns(&MetricValue::Count { count: 4 });
-        let delay = metric_value_columns(&MetricValue::U128 { value: 500 });
+        let count = metric_value_columns(&MetricValue::Count {
+            count: 4,
+            exact: true,
+        });
+        let delay = metric_value_columns(&MetricValue::U128 {
+            value: 500,
+            exact: true,
+        });
         assert_eq!(count.count, "4");
         assert_eq!(delay.amount, "500");
         assert_eq!(count.average_per_count, "-");
@@ -383,12 +426,18 @@ mod tests {
             MetricEntry {
                 labels: vec!["timer".into(), "work_started".into()],
                 principal: None,
-                value: MetricValue::Count { count: 4 },
+                value: MetricValue::Count {
+                    count: 4,
+                    exact: true,
+                },
             },
             MetricEntry {
                 labels: vec!["timer".into(), "latest_armed_delay_ms".into()],
                 principal: None,
-                value: MetricValue::U128 { value: 500 },
+                value: MetricValue::U128 {
+                    value: 500,
+                    exact: true,
+                },
             },
         ];
         let rendered = render_metrics_report(&report, false);

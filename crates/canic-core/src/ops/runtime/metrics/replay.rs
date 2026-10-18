@@ -4,10 +4,11 @@
 //! Does not own: workflow decisions, persisted records, or endpoint DTOs.
 //! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
+use ic_metrics::MeasurementCounter;
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
-    static REPLAY_METRICS: RefCell<HashMap<ReplayMetricKey, u64>> =
+    static REPLAY_METRICS: RefCell<HashMap<ReplayMetricKey, MeasurementCounter>> =
         RefCell::new(HashMap::new());
 }
 
@@ -141,14 +142,14 @@ impl ReplayMetrics {
                 outcome,
                 reason,
             };
-            let entry = counts.entry(key).or_insert(0);
-            *entry = entry.saturating_add(1);
+            let entry = counts.entry(key).or_default();
+            entry.add(1);
         });
     }
 
     /// Snapshot the current replay metric table as stable rows.
     #[must_use]
-    pub fn snapshot() -> Vec<(ReplayMetricKey, u64)> {
+    pub fn snapshot() -> Vec<(ReplayMetricKey, MeasurementCounter)> {
         REPLAY_METRICS
             .with_borrow(std::clone::Clone::clone)
             .into_iter()
@@ -171,8 +172,11 @@ mod tests {
     use super::*;
 
     // Convert snapshots into a map for concise count assertions.
-    fn snapshot_map() -> HashMap<ReplayMetricKey, u64> {
-        ReplayMetrics::snapshot().into_iter().collect()
+    fn snapshot_map() -> HashMap<ReplayMetricKey, u128> {
+        ReplayMetrics::snapshot()
+            .into_iter()
+            .map(|(key, count)| (key, count.exact_total().unwrap()))
+            .collect()
     }
 
     #[test]

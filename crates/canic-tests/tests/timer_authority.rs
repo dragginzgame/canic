@@ -911,7 +911,7 @@ fn timer_metric(entries: &[MetricEntry], label: &str) -> (u64, u64) {
                             u64::try_from(total).expect("bounded timer audit instructions fit u64"),
                         )
                     }
-                    MetricValue::Count(_) | MetricValue::U128(_) => {
+                    MetricValue::Count { .. } | MetricValue::U128 { .. } => {
                         panic!("timer performance metric must carry count and instructions")
                     }
                 }

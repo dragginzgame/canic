@@ -89,7 +89,10 @@ const fn count_entry(labels: Vec<String>, count: u64) -> MetricEntry {
     MetricEntry {
         labels,
         principal: None,
-        value: MetricValue::Count(count),
+        value: MetricValue::Count {
+            count: count as u128,
+            exact: count != u64::MAX,
+        },
     }
 }
 
@@ -101,6 +104,6 @@ const fn principal_u128_entry(
     MetricEntry {
         labels,
         principal: Some(principal),
-        value: MetricValue::U128(value),
+        value: MetricValue::U128 { value, exact: true },
     }
 }

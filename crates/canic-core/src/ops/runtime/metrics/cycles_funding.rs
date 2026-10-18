@@ -5,10 +5,11 @@
 //! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
 use crate::cdk::types::Principal;
+use ic_metrics::MeasurementCounter;
 use std::{cell::RefCell, collections::BTreeMap};
 
 thread_local! {
-    static CYCLES_FUNDING_METRICS: RefCell<BTreeMap<CyclesFundingMetricStorageKey, u128>> =
+    static CYCLES_FUNDING_METRICS: RefCell<BTreeMap<CyclesFundingMetricStorageKey, MeasurementCounter>> =
         const { RefCell::new(BTreeMap::new()) };
 }
 
@@ -116,8 +117,8 @@ impl CyclesFundingMetrics {
                 child_principal,
                 reason,
             };
-            let entry = counts.entry(key).or_insert(0);
-            *entry = entry.saturating_add(cycles);
+            let entry = counts.entry(key).or_default();
+            entry.add(cycles);
         });
     }
 
@@ -196,7 +197,7 @@ impl CyclesFundingMetrics {
         CyclesFundingMetricKey,
         Option<Principal>,
         Option<CyclesFundingDeniedReason>,
-        u128,
+        MeasurementCounter,
     )> {
         CYCLES_FUNDING_METRICS.with_borrow(|counts| {
             counts
@@ -213,7 +214,7 @@ impl CyclesFundingMetrics {
     ) -> Vec<(
         CyclesFundingMetricKey,
         Option<CyclesFundingDeniedReason>,
-        u128,
+        MeasurementCounter,
     )> {
         CYCLES_FUNDING_METRICS.with_borrow(|counts| {
             [
@@ -271,7 +272,10 @@ mod tests {
         CyclesFundingMetrics::bounded_snapshot(usize::MAX)
             .into_iter()
             .map(|(metric, child_principal, reason, cycles)| {
-                ((metric, child_principal, reason), cycles)
+                (
+                    (metric, child_principal, reason),
+                    cycles.exact_total().unwrap(),
+                )
             })
             .collect()
     }

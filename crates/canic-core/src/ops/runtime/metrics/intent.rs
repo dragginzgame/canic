@@ -4,10 +4,11 @@
 //! Does not own: workflow decisions, persisted records, or endpoint DTOs.
 //! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
+use ic_metrics::MeasurementCounter;
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
-    static INTENT_METRICS: RefCell<HashMap<IntentMetricKey, u64>> =
+    static INTENT_METRICS: RefCell<HashMap<IntentMetricKey, MeasurementCounter>> =
         RefCell::new(HashMap::new());
 }
 
@@ -149,7 +150,7 @@ impl IntentMetrics {
     /// Bound source visits before allocating an optional anonymous aggregate.
     pub(crate) fn bounded_snapshot(
         limit: usize,
-    ) -> Result<Vec<(IntentMetricKey, u64)>, crate::InternalError> {
+    ) -> Result<Vec<(IntentMetricKey, MeasurementCounter)>, crate::InternalError> {
         INTENT_METRICS.with_borrow(|counts| {
             if counts.len() > limit {
                 return Err(crate::InternalError::invalid_input());
@@ -176,14 +177,14 @@ impl IntentMetrics {
                 outcome,
                 reason,
             };
-            let entry = counts.entry(key).or_insert(0);
-            *entry = entry.saturating_add(1);
+            let entry = counts.entry(key).or_default();
+            entry.add(1);
         });
     }
 
     /// Snapshot the current intent metric table as stable rows.
     #[must_use]
-    pub fn snapshot() -> Vec<(IntentMetricKey, u64)> {
+    pub fn snapshot() -> Vec<(IntentMetricKey, MeasurementCounter)> {
         INTENT_METRICS
             .with_borrow(std::clone::Clone::clone)
             .into_iter()
@@ -206,8 +207,11 @@ mod tests {
     use super::*;
 
     // Convert snapshots into a map for concise count assertions.
-    fn snapshot_map() -> HashMap<IntentMetricKey, u64> {
-        IntentMetrics::snapshot().into_iter().collect()
+    fn snapshot_map() -> HashMap<IntentMetricKey, u128> {
+        IntentMetrics::snapshot()
+            .into_iter()
+            .map(|(key, count)| (key, count.exact_total().unwrap()))
+            .collect()
     }
 
     #[test]

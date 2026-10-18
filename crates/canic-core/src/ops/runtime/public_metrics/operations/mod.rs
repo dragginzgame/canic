@@ -19,6 +19,7 @@ use crate::{
         },
     },
 };
+use ic_metrics::MeasurementCounter;
 
 #[cfg(test)]
 mod tests;
@@ -64,11 +65,11 @@ pub(super) fn sample() -> Result<Vec<PublicMetricSample>, InternalError> {
         );
         rows.push(scalar(
             name,
-            value,
+            value.total(),
             "cycles",
             PublicMetricKind::Counter {
                 window_id: 0,
-                saturated: value == u128::MAX,
+                saturated: value.total_overflowed(),
             },
         ));
     }
@@ -113,14 +114,14 @@ fn refill_rows(snapshot: &IcpRefillMetricSnapshot) -> Vec<PublicMetricSample> {
     statuses.chain(errors).collect()
 }
 
-fn count(name: String, value: u64) -> PublicMetricSample {
+fn count(name: String, value: MeasurementCounter) -> PublicMetricSample {
     scalar(
         name,
-        u128::from(value),
+        value.total(),
         "count",
         PublicMetricKind::Counter {
             window_id: 0,
-            saturated: value == u64::MAX,
+            saturated: value.total_overflowed(),
         },
     )
 }

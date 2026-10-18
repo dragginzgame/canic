@@ -118,14 +118,20 @@ fn timer_diagnostics_keep_starts_and_latest_delay_independent() {
             rows[0].labels,
             ["once", "app", "jobs", "tick", "work_started"]
         );
-        assert!(matches!(rows[0].value, MetricValue::Count(4)));
+        assert!(matches!(
+            rows[0].value,
+            MetricValue::Count {
+                count: 4,
+                exact: true
+            }
+        ));
         if let Some(delay) = delay {
             assert_eq!(
                 rows[1].labels,
                 ["once", "app", "jobs", "tick", "latest_armed_delay_ms"]
             );
             assert!(
-                matches!(rows[1].value, MetricValue::U128(value) if value == u128::from(delay / 1_000_000))
+                matches!(rows[1].value, MetricValue::U128 { value, .. } if value == u128::from(delay / 1_000_000))
             );
         }
     }
@@ -284,9 +290,21 @@ fn timer_inventory_availability_distinguishes_unavailable_from_empty() {
     let unavailable = timer_inventory_availability(false);
 
     assert_eq!(available.labels, ["inventory", "available"]);
-    assert!(matches!(available.value, MetricValue::Count(1)));
+    assert!(matches!(
+        available.value,
+        MetricValue::Count {
+            count: 1,
+            exact: true
+        }
+    ));
     assert_eq!(unavailable.labels, ["inventory", "available"]);
-    assert!(matches!(unavailable.value, MetricValue::Count(0)));
+    assert!(matches!(
+        unavailable.value,
+        MetricValue::Count {
+            count: 0,
+            exact: true
+        }
+    ));
 }
 
 #[test]
@@ -918,14 +936,14 @@ fn all_metric_kinds() -> &'static [MetricsKind] {
     ]
 }
 
-fn assert_metric_count(entries: &[MetricEntry], labels: &[&str], expected: u64) {
+fn assert_metric_count(entries: &[MetricEntry], labels: &[&str], expected: u128) {
     let entry = entries
         .iter()
         .find(|entry| entry.labels.iter().map(String::as_str).collect::<Vec<_>>() == labels)
         .expect("metric entry should exist");
 
     match &entry.value {
-        MetricValue::Count(count) => assert_eq!(*count, expected),
+        MetricValue::Count { count, .. } => assert_eq!(*count, expected),
         _ => panic!("metric entry should use Count"),
     }
 }
@@ -971,7 +989,36 @@ fn assert_metric_u128(
         .expect("metric entry should exist");
 
     match &entry.value {
-        MetricValue::U128(value) => assert_eq!(*value, expected),
+        MetricValue::U128 { value, .. } => assert_eq!(*value, expected),
         _ => panic!("metric entry should use U128"),
     }
+}
+
+#[test]
+fn scalar_count_projection_preserves_wide_totals_and_source_quality() {
+    for (total, overflowed) in [
+        (0, false),
+        (u128::from(u64::MAX), false),
+        (u128::from(u64::MAX) + 1, false),
+        (u128::MAX, false),
+        (u128::MAX, true),
+    ] {
+        let source = ic_metrics::MeasurementCounter::from_parts(total, overflowed).unwrap();
+        assert!(
+            matches!(count_value(source), MetricValue::Count { count, exact }
+            if count == total && exact != overflowed)
+        );
+    }
+    let forwarded = timer_rows(vec!["test".into()], u64::MAX, Some(0));
+    assert!(
+        matches!(forwarded[0].value, MetricValue::Count { count, exact: false }
+        if count == u128::from(u64::MAX))
+    );
+    assert!(matches!(
+        forwarded[1].value,
+        MetricValue::U128 {
+            value: 0,
+            exact: true
+        }
+    ));
 }

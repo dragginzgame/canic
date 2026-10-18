@@ -426,8 +426,11 @@ new projections.
 Each of the four enum-keyed owners admits at most 256 source rows for a sample.
 An oversized owner rejects the operations sample before allocation or scanning;
 previous cached data ages and other selected families continue. Aggregation uses
-fixed outcome labels and saturating counts. Counts use the existing heap counter
-window (`window_id = 0`); heap coverage and canister version delimit resets.
+fixed outcome labels and IC Metrics wide counters. Both source and grouped
+actual-overflow flags reach public history; an exact numeric cap remains exact.
+Diagnostic funding totals use the same arithmetic with cycle units. Counts use
+the existing heap counter window (`window_id = 0`); heap coverage and canister
+version delimit resets.
 The common 256-row snapshot and global history budgets still apply.
 
 `operations` also includes `timer.state.{disabled,idle,active,retrying,failed}`
@@ -448,8 +451,8 @@ The public sampler reads typed source measurements directly: instruction totals
 retain `u128`, and count/total saturation flags report actual overflow. Reaching
 an exact numeric cap alone does not mark an observation saturated. Registration
 is carried from the timer snapshot, never recovered from the formatted name.
-The protected diagnostic view retains its checked `u64` projection and omits
-unrepresentable totals; that presentation limit does not apply to public rows.
+The protected diagnostic view also retains wide totals and source overflow flags
+in its explicit measurement payload; neither view narrows those totals to `u64`.
 `timer.events.scheduler_started` and `timer.events.work_started` independently
 count starts across the current registry; starts need not equal completed
 measurement samples. Scheduler and work measurements cover the timer owner's

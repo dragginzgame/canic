@@ -33,7 +33,7 @@ fn counts(fixture: &CachedPocketIcBaseline<Principal>) -> PlainReply {
         .expect("Candid harness call")
 }
 
-fn denied_count(fixture: &CachedPocketIcBaseline<Principal>, method: &str) -> u64 {
+fn denied_count(fixture: &CachedPocketIcBaseline<Principal>, method: &str) -> u128 {
     let metrics: Result<Vec<canic::dto::metrics::MetricEntry>, Error> = fixture
         .pocket_ic()
         .query_candid(*fixture.metadata(), "access_counts", ())
@@ -46,7 +46,7 @@ fn denied_count(fixture: &CachedPocketIcBaseline<Principal>, method: &str) -> u6
                 && entry.labels.get(1).is_some_and(|label| label == method)
         })
         .map(|entry| match entry.value {
-            canic::dto::metrics::MetricValue::Count(count) => count,
+            canic::dto::metrics::MetricValue::Count { count, exact: true } => count,
             _ => panic!("access metrics must count denials"),
         })
         .sum()
