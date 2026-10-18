@@ -256,6 +256,7 @@ fn assert_timer_registration_continuity(pic: &PocketIc, canister: Principal) {
 #[derive(CandidType, Deserialize)]
 struct PublicSamplingProbe {
     sample_instructions: u64,
+    scalar_record_instructions: u64,
     sample: Result<(), Error>,
     cycle_tracking: Result<(), Error>,
     allocation_unchanged: bool,
@@ -363,8 +364,8 @@ fn optional_sampling_is_bounded_and_rejected_performance_preserves_cycle_trackin
         )
         .unwrap();
     let baseline = baseline.expect("authorized fixture sampling");
-    baseline.sample.unwrap();
-    baseline.cycle_tracking.unwrap();
+    baseline.sample.as_ref().unwrap();
+    baseline.cycle_tracking.as_ref().unwrap();
     let full: Result<PublicSamplingProbe, Error> = fixture
         .pic
         .update_candid(
@@ -374,9 +375,9 @@ fn optional_sampling_is_bounded_and_rejected_performance_preserves_cycle_trackin
         )
         .unwrap();
     let full = full.expect("authorized fixture sampling");
-    full.sample.unwrap();
-    full.cycle_tracking.unwrap();
-    assert_explicit_sampling_cost(baseline.sample_instructions, full.sample_instructions);
+    full.sample.as_ref().unwrap();
+    full.cycle_tracking.as_ref().unwrap();
+    assert_explicit_sampling_cost(&baseline, &full);
     assert_periodic_sampling_cost(&fixture.pic, canister);
     let operations = query(PublicMetricFamily::Operations);
     let performance = query(PublicMetricFamily::Performance);
@@ -1150,13 +1151,21 @@ fn assert_periodic_sampling_cost(pic: &PocketIc, canister: Principal) {
     report_sampling_cost("scheduled maximum", instructions);
 }
 
-fn assert_explicit_sampling_cost(baseline: u64, full: u64) {
-    report_sampling_cost("first sample, 256 checkpoints", baseline);
-    report_sampling_cost("repeat sample, 4096 checkpoints", full);
+fn assert_explicit_sampling_cost(baseline: &PublicSamplingProbe, full: &PublicSamplingProbe) {
+    assert!(baseline.scalar_record_instructions > 0 && full.scalar_record_instructions > 0);
+    println!(
+        "SCALAR_RECORDING_COST first={} warm={} unit=instructions",
+        baseline.scalar_record_instructions, full.scalar_record_instructions,
+    );
+    report_sampling_cost(
+        "first sample, 256 checkpoints",
+        baseline.sample_instructions,
+    );
+    report_sampling_cost("repeat sample, 4096 checkpoints", full.sample_instructions);
     // Sixteen times the source entries must not cause proportional work once
     // the retained prefix is full. Allow twofold variation between these samples.
     assert!(
-        full <= baseline.saturating_mul(2),
+        full.sample_instructions <= baseline.sample_instructions.saturating_mul(2),
         "sampling cost must remain bounded beyond the retained-series ceiling"
     );
 }
@@ -1222,6 +1231,16 @@ fn assert_public_process_projection(
         assert_eq!(row.unit, "count");
         assert_eq!(row.canister_id, None);
         assert!(row.observed_at_ns > 0);
+        if name == "process.wasm_store.completed" {
+            assert_eq!(row.value, 2);
+            assert_eq!(
+                row.kind,
+                canic::dto::public_status::PublicMetricKind::Counter {
+                    window_id: 0,
+                    saturated: false,
+                }
+            );
+        }
     }
     for name in ["memory.wasm_extent", "memory.stable_extent"] {
         let row = performance

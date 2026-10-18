@@ -29,10 +29,39 @@ native and Wasm, versus eight-byte event and sixteen-byte cycle totals. This is
 value storage only, excluding map padding/allocations. LLVM receipts are under
 `target/maintenance-scalar/`. No recording-instruction, IC-cycle or Wasm-size
 improvement is claimed; [#535](https://github.com/dragginzgame/canic/issues/535)
-retains the governed IC recording-cost acceptance. Fresh hosted/native macOS,
-governed artifact/Candid-export and installed-runtime qualification remain
-separate. The complete 0.112 integration retains its owning Auth/release blockers;
-this contribution does not declare that batch ready to release.
+retains owner review of the storage and recording-cost tradeoffs.
+
+A subsequent focused Linux run at code source `b3a0500` passes all ten
+`timer_authority` integration tests through `make test-pocketic-case`. The
+lock-selected Testkit CLI and checksum-admitted PocketIC 16.1.0 own the server;
+the governed builder produced the Canic/intent/runtime-probe Wasm fixtures.
+The cases qualify controller/public authorization, native timer lifecycle and
+same-source restoration, bounded source sampling, history retention/rollover and
+registration behavior. Raw evidence is `/tmp/canic-next-timer-authority.log` and
+`target/test-runs/20261018T143641Z-3977657.KqXedr/1.log`. The reported IC sampling/
+history instructions are callback measurements, not a scalar recording-cost
+comparison. Native macOS, full release/installed-Fleet and held-HTTP acceptance
+remain separate. The complete 0.112 integration retains its owning Auth/release
+blockers; this contribution does not declare that batch ready to release.
+
+The same fixture now returns `scalar_record_instructions` separately from total
+sampling cost. Its first explicit Wasm-store record measures 2,851 IC instructions;
+the warm record measures 1,482. Both include the public facade, HashMap work and
+measurement overhead. The selected case also confirms the two records publish
+an exact count of two. These are current-workload observations, not a comparison
+against the old recorder, arithmetic-only cost or an application budget. Counter
+value layout remains 32 bytes; whole-table heap allocation is not measured.
+
+All ten timer-authority cases pass again with that fixture change over `b3a0500`,
+using the governed Fast Wasm build and selected locked graph. Raw evidence is
+`/tmp/canic-next-recording-cost.log` and
+`target/test-runs/20261018T144528Z-4074544.QjGztV/1.log`. Strict native probe/all-target
+and selected timer-target Clippy pass; the probe's actual Rust 1.91 all-target
+check passes. The first caller lint attempt exceeded the existing function-size
+limit; its final assertion grouping clears the warning without suppression.
+The 0.112 notes describe the fixture field and client actions. No dependency or
+own-version change, production endpoint or fresh registry/recorder abstraction
+is introduced.
 
 The latest failed hosted source `fbcbda4` also exposed one more stale structured
 Testkit rejection assertion and the same physical temporary-path assumption in

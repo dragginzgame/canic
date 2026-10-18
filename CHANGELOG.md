@@ -25,7 +25,7 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
   accumulators. Protected scalars now carry `u128` values and an explicit `exact`
   flag; update Candid/JSON clients. Public process/operation counters preserve
   actual overflow, while forwarded untracked readings remain conservative
-  ([#535](https://github.com/dragginzgame/canic/issues/535)).
+  ([#535 — Shared scalar diagnostic counters](https://github.com/dragginzgame/canic/issues/535)).
 
 - **Public operation metrics:** publish only anonymous aggregate counters.
   Per-child funding and per-target refill amounts remain in protected Core
@@ -35,7 +35,8 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 - **Protected metric payloads:** replace generic numeric pairs with explicit
   wide measurements and source overflow flags. Timer starts and latest delays
   become separate scalar rows; update Candid/JSON clients and `PerfEntry` callers.
-  Public and protected authorization remain separate.
+  Public and protected authorization remain separate
+  ([#600 — Separate timer delay from measurement averages](https://github.com/dragginzgame/canic/issues/600)).
 
 - **Memory runtime:** adopt Memory 0.44 with one Canic-owned runtime and injected
   component handles. Allocation reports derive byte totals from measured pages
@@ -62,6 +63,10 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
   across releases. Same-release interruption recovery remains supported.
 
 ### 🔧 Changed
+
+- **Metric cost evidence:** report first-use and warm scalar-recording instructions
+  separately from complete public-sampling work
+  ([#535 — Shared scalar diagnostic counters](https://github.com/dragginzgame/canic/issues/535)).
 
 - **Native qualification:** use physical temporary paths for optimizer admission
   and the selected Testkit release's structured canister-rejection contract.
