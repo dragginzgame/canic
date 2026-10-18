@@ -38,6 +38,10 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
 ### 🔧 Changed
 
+- Chunk-upload logs use the same IEC byte units as store sizes: a full chunk
+  reports `1.00 MiB`. Upload size and management-call behavior are unchanged.
+
+
 - **Release checks:** include the shared version validator in isolated release
   fixtures so preflight and failure-recovery checks can run after tooling updates.
   Align record-export checks with the crate-private storage boundary.
