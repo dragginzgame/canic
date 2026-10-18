@@ -29,6 +29,6 @@ pub mod __private {
     pub use crate::ops::{Workflow, memory};
     pub use crate::transport;
     pub use ic_blob_storage_contracts;
-    pub use ic_cdk;
     pub use ic_memory;
+    pub use ic_platform;
 }

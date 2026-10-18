@@ -7,7 +7,7 @@ owns storage, tenant policy, accounting and provider behavior.
 This package is published at 0.111.0 with the coherent Canic family
 ([#33](https://github.com/dragginzgame/canic/issues/33)). It belongs to the main
 Canic workspace and inherits its package version, Canic dependency and published
-Blob runtime/contracts `0.33` from the root catalog. The upstream
+Blob runtime/contracts `0.34` from the root catalog. The upstream
 contracts macro owns service method signatures; the adapter supplies Canic
 authentication, bounded decoding, caller context and lifecycle composition.
 Local paths support
@@ -57,7 +57,7 @@ Owned methods use their Contracts-declared Wire or CBOR codecs through explicit
 raw Canic entrypoints; only the external provider certificate is Candid. The
 shared `ServiceWorkflow` owns dispatch and continuity observations; Canic owns
 installation borrowing, lifecycle and memory bootstrap. This pending adoption
-selects published Blob 0.33.0, Memory 0.48.2 and Storage 0.5.3 in all
+selects published Blob 0.34.0, Memory 0.48.2 and Storage 0.5.3 in all
 three maintained lockfiles. Installed qualification still requires Canic Core's
 Memory caller adoption; dependency resolution alone is not runtime acceptance.
 

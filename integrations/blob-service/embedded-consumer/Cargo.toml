@@ -12,8 +12,8 @@ license = "MIT"
 candid = "0.10.36"
 canic = { path = "../../../crates/canic", default-features = false }
 canic-blob-service = { path = ".." }
-ic-cdk = "0.20.3"
 ic-memory = "0.48"
+ic-platform = { version = "0.1.13", default-features = false }
 ic-storage = "0.5"
 serde = { version = "1.0", features = ["derive"] }
 
@@ -38,8 +38,8 @@ doctest = false
 candid.workspace = true
 canic = { workspace = true, features = [] }
 canic-blob-service.workspace = true
-ic-cdk.workspace = true
 ic-memory.workspace = true
+ic-platform = { workspace = true, features = ["cdk"] }
 ic-storage.workspace = true
 serde.workspace = true
 

@@ -19,60 +19,57 @@ use ic_blob_storage_contracts::{
 };
 
 /// Application owner of the shared service installation.
-pub struct Host {
-    installation: ServiceInstallation<Memory>,
-}
+pub struct Host;
 thread_local! {
-    static HOST: RefCell<Option<Host>> = const { RefCell::new(None) };
+    static HOST: RefCell<Option<ServiceInstallation<Memory>>> = const { RefCell::new(None) };
 }
 pub fn install(input: &ServiceInstallationInput) {
     // The complete candidate is checked before this host opens the service grants.
     let candidate = ValidatedServiceInstallation::new(
-        ic_cdk::api::canister_self(),
+        ic_platform::cdk::api::canister_self(),
         ServiceInstallationCandidate {
             configuration: input.configuration,
             project: &input.project,
             completion_verifier: input.completion_verifier,
             release: ic_blob_storage::LIBRARY_VERSION,
-            platform_installation_version: ic_cdk::api::canister_version(),
+            platform_installation_version: ic_platform::cdk::api::canister_version(),
         },
     )
     .expect("invalid installation configuration");
     assert_uninitialized();
     let installation =
         ServiceInstallation::install(memory::open(), candidate).expect("service installation");
-    publish(Host { installation });
+    publish(installation);
 }
 pub fn restore() {
     assert_uninitialized();
     let installation = ServiceInstallation::open(
         memory::open(),
-        ic_cdk::api::canister_self(),
+        ic_platform::cdk::api::canister_self(),
         ic_blob_storage::LIBRARY_VERSION,
     )
     .expect("service restoration");
-    publish(Host { installation });
+    publish(installation);
 }
 fn assert_uninitialized() {
     HOST.with_borrow(|host| assert!(host.is_none(), "host initialization is not reset"));
 }
-fn publish(host: Host) {
-    HOST.with_borrow_mut(|state| *state = Some(host));
+fn publish(mut installation: ServiceInstallation<Memory>) {
+    installation.observe_platform_version(ic_platform::cdk::api::canister_version());
+    HOST.with_borrow_mut(|state| *state = Some(installation));
 }
 /// Explicit endpoint catalog binding; this alias registers nothing.
 pub type Workflow = ic_blob_storage::workflow::service::ServiceWorkflow<Host>;
 impl ic_blob_storage::workflow::service::ServiceHost for Host {
     type Memory = Memory;
     fn with_installation<R>(operation: impl FnOnce(&mut ServiceInstallation<Memory>) -> R) -> R {
-        HOST.with_borrow_mut(|state| {
-            operation(&mut state.as_mut().expect("initialized host").installation)
-        })
+        HOST.with_borrow_mut(|state| operation(state.as_mut().expect("initialized host")))
     }
     fn platform_version() -> u64 {
-        ic_cdk::api::canister_version()
+        ic_platform::cdk::api::canister_version()
     }
     fn time() -> u64 {
-        ic_cdk::api::time()
+        ic_platform::cdk::api::time()
     }
     fn limits() -> ic_blob_storage::workflow::service::ServiceExecutionLimits {
         use ic_blob_storage::ops::caffeine::decoding::CaffeineReplyLimits;

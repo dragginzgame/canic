@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - Adopt Blob's explicit shared dispatch and per-method Wire/CBOR contracts in
   the managed adapter and qualification clients; retain the outer Canic envelope
-  and provider Candid contract. Requires the coordinated Blob 0.33/Memory graph.
+  and provider Candid contract. Uses published Blob 0.34 and Platform with the coordinated Memory graph.
 
 Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 

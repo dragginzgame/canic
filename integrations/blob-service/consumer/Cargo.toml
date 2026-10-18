@@ -12,7 +12,7 @@ license = "MIT"
 candid = "0.10.36"
 canic = { path = "../../../crates/canic", default-features = false }
 canic-blob-service = { path = ".." }
-ic-cdk = "0.20.3"
+ic-platform = { version = "0.1.13", default-features = false }
 
 [package]
 name = "blob-service-consumer"
@@ -35,7 +35,7 @@ doctest = false
 candid.workspace = true
 canic = { workspace = true, features = [] }
 canic-blob-service.workspace = true
-ic-cdk.workspace = true
+ic-platform = { workspace = true, features = ["cdk"] }
 
 [build-dependencies]
 canic = { workspace = true, features = [] }

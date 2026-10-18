@@ -33,7 +33,7 @@ macro_rules! __canic_blob_endpoint {
                 fn $d name() {
                     arguments!($d category; $d($d arg : $d ty),*);
                     let response: $d reply = (|| $d body)();
-                    ic_cdk::api::msg_reply(encode!($d category, response));
+                    ic_platform::cdk::api::msg_reply(encode!($d category, response));
                 }
             };
             (update, $d category:ident, async fn $d name:ident($d($d arg:ident : $d ty:ty),* $d(,)?) -> $d reply:ty $d body:block) => {
@@ -41,7 +41,7 @@ macro_rules! __canic_blob_endpoint {
                 async fn $d name() {
                     arguments!($d category; $d($d arg : $d ty),*);
                     let response: $d reply = (async move $d body).await;
-                    ic_cdk::api::msg_reply(encode!($d category, response));
+                    ic_platform::cdk::api::msg_reply(encode!($d category, response));
                 }
             };
             (certificate, request, $d wire_name:literal, $d($d item:tt)*) => {
@@ -54,9 +54,9 @@ macro_rules! __canic_blob_endpoint {
             workflow = workflow,
             context = context,
             contracts = ic_blob_storage_contracts,
-            clock = ic_cdk::api::time,
-            caller = ic_cdk::api::msg_caller,
-            trap = ic_cdk::trap,
+            clock = ic_platform::cdk::api::time,
+            caller = ic_platform::cdk::api::msg_caller,
+            trap = ic_platform::cdk::api::trap,
         );
     };
 }
@@ -74,15 +74,15 @@ macro_rules! mount {
     () => {
 
         mod __canic_blob_endpoints {
-            pub(super) use $crate::__private::{ic_blob_storage_contracts, ic_cdk};
+            pub(super) use $crate::__private::{ic_blob_storage_contracts, ic_platform};
             use $crate::{
                 lifecycle::REQUEST_LIMITS,
                 __private::Workflow as workflow,
             };
             fn context() -> ic_blob_storage_contracts::upload::binding::UploadContext {
                 ic_blob_storage_contracts::upload::binding::UploadContext {
-                    service: ic_cdk::api::canister_self(),
-                    actor: ic_cdk::api::msg_caller(),
+                    service: ic_platform::cdk::api::canister_self(),
+                    actor: ic_platform::cdk::api::msg_caller(),
                 }
             }
             $crate::__canic_blob_endpoint!($);
