@@ -27,6 +27,7 @@ clap = { workspace = true }
 ic-host-fs = { workspace = true }
 ic-host-process = { workspace = true }
 ic-host-text = { workspace = true }
+ic-metrics.workspace = true
 rustix = { workspace = true, features = ["termios"] }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -208,7 +208,12 @@ fn metrics_failure_report(
 const fn metric_value_is_zero(value: &MetricValue) -> bool {
     match value {
         MetricValue::Count { count } => *count == 0,
-        MetricValue::CountAndU64 { count, value_u64 } => *count == 0 && *value_u64 == 0,
+        MetricValue::Measurement {
+            count,
+            total,
+            count_overflowed,
+            total_overflowed,
+        } => *count == 0 && *total == 0 && !*count_overflowed && !*total_overflowed,
         MetricValue::U128 { value } => *value == 0,
     }
 }
@@ -320,9 +325,11 @@ mod tests {
     #[test]
     fn detects_zero_metric_values() {
         assert!(metric_value_is_zero(&MetricValue::Count { count: 0 }));
-        assert!(metric_value_is_zero(&MetricValue::CountAndU64 {
+        assert!(metric_value_is_zero(&MetricValue::Measurement {
             count: 0,
-            value_u64: 0
+            total: 0,
+            count_overflowed: false,
+            total_overflowed: false,
         }));
         assert!(!metric_value_is_zero(&MetricValue::U128 { value: 1 }));
     }

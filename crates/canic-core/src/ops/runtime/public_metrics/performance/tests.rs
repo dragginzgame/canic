@@ -4,8 +4,8 @@ use crate::{
     ops::runtime::public_metrics::PublicMetricsOps, perf::PerfKey,
 };
 
-fn checkpoint(aggregate: MeasurementAggregate) -> PerfMeasurement {
-    PerfMeasurement {
+fn checkpoint(aggregate: MeasurementAggregate) -> PerfEntry {
+    PerfEntry {
         key: PerfKey::Checkpoint {
             scope: "work".into(),
             label: "completed".into(),
@@ -107,7 +107,7 @@ fn timer_registration_is_carried_without_matching_label_text() {
 
 #[test]
 fn performance_projection_limits_sources_and_refuses_oversized_names() {
-    let make_measurement = |label: String| PerfMeasurement {
+    let make_measurement = |label: String| PerfEntry {
         key: PerfKey::Checkpoint {
             scope: "bounded".into(),
             label,

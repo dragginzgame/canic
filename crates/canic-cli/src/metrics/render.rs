@@ -173,10 +173,27 @@ fn metric_value_columns(value: &MetricValue) -> MetricValueColumns {
             total: "-".to_string(),
             amount: "-".to_string(),
         },
-        MetricValue::CountAndU64 { count, value_u64 } => MetricValueColumns {
-            count: count.to_string(),
-            average_per_count: average_per_count(*value_u64, *count),
-            total: value_u64.to_string(),
+        MetricValue::Measurement {
+            count,
+            total,
+            count_overflowed,
+            total_overflowed,
+        } => MetricValueColumns {
+            count: if *count_overflowed {
+                format!(">={count}")
+            } else {
+                count.to_string()
+            },
+            average_per_count: if *count_overflowed || *total_overflowed {
+                "-".into()
+            } else {
+                average_per_count(*total, *count)
+            },
+            total: if *total_overflowed {
+                format!(">={total}")
+            } else {
+                total.to_string()
+            },
             amount: "-".to_string(),
         },
         MetricValue::U128 { value } => MetricValueColumns {
@@ -220,21 +237,25 @@ fn compact_cell(value: &str, max_chars: usize) -> String {
     )
 }
 
-fn average_per_count(total: u64, count: u64) -> String {
+fn average_per_count(total: u128, count: u64) -> String {
     if count == 0 {
-        return "-".to_string();
+        return "-".into();
     }
-
-    let whole = total / count;
-    let remainder = total % count;
+    let denominator = u128::from(count);
+    let whole = total / denominator;
+    let remainder = total % denominator;
     if remainder == 0 {
         return whole.to_string();
     }
-
-    let count = u128::from(count);
-    let tenths = ((u128::from(remainder) * 10) + (count / 2)) / count;
+    // Round only the fractional remainder so an exact wide integer never needs
+    // multiplication by ten. The CLI retains its nearest-half-up decimal policy.
+    let Ok(tenths) = ic_metrics::checked_scaled_ratio_nearest(remainder, count, 10) else {
+        return "-".into();
+    };
     if tenths == 10 {
-        (whole + 1).to_string()
+        whole
+            .checked_add(1)
+            .map_or_else(|| "-".into(), |value| value.to_string())
     } else {
         format!("{whole}.{tenths}")
     }
@@ -280,9 +301,11 @@ mod tests {
                             .map(str::to_string)
                             .collect(),
                         principal: Some(PRINCIPAL.to_string()),
-                        value: MetricValue::CountAndU64 {
+                        value: MetricValue::Measurement {
                             count: 3,
-                            value_u64: 15,
+                            total: 15,
+                            count_overflowed: false,
+                            total_overflowed: false,
                         },
                     },
                     MetricEntry {
@@ -305,6 +328,73 @@ mod tests {
                 error: None,
             }],
         }
+    }
+
+    #[test]
+    fn measurement_columns_preserve_wide_exactness_and_refuse_overflowed_means() {
+        let exact = metric_value_columns(&MetricValue::Measurement {
+            count: 2,
+            total: u128::from(u64::MAX) + 1,
+            count_overflowed: false,
+            total_overflowed: false,
+        });
+        let empty = metric_value_columns(&MetricValue::Measurement {
+            count: 0,
+            total: 0,
+            count_overflowed: false,
+            total_overflowed: false,
+        });
+        let zero = metric_value_columns(&MetricValue::Measurement {
+            count: 1,
+            total: 0,
+            count_overflowed: false,
+            total_overflowed: false,
+        });
+        assert_eq!(empty.average_per_count, "-");
+        assert_eq!(zero.average_per_count, "0");
+        assert_eq!(exact.total, "18446744073709551616");
+        assert_eq!(exact.average_per_count, "9223372036854775808");
+        for (count_overflowed, total_overflowed) in [(true, false), (true, true), (false, true)] {
+            let row = metric_value_columns(&MetricValue::Measurement {
+                count: u64::MAX,
+                total: u128::MAX,
+                count_overflowed,
+                total_overflowed,
+            });
+            assert_eq!(row.average_per_count, "-");
+            assert_eq!(row.count.starts_with(">="), count_overflowed);
+            assert_eq!(row.total.starts_with(">="), total_overflowed);
+        }
+        assert_eq!(average_per_count(u128::MAX, 1), u128::MAX.to_string());
+        assert_eq!(average_per_count(19, 20), "1");
+        assert_eq!(average_per_count(1, 20), "0.1");
+    }
+
+    #[test]
+    fn timer_scalar_rows_have_no_average() {
+        let count = metric_value_columns(&MetricValue::Count { count: 4 });
+        let delay = metric_value_columns(&MetricValue::U128 { value: 500 });
+        assert_eq!(count.count, "4");
+        assert_eq!(delay.amount, "500");
+        assert_eq!(count.average_per_count, "-");
+        assert_eq!(delay.average_per_count, "-");
+        let mut report = report();
+        report.canisters[0].entries = vec![
+            MetricEntry {
+                labels: vec!["timer".into(), "work_started".into()],
+                principal: None,
+                value: MetricValue::Count { count: 4 },
+            },
+            MetricEntry {
+                labels: vec!["timer".into(), "latest_armed_delay_ms".into()],
+                principal: None,
+                value: MetricValue::U128 { value: 500 },
+            },
+        ];
+        let rendered = render_metrics_report(&report, false);
+        assert!(rendered.contains("work_started") && rendered.contains("latest_armed_delay_ms"));
+        assert!(rendered.contains("500"));
+        assert!(!rendered.contains("125"));
     }
 
     #[test]

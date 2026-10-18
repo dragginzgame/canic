@@ -10,7 +10,7 @@ use crate::{
     model::public_metrics::{MAX_PUBLIC_METRICS, PublicMetricSample},
     ops::runtime::metrics,
     perf,
-    view::public_metrics::PerfMeasurement,
+    perf::PerfEntry,
 };
 use ic_metrics::MeasurementAggregate;
 
@@ -26,7 +26,7 @@ pub(super) fn sample() -> Result<Vec<PublicMetricSample>, InternalError> {
 }
 
 fn project(
-    measurements: Vec<PerfMeasurement>,
+    measurements: Vec<PerfEntry>,
     timers: &[ic_timers::TimerSnapshot],
 ) -> Result<Vec<PublicMetricSample>, InternalError> {
     let mut rows = Vec::new();

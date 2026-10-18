@@ -31,7 +31,14 @@ pub struct MetricEntry {
 #[derive(CandidType, Debug, Deserialize)]
 pub enum MetricValue {
     Count(u64),
-    CountAndU64 { count: u64, value_u64: u64 },
+    /// Count and accumulated total from the same admitted observation cohort.
+    /// Numeric caps remain exact unless their corresponding flag is true.
+    Measurement {
+        count: u64,
+        total: u128,
+        count_overflowed: bool,
+        total_overflowed: bool,
+    },
     U128(u128),
 }
 

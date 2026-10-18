@@ -899,7 +899,18 @@ fn timer_metric(entries: &[MetricEntry], label: &str) -> (u64, u64) {
         .find_map(|entry| {
             (entry.labels == ["perf", "timer", "canic", subsystem, name, "work"]).then(|| {
                 match entry.value {
-                    MetricValue::CountAndU64 { count, value_u64 } => (count, value_u64),
+                    MetricValue::Measurement {
+                        count,
+                        total,
+                        count_overflowed,
+                        total_overflowed,
+                    } => {
+                        assert!(!count_overflowed && !total_overflowed);
+                        (
+                            count,
+                            u64::try_from(total).expect("bounded timer audit instructions fit u64"),
+                        )
+                    }
                     MetricValue::Count(_) | MetricValue::U128(_) => {
                         panic!("timer performance metric must carry count and instructions")
                     }

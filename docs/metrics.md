@@ -23,15 +23,20 @@ Each row has:
 | ----- | ------- |
 | `labels` | Ordered string dimensions. The first label is always the metric family inside the selected tier. |
 | `principal` | Optional principal dimension when the family is naturally principal-scoped. |
-| `value` | Metric payload: `Count`, `CountAndU64`, or `U128`. |
+| `value` | Metric payload: `Count`, `Measurement`, or `U128`. |
 
-`CountAndU64` uses `count` as the event/sample count. The `value_u64`
-meaning is family-specific.
+`Measurement` carries `count: u64`, `total: u128`, `count_overflowed: bool`
+and `total_overflowed: bool` for the same admitted observation cohort. Numeric
+caps with false flags remain exact. The two flags describe source accumulation;
+labels establish the measured unit. Performance rows use instructions.
 
-`canic info metrics` keeps the default text table compact. It renders
-`CountAndU64` rows as `COUNT` plus `AVG/CALL`, omits raw totals, and keeps
-full canister ids, principal dimensions, and raw totals behind `--verbose`.
-`--json` preserves the raw metric payload shape.
+`canic info metrics` renders measurement rows as `COUNT` plus `AVG/CALL`,
+rounding to the nearest tenth with exact halves upward. Empty or overflowed
+means display `-`; known lower bounds use `>=` on their count or verbose total.
+Full canister IDs, principal dimensions and raw totals remain behind `--verbose`.
+Scalar `Count` and `U128` rows never acquire an average. `--json` carries the
+measurement fields with `type: "measurement"`; wide integer literals require a
+lossless numeric parser. It does not encode a clipped number as exact.
 
 ## Query Perf Samples
 
@@ -139,14 +144,14 @@ use the existing family-specific dimensions:
 | `intent` | `[surface, operation, outcome, reason]` | `None` | `Count` |
 | `inter_canister_call` | `[method]` | Target canister principal | `Count` |
 | `lifecycle` | `[phase, role, stage, outcome]` | `None` | `Count` |
-| `perf` | `[endpoint, call_kind, name]`, `[timer, owner, subsystem, name]`, or `[checkpoint, scope, label]` | `None` | `CountAndU64` |
+| `perf` | `[endpoint, call_kind, name]`, `[timer, owner, subsystem, name, phase]`, or `[checkpoint, scope, label]` | `None` | `Measurement` |
 | `platform_call` | `[surface, mode, outcome, reason]` | `None` | `Count` |
 | `placement_index` | `[operation, outcome, reason]` | `None` | `Count` |
 | `replay` | `[operation, outcome, reason]` | `None` | `Count` |
 | `root_capability` | `[capability, event_type, outcome, proof_mode]` | `None` | `Count` |
 | `scaling` | `[operation, outcome, reason]` | `None` | `Count` |
 | `sharding` | `[operation, outcome, reason]` | `None` | `Count` |
-| `timer` | `[policy, owner, subsystem, name]` or `[inventory, available]` | `None` | `CountAndU64` for timer rows; `Count` for availability |
+| `timer` | `[policy, owner, subsystem, name, metric]` or `[inventory, available]` | `None` | `Count` for starts/availability; `U128` for latest delay |
 | `wasm_store` | `[operation, source, outcome, reason]` | `None` | `Count` |
 
 Delegated-auth renewal rows use the existing `delegated_auth` family with
@@ -155,13 +160,18 @@ the bounded operation label `renewal_sweep`. Outcomes are
 `ok`, `invalid_state`, `cert_expired`, `issuer_proof_unavailable`,
 `cert_hash_mismatch`, `disabled`, and `root_proof_prepare_failed`.
 
-For `timer`, `count` is accepted consumer-work starts and `value_u64` is the
-latest armed delay in milliseconds. Delay is deliberately a value rather than
-a key, so exact-deadline rescheduling does not create unbounded metric rows.
-Timer rows come from the shared `ic-timers` inventory, so they include Canic,
-application, and other framework owners in the same canister. Timer `perf`
-rows use completed work-instruction samples as `count` and their saturating
-instruction total as `value_u64`. These samples bracket the complete accepted
+For `timer`, `work_started` is a `Count` row of accepted consumer-work starts.
+`latest_armed_delay_ms` is a separate scalar `U128` row containing the latest
+armed delay, floored from nanoseconds to milliseconds. No delay row is emitted
+when the source has no latest delay; a measured zero delay remains a row. The
+latest delay is not divided by the number of starts. Delay values never become
+label dimensions, so rescheduling does not create unbounded rows.
+
+Timer rows come from the shared `ic-timers` inventory, covering Canic,
+application and other framework owners in the same canister. Timer `perf` rows
+use completed instruction samples as `count` and their full wide accumulated
+total as `total`, preserving each source quality flag for scheduler/work phases.
+These samples bracket the complete accepted
 shared-runtime callback path, including registry acceptance, consumer work,
 completion accounting, and successor binding; they are not isolated
 application-function benchmarks. Runtime timer status schema 1 separately

@@ -16,6 +16,11 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
 ### ⚠️ Breaking
 
+- **Protected metric payloads:** replace generic numeric pairs with explicit
+  wide measurements and source overflow flags. Timer starts and latest delays
+  become separate scalar rows; update Candid/JSON clients and `PerfEntry` callers.
+  Public and protected authorization remain separate.
+
 - **Memory runtime:** adopt Memory 0.44 with one Canic-owned runtime and injected
   component handles. Allocation reports derive byte totals from measured pages
   and buckets; the storage-format hard cut requires a clean reinstall.

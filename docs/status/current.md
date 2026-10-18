@@ -1,23 +1,38 @@
 # Current handoff — 2026-10-14
 
-## Typed public performance projection — 2026-10-18
+## Typed metric projection — 2026-10-18
 
-Public performance sampling now projects full Metrics aggregates and timer-owned
-registration directly. Label formatting stays shared with protected diagnostics;
-public rows retain wide totals and per-field actual-overflow quality. Host offline
-timer comparison accepts exact caps and full-width instruction totals while
-retaining the sample-count range, registration, source-time and reset checks.
-No endpoint, Candid shape, dependency selection or package version changes.
+The existing 0.112 draft now covers both public and protected reports. One
+`PerfEntry` retains its full Metrics aggregate; protected DTOs carry the wide
+total and independent count/total overflow flags. Public sampling consumes the
+same source state and timer registration without passing through diagnostic DTOs.
+Timer starts and latest armed delay have separate scalar rows, preserving absent
+versus measured-zero delay. CLI means apply only to measurement cohorts and
+preserve nearest-half-up rounding through shared ratio arithmetic. Public and
+protected authorization, reset/registration identity and exclusive/async recording
+are unchanged. The direct `PerfEntry` shape and protected Candid/JSON contract
+require the coordinated client update documented in the 0.112 changelog.
 
 The isolated contribution starts at public main
 `53f1f22d2e23a16c5566b8590f3b0a2a643b6d84`, retaining locked Metrics 0.11.7 and
-Timers 0.25.2. Twenty-seven selected Core/Host units pass, including attribution,
-publication, wide/cap/overflow admission and timer comparisons. Strict native
-Core/Host lib/test Clippy, Core-only Wasm Clippy, actual Core Rust 1.91 native/Wasm
-checks, formatting and local links pass. The broader Wasm Clippy invocation stops
-in unchanged Contracts on `RemoteCoordinatorStatusResponse`'s enum size; [#598](https://github.com/dragginzgame/canic/issues/598)
-owns that separate warning. No full local CI, native macOS, live IC/cost or release
-qualification was run. Receipts remain under `/tmp/metrics-canic-projection.bQp3J0/`.
+Timers 0.25.2. CLI adds an edge to that already selected Metrics package; no
+external version or own package version is advanced. The normal dirty Canic
+checkout is untouched. Focused qualification passes 59 selected tests across
+metric projections, public performance projection, CLI rendering/codecs, exclusive
+attribution and Host timer comparison. Strict Core native library/test and Wasm
+library Clippy, CLI all-target Clippy, affected testing callers, and actual Rust
+1.91 Core native/Wasm and CLI library checks pass. Two stale Testkit field-accessor
+calls in the affected test support were corrected without changing dependencies.
+Formatting, local links and whitespace checks pass. Receipts remain under
+`/tmp/metrics-canic-projection.bQp3J0/`.
+
+The direct minimal-metrics canister check reached the required `canic build`
+artifact guard; that guard was preserved. Governed artifact/Candid-export and
+installed-runtime qualification are not claimed. Complete release, hosted/native
+macOS, held-HTTP runtime and live IC/cost qualification remain separate. Unchanged
+Contracts' Wasm enum-size warning stays with
+[#598](https://github.com/dragginzgame/canic/issues/598); Core's selected Wasm lint
+checks this package with `--no-deps`.
 
 
 **Canic 0.111.0 is live; the integration batch remains uncommitted.** The maintainer

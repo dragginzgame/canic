@@ -107,7 +107,7 @@ fn missing_metrics_fleet_preserves_canonical_typed_error() {
 
 #[test]
 fn parses_typed_metrics_page() {
-    let entries = metric_page(Page {
+    let page = Page {
         entries: vec![
             MetricEntryDto {
                 labels: vec!["lifecycle".into(), "init".into(), "started".into()],
@@ -122,14 +122,19 @@ fn parses_typed_metrics_page() {
             MetricEntryDto {
                 labels: vec!["timer".into(), "tick".into()],
                 principal: None,
-                value: MetricValueDto::CountAndU64 {
+                value: MetricValueDto::Measurement {
                     count: 3,
-                    value_u64: 12,
+                    total: u128::from(u64::MAX) + 1,
+                    count_overflowed: false,
+                    total_overflowed: false,
                 },
             },
         ],
         total: 3,
-    });
+    };
+    let wire = candid::encode_one(page).expect("encode metrics page");
+    let page = candid::decode_one(&wire).expect("decode metrics page");
+    let entries = metric_page(page);
 
     assert_eq!(entries.len(), 3);
     assert_eq!(entries[0].labels, ["lifecycle", "init", "started"]);
@@ -138,9 +143,52 @@ fn parses_typed_metrics_page() {
     assert_eq!(entries[1].value, MetricValue::U128 { value: 1_000 });
     assert_eq!(
         entries[2].value,
-        MetricValue::CountAndU64 {
+        MetricValue::Measurement {
             count: 3,
-            value_u64: 12
+            total: u128::from(u64::MAX) + 1,
+            count_overflowed: false,
+            total_overflowed: false
         }
     );
+}
+
+#[test]
+fn metric_measurement_quality_survives_candid_and_json() {
+    for (count, total, count_overflowed, total_overflowed) in [
+        (0, 0, false, false),
+        (1, 0, false, false),
+        (u64::MAX, u128::from(u64::MAX), false, false),
+        (2, u128::from(u64::MAX) + 1, false, false),
+        (u64::MAX, 0, true, false),
+        (u64::MAX, u128::MAX, true, true),
+    ] {
+        let page = Page {
+            entries: vec![MetricEntryDto {
+                labels: vec!["perf".into(), "instructions".into()],
+                principal: None,
+                value: MetricValueDto::Measurement {
+                    count,
+                    total,
+                    count_overflowed,
+                    total_overflowed,
+                },
+            }],
+            total: 1,
+        };
+        let wire = candid::encode_one(page).unwrap();
+        let rows = metric_page(candid::decode_one(&wire).unwrap());
+        let json = serde_json::to_string(&rows).unwrap();
+        assert!(json.contains(&format!("\"total\":{total}")));
+        assert!(json.contains(&format!("\"count_overflowed\":{count_overflowed}")));
+        assert!(json.contains(&format!("\"total_overflowed\":{total_overflowed}")));
+        assert_eq!(
+            rows[0].value,
+            MetricValue::Measurement {
+                count,
+                total,
+                count_overflowed,
+                total_overflowed
+            }
+        );
+    }
 }

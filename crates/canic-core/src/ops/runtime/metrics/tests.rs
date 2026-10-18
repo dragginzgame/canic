@@ -65,23 +65,72 @@ fn endpoint_call(name: &'static str, kind: EndpointCallKind) -> EndpointCall {
 }
 
 #[test]
-fn perf_projection_keeps_exact_u64_cap_and_omits_unrepresentable_wide_totals() {
-    let snapshot = [u128::from(u64::MAX), u128::from(u64::MAX) + 1]
-        .into_iter()
+fn perf_projection_preserves_wide_totals_empty_zero_and_independent_quality() {
+    use ic_metrics::MeasurementAggregate as Aggregate;
+    let aggregates = [
+        Aggregate::EMPTY,
+        Aggregate::from_parts(1, 0, Some(0), false, false).unwrap(),
+        Aggregate::from_parts(2, u128::from(u64::MAX), Some(u64::MAX), false, false).unwrap(),
+        Aggregate::from_parts(2, u128::from(u64::MAX) + 1, Some(u64::MAX), false, false).unwrap(),
+        Aggregate::from_parts(u64::MAX, 0, Some(0), true, false).unwrap(),
+        Aggregate::from_parts(u64::MAX, u128::MAX, Some(u64::MAX), true, true).unwrap(),
+    ];
+    let snapshot = aggregates
+        .iter()
         .enumerate()
-        .map(|(index, total_instructions)| perf::PerfEntry {
+        .map(|(index, aggregate)| perf::PerfEntry {
             key: PerfKey::Checkpoint {
                 scope: "wide-total".into(),
                 label: index.to_string(),
             },
-            count: 2,
-            total_instructions,
+            aggregate: *aggregate,
         })
         .collect();
     let entries = perf_entries_from(snapshot, &[]);
-    assert_eq!(entries.len(), 1);
-    assert_metric_count_and_u64(&entries, &["checkpoint", "wide-total", "0"], 2, u64::MAX);
+    assert_eq!(entries.len(), aggregates.len());
+    for (entry, source) in entries.iter().zip(aggregates) {
+        let MetricValue::Measurement {
+            count,
+            total,
+            count_overflowed,
+            total_overflowed,
+        } = entry.value
+        else {
+            panic!("performance must preserve the measurement payload")
+        };
+        assert_eq!(count, source.samples());
+        assert_eq!(total, source.total());
+        assert_eq!(count_overflowed, source.samples_overflowed());
+        assert_eq!(total_overflowed, source.total_overflowed());
+    }
 }
+
+#[test]
+fn timer_diagnostics_keep_starts_and_latest_delay_independent() {
+    for (delay, expected_rows) in [(None, 1), (Some(0), 2), (Some(500_000_000), 2)] {
+        let rows = timer_rows(
+            vec!["once".into(), "app".into(), "jobs".into(), "tick".into()],
+            4,
+            delay,
+        );
+        assert_eq!(rows.len(), expected_rows);
+        assert_eq!(
+            rows[0].labels,
+            ["once", "app", "jobs", "tick", "work_started"]
+        );
+        assert!(matches!(rows[0].value, MetricValue::Count(4)));
+        if let Some(delay) = delay {
+            assert_eq!(
+                rows[1].labels,
+                ["once", "app", "jobs", "tick", "latest_armed_delay_ms"]
+            );
+            assert!(
+                matches!(rows[1].value, MetricValue::U128(value) if value == u128::from(delay / 1_000_000))
+            );
+        }
+    }
+}
+
 #[test]
 fn auth_metrics_are_exposed_with_stable_labels() {
     reset_for_tests();
@@ -209,19 +258,19 @@ fn perf_endpoint_metrics_include_call_kind_label() {
 
     let entries = entries(MetricsKind::Runtime);
 
-    assert_metric_count_and_u64(
+    assert_metric_measurement(
         &entries,
         &["perf", "endpoint", "query", "read_state"],
         1,
         10,
     );
-    assert_metric_count_and_u64(
+    assert_metric_measurement(
         &entries,
         &["perf", "endpoint", "composite_query", "read_remote_state"],
         1,
         20,
     );
-    assert_metric_count_and_u64(
+    assert_metric_measurement(
         &entries,
         &["perf", "endpoint", "update", "write_state"],
         1,
@@ -881,11 +930,11 @@ fn assert_metric_count(entries: &[MetricEntry], labels: &[&str], expected: u64) 
     }
 }
 
-fn assert_metric_count_and_u64(
+fn assert_metric_measurement(
     entries: &[MetricEntry],
     labels: &[&str],
     expected_count: u64,
-    expected_value: u64,
+    expected_value: u128,
 ) {
     let entry = entries
         .iter()
@@ -893,11 +942,17 @@ fn assert_metric_count_and_u64(
         .expect("metric entry should exist");
 
     match &entry.value {
-        MetricValue::CountAndU64 { count, value_u64 } => {
+        MetricValue::Measurement {
+            count,
+            total,
+            count_overflowed,
+            total_overflowed,
+        } => {
             assert_eq!(*count, expected_count);
-            assert_eq!(*value_u64, expected_value);
+            assert_eq!(*total, expected_value);
+            assert!(!count_overflowed && !total_overflowed);
         }
-        _ => panic!("metric entry should use CountAndU64"),
+        _ => panic!("metric entry should retain measurement quality"),
     }
 }
 

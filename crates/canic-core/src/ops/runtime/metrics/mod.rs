@@ -424,28 +424,43 @@ fn inter_canister_call_entries() -> Vec<MetricEntry> {
 fn timer_entries(snapshots: &[ic_timers::TimerSnapshot]) -> Vec<MetricEntry> {
     snapshots
         .iter()
-        .map(|snapshot| {
+        .flat_map(|snapshot| {
             let identity = snapshot.identity();
-            let counters = snapshot.observability().counters();
-            let latest_delay_ms = snapshot
-                .latest_armed_delay_ns()
-                .unwrap_or_default()
-                .saturating_div(1_000_000);
-            MetricEntry {
-                labels: vec![
+            timer_rows(
+                vec![
                     snapshot.policy().label().to_string(),
                     identity.owner().to_string(),
                     identity.subsystem().to_string(),
                     identity.name().to_string(),
                 ],
-                principal: None,
-                value: MetricValue::CountAndU64 {
-                    count: counters.work_started(),
-                    value_u64: latest_delay_ms,
-                },
-            }
+                snapshot.observability().counters().work_started(),
+                snapshot.latest_armed_delay_ns(),
+            )
         })
         .collect()
+}
+
+fn timer_rows(
+    mut labels: Vec<String>,
+    work_started: u64,
+    latest_delay_ns: Option<u64>,
+) -> Vec<MetricEntry> {
+    labels.push("work_started".into());
+    let mut rows = vec![MetricEntry {
+        labels: labels.clone(),
+        principal: None,
+        value: MetricValue::Count(work_started),
+    }];
+    if let Some(delay) = latest_delay_ns {
+        labels.pop();
+        labels.push("latest_armed_delay_ms".into());
+        rows.push(MetricEntry {
+            labels,
+            principal: None,
+            value: MetricValue::U128(u128::from(delay / 1_000_000)),
+        });
+    }
+    rows
 }
 
 /// Project access-denial counters into the unified public metrics row shape.
@@ -577,41 +592,35 @@ fn perf_entries_from(
 ) -> Vec<MetricEntry> {
     let mut entries = snapshot
         .into_iter()
-        .filter_map(|entry| {
-            let total_instructions = u64::try_from(entry.total_instructions).ok()?;
-            let labels = perf_labels(entry.key);
-
-            Some(MetricEntry {
-                labels,
-                principal: None,
-                value: MetricValue::CountAndU64 {
-                    count: entry.count,
-                    value_u64: total_instructions,
-                },
-            })
+        .map(|entry| MetricEntry {
+            labels: perf_labels(entry.key),
+            principal: None,
+            value: measurement_value(entry.aggregate),
         })
         .collect::<Vec<_>>();
     entries.extend(timer_snapshots.iter().flat_map(|snapshot| {
-        let identity = snapshot.identity();
         let performance = snapshot.observability().performance();
         [
             ("scheduler", performance.scheduler_instructions()),
             ("work", performance.work_instructions()),
         ]
         .into_iter()
-        .filter_map(|(phase, summary)| {
-            let total = u64::try_from(summary.aggregate().total()).ok()?;
-            Some(MetricEntry {
-                labels: timer_perf_labels(identity, phase),
-                principal: None,
-                value: MetricValue::CountAndU64 {
-                    count: summary.aggregate().samples(),
-                    value_u64: total,
-                },
-            })
+        .map(|(phase, summary)| MetricEntry {
+            labels: timer_perf_labels(snapshot.identity(), phase),
+            principal: None,
+            value: measurement_value(summary.aggregate()),
         })
     }));
     entries
+}
+
+const fn measurement_value(aggregate: ic_metrics::MeasurementAggregate) -> MetricValue {
+    MetricValue::Measurement {
+        count: aggregate.samples(),
+        total: aggregate.total(),
+        count_overflowed: aggregate.samples_overflowed(),
+        total_overflowed: aggregate.total_overflowed(),
+    }
 }
 
 // Both diagnostic and public views use the same source label contract.

@@ -545,6 +545,7 @@ dependencies = [
  "ic-host-fs 0.23.1",
  "ic-host-process 0.23.1",
  "ic-host-text 0.23.1",
+ "ic-metrics",
  "rustix",
  "serde",
  "serde_json",

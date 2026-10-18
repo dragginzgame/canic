@@ -374,12 +374,7 @@ fn operation_metrics() -> Result<Vec<PublicMetricSample>, InternalError> {
         .into_iter()
         .take(MAX_PUBLIC_METRICS + 1)
         .map(|row| {
-            let suffix_bytes = if matches!(&row.value, MetricValue::CountAndU64 { .. }) {
-                6
-            } else {
-                0
-            };
-            let name = metric_name(&row.labels, suffix_bytes)?;
+            let name = metric_name(&row.labels, 0)?;
             let amount_unit = if row.labels.iter().any(|label| label == "amount_e8s") {
                 "icp_e8s"
             } else {
@@ -402,24 +397,9 @@ fn operation_metrics() -> Result<Vec<PublicMetricSample>, InternalError> {
                     observed_at_ns: 0,
                     kind: crate::domain::public_metrics::PublicMetricKind::Gauge,
                 }],
-                MetricValue::CountAndU64 { count, value_u64 } => vec![
-                    PublicMetricSample {
-                        name: format!("{name}.count"),
-                        canister_id: row.principal,
-                        value: u128::from(count),
-                        unit: "count".into(),
-                        observed_at_ns: 0,
-                        kind: crate::domain::public_metrics::PublicMetricKind::Gauge,
-                    },
-                    PublicMetricSample {
-                        name,
-                        canister_id: row.principal,
-                        value: u128::from(value_u64),
-                        unit: "value".into(),
-                        observed_at_ns: 0,
-                        kind: crate::domain::public_metrics::PublicMetricKind::Gauge,
-                    },
-                ],
+                // Operation owners publish scalar counts/amounts only. Performance
+                // observations use their typed, quality-preserving projection.
+                MetricValue::Measurement { .. } => return Err(InternalError::invalid_input()),
             })
         })
         .collect::<Result<Vec<_>, InternalError>>()
