@@ -1,5 +1,25 @@
 # Current handoff — 2026-10-14
 
+## Typed public performance projection — 2026-10-18
+
+Public performance sampling now projects full Metrics aggregates and timer-owned
+registration directly. Label formatting stays shared with protected diagnostics;
+public rows retain wide totals and per-field actual-overflow quality. Host offline
+timer comparison accepts exact caps and full-width instruction totals while
+retaining the sample-count range, registration, source-time and reset checks.
+No endpoint, Candid shape, dependency selection or package version changes.
+
+The isolated contribution starts at public main
+`53f1f22d2e23a16c5566b8590f3b0a2a643b6d84`, retaining locked Metrics 0.11.7 and
+Timers 0.25.2. Twenty-seven selected Core/Host units pass, including attribution,
+publication, wide/cap/overflow admission and timer comparisons. Strict native
+Core/Host lib/test Clippy, Core-only Wasm Clippy, actual Core Rust 1.91 native/Wasm
+checks, formatting and local links pass. The broader Wasm Clippy invocation stops
+in unchanged Contracts on `RemoteCoordinatorStatusResponse`'s enum size; [#598](https://github.com/dragginzgame/canic/issues/598)
+owns that separate warning. No full local CI, native macOS, live IC/cost or release
+qualification was run. Receipts remain under `/tmp/metrics-canic-projection.bQp3J0/`.
+
+
 **Canic 0.111.0 is live; the integration batch remains uncommitted.** The maintainer
 explicitly waived the 0.111 closeout audit for completing Auth, Backup and Blob
 integration, then a cleanup slice to reduce Canic's surface. That decision is

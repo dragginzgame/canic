@@ -7,6 +7,7 @@
 //! domain layering.
 //! Instrumentation modules are layer-neutral and may be used anywhere.
 
+use crate::view::public_metrics::PerfMeasurement;
 use canic_contracts::ids::{EndpointCall, EndpointCallKind};
 use std::{
     borrow::Borrow,
@@ -438,7 +439,7 @@ pub fn entries() -> Vec<PerfEntry> {
 }
 
 /// Read a key-ordered prefix without cloning arbitrarily large checkpoint labels.
-pub(crate) fn bounded_entries(limit: usize) -> Result<Vec<PerfEntry>, crate::InternalError> {
+pub(crate) fn bounded_entries(limit: usize) -> Result<Vec<PerfMeasurement>, crate::InternalError> {
     PERF_TABLE.with_borrow(|table| {
         table
             .iter()
@@ -457,10 +458,9 @@ pub(crate) fn bounded_entries(limit: usize) -> Result<Vec<PerfEntry>, crate::Int
                 if !valid {
                     return Err(crate::InternalError::invalid_input());
                 }
-                Ok(PerfEntry {
+                Ok(PerfMeasurement {
                     key: key.clone(),
-                    count: slot.samples(),
-                    total_instructions: slot.total(),
+                    aggregate: *slot,
                 })
             })
             .collect()

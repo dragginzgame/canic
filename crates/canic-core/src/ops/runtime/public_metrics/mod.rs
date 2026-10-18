@@ -5,6 +5,7 @@
 //! Boundary: public query projection reads cached values only.
 
 mod memory;
+mod performance;
 mod process;
 
 #[cfg(feature = "sharding")]
@@ -285,20 +286,18 @@ impl PublicMetricsOps {
             }
             PublicMetricFamily::Performance => {
                 let mut rows = process::memory();
-                rows.extend(performance_metrics()?);
+                rows.extend(performance::sample()?);
                 rows
             }
             PublicMetricFamily::ShardOccupancy => shard_metrics(),
         };
         for row in &mut rows {
             row.observed_at_ns = now;
-            // Preserve source-owned timer registrations; aggregate timer events remain gauges.
-            let counter = (family == PublicMetricFamily::Operations
+            // Performance rows already carry source-owned identity and actual quality.
+            // Aggregate timer events remain gauges.
+            let counter = family == PublicMetricFamily::Operations
                 && !row.name.starts_with("cycles_funding.icp_refill.")
-                && !row.name.starts_with("timer."))
-                || (family == PublicMetricFamily::Performance
-                    && !row.name.starts_with("perf.timer.")
-                    && !row.name.starts_with("memory."));
+                && !row.name.starts_with("timer.");
             if counter {
                 row.kind = PublicMetricKind::Counter {
                     window_id: 0,
@@ -425,71 +424,6 @@ fn operation_metrics() -> Result<Vec<PublicMetricSample>, InternalError> {
         })
         .collect::<Result<Vec<_>, InternalError>>()
         .map(|rows| rows.into_iter().flatten().collect())
-}
-
-fn performance_metrics() -> Result<Vec<PublicMetricSample>, InternalError> {
-    let inventory = ic_timers::timer_inventory().ok();
-    let timers = inventory
-        .as_ref()
-        .map_or(&[][..], |inventory| inventory.timers());
-    metrics::bounded_performance_entries(MAX_PUBLIC_METRICS / 2 + 1, timers)?
-        .into_iter()
-        .take(MAX_PUBLIC_METRICS / 2 + 1)
-        .map(|row| {
-            let MetricValue::CountAndU64 { count, value_u64 } = row.value else {
-                return Ok(Vec::new());
-            };
-            let name = metric_name(&row.labels, 6)?;
-            let registration = timers.iter().find_map(|timer| {
-                let identity = timer.identity();
-                let labels = &row.labels;
-                let matches = labels.len() == 6
-                    && labels[..5].iter().map(String::as_str).eq([
-                        "perf",
-                        "timer",
-                        identity.owner(),
-                        identity.subsystem(),
-                        identity.name(),
-                    ]);
-                matches.then(|| timer.registration_id())
-            });
-            Ok(vec![
-                PublicMetricSample {
-                    name: format!("{name}.calls"),
-                    canister_id: None,
-                    value: u128::from(count),
-                    unit: "count".into(),
-                    observed_at_ns: 0,
-                    kind: timer_measurement_kind(registration, count),
-                },
-                PublicMetricSample {
-                    name,
-                    canister_id: None,
-                    value: u128::from(value_u64),
-                    unit: "instructions".into(),
-                    observed_at_ns: 0,
-                    kind: timer_measurement_kind(registration, value_u64),
-                },
-            ])
-        })
-        .collect::<Result<Vec<_>, InternalError>>()
-        .map(|rows| rows.into_iter().flatten().collect())
-}
-
-fn timer_measurement_kind(
-    registration: Option<ic_timers::TimerRegistrationId>,
-    value: u64,
-) -> PublicMetricKind {
-    registration.map_or(PublicMetricKind::Gauge, |id| {
-        PublicMetricKind::TimerCounter {
-            registration: crate::domain::public_metrics::TimerMetricRegistration {
-                canister_version: id.epoch().canister_version(),
-                started_at_ns: id.epoch().started_at_ns(),
-                sequence: id.sequence(),
-            },
-            saturated: value == u64::MAX,
-        }
-    })
 }
 
 #[cfg(feature = "sharding")]

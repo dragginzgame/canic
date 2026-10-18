@@ -437,6 +437,12 @@ Timer performance uses `perf.timer.<owner>.<subsystem>.<name>.scheduler` and
 `.work`, in instructions, with a `.calls` row for each phase's completed
 measurement samples. This is a hard cut of the previous work-only metric name.
 The protected performance projection uses the same explicit phase labels.
+The public sampler reads typed source measurements directly: instruction totals
+retain `u128`, and count/total saturation flags report actual overflow. Reaching
+an exact numeric cap alone does not mark an observation saturated. Registration
+is carried from the timer snapshot, never recovered from the formatted name.
+The protected diagnostic view retains its checked `u64` projection and omits
+unrepresentable totals; that presentation limit does not apply to public rows.
 `timer.events.scheduler_started` and `timer.events.work_started` independently
 count starts across the current registry; starts need not equal completed
 measurement samples. Scheduler and work measurements cover the timer owner's
@@ -449,7 +455,10 @@ count from the same inventory observation. Cancellation preserves that identity;
 unregister/re-register changes it. Public history retains raw samples without
 deriving timer rates. Aggregate timer event and state rows remain gauges.
 The host's offline comparison admits timer deltas only for an unchanged
-registration, advancing exact source times and unsaturated fields. A full registry can
+registration, advancing exact source times and unsaturated fields. Instruction
+totals retain the full `u128` range; sample counts remain `u64`. Host comparison
+uses the carried actual-overflow flag rather than treating an exact cap as loss.
+A full registry can
 exceed the existing public row budget; truncation remains explicit and missing
 rows are not zero.
 No extra sampler or polling schedule is introduced. The private

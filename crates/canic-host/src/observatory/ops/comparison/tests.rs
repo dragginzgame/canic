@@ -239,16 +239,55 @@ fn timer_reset_and_regrowth_reject_even_when_values_increase() {
 }
 
 #[test]
+fn timer_comparison_preserves_exact_caps_and_wide_instruction_totals() {
+    for value in [u128::from(u64::MAX), u128::from(u64::MAX) + 1, u128::MAX] {
+        let (before, mut after) = with_timers();
+        data(&mut costs(&mut after, 1).timer_instructions).rows[0].value = value.to_string();
+        let report = compare(&before, &after).unwrap();
+        let CostComparisonResult::Available { value: movement } =
+            &timer_results(&report)[0].movement
+        else {
+            panic!("expected exact instruction movement");
+        };
+        assert_eq!(movement.amount, (value - 20).to_string());
+    }
+}
+
+#[test]
+fn timer_sample_counts_keep_their_source_range_and_actual_quality() {
+    let (before, mut after) = with_timers();
+    let row = &mut data(&mut costs(&mut after, 1).timer_instructions).rows[1];
+    row.value = u64::MAX.to_string();
+    let report = compare(&before, &after).unwrap();
+    let CostComparisonResult::Available { value: movement } = &timer_results(&report)[1].movement
+    else {
+        panic!("expected exact sample-count movement");
+    };
+    assert_eq!(movement.amount, (u64::MAX - 2).to_string());
+    let row = &mut data(&mut costs(&mut after, 1).timer_instructions).rows[1];
+    let MetricKind::TimerCounter { saturated, .. } = &mut row.measurement else {
+        panic!()
+    };
+    *saturated = true;
+    assert_eq!(
+        timer_results(&compare(&before, &after).unwrap())[1].movement,
+        CostComparisonResult::Unavailable {
+            reason: CostComparisonFailure::SaturatedCounter
+        }
+    );
+    let row = &mut data(&mut costs(&mut after, 1).timer_instructions).rows[1];
+    row.value = (u128::from(u64::MAX) + 1).to_string();
+    assert_eq!(
+        timer_results(&compare(&before, &after).unwrap())[1].movement,
+        CostComparisonResult::Unavailable {
+            reason: CostComparisonFailure::InvalidMetric
+        }
+    );
+}
+
+#[test]
 fn timer_saturation_decreases_and_malformed_values_never_become_deltas() {
     for (value, reason) in [
-        (
-            u64::MAX.to_string(),
-            CostComparisonFailure::SaturatedCounter,
-        ),
-        (
-            (u128::from(u64::MAX) + 1).to_string(),
-            CostComparisonFailure::InvalidMetric,
-        ),
         ("19".into(), CostComparisonFailure::CounterDecreased),
         ("070".into(), CostComparisonFailure::InvalidMetric),
     ] {

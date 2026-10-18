@@ -103,15 +103,6 @@ pub(super) fn bounded_core_entries(limit: usize) -> Result<Vec<MetricEntry>, cra
     Ok(rows)
 }
 
-/// Sample performance directly; the upstream timer registry admits at most 64 timers.
-pub(super) fn bounded_performance_entries(
-    limit: usize,
-    timers: &[ic_timers::TimerSnapshot],
-) -> Result<Vec<MetricEntry>, crate::InternalError> {
-    let counters = perf::bounded_entries(limit)?;
-    Ok(prefix_entries("perf", perf_entries_from(counters, timers)))
-}
-
 #[must_use]
 pub fn placement_entries() -> Vec<MetricEntry> {
     let mut entries = prefix_entries("cascade", cascade_entries());
@@ -588,16 +579,7 @@ fn perf_entries_from(
         .into_iter()
         .filter_map(|entry| {
             let total_instructions = u64::try_from(entry.total_instructions).ok()?;
-            let labels = match entry.key {
-                PerfKey::Endpoint { kind, name } => vec![
-                    "endpoint".to_string(),
-                    kind.metric_label().to_string(),
-                    name,
-                ],
-                PerfKey::Checkpoint { scope, label } => {
-                    vec!["checkpoint".to_string(), scope, label]
-                }
-            };
+            let labels = perf_labels(entry.key);
 
             Some(MetricEntry {
                 labels,
@@ -620,13 +602,7 @@ fn perf_entries_from(
         .filter_map(|(phase, summary)| {
             let total = u64::try_from(summary.aggregate().total()).ok()?;
             Some(MetricEntry {
-                labels: vec![
-                    "timer".to_string(),
-                    identity.owner().to_string(),
-                    identity.subsystem().to_string(),
-                    identity.name().to_string(),
-                    phase.to_string(),
-                ],
+                labels: timer_perf_labels(identity, phase),
                 principal: None,
                 value: MetricValue::CountAndU64 {
                     count: summary.aggregate().samples(),
@@ -636,6 +612,26 @@ fn perf_entries_from(
         })
     }));
     entries
+}
+
+// Both diagnostic and public views use the same source label contract.
+pub(super) fn perf_labels(key: PerfKey) -> Vec<String> {
+    match key {
+        PerfKey::Endpoint { kind, name } => {
+            vec!["endpoint".into(), kind.metric_label().into(), name]
+        }
+        PerfKey::Checkpoint { scope, label } => vec!["checkpoint".into(), scope, label],
+    }
+}
+
+pub(super) fn timer_perf_labels(identity: &ic_timers::TimerIdentity, phase: &str) -> Vec<String> {
+    vec![
+        "timer".into(),
+        identity.owner().into(),
+        identity.subsystem().into(),
+        identity.name().into(),
+        phase.into(),
+    ]
 }
 
 #[cfg(test)]

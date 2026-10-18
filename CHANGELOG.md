@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- **Public performance metrics:** project typed source measurements directly,
+  retaining wide totals, actual overflow quality and timer registration without
+  reconstructing identity from display labels.
+
 Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
 ### ⚠️ Breaking
