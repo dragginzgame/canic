@@ -96,7 +96,9 @@ mod tests {
                 )
             })
             .expect("public perf macros record one shared checkpoint");
-        assert_eq!(checkpoint.count, 3);
-        assert_eq!(checkpoint.total_instructions, 0);
+        assert_eq!(checkpoint.aggregate.samples(), 3);
+        assert_eq!(checkpoint.aggregate.total(), 0);
+        assert!(!checkpoint.aggregate.samples_overflowed());
+        assert!(!checkpoint.aggregate.total_overflowed());
     }
 }

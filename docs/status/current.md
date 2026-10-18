@@ -1,6 +1,6 @@
 # Current handoff — 2026-10-14
 
-## Runtime probe caller repair — 2026-10-18
+## Runtime probe and facade caller repairs — 2026-10-18
 
 The earlier PR #599 hosted MSRV job exposed a missed `PerfEntry` caller in
 `runtime_probe::perf_context`. The probe now reads the full aggregate and excludes
@@ -10,8 +10,13 @@ The focused native regression, strict all-target package Clippy and actual Rust
 1.91 all-target package check pass, with locked dependencies and no artifact-guard
 bypass. Formatting, affected local links and diff checks pass. Receipts are under
 `/tmp/canic-pr599-probe-*.log`. The failed hosted source keeps its original result;
-new hosted and governed runtime acceptance remain separate. This completes the
-caller propagation inside the existing 0.112 draft without a version change.
+new hosted and governed runtime acceptance remain separate. A later hosted
+all-target Clippy job exposed stale facade macro test assertions. They now assert
+aggregate count/total and exact source quality. Facade all-target strict Clippy,
+the named public-macro regression and actual Rust 1.91 all-target checking pass;
+receipts are under `/tmp/canic-pr599-facade-*.log`. No maintained Rust access to
+the retired `total_instructions` field remains. Both repairs stay in the existing
+0.112 draft without a version or dependency change.
 
 ## Public operation projection — 2026-10-18
 
