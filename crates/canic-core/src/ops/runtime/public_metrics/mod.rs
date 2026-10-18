@@ -5,17 +5,15 @@
 //! Boundary: public query projection reads cached values only.
 
 mod memory;
+mod operations;
 mod performance;
 mod process;
 
-#[cfg(feature = "sharding")]
-use crate::ops::storage::placement::sharding::ShardingRegistryOps;
 use crate::{
     InternalError,
     config::{Config, RoleRuntimeConfig},
     domain::public_metrics::PublicMetricFamily,
     dto::{
-        metrics::MetricValue,
         page::{Page, PageRequest},
         public_status::{
             PublicCounterDelta, PublicHealth, PublicHealthStatus, PublicHistoryPoint,
@@ -24,14 +22,16 @@ use crate::{
         },
     },
     model::public_metrics::{
-        MAX_HISTORY_BYTES, MAX_HISTORY_SERIES, MAX_PUBLIC_METRIC_TEXT_BYTES, MAX_PUBLIC_METRICS,
+        MAX_HISTORY_BYTES, MAX_HISTORY_SERIES, MAX_PUBLIC_METRIC_TEXT_BYTES,
         PUBLIC_HISTORY_RETENTION_NS, PUBLIC_HISTORY_SLOTS, PUBLIC_METRICS_CADENCE_NS,
         PUBLIC_METRICS_STALE_AFTER_NS, PublicHistoryCache, PublicMetricSample, PublicMetricsCache,
     },
-    ops::{
-        ic::IcOps,
-        runtime::{env::EnvOps, metrics},
-    },
+    ops::{ic::IcOps, runtime::env::EnvOps},
+};
+#[cfg(feature = "sharding")]
+use crate::{
+    model::public_metrics::MAX_PUBLIC_METRICS,
+    ops::storage::placement::sharding::ShardingRegistryOps,
 };
 use std::{cell::Cell, collections::BTreeSet};
 
@@ -281,7 +281,7 @@ impl PublicMetricsOps {
             }],
             PublicMetricFamily::Operations => {
                 let mut rows = process::operations()?;
-                rows.extend(operation_metrics()?);
+                rows.extend(operations::sample()?);
                 rows
             }
             PublicMetricFamily::Performance => {
@@ -293,21 +293,6 @@ impl PublicMetricsOps {
         };
         for row in &mut rows {
             row.observed_at_ns = now;
-            // Performance rows already carry source-owned identity and actual quality.
-            // Aggregate timer events remain gauges.
-            let counter = family == PublicMetricFamily::Operations
-                && !row.name.starts_with("cycles_funding.icp_refill.")
-                && !row.name.starts_with("timer.");
-            if counter {
-                row.kind = PublicMetricKind::Counter {
-                    window_id: 0,
-                    saturated: if matches!(row.unit.as_str(), "cycles" | "icp_e8s") {
-                        row.value == u128::MAX
-                    } else {
-                        row.value == u128::from(u64::MAX)
-                    },
-                };
-            }
         }
         if family == PublicMetricFamily::Performance {
             // Allocation rows own their source times, including retained values on failure.
@@ -367,43 +352,6 @@ fn metric_name(labels: &[String], suffix_bytes: usize) -> Result<String, Interna
         return Err(InternalError::invalid_input());
     }
     Ok(labels.join("."))
-}
-
-fn operation_metrics() -> Result<Vec<PublicMetricSample>, InternalError> {
-    metrics::bounded_core_entries(MAX_PUBLIC_METRICS + 1)?
-        .into_iter()
-        .take(MAX_PUBLIC_METRICS + 1)
-        .map(|row| {
-            let name = metric_name(&row.labels, 0)?;
-            let amount_unit = if row.labels.iter().any(|label| label == "amount_e8s") {
-                "icp_e8s"
-            } else {
-                "cycles"
-            };
-            Ok(match row.value {
-                MetricValue::Count(value) => vec![PublicMetricSample {
-                    name,
-                    canister_id: row.principal,
-                    value: u128::from(value),
-                    unit: "count".into(),
-                    observed_at_ns: 0,
-                    kind: crate::domain::public_metrics::PublicMetricKind::Gauge,
-                }],
-                MetricValue::U128(value) => vec![PublicMetricSample {
-                    name,
-                    canister_id: row.principal,
-                    value,
-                    unit: amount_unit.into(),
-                    observed_at_ns: 0,
-                    kind: crate::domain::public_metrics::PublicMetricKind::Gauge,
-                }],
-                // Operation owners publish scalar counts/amounts only. Performance
-                // observations use their typed, quality-preserving projection.
-                MetricValue::Measurement { .. } => return Err(InternalError::invalid_input()),
-            })
-        })
-        .collect::<Result<Vec<_>, InternalError>>()
-        .map(|rows| rows.into_iter().flatten().collect())
 }
 
 #[cfg(feature = "sharding")]

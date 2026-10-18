@@ -558,15 +558,15 @@ fn icp_refill_metrics_project_bounded_record_state() {
         entries_from_snapshot(&IcpRefillMetricSnapshot {
             statuses: vec![
                 IcpRefillMetricStatusCount {
-                    trigger: crate::domain::icp_refill::IcpRefillTrigger::Automatic { sequence: 1 },
+                    trigger_label: "automatic",
+                    phase: "notify",
                     status: IcpRefillRecordStatus::Completed,
-                    error_code: None,
                     count: 1,
                 },
                 IcpRefillMetricStatusCount {
-                    trigger: crate::domain::icp_refill::IcpRefillTrigger::Manual,
+                    trigger_label: "manual",
+                    phase: "notify",
                     status: IcpRefillRecordStatus::Failed,
-                    error_code: Some(IcpRefillRecordErrorCode::NotifyFailed),
                     count: 2,
                 },
             ],

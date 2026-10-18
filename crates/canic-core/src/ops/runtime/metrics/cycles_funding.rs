@@ -207,6 +207,40 @@ impl CyclesFundingMetrics {
         })
     }
 
+    /// Read fixed global metric groups without walking child-principal rows.
+    pub(crate) fn bounded_aggregate_snapshot(
+        limit: usize,
+    ) -> Vec<(
+        CyclesFundingMetricKey,
+        Option<CyclesFundingDeniedReason>,
+        u128,
+    )> {
+        CYCLES_FUNDING_METRICS.with_borrow(|counts| {
+            [
+                CyclesFundingMetricKey::DeniedGlobalKillSwitch,
+                CyclesFundingMetricKey::DeniedTotal,
+                CyclesFundingMetricKey::GrantedTotal,
+                CyclesFundingMetricKey::RequestedTotal,
+            ]
+            .into_iter()
+            .flat_map(|metric| {
+                let start = CyclesFundingMetricStorageKey {
+                    metric,
+                    child_principal: None,
+                    reason: None,
+                };
+                counts
+                    .range(start..)
+                    .take_while(move |(key, _)| {
+                        key.metric == metric && key.child_principal.is_none()
+                    })
+                    .map(|(key, amount)| (key.metric, key.reason, *amount))
+            })
+            .take(limit)
+            .collect()
+        })
+    }
+
     #[cfg(test)]
     pub fn reset() {
         CYCLES_FUNDING_METRICS.with_borrow_mut(BTreeMap::clear);

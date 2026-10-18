@@ -59,7 +59,12 @@ fn process_rows() -> Result<Vec<PublicMetricSample>, InternalError> {
     let rows = counts
         .into_iter()
         .map(|((owner, outcome), value)| {
-            sample(format!("process.{owner}.{outcome}"), value, "count")
+            let mut row = sample(format!("process.{owner}.{outcome}"), value, "count");
+            row.kind = PublicMetricKind::Counter {
+                window_id: 0,
+                saturated: value == u64::MAX,
+            };
+            row
         })
         .collect::<Vec<_>>();
     Ok(rows)
@@ -187,6 +192,13 @@ mod tests {
             assert_eq!(row.value, 1);
             assert_eq!(row.unit, "count");
             assert_eq!(row.canister_id, None);
+            assert!(matches!(
+                row.kind,
+                PublicMetricKind::Counter {
+                    window_id: 0,
+                    saturated: false
+                }
+            ));
         }
         assert!(PlatformCallMetrics::bounded_snapshot(0).is_err());
         assert!(IntentMetrics::bounded_snapshot(0).is_err());

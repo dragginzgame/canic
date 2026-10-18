@@ -72,37 +72,6 @@ pub fn core_entries() -> Vec<MetricEntry> {
     entries
 }
 
-/// Project at most `limit` inputs from each operation owner before formatting.
-pub(super) fn bounded_core_entries(limit: usize) -> Result<Vec<MetricEntry>, crate::InternalError> {
-    let mut rows = prefix_entries(
-        "lifecycle",
-        lifecycle_entries_from(LifecycleMetrics::bounded_snapshot(limit)),
-    );
-    rows.extend(prefix_entries(
-        "canister_ops",
-        canister_ops_entries_from(CanisterOpsMetrics::bounded_snapshot(limit)?),
-    ));
-    rows.extend(prefix_entries(
-        "cycles_funding",
-        cycles_funding_entries_from(limit),
-    ));
-    if EnvOps::is_root() {
-        rows.extend(prefix_entries(
-            "cycles_funding",
-            icp_refill::entries_from_snapshot(
-                &crate::ops::storage::icp_refill::IcpRefillRecordOps::bounded_metric_snapshot(
-                    limit,
-                ),
-            ),
-        ));
-    }
-    rows.extend(prefix_entries(
-        "cycles_topup",
-        cycles_topup_entries_from(CyclesTopupMetrics::bounded_snapshot(limit)),
-    ));
-    Ok(rows)
-}
-
 #[must_use]
 pub fn placement_entries() -> Vec<MetricEntry> {
     let mut entries = prefix_entries("cascade", cascade_entries());

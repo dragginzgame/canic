@@ -12,9 +12,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   retaining wide totals, actual overflow quality and timer registration without
   reconstructing identity from display labels.
 
+- **Refill status metrics:** aggregate published identities before bounded
+  selection, so automatic sequences and equivalent failure phases produce one
+  count instead of duplicate public rows
+  ([#97 — Aggregate refill metric identities before selection](https://github.com/dragginzgame/canic/issues/97)).
+
 Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
 ### ⚠️ Breaking
+
+- **Public operation metrics:** publish only anonymous aggregate counters.
+  Per-child funding and per-target refill amounts remain in protected Core
+  diagnostics; clients needing those rows must use the protected endpoint
+  ([#104 — Keep principal-scoped funding out of public operations](https://github.com/dragginzgame/canic/issues/104)).
 
 - **Protected metric payloads:** replace generic numeric pairs with explicit
   wide measurements and source overflow flags. Timer starts and latest delays

@@ -62,14 +62,14 @@ pub struct IcpRefillPolicyUsage {
 ///
 /// IcpRefillMetricStatusCount
 ///
-/// Derived count for one persisted ICP-refill status and error combination.
+/// Derived count for one published trigger-kind, phase and status identity.
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct IcpRefillMetricStatusCount {
-    pub trigger: IcpRefillTrigger,
+    pub trigger_label: &'static str,
+    pub phase: &'static str,
     pub status: IcpRefillRecordStatus,
-    pub error_code: Option<IcpRefillRecordErrorCode>,
     pub count: u64,
 }
 
@@ -122,14 +122,7 @@ struct IcpRefillTargetTotals {
 struct IcpRefillDerivedIndex {
     operation_ids: BTreeMap<[u8; 32], u64>,
     active_operations: BTreeMap<IcpRefillActiveKey, u64>,
-    status_counts: BTreeMap<
-        (
-            IcpRefillTriggerRecord,
-            IcpRefillRecordStatus,
-            Option<IcpRefillRecordErrorCode>,
-        ),
-        u64,
-    >,
+    status_counts: BTreeMap<(&'static str, &'static str, IcpRefillRecordStatus), u64>,
     error_counts: BTreeMap<IcpRefillRecordErrorCode, u64>,
     target_totals: BTreeMap<Principal, IcpRefillTargetTotals>,
     window_reserved_e8s: BTreeMap<u64, u64>,
@@ -137,6 +130,94 @@ struct IcpRefillDerivedIndex {
     automatic_completed_refill_e8s: u64,
     maximum_automatic_sequence: u64,
     max_id: u64,
+}
+
+// Normalize before indexing and bounded selection: sequences and folded errors
+// must not produce duplicate emitted identities or crowd out another trigger kind.
+const fn metric_status_key(
+    record: &IcpRefillRecord,
+) -> (&'static str, &'static str, IcpRefillRecordStatus) {
+    (
+        trigger_label(record.trigger),
+        record_phase(record.status, record.error_code),
+        record.status,
+    )
+}
+
+const fn trigger_label(trigger: IcpRefillTriggerRecord) -> &'static str {
+    match trigger {
+        IcpRefillTriggerRecord::Automatic { .. } => "automatic",
+        IcpRefillTriggerRecord::Manual => "manual",
+    }
+}
+
+const fn record_phase(
+    status: IcpRefillRecordStatus,
+    error_code: Option<IcpRefillRecordErrorCode>,
+) -> &'static str {
+    match status {
+        IcpRefillRecordStatus::Requested => "preflight",
+        IcpRefillRecordStatus::Transferred
+        | IcpRefillRecordStatus::NotifyProcessing
+        | IcpRefillRecordStatus::Completed
+        | IcpRefillRecordStatus::InvalidTransaction
+        | IcpRefillRecordStatus::Refunded
+        | IcpRefillRecordStatus::TransactionTooOld => "notify",
+        IcpRefillRecordStatus::Failed => match error_code {
+            Some(error_code) => metric_error_phase(error_code),
+            None => "transfer",
+        },
+    }
+}
+
+/// Canonical refill error phase shared by protected and public projections.
+pub const fn metric_error_phase(error: IcpRefillRecordErrorCode) -> &'static str {
+    match error {
+        IcpRefillRecordErrorCode::BadFee
+        | IcpRefillRecordErrorCode::Duplicate
+        | IcpRefillRecordErrorCode::InvalidLedgerBlockIndex
+        | IcpRefillRecordErrorCode::LedgerTransferFailed
+        | IcpRefillRecordErrorCode::TransferWindowStale => "transfer",
+        IcpRefillRecordErrorCode::CyclesSentOverflow
+        | IcpRefillRecordErrorCode::InvalidTransaction
+        | IcpRefillRecordErrorCode::NotifyFailed
+        | IcpRefillRecordErrorCode::NotifyMaxAttempts
+        | IcpRefillRecordErrorCode::Processing
+        | IcpRefillRecordErrorCode::Refunded
+        | IcpRefillRecordErrorCode::TransactionTooOld => "notify",
+    }
+}
+
+/// Canonical refill status label shared by protected and public projections.
+pub const fn metric_status_label(status: IcpRefillRecordStatus) -> &'static str {
+    match status {
+        IcpRefillRecordStatus::Completed => "completed",
+        IcpRefillRecordStatus::Failed => "failed",
+        IcpRefillRecordStatus::InvalidTransaction => "invalid_transaction",
+        IcpRefillRecordStatus::NotifyProcessing => "notify_processing",
+        IcpRefillRecordStatus::Refunded => "refunded",
+        IcpRefillRecordStatus::Requested => "requested",
+        IcpRefillRecordStatus::TransactionTooOld => "transaction_too_old",
+        IcpRefillRecordStatus::Transferred => "transferred",
+    }
+}
+
+/// Canonical refill error label shared by protected and public projections.
+pub const fn metric_error_label(error: IcpRefillRecordErrorCode) -> &'static str {
+    match error {
+        IcpRefillRecordErrorCode::BadFee => "bad_fee",
+        IcpRefillRecordErrorCode::CyclesSentOverflow => "cycles_sent_overflow",
+        IcpRefillRecordErrorCode::Duplicate => "duplicate",
+        IcpRefillRecordErrorCode::InvalidLedgerBlockIndex => "invalid_ledger_block_index",
+        IcpRefillRecordErrorCode::InvalidTransaction => "invalid_transaction",
+        IcpRefillRecordErrorCode::LedgerTransferFailed => "ledger_transfer_failed",
+        IcpRefillRecordErrorCode::NotifyFailed => "notify_failed",
+        IcpRefillRecordErrorCode::NotifyMaxAttempts => "notify_max_attempts",
+        IcpRefillRecordErrorCode::Processing => "processing",
+        IcpRefillRecordErrorCode::Refunded => "refunded",
+        IcpRefillRecordErrorCode::TransactionTooOld => "transaction_too_old",
+        IcpRefillRecordErrorCode::TransferWindowStale => "transfer_window_stale",
+    }
 }
 
 ///
@@ -804,7 +885,7 @@ impl IcpRefillDerivedIndex {
         }
         let status_count = self
             .status_counts
-            .entry((record.trigger, record.status, record.error_code))
+            .entry(metric_status_key(record))
             .or_default();
         *status_count = status_count.saturating_add(1);
         if let Some(error_code) = record.error_code {
@@ -855,10 +936,7 @@ impl IcpRefillDerivedIndex {
         if self.active_operations.get(&active_key) == Some(&record.id) {
             self.active_operations.remove(&active_key);
         }
-        decrement_count(
-            &mut self.status_counts,
-            &(record.trigger, record.status, record.error_code),
-        );
+        decrement_count(&mut self.status_counts, &metric_status_key(record));
         if let Some(error_code) = record.error_code {
             decrement_count(&mut self.error_counts, &error_code);
         }
@@ -958,10 +1036,10 @@ impl IcpRefillDerivedIndex {
                 .iter()
                 .take(limit)
                 .map(
-                    |((trigger, status, error_code), count)| IcpRefillMetricStatusCount {
-                        trigger: (*trigger).into(),
+                    |((trigger_label, phase, status), count)| IcpRefillMetricStatusCount {
+                        trigger_label,
+                        phase,
                         status: *status,
-                        error_code: *error_code,
                         count: *count,
                     },
                 )
@@ -1629,6 +1707,75 @@ mod tests {
     fn reset_records() {
         IcpRefillRecords::clear_for_tests();
         ICP_REFILL_DERIVED_INDEX.with_borrow_mut(|index| *index = IcpRefillDerivedIndex::default());
+    }
+
+    #[test]
+    fn refill_status_identity_is_aggregated_before_limits_and_survives_rebuild() {
+        let mut records = (1_u64..=300)
+            .map(|sequence| {
+                let mut operation_id = [0; 32];
+                operation_id[..8].copy_from_slice(&sequence.to_le_bytes());
+                let mut entry = record(1, operation_id, p(33));
+                entry.id = sequence;
+                entry.trigger = IcpRefillTriggerRecord::Automatic { sequence };
+                entry.status = IcpRefillRecordStatus::Completed;
+                entry.cycles_sent = Some(Nat::from(1_u64));
+                entry
+            })
+            .collect::<Vec<_>>();
+        for (offset, error) in [
+            IcpRefillRecordErrorCode::BadFee,
+            IcpRefillRecordErrorCode::LedgerTransferFailed,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let mut entry = record(2, [u8::try_from(offset + 1).unwrap(); 32], p(34));
+            entry.id = 301 + u64::try_from(offset).unwrap();
+            entry.status = IcpRefillRecordStatus::Failed;
+            entry.error_code = Some(error);
+            records.push(entry);
+        }
+        let mut index = IcpRefillDerivedIndex::from_records(records.clone()).unwrap();
+        let snapshot = index.metric_snapshot(2);
+        assert_eq!(snapshot.statuses.len(), 2);
+        assert_eq!(
+            (
+                snapshot.statuses[0].trigger_label,
+                snapshot.statuses[0].phase,
+                snapshot.statuses[0].status,
+                snapshot.statuses[0].count
+            ),
+            ("automatic", "notify", IcpRefillRecordStatus::Completed, 300)
+        );
+        assert_eq!(
+            (
+                snapshot.statuses[1].trigger_label,
+                snapshot.statuses[1].phase,
+                snapshot.statuses[1].status,
+                snapshot.statuses[1].count
+            ),
+            ("manual", "transfer", IcpRefillRecordStatus::Failed, 2)
+        );
+        assert_eq!(index.metric_snapshot(1).statuses[0].count, 300);
+        let previous = records[0].clone();
+        records[0].status = IcpRefillRecordStatus::Failed;
+        records[0].error_code = Some(IcpRefillRecordErrorCode::NotifyMaxAttempts);
+        records[0].cycles_sent = None;
+        index.replace_record(Some(&previous), &records[0]).unwrap();
+        let expected = index.metric_snapshot(10);
+        let rebuilt = IcpRefillDerivedIndex::from_records(records)
+            .unwrap()
+            .metric_snapshot(10);
+        assert_eq!(expected, rebuilt);
+        assert!(
+            expected
+                .statuses
+                .iter()
+                .any(|status| status.trigger_label == "automatic"
+                    && status.status == IcpRefillRecordStatus::Completed
+                    && status.count == 299)
+        );
     }
 
     #[test]

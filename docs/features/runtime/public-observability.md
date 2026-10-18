@@ -260,8 +260,15 @@ and become stale normally; successful families still refresh. Optional sampling
 errors do not change cycle-tracking or funding decisions.
 
 Collection bounds apply before formatting and sorting. Operations read at most
-257 entries from each of four counter owners and each of the three ICP-refill
-aggregate indexes. Each target entry yields at most two refill rows. Performance
+257 entries from lifecycle, canister-operation and top-up owners. Global funding
+uses four fixed enum groups with at most the fixed denial-reason set; ordered
+range lookup skips all child-principal groups before applying its row limit.
+Root reads bounded prefixes of the three ICP-refill indexes, but publishes only
+normalized status/error counts. Per-child funding and per-target refill amounts
+remain in protected Core diagnostics. Refill status grouping removes automatic
+sequences and folds error phases before bounded selection, preserving one emitted
+identity. Public operation units and counter/gauge interpretation come from
+these typed projections; display names do not recover either fact. Performance
 reads at most 129 recorded counters plus the upstream timer inventory, capped by
 ic-timers at 64 registrations with bounded identities. Each registration yields
 separate scheduler and work entries; the performance path builds no protected

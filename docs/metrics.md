@@ -154,6 +154,16 @@ use the existing family-specific dimensions:
 | `timer` | `[policy, owner, subsystem, name, metric]` or `[inventory, available]` | `None` | `Count` for starts/availability; `U128` for latest delay |
 | `wasm_store` | `[operation, source, outcome, reason]` | `None` | `Count` |
 
+ICP-refill status rows aggregate by emitted trigger kind, phase and status;
+sequence numbers and equivalent error codes do not produce duplicate rows. The
+record-derived index applies this grouping before bounded selection and rebuilds
+it from the unchanged records. Error rows retain their distinct error labels.
+Protected Core diagnostics retain child-principal funding and refill-target
+amounts. The public `operations` family selects only anonymous aggregate funding
+and refill status/error counts; it never republishes those principal dimensions
+or target amounts. Its record-derived counts remain gauges rather than cumulative
+history counters.
+
 Delegated-auth renewal rows use the existing `delegated_auth` family with
 the bounded operation label `renewal_sweep`. Outcomes are
 `started`/`completed`/`failed`; reasons reuse bounded auth reasons such as

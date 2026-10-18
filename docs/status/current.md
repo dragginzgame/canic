@@ -1,5 +1,24 @@
 # Current handoff — 2026-10-14
 
+## Public operation projection — 2026-10-18
+
+The existing metrics contribution now reads public operations from typed owners,
+with units and history kinds assigned before publication. It removes the generic
+protected-row translation and name-based interpretation. Four fixed global
+funding groups bypass child-principal cardinality; child funding and refill-target
+amounts remain protected. Refill status identities normalize trigger kind/phase
+before indexing and limits, preserving counts across replacement and index rebuild.
+The internal metric-count view changes, but durable refill records, financial
+policy/recovery and public Candid shapes do not. These changes extend the existing
+0.112 draft; own versions and dependency selections remain unchanged.
+
+Focused qualification passes 43 selected Core units across public operations,
+refill storage/indexing, protected metric projections, process counters and public
+cache/history. Strict native Core library/test and Wasm library Clippy and actual
+Core Rust 1.91 native/Wasm checks pass. Receipts and retained failed attempts are
+under `/tmp/metrics-canic-projection.bQp3J0/operations-*.log`. Governed canister
+artifact, installed-runtime, full CI and native macOS qualification remain separate.
+
 ## Typed metric projection — 2026-10-18
 
 The existing 0.112 draft now covers both public and protected reports. One
