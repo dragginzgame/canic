@@ -112,6 +112,8 @@ mod tests {
 
     #[test]
     fn formats_larger_byte_sizes() {
+        assert_eq!(byte_size(crate::CANIC_WASM_CHUNK_BYTES as u64), "1.00 MiB");
+        assert_eq!(byte_size(385_886), "376.84 KiB");
         assert_eq!(byte_size(720_795), "703.90 KiB");
         assert_eq!(byte_size(13_936_529), "13.29 MiB");
         assert_eq!(byte_size(9_102_643), "8.68 MiB");
