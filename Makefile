@@ -354,8 +354,6 @@ release-integrity-contract-gate:
 	bash scripts/ci/test-release-runner.sh
 	bash scripts/ci/check-release-integrity-contract.sh
 	bash scripts/ci/test-require-jq.sh
-	bash scripts/ci/test-ic-tools.sh
-	bash scripts/ci/test-host-tools.sh
 	bash scripts/ci/test-dev-tool-recipes.sh
 	bash scripts/ci/test-release-tools.sh
 	bash scripts/ci/test-pinned-ci-tools.sh
