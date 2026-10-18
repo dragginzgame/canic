@@ -1,6 +1,7 @@
-# Current handoff — 2026-10-14
+# Current handoff — 2026-10-18
 
-**Canic 0.111.0 is live; the integration batch remains uncommitted.** The maintainer
+**The workspace remains on Canic 0.111.0; the 0.112 integration batch is unfinished.**
+The maintainer
 explicitly waived the 0.111 closeout audit for completing Auth, Backup and Blob
 integration, then a cleanup slice to reduce Canic's surface. That decision is
 recorded on [#517](https://github.com/dragginzgame/canic/issues/517#issuecomment-6119790876).
@@ -20,13 +21,38 @@ application snapshots. Snapshot loading cannot rewind that retained sequence;
 a lost release acknowledgement retains the original binding and retries without
 rerunning completed business hooks. The inventory preflight also passes.
 
+After the normal #546 prerequisite merge, the same checkpoint case passes again.
+The combined graph also passes peer refresh/verification, six peer cases, strict
+Host/fixture lint and actual Rust 1.91 libraries with governed fixtures enabled.
+
 Root authority remains fixture-held and its sender is supplied by the test
 driver. This qualifies the installed participant/model composition, not production
 Root storage, discovery, RPC dispatch or paid snapshot effects. Live create stays
 unavailable. PR #546 owns the outstanding reproducible-peer and native-path CI
-prerequisites. Evidence: `/tmp/canic-pr592-checkpoint-pic.log` and
-`target/test-runs/20261018T155504Z-3146384.d68c3y/`. The complete 0.112 batch remains
+prerequisites. Evidence: `/tmp/canic-pr592-combined-checkpoint-pic.log` and
+`target/test-runs/20261018T161904Z-3555103.IM53SK/`. The complete 0.112 batch remains
 unfinished; no version, release, deployment or live IC effect is included.
+
+## Current-main build and fixture integration — 2026-10-18
+
+The isolated Rust release fixtures now include the shared version-input validator.
+Binaryen and IC Wasm tests exercise directory aliases and compare canonical paths;
+the rejected executable's marker is bound to its own path. All 17 release-flow
+cases, seven Binaryen cases and six IC Wasm cases pass on Linux. This reproduces
+the macOS path
+distinction locally; native macOS qualification remains CI-owned.
+
+PR #546 is reconciled with current main without changing its dependency selections.
+Its shared library selector and current-source peer recipe pass 94 build/reuse
+cases (three unrelated cases ignored), 18 bootstrap cases, six peer cases and the
+explicit real-Wasm reproduction across paths and a disposable version transaction.
+The canonical refresh and unchanged verifier pass. Strict Host and fixture-owner
+library/test/example lint and actual Rust 1.91 library checks pass. Retained mismatch writes use
+Host's explicit replacement/permission inputs; Testkit diagnostic fields match the
+repair in #592. Main's remaining governed Testkit call errors require that adoption.
+Evidence: `/tmp/canic-pr546-*.log` and `/tmp/canic-pr592-*-direct.log`.
+The complete 0.112 batch remains unfinished;
+no package-version, release, deployment or live IC effect is included.
 
 ## Auth status capability emission — 2026-10-16
 

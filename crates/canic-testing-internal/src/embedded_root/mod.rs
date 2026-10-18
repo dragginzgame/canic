@@ -10,7 +10,12 @@ use canic_core::cdk::utils::hash::sha256_hex;
 use ic_build::artifacts::{WasmBuildSpec, build_wasm_canisters_cached, resolve_cargo_build_inputs};
 use ic_host_fs::durable::{PublicationMode, WriteOptions};
 use serde::{Deserialize, Serialize};
-use std::{error::Error, fs, io, path::Path, process::Command};
+use std::{
+    error::Error,
+    fs, io,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 const ARTIFACT: &str =
     "crates/canic/src/testing/managed_component_group/fixture/sharding_root_stub.wasm";
@@ -37,6 +42,40 @@ struct FixtureEvidence {
     rustc: String,
 }
 
+#[derive(Debug)]
+struct PeerMismatch {
+    expected: String,
+    built: String,
+    retained: io::Result<PathBuf>,
+}
+
+impl std::fmt::Display for PeerMismatch {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "embedded allocation peer differs from current source (expected {}, built {}); run cargo run --locked --offline -p canic-testing-internal --example refresh_embedded_root",
+            self.expected, self.built
+        )?;
+        match &self.retained {
+            Ok(path) => write!(
+                formatter,
+                "; mismatch Wasm and provenance retained at {}",
+                path.display()
+            ),
+            Err(error) => write!(formatter, "; retaining mismatch evidence failed: {error}"),
+        }
+    }
+}
+
+impl Error for PeerMismatch {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        self.retained
+            .as_ref()
+            .err()
+            .map(|error| error as &dyn Error)
+    }
+}
+
 /// Check recorded identity or compare a freshly qualified cached build after inputs change.
 /// Normal qualification never updates the checked-in artifact or evidence.
 pub fn verify(workspace: &Path) -> Result<(), Box<dyn Error>> {
@@ -51,12 +90,48 @@ pub fn verify(workspace: &Path) -> Result<(), Box<dyn Error>> {
     }
     // A metadata-only change may select the same executable. Prove that fact
     // through the content-addressed build rather than demanding a source rewrite.
-    let (built, _) = build(&workspace, &spec)?;
+    let (built, provenance) = build(&workspace, &spec)?;
     if built != embedded {
-        return Err(io::Error::new(io::ErrorKind::InvalidData,
-            "embedded allocation peer differs from current source; run cargo run --locked --offline -p canic-testing-internal --example refresh_embedded_root").into());
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            PeerMismatch {
+                expected: sha256_hex(&embedded),
+                built: provenance.artifact_sha256.clone(),
+                retained: retain_peer_mismatch(&workspace, &built, &provenance),
+            },
+        )
+        .into());
     }
     Ok(())
+}
+
+fn retain_peer_mismatch(
+    workspace: &Path,
+    bytes: &[u8],
+    provenance: &FixtureEvidence,
+) -> io::Result<PathBuf> {
+    let parent = workspace.join("target/embedded-root/mismatches");
+    fs::create_dir_all(&parent)?;
+    let path = parent.join(format!("{}.wasm", provenance.artifact_sha256));
+    ic_host_fs::durable::write_bytes(
+        &path,
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        bytes,
+    )
+    .map_err(io::Error::other)?;
+    ic_host_fs::durable::write_bytes(
+        &path.with_extension("json"),
+        WriteOptions {
+            mode: PublicationMode::Replace,
+            permissions: 0o666,
+        },
+        &serde_json::to_vec_pretty(provenance).map_err(io::Error::other)?,
+    )
+    .map_err(io::Error::other)?;
+    Ok(path)
 }
 
 /// Explicit maintainer refresh of the peer and its structured source/tool/lock evidence.
@@ -97,6 +172,7 @@ pub fn refresh(workspace: &Path) -> Result<(), Box<dyn Error>> {
 }
 
 fn build_spec(workspace: &Path, source: &Path) -> io::Result<WasmBuildSpec> {
+    let sysroot = source::compiler_sysroot()?;
     Ok(WasmBuildSpec::new(
         source,
         &workspace.join("target/embedded-root/cache"),
@@ -106,10 +182,15 @@ fn build_spec(workspace: &Path, source: &Path) -> io::Result<WasmBuildSpec> {
     .with_additional_inputs(["crates/canic-testing-internal/src/embedded_root"])
     .with_cargo_profile_args(["--profile", PROFILE, "--locked", "--offline"])
     .with_extra_env([
-        ("CARGO_INCREMENTAL", "0".to_owned()),
-        ("ICP_ENVIRONMENT", "local".to_owned()),
-        ("CANIC_MEMORY_BUCKET_PAGES", "16".to_owned()),
-        ("CARGO_ENCODED_RUSTFLAGS", source::rustflags(source)?),
+        ("CARGO_INCREMENTAL", "0".into()),
+        ("ICP_ENVIRONMENT", "local".into()),
+        ("CANIC_MEMORY_BUCKET_PAGES", "16".into()),
+        (
+            "CARGO_ENCODED_RUSTFLAGS",
+            source::rustflags(source, &sysroot)?.into(),
+        ),
+        // Select the compiler in the same map: with_extra_env replaces prior entries.
+        ("RUSTC", sysroot.join("bin/rustc").into_os_string()),
     ]))
 }
 

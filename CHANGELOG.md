@@ -46,9 +46,15 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
   Local-fleet startup and native Host fixtures use the current startup, rejection
   and HTTP-capture contracts.
 
-- **Release checks:** include the shared version validator in isolated release
-  fixtures so preflight and failure-recovery checks can run after tooling updates.
+- **Build identity:** bind the shared library selector to canister commands and
+  complete-build reuse. Embedded peers use one compiler/environment recipe with
+  normalized registry and standard-library paths; retain mismatching bytes and
+  provenance before CI refusal ([#551](https://github.com/dragginzgame/canic/issues/551)).
+
+- **Release checks:** include the shared version validator in isolated shell and
+  Rust release fixtures so preflight and failure-recovery checks can run after tooling updates.
   Align record-export checks with the crate-private storage boundary.
+  Exercise optimizer admission through directory aliases and compare its canonical path.
 
 - **Diagnostic lookup:** distinguish out-of-range numbers from malformed codes
   ([#547](https://github.com/dragginzgame/canic/issues/547)).

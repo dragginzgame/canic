@@ -51,16 +51,20 @@ fn repository_ic_wasm_authority_matches_every_install_projection() {
 #[test]
 fn incompatible_path_selected_ic_wasm_is_rejected_with_its_exact_path() {
     let root = temp_root("wrong-version");
-    fs::create_dir_all(&root).expect("create test root");
-    let executable = root.join(IC_WASM_TOOL);
+    let physical = root.join("physical");
+    fs::create_dir_all(&physical).expect("create test root");
+    let alias = root.join("alias");
+    std::os::unix::fs::symlink(&physical, &alias).expect("alias executable directory");
+    let executable = alias.join(IC_WASM_TOOL);
     write_executable(&executable, "#!/bin/sh\nprintf 'ic-wasm 0.9.11\\n'\n");
+    let canonical = executable.canonicalize().expect("canonical executable");
 
     let error = admit_ic_wasm_executable(&executable).expect_err("wrong version must reject");
 
     assert!(matches!(
         error,
         IcWasmToolError::VersionMismatch { path, actual, expected }
-            if path == executable
+            if path == canonical
                 && actual == "ic-wasm 0.9.11"
                 && expected == IC_WASM_VERSION_IDENTITY
     ));
@@ -71,8 +75,11 @@ fn incompatible_path_selected_ic_wasm_is_rejected_with_its_exact_path() {
 #[test]
 fn admitted_executable_records_absolute_path_and_exact_version() {
     let root = temp_root("admitted");
-    fs::create_dir_all(&root).expect("create test root");
-    let executable = root.join(IC_WASM_TOOL);
+    let physical = root.join("physical");
+    fs::create_dir_all(&physical).expect("create test root");
+    let alias = root.join("alias");
+    std::os::unix::fs::symlink(&physical, &alias).expect("alias executable directory");
+    let executable = alias.join(IC_WASM_TOOL);
     write_executable(
         &executable,
         &crate::test_support::tool_script("#!/bin/sh\nprintf '@IC_WASM_IDENTITY@\\n'\n"),
@@ -80,7 +87,7 @@ fn admitted_executable_records_absolute_path_and_exact_version() {
 
     let admitted = admit_ic_wasm_executable(&executable).expect("admit exact tool");
 
-    assert_eq!(admitted.path(), executable);
+    assert_eq!(admitted.path(), executable.canonicalize().unwrap());
     assert_eq!(admitted.version_identity(), IC_WASM_VERSION_IDENTITY);
     fs::remove_dir_all(root).expect("remove test root");
 }

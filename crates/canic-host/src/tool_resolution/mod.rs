@@ -43,6 +43,8 @@ mod tests {
     #[test]
     fn search_projection_preserves_precedence_and_follows_symlinks() {
         let root = crate::test_support::temp_dir("canic-sdk-resolution");
+        fs::create_dir_all(&root).unwrap();
+        let root = root.canonicalize().unwrap();
         let first = root.join("first");
         let second = root.join("second");
         fs::create_dir_all(&first).unwrap();
@@ -65,6 +67,7 @@ mod tests {
     fn literal_request_never_selects_a_same_named_search_candidate() {
         let root = crate::test_support::temp_dir("canic-sdk-literal");
         fs::create_dir_all(&root).unwrap();
+        let root = root.canonicalize().unwrap();
         let candidate = root.join("tool");
         fs::write(&candidate, b"executable").unwrap();
         fs::set_permissions(&candidate, fs::Permissions::from_mode(0o755)).unwrap();
