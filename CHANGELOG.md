@@ -38,6 +38,10 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
 ### 🔧 Changed
 
+- Timer guides now inherit the workspace provider and inspect the locked Wasm
+  graph, avoiding stale dependency examples that could introduce a second runtime.
+
+
 - **Release checks:** include the shared version validator in isolated release
   fixtures so preflight and failure-recovery checks can run after tooling updates.
   Align record-export checks with the crate-private storage boundary.
