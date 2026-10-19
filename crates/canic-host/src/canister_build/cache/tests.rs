@@ -211,8 +211,10 @@ fn cargo_keeps_explicit_wrapper_and_returns_its_failure_without_retry() {
         let CargoBuildOutput {
             execution: output,
             messages: _,
+            facts,
         } = output_canister_cargo_command(&cargo, CargoBuildProgress::single("fixture")).unwrap();
         assert_eq!(output.status.code(), Some(7));
+        assert!(facts.is_none());
         assert_eq!(
             fs::read(root.join("selected-wrapper")).unwrap(),
             selected.as_bytes()
@@ -268,8 +270,10 @@ fn cargo_protocol_failure_preserves_failed_exit_and_refuses_success() {
             let CargoBuildOutput {
                 execution: output,
                 messages: _,
+                facts,
             } = result.unwrap();
             assert_eq!(output.status.code(), Some(code));
+            assert!(facts.is_none());
             assert_eq!(output.stderr, b"compiler failure");
         }
         fs::remove_dir_all(root).unwrap();
@@ -285,8 +289,13 @@ fn cargo_shared_execution_retains_typed_build_script_evidence() {
     let CargoBuildOutput {
         execution: output,
         messages,
+        facts,
     } = output_canister_cargo_command(&command, CargoBuildProgress::single("fixture")).unwrap();
     assert!(output.status.success());
+    let facts = facts.expect("successful invocation retains its facts");
+    assert_eq!(facts.selection, command.selection);
+    assert_eq!(facts.environment, command.environment);
+    assert_eq!(facts.target, command.target);
     let [Message::BuildScriptExecuted(script)] = messages.as_slice() else {
         panic!("one build-script record");
     };

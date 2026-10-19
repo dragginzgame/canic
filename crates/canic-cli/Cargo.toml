@@ -37,6 +37,9 @@ toml = { workspace = true }
 [dev-dependencies.ic-backup]
 workspace = true
 
+[dev-dependencies.ic-build]
+workspace = true
+
 [dev-dependencies.ic-host-process]
 workspace = true
 features = ["test-support"]

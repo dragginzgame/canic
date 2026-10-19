@@ -1,5 +1,33 @@
 # Current handoff — 2026-10-18
 
+## Captured runtime facts handoff — 2026-10-19
+
+PR #596 now follows committed main `4caeec25d`, which already owns the unified
+typed Cargo execution pipeline. The old bootstrap contribution is superseded;
+its branch history is retained through a merge whose tree matches that main.
+This follow-up retains successful runtime CargoBuildFacts through configured
+single/batched and infrastructure artifacts, provenance, CLI tests and internal
+fixtures. Original failed exits remain primary and do not claim successful facts.
+Provenance reads the executed selection, observed tool identities and captured
+Rust flags, without fresh tool probes or ambient environment reconstruction.
+Source/config custody, transformation, protocol and release policy remain local.
+Artifact output struct literals must supply facts from the actual runtime build.
+
+This isolated contribution retains main's published Build 0.19.0 and Host 0.27.6
+graph. The normal checkout's newer dependency refresh and other pending source
+are not imported. Only the CLI's inherited dev dependency on Build is added;
+no selected external package identity changes. Own versions remain unchanged.
+
+Focused Linux evidence: 41 provenance/cache/configured-artifact/infrastructure
+cases pass, as do twenty enabled reuse cases (one existing case is ignored).
+One reuse case initially attempted a child Cargo registry refresh; its retry
+with CARGO_NET_OFFLINE inherited passes. Strict Host library/test Clippy and
+actual Rust 1.91 production checks for Host, CLI and Testing Internal pass.
+Development all-target caller checks pass with the pre-existing unused imports
+warning in Testing Internal's libtest. Full suites, native macOS and installed-IC
+acceptance remain separate; no Canic release, deployment or lifecycle claim is
+made. Evidence: `/tmp/ic-build-fleet-followup.KGzFhf/`.
+
 ## Focused restore and Build 0.19 qualification — 2026-10-19
 
 Continue 0.112 with the framework Candid protocol unchanged and live coordinated
