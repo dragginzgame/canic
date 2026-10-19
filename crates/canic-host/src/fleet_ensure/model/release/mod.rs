@@ -4,8 +4,8 @@
 //! effect ownership must retain and authenticate the observations before any reset.
 
 use crate::fleet_ensure::model::capacity_import::CapacityImportSourceBinding;
-use candid::Principal;
 use canic_contracts::ids::FleetBinding;
+use ic_platform::Principal;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 

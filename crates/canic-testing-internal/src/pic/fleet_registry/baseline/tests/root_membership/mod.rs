@@ -1,17 +1,18 @@
 //! Qualify canonical Root membership discovery through its guarded update.
 
 use super::*;
-use candid::types::{Function, TypeInner, internal::TypeContainer, subtype};
 use canic::dto::component_registry::{RootMembershipRequest, RootMembershipResponse};
+use ic_platform::candid::contract::types::TypeInner;
+use ic_platform::candid::contract::types::{Function, internal::TypeContainer, subtype};
 use ic_testkit::{pic::CandidCallError, pocket_ic::ErrorCode};
 
 pub(super) fn assert_candid_contract(candid: &[u8]) {
     let source = std::str::from_utf8(candid).expect("Root Candid UTF-8");
     let program = source
-        .parse::<candid_parser::IDLProg>()
+        .parse::<ic_platform::candid_parser::IDLProg>()
         .expect("parse generated Root Candid");
-    let mut environment = candid::TypeEnv::new();
-    let actor = candid_parser::check_prog(&mut environment, &program)
+    let mut environment = ic_platform::candid::contract::TypeEnv::new();
+    let actor = ic_platform::candid_parser::check_prog(&mut environment, &program)
         .expect("type-check generated Root Candid");
     let actor = actor.expect("Root service");
     let actual = environment
@@ -27,7 +28,7 @@ pub(super) fn assert_candid_contract(candid: &[u8]) {
     .into();
     let expected = environment.merge_type(rust.env, expected);
     subtype::equal(
-        &mut subtype::Gamma::new(),
+        &mut std::collections::HashSet::default(),
         &environment,
         &TypeInner::Func(actual).into(),
         &expected,
@@ -37,8 +38,9 @@ pub(super) fn assert_candid_contract(candid: &[u8]) {
 
 pub(super) fn assert_prepared_root_refuses_discovery(pic: &PocketIc, root: Principal) {
     // The ordinary Fleet fence runs before the lookup's endpoint guard and handler.
-    let rejected = pic
-        .update_candid_as::<Result<RootMembershipResponse, Error>, _>(
+    let rejected =
+        ic_testkit::pic::update_candid_args::<(Result<RootMembershipResponse, Error>,), _>(
+            pic,
             root,
             Principal::anonymous(),
             canic::protocol::CANIC_ROOT_MEMBERSHIP,
@@ -47,6 +49,7 @@ pub(super) fn assert_prepared_root_refuses_discovery(pic: &PocketIc, root: Princ
             },),
             canic::testing::CANDID_REPLY_LIMITS,
         )
+        .map(|(reply,)| reply)
         .expect_err("Prepared Root must keep the lookup behind its Fleet fence");
     let CandidCallError::CanisterReject { response, .. } = rejected else {
         panic!("expected canister rejection");
@@ -86,13 +89,15 @@ fn lookup(
     caller: Principal,
     subject: Principal,
 ) -> Result<RootMembershipResponse, Error> {
-    pic.update_candid_as(
+    ic_testkit::pic::update_candid_args(
+        pic,
         root,
         caller,
         canic::protocol::CANIC_ROOT_MEMBERSHIP,
         (RootMembershipRequest { subject },),
         canic::testing::CANDID_REPLY_LIMITS,
     )
+    .map(|(reply,)| reply)
     .expect("membership lookup transport")
 }
 

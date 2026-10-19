@@ -231,6 +231,7 @@ workspace catalog, with Canic defaults disabled:
 candid = "<version>"
 canic = { version = "<same-version-as-canic-cli>", default-features = false }
 ic-cdk = "0.20"
+ic-platform = { version = "0.1.5", default-features = false }
 ```
 
 In each canister member, use dependency tables and an explicit runtime feature
@@ -247,6 +248,7 @@ role = "hub"
 
 [dependencies]
 candid.workspace = true
+ic-platform = { workspace = true, features = ["candid"] }
 canic = { workspace = true, features = [] }
 ic-cdk.workspace = true
 
@@ -257,7 +259,7 @@ canic = { workspace = true, features = [] }
 ```rust
 #![expect(clippy::unused_async)]
 
-use candid::Principal;
+use ic_platform::Principal;
 use canic::{Error, prelude::*};
 use ic_cdk::api::msg_caller;
 

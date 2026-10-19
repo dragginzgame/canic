@@ -11,7 +11,6 @@ use crate::{
         view::certified_custody::CertifiedCanisterCustodyView,
     },
 };
-use candid::{CandidType, Nat, Principal};
 use canic_contracts::{
     dto::{
         canister::{CanisterInspectionRequest, CanisterStatusType},
@@ -23,16 +22,22 @@ use canic_contracts::{
     },
     protocol,
 };
-use ic_agent::Agent;
+use ic_platform::{
+    Principal,
+    agent::Agent,
+    candid::contract::{CandidType, Nat},
+};
 use serde::Deserialize;
 use std::time::Duration;
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct Request {
     canister_id: Principal,
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 struct Status {
     version: u64,
     status: RunState,
@@ -44,6 +49,7 @@ struct Status {
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 enum RunState {
     #[serde(rename = "running")]
     Running,
@@ -54,11 +60,13 @@ enum RunState {
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 struct Settings {
     controllers: Vec<Principal>,
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 struct Memory {
     snapshots_size: Nat,
 }
@@ -115,11 +123,11 @@ pub(in crate::fleet_ensure) async fn prepare_root_owned(
     if !before.controllers.contains(&root) {
         return Err(invalid());
     }
-    let reserve_argument = candid::encode_one(InspectionReserveRequest::InspectionReserve(
-        CanisterInspectionRequest {
+    let reserve_argument = ic_platform::candid::contract::encode_one(
+        InspectionReserveRequest::InspectionReserve(CanisterInspectionRequest {
             canister_id: canister,
-        },
-    ))
+        }),
+    )
     .map_err(|_| invalid())?;
     let reserve_bytes = tokio::time::timeout(
         Duration::from_secs(30),
@@ -132,13 +140,15 @@ pub(in crate::fleet_ensure) async fn prepare_root_owned(
     .map_err(|_| invalid())?
     .map_err(|_| invalid())?;
     let reserve: Result<InspectionReserveResponse, Error> =
-        candid::decode_one(&reserve_bytes).map_err(|_| invalid())?;
+        ic_platform::candid::decoder::decode_one(&reserve_bytes).map_err(|_| invalid())?;
     let InspectionReserveResponse::InspectionReserve(evidence) =
         reserve.map_err(CapacityImportJournalError::RootRejected)?;
     validate_inspection_reserve(root, canister, evidence)?;
-    let argument = candid::encode_one(RootRequest::InspectCanister(CanisterInspectionRequest {
-        canister_id: canister,
-    }))
+    let argument = ic_platform::candid::contract::encode_one(RootRequest::InspectCanister(
+        CanisterInspectionRequest {
+            canister_id: canister,
+        },
+    ))
     .map_err(|_| invalid())?;
     Ok(PreparedManagementObservation {
         agent: agent.clone(),
@@ -172,7 +182,7 @@ async fn observe_root_prepared(
     .map_err(|_| invalid())?
     .map_err(|_| invalid())?;
     let response: Result<RootResponse, Error> =
-        candid::decode_one(&bytes).map_err(|_| invalid())?;
+        ic_platform::candid::decoder::decode_one(&bytes).map_err(|_| invalid())?;
     let mut status = match response.map_err(CapacityImportJournalError::RootRejected)? {
         RootResponse::InspectCanister(status) => status,
         RootResponse::InspectionReserveRequired(evidence) => {
@@ -236,7 +246,7 @@ pub(in crate::fleet_ensure) async fn prepare(
     let before = certified_custody::observe_one(agent, canister)
         .await
         .map_err(|_| invalid())?;
-    let argument = candid::encode_one(Request {
+    let argument = ic_platform::candid::contract::encode_one(Request {
         canister_id: canister,
     })
     .map_err(|_| invalid())?;
@@ -271,7 +281,8 @@ async fn observe_direct_prepared(
     .await
     .map_err(|_| invalid())?
     .map_err(|_| invalid())?;
-    let mut status: Status = candid::decode_one(&bytes).map_err(|_| invalid())?;
+    let mut status: Status =
+        ic_platform::candid::decoder::decode_one(&bytes).map_err(|_| invalid())?;
     status.settings.controllers.sort_unstable();
     let module_sha256 = status
         .module_hash

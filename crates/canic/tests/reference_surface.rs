@@ -1,6 +1,5 @@
-use std::collections::BTreeSet;
-use std::fs;
 use std::path::{Path, PathBuf};
+use std::{collections::BTreeSet, fs};
 
 // Return the repository root so release-surface fixtures can be read from disk.
 fn workspace_root() -> PathBuf {
@@ -118,13 +117,15 @@ fn test_component_topology_has_derivable_release_set() {
     reason = "the compiler resolves the generated-consumer export inventory without calling IC APIs"
 )]
 fn hidden_macro_cdk_exports_compile() {
+    use canic::__internal::cdk::Principal as _;
     use canic::__internal::cdk::api::{
         canister_cycle_balance as _, canister_version as _, is_controller as _, msg_caller as _,
         msg_reply as _, time as _,
     };
     use canic::__internal::cdk::raw::{msg_arg_data_copy as _, msg_arg_data_size as _};
     use canic::__internal::cdk::{
-        Principal as _, export_candid as _, futures as _, init as _, inspect_message as _,
-        post_upgrade as _, query as _, trap as _, update as _,
+        export_candid as _, futures as _, init as _, inspect_message as _, post_upgrade as _,
+        query as _,
     };
+    use canic::__internal::cdk::{trap as _, update as _};
 }

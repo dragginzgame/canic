@@ -12,19 +12,28 @@ use crate::{
     query_canister_with_arg,
     registry::RegistryEntry,
 };
-use candid::{Principal, types::principal::PrincipalError};
-use canic_contracts::dto::canister::CanisterInspectionRequest;
-use canic_contracts::dto::observability::CanisterObservabilityRequest;
-use canic_contracts::dto::observability::CanisterObservabilityResponse;
-use canic_contracts::dto::observability::FleetCanisterObservabilityRequest;
-use canic_contracts::dto::wire::projection::funding_observation::Command as RootCommandFragment;
-use canic_contracts::dto::wire::projection::funding_observation::Response as RootCommandResponseFragment;
-use canic_contracts::dto::wire::projection::protected_observability::RootStatusRequestFragment;
-use canic_contracts::dto::wire::projection::protected_observability::RootStatusResponseFragment;
-use canic_contracts::dto::wire::projection::protected_observability::StoreStatusRequestFragment;
-use canic_contracts::dto::wire::projection::protected_observability::StoreStatusResponseFragment;
-use canic_contracts::ids::CanisterRole;
-use canic_contracts::protocol;
+use canic_contracts::{
+    dto::{
+        canister::CanisterInspectionRequest,
+        observability::{
+            CanisterObservabilityRequest, CanisterObservabilityResponse,
+            FleetCanisterObservabilityRequest,
+        },
+        wire::projection::{
+            funding_observation::{
+                Command as RootCommandFragment, Response as RootCommandResponseFragment,
+            },
+            protected_observability::{
+                RootStatusRequestFragment, RootStatusResponseFragment, StoreStatusRequestFragment,
+                StoreStatusResponseFragment,
+            },
+        },
+    },
+    ids::CanisterRole,
+    protocol,
+};
+use ic_platform::Principal;
+use ic_platform::PrincipalError;
 use std::{collections::BTreeSet, path::Path};
 use thiserror::Error as ThisError;
 

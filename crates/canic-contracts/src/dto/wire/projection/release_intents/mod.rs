@@ -6,18 +6,20 @@
 //! transport. Compatibility is checked against the canonical role contracts.
 
 use crate::dto::release_intents::{IntentReleaseKey, IntentReleaseResponse};
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded Request wire projection for release intents.
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum Request {
     IntentRelease(Option<IntentReleaseKey>),
 }
 
 /// Bounded Response wire projection for release intents.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum Response {
     IntentRelease(IntentReleaseResponse),
 }

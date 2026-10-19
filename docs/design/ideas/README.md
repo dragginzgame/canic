@@ -22,6 +22,7 @@ Supporting implementation evidence does not belong here.
 - `operator-funding-conversion-authority/`
 - `release-binding-finalization/`
 - `role-specific-stable-initialization/`
+- [Swappable IC Wire and Candid encoding](swappable-wire-encoding/design.md)
 
 The [OpenChat-class application objective](openchat-scale-application-support/design.md)
 is maintainer-requested; its proposed qualification and implementation packages

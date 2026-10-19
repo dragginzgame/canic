@@ -9,7 +9,8 @@ use crate::dto::{
 };
 
 /// Bounded CanisterStatusResponse selectors for lifecycle boundary validation.
-#[derive(candid::CandidType, serde::Deserialize)]
+#[derive(ic_platform::candid::contract::CandidType, serde::Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CanisterStatusResponse {
     Operation(Box<CanisterOperationStatusResponse>),
     Readiness(CanicReadinessStatus),

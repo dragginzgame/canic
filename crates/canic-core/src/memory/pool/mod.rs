@@ -24,30 +24,11 @@ pub fn framework_pool(
     MemoryAllocationPool::new(authorities, exclusions)
 }
 
-thread_local! {
-    static COMMITTED_POOL: std::cell::RefCell<Option<MemoryAllocationPool>> = const { std::cell::RefCell::new(None) };
-}
-
-pub(super) fn remember(pool: MemoryAllocationPool) {
-    COMMITTED_POOL.with_borrow_mut(|selected| *selected = Some(pool));
-}
-
-pub(super) fn selected()
--> Result<MemoryAllocationPool, crate::memory::registry::MemoryRegistryError> {
-    COMMITTED_POOL
-        .with_borrow(Clone::clone)
-        .ok_or(crate::memory::registry::MemoryRegistryError::PoolUnavailable)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use ic_memory::{
-        MemoryRequest, MemoryRuntime, SealedDeclarationSnapshot,
-        ic_stable_structures::{
-            Memory, VectorMemory,
-            memory_manager::{MemoryId, MemoryManager},
-        },
+        Memory, MemoryRequest, MemoryRuntime, SealedDeclarationSnapshot, VectorMemory,
     };
     use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -154,14 +135,9 @@ mod tests {
 
     #[test]
     fn populated_unmanaged_slot_requires_explicit_physical_exclusion() {
-        let backing = VectorMemory::default();
+        let backing = crate::memory::fixtures::unmanaged(1);
         let config = ic_memory::MemoryManagerConfig::new(1).unwrap();
-        let manager = MemoryManager::init_with_bucket_size(backing.clone(), 1);
-        let unmanaged = manager.get(MemoryId::new(200));
-        assert_eq!(unmanaged.grow(1), 0);
-        unmanaged.write(0, b"custody");
-        drop(unmanaged);
-        drop(manager);
+        let custody_before = backing.borrow()[65_536..].to_vec();
         let declarations = requests(&[(CANIC_CORE_MEMORY_AUTHORITY, "canic.core.rows.v1")]);
         let policy = crate::memory::CanicMemoryManagerPolicy::new();
         let mut runtime = MemoryRuntime::new_with_config(backing.clone(), config).unwrap();
@@ -181,16 +157,12 @@ mod tests {
         let pool = framework_pool(Vec::new(), vec![200]).unwrap();
         runtime.bootstrap(&declarations, &pool, &policy).unwrap();
         let allocations = runtime.memory_allocations().unwrap();
-        assert_eq!(allocations.memories[200].pool_eligible, Some(false));
+        assert!(!runtime.allocation_pool().unwrap().contains(200));
+        assert_eq!(allocations.memories[200].virtual_extent.wasm_pages, 1);
         assert_eq!(
-            allocations.memories[200].binding,
-            ic_memory::AllocationBinding::Unknown
+            &backing.borrow()[65_536..65_536 + custody_before.len()],
+            custody_before
         );
-        drop(runtime);
-        let manager = MemoryManager::init_with_bucket_size(backing, 1);
-        let mut payload = [0; 7];
-        manager.get(MemoryId::new(200)).read(0, &mut payload);
-        assert_eq!(&payload, b"custody");
     }
 
     #[test]

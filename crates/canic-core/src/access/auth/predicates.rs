@@ -11,7 +11,7 @@ use crate::{
     ops::{runtime::env::EnvOps, storage::children::CanisterChildrenOps},
     workflow::fleet_admission_projection::FleetAdmissionProjectionWorkflow,
 };
-use ic_cdk::api::{canister_self, is_controller as caller_is_controller};
+use ic_platform::cdk::api::{canister_self, is_controller as caller_is_controller};
 
 /// Require that the caller controls the current canister.
 /// Allows controller-only maintenance calls.

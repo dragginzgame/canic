@@ -6,7 +6,7 @@
 
 use crate::{
     InternalError,
-    cdk::{candid::Nat, types::Principal},
+    cdk::types::Principal,
     domain::{
         icp_refill::{IcpRefillErrorCode, IcpRefillStatus, IcpRefillTrigger},
         policy::pure::icp_refill::IcpRefillPolicyViolation,
@@ -39,6 +39,7 @@ use crate::{
         replay::abort_reserved_receipt_after_failure,
     },
 };
+use ic_platform::candid::contract::Nat;
 
 pub(super) async fn execute_fresh_manual_refill(
     request: IcpRefillRequest,

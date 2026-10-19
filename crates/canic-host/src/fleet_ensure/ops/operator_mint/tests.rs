@@ -8,7 +8,7 @@ use crate::fleet_ensure::model::operator_mint::{
     OperatorMintAuthority, OperatorMintIntentRecord,
     OperatorMintNotificationOutcomeRecord as Notify, OperatorMintTransferOutcomeRecord as Transfer,
 };
-use candid::Principal;
+use ic_platform::Principal;
 
 // ICP Ledger transfer and CMC notification contracts reviewed for RF2; the
 // literal contracts are independent of the Rust derives under test.
@@ -42,15 +42,15 @@ type NotificationReply = variant {
 };
 ";
 
-fn assert_wire_type<T: candid::CandidType>(name: &str) {
-    let (mut env, _) = candid_parser::utils::CandidSource::Text(CONTRACT)
+fn assert_wire_type<T: ic_platform::candid::contract::CandidType>(name: &str) {
+    let (mut env, _) = ic_platform::candid_parser::CandidSource::Text(CONTRACT)
         .load()
         .unwrap();
     let expected = env.find_type(name).unwrap().clone();
-    let mut rust = candid::types::internal::TypeContainer::new();
+    let mut rust = ic_platform::candid::contract::types::internal::TypeContainer::new();
     let ty = rust.add::<T>();
     let actual = env.merge_type(rust.env, ty);
-    candid::types::subtype::equal(
+    ic_platform::candid::contract::types::subtype::equal(
         &mut std::collections::HashSet::new(),
         &env,
         &expected,
@@ -85,7 +85,7 @@ fn intent() -> OperatorMintIntentRecord {
 }
 
 fn bytes(idl: &str) -> Vec<u8> {
-    candid_parser::parse_idl_args(idl)
+    ic_platform::candid_parser::parse_idl_args(idl)
         .unwrap()
         .to_bytes()
         .unwrap()
@@ -99,7 +99,7 @@ fn account_bytes(hex: &str) -> [u8; 32] {
 fn operator_mint_transfer_matches_upstream_account_vector_and_exact_intent() {
     let intent = intent();
     let args: wire::TransferArgs =
-        candid::decode_one(&transfer_argument(&intent).unwrap()).unwrap();
+        ic_platform::candid::decoder::decode_one(&transfer_argument(&intent).unwrap()).unwrap();
     // ic-ledger-types 0.16.0's principal_to_subaccount vector, independently published.
     assert_eq!(
         args.to,
@@ -114,7 +114,8 @@ fn operator_mint_transfer_matches_upstream_account_vector_and_exact_intent() {
         intent.created_at_time_ns
     );
     let args: wire::NotifyMintArgs =
-        candid::decode_one(&notification_argument(&intent, 42).unwrap()).unwrap();
+        ic_platform::candid::decoder::decode_one(&notification_argument(&intent, 42).unwrap())
+            .unwrap();
     assert_eq!(args.block_index, 42);
     assert_eq!(args.deposit_memo, Some(intent.deposit_memo.to_vec()));
     assert!(args.to_subaccount.is_none());

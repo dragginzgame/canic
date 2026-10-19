@@ -5,7 +5,6 @@
 //! Boundary: returns typed integrity reports or persistence errors.
 
 use crate::{
-    artifacts::ArtifactChecksum,
     journal::{ArtifactJournalEntry, ArtifactState, DownloadJournal},
     manifest::{DeploymentBackupManifest, DeploymentMember},
     persistence::{
@@ -82,7 +81,7 @@ fn verify_member_artifact(
     verify_durable_artifact(layout, entry)
 }
 
-pub fn verify_durable_artifact(
+fn verify_durable_artifact(
     layout: &BackupLayout,
     entry: &ArtifactJournalEntry,
 ) -> Result<ArtifactIntegrityReport, PersistenceError> {
@@ -97,11 +96,12 @@ pub fn verify_durable_artifact(
         ));
     }
 
-    ArtifactChecksum::from_relative_path_no_follow(
+    crate::artifacts::checksum_relative_path(
         layout.root(),
         std::path::Path::new(&entry.artifact_path),
     )?
-    .verify(expected_hash)?;
+    .verify(expected_hash)
+    .map_err(crate::artifacts::ArtifactChecksumError::from)?;
     Ok(ArtifactIntegrityReport {
         canister_id: entry.canister_id.clone(),
         snapshot_id: entry.snapshot_id.clone(),

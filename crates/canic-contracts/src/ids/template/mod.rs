@@ -1,6 +1,6 @@
 //! Control-plane-specific identifiers and value types.
 
-use candid::{
+use ic_platform::candid::contract::{
     CandidType,
     types::{Serializer, Type},
 };
@@ -17,6 +17,7 @@ use std::{
 #[derive(
     CandidType, Clone, Debug, Eq, Ord, PartialOrd, Deserialize, Serialize, PartialEq, Hash,
 )]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(transparent)]
 pub struct TemplateId(pub Cow<'static, str>);
 
@@ -142,6 +143,7 @@ impl CandidType for TemplateVersion {
 #[derive(
     CandidType, Clone, Debug, Eq, Ord, PartialOrd, Deserialize, Serialize, PartialEq, Hash,
 )]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(transparent)]
 pub struct WasmStoreBinding(pub Cow<'static, str>);
 
@@ -199,6 +201,7 @@ impl fmt::Display for WasmStoreBinding {
 #[derive(
     CandidType, Clone, Debug, Eq, Ord, PartialOrd, Deserialize, Serialize, PartialEq, Hash,
 )]
+#[candid_path("ic_platform::candid::contract")]
 pub struct TemplateReleaseKey {
     pub template_id: TemplateId,
     pub version: TemplateVersion,
@@ -227,6 +230,7 @@ impl fmt::Display for TemplateReleaseKey {
 #[derive(
     CandidType, Clone, Debug, Eq, Ord, PartialOrd, Deserialize, Serialize, PartialEq, Hash,
 )]
+#[candid_path("ic_platform::candid::contract")]
 pub struct TemplateChunkKey {
     pub release: TemplateReleaseKey,
     pub chunk_index: u32,
@@ -252,7 +256,8 @@ impl fmt::Display for TemplateChunkKey {
 mod tests {
     use super::TemplateVersion;
     use crate::ids::CanisterRole;
-    use candid::{CandidType, Encode};
+    use ic_platform::candid::contract::CandidType;
+    use ic_platform::candid::contract::Encode;
 
     #[test]
     fn canister_role_basic_traits_and_utils() {
@@ -282,6 +287,7 @@ mod tests {
 #[derive(
     CandidType, Clone, Copy, Debug, Eq, Ord, PartialOrd, Deserialize, Serialize, PartialEq,
 )]
+#[candid_path("ic_platform::candid::contract")]
 pub enum TemplateChunkingMode {
     Chunked,
 }
@@ -293,6 +299,7 @@ pub enum TemplateChunkingMode {
 #[derive(
     CandidType, Clone, Copy, Debug, Default, Eq, Ord, PartialOrd, Deserialize, Serialize, PartialEq,
 )]
+#[candid_path("ic_platform::candid::contract")]
 pub enum WasmStoreGcMode {
     #[default]
     Normal,
@@ -323,6 +330,7 @@ pub struct WasmStoreGcStatus {
 #[derive(
     CandidType, Clone, Copy, Debug, Eq, Ord, PartialOrd, Deserialize, Serialize, PartialEq,
 )]
+#[candid_path("ic_platform::candid::contract")]
 pub enum TemplateManifestState {
     Approved,
 }

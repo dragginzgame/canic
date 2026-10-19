@@ -17,9 +17,8 @@ role = "index_hub"
 crate-type = ["cdylib"]
 
 [dependencies]
-candid = { workspace = true }
 canic = { workspace = true, features = [] }
-ic-cdk = { workspace = true }
+ic-platform = { workspace = true, features = ["cdk", "candid"] }
 
 [build-dependencies]
 canic = { workspace = true, features = [] }

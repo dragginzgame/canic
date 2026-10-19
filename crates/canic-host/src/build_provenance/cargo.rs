@@ -4,7 +4,7 @@ use toml::Value as TomlValue;
 
 use canic_core::cdk::utils::hash::sha256_hex;
 
-use crate::{cargo_command, evidence_envelope::file_input_fingerprint};
+use crate::{cargo_command, evidence_envelope::command_path_for_root};
 
 use super::{
     inputs::{build_cargo_lock_path, cargo_config_fingerprints},
@@ -52,7 +52,7 @@ pub(super) fn cargo_provenance(
         cargo_lock_sha256: optional_file_sha256(&cargo_lock_path)?,
         package_manifest_sha256: Some(sha256_hex(manifest_source.as_bytes())),
         package_name,
-        package_manifest: display_path(package_manifest, &request.workspace_root),
+        package_manifest: command_path_for_root(package_manifest, &request.workspace_root),
         package_metadata_app,
         package_metadata_role,
         rustc_version: command_version("rustc", ["--version"]),
@@ -100,13 +100,6 @@ fn required_manifest_str(
         )
         .into()
     })
-}
-
-fn display_path(path: &Path, root: &Path) -> String {
-    file_input_fingerprint("path", path, root, None, None)
-        .ok()
-        .and_then(|fingerprint| fingerprint.path)
-        .unwrap_or_else(|| "<redacted:absolute-outside-root>".to_string())
 }
 
 fn command_version<const N: usize>(command: &str, args: [&str; N]) -> Option<String> {

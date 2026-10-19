@@ -19,7 +19,7 @@ use crate::{
         ComponentProvisioningPlanOpsError, PlanValidationLedger, validate_spec_admissions,
     },
 };
-use candid::Principal;
+use ic_platform::Principal;
 use std::collections::BTreeMap;
 
 /// One Coordinator-committed placement used to validate a scale-out addition.

@@ -28,6 +28,9 @@ export CANIC_RECIPE_TEST_BASH="$real_bash"
 cat >"$fixture/record" <<'SH'
 set -euo pipefail
 if [[ "$1" == */check-make-execution.sh ]]; then exec "$CANIC_RECIPE_TEST_BASH" "$@"; fi
+if [[ -f "$1" && ( "$1" == scripts/dev/candid-extractor.sh || "$1" == */scripts/dev/install-rust-tools.sh ) ]]; then
+    exec "$CANIC_RECIPE_TEST_BASH" "$@"
+fi
 name="${0##*/}"
 printf '%s\t%s\n' "$0" "$*" >>"$EVENTS"
 case "$name:$*" in
@@ -36,6 +39,9 @@ case "$name:$*" in
         ;;
     'bash:scripts/ci/testkit-server.sh' | 'bash:scripts/ci/testkit-server.sh --check')
         printf '%s\n' "$PWD/.tools/rust/fixture-testkit/installed/bin/testkit-runner"
+        ;;
+    'bash:scripts/dev/candid-extractor.sh' | 'bash:scripts/dev/candid-extractor.sh --check')
+        exit "${FAIL_EXTRACTOR:-0}"
         ;;
     'bash:'*'/scripts/dev/install-host-tools.sh '*) exit "${FAIL_HOST_TOOLS:-0}" ;;
     'bash:'*'/scripts/dev/install-ic-tools.sh '*' --preflight') exit "${FAIL_PREFLIGHT:-0}" ;;
@@ -102,12 +108,12 @@ for target in install-tools tools-check; do
     run_recipe -j8 "$target"
     {
         if [[ "$target" == install-tools ]]; then
-            printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-ic-tools.sh --consumer $fixture --pins $fixture/ci/ic-tools.tsv --preflight"
             printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-rust-tools.sh --consumer $fixture --versions $fixture/ci/tool-versions.env --preflight"
         fi
         printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-host-tools.sh --consumer $fixture --versions $fixture/ci/tool-versions.env$suffix"
-        printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-ic-tools.sh --consumer $fixture --pins $fixture/ci/ic-tools.tsv$suffix"
         printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-rust-tools.sh --consumer $fixture --versions $fixture/ci/tool-versions.env$suffix"
+        printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-ic-tools.sh --consumer $fixture --pins $fixture/ci/ic-tools.tsv$suffix"
+        printf '%s\t%s\n' "$fixture/bin/bash" "scripts/dev/candid-extractor.sh$suffix"
         printf '%s\t%s\n' "$fixture/bin/bash" "scripts/ci/testkit-server.sh$suffix"
         printf '%s\t%s\n' "$fixture/.tools/rust/fixture-testkit/installed/bin/testkit-runner" "$action"
     } > "$fixture/aggregate-expected"
@@ -116,12 +122,16 @@ for target in install-tools tools-check; do
         echo 'aggregate accepted failed host admission' >&2; exit 1
     fi
     expected_prefix=0
-    if [[ "$target" == install-tools ]]; then expected_prefix=2; fi
+    if [[ "$target" == install-tools ]]; then expected_prefix=1; fi
     [[ "$(wc -l < "$EVENTS")" == $((expected_prefix + 1)) ]] || exit 1
     if FAIL_RUST_TOOLS=17 run_recipe -j8 "$target"; then
         echo 'aggregate accepted failed Cargo-tool admission' >&2; exit 1
     fi
-    [[ "$(wc -l < "$EVENTS")" == $((expected_prefix + 3)) ]] || exit 1
+    [[ "$(wc -l < "$EVENTS")" == $((expected_prefix + 2)) ]] || exit 1
+    if FAIL_EXTRACTOR=17 run_recipe -j8 "$target"; then
+        echo 'aggregate accepted failed extractor admission' >&2; exit 1
+    fi
+    [[ "$(wc -l < "$EVENTS")" == $((expected_prefix + 4)) ]] || exit 1
     if FAIL_TESTKIT=17 run_recipe -j8 "$target"; then
         echo 'aggregate accepted failed product admission' >&2; exit 1
     fi
@@ -160,5 +170,61 @@ for unsupported in --version --package --lockfile; do
     fi
     cmp "$fixture/expected-versions" "$INSTALL_SELECTION"
 done
-echo 'Development Make recipes: configured paths, spaces, PATH shadowing, parallel aggregate ordering and failure propagation passed'
+# Exercise the actual extractor adapter independently of the common Rust set.
+cp "$ROOT/scripts/dev/candid-extractor.sh" scripts/dev/
+cat > scripts/dev/install-rust-tools.sh <<'SELECT'
+set -euo pipefail
+printf '%s\0' "$@" > "$INSTALL_SELECTION"
+[[ "${CANIC_EXTRACTOR_FAILURE:-0}" == 0 ]] || exit "$CANIC_EXTRACTOR_FAILURE"
+printf '%s\n' "$PWD/admitted bin/candid-extractor"
+SELECT
+for suffix in '' --check; do
+    arguments=()
+    [[ -z "$suffix" ]] || arguments+=("$suffix")
+    "$real_bash" scripts/dev/candid-extractor.sh ${arguments[@]+"${arguments[@]}"} > selected-extractor
+    printf '%s\0' --consumer "$fixture" --package candid-extractor --version 0.1.6 \
+        --bin candid-extractor --profile release ${arguments[@]+"${arguments[@]}"} > expected-extractor
+    cmp expected-extractor "$INSTALL_SELECTION"
+    [[ "$(cat selected-extractor)" == "$fixture/admitted bin/candid-extractor" ]] || exit 1
+    status=0
+    CANIC_EXTRACTOR_FAILURE=37 "$real_bash" scripts/dev/candid-extractor.sh ${arguments[@]+"${arguments[@]}"} > selected-extractor || status=$?
+    [[ "$status" == 37 && ! -s selected-extractor ]] || exit 1
+done
+cp "$INSTALL_SELECTION" expected-extractor
+for override in --version --package --lockfile; do
+    status=0
+    "$real_bash" scripts/dev/candid-extractor.sh "$override" > selected-extractor 2>/dev/null || status=$?
+    [[ "$status" == 2 && ! -s selected-extractor ]] || exit 1
+    cmp expected-extractor "$INSTALL_SELECTION"
+done
+# Execute both maintained native setup bodies. Other installers are substitutes;
+# Make/adapter dispatch and GitHub PATH publication use the actual caller code.
+export CANIC_EXTRACTOR_FIXTURE="$fixture" CANIC_EXTRACTOR_MAKE="$real_make"
+printf '#!%s\n' "$real_bash" > bin/make
+cat >> bin/make <<'MAKE'
+set -euo pipefail
+case "$*" in
+    'install-rust-tools install-candid-extractor')
+        exec "$CANIC_EXTRACTOR_MAKE" --no-print-directory -C "$CANIC_EXTRACTOR_FIXTURE" install-candid-extractor ;;
+    '--no-print-directory candid-extractor-check')
+        exec "$CANIC_EXTRACTOR_MAKE" --no-print-directory -C "$CANIC_EXTRACTOR_FIXTURE" candid-extractor-check ;;
+    install-host-tools|'install-ic-tools install-testkit-server'|testkit-server-check) exit 0 ;;
+    *) exit 97 ;;
+esac
+MAKE
+chmod +x bin/make
+export GITHUB_WORKSPACE="$fixture" GITHUB_PATH="$fixture/github-path"
+for step in 'Install and qualify pinned native build tools' 'Install PocketIC test helper tools'; do
+    yq -o json '.' "$ROOT/.github/workflows/ci.yml" | jq -er --arg step "$step" \
+        '[.jobs[].steps[] | select(.name == $step) | .run] | if length == 1 then .[0] else error("ambiguous native setup") end' > workflow-step
+    : > "$GITHUB_PATH"
+    PATH="$fixture/bin:$PATH" "$real_bash" -e -o pipefail workflow-step > workflow-output
+    grep -Fx "$fixture/admitted bin" "$GITHUB_PATH" >/dev/null
+    : > "$GITHUB_PATH"
+    status=0
+    CANIC_EXTRACTOR_FAILURE=37 PATH="$fixture/bin:$PATH" "$real_bash" -e -o pipefail workflow-step > workflow-output 2>&1 || status=$?
+    [[ "$status" != 0 ]] || exit 1
+    if grep -Fx "$fixture/admitted bin" "$GITHUB_PATH"; then exit 1; fi
+done
+echo 'Development recipes, explicit extractor admission and native workflow PATH publication passed (installer effects substituted)'
 fixture_complete=true

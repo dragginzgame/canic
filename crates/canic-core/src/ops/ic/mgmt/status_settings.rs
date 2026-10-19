@@ -43,8 +43,8 @@ impl MgmtOps {
         Ok(CanisterInspectionReserveResponse {
             caller: crate::ops::ic::IcOps::canister_self(),
             canister_id: canister_pid,
-            native_cycles: ic_cdk::api::canister_cycle_balance(),
-            available_liquid_cycles: ic_cdk::api::canister_liquid_cycle_balance(),
+            native_cycles: ic_platform::cdk::api::canister_cycle_balance(),
+            available_liquid_cycles: ic_platform::cdk::api::canister_liquid_cycle_balance(),
             required_liquid_cycles,
         })
     }
@@ -189,9 +189,9 @@ fn inspection_failure(
     error: IcInfraError,
 ) -> Result<CanisterInspectionOutcome, InternalError> {
     match error {
-        IcInfraError::CallFailed(ic_cdk::call::CallFailed::InsufficientLiquidCycleBalance(
-            error,
-        )) => Ok(CanisterInspectionOutcome::ReserveRequired(
+        IcInfraError::CallFailed(
+            ic_platform::cdk::call::CallFailed::InsufficientLiquidCycleBalance(error),
+        ) => Ok(CanisterInspectionOutcome::ReserveRequired(
             CanisterInspectionReserveResponse {
                 caller,
                 canister_id,
@@ -212,7 +212,8 @@ fn inspection_failure(
 mod tests {
     use super::*;
     use crate::diagnostics::codes;
-    use ic_cdk::call::{CallFailed, CallPerformFailed, InsufficientLiquidCycleBalance};
+    use ic_platform::cdk::call::CallFailed;
+    use ic_platform::cdk::call::{CallPerformFailed, InsufficientLiquidCycleBalance};
 
     #[test]
     fn protected_inspection_retains_exact_reserve_numbers_and_target() {
@@ -229,8 +230,9 @@ mod tests {
             .into(),
         )
         .unwrap();
-        let bytes = candid::encode_one(response).unwrap();
-        let decoded: CanisterInspectionOutcome = candid::decode_one(&bytes).unwrap();
+        let bytes = ic_platform::candid::contract::encode_one(response).unwrap();
+        let decoded: CanisterInspectionOutcome =
+            ic_platform::candid::decoder::decode_one(&bytes).unwrap();
         let CanisterInspectionOutcome::ReserveRequired(evidence) = decoded else {
             panic!("expected protected reserve evidence");
         };

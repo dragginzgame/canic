@@ -1,166 +1,45 @@
 use crate::{
     cli::defaults::local_environment,
     endpoints::{
-        CANDID_SERVICE_METADATA, EndpointsCommandError, EndpointsOptions,
-        model::{EndpointReport, EndpointSourceKind, EndpointTarget},
+        EndpointsCommandError, EndpointsOptions,
+        model::{EndpointReport, EndpointSourceKind},
     },
 };
 use canic_host::{
-    candid_endpoints::parse_candid_service_endpoints,
-    fleet_ensure::resolve_current_fleet,
-    icp::{IcpCli, local_canister_candid_path},
-    icp_config::resolve_current_canic_icp_root,
-    registry::RegistryEntry,
-    release_set::load_built_candid,
+    candid_endpoints::parse_candid_service_endpoints, icp_config::resolve_current_canic_icp_root,
+    protocol_binding::load_installed_candid, release_set::load_built_candid,
 };
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::path::Path;
 
 pub(super) fn endpoint_report(
     options: &EndpointsOptions,
 ) -> Result<EndpointReport, EndpointsCommandError> {
-    let root = resolve_current_canic_icp_root()?;
-    endpoint_report_at(&root, options)
+    endpoint_report_at(&resolve_current_canic_icp_root()?, options)
 }
 
 pub(super) fn endpoint_report_at(
     root: &Path,
     options: &EndpointsOptions,
 ) -> Result<EndpointReport, EndpointsCommandError> {
-    if let Some(release_build_id) = options.release_build {
-        let built = load_built_candid(root, release_build_id, &options.canister)?;
-        return Ok(EndpointReport {
-            source: built.path.display().to_string(),
-            source_kind: EndpointSourceKind::Built,
-            release_build_id: Some(built.release_build_id),
-            endpoints: parse_candid_service_endpoints(&built.candid)?,
-        });
-    }
-    let target = resolve_endpoint_target(options);
-    if let Ok(target) = &target
-        && let Ok(candid) = read_live_candid(options, target)
-    {
-        return Ok(EndpointReport {
-            source: format!("{} metadata", options.canister),
-            source_kind: EndpointSourceKind::Live,
-            release_build_id: None,
-            endpoints: parse_candid_service_endpoints(&candid)?,
-        });
-    }
-
-    let role = target
-        .ok()
-        .and_then(|target| target.role)
-        .or_else(|| (!is_principal_like(&options.canister)).then(|| options.canister.clone()));
-    let Some(role) = role else {
-        return Err(EndpointsCommandError::NoInterfaceArtifact {
-            fleet: options.fleet.clone(),
-            canister: options.canister.clone(),
-        });
+    let (built, source_kind) = if let Some(id) = options.release_build {
+        (
+            load_built_candid(root, id, &options.canister)?,
+            EndpointSourceKind::Built,
+        )
+    } else {
+        let environment = options
+            .environment
+            .clone()
+            .unwrap_or_else(local_environment);
+        (
+            load_installed_candid(root, &environment, &options.fleet, &options.canister)?,
+            EndpointSourceKind::Installed,
+        )
     };
-    let path = resolve_role_did(root, &state_environment(options), &role)?;
-    let candid = read_did(&path)?;
     Ok(EndpointReport {
-        source: path.display().to_string(),
-        source_kind: EndpointSourceKind::Local,
-        release_build_id: None,
-        endpoints: parse_candid_service_endpoints(&candid)?,
+        source: built.path.display().to_string(),
+        source_kind,
+        release_build_id: Some(built.release_build_id),
+        endpoints: parse_candid_service_endpoints(&built.candid)?,
     })
-}
-
-fn read_live_candid(
-    options: &EndpointsOptions,
-    target: &EndpointTarget,
-) -> Result<String, Box<dyn std::error::Error>> {
-    let root = resolve_endpoint_icp_root()?;
-    Ok(IcpCli::new(&options.icp, options.environment.clone())
-        .with_cwd(root)
-        .canister_metadata_output(&target.canister, CANDID_SERVICE_METADATA)?)
-}
-
-fn resolve_endpoint_target(
-    options: &EndpointsOptions,
-) -> Result<EndpointTarget, Box<dyn std::error::Error>> {
-    if is_principal_like(&options.canister) {
-        let role = load_fleet_registry(options).ok().and_then(|registry| {
-            registry
-                .into_iter()
-                .find(|entry| entry.pid == options.canister)
-                .and_then(|entry| entry.role)
-        });
-        return Ok(EndpointTarget {
-            canister: options.canister.clone(),
-            role,
-        });
-    }
-
-    let registry = load_fleet_registry(options)?;
-    let entry = registry
-        .iter()
-        .find(|entry| entry.role.as_deref() == Some(options.canister.as_str()))
-        .ok_or_else(|| -> Box<dyn std::error::Error> {
-            format!(
-                "role {} was not found in Fleet {}",
-                options.canister, options.fleet
-            )
-            .into()
-        })?;
-    Ok(EndpointTarget {
-        canister: entry.pid.clone(),
-        role: entry.role.clone(),
-    })
-}
-
-fn load_fleet_registry(
-    options: &EndpointsOptions,
-) -> Result<Vec<RegistryEntry>, Box<dyn std::error::Error>> {
-    let root = resolve_endpoint_icp_root()?;
-    Ok(
-        resolve_current_fleet(&root, &state_environment(options), &options.fleet)?
-            .registry
-            .entries,
-    )
-}
-
-pub(super) fn resolve_role_did(
-    root: &Path,
-    environment: &str,
-    role: &str,
-) -> Result<PathBuf, EndpointsCommandError> {
-    let path = local_canister_candid_path(root, environment, role);
-    if path.is_file() {
-        return Ok(path);
-    }
-
-    Err(EndpointsCommandError::MissingRoleArtifact {
-        role: role.to_string(),
-        path: path.display().to_string(),
-    })
-}
-
-fn resolve_endpoint_icp_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
-    resolve_current_canic_icp_root().map_err(Into::into)
-}
-
-fn state_environment(options: &EndpointsOptions) -> String {
-    options
-        .environment
-        .clone()
-        .unwrap_or_else(local_environment)
-}
-
-fn read_did(path: &Path) -> Result<String, EndpointsCommandError> {
-    fs::read_to_string(path).map_err(|source| EndpointsCommandError::ReadDid {
-        path: path.display().to_string(),
-        source,
-    })
-}
-
-fn is_principal_like(value: &str) -> bool {
-    value.contains('-')
-        && value
-            .chars()
-            .all(|ch| ch.is_ascii_alphanumeric() || ch == '-')
 }

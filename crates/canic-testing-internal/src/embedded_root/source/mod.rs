@@ -2,9 +2,8 @@
 //!
 //! Normalize only the workspace's own version; external dependency requirements stay intact.
 
-use ic_build::cargo::observation::{
-    CargoFeatureSelection, CargoMetadataSpec, observe_metadata, schema::Metadata,
-};
+use ic_build::cargo::observation::{CargoMetadataSpec, observe_metadata, schema::Metadata};
+use ic_build::cargo::selection::CargoFeatureSelection;
 use ic_host_process::tool::{OutputLimit, OutputLimits};
 use std::{
     collections::BTreeMap,

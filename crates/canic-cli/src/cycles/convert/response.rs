@@ -5,16 +5,17 @@
 //! Boundary: accepts raw Candid hex from `icp` and returns one verified refill outcome.
 
 use crate::cycles::CyclesCommandError;
-use candid::decode_one;
-use canic_contracts::dto::error::Error;
-use canic_contracts::dto::icp_refill::IcpRefillResponse;
-use canic_contracts::dto::role::OperationAcceptedResponse as RootCommandResponse;
-use canic_contracts::dto::wire::projection::cycle_conversion::RootOperationStatusResponse;
-use canic_contracts::dto::wire::projection::cycle_conversion::RootStatusResponse;
+use canic_contracts::dto::{
+    error::Error,
+    icp_refill::IcpRefillResponse,
+    role::OperationAcceptedResponse as RootCommandResponse,
+    wire::projection::cycle_conversion::{RootOperationStatusResponse, RootStatusResponse},
+};
 use canic_core::{
     cdk::utils::hash::{decode_hex, hex_bytes},
     shared_support::icp_refill::icp_refill_outcome_is_resumable,
 };
+use ic_platform::candid::decoder::decode_one;
 
 /// One decoded, operation-bound live refill response.
 
@@ -127,7 +128,6 @@ fn optional_debug<T: std::fmt::Debug>(value: Option<T>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use candid::{Nat, encode_one};
     use canic_contracts::{
         diagnostics::codes,
         dto::{
@@ -135,6 +135,7 @@ mod tests {
             role::OperationReceipt,
         },
     };
+    use ic_platform::candid::contract::{Nat, encode_one};
 
     #[test]
     fn terminal_refill_response_is_typed_and_operation_bound() {

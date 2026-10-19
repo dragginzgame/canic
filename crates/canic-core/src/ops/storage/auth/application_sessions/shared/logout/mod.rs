@@ -38,6 +38,17 @@ pub(super) fn commit_logout(caller: Principal, login: PreparedLogin) -> Result<(
     if encoded_bytes > MAX_APPLICATION_SESSION_STABLE_BYTES {
         return Err(SessionError::ByteCapacity);
     }
+    let canonical = session
+        .as_ref()
+        .map(session_from_record)
+        .transpose()
+        .map_err(|_| SessionError::InvalidPolicyOrRecord)?;
+    let moved_caller = moved
+        .as_ref()
+        .map(session_from_record)
+        .transpose()
+        .map_err(|_| SessionError::InvalidPolicyOrRecord)?
+        .map(|session| session.caller());
     // All fallible projection and capacity work precedes the synchronous IC commit.
     LocalApplicationAuthorizationState::commit_shared_logout(
         caller,
@@ -47,23 +58,21 @@ pub(super) fn commit_logout(caller: Principal, login: PreparedLogin) -> Result<(
     );
     APPLICATION_SESSION_INDEXES.with_borrow_mut(|slot| {
         let indexes = slot.as_mut().expect("admitted session indexes");
-        if let Some(session) = session {
+        if let Some(session) = canonical {
             indexes.session_by_caller.remove(&caller);
             let count = indexes
                 .session_count_by_subject
-                .get_mut(&session.authenticated_subject)
+                .get_mut(&session.subject())
                 .expect("validated session subject count");
             *count -= 1;
             if *count == 0 {
-                indexes
-                    .session_count_by_subject
-                    .remove(&session.authenticated_subject);
+                indexes.session_count_by_subject.remove(&session.subject());
             }
         }
-        if let Some(moved) = moved {
+        if let Some(moved) = moved_caller {
             indexes
                 .session_by_caller
-                .insert(moved.transport_caller, index.expect("validated swap index"));
+                .insert(moved, index.expect("validated swap index"));
         }
         indexes.encoded_bytes = encoded_bytes;
         indexes.estimated_bytes = estimate_index_bytes(indexes);

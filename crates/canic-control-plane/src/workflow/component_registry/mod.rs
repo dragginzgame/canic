@@ -48,134 +48,87 @@ use crate::{
     },
 };
 use authority_validation::*;
-use candid::CandidType;
-use canic_contracts::dto::abi::v1::CanisterInitAuthority;
-use canic_contracts::dto::abi::v1::CanisterInitPayload;
-use canic_contracts::dto::component_deployment::ComponentDeploymentLimits;
-use canic_contracts::dto::component_deployment::ProtectedComponentDeployment;
-use canic_contracts::dto::component_provisioning::ComponentGroupDirectory;
-use canic_contracts::dto::component_registry::ComponentDirectoryChildEntry;
-use canic_contracts::dto::component_registry::ComponentDirectoryHead;
-use canic_contracts::dto::component_registry::ComponentDirectoryHeadRequest;
-use canic_contracts::dto::component_registry::ComponentDirectoryPageCursor;
-use canic_contracts::dto::component_registry::ComponentDirectoryPageRequest;
-use canic_contracts::dto::component_registry::ComponentDirectoryPageResponse;
-use canic_contracts::dto::component_registry::ComponentDirectoryProvenance;
-use canic_contracts::dto::component_registry::ComponentLifecycleStatus;
-use canic_contracts::dto::component_registry::ComponentProvisioningOrigin;
-use canic_contracts::dto::component_registry::ComponentRegistryActivePartitionRequest;
-use canic_contracts::dto::component_registry::ComponentRegistryActivePartitionResponse;
-use canic_contracts::dto::component_registry::ComponentRegistryHead;
-use canic_contracts::dto::component_registry::ComponentRegistryPartitionRequest;
-use canic_contracts::dto::component_registry::ComponentRegistryPartitionResponse;
-use canic_contracts::dto::component_registry::ComponentRuntimeActivationEvidence;
-use canic_contracts::dto::component_registry::ComponentRuntimeActivationRequest;
-use canic_contracts::dto::component_registry::ComponentRuntimeDirectChild;
-use canic_contracts::dto::component_registry::ComponentRuntimeDirectoryAuthority;
-use canic_contracts::dto::component_registry::ComponentRuntimeDirectoryConvergenceEvidence;
-use canic_contracts::dto::component_registry::ComponentRuntimeDirectoryPreparationRequest;
-use canic_contracts::dto::component_registry::ComponentRuntimeDirectorySynchronizationRequest;
-use canic_contracts::dto::component_registry::ComponentRuntimePhase;
-use canic_contracts::dto::component_registry::ComponentRuntimeStatusResponse;
-use canic_contracts::dto::component_registry::FleetServiceComponentRequester;
-use canic_contracts::dto::component_registry::PeerComponentRequester;
-use canic_contracts::dto::component_registry::RootComponentAllocationPhase;
-use canic_contracts::dto::component_registry::RootComponentAllocationRequest;
-use canic_contracts::dto::component_registry::RootComponentAllocationResponse;
-use canic_contracts::dto::component_registry::RootComponentChildAllocationRequest;
-use canic_contracts::dto::component_registry::RootComponentChildAllocationResponse;
-use canic_contracts::dto::component_registry::RootComponentChildCommitRequest;
-use canic_contracts::dto::component_registry::RootComponentChildCommitResponse;
-use canic_contracts::dto::component_registry::RootComponentChildCreationRequest;
-use canic_contracts::dto::component_registry::RootComponentChildDirectoryPreparationRequest;
-use canic_contracts::dto::component_registry::RootComponentChildDirectoryPreparationResponse;
-use canic_contracts::dto::component_registry::RootComponentChildInstallEvidence;
-use canic_contracts::dto::component_registry::RootComponentChildInstallRequest;
-use canic_contracts::dto::component_registry::RootComponentChildMembershipActivationRequest;
-use canic_contracts::dto::component_registry::RootComponentChildMembershipActivationResponse;
-use canic_contracts::dto::component_registry::RootComponentChildRuntimeActivationRequest;
-use canic_contracts::dto::component_registry::RootComponentChildRuntimeActivationResponse;
-use canic_contracts::dto::component_registry::RootComponentCommitResponse;
-use canic_contracts::dto::component_registry::RootComponentCreationEvidence;
-use canic_contracts::dto::component_registry::RootComponentDeletedReceipt;
-use canic_contracts::dto::component_registry::RootComponentDeletionIntent;
-use canic_contracts::dto::component_registry::RootComponentDeletionPhase;
-use canic_contracts::dto::component_registry::RootComponentDeletionRequest;
-use canic_contracts::dto::component_registry::RootComponentDeletionResponse;
-use canic_contracts::dto::component_registry::RootComponentDeletionStatusRequest;
-use canic_contracts::dto::component_registry::RootComponentDirectoryPreparationRequest;
-use canic_contracts::dto::component_registry::RootComponentDirectoryPreparationResponse;
-use canic_contracts::dto::component_registry::RootComponentDrainingAdvancePhase;
-use canic_contracts::dto::component_registry::RootComponentDrainingAdvanceRequest;
-use canic_contracts::dto::component_registry::RootComponentDrainingAdvanceResponse;
-use canic_contracts::dto::component_registry::RootComponentDrainingDescendantsEmpty;
-use canic_contracts::dto::component_registry::RootComponentDrainingRequest;
-use canic_contracts::dto::component_registry::RootComponentDrainingResponse;
-use canic_contracts::dto::component_registry::RootComponentDrainingStatusRequest;
-use canic_contracts::dto::component_registry::RootComponentFinalInventory;
-use canic_contracts::dto::component_registry::RootComponentFinalInventoryRequest;
-use canic_contracts::dto::component_registry::RootComponentFinalInventoryResponse;
-use canic_contracts::dto::component_registry::RootComponentInitialInventoryStatus;
-use canic_contracts::dto::component_registry::RootComponentInstallEvidence;
-use canic_contracts::dto::component_registry::RootComponentMembershipActivationRequest;
-use canic_contracts::dto::component_registry::RootComponentMembershipActivationResponse;
-use canic_contracts::dto::component_registry::RootComponentMembershipRemovedReceipt;
-use canic_contracts::dto::component_registry::RootComponentQuiescencePhase;
-use canic_contracts::dto::component_registry::RootComponentQuiescenceRequest;
-use canic_contracts::dto::component_registry::RootComponentQuiescenceResponse;
-use canic_contracts::dto::component_registry::RootComponentQuiescenceStatusRequest;
-use canic_contracts::dto::component_registry::RootComponentQuiescenceStopIntent;
-use canic_contracts::dto::component_registry::RootComponentQuiescentReceipt;
-use canic_contracts::dto::component_registry::RootComponentRegistryPreparationRequest;
-use canic_contracts::dto::component_registry::RootComponentRegistryStatusResponse;
-use canic_contracts::dto::component_registry::RootComponentRuntimeActivationRequest;
-use canic_contracts::dto::component_registry::RootComponentRuntimeActivationResponse;
-use canic_contracts::dto::component_registry::RootComponentSubtreeRemovalAdvanceRequest;
-use canic_contracts::dto::component_registry::RootComponentSubtreeRemovalCompletedReceipt;
-use canic_contracts::dto::component_registry::RootComponentSubtreeRemovalDeleteIntent;
-use canic_contracts::dto::component_registry::RootComponentSubtreeRemovalDeletePreparationRequest;
-use canic_contracts::dto::component_registry::RootComponentSubtreeRemovalDeleteRequest;
-use canic_contracts::dto::component_registry::RootComponentSubtreeRemovalDeletedReceipt;
-use canic_contracts::dto::component_registry::RootComponentSubtreeRemovalDirectoryConvergenceEvidence;
-use canic_contracts::dto::component_registry::RootComponentSubtreeRemovalDirectorySynchronizationRequest;
-use canic_contracts::dto::component_registry::RootComponentSubtreeRemovalDirectorySynchronizedReceipt;
-use canic_contracts::dto::component_registry::RootComponentSubtreeRemovalLeafFinalizationRequest;
-use canic_contracts::dto::component_registry::RootComponentSubtreeRemovalMembershipRemovalRequest;
-use canic_contracts::dto::component_registry::RootComponentSubtreeRemovalMembershipRemovedReceipt;
-use canic_contracts::dto::component_registry::RootComponentSubtreeRemovalNode;
-use canic_contracts::dto::component_registry::RootComponentSubtreeRemovalPhase;
-use canic_contracts::dto::component_registry::RootComponentSubtreeRemovalRequest;
-use canic_contracts::dto::component_registry::RootComponentSubtreeRemovalResponse;
-use canic_contracts::dto::component_registry::RootComponentSubtreeRemovalStatusRequest;
-use canic_contracts::dto::component_registry::RootComponentSubtreeRemovalStopIntent;
-use canic_contracts::dto::component_registry::RootComponentSubtreeRemovalStopPreparationRequest;
-use canic_contracts::dto::component_registry::RootComponentSubtreeRemovalStopRequest;
-use canic_contracts::dto::component_registry::RootComponentSubtreeRemovalStoppedReceipt;
-use canic_contracts::dto::component_registry::RootPeerComponentAllocationRequest;
-use canic_contracts::dto::error::Error;
-use canic_contracts::dto::fixture_provisioning::FixtureAssignment;
-use canic_contracts::dto::fixture_provisioning::FixtureProvisioningStatus;
-use canic_contracts::dto::fleet_activation::FleetActivationPhase;
-use canic_contracts::dto::fleet_registry::FleetDirectorySnapshot;
-use canic_contracts::dto::fleet_registry::FleetRegistryVersion;
-use canic_contracts::dto::fleet_registry::FleetSubnetRootStatus;
-use canic_contracts::dto::role::OperationAcceptedResponse as CanisterCommandResponseFragment;
-use canic_contracts::dto::role::OperationStatusRequest;
-use canic_contracts::dto::root_store::RootStoreBootstrapRequest;
-use canic_contracts::dto::root_store::RootStoreBootstrapResponse;
-use canic_contracts::dto::runtime::RUNTIME_INTROSPECTION_SCHEMA_VERSION;
-use canic_contracts::dto::runtime::ReadinessStatus;
-use canic_contracts::dto::wire::projection::component_registry::CanisterCommandFragment;
-use canic_contracts::dto::wire::projection::component_registry::CanisterOperationStatusFragment;
-use canic_contracts::dto::wire::projection::component_registry::CanisterStatusRequestFragment;
-use canic_contracts::dto::wire::projection::component_registry::CanisterStatusResponseFragment;
-use canic_contracts::ids::CanisterRole;
-use canic_contracts::ids::ComponentBinding;
-use canic_contracts::ids::ComponentInstanceId;
-use canic_contracts::ids::FleetSubnetRootBinding;
-use canic_contracts::ids::FleetSubnetRootReleaseSet;
-use canic_contracts::ids::ManagedCanisterBinding;
-use canic_contracts::protocol;
+use canic_contracts::{
+    dto::{
+        abi::v1::{CanisterInitAuthority, CanisterInitPayload},
+        component_deployment::{ComponentDeploymentLimits, ProtectedComponentDeployment},
+        component_provisioning::ComponentGroupDirectory,
+        component_registry::{
+            ComponentDirectoryChildEntry, ComponentDirectoryHead, ComponentDirectoryHeadRequest,
+            ComponentDirectoryPageCursor, ComponentDirectoryPageRequest,
+            ComponentDirectoryPageResponse, ComponentDirectoryProvenance, ComponentLifecycleStatus,
+            ComponentProvisioningOrigin, ComponentRegistryActivePartitionRequest,
+            ComponentRegistryActivePartitionResponse, ComponentRegistryHead,
+            ComponentRegistryPartitionRequest, ComponentRegistryPartitionResponse,
+            ComponentRuntimeActivationEvidence, ComponentRuntimeActivationRequest,
+            ComponentRuntimeDirectChild, ComponentRuntimeDirectoryAuthority,
+            ComponentRuntimeDirectoryConvergenceEvidence,
+            ComponentRuntimeDirectoryPreparationRequest,
+            ComponentRuntimeDirectorySynchronizationRequest, ComponentRuntimePhase,
+            ComponentRuntimeStatusResponse, FleetServiceComponentRequester, PeerComponentRequester,
+            RootComponentAllocationPhase, RootComponentAllocationRequest,
+            RootComponentAllocationResponse, RootComponentChildAllocationRequest,
+            RootComponentChildAllocationResponse, RootComponentChildCommitRequest,
+            RootComponentChildCommitResponse, RootComponentChildCreationRequest,
+            RootComponentChildDirectoryPreparationRequest,
+            RootComponentChildDirectoryPreparationResponse, RootComponentChildInstallEvidence,
+            RootComponentChildInstallRequest, RootComponentChildMembershipActivationRequest,
+            RootComponentChildMembershipActivationResponse,
+            RootComponentChildRuntimeActivationRequest,
+            RootComponentChildRuntimeActivationResponse, RootComponentCommitResponse,
+            RootComponentCreationEvidence, RootComponentDeletedReceipt,
+            RootComponentDeletionIntent, RootComponentDeletionPhase, RootComponentDeletionRequest,
+            RootComponentDeletionResponse, RootComponentDeletionStatusRequest,
+            RootComponentDirectoryPreparationRequest, RootComponentDirectoryPreparationResponse,
+            RootComponentDrainingAdvancePhase, RootComponentDrainingAdvanceRequest,
+            RootComponentDrainingAdvanceResponse, RootComponentDrainingDescendantsEmpty,
+            RootComponentDrainingRequest, RootComponentDrainingResponse,
+            RootComponentDrainingStatusRequest, RootComponentFinalInventory,
+            RootComponentFinalInventoryRequest, RootComponentFinalInventoryResponse,
+            RootComponentInitialInventoryStatus, RootComponentInstallEvidence,
+            RootComponentMembershipActivationRequest, RootComponentMembershipActivationResponse,
+            RootComponentMembershipRemovedReceipt, RootComponentQuiescencePhase,
+            RootComponentQuiescenceRequest, RootComponentQuiescenceResponse,
+            RootComponentQuiescenceStatusRequest, RootComponentQuiescenceStopIntent,
+            RootComponentQuiescentReceipt, RootComponentRegistryPreparationRequest,
+            RootComponentRegistryStatusResponse, RootComponentRuntimeActivationRequest,
+            RootComponentRuntimeActivationResponse, RootComponentSubtreeRemovalAdvanceRequest,
+            RootComponentSubtreeRemovalCompletedReceipt, RootComponentSubtreeRemovalDeleteIntent,
+            RootComponentSubtreeRemovalDeletePreparationRequest,
+            RootComponentSubtreeRemovalDeleteRequest, RootComponentSubtreeRemovalDeletedReceipt,
+            RootComponentSubtreeRemovalDirectoryConvergenceEvidence,
+            RootComponentSubtreeRemovalDirectorySynchronizationRequest,
+            RootComponentSubtreeRemovalDirectorySynchronizedReceipt,
+            RootComponentSubtreeRemovalLeafFinalizationRequest,
+            RootComponentSubtreeRemovalMembershipRemovalRequest,
+            RootComponentSubtreeRemovalMembershipRemovedReceipt, RootComponentSubtreeRemovalNode,
+            RootComponentSubtreeRemovalPhase, RootComponentSubtreeRemovalRequest,
+            RootComponentSubtreeRemovalResponse, RootComponentSubtreeRemovalStatusRequest,
+            RootComponentSubtreeRemovalStopIntent,
+            RootComponentSubtreeRemovalStopPreparationRequest,
+            RootComponentSubtreeRemovalStopRequest, RootComponentSubtreeRemovalStoppedReceipt,
+            RootPeerComponentAllocationRequest,
+        },
+        error::Error,
+        fixture_provisioning::{FixtureAssignment, FixtureProvisioningStatus},
+        fleet_activation::FleetActivationPhase,
+        fleet_registry::{FleetDirectorySnapshot, FleetRegistryVersion, FleetSubnetRootStatus},
+        role::{
+            OperationAcceptedResponse as CanisterCommandResponseFragment, OperationStatusRequest,
+        },
+        root_store::{RootStoreBootstrapRequest, RootStoreBootstrapResponse},
+        runtime::{RUNTIME_INTROSPECTION_SCHEMA_VERSION, ReadinessStatus},
+        wire::projection::component_registry::{
+            CanisterCommandFragment, CanisterOperationStatusFragment,
+            CanisterStatusRequestFragment, CanisterStatusResponseFragment,
+        },
+    },
+    ids::{
+        CanisterRole, ComponentBinding, ComponentInstanceId, FleetSubnetRootBinding,
+        FleetSubnetRootReleaseSet, ManagedCanisterBinding,
+    },
+    protocol,
+};
 use canic_core::{
     api::{runtime::install::ApprovedModuleSource, timer::TimerApi},
     control_plane_support::{
@@ -218,6 +171,7 @@ use component_installation::{
 use component_installation::{
     validate_installed_component_status, validate_prepared_install_status,
 };
+use ic_platform::candid::contract::CandidType;
 use lifecycle_drivers::{
     advance_component_draining_boundary, advance_subtree_removal_phase,
     component_allocation_reconciliation_complete, component_draining_advance_removal_response,
@@ -248,8 +202,8 @@ const MAX_COMPONENT_DIRECTORY_PAGE_ENTRIES: u16 = 100;
 const MAX_COMPONENT_DIRECTORY_CURSOR_BYTES: usize = 2_048;
 
 fn has_exact_workload_controllers(
-    root: candid::Principal,
-    observed: &[candid::Principal],
+    root: ic_platform::Principal,
+    observed: &[ic_platform::Principal],
 ) -> Result<bool, InternalError> {
     let (authority, actual_root) = root_authority()?;
     if root != actual_root {
@@ -298,7 +252,7 @@ impl<'a> ComponentRegistryPreparationAuthority<'a> {
 #[derive(Debug, Eq, PartialEq)]
 struct ComponentDirectoryCursorBinding<'a> {
     directory: &'a ComponentDirectoryHead,
-    parent_canister_id: Option<candid::Principal>,
+    parent_canister_id: Option<ic_platform::Principal>,
     role: Option<&'a CanisterRole>,
     status: Option<ComponentLifecycleStatus>,
 }
@@ -354,7 +308,7 @@ impl<'a> ComponentRuntimeDirectoryStatusIdentity<'a> {
 #[derive(Debug, Eq, PartialEq)]
 struct ComponentDirectoryOwnership<'a> {
     component: &'a ComponentBinding,
-    source_fleet_subnet_root: &'a candid::Principal,
+    source_fleet_subnet_root: &'a ic_platform::Principal,
 }
 
 impl<'a> ComponentDirectoryOwnership<'a> {
@@ -487,7 +441,7 @@ struct PreparedComponentRuntimePlan {
     root_binding: canic_contracts::ids::FleetSubnetRootBinding,
     allocation: RootComponentAllocationView,
     partition: ComponentRegistryPartitionView,
-    target_canister: candid::Principal,
+    target_canister: ic_platform::Principal,
     target_binding: ManagedCanisterBinding,
     deployment: ProtectedComponentDeployment,
     directory_request: ComponentRuntimeDirectoryPreparationRequest,
@@ -515,7 +469,7 @@ struct PreparedChildRuntimePlan {
     root_binding: canic_contracts::ids::FleetSubnetRootBinding,
     allocation: RootComponentChildAllocationView,
     committed_partition: ComponentRegistryPartitionView,
-    child_canister: candid::Principal,
+    child_canister: ic_platform::Principal,
     child_binding: ManagedCanisterBinding,
     deployment: ProtectedComponentDeployment,
     owning_component_binding: ManagedCanisterBinding,
@@ -649,14 +603,15 @@ struct PreparedSubtreeLeafDeletePlan {
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 struct ComponentDirectoryCursorPayload {
     directory: ComponentDirectoryHead,
-    parent_canister_id: Option<candid::Principal>,
+    parent_canister_id: Option<ic_platform::Principal>,
     role: Option<CanisterRole>,
     status: Option<ComponentLifecycleStatus>,
-    last_parent_canister_id: candid::Principal,
+    last_parent_canister_id: ic_platform::Principal,
     last_role: CanisterRole,
-    last_canister_id: candid::Principal,
+    last_canister_id: ic_platform::Principal,
 }
 
 /// Freeze opaque application initialization under endpoint controller authority.
@@ -712,7 +667,7 @@ pub fn local_status(
 
 fn prepared_status(
     authority: &canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority,
-    root: candid::Principal,
+    root: ic_platform::Principal,
     request: &RootComponentRegistryPreparationRequest,
     prepared: &RootComponentRegistryView,
 ) -> Result<RootComponentRegistryStatusResponse, InternalError> {
@@ -859,7 +814,7 @@ pub async fn reserve_peer_allocation(
 /// Authorize the exact local or Fleet-service peer caller before endpoint dispatch.
 pub fn authorize_peer_allocation_caller(
     request: &RootPeerComponentAllocationRequest,
-    caller: candid::Principal,
+    caller: ic_platform::Principal,
 ) -> Result<(), InternalError> {
     let (authority, _) = root_authority()?;
     let topology = ConfigOps::component_topology()?;
@@ -935,7 +890,7 @@ fn peer_requester_authority(
     release_set: FleetSubnetRootReleaseSet,
     topology: &canic_core::control_plane_support::config::ComponentTopology,
     requester: &PeerComponentRequester,
-    caller: candid::Principal,
+    caller: ic_platform::Principal,
 ) -> Result<PeerRequesterAuthority, InternalError> {
     match requester {
         PeerComponentRequester::SameRoot => Ok(PeerRequesterAuthority::SameRoot {
@@ -973,7 +928,7 @@ fn peer_component_requester(
     root: &canic_contracts::ids::FleetSubnetRootBinding,
     release_set: canic_contracts::ids::FleetSubnetRootReleaseSet,
     topology: &canic_core::control_plane_support::config::ComponentTopology,
-    caller: candid::Principal,
+    caller: ic_platform::Principal,
 ) -> Result<ComponentRegistryPartitionView, InternalError> {
     let requester_component =
         ComponentRegistryOps::component_for_principal(caller).ok_or_else(|| {
@@ -1061,7 +1016,7 @@ pub(super) fn top_level_allocation_decision(
 /// Resolve one top-level Component allocation for the role-owned operation status lane.
 pub fn allocation_operation_status(
     operation_id: [u8; 32],
-    caller: candid::Principal,
+    caller: ic_platform::Principal,
     caller_is_controller: bool,
 ) -> Result<Option<RootComponentOperationStatus>, InternalError> {
     let Some(allocation) = ComponentRegistryOps::allocation(operation_id) else {
@@ -1202,7 +1157,7 @@ pub async fn reserve_child_allocation(
 /// Authorize the exact registered parent before endpoint dispatch.
 pub fn authorize_child_allocation_caller(
     request: &RootComponentChildAllocationRequest,
-    caller: candid::Principal,
+    caller: ic_platform::Principal,
 ) -> Result<(), InternalError> {
     ComponentRegistryOps::registered_parent(request.component, caller)?.ok_or_else(|| {
         InternalError::public(canic_contracts::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
@@ -1214,7 +1169,7 @@ pub fn authorize_child_allocation_caller(
 pub(super) fn terminal_child_allocation_binding(
     component: ComponentInstanceId,
     operation_id: [u8; 32],
-    parent_canister_id: candid::Principal,
+    parent_canister_id: ic_platform::Principal,
     child_role: &CanisterRole,
 ) -> Result<Option<canic_contracts::ids::ComponentChildBinding>, InternalError> {
     let allocation = retained_child_allocation_for_parent(
@@ -1260,7 +1215,7 @@ pub(super) fn terminal_child_allocation_binding(
 pub(super) fn child_allocation_is_initial_bootstrap(
     component: ComponentInstanceId,
     operation_id: [u8; 32],
-    parent_canister_id: candid::Principal,
+    parent_canister_id: ic_platform::Principal,
     child_role: &CanisterRole,
 ) -> Result<bool, InternalError> {
     Ok(retained_child_allocation_for_parent(
@@ -1275,7 +1230,7 @@ pub(super) fn child_allocation_is_initial_bootstrap(
 fn retained_child_allocation_for_parent(
     component: ComponentInstanceId,
     operation_id: [u8; 32],
-    parent_canister_id: candid::Principal,
+    parent_canister_id: ic_platform::Principal,
     child_role: &CanisterRole,
 ) -> Result<RootComponentChildAllocationView, InternalError> {
     let allocation = ComponentRegistryOps::child_allocation(component, operation_id)?
@@ -1289,7 +1244,7 @@ fn retained_child_allocation_for_parent(
 /// Resolve one direct-child allocation for its controller or exact registered parent.
 pub fn child_allocation_operation_status(
     operation_id: [u8; 32],
-    caller: candid::Principal,
+    caller: ic_platform::Principal,
     caller_is_controller: bool,
 ) -> Result<Option<RootComponentChildAllocationResponse>, InternalError> {
     let Some(allocation) = ComponentRegistryOps::child_allocation_by_operation(operation_id)?
@@ -1626,7 +1581,7 @@ pub fn remove_component_membership(
 
 fn component_recycling_canister(
     request: &RootComponentDeletionRequest,
-) -> Result<candid::Principal, InternalError> {
+) -> Result<ic_platform::Principal, InternalError> {
     let draining = ComponentRegistryOps::component_draining(request.component)?
         .ok_or_else(InternalError::unavailable)?;
     if draining.operation_id != request.operation_id {
@@ -2315,7 +2270,7 @@ pub fn subtree_removal_operation_status(
 
 async fn create_child_allocation_for_parent(
     request: RootComponentChildCreationRequest,
-    parent_canister_id: candid::Principal,
+    parent_canister_id: ic_platform::Principal,
 ) -> Result<RootComponentChildAllocationResponse, InternalError> {
     let (authority, root) = root_authority()?;
     let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
@@ -2350,7 +2305,7 @@ async fn create_child_allocation_for_parent(
 
 /// Reuse the ordinary top-level Component pool-claim journal for one accepted group member.
 pub(super) fn advance_group_member_creation(
-    root: candid::Principal,
+    root: ic_platform::Principal,
     store: &RootStoreBootstrapResponse,
     allocation: RootComponentAllocationView,
 ) -> Result<RootComponentAllocationView, InternalError> {
@@ -2412,7 +2367,7 @@ pub(super) async fn advance_group_member_registry_commit(
 
 async fn install_child_allocation_for_parent(
     request: RootComponentChildInstallRequest,
-    parent_canister_id: candid::Principal,
+    parent_canister_id: ic_platform::Principal,
 ) -> Result<RootComponentChildAllocationResponse, InternalError> {
     let (authority, root) = root_authority()?;
     let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
@@ -2451,7 +2406,7 @@ async fn install_child_allocation_for_parent(
 
 async fn commit_child_allocation_for_parent(
     request: RootComponentChildCommitRequest,
-    parent_canister_id: candid::Principal,
+    parent_canister_id: ic_platform::Principal,
 ) -> Result<RootComponentChildCommitResponse, InternalError> {
     let (authority, root) = root_authority()?;
     let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
@@ -2503,7 +2458,7 @@ async fn commit_child_allocation_for_parent(
 
 async fn prepare_child_directories_for_parent(
     request: RootComponentChildDirectoryPreparationRequest,
-    parent_canister_id: candid::Principal,
+    parent_canister_id: ic_platform::Principal,
 ) -> Result<RootComponentChildDirectoryPreparationResponse, InternalError> {
     let plan = Box::pin(prepared_child_runtime_plan(
         request.component,
@@ -2610,7 +2565,7 @@ fn child_directory_failure(stage: &'static str, error: InternalError) -> Interna
 
 async fn activate_child_runtime_for_parent(
     request: RootComponentChildRuntimeActivationRequest,
-    parent_canister_id: candid::Principal,
+    parent_canister_id: ic_platform::Principal,
 ) -> Result<RootComponentChildRuntimeActivationResponse, InternalError> {
     let plan = Box::pin(prepared_child_runtime_plan(
         request.component,
@@ -2653,7 +2608,7 @@ async fn activate_child_runtime_for_parent(
 
 async fn activate_child_membership_for_parent(
     request: RootComponentChildMembershipActivationRequest,
-    parent_canister_id: candid::Principal,
+    parent_canister_id: ic_platform::Principal,
 ) -> Result<RootComponentChildMembershipActivationResponse, InternalError> {
     let plan = Box::pin(prepared_child_runtime_plan(
         request.component,
@@ -2918,7 +2873,7 @@ async fn prepare_component_directories_with_plan(
 
 /// Deliver and independently verify one grouped runtime configuration intent.
 pub(super) async fn prepare_grouped_component_directories(
-    canister: candid::Principal,
+    canister: ic_platform::Principal,
     binding: &ManagedCanisterBinding,
     deployment: &ProtectedComponentDeployment,
     request: &ComponentRuntimeDirectoryPreparationRequest,
@@ -2958,7 +2913,7 @@ pub(super) async fn prepare_grouped_component_directories(
 
 /// Synchronize one already-Active grouped Component to a current Directory covering the request.
 pub(super) async fn synchronize_grouped_component_directory(
-    canister: candid::Principal,
+    canister: ic_platform::Principal,
     binding: &ManagedCanisterBinding,
     deployment: &ProtectedComponentDeployment,
     request: &ComponentRuntimeDirectorySynchronizationRequest,
@@ -3371,7 +3326,7 @@ pub fn root_runtime_activation_receipt_complete() -> bool {
 
 /// Resolve one active member from current protected Component Registry authority.
 pub fn active_component_member(
-    canister: candid::Principal,
+    canister: ic_platform::Principal,
 ) -> Result<ManagedCanisterBinding, ActiveComponentMemberError> {
     Ok(active_component_member_authority(canister)?.binding)
 }
@@ -3433,7 +3388,7 @@ mod active_component_member_error_tests {
 
 /// Resolve one active member together with its current owning Registry head.
 pub fn active_component_member_authority(
-    canister: candid::Principal,
+    canister: ic_platform::Principal,
 ) -> Result<ActiveComponentMemberView, ActiveComponentMemberError> {
     let registered = registered_component_member_authority(canister)?;
     if registered.lifecycle != ComponentLifecycleStatus::Active {
@@ -3447,7 +3402,7 @@ pub fn active_component_member_authority(
 
 /// Resolve one exact Prepared or Active member with its current protected Registry head.
 pub fn registered_component_member_authority(
-    canister: candid::Principal,
+    canister: ic_platform::Principal,
 ) -> Result<RegisteredComponentMemberView, ActiveComponentMemberError> {
     let (authority, _) = root_authority()?;
     prepared_registry(&authority.binding, authority.initial_release_set)?;
@@ -3679,7 +3634,7 @@ pub fn controller_directory_page(
 
 fn read_directory_page(
     request: ComponentDirectoryPageRequest,
-    member_caller: Option<candid::Principal>,
+    member_caller: Option<ic_platform::Principal>,
 ) -> Result<ComponentDirectoryPageResponse, InternalError> {
     if request.limit == 0 || request.limit > MAX_COMPONENT_DIRECTORY_PAGE_ENTRIES {
         return Err(InternalError::invalid_input());
@@ -3759,7 +3714,7 @@ fn read_directory_page(
 }
 
 async fn query_managed_binding(
-    canister: candid::Principal,
+    canister: ic_platform::Principal,
 ) -> Result<ManagedCanisterBinding, InternalError> {
     let call = CallOps::bounded_wait(canister, protocol::CANIC_OBSERVABILITY)
         .with_arg(CanisterStatusRequestFragment::Binding)?
@@ -3941,7 +3896,7 @@ fn validated_group_component_runtime_authority(
 async fn prepared_child_runtime_plan(
     component: canic_contracts::ids::ComponentInstanceId,
     operation_id: [u8; 32],
-    parent_canister_id: candid::Principal,
+    parent_canister_id: ic_platform::Principal,
 ) -> Result<PreparedChildRuntimePlan, InternalError> {
     let (root_authority, root) = root_authority()?;
     let prepared = prepared_registry(&root_authority.binding, root_authority.initial_release_set)?;
@@ -4032,7 +3987,7 @@ async fn prepared_child_runtime_plan(
 
 fn validate_requesting_parent_still_in_allocation_phase(
     component: canic_contracts::ids::ComponentInstanceId,
-    parent_canister_id: candid::Principal,
+    parent_canister_id: ic_platform::Principal,
     expected: &ManagedCanisterBinding,
     initial_bootstrap: bool,
 ) -> Result<(), InternalError> {
@@ -4105,7 +4060,7 @@ fn child_directory_request(
     fleet: FleetDirectorySnapshot,
     partition: &ComponentRegistryPartitionView,
     allocation: &RootComponentChildAllocationView,
-    child_canister: candid::Principal,
+    child_canister: ic_platform::Principal,
     component_group: Option<ComponentGroupDirectory>,
 ) -> Result<(ComponentRuntimeDirectoryPreparationRequest, [u8; 32]), InternalError> {
     let request = ComponentRuntimeDirectoryPreparationRequest {
@@ -4126,7 +4081,7 @@ fn child_directory_request(
 
 fn active_component_direct_children_for_authority(
     authority: &ComponentRuntimeDirectoryAuthority,
-    parent_canister_id: candid::Principal,
+    parent_canister_id: ic_platform::Principal,
 ) -> Result<Vec<ComponentRuntimeDirectChild>, InternalError> {
     let component = authority.component.provenance.component.component;
     let partition =
@@ -4139,7 +4094,7 @@ fn active_component_direct_children_for_authority(
 
 pub(super) fn active_component_direct_children(
     partition: &ComponentRegistryPartitionView,
-    parent_canister_id: candid::Principal,
+    parent_canister_id: ic_platform::Principal,
 ) -> Result<Vec<ComponentRuntimeDirectChild>, InternalError> {
     let scan_limit = usize::try_from(partition.committed_descendants)
         .unwrap_or(usize::MAX)
@@ -4178,7 +4133,7 @@ pub(super) fn active_component_direct_children(
 }
 
 async fn query_component_runtime_status(
-    canister: candid::Principal,
+    canister: ic_platform::Principal,
     operation_id: [u8; 32],
 ) -> Result<ComponentRuntimeStatusResponse, InternalError> {
     let call = CallOps::bounded_wait(canister, protocol::CANIC_CONTROL_STATUS)
@@ -4213,7 +4168,7 @@ async fn query_component_runtime_status(
 }
 
 async fn require_component_runtime_ready(
-    canister: candid::Principal,
+    canister: ic_platform::Principal,
     expected_role: &CanisterRole,
     expected_fixture: Option<&canic_contracts::dto::fixture_provisioning::FixtureAssignment>,
 ) -> Result<(), InternalError> {
@@ -4281,7 +4236,7 @@ const fn managed_canister_role(binding: &ManagedCanisterBinding) -> &CanisterRol
 }
 
 async fn activate_target_component_runtime(
-    canister: candid::Principal,
+    canister: ic_platform::Principal,
     request: ComponentRuntimeActivationRequest,
 ) -> Result<ComponentRuntimeStatusResponse, InternalError> {
     let status = query_component_runtime_status(canister, request.operation_id).await?;
@@ -4292,7 +4247,7 @@ async fn activate_target_component_runtime(
 }
 
 async fn activate_directory_prepared_runtime_for_deployment(
-    canister: candid::Principal,
+    canister: ic_platform::Principal,
     binding: &ManagedCanisterBinding,
     deployment: &ProtectedComponentDeployment,
     directory_request: &ComponentRuntimeDirectoryPreparationRequest,
@@ -4358,7 +4313,7 @@ async fn activate_directory_prepared_runtime_for_deployment(
 }
 
 async fn converge_active_membership_directory_for_deployment(
-    canister: candid::Principal,
+    canister: ic_platform::Principal,
     binding: &ManagedCanisterBinding,
     deployment: &ProtectedComponentDeployment,
     prepared_request: &ComponentRuntimeDirectoryPreparationRequest,
@@ -4428,7 +4383,7 @@ async fn converge_active_membership_directory_for_deployment(
 }
 
 async fn synchronize_target_component_directory(
-    canister: candid::Principal,
+    canister: ic_platform::Principal,
     request: ComponentRuntimeDirectorySynchronizationRequest,
 ) -> Result<ComponentRuntimeStatusResponse, InternalError> {
     configure_target_component_runtime(
@@ -4443,14 +4398,14 @@ async fn synchronize_target_component_directory(
 }
 
 async fn prepare_target_component_directories(
-    canister: candid::Principal,
+    canister: ic_platform::Principal,
     request: ComponentRuntimeDirectoryPreparationRequest,
 ) -> Result<ComponentRuntimeStatusResponse, InternalError> {
     configure_target_component_runtime(canister, request).await
 }
 
 async fn configure_target_component_runtime(
-    canister: candid::Principal,
+    canister: ic_platform::Principal,
     request: ComponentRuntimeDirectoryPreparationRequest,
 ) -> Result<ComponentRuntimeStatusResponse, InternalError> {
     let operation_id = request.operation_id;
@@ -4602,7 +4557,7 @@ async fn converge_active_member_directory(
 
 fn member_directory_failure(
     stage: &'static str,
-    canister: candid::Principal,
+    canister: ic_platform::Principal,
     error: InternalError,
 ) -> InternalError {
     canic_core::log!(
@@ -4756,7 +4711,7 @@ fn fleet_directory_non_regressing(
     next_revision > current_revision || (next_revision == current_revision && next == current)
 }
 
-const fn managed_canister_principal(binding: &ManagedCanisterBinding) -> candid::Principal {
+const fn managed_canister_principal(binding: &ManagedCanisterBinding) -> ic_platform::Principal {
     match binding {
         ManagedCanisterBinding::Component(component) => component.canister_id,
         ManagedCanisterBinding::ComponentChild(child) => child.canister_id,
@@ -5100,7 +5055,7 @@ fn active_membership_target_status_for_deployment(
 
 const fn allocation_creation_and_canister(
     allocation: &RootComponentAllocationView,
-) -> Result<(&RootComponentCreationEffectView, candid::Principal), InternalError> {
+) -> Result<(&RootComponentCreationEffectView, ic_platform::Principal), InternalError> {
     match &allocation.progress {
         RootComponentAllocationProgressView::Created { effect, canister } => {
             Ok((effect, *canister))
@@ -5127,7 +5082,7 @@ const fn allocation_creation_and_canister(
 
 const fn child_allocation_creation_and_canister(
     allocation: &RootComponentChildAllocationView,
-) -> Result<(&RootComponentCreationEffectView, candid::Principal), InternalError> {
+) -> Result<(&RootComponentCreationEffectView, ic_platform::Principal), InternalError> {
     match &allocation.progress {
         RootComponentChildAllocationProgressView::Created { effect, canister } => {
             Ok((effect, *canister))
@@ -5244,7 +5199,7 @@ fn prepared_registry(
 
 fn validate_preparation_authority(
     authority: &canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority,
-    root: candid::Principal,
+    root: ic_platform::Principal,
     request: &RootComponentRegistryPreparationRequest,
 ) -> Result<FleetDirectorySnapshot, InternalError> {
     let mirror = FleetRegistryMirrorOps::validated_current(authority, root)?;
@@ -5258,7 +5213,7 @@ fn validate_preparation_authority(
 
 fn validate_current_mirror_authority(
     authority: &canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority,
-    root: candid::Principal,
+    root: ic_platform::Principal,
     request: &RootComponentRegistryPreparationRequest,
 ) -> Result<FleetDirectorySnapshot, InternalError> {
     let mirror = FleetRegistryMirrorOps::validated_current(authority, root)?;
@@ -5330,8 +5285,9 @@ fn decode_component_directory_cursor(
     if cursor.0.is_empty() || cursor.0.len() > MAX_COMPONENT_DIRECTORY_CURSOR_BYTES {
         return Err(InternalError::invalid_input());
     }
-    let payload = candid::decode_one::<ComponentDirectoryCursorPayload>(&cursor.0)
-        .map_err(|_| InternalError::invalid_input())?;
+    let payload =
+        ic_platform::candid::decoder::decode_one::<ComponentDirectoryCursorPayload>(&cursor.0)
+            .map_err(|_| InternalError::invalid_input())?;
     if ComponentDirectoryCursorBinding::from_payload(&payload)
         != ComponentDirectoryCursorBinding::from_request(request)
     {
@@ -5357,7 +5313,8 @@ fn encode_component_directory_cursor(
         last_role: cursor.role,
         last_canister_id: cursor.canister_id,
     };
-    let bytes = candid::encode_one(payload).map_err(|_error| InternalError::invariant())?;
+    let bytes = ic_platform::candid::contract::encode_one(payload)
+        .map_err(|_error| InternalError::invariant())?;
     if bytes.len() > MAX_COMPONENT_DIRECTORY_CURSOR_BYTES {
         return Err(InternalError::invariant());
     }
@@ -5365,7 +5322,7 @@ fn encode_component_directory_cursor(
 }
 
 fn creation_plan(
-    root: candid::Principal,
+    root: ic_platform::Principal,
     store: &RootStoreBootstrapResponse,
     allocation: &RootComponentAllocationView,
 ) -> Result<RootComponentCreationPlan, InternalError> {
@@ -5385,7 +5342,7 @@ fn creation_plan(
 }
 
 fn child_creation_plan(
-    root: candid::Principal,
+    root: ic_platform::Principal,
     store: &RootStoreBootstrapResponse,
     allocation: &RootComponentChildAllocationView,
 ) -> Result<RootComponentCreationPlan, InternalError> {
@@ -5919,7 +5876,7 @@ mod tests {
             FixtureProvisioningStatus, FixtureTargetBinding,
         };
         let assignment = FixtureAssignment {
-            store: candid::Principal::from_slice(&[8; 29]),
+            store: ic_platform::Principal::from_slice(&[8; 29]),
             grant: FixtureGrant {
                 revision: 1,
                 enabled: true,
@@ -5971,14 +5928,14 @@ mod tests {
                     else {
                         unreachable!()
                     };
-                    binding.canister_id = candid::Principal::from_slice(&[7; 29]);
+                    binding.canister_id = ic_platform::Principal::from_slice(&[7; 29]);
                 }
                 _ => {
                     let ManagedCanisterBinding::Component(binding) = &mut wrong.binding.target
                     else {
                         unreachable!()
                     };
-                    binding.fleet_subnet_root = candid::Principal::from_slice(&[7; 29]);
+                    binding.fleet_subnet_root = ic_platform::Principal::from_slice(&[7; 29]);
                 }
             }
             let observed = Ok(FixtureProvisioningStatus::Complete(Box::new(wrong)));
@@ -6307,7 +6264,7 @@ mod tests {
         assert!(exact.is_exact_active());
 
         let foreign_caller = PeerRequesterAccessEvidence {
-            caller: candid::Principal::from_slice(&[9; 29]),
+            caller: ic_platform::Principal::from_slice(&[9; 29]),
             ..exact
         };
         assert!(!foreign_caller.is_exact_active());
@@ -6317,7 +6274,7 @@ mod tests {
         };
         assert!(!missing_index.is_exact_active());
         let drifted_binding = ComponentBinding {
-            canister_id: candid::Principal::from_slice(&[10; 29]),
+            canister_id: ic_platform::Principal::from_slice(&[10; 29]),
             ..requester.clone()
         };
         let drifted = PeerRequesterAccessEvidence {
@@ -6356,7 +6313,7 @@ mod tests {
         let canonical = ComponentDirectoryCanonicalCursor {
             parent_canister_id: binding.canister_id,
             role: CanisterRole::new("project_instance"),
-            canister_id: candid::Principal::from_slice(&[13; 29]),
+            canister_id: ic_platform::Principal::from_slice(&[13; 29]),
         };
         let encoded = encode_component_directory_cursor(&request, canonical.clone())
             .expect("encode Directory cursor");
@@ -6403,7 +6360,7 @@ mod tests {
     }
 
     fn component_binding() -> ComponentBinding {
-        let root = candid::Principal::from_slice(&[1; 29]);
+        let root = ic_platform::Principal::from_slice(&[1; 29]);
         ComponentBinding {
             authority: FleetRegistryAuthority {
                 binding: FleetCoordinatorBinding {
@@ -6414,10 +6371,10 @@ mod tests {
                         },
                         app: AppId::from("toko"),
                     },
-                    coordinator_subnet: SubnetId::from_principal(candid::Principal::from_slice(
-                        &[4; 29],
-                    )),
-                    coordinator: candid::Principal::from_slice(&[5; 29]),
+                    coordinator_subnet: SubnetId::from_principal(
+                        ic_platform::Principal::from_slice(&[4; 29]),
+                    ),
+                    coordinator: ic_platform::Principal::from_slice(&[5; 29]),
                     recovery_controllers: Vec::new(),
                 },
                 epoch: 1,
@@ -6426,9 +6383,11 @@ mod tests {
             component_spec: "projects".parse().expect("Component Spec"),
             spec_hash: [6; 32],
             role: CanisterRole::new("project_hub"),
-            placement_subnet: SubnetId::from_principal(candid::Principal::from_slice(&[7; 29])),
+            placement_subnet: SubnetId::from_principal(ic_platform::Principal::from_slice(
+                &[7; 29],
+            )),
             fleet_subnet_root: root,
-            canister_id: candid::Principal::from_slice(&[8; 29]),
+            canister_id: ic_platform::Principal::from_slice(&[8; 29]),
         }
     }
 }

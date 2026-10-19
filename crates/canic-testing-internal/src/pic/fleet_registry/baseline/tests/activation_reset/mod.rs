@@ -191,9 +191,9 @@ fn retain_source(input: &ReinstallJourney<'_>) -> FleetEnsurePlan {
     input.pic.stop_progress();
     assert!(!input.pic.auto_progress_enabled());
     for attempt in 0..240 {
-        let response: Result<RootStatusResponseFragment, Error> = input
-            .pic
-            .query_candid_as(
+        let response: Result<RootStatusResponseFragment, Error> =
+            ic_testkit::pic::query_candid_args(
+                input.pic,
                 input.root,
                 operator,
                 canic::protocol::CANIC_ROOT_OPERATION_STATUS,
@@ -202,6 +202,7 @@ fn retain_source(input: &ReinstallJourney<'_>) -> FleetEnsurePlan {
                 ),),
                 canic::testing::CANDID_REPLY_LIMITS,
             )
+            .map(|(reply,)| reply)
             .unwrap();
         if let Ok(RootStatusResponseFragment::Operation(
             RootOperationStatusResponse::ProvisionComponents(status),

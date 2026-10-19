@@ -5,9 +5,9 @@ use crate::{
     storage::stable::component_registry::caller_authority as stored,
     view::component_registry::caller_authority as view,
 };
-use candid::Principal;
 use canic_contracts::ids::{CallerInstallation, CallerRootAuthority, CanisterRole};
 use canic_core::control_plane_support::error::InternalError;
+use ic_platform::Principal;
 
 impl RootCallerOps {
     /// Project original operation authority without exposing mutable storage records.

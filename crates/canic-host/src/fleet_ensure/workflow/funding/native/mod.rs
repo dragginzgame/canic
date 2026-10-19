@@ -18,6 +18,7 @@ use crate::fleet_ensure::{
     workflow::{EnsureWorkflowError, continuation, funding, reviewed_estate_root_principal},
 };
 use canic_contracts::cycles::Cycles;
+use ic_platform::candid::contract::Nat;
 use std::collections::BTreeSet;
 
 pub(super) fn applicable(plan: &FleetEnsurePlan, journal: &FleetEnsureJournalRecord) -> bool {
@@ -255,7 +256,7 @@ fn verify_receipt<E: std::error::Error + 'static>(
         let valid_receipt = effect
             .receipt
             .as_ref()
-            .is_some_and(|receipt| receipt.parse::<candid::Nat>().is_ok());
+            .is_some_and(|receipt| receipt.parse::<Nat>().is_ok());
         let shape_is_exact = match effect.state {
             EffectState::Intent => {
                 effect.receipt.is_none()
@@ -576,7 +577,7 @@ pub(super) fn resume<P: EnsurePlatform>(
             || outcome
                 .receipt
                 .as_ref()
-                .is_none_or(|receipt| receipt.parse::<candid::Nat>().is_err())
+                .is_none_or(|receipt| receipt.parse::<Nat>().is_err())
         {
             return Err(EnsureWorkflowError::JournalIntegrity);
         }

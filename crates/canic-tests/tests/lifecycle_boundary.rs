@@ -1,7 +1,6 @@
 // Category C - Artifact / deployment test (embedded config).
 // This test relies on embedded production config by design.
 
-use candid::{Principal, decode_args, encode_args};
 use canic::{
     Error,
     dto::{
@@ -9,14 +8,20 @@ use canic::{
         role::OperationStatusRequest, runtime::ReadinessStatus,
     },
 };
-use canic_contracts::dto::wire::projection::component_registry::CanisterOperationStatusFragment as CanisterOperationStatusResponse;
-use canic_contracts::dto::wire::projection::fixture_canic::RootStatusRequestFragment as CanisterStatusRequest;
-use canic_contracts::dto::wire::projection::fixture_lifecycle_boundary::CanisterStatusResponse;
+use canic_contracts::dto::wire::projection::{
+    component_registry::CanisterOperationStatusFragment as CanisterOperationStatusResponse,
+    fixture_canic::RootStatusRequestFragment as CanisterStatusRequest,
+    fixture_lifecycle_boundary::CanisterStatusResponse,
+};
 use canic_testing_internal::pic::{
     install_lifecycle_boundary_fixture, invalid_init_args, lifecycle_participant_init_trap_wasm,
     lifecycle_participant_trap_wasm, managed_test_init_identity, upgrade_args,
 };
-use ic_testkit::pic::{CandidCallExt, CanisterInstallExt, PocketIc, RetryPolicy};
+use ic_platform::{
+    Principal,
+    candid::{contract::encode_args, decoder::decode_args},
+};
+use ic_testkit::pic::{CanisterInstallExt, PocketIc, RetryPolicy};
 use std::{any::Any, time::Duration};
 
 const INSTALL_CODE_RETRY_LIMIT: usize = 4;
@@ -278,17 +283,18 @@ fn missing_selected_admission_rejects_install_then_accepts_corrected_retry() {
 }
 
 fn assert_prepared_and_not_ready(pic: &PocketIc, canister_id: Principal, root: Principal) {
-    let status: Result<CanisterStatusResponse, Error> = pic
-        .query_candid_as(
-            canister_id,
-            root,
-            canic_contracts::protocol::CANIC_CONTROL_STATUS,
-            (CanisterStatusRequest::Operation(OperationStatusRequest {
-                operation_id: [0x43; 32],
-            }),),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .expect("query Prepared Fleet activation status");
+    let status: Result<CanisterStatusResponse, Error> = ic_testkit::pic::query_candid_args(
+        pic,
+        canister_id,
+        root,
+        canic_contracts::protocol::CANIC_CONTROL_STATUS,
+        (CanisterStatusRequest::Operation(OperationStatusRequest {
+            operation_id: [0x43; 32],
+        }),),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("query Prepared Fleet activation status");
     let CanisterStatusResponse::Operation(operation) = status.expect("Prepared activation status")
     else {
         panic!("managed Canister returned a differently correlated operation status");
@@ -298,14 +304,16 @@ fn assert_prepared_and_not_ready(pic: &PocketIc, canister_id: Principal, root: P
         status.fleet_activation.phase,
         FleetActivationPhase::Prepared
     );
-    let readiness: Result<CanisterStatusResponse, Error> = pic
-        .query_candid(
-            canister_id,
-            canic_contracts::protocol::CANIC_OBSERVABILITY,
-            (CanisterStatusRequest::Readiness,),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .expect("query managed Canister readiness");
+    let readiness: Result<CanisterStatusResponse, Error> = ic_testkit::pic::query_candid_args(
+        pic,
+        canister_id,
+        ic_platform::Principal::anonymous(),
+        canic_contracts::protocol::CANIC_OBSERVABILITY,
+        (CanisterStatusRequest::Readiness,),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("query managed Canister readiness");
     let CanisterStatusResponse::Readiness(readiness) =
         readiness.expect("Prepared readiness status")
     else {
@@ -338,11 +346,11 @@ fn non_root_post_upgrade_failure_reports_phase_error() {
 }
 
 const fn install_retry_policy() -> RetryPolicy {
-    RetryPolicy::new(
-        std::num::NonZeroUsize::new(INSTALL_CODE_RETRY_LIMIT)
+    RetryPolicy {
+        max_attempts: std::num::NonZeroUsize::new(INSTALL_CODE_RETRY_LIMIT)
             .expect("non-zero install attempt limit"),
-        INSTALL_CODE_COOLDOWN,
-    )
+        cooldown: INSTALL_CODE_COOLDOWN,
+    }
 }
 
 fn replace_release_build_id(wasm: &[u8], retained: &str, replacement: &str) -> Vec<u8> {

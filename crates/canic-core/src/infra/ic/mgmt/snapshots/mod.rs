@@ -4,13 +4,13 @@
 //! Does not own: reset authority, retention policy or lifecycle orchestration.
 //! Boundary: raw management calls used by the observed operations facade.
 
-use super::{
-    MgmtInfra,
-    types::{InfraCanisterIdRecord, InfraCanisterSnapshot, InfraDeleteCanisterSnapshotArgs},
-};
+use super::MgmtInfra;
 use crate::{
     cdk::types::Principal,
     infra::ic::{IcInfraError, call::Call},
+};
+use ic_platform::management_canister_types::{
+    CanisterIdRecord, DeleteCanisterSnapshotArgs, Snapshot,
 };
 
 impl MgmtInfra {
@@ -20,10 +20,10 @@ impl MgmtInfra {
     ) -> Result<Vec<Vec<u8>>, IcInfraError> {
         let response =
             Call::bounded_wait(Principal::management_canister(), "list_canister_snapshots")
-                .with_arg(InfraCanisterIdRecord { canister_id })?
+                .with_arg(CanisterIdRecord { canister_id })?
                 .execute()
                 .await?;
-        let (snapshots,): (Vec<InfraCanisterSnapshot>,) = response.candid_tuple()?;
+        let (snapshots,): (Vec<Snapshot>,) = response.candid_tuple()?;
         Ok(snapshots.into_iter().map(|snapshot| snapshot.id).collect())
     }
 
@@ -33,7 +33,7 @@ impl MgmtInfra {
         snapshot_id: Vec<u8>,
     ) -> Result<(), IcInfraError> {
         Call::unbounded_wait(Principal::management_canister(), "delete_canister_snapshot")
-            .with_arg(InfraDeleteCanisterSnapshotArgs {
+            .with_arg(DeleteCanisterSnapshotArgs {
                 canister_id,
                 snapshot_id,
             })?

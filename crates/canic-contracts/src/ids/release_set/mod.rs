@@ -5,7 +5,7 @@
 //! Boundary: the host derives this digest from validated canonical manifest bytes.
 
 use crate::ids::ReleaseBuildId;
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 use std::{fmt, fmt::Display};
 
@@ -18,6 +18,7 @@ use std::{fmt, fmt::Display};
 #[derive(
     CandidType, Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
 )]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(transparent)]
 pub struct ReleaseSetDigest([u8; 32]);
 
@@ -54,6 +55,7 @@ impl Display for ReleaseSetDigest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetSubnetRootReleaseSet {
     pub release_build_id: ReleaseBuildId,
@@ -77,9 +79,11 @@ mod tests {
         assert_eq!(digest.into_bytes(), [0xab; 32]);
         assert_eq!(digest.to_string(), "ab".repeat(32));
 
-        let bytes = candid::encode_one(digest).expect("encode Release Set digest");
+        let bytes =
+            ic_platform::candid::contract::encode_one(digest).expect("encode Release Set digest");
         assert_eq!(
-            candid::decode_one::<ReleaseSetDigest>(&bytes).expect("decode Release Set digest"),
+            ic_platform::candid::decoder::decode_one::<ReleaseSetDigest>(&bytes)
+                .expect("decode Release Set digest"),
             digest
         );
 
@@ -89,9 +93,10 @@ mod tests {
             )),
             manifest_digest: digest,
         };
-        let bytes = candid::encode_one(release_set).expect("encode root Release Set identity");
+        let bytes = ic_platform::candid::contract::encode_one(release_set)
+            .expect("encode root Release Set identity");
         assert_eq!(
-            candid::decode_one::<FleetSubnetRootReleaseSet>(&bytes)
+            ic_platform::candid::decoder::decode_one::<FleetSubnetRootReleaseSet>(&bytes)
                 .expect("decode root Release Set identity"),
             release_set
         );

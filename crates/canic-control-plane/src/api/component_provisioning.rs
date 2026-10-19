@@ -30,7 +30,7 @@ impl RootComponentProvisioningApi {
     }
 
     /// Authorize the protected Coordinator before endpoint workflow dispatch.
-    pub fn authorize_coordinator_caller(caller: candid::Principal) -> Result<(), Error> {
+    pub fn authorize_coordinator_caller(caller: ic_platform::Principal) -> Result<(), Error> {
         component_provisioning::authorize_coordinator_caller(caller).map_err(Into::into)
     }
 

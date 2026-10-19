@@ -6,10 +6,11 @@ use canic::api::public_status::{ApplicationMetricsSampler, PublicStatusApi};
 use canic_blob_service::{dto::configuration::ServiceInstallationInput, lifecycle};
 
 /// This application's nested init contract, delivered after the protected Canic payload.
-#[derive(candid::CandidType, serde::Deserialize)]
+#[derive(ic_platform::candid::contract::CandidType, serde::Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 struct InstallationInput {
     initial_count: u64,
-    blob: ServiceInstallationInput,
+    blob: Vec<u8>,
 }
 
 // The artifact grants both namespaces in one shared physical allocation pool.
@@ -55,7 +56,10 @@ fn install() {
         )
         .expect("bounded application configuration");
     app::install(input.initial_count);
-    lifecycle::install(&input.blob);
+    let blob: ServiceInstallationInput =
+        canic_blob_service::__private::ic_blob_storage_contracts::wire::decode(&input.blob, 16_384)
+            .expect("bounded Blob installation");
+    lifecycle::install(&blob);
     register_metrics();
 }
 

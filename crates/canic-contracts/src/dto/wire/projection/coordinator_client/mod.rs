@@ -14,12 +14,13 @@ use crate::dto::{
     },
     role::OperationStatusRequest,
 };
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded CoordinatorCommandFragment wire projection for coordinator client.
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CoordinatorCommandFragment {
     AcknowledgeRootSnapshot(FleetSubnetRootSnapshotAcknowledgementRequest),
     RequestRootFunding(FleetRootFundingRequest),
@@ -27,6 +28,7 @@ pub enum CoordinatorCommandFragment {
 
 /// Bounded CoordinatorCommandResponseFragment wire projection for coordinator client.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CoordinatorCommandResponseFragment {
     AcknowledgeRootSnapshot(FleetSubnetRootSnapshotAcknowledgement),
     RequestRootFunding(FleetRootFundingResponse),
@@ -34,6 +36,7 @@ pub enum CoordinatorCommandResponseFragment {
 
 /// Bounded CoordinatorStatusRequestFragment wire projection for coordinator client.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CoordinatorStatusRequestFragment {
     Operation(OperationStatusRequest),
     Registry,
@@ -41,6 +44,7 @@ pub enum CoordinatorStatusRequestFragment {
 
 /// Bounded CoordinatorStatusResponseFragment wire projection for coordinator client.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CoordinatorStatusResponseFragment {
     Operation(Box<CoordinatorOperationStatusFragment>),
     Registry(Box<FleetRegistry>),
@@ -48,6 +52,7 @@ pub enum CoordinatorStatusResponseFragment {
 
 /// Bounded CoordinatorOperationStatusFragment wire projection for coordinator client.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CoordinatorOperationStatusFragment {
     RootRemoval(CoordinatorRootRemovalOperationStatus),
 }

@@ -13,6 +13,7 @@ use crate::{
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CanisterInitAuthority {
     Component {
         root: FleetSubnetRootBinding,
@@ -29,6 +30,7 @@ pub enum CanisterInitAuthority {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CanisterInitPayload {
     pub root_install_id: [u8; 32],
     pub component_install_id: [u8; 32],
@@ -125,9 +127,10 @@ mod tests {
             )),
         };
 
-        let bytes = candid::encode_one(&payload).expect("encode managed non-root init payload");
-        let decoded: CanisterInitPayload =
-            candid::decode_one(&bytes).expect("decode managed non-root init payload");
+        let bytes = ic_platform::candid::contract::encode_one(&payload)
+            .expect("encode managed non-root init payload");
+        let decoded: CanisterInitPayload = ic_platform::candid::decoder::decode_one(&bytes)
+            .expect("decode managed non-root init payload");
 
         assert_eq!(decoded.install_id, [11; 32]);
         assert_eq!(decoded.release_build_id, release_build_id);

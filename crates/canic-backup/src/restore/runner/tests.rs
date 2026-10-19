@@ -5,7 +5,7 @@
 //! Boundary: exercises journal claim, staging, command execution, receipt, and cleanup together.
 
 use crate::{
-    artifacts::{ArtifactChecksum, ArtifactChecksumError},
+    artifacts::ArtifactChecksumError,
     operational_readiness::manifest::{
         assert_case_defined, restore_operation_label, restore_operations,
     },
@@ -16,6 +16,7 @@ use crate::{
     },
     test_support::{hold_at_acknowledged_barrier, kill_child_at_acknowledged_barrier, temp_dir},
 };
+use ic_backup::model::artifacts::ArtifactChecksumRecord;
 
 use std::{
     collections::VecDeque,
@@ -168,7 +169,7 @@ fn interrupted_private_upload_staging_is_replaced_before_claim() {
     let operation = journal.operations.first().expect("upload operation");
 
     super::artifact::stage_upload_artifact_at_test_barrier(&config, &journal, operation, || {
-        hold_at_acknowledged_barrier(&handshake_root)
+        hold_at_acknowledged_barrier(&handshake_root, std::time::Duration::from_secs(5))
     })
     .expect("stage upload artifact in crash child");
     panic!("restore staging child passed its armed barrier");
@@ -194,7 +195,12 @@ fn prove_interrupted_private_upload_staging() {
         .spawn()
         .expect("spawn restore staging child");
 
-    kill_child_at_acknowledged_barrier(&mut child, &handshake_root);
+    kill_child_at_acknowledged_barrier(
+        &mut child,
+        &handshake_root,
+        std::time::Duration::from_secs(5),
+    )
+    .expect("complete crash barrier handshake");
 
     assert!(stage_root.is_dir());
     assert!(operation_root.is_dir());
@@ -372,7 +378,7 @@ fn pending_claim_publication_selects_each_restore_recovery_policy() {
     };
     write_json_durable_at_barriers(&config.journal, &journal, |observed| {
         if observed == target {
-            hold_at_acknowledged_barrier(&handshake_root);
+            hold_at_acknowledged_barrier(&handshake_root, std::time::Duration::from_secs(5));
         }
     })
     .expect("write restore pending claim in crash child");
@@ -414,7 +420,12 @@ fn prove_restore_pending_claim(
         .spawn()
         .expect("spawn restore claim child");
 
-    kill_child_at_acknowledged_barrier(&mut child, &handshake_root);
+    kill_child_at_acknowledged_barrier(
+        &mut child,
+        &handshake_root,
+        std::time::Duration::from_secs(5),
+    )
+    .expect("complete crash barrier handshake");
     let interrupted_bytes =
         fs::read(&fixture.config.journal).expect("read interrupted restore claim journal");
     let interrupted: RestoreApplyJournal =
@@ -530,7 +541,7 @@ fn terminal_state_and_receipt_publish_atomically_for_each_restore_operation() {
         &mut executor,
         |observed| {
             if observed == target {
-                hold_at_acknowledged_barrier(&handshake_root);
+                hold_at_acknowledged_barrier(&handshake_root, std::time::Duration::from_secs(5));
             }
         },
     )
@@ -574,7 +585,12 @@ fn prove_restore_terminal_publication(
         .spawn()
         .expect("spawn restore terminal child");
 
-    kill_child_at_acknowledged_barrier(&mut child, &handshake_root);
+    kill_child_at_acknowledged_barrier(
+        &mut child,
+        &handshake_root,
+        std::time::Duration::from_secs(5),
+    )
+    .expect("complete crash barrier handshake");
     let interrupted: RestoreApplyJournal = serde_json::from_slice(
         &fs::read(&fixture.config.journal).expect("read interrupted terminal journal"),
     )
@@ -718,7 +734,12 @@ fn prove_interrupted_stopped_canister_precondition() {
         .spawn()
         .expect("spawn restore precondition child");
 
-    kill_child_at_acknowledged_barrier(&mut child, &handshake_root);
+    kill_child_at_acknowledged_barrier(
+        &mut child,
+        &handshake_root,
+        std::time::Duration::from_secs(5),
+    )
+    .expect("complete crash barrier handshake");
     let interrupted: RestoreApplyJournal = serde_json::from_slice(
         &fs::read(&fixture.config.journal).expect("read interrupted precondition journal"),
     )
@@ -937,7 +958,7 @@ fn completed_restore_replays_after_final_response_loss() {
     let response = restore_run_execute_with_executor(&config, &mut executor)
         .expect("complete restore before response loss");
     assert!(response.complete);
-    hold_at_acknowledged_barrier(&handshake_root);
+    hold_at_acknowledged_barrier(&handshake_root, std::time::Duration::from_secs(5));
 }
 
 #[cfg(unix)]
@@ -959,7 +980,12 @@ fn prove_completed_restore_response_loss() {
         .spawn()
         .expect("spawn restore response-loss child");
 
-    kill_child_at_acknowledged_barrier(&mut child, &handshake_root);
+    kill_child_at_acknowledged_barrier(
+        &mut child,
+        &handshake_root,
+        std::time::Duration::from_secs(5),
+    )
+    .expect("complete crash barrier handshake");
     let completed_bytes =
         fs::read(&fixture.config.journal).expect("read completed response-loss journal");
     let completed: RestoreApplyJournal =
@@ -1087,7 +1113,9 @@ fn execute_upload_rejects_source_replacement_before_claim() {
     std::assert_matches!(
         error,
         RestoreRunnerError::ArtifactStageChecksum {
-            source: ArtifactChecksumError::ChecksumMismatch { .. },
+            source: ArtifactChecksumError::Checksum(
+                ic_backup::model::artifacts::ChecksumError::ChecksumMismatch { .. }
+            ),
             ..
         }
     );
@@ -1134,7 +1162,8 @@ fn execute_upload_rejects_post_validation_symlink_replacement() {
 fn execute_upload_stages_complete_snapshot_directory() {
     let fixture = upload_directory_fixture("canic-restore-directory-stage");
     let source_path = fixture.root.join("artifacts/root");
-    let expected = ArtifactChecksum::from_directory(&source_path).expect("checksum source tree");
+    let expected =
+        crate::artifacts::checksum_directory(&source_path).expect("checksum source tree");
     let mut executor = DirectoryInspectingExecutor {
         original_source: source_path,
         expected,
@@ -1318,7 +1347,7 @@ fn upload_fixture(prefix: &str) -> UploadFixture {
     let root = temp_dir(prefix);
     fs::create_dir_all(root.join("artifacts")).expect("create artifact root");
     fs::write(root.join("artifacts/root"), SOURCE_BYTES).expect("write source artifact");
-    let checksum = ArtifactChecksum::from_bytes(SOURCE_BYTES);
+    let checksum = ArtifactChecksumRecord::from_bytes(SOURCE_BYTES);
     finish_upload_fixture(root, checksum)
 }
 
@@ -1328,11 +1357,11 @@ fn upload_directory_fixture(prefix: &str) -> UploadFixture {
     fs::create_dir_all(artifact.join("nested")).expect("create artifact tree");
     fs::write(artifact.join("snapshot.bin"), SOURCE_BYTES).expect("write snapshot bytes");
     fs::write(artifact.join("nested/metadata.json"), b"{}").expect("write snapshot metadata");
-    let checksum = ArtifactChecksum::from_directory(&artifact).expect("checksum artifact tree");
+    let checksum = crate::artifacts::checksum_directory(&artifact).expect("checksum artifact tree");
     finish_upload_fixture(root, checksum)
 }
 
-fn finish_upload_fixture(root: PathBuf, checksum: ArtifactChecksum) -> UploadFixture {
+fn finish_upload_fixture(root: PathBuf, checksum: ArtifactChecksumRecord) -> UploadFixture {
     let operation = RestoreApplyJournalOperation {
         sequence: 0,
         operation: RestoreApplyOperationKind::UploadSnapshot,
@@ -1389,7 +1418,7 @@ fn ready_restore_operation_fixture(
     let root = temp_dir(prefix);
     fs::create_dir_all(root.join("artifacts")).expect("create restore claim artifacts");
     fs::write(root.join("artifacts/root"), SOURCE_BYTES).expect("write restore claim artifact");
-    let checksum = ArtifactChecksum::from_bytes(SOURCE_BYTES);
+    let checksum = ArtifactChecksumRecord::from_bytes(SOURCE_BYTES);
     let target_sequence = usize::from(operation_kind == RestoreApplyOperationKind::LoadSnapshot);
     let target_operation = restore_operation(
         target_sequence,
@@ -1475,7 +1504,7 @@ fn restore_operation(
     operation: RestoreApplyOperationKind,
     state: RestoreApplyOperationState,
     state_updated_at: Option<String>,
-    checksum: &ArtifactChecksum,
+    checksum: &ArtifactChecksumRecord,
 ) -> RestoreApplyJournalOperation {
     let has_artifact = matches!(
         operation,
@@ -1671,7 +1700,7 @@ fn pending_lifecycle_fixture(
 fn pending_load_fixture() -> (PathBuf, RestoreRunnerConfig) {
     let root = temp_dir("canic-restore-pending-load");
     fs::create_dir_all(&root).expect("create fixture root");
-    let checksum = ArtifactChecksum::from_bytes(SOURCE_BYTES);
+    let checksum = ArtifactChecksumRecord::from_bytes(SOURCE_BYTES);
     let config = runner_test_config(&root);
     let prior_upload =
         CommandLifetimeLock::acquire(&config.journal, 0).expect("retain original upload custody");
@@ -1806,7 +1835,7 @@ impl RestoreRunnerCommandExecutor for PreconditionBarrierExecutor {
         _command_lifetime: Option<&mut crate::persistence::CommandLifetimeLock>,
     ) -> Result<RestoreRunnerCommandOutput, std::io::Error> {
         assert_eq!(command.args.get(1).map(String::as_str), Some("status"));
-        hold_at_acknowledged_barrier(&self.handshake_root);
+        hold_at_acknowledged_barrier(&self.handshake_root, std::time::Duration::from_secs(5));
     }
 }
 
@@ -1840,7 +1869,7 @@ fn status_output(status: &str) -> RestoreRunnerCommandOutput {
 
 struct DirectoryInspectingExecutor {
     original_source: PathBuf,
-    expected: ArtifactChecksum,
+    expected: ArtifactChecksumRecord,
     observed_input: Option<PathBuf>,
 }
 
@@ -1861,7 +1890,7 @@ impl RestoreRunnerCommandExecutor for DirectoryInspectingExecutor {
             .ok_or_else(|| std::io::Error::other("missing staged --input"))?;
         assert!(input.is_dir());
         assert_eq!(
-            ArtifactChecksum::from_directory(&input)
+            crate::artifacts::checksum_directory(&input)
                 .map_err(|error| std::io::Error::other(error.to_string()))?,
             self.expected
         );
@@ -1870,7 +1899,7 @@ impl RestoreRunnerCommandExecutor for DirectoryInspectingExecutor {
             b"changed original tree",
         )?;
         assert_eq!(
-            ArtifactChecksum::from_directory(&input)
+            crate::artifacts::checksum_directory(&input)
                 .map_err(|error| std::io::Error::other(error.to_string()))?,
             self.expected
         );
@@ -1963,6 +1992,7 @@ impl RestoreRunnerCommandExecutor for InspectingExecutor {
 mod command_in_flight {
     use super::*;
     use crate::persistence::{CommandLifetimeLock, CommandLifetimeLockError};
+    use crate::test_support::wait_for_path;
     use std::{
         fs::File,
         os::fd::FromRawFd,
@@ -1999,6 +2029,7 @@ mod command_in_flight {
     }
 
     fn prove_orphaned_command_tree_blocks_restart(operation: RestoreApplyOperationKind) {
+        let allowance = std::time::Duration::from_secs(5);
         let operation_label = restore_operation_label(&operation);
         assert_case_defined(&format!(
             "CANIC-094-R14/{operation_label}/owner-dead-command-in-flight"
@@ -2022,7 +2053,8 @@ mod command_in_flight {
         fs::create_dir_all(&handshake_root).expect("create restore command-tree handshake root");
 
         let mut owner = spawn_owner(&fixture.root, operation_label, &handshake_root);
-        kill_child_at_acknowledged_barrier(&mut owner, &handshake_root);
+        kill_child_at_acknowledged_barrier(&mut owner, &handshake_root, allowance)
+            .expect("complete crash barrier handshake");
 
         let pending_bytes =
             fs::read(&fixture.config.journal).expect("read owner-dead restore journal");
@@ -2045,10 +2077,12 @@ mod command_in_flight {
             b"release direct owner\n",
         )
         .expect("release direct restore command descriptor");
-        crate::test_support::wait_for_path(
+        wait_for_path(
             &direct_closed_marker(&handshake_root),
             "direct restore command descriptor close",
-        );
+            allowance,
+        )
+        .expect("complete crash barrier handshake");
 
         let mut blocked_executor = ScriptedExecutor::new([]);
         let error = restore_run_execute_with_executor(&fixture.config, &mut blocked_executor)
@@ -2071,14 +2105,16 @@ mod command_in_flight {
 
         fs::write(effect_release_marker(&handshake_root), b"commit effect\n")
             .expect("release restore effect descendant");
-        crate::test_support::wait_for_path(
-            &effect_marker(&handshake_root),
-            "committed restore effect",
-        );
-        crate::test_support::wait_for_path(
-            &external_complete_marker(&handshake_root),
-            "external restore command completion",
-        );
+        for (marker, description) in [
+            (effect_marker(&handshake_root), "committed restore effect"),
+            (
+                external_complete_marker(&handshake_root),
+                "external restore command completion",
+            ),
+        ] {
+            wait_for_path(&marker, description, allowance)
+                .expect("complete crash barrier handshake");
+        }
         wait_for_command_quiescence(&fixture.config.journal, target_sequence);
 
         let mut recovery_executor =
@@ -2150,20 +2186,26 @@ mod command_in_flight {
             &mut descendant,
             &handshake_root.join("descendant-ready"),
             "restore effect descendant readiness",
-        );
+            std::time::Duration::from_secs(5),
+        )
+        .expect("complete crash barrier handshake");
 
         fs::write(handshake_root.join("barrier-ready"), b"ready\n")
             .expect("signal restore command-in-flight barrier");
         crate::test_support::wait_for_path(
             &handshake_root.join("barrier-acknowledged"),
             "restore command-in-flight acknowledgement",
-        );
+            std::time::Duration::from_secs(5),
+        )
+        .expect("complete crash barrier handshake");
         fs::write(handshake_root.join("barrier-armed"), b"armed\n")
             .expect("arm restore owner-death barrier");
         crate::test_support::wait_for_path(
             &direct_release_marker(&handshake_root),
             "direct restore descriptor release",
-        );
+            std::time::Duration::from_secs(5),
+        )
+        .expect("complete crash barrier handshake");
 
         let raw_fd = std::env::var(COMMAND_FD_ENV)
             .expect("inherited restore command descriptor")
@@ -2195,7 +2237,9 @@ mod command_in_flight {
         crate::test_support::wait_for_path(
             &effect_release_marker(&handshake_root),
             "restore effect release",
-        );
+            std::time::Duration::from_secs(5),
+        )
+        .expect("complete crash barrier handshake");
         fs::write(effect_marker(&handshake_root), b"committed\n")
             .expect("record modeled restore effect");
     }

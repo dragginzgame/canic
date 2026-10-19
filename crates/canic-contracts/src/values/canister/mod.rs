@@ -7,7 +7,7 @@
 //! Boundary: ops and DTO modules re-export these values to preserve public API
 //! paths while conversion from foreign infra payloads remains explicit.
 
-use candid::{CandidType, Principal};
+use ic_platform::{Principal, candid::contract::CandidType};
 use serde::Deserialize;
 
 ///
@@ -15,6 +15,7 @@ use serde::Deserialize;
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CanisterStatusType {
     #[serde(rename = "running")]
     Running,
@@ -29,6 +30,7 @@ pub enum CanisterStatusType {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum LogVisibility {
     #[serde(rename = "controllers")]
     Controllers,

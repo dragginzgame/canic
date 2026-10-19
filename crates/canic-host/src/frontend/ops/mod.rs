@@ -5,6 +5,7 @@
 mod bundle;
 mod capacity;
 mod uploaded;
+mod validation;
 
 use crate::{
     fleet_ensure::{policy::expected_plan_sha256, resolve_current_fleet},
@@ -19,14 +20,12 @@ use crate::{
     network::{frontend_root_key, resolve_canonical_network_id_from_root},
     protocol_binding::resolve_registry_protocol_binding,
 };
-use candid::TypeEnv;
-use candid_parser::{
-    IDLProg,
-    bindings::{javascript, typescript},
-    syntax::{Dec, IDLMergedProg},
-};
 use canic_core::cdk::utils::hash::{hex_bytes, sha256_hex};
 use ic_host_fs::read::read_file_no_follow;
+use ic_platform::candid::contract::TypeEnv;
+use ic_platform::candid_parser::{
+    Dec, IDLMergedProg, IDLProg, compile_javascript, compile_typescript,
+};
 use std::{collections::BTreeMap, path::Path};
 
 pub use bundle::{manifest_digest, publish_bundle, verify_bundle};
@@ -101,7 +100,9 @@ pub fn bindings(candid: &[u8]) -> Result<FrontendBindingsView, FrontendError> {
         std::str::from_utf8(candid).map_err(|error| FrontendError::Candid(error.to_string()))?;
     let program: IDLProg = source
         .parse()
-        .map_err(|error: candid_parser::Error| FrontendError::Candid(error.to_string()))?;
+        .map_err(|error: ic_platform::candid_parser::Error| {
+            FrontendError::Candid(error.to_string())
+        })?;
     if program
         .decs
         .iter()
@@ -112,14 +113,14 @@ pub fn bindings(candid: &[u8]) -> Result<FrontendBindingsView, FrontendError> {
         ));
     }
     let mut environment = TypeEnv::new();
-    let actor = candid_parser::check_prog(&mut environment, &program)
+    let actor = ic_platform::candid_parser::check_prog(&mut environment, &program)
         .map_err(|error| FrontendError::Candid(error.to_string()))?;
     if actor.is_none() {
         return Err(FrontendError::Candid("missing service".to_string()));
     }
-    let javascript = javascript::compile(&environment, &actor).into_bytes();
+    let javascript = compile_javascript(&environment, &actor).into_bytes();
     let typescript =
-        typescript::compile(&environment, &actor, &IDLMergedProg::new(program)).into_bytes();
+        compile_typescript(&environment, &actor, &IDLMergedProg::new(program)).into_bytes();
     if javascript.len().max(typescript.len()) > MAX_FRONTEND_FILE_BYTES {
         return Err(FrontendError::Bound("generated binding bytes"));
     }

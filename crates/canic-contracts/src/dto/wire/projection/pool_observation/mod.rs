@@ -5,17 +5,19 @@
 //! role operations, release receipts, and recursive registry payloads into each
 //! transport. Compatibility is checked against the canonical role contracts.
 
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded ManagedCanisterStatusRequest wire projection for pool observation.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ManagedCanisterStatusRequest {
     CycleBalance,
 }
 
 /// Bounded ManagedCanisterStatusResponse wire projection for pool observation.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ManagedCanisterStatusResponse {
     CycleBalance(crate::dto::role::CycleBalanceStatusResponse),
 }

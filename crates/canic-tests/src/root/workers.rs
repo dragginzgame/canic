@@ -1,12 +1,14 @@
 // Category C - Artifact / deployment test (embedded config).
 // This test relies on embedded production config by design.
 
-use candid::Principal;
 use canic::{Error, dto::page::PageRequest, protocol};
-use canic_contracts::dto::wire::projection::current_inventory::ChildrenStatusRequest as CanisterStatusRequest;
-use canic_contracts::dto::wire::projection::current_inventory::ChildrenStatusResponse as CanisterStatusResponse;
+use canic_contracts::dto::wire::projection::current_inventory::{
+    ChildrenStatusRequest as CanisterStatusRequest,
+    ChildrenStatusResponse as CanisterStatusResponse,
+};
 use canic_testing_internal::pic::{CanicPicExt, report_canister_diagnostics};
-use ic_testkit::pic::{CandidCallExt, PocketIc};
+use ic_platform::Principal;
+use ic_testkit::pic::PocketIc;
 use std::time::Duration;
 
 const TC: u128 = 1_000_000_000_000;
@@ -21,14 +23,16 @@ pub fn create_worker(
     root_pid: Principal,
     hub_pid: Principal,
 ) -> Result<Principal, Error> {
-    let worker_pid: Result<Principal, Error> = pic
-        .update_candid(
-            hub_pid,
-            "create_worker",
-            (),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .expect("update Candid harness call");
+    let worker_pid: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
+        pic,
+        hub_pid,
+        ic_platform::Principal::anonymous(),
+        "create_worker",
+        (),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("update Candid harness call");
     let worker_pid = worker_pid?;
     wait_for_worker_sync(pic, root_pid, hub_pid, worker_pid);
     Ok(worker_pid)
@@ -54,17 +58,19 @@ fn wait_for_worker_sync(
     for _ in 0..50 {
         pic.tick();
 
-        let children: Result<CanisterStatusResponse, Error> = pic
-            .query_candid(
-                hub_pid,
-                protocol::CANIC_PUBLIC_STATUS,
-                (CanisterStatusRequest::Children(PageRequest {
-                    limit: 100,
-                    offset: 0,
-                }),),
-                canic::testing::CANDID_REPLY_LIMITS,
-            )
-            .expect("query Candid harness call");
+        let children: Result<CanisterStatusResponse, Error> = ic_testkit::pic::query_candid_args(
+            pic,
+            hub_pid,
+            ic_platform::Principal::anonymous(),
+            protocol::CANIC_PUBLIC_STATUS,
+            (CanisterStatusRequest::Children(PageRequest {
+                limit: 100,
+                offset: 0,
+            }),),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)
+        .expect("query Candid harness call");
 
         let CanisterStatusResponse::Children(children) =
             children.expect("query child list application");

@@ -5,8 +5,7 @@
 //! Boundary: consumes only a complete report and never represents partial query state.
 
 use crate::info_subnets::model::FleetSubnetInventoryReportV1;
-
-use canic_host::table::{ColumnAlign, render_table};
+use ic_host_text::table::{self, Alignment, Options};
 
 pub(super) fn text_report(report: &FleetSubnetInventoryReportV1) -> String {
     let rows = report
@@ -24,16 +23,20 @@ pub(super) fn text_report(report: &FleetSubnetInventoryReportV1) -> String {
             ]
         })
         .collect::<Vec<_>>();
-    let table = render_table(
+    let table = table::render(
         &["SUBNET", "ROOT", "STATUS", "POOL", "CANISTERS"],
         &rows,
         &[
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-            ColumnAlign::Right,
-            ColumnAlign::Right,
+            Alignment::Left,
+            Alignment::Left,
+            Alignment::Left,
+            Alignment::Right,
+            Alignment::Right,
         ],
+        Options {
+            column_gap: 3,
+            header_separator: true,
+        },
     );
     format!(
         "{table}\n\nFleet total: {} Canisters",

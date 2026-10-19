@@ -11,27 +11,30 @@ use crate::{
     protocol_binding::resolve_registry_protocol_binding,
     registry::RegistryEntry,
 };
-use candid::{CandidType, Principal};
-use canic_contracts::dto::page::PageRequest;
-use canic_contracts::dto::pool::CanisterPoolStatusRequest;
-use canic_contracts::dto::public_status::PublicHistoryRequest;
-use canic_contracts::dto::public_status::PublicMetricFamily;
-use canic_contracts::dto::public_status::PublicMetricsRequest;
-use canic_contracts::dto::template::WasmStoreStatusResponse;
-use canic_contracts::dto::wire::projection::capacity_inventory::RootRequest as EstateRequest;
-use canic_contracts::dto::wire::projection::capacity_inventory::RootResponse as EstateResponse;
-use canic_contracts::dto::wire::projection::observatory::MetricRequest;
-use canic_contracts::dto::wire::projection::observatory::MetricResponse;
-use canic_contracts::dto::wire::projection::observatory::RootFundingResponse;
-use canic_contracts::dto::wire::projection::observatory::StoreRequest;
-use canic_contracts::dto::wire::projection::observatory::StoreResponse;
-use canic_contracts::dto::wire::projection::overview::RoleStatusRequest as OverviewRequest;
-use canic_contracts::dto::wire::projection::overview::RoleStatusResponse as OverviewResponse;
-use canic_contracts::dto::wire::projection::release_coordinator_funding::Request as FundingRequest;
-use canic_contracts::dto::wire::projection::release_coordinator_funding::Response as CoordinatorResponse;
-use canic_contracts::ids::WasmStoreGcMode;
-use canic_contracts::protocol;
+use canic_contracts::{
+    dto::{
+        page::PageRequest,
+        pool::CanisterPoolStatusRequest,
+        public_status::{PublicHistoryRequest, PublicMetricFamily, PublicMetricsRequest},
+        template::WasmStoreStatusResponse,
+        wire::projection::{
+            capacity_inventory::{RootRequest as EstateRequest, RootResponse as EstateResponse},
+            observatory::{
+                MetricRequest, MetricResponse, RootFundingResponse, StoreRequest, StoreResponse,
+            },
+            overview::{
+                RoleStatusRequest as OverviewRequest, RoleStatusResponse as OverviewResponse,
+            },
+            release_coordinator_funding::{
+                Request as FundingRequest, Response as CoordinatorResponse,
+            },
+        },
+    },
+    ids::WasmStoreGcMode,
+    protocol,
+};
 use canic_core::role_contract::RoleCapabilityKey;
+use ic_platform::{Principal, candid::contract::CandidType};
 use std::path::Path;
 
 /// Independent role observations; implementations must not retry or substitute another role.
@@ -113,8 +116,8 @@ impl IcpObservatoryTransport<'_> {
             .map_err(|_| ObservationFailure::BindingUnavailable)?;
         let canister =
             Principal::from_text(&entry.pid).map_err(|_| ObservationFailure::InvalidResponse)?;
-        let argument =
-            candid::encode_one(request).map_err(|_| ObservationFailure::InvalidResponse)?;
+        let argument = ic_platform::candid::contract::encode_one(request)
+            .map_err(|_| ObservationFailure::InvalidResponse)?;
         let argument = crate::icp::write_candid_argument_file(&argument)
             .map_err(|_| ObservationFailure::TransportUnavailable)?;
         let mut command = self.icp.bounded_query_command(
@@ -339,12 +342,12 @@ fn decode_reply<O: CandidType + serde::de::DeserializeOwned>(
     maximum_bytes: usize,
 ) -> Result<O, ObservationFailure> {
     let bytes = response_bytes(envelope).map_err(response_failure)?;
-    let mut config = candid::de::DecoderConfig::new();
+    let mut config = ic_platform::candid::decoder::DecoderConfig::new();
     // Bound decoder work as well as captured bytes, including skipped Candid fields.
     config.set_decoding_quota(maximum_bytes.saturating_mul(64));
     config.set_skipping_quota(maximum_bytes);
     let reply: Result<O, canic_contracts::dto::error::Error> =
-        candid::utils::decode_one_with_config(&bytes, &config)
+        ic_platform::candid::decoder::decode_one_with_config(&bytes, &config)
             .map_err(|_| ObservationFailure::InvalidResponse)?;
     reply.map_err(|error| ObservationFailure::Rejected {
         code: u32::from(error.raw_code()),

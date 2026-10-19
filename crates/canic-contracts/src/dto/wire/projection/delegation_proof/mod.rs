@@ -6,17 +6,19 @@
 //! transport. Compatibility is checked against the canonical role contracts.
 
 use crate::dto::auth::RootDelegationProofBatchProof;
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 
 /// Bounded RootCommand wire projection for delegation proof.
 
 #[derive(CandidType, serde::Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootCommand {
     GetOrCreateDelegationProof,
 }
 
 /// Bounded RootCommandResponse wire projection for delegation proof.
 #[derive(CandidType, serde::Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootCommandResponse {
     GetOrCreateDelegationProof(RootDelegationProofBatchProof),
 }

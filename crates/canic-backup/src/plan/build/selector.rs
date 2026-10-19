@@ -11,7 +11,7 @@ use crate::{
 
 use std::str::FromStr;
 
-use candid::Principal;
+use ic_platform::Principal;
 
 /// Resolve an operator selector to one concrete live registry canister id.
 pub fn resolve_backup_selector(

@@ -369,7 +369,7 @@ and publication authority before application hooks.
 | `canic.core.fleet.state.v1` | Cell |
 | `canic.core.fleet.activation.v1` | Bounded optional cell |
 | `canic.core.auth.local_application_authorization.state.v1` | Cell (generation and protected binding) |
-| `canic.core.auth.local_application_authorization.sessions.v1` | Bounded vector (4 KiB rows; SDK session and read-only projection) |
+| `canic.core.auth.local_application_authorization.sessions.v1` | Bounded vector (4 KiB rows; canonical IC Auth session payload only) |
 | `canic.core.auth.local_application_authorization.replays.v1` | Bounded vector (512-byte consumed-proof tombstones) |
 | `canic.core.replay.receipts.v1` | B-tree |
 | `canic.core.cycles.tracker.v1` | B-tree |

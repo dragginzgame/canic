@@ -7,11 +7,13 @@
 mod tests;
 
 use crate::fleet_ensure::view::certified_custody::CertifiedCanisterCustodyView;
-use candid::Principal;
 use canic_contracts::ids::SubnetId;
 use canic_core::cdk::utils::hash::hex_bytes;
-use ic_agent::{Agent, AgentError, Certificate};
-use ic_certification::{Label, LookupResult};
+use ic_platform::{
+    Principal,
+    agent::{Agent, AgentError},
+    certification::{Certificate, Label, LookupResult},
+};
 use std::{collections::BTreeSet, time::Duration};
 use thiserror::Error;
 
@@ -75,7 +77,8 @@ fn project(
         canister: principal,
     };
     let path = |field: &'static [u8]| [b"canister".as_slice(), principal.as_slice(), field];
-    let bytes = ic_agent::lookup_value(certificate, path(b"controllers")).map_err(|_| invalid())?;
+    let bytes = ic_platform::agent::lookup_value(certificate, path(b"controllers"))
+        .map_err(|_| invalid())?;
     let mut input = bytes;
     let mut controllers: Vec<Principal> =
         ciborium::de::from_reader_with_recursion_limit(&mut input, 8).map_err(|_| invalid())?;

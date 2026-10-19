@@ -340,7 +340,7 @@ impl ShardingRegistryOps {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cdk::structures::{BTreeMap, VectorMemory};
+    use crate::cdk::structures::StableBTreeMap as BTreeMap;
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -361,8 +361,8 @@ mod tests {
 
     #[test]
     fn activation_is_owned_by_the_registry_row_and_survives_reopen() {
-        let memory = VectorMemory::default();
-        let mut records = BTreeMap::init(memory.clone());
+        let runtime = crate::memory::fixtures::runtime(&["test.shards.v1"], 1);
+        let mut records = BTreeMap::init(runtime.open_memory("test.shards.v1").unwrap());
         let active =
             ShardEntryRecord::try_new("pool", 0, CanisterRole::new("shard"), 10, 1, [1; 32])
                 .unwrap();
@@ -372,7 +372,9 @@ mod tests {
         records.insert(p(1), active.clone());
         records.insert(p(2), inactive.clone());
         drop(records);
-        let reopened = BTreeMap::<Principal, ShardEntryRecord, _>::init(memory);
+        let reopened = BTreeMap::<Principal, ShardEntryRecord, _>::init(
+            runtime.open_memory("test.shards.v1").unwrap(),
+        );
         assert_eq!(reopened.get(&p(1)), Some(active));
         assert_eq!(reopened.get(&p(2)), Some(inactive));
         ShardingRegistryOps::clear_for_test();

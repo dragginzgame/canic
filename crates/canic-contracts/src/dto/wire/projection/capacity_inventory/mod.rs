@@ -9,30 +9,34 @@ use crate::dto::{
     fleet_registry::FleetRegistry,
     pool::{CanisterPoolResponse, CanisterPoolStatusRequest},
 };
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded CoordinatorRequest wire projection for capacity inventory.
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CoordinatorRequest {
     Registry,
 }
 
 /// Bounded CoordinatorResponse wire projection for capacity inventory.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CoordinatorResponse {
     Registry(Box<FleetRegistry>),
 }
 
 /// Bounded RootRequest wire projection for capacity inventory.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootRequest {
     Pool(CanisterPoolStatusRequest),
 }
 
 /// Bounded RootResponse wire projection for capacity inventory.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootResponse {
     Pool(Box<CanisterPoolResponse>),
 }

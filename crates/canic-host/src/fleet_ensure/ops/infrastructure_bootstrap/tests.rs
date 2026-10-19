@@ -924,8 +924,9 @@ fn qualify_ready_coordinator(
     )
     .unwrap();
     source.coordinator = BootstrapCoordinatorSelection::Ready;
-    source.coordinator_registry_candid_hex =
-        Some(hex_bytes(candid::encode_one(&registry).unwrap()));
+    source.coordinator_registry_candid_hex = Some(hex_bytes(
+        ic_platform::candid::contract::encode_one(&registry).unwrap(),
+    ));
     let artifacts = resolve_desired_artifacts(root, &desired).unwrap();
     let coordinator = source.sources.get_mut("coordinator").unwrap();
     coordinator.sample.binding.module_sha256 = Some(
@@ -938,8 +939,9 @@ fn qualify_ready_coordinator(
     let plan = prepare(root, &desired, &source, "ready-coordinator", 46).unwrap();
     assert!(plan.canisters[0].actions.is_empty());
     registry.revision += 1;
-    source.coordinator_registry_candid_hex =
-        Some(hex_bytes(candid::encode_one(&registry).unwrap()));
+    source.coordinator_registry_candid_hex = Some(hex_bytes(
+        ic_platform::candid::contract::encode_one(&registry).unwrap(),
+    ));
     reseal(&mut desired, &mut source);
     assert!(matches!(
         prepare(root, &desired, &source, "wrong-coordinator-registry", 46),

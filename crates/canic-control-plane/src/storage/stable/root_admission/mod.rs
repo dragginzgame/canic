@@ -8,7 +8,7 @@ use canic_contracts::ids::{
     FleetAdmissionPolicy, FleetCoordinatorBinding, FleetSubnetRootBinding, ManagedCanisterBinding,
 };
 use canic_core::{
-    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
+    cdk::structures::{DefaultMemoryImpl, StableCell as Cell},
     impl_storable_bounded,
     shared_support::fleet_admission_root::MAX_FLEET_ADMISSION_ROOT_RECORD_BYTES,
 };
@@ -17,7 +17,7 @@ use std::cell::RefCell;
 
 std::thread_local! {
     static ROOT_ADMISSION_STATE:
-        RefCell<Cell<RootAdmissionStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
+        RefCell<Cell<RootAdmissionStateRecord, DefaultMemoryImpl>> =
         RefCell::new(Cell::init(
             canic_core::memory::open(crate::memory::keys::ROOT_ADMISSION_V1),
             RootAdmissionStateRecord::default(),
@@ -374,7 +374,7 @@ mod tests {
         assert!(bytes.len() <= MAX_FLEET_ADMISSION_ROOT_RECORD_BYTES as usize);
     }
 
-    fn principal(index: usize) -> candid::Principal {
+    fn principal(index: usize) -> ic_platform::Principal {
         let mut bytes = [0_u8; 29];
         bytes[..8].copy_from_slice(
             &u64::try_from(index)
@@ -382,6 +382,6 @@ mod tests {
                 .to_be_bytes(),
         );
         bytes[8..].fill(u8::try_from(index % 251).expect("bounded fixture byte"));
-        candid::Principal::from_slice(&bytes)
+        ic_platform::Principal::from_slice(&bytes)
     }
 }

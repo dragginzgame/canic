@@ -18,8 +18,8 @@ use crate::fleet_ensure::{
         transfer_argument,
     },
 };
-use candid::Principal;
 use canic_core::cdk::utils::hash::{decode_hex, sha256_hex};
+use ic_platform::Principal;
 
 pub(in crate::fleet_ensure) fn fresh_quote(
     plan: &FleetEnsurePlan,

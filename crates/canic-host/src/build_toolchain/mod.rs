@@ -186,6 +186,10 @@ pub enum BuildToolchainError {
 }
 
 /// Install and admit both canonical Wasm tools for the current host.
+///
+/// # Panics
+///
+/// Panics if the canonical installation path has no parent.
 pub fn install_required_build_toolchain() -> Result<InstalledBuildToolchain, BuildToolchainError> {
     // Fail unsupported platform projections before downloading or publishing either tool.
     current_binaryen_authority()?;

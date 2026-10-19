@@ -12,14 +12,16 @@ use crate::dto::{
 };
 
 /// Bounded ManagedCommandResponse selectors for managed component group validation.
-#[derive(candid::CandidType, serde::Deserialize)]
+#[derive(ic_platform::candid::contract::CandidType, serde::Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ManagedCommandResponse {
     OperationAccepted(OperationReceipt),
     PrepareFleetAdmission(Box<FleetAdmissionTargetReceipt>),
 }
 
 /// Bounded ManagedStatusRequest selectors for managed component group validation.
-#[derive(candid::CandidType)]
+#[derive(ic_platform::candid::contract::CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ManagedStatusRequest {
     Admission(PageRequest),
     Binding,
@@ -29,7 +31,8 @@ pub enum ManagedStatusRequest {
 }
 
 /// Bounded ManagedStatusResponse selectors for managed component group validation.
-#[derive(candid::CandidType, serde::Deserialize)]
+#[derive(ic_platform::candid::contract::CandidType, serde::Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ManagedStatusResponse {
     Admission(FleetAdmissionProjectionStatusResponse),
     Binding(crate::ids::ManagedCanisterBinding),

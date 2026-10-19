@@ -9,11 +9,12 @@ use crate::dto::{
     pool_import::{PoolImportContext, PoolImportIdentity, PoolImportStatus},
     root::RootPoolReleaseResponse,
 };
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded transport selectors used by fleet_registry baseline tests capacity_import validation.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum StatusRequest {
     PoolImport(PoolImportIdentity),
     PoolImportContext,
@@ -22,6 +23,7 @@ pub enum StatusRequest {
 
 /// Bounded transport selectors used by fleet_registry baseline tests capacity_import validation.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum StatusResponse {
     PoolImport(Box<PoolImportStatus>),
     PoolImportContext(Box<PoolImportContext>),

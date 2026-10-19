@@ -16,10 +16,6 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum MemoryRegistryError {
-    /// No successful host bootstrap supplied a diagnostic pool.
-    #[error("host memory pool is not committed")]
-    PoolUnavailable,
-
     /// A composed consumer rejected the sealed snapshot before commitment.
     #[error("composed memory admission rejected: {source}")]
     Admission {

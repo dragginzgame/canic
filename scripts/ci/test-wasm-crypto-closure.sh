@@ -32,7 +32,16 @@ if [[ "$CRYPTO_TEST_CASE" == duplicate-version ]]; then
     printf 'sha2 v0.11.0\n'
 fi
 case "$package/$features" in
-    delegation_root_stub/|canister_test/|canister_user_shard/)
+    delegation_root_stub/)
+        printf '%s v0.1.0\n' signature rfc6979 hmac elliptic-curve ecdsa crypto-bigint signature ic-canister-sig-creation ic-certification
+        if [[ "$CRYPTO_TEST_CASE" != missing-root-ecdsa ]]; then
+            printf 'k256 v0.1.0\n'
+        fi
+        if [[ "$CRYPTO_TEST_CASE" == unexpected-root-verifier ]]; then
+            printf 'ic-verify-bls-signature v0.1.0\n'
+        fi
+        ;;
+    canister_test/|canister_user_shard/)
         # Deliberately unordered and repeated identities must compare as a set.
         printf '%s v0.1.0\n' signature rfc6979 k256 ic_bls12_381 \
             ic-verify-bls-signature ic-signature-verification ic-certification \
@@ -70,7 +79,7 @@ host_collation="$(locale -a | awk 'tolower($0) ~ /^en_us\./ { print; exit }')"
 if [[ -n "$host_collation" ]]; then
     check_case valid 0 "$host_collation"
 fi
-for selection in missing-sha256 duplicate-version missing-signature unexpected-signature; do
+for selection in missing-sha256 duplicate-version missing-signature unexpected-signature unexpected-root-verifier missing-root-ecdsa; do
     check_case "$selection" 1 C
 done
 echo 'Wasm crypto closure fixtures passed: collation, package sets, versions and SHA-256 (Cargo stubs)'

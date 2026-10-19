@@ -5,7 +5,7 @@
 //! Boundary: callers persist authority before invoking this mechanical transport adapter.
 
 use crate::icp::{IcpCli, IcpCommandError, IcpJsonResponseError};
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::de::DeserializeOwned;
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
@@ -25,7 +25,7 @@ static NEXT_ARGUMENT_FILE: AtomicU64 = AtomicU64::new(0);
 #[derive(Debug, ThisError)]
 pub enum IcpCandidCallError {
     #[error("failed to encode Candid call argument: {0}")]
-    Encode(#[source] candid::Error),
+    Encode(#[source] ic_platform::candid::contract::Error),
 
     #[error("failed to manage Candid call argument file: {0}")]
     File(#[source] io::Error),
@@ -80,7 +80,8 @@ impl IcpCli {
         I: CandidType,
         O: CandidType + DeserializeOwned,
     {
-        let bytes = candid::encode_one(input).map_err(IcpCandidCallError::Encode)?;
+        let bytes =
+            ic_platform::candid::contract::encode_one(input).map_err(IcpCandidCallError::Encode)?;
         let path = write_candid_argument_file(&bytes).map_err(IcpCandidCallError::File)?;
         let output = if query {
             self.canister_query_binary_args_output_with_candid(
@@ -195,9 +196,9 @@ exit "$(cat exit-code)"
         fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
         let icp = IcpCli::new(executable.to_str().unwrap(), None).with_cwd(&root);
         let payload = vec![0xa5_u8; 1024 * 1024];
-        let encoded = candid::encode_one(&payload).unwrap();
+        let encoded = ic_platform::candid::contract::encode_one(&payload).unwrap();
         let response = serde_json::json!({
-            "response_bytes": hex_bytes(candid::encode_one(42_u64).unwrap()),
+            "response_bytes": hex_bytes(ic_platform::candid::contract::encode_one(42_u64).unwrap()),
         });
         let mut paths = BTreeSet::new();
         for (query, cleanup_mode) in [

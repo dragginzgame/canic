@@ -7,9 +7,9 @@
 #[cfg(test)]
 mod tests;
 
-use candid::CandidType;
 use canic_contracts::dto::error::Error as CanicError;
 use ic_host_tools::response::{ResponseError, ResponseFormat, ResponseLimits, decode};
+use ic_platform::candid::contract::CandidType;
 use serde::de::DeserializeOwned;
 use thiserror::Error as ThisError;
 
@@ -22,7 +22,7 @@ use thiserror::Error as ThisError;
 #[derive(Debug, ThisError)]
 pub enum IcpJsonResponseError {
     #[error("ICP response_bytes Candid was invalid: {0}")]
-    Candid(#[source] candid::Error),
+    Candid(#[source] ic_platform::candid::contract::Error),
 
     #[error("ICP response envelope was invalid: {0}")]
     Envelope(#[from] ResponseError),
@@ -40,7 +40,7 @@ where
     T: CandidType + DeserializeOwned,
 {
     let bytes = response_bytes(output)?;
-    candid::decode_one(&bytes).map_err(IcpJsonResponseError::Candid)
+    ic_platform::candid::decoder::decode_one(&bytes).map_err(IcpJsonResponseError::Candid)
 }
 
 /// Decode a `Result<T, canic_contracts::dto::error::Error>` from the canonical envelope.
@@ -49,7 +49,7 @@ where
     T: CandidType + DeserializeOwned,
 {
     let bytes = response_bytes(output)?;
-    let response = candid::decode_one::<Result<T, CanicError>>(&bytes)
+    let response = ic_platform::candid::decoder::decode_one::<Result<T, CanicError>>(&bytes)
         .map_err(IcpJsonResponseError::Candid)?;
     response.map_err(IcpJsonResponseError::Rejected)
 }

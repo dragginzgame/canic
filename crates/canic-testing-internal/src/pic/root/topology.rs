@@ -6,15 +6,16 @@ use crate::pic::{
     canic::{adopt_sibling_wasm_store, create_and_install_pre_adoption_root},
     startup::try_start_pocket_ic,
 };
-use candid::Principal;
+use ic_platform::Principal;
 
-use canic::Error;
-use canic::dto::canister::CanisterInfo;
-use canic::dto::page::PageRequest;
-use canic::ids::CanisterRole;
-use canic::protocol;
+use canic::{
+    Error,
+    dto::{canister::CanisterInfo, page::PageRequest},
+    ids::CanisterRole,
+    protocol,
+};
 
-use ic_testkit::pic::{PocketIc, PocketIcBuilder, PocketIcStartupError, prelude::*};
+use ic_testkit::pic::{PocketIc, PocketIcBuilder, PocketIcStartupError};
 use std::{collections::HashMap, fs, time::Instant};
 
 use canic_contracts::dto::wire::projection::fixture_root_topology::RootStatusRequest;
@@ -207,17 +208,19 @@ fn fetch_root_children(pic: &PocketIc, root_id: Principal) -> Vec<CanisterInfo> 
     let mut entries = Vec::new();
     let mut offset = 0;
     loop {
-        let page: Result<RootStatusResponse, Error> = pic
-            .query_candid(
-                root_id,
-                protocol::CANIC_PUBLIC_STATUS,
-                (RootStatusRequest::Children(PageRequest {
-                    limit: PAGE_LIMIT,
-                    offset,
-                }),),
-                canic::testing::CANDID_REPLY_LIMITS,
-            )
-            .expect("query root children transport");
+        let page: Result<RootStatusResponse, Error> = ic_testkit::pic::query_candid_args(
+            pic,
+            root_id,
+            ic_platform::Principal::anonymous(),
+            protocol::CANIC_PUBLIC_STATUS,
+            (RootStatusRequest::Children(PageRequest {
+                limit: PAGE_LIMIT,
+                offset,
+            }),),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)
+        .expect("query root children transport");
         let page = match page.expect("query root children application") {
             RootStatusResponse::Children(page) => page,
             RootStatusResponse::StoreOverview(_) => panic!("unexpected Root status response"),
@@ -236,14 +239,16 @@ fn fetch_root_children(pic: &PocketIc, root_id: Principal) -> Vec<CanisterInfo> 
 
 // Fetch the currently tracked managed wasm_store canister ids from root-owned state.
 fn fetch_managed_store_pids(pic: &PocketIc, root_id: Principal) -> Vec<Principal> {
-    let overview: Result<RootStatusResponse, canic::Error> = pic
-        .query_candid(
-            root_id,
-            canic::protocol::CANIC_ROOT_STATUS,
-            (RootStatusRequest::StoreOverview,),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .expect("query wasm_store overview transport");
+    let overview: Result<RootStatusResponse, canic::Error> = ic_testkit::pic::query_candid_args(
+        pic,
+        root_id,
+        ic_platform::Principal::anonymous(),
+        canic::protocol::CANIC_ROOT_STATUS,
+        (RootStatusRequest::StoreOverview,),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("query wasm_store overview transport");
 
     match overview.expect("query wasm_store overview application") {
         RootStatusResponse::StoreOverview(overview) => overview,

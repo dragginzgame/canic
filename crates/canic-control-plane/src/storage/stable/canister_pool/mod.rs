@@ -5,10 +5,7 @@ pub mod capacity_import;
 use canic_contracts::{cycles::Cycles, ids::ComponentInstanceId};
 use canic_core::{
     cdk::{
-        structures::{
-            DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, cell::Cell,
-            memory::RuntimeMemory,
-        },
+        structures::{DefaultMemoryImpl, StableBTreeMap as StableBtreeMap, StableCell as Cell},
         types::Principal,
     },
     control_plane_support::model::replay::ReplayCostGuardSettlement,
@@ -20,19 +17,19 @@ use std::cell::RefCell;
 
 std::thread_local! {
     static CANISTER_POOL: RefCell<
-        StableBtreeMap<Principal, CanisterPoolAssetRecord, RuntimeMemory<DefaultMemoryImpl>>
+        StableBtreeMap<Principal, CanisterPoolAssetRecord, DefaultMemoryImpl>
     > = RefCell::new(StableBtreeMap::init(canic_core::memory::open(crate::memory::keys::ROOT_CANISTER_INVENTORY_ASSETS_V1)));
 }
 
 std::thread_local! {
     static CANISTER_POOL_HANDOFF_RECEIPTS: RefCell<
-        StableBtreeMap<Principal, CanisterPoolHandoffReceiptRecord, RuntimeMemory<DefaultMemoryImpl>>
+        StableBtreeMap<Principal, CanisterPoolHandoffReceiptRecord, DefaultMemoryImpl>
     > = RefCell::new(StableBtreeMap::init(canic_core::memory::open(crate::memory::keys::ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_V1)));
 }
 
 std::thread_local! {
     static CANISTER_POOL_STATE: RefCell<
-        Cell<CanisterPoolStateRecord, RuntimeMemory<DefaultMemoryImpl>>
+        Cell<CanisterPoolStateRecord, DefaultMemoryImpl>
     > = RefCell::new(Cell::init(
         canic_core::memory::open(crate::memory::keys::ROOT_CANISTER_POOL_STATE_V1),
         CanisterPoolStateRecord::default(),
@@ -303,8 +300,8 @@ impl CanisterPoolStore {
 
     #[cfg(test)]
     pub fn clear() {
-        CANISTER_POOL.with_borrow_mut(StableBtreeMap::clear_new);
-        CANISTER_POOL_HANDOFF_RECEIPTS.with_borrow_mut(StableBtreeMap::clear_new);
+        CANISTER_POOL.with_borrow_mut(StableBtreeMap::clear);
+        CANISTER_POOL_HANDOFF_RECEIPTS.with_borrow_mut(StableBtreeMap::clear);
         Self::set_state(CanisterPoolStateRecord::default());
     }
 }
@@ -404,7 +401,15 @@ mod tests {
         };
 
         assert_eq!(structurally_maximal.to_bytes().len(), 67);
-        let mut receipts = StableBtreeMap::init(DefaultMemoryImpl::default());
+        let runtime = ic_memory::testing::fixture_runtime(
+            DefaultMemoryImpl::default(),
+            "test",
+            "test.",
+            &["test.receipts.v1"],
+            ic_memory::MemoryManagerConfig::new(1).unwrap(),
+        )
+        .unwrap();
+        let mut receipts = StableBtreeMap::init(runtime.open_memory("test.receipts.v1").unwrap());
         receipts.insert(maximum_principal(), structurally_maximal);
         assert_eq!(
             receipts.get(&maximum_principal()),

@@ -5,7 +5,7 @@
 //! Boundary: table formatting for create command summaries.
 
 use super::super::BackupCreateReport;
-use canic_host::table::{ColumnAlign, render_table};
+use ic_host_text::table::{self, Alignment, Options};
 
 pub(super) fn render_create_report(report: &BackupCreateReport) -> String {
     let rows = [[
@@ -20,7 +20,7 @@ pub(super) fn render_create_report(report: &BackupCreateReport) -> String {
         report.executed_operations.to_string(),
         report.out.display().to_string(),
     ]];
-    render_table(
+    table::render(
         &[
             "FLEET",
             "ENVIRONMENT",
@@ -34,7 +34,11 @@ pub(super) fn render_create_report(report: &BackupCreateReport) -> String {
             "OUT",
         ],
         &rows,
-        &[ColumnAlign::Left; 10],
+        &[Alignment::Left; 10],
+        Options {
+            column_gap: 3,
+            header_separator: true,
+        },
     )
 }
 

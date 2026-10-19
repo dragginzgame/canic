@@ -4,6 +4,7 @@
 //! Does not own: current Fleet state, replica lifecycle, or App config parsing.
 //! Boundary: reads host/workspace state and formats the operator-facing status view.
 
+use ic_host_text::table::{self, Alignment, Options};
 #[cfg(test)]
 mod tests;
 
@@ -24,7 +25,6 @@ use canic_host::{
     },
     release_set::{AppConfigSnapshot, display_workspace_path},
     replica_query,
-    table::{ColumnAlign, render_table},
 };
 use clap::Command as ClapCommand;
 use std::{ffi::OsString, path::Path};
@@ -299,10 +299,14 @@ fn render_app_table(apps: &[StatusAppRow]) -> String {
         .iter()
         .map(|app| [app.app.clone(), app.config.clone(), app.canisters.clone()])
         .collect::<Vec<_>>();
-    render_table(
+    table::render(
         &[APP_HEADER, CONFIG_HEADER, CANISTERS_HEADER],
         &rows,
-        &[ColumnAlign::Left; 3],
+        &[Alignment::Left; 3],
+        Options {
+            column_gap: 3,
+            header_separator: true,
+        },
     )
 }
 
@@ -319,7 +323,7 @@ fn render_fleet_table(fleets: &[StatusFleetRow]) -> String {
             ]
         })
         .collect::<Vec<_>>();
-    render_table(
+    table::render(
         &[
             FLEET_HEADER,
             APP_HEADER,
@@ -328,7 +332,11 @@ fn render_fleet_table(fleets: &[StatusFleetRow]) -> String {
             COORDINATOR_HEADER,
         ],
         &rows,
-        &[ColumnAlign::Left; 5],
+        &[Alignment::Left; 5],
+        Options {
+            column_gap: 3,
+            header_separator: true,
+        },
     )
 }
 

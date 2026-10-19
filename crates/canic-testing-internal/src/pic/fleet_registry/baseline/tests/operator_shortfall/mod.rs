@@ -26,15 +26,16 @@ pub(super) fn assert_fresh_reinstall_rejection(
         })
     };
     let before = snapshot();
-    let withdrawals: u64 = input
-        .pic
-        .query_candid(
-            ledger,
-            "withdrawal_count",
-            (),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .unwrap();
+    let withdrawals: u64 = ic_testkit::pic::query_candid_args(
+        input.pic,
+        ledger,
+        ic_platform::Principal::anonymous(),
+        "withdrawal_count",
+        (),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap();
     assert!(plan.conservation.maximum_operator_debit_cycles > 0);
 
     move_fixture_balance(input.pic, ledger, operator, reserve, balance.clone());
@@ -68,15 +69,16 @@ pub(super) fn assert_fresh_reinstall_rejection(
     );
     assert_eq!(snapshot(), before);
     assert_eq!(
-        input
-            .pic
-            .query_candid::<u64, _>(
-                ledger,
-                "withdrawal_count",
-                (),
-                canic::testing::CANDID_REPLY_LIMITS
-            )
-            .unwrap(),
+        ic_testkit::pic::query_candid_args::<(u64,), _>(
+            input.pic,
+            ledger,
+            ic_platform::Principal::anonymous(),
+            "withdrawal_count",
+            (),
+            canic::testing::CANDID_REPLY_LIMITS
+        )
+        .map(|(reply,)| reply)
+        .unwrap(),
         withdrawals
     );
     move_fixture_balance(input.pic, ledger, reserve, operator, balance.clone());
@@ -92,16 +94,19 @@ fn move_fixture_balance(
 ) {
     // The fixture-only override makes the out-and-back setup conserve the exact
     // original balance. Restore the reviewed fee before production admission.
-    let _: () = pic
-        .update_candid(
-            ledger,
-            "set_transfer_fee_override",
-            (Some(Nat::from(0_u8)),),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .unwrap();
-    let receipt: Result<Nat, QualificationIcrc1TransferError> = pic
-        .update_candid_as(
+    let _: () = ic_testkit::pic::update_candid_args(
+        pic,
+        ledger,
+        ic_platform::Principal::anonymous(),
+        "set_transfer_fee_override",
+        (Some(Nat::from(0_u8)),),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap();
+    let receipt: Result<Nat, QualificationIcrc1TransferError> =
+        ic_testkit::pic::update_candid_args(
+            pic,
             ledger,
             from,
             "icrc1_transfer",
@@ -118,14 +123,17 @@ fn move_fixture_balance(
             },),
             canic::testing::CANDID_REPLY_LIMITS,
         )
+        .map(|(reply,)| reply)
         .unwrap();
     receipt.unwrap();
-    let _: () = pic
-        .update_candid(
-            ledger,
-            "set_transfer_fee_override",
-            (None::<Nat>,),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .unwrap();
+    let _: () = ic_testkit::pic::update_candid_args(
+        pic,
+        ledger,
+        ic_platform::Principal::anonymous(),
+        "set_transfer_fee_override",
+        (None::<Nat>,),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap();
 }

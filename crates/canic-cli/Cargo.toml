@@ -18,7 +18,6 @@ name = "canic"
 path = "src/main.rs"
 
 [dependencies]
-candid = { workspace = true }
 canic-backup = { workspace = true }
 canic-contracts.workspace = true
 canic-core = { workspace = true, features = [] }
@@ -27,12 +26,20 @@ clap = { workspace = true }
 ic-host-fs = { workspace = true }
 ic-host-process = { workspace = true }
 ic-host-text = { workspace = true }
+ic-platform = { workspace = true, features = ["candid"] }
 rustix = { workspace = true, features = ["termios"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 signal-hook = { workspace = true }
 thiserror = { workspace = true }
 toml = { workspace = true }
+
+[dev-dependencies.ic-backup]
+workspace = true
+
+[dev-dependencies.ic-host-process]
+workspace = true
+features = ["test-support"]
 
 [lints]
 workspace = true

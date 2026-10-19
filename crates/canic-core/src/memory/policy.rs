@@ -33,7 +33,7 @@ impl CanicMemoryManagerPolicy {
 
     /// Compose consumer admission with Canic's bootstrap identity.
     #[must_use]
-    pub fn with_admission(mut self, admission: MemoryBootstrapAdmission) -> Self {
+    pub const fn with_admission(mut self, admission: MemoryBootstrapAdmission) -> Self {
         self.admission = Some(admission);
         self
     }

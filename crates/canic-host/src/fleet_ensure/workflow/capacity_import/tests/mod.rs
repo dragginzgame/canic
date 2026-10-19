@@ -14,7 +14,7 @@ use crate::fleet_ensure::{
     },
     policy::capacity_import::tests::{destination, plan, sources},
 };
-use ic_agent::{Agent, Identity, identity::BasicIdentity};
+use ic_platform::agent::{Agent, BasicIdentity, Identity};
 use sha2_host::{Digest, Sha256};
 use std::{
     path::{Path, PathBuf},

@@ -530,8 +530,9 @@ fn wire_acknowledgements_share_the_retained_participant_phase() {
             binding: record.binding().clone(),
             phase: record.phase(),
         };
-        let bytes = candid::encode_one(&acknowledgement).unwrap();
-        let decoded: ApplicationCheckpointParticipantStatus = candid::decode_one(&bytes).unwrap();
+        let bytes = ic_platform::candid::contract::encode_one(&acknowledgement).unwrap();
+        let decoded: ApplicationCheckpointParticipantStatus =
+            ic_platform::candid::decoder::decode_one(&bytes).unwrap();
         assert_eq!(decoded, acknowledgement);
     }
 }

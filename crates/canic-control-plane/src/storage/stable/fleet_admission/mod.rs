@@ -4,19 +4,16 @@
 //! Does not own: mutation decisions, transport authorization, participant distribution, or status.
 //! Boundary: ops converts complete model state to and from this memory-ID-64 record.
 
-use candid::Principal;
 use canic_contracts::ids::{
     FleetAdmissionPolicy, FleetAdmissionSelector, FleetCoordinatorBinding, SubnetId,
 };
 #[cfg(feature = "fleet-coordinator-canister")]
-use canic_core::cdk::{
-    bounded_cell::BoundedCell,
-    structures::{DefaultMemoryImpl, memory::RuntimeMemory},
-};
+use canic_core::cdk::structures::{BoundedCell, DefaultMemoryImpl};
 use canic_core::{
     impl_storable_bounded,
     shared_support::fleet_admission_authority::MAX_FLEET_ADMISSION_AUTHORITY_RECORD_BYTES,
 };
+use ic_platform::Principal;
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "fleet-coordinator-canister")]
 use std::cell::RefCell;
@@ -24,7 +21,7 @@ use std::cell::RefCell;
 #[cfg(feature = "fleet-coordinator-canister")]
 std::thread_local! {
     static FLEET_ADMISSION: RefCell<
-        BoundedCell<Option<FleetAdmissionAuthorityRecord>, RuntimeMemory<DefaultMemoryImpl>>,
+        BoundedCell<Option<FleetAdmissionAuthorityRecord>, DefaultMemoryImpl>,
     > = RefCell::new(BoundedCell::init(canic_core::memory::open(crate::memory::keys::FLEET_ADMISSION_V1), None));
 }
 

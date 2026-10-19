@@ -6,13 +6,12 @@
 
 use crate::dto::prelude::*;
 
-pub use crate::values::memory::{
-    MemoryAllocationBinding, MemoryAllocationState, MemoryCommitRecoveryErrorResponse,
-};
+pub use crate::values::memory::{MemoryAllocationBinding, MemoryCommitRecoveryErrorResponse};
 
 /// Measured physical and virtual allocations exposed by protected observations.
 /// Covers all usable IDs, including unknown bindings and the substrate ledger.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct MemoryAllocationsResponse {
     pub current_generation: u64,
     pub manager_layout_version: u8,
@@ -43,6 +42,7 @@ pub struct MemoryAllocationsResponse {
 
 /// One manager ID's measured capacity and independently sourced ownership metadata.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct MemoryAllocationEntry {
     pub memory_manager_id: u8,
     pub binding: MemoryAllocationBinding,
@@ -61,6 +61,7 @@ pub struct MemoryAllocationEntry {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct MemoryLedgerResponse {
     pub ledger_schema_version: u32,
     pub physical_format_id: u32,
@@ -78,6 +79,7 @@ pub struct MemoryLedgerResponse {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct MemoryCommitRecoveryResponse {
     pub current: MemoryCommitSnapshotResponse,
     pub authoritative_generation: Option<u64>,
@@ -89,6 +91,7 @@ pub struct MemoryCommitRecoveryResponse {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct MemoryCommitSnapshotResponse {
     pub present: bool,
     pub generation: Option<u64>,
@@ -97,6 +100,7 @@ pub struct MemoryCommitSnapshotResponse {
 
 /// Current host grants and unmanaged physical exclusions, including governance.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct MemoryAllocationPoolEntry {
     pub authorities: Vec<MemoryAuthorityEntry>,
     pub excluded_ids: Vec<u8>,
@@ -104,6 +108,7 @@ pub struct MemoryAllocationPoolEntry {
 
 /// One admitted linked-code owner and its permanent key namespace.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct MemoryAuthorityEntry {
     pub owner: String,
     pub key_prefix: String,
@@ -114,10 +119,10 @@ pub struct MemoryAuthorityEntry {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct MemoryLedgerMemoryEntry {
     pub memory_manager_id: u8,
     pub stable_key: String,
-    pub state: MemoryAllocationState,
     pub size: MemoryAllocationSizeEntry,
 }
 
@@ -126,10 +131,10 @@ pub struct MemoryLedgerMemoryEntry {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct MemoryAllocationRecordEntry {
     pub memory_manager_id: Option<u8>,
     pub stable_key: String,
-    pub state: MemoryAllocationState,
     pub memory_size: Option<MemoryAllocationSizeEntry>,
 }
 
@@ -138,6 +143,7 @@ pub struct MemoryAllocationRecordEntry {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct MemoryAllocationSizeEntry {
     pub wasm_pages: u64,
     pub bytes: u64,
@@ -146,7 +152,7 @@ pub struct MemoryAllocationSizeEntry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use candid::{Decode, Encode};
+    use ic_platform::candid::contract::{Decode, Encode};
     use serde::de::DeserializeOwned;
     use std::fmt::Debug;
 
@@ -154,7 +160,23 @@ mod tests {
     fn memory_enums_roundtrip_candid_with_existing_variant_labels() {
         assert_enum_candid_contract(MemoryCommitRecoveryErrorResponse::InvalidSnapshot);
         assert_enum_candid_contract(MemoryCommitRecoveryErrorResponse::UnexpectedGeneration);
-        assert_enum_candid_contract(MemoryAllocationState::Retired);
+    }
+
+    #[test]
+    fn allocation_record_roundtrips_permanent_binding_and_measurement() {
+        let value = MemoryAllocationRecordEntry {
+            memory_manager_id: Some(100),
+            stable_key: "app.users.v1".into(),
+            memory_size: Some(MemoryAllocationSizeEntry {
+                wasm_pages: 2,
+                bytes: 131_072,
+            }),
+        };
+        let bytes = Encode!(&value).unwrap();
+        let decoded = Decode!(&bytes, MemoryAllocationRecordEntry).unwrap();
+        assert_eq!(decoded.memory_manager_id, value.memory_manager_id);
+        assert_eq!(decoded.stable_key, value.stable_key);
+        assert_eq!(decoded.memory_size, value.memory_size);
     }
 
     fn assert_enum_candid_contract<T>(value: T)

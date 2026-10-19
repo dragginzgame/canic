@@ -14,7 +14,7 @@ use crate::{
     },
     ops::prelude::*,
 };
-use candid::Nat;
+use ic_platform::candid::contract::Nat;
 
 pub use crate::domain::canister::{CanisterStatusType, LogVisibility};
 
@@ -324,7 +324,7 @@ pub(super) fn update_settings_to_infra(args: &UpdateSettingsArgs) -> InfraUpdate
     InfraUpdateSettingsArgs {
         canister_id: args.canister_id,
         settings: settings_to_infra(&args.settings),
-        sender_canister_version: Some(ic_cdk::api::canister_version()),
+        sender_canister_version: Some(ic_platform::cdk::api::canister_version()),
     }
 }
 

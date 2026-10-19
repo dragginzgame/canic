@@ -48,7 +48,7 @@ macro_rules! canic_emit_root_command_endpoint {
             {
                 return;
             }
-            let Ok(command) = ::canic::__internal::candid::decode_one::<RootCommand>(&bytes) else {
+            let Ok(command) = ::canic::__internal::ic_platform::candid::decoder::decode_one::<RootCommand>(&bytes) else {
                 return;
             };
             if $crate::__internal::core::ingress::payload::payload_within_limit(

@@ -33,6 +33,14 @@ the independent, non-mutating formatting gate.
   versions, workspace inheritance, comments and selected lockfiles; it is not a
   dependency upgrade or release bump. See the
   [cargo-sort documentation](https://github.com/DevinR528/cargo-sort).
+- If a consumer separates dependency-role groups with blank lines, use
+  `cargo sort --workspace --grouped` for writing and add `--check` for checking.
+  Apply the same selection to hooks, CI and selected-source release checks;
+  the default shared commands do not select grouped mode. Use the
+  [dependency role labels](cargo-dependencies.md#dependency-roles-and-deployment-checks)
+  rather than ambiguous `Published`/`Unpublished` catalog headings. Inline role
+  comments also work with the default global ordering. Sorting checks order;
+  it does not verify dependency roles or registry publication.
 - Additional formatting steps, such as derive sorting, may
   belong in those targets. They must have matching non-mutating checks, preserve
   dependency/version selections and work from tracked inputs in an isolated
@@ -196,9 +204,12 @@ See the [Prettier CLI contract](https://prettier.io/docs/cli).
 - Formatting runs in a temporary export of the exact index, using its source,
   manifests, configuration and Make targets. It does not use unstaged working
   versions. It preserves executable lookup through the original checkout's
-  prepared `.tools/host/bin`, `.tools/ic/bin` and `.tools/rust/common/bin`, in that order
+  prepared `.tools/host/bin` and `.tools/rust/common/bin`, in that order
   before the inherited PATH; an interactive shell export is not required for
-  those tools. Prerequisite checks still enforce the selected versions, and
+  those common tools. Products requiring IC formatters explicitly publish their
+  prepared IC PATH or select it in their Make recipes; index exports expose
+  `SHARED_TOOLING_FORMAT_TOOLS_FROM` for the original checkout's tool root.
+  Prerequisite checks still enforce the selected versions, and
   formatting never installs missing tools. It clears inherited Git
   repository/index variables for formatters,
   while preserving the original commit index for its own checks and staging.
@@ -233,7 +244,9 @@ See the [Prettier CLI contract](https://prettier.io/docs/cli).
 ## Installation and adoption
 
 The consumer Make entrypoint supplies `install-hooks` for Rust consumers through
-`scripts/dev/install-git-hooks.sh --consumer <checkout>`. Keep the tracked hook
+`scripts/dev/install-git-hooks.sh --consumer <checkout>`. The destination is
+required; neither invocation location nor installer location selects a checkout.
+Keep the tracked hook
 and its root-layout companions in the consumer, even when the installer itself
 is in a nested snapshot. A focused include can still call that documented helper.
 

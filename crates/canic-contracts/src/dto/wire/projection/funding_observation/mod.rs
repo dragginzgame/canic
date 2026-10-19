@@ -9,12 +9,13 @@ use crate::dto::{
     canister::{CanisterInspectionRequest, CanisterStatusResponse},
     observability::{CanisterObservabilityResponse, FleetCanisterObservabilityRequest},
 };
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded Command wire projection for funding observation.
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum Command {
     InspectCanister(CanisterInspectionRequest),
     ObserveCanister(FleetCanisterObservabilityRequest),
@@ -22,6 +23,7 @@ pub enum Command {
 
 /// Bounded Response wire projection for funding observation.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum Response {
     InspectCanister(Box<CanisterStatusResponse>),
     InspectionReserveRequired(crate::dto::canister::CanisterInspectionReserveResponse),

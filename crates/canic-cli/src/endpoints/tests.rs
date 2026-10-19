@@ -62,7 +62,7 @@ fn test_endpoint_type(candid: &str) -> EndpointType {
     }
 }
 
-// Ensure endpoint options parse local and live lookup controls.
+// Ensure endpoint options parse Fleet selection and output controls.
 #[test]
 fn parses_endpoint_options() {
     let options = EndpointsOptions::parse_info([
@@ -79,12 +79,11 @@ fn parses_endpoint_options() {
     assert_eq!(options.fleet, "test");
     assert_eq!(options.canister, "app");
     assert_eq!(options.environment.as_deref(), Some("local"));
-    assert_eq!(options.icp, "/bin/icp");
     assert!(options.json);
 }
 
 #[test]
-fn selected_build_parses_exact_identity_and_never_substitutes_local_metadata() {
+fn selected_build_requires_finalized_identity() {
     let id = "01".repeat(32);
     let options = EndpointsOptions::parse_info(
         ["demo", "app", "--release-build", &id, "--json"].map(OsString::from),
@@ -92,9 +91,6 @@ fn selected_build_parses_exact_identity_and_never_substitutes_local_metadata() {
     .unwrap();
     assert_eq!(options.release_build.unwrap().to_string(), id);
     let root = crate::test_support::TempDir::new("endpoint-build-selection");
-    let path = root.join(".icp/local/canisters/app/app.did");
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    std::fs::write(path, "service : { stale : () -> (); }").unwrap();
     assert!(matches!(
         transport::endpoint_report_at(&root, &options),
         Err(EndpointsCommandError::BuiltCandid(
@@ -106,21 +102,5 @@ fn selected_build_parses_exact_identity_and_never_substitutes_local_metadata() {
             ["demo", "app", "--release-build", "invalid",].map(OsString::from)
         ),
         Err(EndpointsCommandError::Usage(_))
-    ));
-}
-
-#[test]
-fn local_declaration_uses_selected_environment() {
-    let root = crate::test_support::TempDir::new("endpoint-environment");
-    let path = root.join(".icp/staging/canisters/app/app.did");
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    std::fs::write(&path, "service : {}").unwrap();
-    assert_eq!(
-        transport::resolve_role_did(&root, "staging", "app").unwrap(),
-        path
-    );
-    assert!(matches!(
-        transport::resolve_role_did(&root, "local", "app"),
-        Err(EndpointsCommandError::MissingRoleArtifact { .. })
     ));
 }

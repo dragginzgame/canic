@@ -15,7 +15,8 @@ use crate::dto::{
 };
 
 /// Bounded transport selectors used by framework validation.
-#[derive(candid::CandidType)]
+#[derive(ic_platform::candid::contract::CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ManagedCommand {
     ActivateFleetAdmission(FleetAdmissionActivateTargetRequest),
     CallerAuthority(CallerAuthorityCommand),
@@ -26,7 +27,8 @@ pub enum ManagedCommand {
 }
 
 /// Bounded transport selectors used by framework validation.
-#[derive(candid::CandidType, Debug, candid::Deserialize, Eq, PartialEq)]
+#[derive(ic_platform::candid::contract::CandidType, Debug, serde::Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ManagedCommandResponse {
     ActivateFleetAdmission(FleetAdmissionTargetReceipt),
     CallerAuthority(Box<CallerAuthorityReceipt>),

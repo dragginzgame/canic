@@ -7,6 +7,7 @@ mod tests;
 
 use super::{BuildReuseError, dependencies::resolve_existing_path, hash_field, hex_bytes};
 use crate::canister_build::{WorkspaceBuildContext, cache::canister_build_target_root};
+use ic_build::cargo::observation::schema::{Message, TargetKind};
 use ic_host_fs::{
     durable::{PublicationMode, WriteOptions, write_bytes},
     read::read_file_no_follow,
@@ -32,21 +33,18 @@ struct ProducerExportsRecord {
     inputs: BTreeSet<PathBuf>,
 }
 
-pub fn retain(context: &WorkspaceBuildContext, messages: &[u8]) -> Result<(), BuildReuseError> {
-    let messages = messages
-        .split(|byte| *byte == b'\n')
-        .filter(|line| !line.is_empty())
-        .map(serde_json::from_slice::<serde_json::Value>)
-        .collect::<Result<Vec<_>, _>>()?;
+pub fn retain(
+    context: &WorkspaceBuildContext,
+    messages: &[Message],
+) -> Result<(), BuildReuseError> {
     let mut producers = BTreeMap::new();
-    for message in &messages {
-        if message["reason"] == "compiler-artifact"
-            && message["target"]["kind"]
-                .as_array()
-                .is_some_and(|kinds| kinds.iter().any(|kind| kind == "custom-build"))
-        {
-            let package = field(message, "package_id")?;
-            let manifest = PathBuf::from(field(message, "manifest_path")?).canonicalize()?;
+    for message in messages {
+        let Message::CompilerArtifact(artifact) = message else {
+            continue;
+        };
+        if artifact.target.kind.contains(&TargetKind::CustomBuild) {
+            let package = artifact.package_id.repr.as_str();
+            let manifest = artifact.manifest_path.canonicalize()?;
             if producers
                 .insert(package.to_owned(), manifest.clone())
                 .is_some_and(|old| old != manifest)
@@ -59,15 +57,14 @@ pub fn retain(context: &WorkspaceBuildContext, messages: &[u8]) -> Result<(), Bu
     }
     let recipe = recipe_key(context)?;
     let mut records = BTreeMap::<PathBuf, ProducerExportsRecord>::new();
-    for message in &messages {
-        if message["reason"] != "build-script-executed" {
+    for message in messages {
+        let Message::BuildScriptExecuted(script) = message else {
             continue;
-        }
-        let package = field(message, "package_id")?;
+        };
+        let package = script.package_id.repr.as_str();
         let manifest = producers.get(package).ok_or_else(|| {
             BuildReuseError::Evidence("Cargo build-script message has no exact producer".into())
         })?;
-        let exports: Vec<(String, String)> = serde_json::from_value(message["env"].clone())?;
         let record = records
             .entry(manifest.clone())
             .or_insert_with(|| ProducerExportsRecord {
@@ -82,17 +79,20 @@ pub fn retain(context: &WorkspaceBuildContext, messages: &[u8]) -> Result<(), Bu
                 "ambiguous Cargo export identity".into(),
             ));
         }
-        record
-            .inputs
-            .extend(exports.into_iter().filter_map(|(name, value)| {
-                matches!(
-                    name.as_str(),
-                    "CANIC_CONFIG_SOURCE_PATH"
-                        | "CANIC_CONFIG_MODEL_PATH"
-                        | "CANIC_ROLE_RUNTIME_AUTHORITY_PATH"
-                )
-                .then(|| PathBuf::from(value))
-            }));
+        record.inputs.extend(
+            script
+                .env
+                .iter()
+                .filter(|(name, _)| {
+                    matches!(
+                        name.as_str(),
+                        "CANIC_CONFIG_SOURCE_PATH"
+                            | "CANIC_CONFIG_MODEL_PATH"
+                            | "CANIC_ROLE_RUNTIME_AUTHORITY_PATH"
+                    )
+                })
+                .map(|(_, value)| PathBuf::from(value)),
+        );
     }
     let records = records
         .into_iter()
@@ -176,12 +176,6 @@ pub(super) fn append_observed(
         }
     }
     Ok(())
-}
-
-fn field<'a>(message: &'a serde_json::Value, name: &str) -> Result<&'a str, BuildReuseError> {
-    message[name]
-        .as_str()
-        .ok_or_else(|| BuildReuseError::Evidence(format!("Cargo message omits {name}")))
 }
 
 fn record_path(

@@ -4,7 +4,6 @@
 //! Does not own: durable records, policy derivation, cycle acceptance, or endpoint auth.
 //! Boundary: Root workflow derives authority; Root ops return one fresh-or-replay decision.
 
-use candid::Principal;
 use canic_contracts::{
     dto::{
         fleet_funding::FleetRootFundingAcceptanceReceipt,
@@ -12,6 +11,7 @@ use canic_contracts::{
     },
     ids::FleetSubnetRootFundingAuthority,
 };
+use ic_platform::Principal;
 
 /// Minimal protected and Registry-derived authority for one Root funding operation.
 

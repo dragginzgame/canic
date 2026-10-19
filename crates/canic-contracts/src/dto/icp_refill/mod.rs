@@ -4,6 +4,7 @@ pub use crate::values::icp_refill::{IcpRefillErrorCode, IcpRefillStatus, IcpRefi
 
 /// Exact input shared by the Root's preview and durable refill commands.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CycleRefillInput {
     pub operation_id: [u8; 32],
     pub source_subaccount: Option<[u8; 32]>,
@@ -15,6 +16,7 @@ pub struct CycleRefillInput {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct IcpRefillRequest {
     pub operation_id: [u8; 32],
     pub source_subaccount: Option<[u8; 32]>,
@@ -27,6 +29,7 @@ pub struct IcpRefillRequest {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct IcpRefillResponse {
     pub operation_id: [u8; 32],
     pub status: IcpRefillStatus,
@@ -41,6 +44,7 @@ pub struct IcpRefillResponse {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct IcpRefillDryRun {
     pub operation_id: [u8; 32],
     pub amount_e8s: u64,
@@ -54,6 +58,7 @@ pub struct IcpRefillDryRun {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[remain::sorted]
 pub enum IcpRefillEndpointResponse {
     DryRun(IcpRefillDryRun),
@@ -75,9 +80,10 @@ mod tests {
             error_message: Some("bounded failure summary".to_string()),
         };
 
-        let bytes = candid::encode_one(&response).expect("encode ICP refill response");
+        let bytes = ic_platform::candid::contract::encode_one(&response)
+            .expect("encode ICP refill response");
         let decoded: IcpRefillResponse =
-            candid::decode_one(&bytes).expect("decode ICP refill response");
+            ic_platform::candid::decoder::decode_one(&bytes).expect("decode ICP refill response");
 
         let dto_status: IcpRefillStatus = crate::values::icp_refill::IcpRefillStatus::Failed;
         let dto_error_code: IcpRefillErrorCode =
@@ -101,9 +107,11 @@ mod tests {
             source_subaccount: None,
             amount_e8s: 10_000,
         };
-        let bytes = candid::encode_one(&input).expect("encode cycle refill input");
+        let bytes =
+            ic_platform::candid::contract::encode_one(&input).expect("encode cycle refill input");
         assert_eq!(
-            candid::decode_one::<CycleRefillInput>(&bytes).expect("decode cycle refill input"),
+            ic_platform::candid::decoder::decode_one::<CycleRefillInput>(&bytes)
+                .expect("decode cycle refill input"),
             input,
         );
 
@@ -114,9 +122,10 @@ mod tests {
             dry_run: true,
         };
 
-        let bytes = candid::encode_one(&request).expect("encode ICP refill request");
+        let bytes =
+            ic_platform::candid::contract::encode_one(&request).expect("encode ICP refill request");
         let decoded: IcpRefillRequest =
-            candid::decode_one(&bytes).expect("decode ICP refill request");
+            ic_platform::candid::decoder::decode_one(&bytes).expect("decode ICP refill request");
 
         assert_eq!(decoded.operation_id, [9; 32]);
         assert_eq!(decoded.source_subaccount, None);

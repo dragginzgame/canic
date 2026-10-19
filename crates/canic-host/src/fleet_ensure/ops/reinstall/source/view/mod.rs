@@ -4,13 +4,13 @@
 //! Does not own: current protocol decoding, fixture defaults, replay or reset admission.
 //! Boundary: the source inspector may use this projection only for an already Applied prefix row.
 
-use crate::fleet_ensure::{json, ops::EnsureStateError};
-use candid::Principal;
+use crate::fleet_ensure::ops::EnsureStateError;
 use canic_contracts::{
     dto::root_store::{RootStoreBootstrapRequest, RootStoreCatalogEntry},
     ids::FleetSubnetRootReleaseSet,
 };
 use canic_core::cdk::utils::hash::sha256_hex;
+use ic_platform::Principal;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -32,7 +32,7 @@ pub(super) fn completed_bootstrap_hash(action: &Value) -> Result<Option<String>,
     if burn.to_string() != view.maximum_execution_burn_cycles {
         return Err(EnsureStateError::InvalidActivationSource);
     }
-    let bytes = json::to_vec(&view).map_err(|_| EnsureStateError::InvalidActivationSource)?;
+    let bytes = serde_json::to_vec(&view).map_err(|_| EnsureStateError::InvalidActivationSource)?;
     Ok(Some(sha256_hex(&bytes)))
 }
 

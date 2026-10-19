@@ -3,11 +3,11 @@
 //! Responsibility: retain synthetic placement evidence for the real PocketIC estate.
 //! Boundary: this catalog is test input, never mainnet discovery or release evidence.
 
-use candid::Principal;
 use canic_host::{
     fleet_ensure::model::DesiredFleet,
     subnet_catalog::{MAINNET_CATALOG_ENDPOINTS, mainnet_subnet_catalog_cache_root},
 };
+use ic_platform::Principal;
 use ic_query::{
     nns::NnsSourceRequest,
     subnet_catalog::{

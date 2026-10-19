@@ -13,7 +13,6 @@ use crate::{
         fixture_store::{FixtureGrantSelection, FixtureInstallation},
     },
 };
-use candid::Principal;
 use canic_contracts::{
     dto::{
         abi::v1::{CanisterInitAuthority, CanisterInitPayload},
@@ -26,6 +25,7 @@ use canic_contracts::{
     ids::{FleetRegistryAuthority, ManagedCanisterBinding, ReleaseBuildId, SubnetId},
 };
 use canic_core::control_plane_support::error::InternalError;
+use ic_platform::Principal;
 
 /// Exact Root identity shared by the selected Store and immutable target binding.
 

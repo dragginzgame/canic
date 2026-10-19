@@ -1,5 +1,5 @@
 use super::{LocalFleetError, model::*, ops, policy, workflow::LocalFleetSession};
-use candid::Principal;
+use ic_platform::Principal;
 use std::{fs, net::TcpListener, path::PathBuf};
 
 #[test]

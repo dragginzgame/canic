@@ -4,18 +4,17 @@
 
 mod candid_contract;
 
-use candid::CandidType;
-use candid::Principal;
 use canic::{
     Error,
     dto::{caller_authority::*, role::OperationStatusRequest},
     testing::ManagedComponentGroupFixture,
 };
-use canic_contracts::dto::wire::projection::caller_authority::StatusRequest;
-use canic_contracts::dto::wire::projection::caller_authority::StatusResponse;
-use canic_contracts::dto::wire::projection::fixture_caller_authority::Command;
-use canic_contracts::dto::wire::projection::fixture_caller_authority::Response;
-use ic_testkit::pic::{CandidCallExt, PocketIc};
+use canic_contracts::dto::wire::projection::{
+    caller_authority::{StatusRequest, StatusResponse},
+    fixture_caller_authority::{Command, Response},
+};
+use ic_platform::{Principal, candid::contract::CandidType};
+use ic_testkit::pic::PocketIc;
 use std::time::Duration;
 
 pub(super) fn qualify_candid(workspace: &std::path::Path) {
@@ -202,7 +201,8 @@ fn discard_reply(pic: &PocketIc, root: Principal, hub: Principal, request: Calle
             hub,
             root,
             canic::protocol::CANIC_COMMAND,
-            candid::encode_args((Command::CallerAuthority(request),)).unwrap(),
+            ic_platform::candid::contract::encode_args((Command::CallerAuthority(request),))
+                .unwrap(),
         )
         .unwrap();
     for _ in 0..12 {
@@ -236,15 +236,16 @@ fn command(
     hub: Principal,
     request: CallerAuthorityCommand,
 ) -> Result<CallerAuthorityReceipt, Error> {
-    let response: Result<Response, Error> = pic
-        .update_candid_as(
-            hub,
-            caller,
-            canic::protocol::CANIC_COMMAND,
-            (Command::CallerAuthority(request),),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .unwrap();
+    let response: Result<Response, Error> = ic_testkit::pic::update_candid_args(
+        pic,
+        hub,
+        caller,
+        canic::protocol::CANIC_COMMAND,
+        (Command::CallerAuthority(request),),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap();
     response.map(|Response::CallerAuthority(receipt)| receipt)
 }
 
@@ -254,29 +255,32 @@ fn status(
     target: Principal,
     operation_id: [u8; 32],
 ) -> CallerAuthorityStatus {
-    let response: Result<StatusResponse, Error> = pic
-        .query_candid_as(
-            target,
-            root,
-            canic::protocol::CANIC_CONTROL_STATUS,
-            (StatusRequest::CallerAuthority(OperationStatusRequest {
-                operation_id,
-            }),),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .unwrap();
+    let response: Result<StatusResponse, Error> = ic_testkit::pic::query_candid_args(
+        pic,
+        target,
+        root,
+        canic::protocol::CANIC_CONTROL_STATUS,
+        (StatusRequest::CallerAuthority(OperationStatusRequest {
+            operation_id,
+        }),),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap();
     let StatusResponse::CallerAuthority(status) = response.unwrap();
     status
 }
 
 fn probe(pic: &PocketIc, hub: Principal, shard: Principal) -> Result<Principal, Error> {
-    pic.update_candid_as(
+    ic_testkit::pic::update_candid_args(
+        pic,
         hub,
         shard,
         "test_caller_probe",
         (),
         canic::testing::CANDID_REPLY_LIMITS,
     )
+    .map(|(reply,)| reply)
     .unwrap()
 }
 

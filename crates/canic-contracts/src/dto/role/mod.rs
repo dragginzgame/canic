@@ -19,6 +19,7 @@ use crate::{
 #[derive(
     CandidType, Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize,
 )]
+#[candid_path("ic_platform::candid::contract")]
 #[remain::sorted]
 pub enum RoleCapability {
     AutomaticTopup,
@@ -47,6 +48,7 @@ pub enum RoleCapability {
 
 /// Immutable role, capability, release, and bootstrap profile-verification response.
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RoleOverviewResponse {
     pub role: CanisterRole,
     pub capabilities: Vec<RoleCapability>,
@@ -57,42 +59,49 @@ pub struct RoleOverviewResponse {
 
 /// Lookup key shared by each role's local durable-operation status variant.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct OperationStatusRequest {
     pub operation_id: [u8; 32],
 }
 
 /// Durable identity returned when one role-owned asynchronous command is accepted.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct OperationReceipt {
     pub operation_id: [u8; 32],
 }
 
 /// Bounded asynchronous acceptance reply shared by Root, managed, and Store commands.
 #[derive(CandidType, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum OperationAcceptedResponse {
     OperationAccepted(OperationReceipt),
 }
 
 /// Exact Coordinator reservation delivered with one accepted Root-removal intent.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootRemovalRequest {
     pub reservation: FleetSubnetRootDrainingReservationResponse,
 }
 
 /// Named response for the protected compiled configuration source.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ConfigStatusResponse {
     pub toml: String,
 }
 
 /// Named response for the canister's current cycle balance.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CycleBalanceStatusResponse {
     pub cycles: u128,
 }
 
 /// Bounded log observation selector used by each role status surface.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct LogStatusRequest {
     pub crate_name: Option<String>,
     pub topic: Option<String>,
@@ -102,6 +111,7 @@ pub struct LogStatusRequest {
 
 /// Bounded metrics observation selector used by each role status surface.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct MetricsStatusRequest {
     pub kind: MetricsKind,
     pub page: PageRequest,
@@ -109,6 +119,7 @@ pub struct MetricsStatusRequest {
 
 /// Managed runtime configuration detail projected through the operation lane.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ComponentRuntimeOperationStatus {
     pub operation_id: [u8; 32],
     pub fleet_activation: FleetActivationStatusResponse,
@@ -120,7 +131,7 @@ pub use crate::dto::state::BootstrapStatusResponse;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use candid::{Decode, Encode};
+    use ic_platform::candid::contract::{Decode, Encode};
 
     #[test]
     fn shared_role_status_requests_round_trip_through_candid() {

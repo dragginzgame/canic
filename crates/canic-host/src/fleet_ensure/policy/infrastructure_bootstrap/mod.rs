@@ -25,7 +25,7 @@ use crate::fleet_ensure::{
         validate_observation_authority, wasm_sha256,
     },
 };
-use candid::Principal;
+use ic_platform::Principal;
 use std::collections::BTreeMap;
 use thiserror::Error;
 

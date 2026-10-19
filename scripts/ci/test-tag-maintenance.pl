@@ -156,6 +156,15 @@ ok(!-e "$repo/.git/tag-maintenance", 'dry run creates no maintenance state');
 is(invoke('', '--cutoff', 'v0.1', '--remote', 'origin'), 0, 'minor remote inventory succeeds');
 like(read_file("$repo/output"), qr/remote origin tags selected: 3\n/, 'minor cutoff includes all patches');
 unlike(read_file("$repo/events"), qr/"push"|"update-ref"/, 'dry runs have no effects');
+setup('large-selection', qw(1.2.3 v1.2.3 v1.2.999999999999999999999999999999 v1.3.0
+    v999999999999999999999999999998.0.0 v999999999999999999999999999999.0.0));
+is(invoke('', '--cutoff', '1.2'), 0, 'minor selection retains arbitrarily large patches');
+my @selected = read_file("$repo/output") =~ /^([^\t\n]+)\t/gm;
+is_deeply(\@selected, [qw(1.2.3 v1.2.3 v1.2.999999999999999999999999999999)],
+    'numeric ordering keeps the tag spelling tie-breaker');
+is(invoke('', '--cutoff', '999999999999999999999999999998.0.0'), 0,
+    'large exact cutoff compares without native numeric rounding');
+like(read_file("$repo/output"), qr/local tags selected: 5\n/, 'adjacent large components remain distinct');
 for my $cutoff ('', '1', '01.2', '1.02.0', '1.2.3-rc', '1.2.3+meta') {
     isnt(invoke('', '--cutoff', $cutoff), 0, 'invalid or ambiguous cutoff rejected');
 }

@@ -29,7 +29,7 @@ pub(in crate::fleet_ensure::generate) fn qualify(request: &FleetGenerateRequest<
         .iter()
         .find(|entry| entry.kind == DesiredCanisterKind::Coordinator)
         .unwrap();
-    let id = candid::Principal::from_text(coordinator.principal.as_ref().unwrap()).unwrap();
+    let id = ic_platform::Principal::from_text(coordinator.principal.as_ref().unwrap()).unwrap();
     assert_eq!(
         seed_projection(&supplied, &original, Some(id)).unwrap(),
         original

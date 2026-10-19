@@ -33,6 +33,7 @@ for target in fmt fmt-check; do
         "$fixture/integrations/blob-service/consumer" "$fixture/integrations/blob-service/embedded-consumer"; do
         awk -F '\t' -v root="$workspace" '$1 == root && $2 ~ /^fmt --all/ { found = 1 } END { exit !found }' "$CANIC_FORMAT_EVENTS"
     done
+    awk -F '\t' '$2 ~ /^sort --workspace/ && $2 !~ /--grouped/ { exit 1 }' "$CANIC_FORMAT_EVENTS"
     if [[ "$target" == fmt-check ]]; then
         awk -F '\t' '$2 !~ /--check/ { exit 1 }' "$CANIC_FORMAT_EVENTS"
     else
@@ -48,4 +49,30 @@ for mode in -n -i -q -t; do
     if make --no-print-directory -C "$fixture" "$mode" fmt MAKEFLAGS= > "$fixture/output" 2>&1; then exit 1; fi
     [[ ! -s "$CANIC_FORMAT_EVENTS" ]]
 done
+# Exercise actual Cargo sort: grouped writes are stable and checks reject
+# an unsorted dependency pair without mutating the inspected manifest.
+mkdir -p "$fixture/grouped"
+cat > "$fixture/grouped/Cargo.toml" <<'TOML'
+[workspace]
+members = []
+
+[workspace.dependencies]
+# Production dependencies
+alpha = "1"
+beta = "1"
+
+# Tests and tooling only
+aardvark = "1"
+TOML
+cargo sort --workspace --grouped "$fixture/grouped" > "$fixture/grouped.log" 2>&1
+cp "$fixture/grouped/Cargo.toml" "$fixture/grouped-first"
+cargo sort --workspace --grouped "$fixture/grouped" >> "$fixture/grouped.log" 2>&1
+cmp "$fixture/grouped-first" "$fixture/grouped/Cargo.toml"
+grep -Fxq '# Production dependencies' "$fixture/grouped/Cargo.toml"
+grep -Fxq '# Tests and tooling only' "$fixture/grouped/Cargo.toml"
+perl "$ROOT/scripts/ci/prepare-cargo-formatting-fixture.pl" \
+    "$fixture/grouped/Cargo.toml" workspace.dependencies alpha beta > "$fixture/unsorted"
+cp "$fixture/unsorted" "$fixture/grouped/Cargo.toml"
+if cargo sort --workspace --grouped --check "$fixture/grouped" >> "$fixture/grouped.log" 2>&1; then exit 1; fi
+cmp "$fixture/unsorted" "$fixture/grouped/Cargo.toml"
 echo 'Canic formatter roots, check-only mode, failure logs and Make admission passed'

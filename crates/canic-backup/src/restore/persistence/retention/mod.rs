@@ -8,6 +8,7 @@ use crate::{
     persistence::{BackupLayout, BackupLayoutGuard, JournalLockError},
     restore::{RestoreApplyJournal, RestoreApplyOperationKind, RestorePersistenceError},
 };
+use ic_backup::model::artifacts::ArtifactChecksumRecord;
 
 use std::{
     fs, io,
@@ -224,7 +225,7 @@ struct RestoreOperationAuthority<'a> {
     role: &'a str,
     snapshot_id: Option<&'a str>,
     artifact_path: Option<&'a str>,
-    artifact_checksum: Option<&'a crate::artifacts::ArtifactChecksum>,
+    artifact_checksum: Option<&'a ArtifactChecksumRecord>,
     expected_module_hash: Option<&'a str>,
     verification_kind: Option<&'a str>,
 }

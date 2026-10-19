@@ -30,7 +30,7 @@ use crate::fleet_ensure::{
     },
     view::capacity_import::{CapacityImportDestinationView, CapacityImportSourceView},
 };
-use candid::Principal;
+use ic_platform::Principal;
 use thiserror::Error;
 
 pub use store::CapacityImportJournalStore;

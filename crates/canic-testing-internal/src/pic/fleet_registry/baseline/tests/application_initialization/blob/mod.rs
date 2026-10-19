@@ -4,6 +4,7 @@
 //! Boundary: use production build/manifest owners; no provider or paid effects.
 
 use super::*;
+use canic_blob_service::__private::ic_blob_storage_contracts::wire;
 use canic_blob_service::dto::configuration::{
     HostConfigurationView, HostFailure, ServiceBillingInput, ServiceConfigurationInput,
     ServiceFundingInput, ServiceInstallationInput, ServiceReadInput, ServiceResourceInput,
@@ -82,7 +83,7 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn production_blob_initializ
         operation_id: member_operation,
         initialization: ComponentApplicationInitialization {
             target_canister: service,
-            arguments: candid::encode_one(&input).expect("encode canonical Blob installation"),
+            arguments: wire::encode(&input).expect("encode canonical Blob installation"),
         },
     };
     let before = allocation(&pic, fixture.root_id, member_operation);
@@ -93,30 +94,32 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn production_blob_initializ
             .module_hash
             .is_none()
     );
-    let refused: Result<RootCommandResponseFragment, Error> = pic
-        .update_candid_as(
-            fixture.root_id,
-            service,
-            canic::protocol::CANIC_ROOT_COMMAND,
-            (Command::BindComponentInitialization(request.clone()),),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .unwrap();
+    let refused: Result<RootCommandResponseFragment, Error> = ic_testkit::pic::update_candid_args(
+        &(pic),
+        fixture.root_id,
+        service,
+        canic::protocol::CANIC_ROOT_COMMAND,
+        (Command::BindComponentInitialization(request.clone()),),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap();
     assert_eq!(
         refused.err().expect("binding refusal").code(),
         canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
     );
     let mut wrong_target = request.clone();
     wrong_target.initialization.target_canister = coordinator;
-    let refused: Result<RootCommandResponseFragment, Error> = pic
-        .update_candid_as(
-            fixture.root_id,
-            Principal::anonymous(),
-            canic::protocol::CANIC_ROOT_COMMAND,
-            (Command::BindComponentInitialization(wrong_target),),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .unwrap();
+    let refused: Result<RootCommandResponseFragment, Error> = ic_testkit::pic::update_candid_args(
+        &(pic),
+        fixture.root_id,
+        Principal::anonymous(),
+        canic::protocol::CANIC_ROOT_COMMAND,
+        (Command::BindComponentInitialization(wrong_target),),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap();
     assert_eq!(
         refused.err().expect("binding refusal").code(),
         canic::diagnostics::codes::STATE_CONFLICT.raw_code()
@@ -150,16 +153,17 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn production_blob_initializ
     let mut conflicting = request.clone();
     let mut changed = input.clone();
     changed.project = "different-blob-project".into();
-    conflicting.initialization.arguments = candid::encode_one(changed).unwrap();
-    let refused: Result<RootCommandResponseFragment, Error> = pic
-        .update_candid_as(
-            fixture.root_id,
-            Principal::anonymous(),
-            canic::protocol::CANIC_ROOT_COMMAND,
-            (Command::BindComponentInitialization(conflicting),),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .unwrap();
+    conflicting.initialization.arguments = wire::encode(changed).unwrap();
+    let refused: Result<RootCommandResponseFragment, Error> = ic_testkit::pic::update_candid_args(
+        &(pic),
+        fixture.root_id,
+        Principal::anonymous(),
+        canic::protocol::CANIC_ROOT_COMMAND,
+        (Command::BindComponentInitialization(conflicting),),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap();
     assert_eq!(
         refused.err().expect("binding refusal").code(),
         canic::diagnostics::codes::STATE_CONFLICT.raw_code()
@@ -167,15 +171,17 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn production_blob_initializ
     await_root_provisioning(&pic, fixture.root_id, operation, |status| {
         status.root_runtime_active
     });
-    let installed: Result<HostConfigurationView, HostFailure> = pic
-        .query_candid_as(
+    let installed: Result<HostConfigurationView, HostFailure> = wire::decode(
+        &pic.query_call(
             service,
             input.configuration.operator,
             "blob_configuration",
-            (),
-            canic::testing::CANDID_REPLY_LIMITS,
+            wire::encode(()).unwrap(),
         )
-        .unwrap();
+        .unwrap(),
+        canic::testing::CANDID_REPLY_LIMITS.reply_bytes,
+    )
+    .unwrap();
     let installed = installed.expect("Root-installed service configuration");
     assert_eq!(installed.configuration, input.configuration);
     assert_eq!(
@@ -186,15 +192,16 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn production_blob_initializ
         .canister_status(service, Some(fixture.root_id))
         .unwrap()
         .version;
-    let replay: Result<RootCommandResponseFragment, Error> = pic
-        .update_candid_as(
-            fixture.root_id,
-            Principal::anonymous(),
-            canic::protocol::CANIC_ROOT_COMMAND,
-            (Command::BindComponentInitialization(request.clone()),),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .unwrap();
+    let replay: Result<RootCommandResponseFragment, Error> = ic_testkit::pic::update_candid_args(
+        &(pic),
+        fixture.root_id,
+        Principal::anonymous(),
+        canic::protocol::CANIC_ROOT_COMMAND,
+        (Command::BindComponentInitialization(request.clone()),),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap();
     replay.unwrap();
     assert_eq!(
         pic.canister_status(service, Some(fixture.root_id))

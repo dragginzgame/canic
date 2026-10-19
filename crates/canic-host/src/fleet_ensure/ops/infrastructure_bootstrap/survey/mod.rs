@@ -22,12 +22,12 @@ use crate::{
     },
     icp::IcpCli,
 };
-use candid::{Nat, Principal};
 use canic_core::cdk::utils::hash::{decode_hex, hex_bytes};
 use ic_host_fs::{
     durable::{PublicationMode, WriteOptions, write_bytes},
     read::read_optional_file_no_follow,
 };
+use ic_platform::{Principal, candid::contract::Nat};
 use sha2_host::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -146,13 +146,13 @@ impl BootstrapSurvey {
         &self,
         icp: &IcpCli,
         desired: &DesiredFleet,
-    ) -> Result<ic_agent::Agent, InfrastructureBootstrapError> {
+    ) -> Result<ic_platform::agent::Agent, InfrastructureBootstrapError> {
         authenticated_agent(icp, desired, &self.original)
     }
 
     /// Check custody before workflow reserves the corresponding durable paid-read allowance.
     pub(in crate::fleet_ensure) async fn prepare_sample(
-        agent: &ic_agent::Agent,
+        agent: &ic_platform::agent::Agent,
         canister: Principal,
     ) -> Result<management::PreparedManagementObservation, InfrastructureBootstrapError> {
         Ok(management::prepare(agent, canister).await?)
@@ -163,7 +163,7 @@ impl BootstrapSurvey {
         mut self,
         paths: &EnsurePaths,
         desired: &DesiredFleet,
-        agent: &ic_agent::Agent,
+        agent: &ic_platform::agent::Agent,
         samples: Vec<CapacityImportSampleRecord>,
     ) -> Result<InfrastructureBootstrapRecord, InfrastructureBootstrapError> {
         let invalid = || InfrastructureBootstrapError::Integrity;
@@ -202,7 +202,7 @@ impl BootstrapSurvey {
             let registry =
                 inventory::registry(agent, *self.selected.get(name).ok_or_else(invalid)?).await?;
             self.original.coordinator_registry_candid_hex = Some(hex_bytes(
-                candid::encode_one(registry).map_err(|_| invalid())?,
+                ic_platform::candid::contract::encode_one(registry).map_err(|_| invalid())?,
             ));
         }
         let source = seal_sources(self.original)?;

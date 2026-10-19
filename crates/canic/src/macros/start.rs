@@ -550,7 +550,7 @@ macro_rules! finish {
             use super::*;
 
             #[cfg(canic_export_candid)]
-            $crate::__internal::candid::export_service!();
+            $crate::__internal::ic_platform::candid::contract::export_service!(ic_platform::candid::contract);
 
             #[cfg(canic_export_candid)]
             #[unsafe(no_mangle)]

@@ -8,12 +8,13 @@
 use crate::dto::fleet_activation::{
     FleetActivationRequest, FleetActivationStatusResponse, FleetCredentialGenerationRequest,
 };
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded StoreCommandFragment wire projection for store activation.
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum StoreCommandFragment {
     ActivateFleet(FleetActivationRequest),
     PrepareFleetCredential(FleetCredentialGenerationRequest),
@@ -21,12 +22,14 @@ pub enum StoreCommandFragment {
 
 /// Bounded StoreStatusResponseFragment wire projection for store activation.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum StoreStatusResponseFragment {
     Operation(StoreOperationStatusFragment),
 }
 
 /// Bounded StoreOperationStatusFragment wire projection for store activation.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum StoreOperationStatusFragment {
     FleetActivation(FleetActivationStatusResponse),
 }

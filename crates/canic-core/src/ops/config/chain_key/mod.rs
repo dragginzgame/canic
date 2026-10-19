@@ -15,7 +15,7 @@ use crate::{
 };
 use canic_contracts::ids::BuildNetwork;
 use ic_auth::canonical::chain_key_derivation_path_hash;
-use ic_secp256k1::{MasterPublicKeyId, PocketIcMasterPublicKeyId, PublicKey};
+use ic_platform::secp256k1::{MasterPublicKeyId, PocketIcMasterPublicKeyId, PublicKey};
 
 /// Materialize public verification data without changing operator policy fields.
 pub fn resolve(config: &mut DelegatedTokenConfig) -> Result<(), ChainKeyDerivationError> {

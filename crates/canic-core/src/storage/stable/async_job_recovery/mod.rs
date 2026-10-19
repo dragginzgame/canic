@@ -5,7 +5,7 @@
 //! Boundary: storage retains one fixed record; ops validates and commits exact attempt fences.
 
 use crate::{
-    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
+    cdk::structures::{DefaultMemoryImpl, StableCell as Cell},
     storage::prelude::*,
 };
 use std::cell::RefCell;
@@ -15,7 +15,7 @@ pub const MAX_ASYNC_JOB_RECOVERY_RECORD_BYTES: u32 = 810;
 
 std::thread_local! {
     static ASYNC_JOB_RECOVERY: RefCell<
-        Cell<AsyncJobRecoveryRecord, RuntimeMemory<DefaultMemoryImpl>>,
+        Cell<AsyncJobRecoveryRecord, DefaultMemoryImpl>,
     > = RefCell::new(Cell::init(
         crate::memory::open(crate::memory::keys::ASYNC_JOB_RECOVERY_V1),
         AsyncJobRecoveryRecord::default(),

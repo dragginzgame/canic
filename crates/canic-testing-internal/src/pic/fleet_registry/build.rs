@@ -359,13 +359,30 @@ fn build_bootstrap_wasm_store(workspace_root: &Path, config_path: &Path) -> Vec<
         .expect("bootstrap Store config must be workspace-confined")
         .to_str()
         .expect("bootstrap Store config path UTF-8");
-    let cargo_build = WasmBuildSpec::new(workspace_root, &target_dir, &["canic", "canic-host"])
-        .with_cargo_profile_args(["--profile", "fast", "--locked"])
-        .with_extra_env([
-            ("CARGO_INCREMENTAL", "0"),
-            ("ICP_ENVIRONMENT", "local"),
-            INTERNAL_TEST_RELEASE_BUILD_ID,
-        ]);
+    let cargo_build = WasmBuildSpec::new(
+        workspace_root,
+        &target_dir,
+        &["canic", "canic-host"],
+        std::env::vars_os().chain(
+            ([
+                ("CARGO_INCREMENTAL", "0"),
+                ("ICP_ENVIRONMENT", "local"),
+                INTERNAL_TEST_RELEASE_BUILD_ID,
+            ])
+            .into_iter()
+            .map(|(key, value)| {
+                (
+                    std::ffi::OsString::from(key),
+                    std::ffi::OsString::from(value),
+                )
+            }),
+        ),
+    )
+    .with_cargo_selection(ic_build::cargo::selection::CargoSelection {
+        profile: Some("fast".into()),
+        locked: true,
+        ..Default::default()
+    });
     let cargo_inputs = resolve_cargo_build_inputs(&cargo_build)
         .expect("resolve bootstrap Store Cargo build inputs");
     let cache = ArtifactCacheSpec::new(

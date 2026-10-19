@@ -9,6 +9,7 @@ use std::{
     env,
     ffi::{OsStr, OsString},
     process::Command,
+    sync::OnceLock,
 };
 
 // Exact keys only: compiler inputs, sandbox policy and unknown launcher keys stay bound.
@@ -18,27 +19,33 @@ const WITHHELD_INPUTS: [&str; 3] = [
     "CODEX_THREAD_ID",
 ];
 
-/// Construct a build/tool command with the same exclusions as its fingerprint.
+/// Construct a build/tool command from the captured process build environment.
+/// Later command-specific edits take precedence and remain the caller's inputs.
 pub fn command(program: impl AsRef<OsStr>) -> Command {
     let mut command = Command::new(program);
-    apply(&mut command);
+    command.env_clear().envs(captured().iter().cloned());
     command
 }
 
-/// Withhold credentials and session correlation IDs; start tools at a fixed shell depth.
-pub fn apply(command: &mut Command) {
-    for key in WITHHELD_INPUTS {
-        command.env_remove(key);
-    }
-    command.env("SHLVL", "0");
+/// Fingerprint the same base environment used to construct build commands.
+/// Command-specific overrides remain bound by the owning build recipe.
+pub fn inputs() -> Vec<(OsString, OsString)> {
+    captured().clone()
 }
 
-/// Fingerprint the environment tools receive, including the fixed shell-depth value.
-pub fn inputs() -> Vec<(OsString, OsString)> {
-    env::vars_os()
-        .filter(|(key, _)| {
-            key != "SHLVL" && !WITHHELD_INPUTS.iter().any(|name| key == OsStr::new(name))
-        })
-        .chain([(OsString::from("SHLVL"), OsString::from("0"))])
-        .collect()
+// Capture once per host process, before its first build command or input observation.
+// CLI invocations are separate processes; library callers select later changes on commands.
+fn captured() -> &'static Vec<(OsString, OsString)> {
+    static ENVIRONMENT: OnceLock<Vec<(OsString, OsString)>> = OnceLock::new();
+    ENVIRONMENT.get_or_init(|| {
+        env::vars_os()
+            .filter(|(key, _)| {
+                key != "SHLVL" && !WITHHELD_INPUTS.iter().any(|name| key == OsStr::new(name))
+            })
+            .chain([(OsString::from("SHLVL"), OsString::from("0"))])
+            .collect()
+    })
 }
+
+#[cfg(test)]
+mod tests;

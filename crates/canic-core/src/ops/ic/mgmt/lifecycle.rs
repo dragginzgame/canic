@@ -6,7 +6,7 @@
 
 use super::*;
 use crate::ops::cost_guard::CostGuardPermit;
-use candid::utils::ArgumentEncoder;
+use ic_platform::candid::contract::ArgumentEncoder;
 
 impl MgmtOps {
     /// Install chunked code after a cost guard has reserved deployment quota and cycles.

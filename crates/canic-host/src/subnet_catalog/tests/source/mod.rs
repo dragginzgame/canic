@@ -1,6 +1,6 @@
 //! Synthetic endpoint evidence for catalog policy tests; never mainnet observations.
 
-use candid::Principal;
+use ic_platform::Principal;
 use ic_query::{
     nns::NnsSourceRequest,
     subnet_catalog::{

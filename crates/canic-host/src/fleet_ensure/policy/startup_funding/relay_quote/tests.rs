@@ -5,8 +5,8 @@ use crate::fleet_ensure::{
         StartupChildFundingBinding, StartupChildFundingUsage, StartupInventoryCoverage,
     },
 };
-use candid::Principal;
 use canic_core::control_plane_support::config::ComponentDeploymentConfiguration;
+use ic_platform::Principal;
 
 fn requests() -> Vec<StartupChildFundingBinding> {
     let config = ComponentDeploymentConfiguration::compile(&hub_config()).unwrap();

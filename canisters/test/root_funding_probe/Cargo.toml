@@ -14,8 +14,7 @@ ignored = ["serde"]
 crate-type = ["cdylib"]
 
 [dependencies]
-candid = { workspace = true }
-ic-cdk = { workspace = true }
+ic-platform = { workspace = true, features = ["cdk", "candid"] }
 serde = { workspace = true }
 
 [lints]

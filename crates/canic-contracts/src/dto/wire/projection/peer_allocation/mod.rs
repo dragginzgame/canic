@@ -4,10 +4,11 @@
 //! not link unrelated Root commands or recursive operation status payloads.
 
 use crate::dto::component_registry::RootPeerComponentAllocationRequest;
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 
 /// Request a peer from the owning Root.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootCommand {
     ProvisionPeer(RootPeerComponentAllocationRequest),
 }

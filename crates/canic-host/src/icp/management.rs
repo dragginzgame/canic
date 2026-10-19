@@ -8,11 +8,13 @@
 
 use std::{sync::Arc, time::Duration};
 
-use candid::{CandidType, Principal};
-use ic_agent::{
-    Agent, AgentError, Identity,
-    agent::AgentBuilder,
-    identity::{BasicIdentity, Prime256v1Identity, Secp256k1Identity},
+use ic_platform::{
+    Principal,
+    agent::{
+        Agent, AgentBuilder, AgentError, BasicIdentity, Identity, Prime256v1Identity,
+        Secp256k1Identity,
+    },
+    candid::contract::CandidType,
 };
 use serde::{Deserialize, de::DeserializeOwned};
 use thiserror::Error as ThisError;
@@ -27,6 +29,7 @@ const MANAGEMENT_INGRESS_EXPIRY: Duration = Duration::from_mins(4);
 pub const SNAPSHOT_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 struct ManagementSnapshot {
     id: Vec<u8>,
 }
@@ -48,10 +51,10 @@ pub enum IcpManagementCallError {
     SnapshotResponseTooLarge { actual: usize, maximum: usize },
 
     #[error("failed to encode the management-canister argument: {0}")]
-    CandidEncode(#[source] candid::Error),
+    CandidEncode(#[source] ic_platform::candid::contract::Error),
 
     #[error("failed to decode the management-canister response: {0}")]
-    CandidResponse(#[source] candid::Error),
+    CandidResponse(#[source] ic_platform::candid::contract::Error),
 
     #[error("failed to build the management-canister agent: {0}")]
     AgentBuild(#[source] AgentError),
@@ -113,6 +116,7 @@ impl IcpCli {
         snapshot_id: Vec<u8>,
     ) -> Result<(), IcpManagementCallError> {
         #[derive(CandidType)]
+        #[candid_path("ic_platform::candid::contract")]
         struct Request {
             canister_id: Principal,
             snapshot_id: Vec<u8>,
@@ -135,15 +139,15 @@ impl IcpCli {
     ) -> Result<O, IcpManagementCallError>
     where
         I: CandidType,
-        O: for<'de> candid::utils::ArgumentDecoder<'de>,
+        O: for<'de> ic_platform::candid::contract::ArgumentDecoder<'de>,
     {
         self.measure_request(
             crate::icp::IcpRequestKind::Update,
             Some(&canister_id.to_text()),
             Some(method),
             || {
-                let argument =
-                    candid::encode_one(input).map_err(IcpManagementCallError::CandidEncode)?;
+                let argument = ic_platform::candid::contract::encode_one(input)
+                    .map_err(IcpManagementCallError::CandidEncode)?;
                 let agent = self.authenticated_agent()?;
                 self.record_remote_call();
                 let response = call_management_update(
@@ -152,7 +156,8 @@ impl IcpCli {
                     method,
                     argument,
                 )?;
-                candid::decode_args(&response).map_err(IcpManagementCallError::CandidResponse)
+                ic_platform::candid::decoder::decode_args(&response)
+                    .map_err(IcpManagementCallError::CandidResponse)
             },
         )
     }
@@ -181,8 +186,8 @@ impl IcpCli {
             Some(&effective_canister_id.to_text()),
             Some(MANAGEMENT_CANISTER_STATUS),
             || {
-                let argument =
-                    candid::encode_one(input).map_err(IcpManagementCallError::CandidEncode)?;
+                let argument = ic_platform::candid::contract::encode_one(input)
+                    .map_err(IcpManagementCallError::CandidEncode)?;
                 let agent = self.authenticated_agent()?;
                 self.record_remote_call();
                 let response = call_management_update(
@@ -191,7 +196,8 @@ impl IcpCli {
                     MANAGEMENT_CANISTER_STATUS,
                     argument,
                 )?;
-                candid::decode_one(&response).map_err(IcpManagementCallError::CandidResponse)
+                ic_platform::candid::decoder::decode_one(&response)
+                    .map_err(IcpManagementCallError::CandidResponse)
             },
         )
     }
@@ -203,6 +209,7 @@ impl IcpCli {
         canister_id: Principal,
     ) -> Result<(), IcpManagementCallError> {
         #[derive(CandidType)]
+        #[candid_path("ic_platform::candid::contract")]
         struct UninstallRequest {
             canister_id: Principal,
             sender_canister_version: Option<u64>,
@@ -212,7 +219,7 @@ impl IcpCli {
             Some(&canister_id.to_text()),
             Some("uninstall_code"),
             || {
-                let argument = candid::encode_one(UninstallRequest {
+                let argument = ic_platform::candid::contract::encode_one(UninstallRequest {
                     canister_id,
                     sender_canister_version: None,
                 })
@@ -225,7 +232,8 @@ impl IcpCli {
                     "uninstall_code",
                     argument,
                 )?;
-                candid::decode_args::<()>(&response).map_err(IcpManagementCallError::CandidResponse)
+                ic_platform::candid::decoder::decode_args::<()>(&response)
+                    .map_err(IcpManagementCallError::CandidResponse)
             },
         )
     }
@@ -317,10 +325,11 @@ pub async fn read_snapshot_ids(
     canister: Principal,
 ) -> Result<Vec<Vec<u8>>, IcpManagementCallError> {
     #[derive(CandidType)]
+    #[candid_path("ic_platform::candid::contract")]
     struct Request {
         canister_id: Principal,
     }
-    let argument = candid::encode_one(Request {
+    let argument = ic_platform::candid::contract::encode_one(Request {
         canister_id: canister,
     })
     .map_err(IcpManagementCallError::CandidEncode)?;
@@ -345,12 +354,13 @@ fn decode_snapshot_ids(bytes: &[u8]) -> Result<Vec<Vec<u8>>, IcpManagementCallEr
             maximum: SNAPSHOT_RESPONSE_BYTES,
         });
     }
-    let mut config = candid::de::DecoderConfig::new();
+    let mut config = ic_platform::candid::decoder::DecoderConfig::new();
     config
         .set_decoding_quota(SNAPSHOT_RESPONSE_BYTES * 64)
         .set_skipping_quota(SNAPSHOT_RESPONSE_BYTES * 64);
-    let snapshots: Vec<ManagementSnapshot> = candid::utils::decode_one_with_config(bytes, &config)
-        .map_err(IcpManagementCallError::CandidResponse)?;
+    let snapshots: Vec<ManagementSnapshot> =
+        ic_platform::candid::decoder::decode_one_with_config(bytes, &config)
+            .map_err(IcpManagementCallError::CandidResponse)?;
     Ok(snapshots.into_iter().map(|snapshot| snapshot.id).collect())
 }
 
@@ -423,7 +433,10 @@ mod tests {
 
     #[test]
     fn snapshot_inventory_decoder_preserves_ids_and_refuses_oversized_or_malformed_replies() {
-        let bytes = candid::encode_one(vec![ManagementSnapshot { id: vec![1, 2, 3] }]).unwrap();
+        let bytes = ic_platform::candid::contract::encode_one(vec![ManagementSnapshot {
+            id: vec![1, 2, 3],
+        }])
+        .unwrap();
         assert_eq!(decode_snapshot_ids(&bytes).unwrap(), [vec![1, 2, 3]]);
         assert!(matches!(
             decode_snapshot_ids(&vec![0; SNAPSHOT_RESPONSE_BYTES + 1]),

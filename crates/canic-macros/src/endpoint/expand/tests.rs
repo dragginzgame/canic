@@ -30,7 +30,7 @@ fn bounded_guards_consume_decoded_proofs_and_keep_the_fleet_guard() {
     let compact = expansion.split_whitespace().collect::<String>();
     assert!(compact.contains("attested_local_subnet_argument(&token)"));
     assert!(compact.contains("fleet::is_queryable()"));
-    assert!(compact.contains("in_query_executor_context"));
+    assert!(compact.contains("in_tracking_query_executor_context"));
     assert!(compact.contains("msg_reject"));
     assert!(compact.contains("candid_method(query,rename=\"read\")"));
     assert!(compact.contains("__canic_impl_read(token)"));

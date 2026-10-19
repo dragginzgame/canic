@@ -7,19 +7,12 @@ use canic_contracts::ids::{
     AppId, CanonicalNetworkId, FleetAdmissionRule, FleetBinding, FleetId, FleetKey, SubnetId,
 };
 use canic_core::{
-    cdk::{
-        bounded_cell::BoundedCell,
-        structures::{
-            Memory, VectorMemory,
-            memory::{MemoryId, MemoryManager},
-            storable::Storable,
-        },
-    },
+    cdk::structures::{BoundedCell, Memory, VectorMemory, storable::Storable},
     shared_support::fleet_admission_policy::compile_installed_fleet_admission_policy,
 };
 
 #[test]
-fn maximum_b3_current_plus_last_authority_fits_memory_id_64() {
+fn maximum_b3_current_plus_last_authority_fits_its_allocation() {
     let fleet = FleetBinding {
         fleet: FleetKey {
             canonical_network_id: CanonicalNetworkId::ic_mainnet(),
@@ -108,18 +101,31 @@ fn maximum_b3_current_plus_last_authority_fits_memory_id_64() {
 
 fn assert_cell_allocation(record: &FleetAdmissionAuthorityRecord, encoded_bytes: u64) {
     let physical = VectorMemory::default();
-    let manager = MemoryManager::init_with_bucket_size(physical.clone(), 16);
-    let memory = manager.get(MemoryId::new(64));
-    let mut cell = BoundedCell::init(memory.clone(), None);
+    let runtime = ic_memory::testing::fixture_runtime(
+        physical.clone(),
+        "test",
+        "test.",
+        &["test.admission.v1"],
+        ic_memory::MemoryManagerConfig::new(16).unwrap(),
+    )
+    .unwrap();
+    let mut cell = BoundedCell::init(runtime.open_memory("test.admission.v1").unwrap(), None);
     cell.set(Some(record.clone()));
-    assert_eq!(memory.size(), (encoded_bytes + 9).div_ceil(65_536));
+    let id = usize::from(runtime.memory_id("test.admission.v1").unwrap());
+    let pages = runtime.memory_allocations().unwrap().memories[id]
+        .virtual_extent
+        .wasm_pages;
+    assert_eq!(pages, (encoded_bytes + 9).div_ceil(65_536));
     eprintln!(
         "Coordinator admission cell: virtual_bytes={} physical_bytes={}",
-        memory.size() * 65_536,
+        pages * 65_536,
         physical.size() * 65_536
     );
     drop(cell);
-    assert_eq!(BoundedCell::init(memory, None).get(), &Some(record.clone()));
+    assert_eq!(
+        BoundedCell::init(runtime.open_memory("test.admission.v1").unwrap(), None).get(),
+        &Some(record.clone())
+    );
 }
 
 fn principal(index: u16) -> Principal {

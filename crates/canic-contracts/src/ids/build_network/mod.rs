@@ -4,7 +4,7 @@
 //! Does not own: ICP environment resolution or deployment selection.
 //! Boundary: exposes the network class baked into a canister artifact.
 
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 use std::{fmt, fmt::Display};
 
@@ -16,6 +16,7 @@ use std::{fmt, fmt::Display};
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum BuildNetwork {
     #[serde(rename = "ic")]
     Ic,

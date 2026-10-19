@@ -196,7 +196,7 @@ impl FleetActivationOps {
         embedded_release_build_id: ReleaseBuildId,
         configured_app: &AppId,
         component_topology: &ComponentTopology,
-        root_canister: candid::Principal,
+        root_canister: ic_platform::Principal,
     ) -> Result<FleetActivationIdentity, FleetActivationOpsError> {
         Self::select_root_storage();
         let prepared = prepare_root_install(
@@ -219,7 +219,7 @@ impl FleetActivationOps {
     pub(crate) fn initialize_wasm_store_prepared(
         input: FleetSubnetWasmStoreInitArgs,
         embedded_release_build_id: ReleaseBuildId,
-        wasm_store_canister: candid::Principal,
+        wasm_store_canister: ic_platform::Principal,
     ) -> Result<FleetActivationIdentity, FleetActivationOpsError> {
         Self::select_wasm_store_storage();
         let prepared = prepare_wasm_store_install(
@@ -1624,7 +1624,6 @@ mod tests {
             FleetCredentialManifestRecord,
         },
     };
-    use candid::Principal;
     use canic_contracts::{
         cycles::Cycles,
         ids::{
@@ -1636,6 +1635,7 @@ mod tests {
             ManagedCanisterBinding, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
         },
     };
+    use ic_platform::Principal;
 
     #[test]
     fn fleet_service_modes_round_trip_through_internal_storage_records() {

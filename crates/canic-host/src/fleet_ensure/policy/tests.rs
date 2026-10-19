@@ -14,7 +14,6 @@ use crate::fleet_ensure::model::{
     EstatePoolAssetOrigin, EstatePoolInventoryObservation, EstatePoolPendingCreationObservation,
     PoolFundingAuthority,
 };
-use candid::Principal;
 use canic_contracts::{
     cycles::Cycles,
     ids::{
@@ -25,6 +24,7 @@ use canic_contracts::{
 use canic_core::control_plane_support::config::{
     ComponentLimits, ComponentSpawnGrant, ComponentSpec,
 };
+use ic_platform::Principal;
 use std::collections::BTreeMap;
 
 #[test]

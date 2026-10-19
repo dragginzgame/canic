@@ -7,7 +7,7 @@
 use crate::ids::{WasmStoreBinding, WasmStoreGcMode};
 use canic_contracts::dto::root_store::RootStoreBootstrapResponse;
 #[cfg(feature = "root-control-plane")]
-use canic_core::cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory};
+use canic_core::cdk::structures::{DefaultMemoryImpl, StableCell as Cell};
 use canic_core::{cdk::types::Principal, impl_storable_bounded};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "root-control-plane")]
@@ -15,7 +15,7 @@ use std::cell::RefCell;
 
 #[cfg(feature = "root-control-plane")]
 std::thread_local! {
-    static ROOT_WASM_STORE_STATE: RefCell<Cell<RootWasmStoreStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
+    static ROOT_WASM_STORE_STATE: RefCell<Cell<RootWasmStoreStateRecord, DefaultMemoryImpl>> =
         RefCell::new(Cell::init(
             canic_core::memory::open(crate::memory::keys::ROOT_WASM_STORE_STATE_V1),
             RootWasmStoreStateRecord::default(),

@@ -5,11 +5,9 @@
 //! Production membership uses Root's journal; fixtures retain exact receipts in their receivers.
 
 use super::managed_app::ManagedAppQualificationError as FixtureError;
-use candid::Principal;
-use canic_contracts::dto::wire::projection::caller_authority::Command;
-use canic_contracts::dto::wire::projection::caller_authority::CommandResponse as Response;
-use canic_contracts::dto::wire::projection::caller_authority::StatusRequest;
-use canic_contracts::dto::wire::projection::caller_authority::StatusResponse;
+use canic_contracts::dto::wire::projection::caller_authority::{
+    Command, CommandResponse as Response, StatusRequest, StatusResponse,
+};
 use canic_contracts::{
     dto::{caller_authority::*, error::Error, role::OperationStatusRequest},
     ids::CallerReceiverAuthority,
@@ -19,7 +17,8 @@ use canic_core::{
     api::caller_authority::CallerAuthorityApi, bootstrap::compiled::CompiledCallerPolicy,
     control_plane_support::policy::caller_authority::matches_permission,
 };
-use ic_testkit::pic::{CandidCallExt, PocketIc};
+use ic_platform::Principal;
+use ic_testkit::pic::PocketIc;
 
 pub(super) fn publish(
     pic: &PocketIc,
@@ -93,7 +92,8 @@ fn status(
     authority: &CallerReceiverAuthority,
     operation_id: [u8; 32],
 ) -> Result<CallerAuthorityStatus, FixtureError> {
-    let response: Result<StatusResponse, Error> = pic.query_candid_as(
+    let response: Result<StatusResponse, Error> = ic_testkit::pic::query_candid_args(
+        pic,
         authority.receiver.canister(),
         root,
         CANIC_CONTROL_STATUS,
@@ -101,7 +101,8 @@ fn status(
             operation_id,
         }),),
         crate::testing::CANDID_REPLY_LIMITS,
-    )?;
+    )
+    .map(|(reply,)| reply)?;
     let StatusResponse::CallerAuthority(status) = response.map_err(FixtureError::Canic)?;
     if status.authority != *authority {
         return Err(FixtureError::Authority(
@@ -117,7 +118,7 @@ fn apply(
     authority: &CallerReceiverAuthority,
     change: CallerAuthorityChange,
 ) -> Result<CallerAuthorityPublication, FixtureError> {
-    let encoded = candid::encode_args((authority.clone(), change.clone()))
+    let encoded = ic_platform::candid::contract::encode_args((authority.clone(), change.clone()))
         .map_err(|error| FixtureError::Candid(error.to_string()))?;
     let operation: [u8; 32] = canic_core::cdk::utils::hash::sha256_bytes(&encoded)
         .try_into()
@@ -161,12 +162,14 @@ fn command(
     target: Principal,
     command: Command,
 ) -> Result<Response, FixtureError> {
-    let response: Result<Response, Error> = pic.update_candid_as(
+    let response: Result<Response, Error> = ic_testkit::pic::update_candid_args(
+        pic,
         target,
         root,
         CANIC_COMMAND,
         (command,),
         crate::testing::CANDID_REPLY_LIMITS,
-    )?;
+    )
+    .map(|(reply,)| reply)?;
     response.map_err(FixtureError::Canic)
 }

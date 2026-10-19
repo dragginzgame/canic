@@ -80,7 +80,6 @@ use crate::{
         RootFleetSubnetStoreReclamationView,
     },
 };
-use candid::CandidType;
 use canic_contracts::{
     cycles::Cycles,
     dto::{
@@ -113,6 +112,7 @@ use canic_core::{
     ids::IntentId,
     role_contract::ProtocolProfileDigest,
 };
+use ic_platform::candid::contract::CandidType;
 use root_retirement::{
     root_store_binding_finalization_hash, root_store_deletion_hash, root_store_reclamation_hash,
 };
@@ -217,6 +217,7 @@ pub struct RootFleetSubnetFinalInventoryPlan {
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct RootTerminalComponentHistoryHashEntry {
     allocation_sequence: u64,
     component: ComponentInstanceId,
@@ -226,6 +227,7 @@ struct RootTerminalComponentHistoryHashEntry {
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct RootComponentInitialInventoryHashEntry {
     operation_id: [u8; 32],
     allocation_sequence: u64,
@@ -247,6 +249,7 @@ struct RootComponentInitialInventoryHashEntry {
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct RootComponentFinalInventoryHashAuthority {
     binding: ComponentBinding,
     provisioning_origin: ComponentProvisioningOrigin,
@@ -265,6 +268,7 @@ struct RootComponentFinalInventoryHashAuthority {
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct RootComponentMembershipRemovalHashAuthority {
     operation_id: [u8; 32],
     component: ComponentInstanceId,
@@ -1381,7 +1385,7 @@ impl ComponentRegistryOps {
     /// Resolve a currently registered descendant's exact allocation for paid-effect admission.
     pub(crate) fn child_allocation_operation_id(
         component: ComponentInstanceId,
-        canister: candid::Principal,
+        canister: ic_platform::Principal,
     ) -> Result<Option<[u8; 32]>, InternalError> {
         let Some(child) = RootComponentRegistryStore::child(component, canister) else {
             return Ok(None);
@@ -1803,7 +1807,8 @@ const fn removed_component_membership_receipt(
 fn terminal_component_history_hash(
     entries: &[RootTerminalComponentHistoryHashEntry],
 ) -> Result<[u8; 32], InternalError> {
-    let payload = candid::encode_one(entries).map_err(|_error| InternalError::invariant())?;
+    let payload = ic_platform::candid::contract::encode_one(entries)
+        .map_err(|_error| InternalError::invariant())?;
     Ok(domain_hash(
         ROOT_TERMINAL_COMPONENT_HISTORY_HASH_DOMAIN,
         &payload,
@@ -5288,19 +5293,20 @@ fn component_membership_removal_hash(
     draining: &RootComponentDrainingRecord,
     receipt: &RootComponentMembershipRemovedRecord,
 ) -> Result<[u8; 32], InternalError> {
-    let payload = candid::encode_one(RootComponentMembershipRemovalHashAuthority {
-        operation_id: draining.operation_id,
-        component: draining.component,
-        final_inventory_hash: receipt.deleted.deletion.final_inventory.inventory_hash,
-        deleted_at_ns: receipt.deleted.deleted_at_ns,
-        allocation_operation_id: receipt.allocation_operation_id,
-        remaining_spec_committed_instances: receipt.remaining_spec_committed_instances,
-        root_committed_component_instances: receipt.root_committed_component_instances,
-        root_known_created_component_canisters: receipt.root_known_created_component_canisters,
-        root_registry_encoded_bytes: receipt.root_registry_encoded_bytes,
-        removed_at_ns: receipt.removed_at_ns,
-    })
-    .map_err(|_error| InternalError::invariant())?;
+    let payload =
+        ic_platform::candid::contract::encode_one(RootComponentMembershipRemovalHashAuthority {
+            operation_id: draining.operation_id,
+            component: draining.component,
+            final_inventory_hash: receipt.deleted.deletion.final_inventory.inventory_hash,
+            deleted_at_ns: receipt.deleted.deleted_at_ns,
+            allocation_operation_id: receipt.allocation_operation_id,
+            remaining_spec_committed_instances: receipt.remaining_spec_committed_instances,
+            root_committed_component_instances: receipt.root_committed_component_instances,
+            root_known_created_component_canisters: receipt.root_known_created_component_canisters,
+            root_registry_encoded_bytes: receipt.root_registry_encoded_bytes,
+            removed_at_ns: receipt.removed_at_ns,
+        })
+        .map_err(|_error| InternalError::invariant())?;
     let mut hasher = Sha256::new();
     hasher.update(COMPONENT_MEMBERSHIP_REMOVAL_HASH_DOMAIN);
     hasher.update((payload.len() as u64).to_be_bytes());
@@ -6205,7 +6211,7 @@ fn component_partition_content_hash(
     committed_descendants: u32,
 ) -> Result<[u8; 32], InternalError> {
     const DOMAIN: &[u8] = b"canic.component-registry.partition.v1";
-    let payload = candid::encode_one((
+    let payload = ic_platform::candid::contract::encode_one((
         binding.clone(),
         protocol_profile_digest,
         provisioning_origin.clone(),
@@ -6235,23 +6241,24 @@ fn component_final_inventory_hash(
     partition: &ComponentRegistryPartitionRecord,
     inventory: &RootComponentFinalInventoryRecord,
 ) -> Result<[u8; 32], InternalError> {
-    let payload = candid::encode_one(RootComponentFinalInventoryHashAuthority {
-        binding: partition.binding.clone(),
-        provisioning_origin: partition.provisioning_origin.clone(),
-        release_set: partition.release_set,
-        status: partition.status,
-        registry: inventory.registry.clone(),
-        descendant_content_hash: inventory.descendant_content_hash,
-        directory_synchronized_at_ns: inventory.directory_synchronized_at_ns,
-        reserved_descendants: partition.reserved_descendants,
-        committed_descendants: partition.committed_descendants,
-        registry_encoded_bytes: inventory.registry_encoded_bytes,
-        covered_fleet_registry_revision: inventory.covered_fleet_registry_revision,
-        covered_fleet_registry_content_hash: inventory.covered_fleet_registry_content_hash,
-        directory_authority_hash: inventory.directory_authority_hash,
-        finalized_at_ns: inventory.finalized_at_ns,
-    })
-    .map_err(|_error| InternalError::invariant())?;
+    let payload =
+        ic_platform::candid::contract::encode_one(RootComponentFinalInventoryHashAuthority {
+            binding: partition.binding.clone(),
+            provisioning_origin: partition.provisioning_origin.clone(),
+            release_set: partition.release_set,
+            status: partition.status,
+            registry: inventory.registry.clone(),
+            descendant_content_hash: inventory.descendant_content_hash,
+            directory_synchronized_at_ns: inventory.directory_synchronized_at_ns,
+            reserved_descendants: partition.reserved_descendants,
+            committed_descendants: partition.committed_descendants,
+            registry_encoded_bytes: inventory.registry_encoded_bytes,
+            covered_fleet_registry_revision: inventory.covered_fleet_registry_revision,
+            covered_fleet_registry_content_hash: inventory.covered_fleet_registry_content_hash,
+            directory_authority_hash: inventory.directory_authority_hash,
+            finalized_at_ns: inventory.finalized_at_ns,
+        })
+        .map_err(|_error| InternalError::invariant())?;
     let mut hasher = Sha256::new();
     hasher.update(COMPONENT_FINAL_INVENTORY_HASH_DOMAIN);
     hasher.update((payload.len() as u64).to_be_bytes());
@@ -6284,7 +6291,7 @@ fn committed_component_descendant_content_hash(
     if previous == [0; 32] || child.status != ComponentLifecycleStatus::Prepared {
         return Err(InternalError::invariant());
     }
-    let payload = candid::encode_one((
+    let payload = ic_platform::candid::contract::encode_one((
         previous,
         previous_committed_descendants,
         revision,
@@ -6318,7 +6325,7 @@ fn activated_component_descendant_content_hash(
     {
         return Err(InternalError::invariant());
     }
-    let payload = candid::encode_one((
+    let payload = ic_platform::candid::contract::encode_one((
         previous,
         previous_revision,
         revision,
@@ -6360,7 +6367,7 @@ fn removed_component_descendant_content_hash(
     if previous_committed_descendants == 1 {
         return Ok(empty_component_descendant_content_hash(component));
     }
-    let payload = candid::encode_one((
+    let payload = ic_platform::candid::contract::encode_one((
         previous,
         previous_revision,
         previous_committed_descendants,

@@ -7,7 +7,7 @@ use crate::fleet_ensure::{
     model::operator_mint::OperatorMintIntentRecord,
     ops::operator_mint::receipts::DepositVerificationError as Error,
 };
-use icrc_ledger_types::icrc::generic_value::Value;
+use ic_platform::icrc_ledger_types::Value;
 use std::collections::BTreeMap;
 
 pub(super) fn deposit_amounts(

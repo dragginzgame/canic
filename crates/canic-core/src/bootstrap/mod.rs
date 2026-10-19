@@ -24,42 +24,25 @@ pub use crate::{config::ConfigError, config::ConfigTomlIssue};
 
 #[doc(hidden)]
 pub mod compiled {
-    pub use crate::{
-        cdk::candid::Principal, config::schema::AppConfig, config::schema::AuthConfig,
-        config::schema::CanisterAuthConfig, config::schema::CanisterConfig,
-        config::schema::CanisterKind, config::schema::CanisterRoleNameIssue,
-        config::schema::ChainKeyPublicKeyDerivation, config::schema::ChainKeyRootProofConfig,
-        config::schema::ComponentChildConfig, config::schema::ComponentChildKind,
-        config::schema::ComponentDeploymentMemberLimitConfig,
-        config::schema::ComponentDeploymentSpawnGrantLimitConfig,
-        config::schema::ComponentGroupComponentConfig,
-        config::schema::ComponentGroupDeploymentConfig,
-        config::schema::ComponentGroupIncludeConfig,
-        config::schema::ComponentGroupPlacementPolicyConfig,
-        config::schema::ComponentGroupSpecConfig, config::schema::ComponentLimitsConfig,
-        config::schema::ComponentProvisioningGrantConfig,
-        config::schema::ComponentSpawnGrantConfig, config::schema::ComponentSpecConfig,
-        config::schema::ConfigModel, config::schema::CyclesFundingBudgetConfig,
-        config::schema::CyclesFundingPolicyConfig, config::schema::DelegatedTokenConfig,
-        config::schema::DiagnosticsCanisterConfig, config::schema::FleetInitMode,
-        config::schema::FleetServicePlacementPolicyConfig,
-        config::schema::FleetServiceTargetConfig, config::schema::FleetServicesConfig,
-        config::schema::IndexConfig, config::schema::IndexPool,
-        config::schema::LocalApplicationAuthorizationConfig, config::schema::LogConfig,
-        config::schema::MAX_COMPONENT_CHILD_ROLES,
-        config::schema::MAX_COMPONENT_PROVISIONING_GRANTS,
-        config::schema::MAX_COMPONENT_SPAWN_GRANTS, config::schema::MAX_FLEET_COMPONENT_INSTANCES,
-        config::schema::MetricsCanisterConfig, config::schema::MetricsProfile,
-        config::schema::NAME_MAX_BYTES, config::schema::RoleAttestationConfig,
-        config::schema::RoleDeclaration, config::schema::RoleDeclarationKind,
-        config::schema::RoleObservabilityConfig, config::schema::ScalePool,
-        config::schema::ScalePoolPolicy, config::schema::ScalingConfig,
-        config::schema::ServicesConfig, config::schema::ShardPool, config::schema::ShardPoolPolicy,
-        config::schema::ShardingConfig, config::schema::Standards,
-        config::schema::StandardsCanisterConfig, config::schema::TopupPolicy,
-        config::schema::implicit_root_canister_config,
-        config::schema::implicit_wasm_store_canister_config, config::schema::validate_app_name,
-        config::schema::validate_canister_role_name,
+    pub use crate::config::schema::{
+        AppConfig, AuthConfig, CanisterAuthConfig, CanisterConfig, CanisterKind,
+        CanisterRoleNameIssue, ChainKeyPublicKeyDerivation, ChainKeyRootProofConfig,
+        ComponentChildConfig, ComponentChildKind, ComponentDeploymentMemberLimitConfig,
+        ComponentDeploymentSpawnGrantLimitConfig, ComponentGroupComponentConfig,
+        ComponentGroupDeploymentConfig, ComponentGroupIncludeConfig,
+        ComponentGroupPlacementPolicyConfig, ComponentGroupSpecConfig, ComponentLimitsConfig,
+        ComponentProvisioningGrantConfig, ComponentSpawnGrantConfig, ComponentSpecConfig,
+        ConfigModel, CyclesFundingBudgetConfig, CyclesFundingPolicyConfig, DelegatedTokenConfig,
+        DiagnosticsCanisterConfig, FleetInitMode, FleetServicePlacementPolicyConfig,
+        FleetServiceTargetConfig, FleetServicesConfig, IndexConfig, IndexPool,
+        LocalApplicationAuthorizationConfig, LogConfig, MAX_COMPONENT_CHILD_ROLES,
+        MAX_COMPONENT_PROVISIONING_GRANTS, MAX_COMPONENT_SPAWN_GRANTS,
+        MAX_FLEET_COMPONENT_INSTANCES, MetricsCanisterConfig, MetricsProfile, NAME_MAX_BYTES,
+        RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind, RoleObservabilityConfig,
+        ScalePool, ScalePoolPolicy, ScalingConfig, ServicesConfig, ShardPool, ShardPoolPolicy,
+        ShardingConfig, Standards, StandardsCanisterConfig, TopupPolicy,
+        implicit_root_canister_config, implicit_wasm_store_canister_config, validate_app_name,
+        validate_canister_role_name,
     };
     pub use crate::{
         config::ComponentChildFundingPolicy, config::ComponentChildSpec,
@@ -111,6 +94,7 @@ pub mod compiled {
         ids::ComponentGroupMemberId, ids::ComponentGroupMemberPath, ids::ComponentGroupSpecId,
         ids::ComponentSpecId, ids::CyclesFundingBudget, ids::FleetServiceId,
     };
+    pub use ic_platform::Principal;
 }
 
 /// init_compiled_config
@@ -213,7 +197,7 @@ fn inject_runtime_ic_root_public_key_into_auth(
     if !should_inject_runtime_ic_root_public_key_for_auth(auth) {
         return Ok(());
     }
-    let root_key = ic_cdk::api::root_key();
+    let root_key = ic_platform::cdk::api::root_key();
     inject_runtime_ic_root_public_key_into_auth_from(auth, &root_key)
 }
 

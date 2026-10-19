@@ -6,7 +6,7 @@
 use super::*;
 
 pub(super) fn response(
-    root: candid::Principal,
+    root: ic_platform::Principal,
     prepared: &RootComponentRegistryView,
 ) -> Result<RootComponentRegistryStatusResponse, InternalError> {
     if prepared.root.fleet_subnet_root != root {

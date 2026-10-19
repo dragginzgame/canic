@@ -4,11 +4,7 @@ mod transport;
 
 use crate::{
     cli::{
-        clap::{
-            flag_arg, parse_matches, render_usage, required_string, string_option,
-            string_option_or_else, value_arg,
-        },
-        defaults::default_icp,
+        clap::{flag_arg, parse_matches, render_usage, required_string, string_option, value_arg},
         globals::{internal_environment_arg, internal_icp_arg},
         help::print_help_or_version,
     },
@@ -25,7 +21,6 @@ use clap::Command as ClapCommand;
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
 
-const CANDID_SERVICE_METADATA: &str = "candid:service";
 const INFO_HELP_AFTER: &str = "\
 Examples:
   canic info endpoints demo-local app
@@ -47,24 +42,11 @@ pub enum EndpointsCommandError {
     #[error(transparent)]
     CandidEndpoint(#[from] CandidEndpointError),
 
-    #[error(
-        "live metadata was unavailable for {canister} in Fleet {fleet} and no local Candid artifact could be resolved"
-    )]
-    NoInterfaceArtifact { fleet: String, canister: String },
-
-    #[error(
-        "local Candid artifact not found for role {role}: {path}; to inspect a managed build, pass --release-build <sha256> using the ID emitted by canic build"
-    )]
-    MissingRoleArtifact { role: String, path: String },
+    #[error(transparent)]
+    Installed(#[from] canic_host::protocol_binding::InstalledCandidError),
 
     #[error(transparent)]
     IcpConfig(#[from] IcpConfigError),
-
-    #[error("failed to read local Candid artifact {path}: {source}")]
-    ReadDid {
-        path: String,
-        source: std::io::Error,
-    },
 
     #[error("failed to render endpoint output: {0}")]
     Json(#[from] serde_json::Error),
@@ -79,7 +61,6 @@ struct EndpointsOptions {
     fleet: String,
     canister: String,
     environment: Option<String>,
-    icp: String,
     json: bool,
     release_build: Option<ReleaseBuildId>,
 }
@@ -107,7 +88,6 @@ impl EndpointsOptions {
             fleet: required_string(&matches, target_arg),
             canister: required_string(&matches, "canister"),
             environment: string_option(&matches, "environment"),
-            icp: string_option_or_else(&matches, "icp", default_icp),
             json: matches.get_flag("json"),
             release_build: matches.get_one::<ReleaseBuildId>("release-build").copied(),
         })
@@ -146,7 +126,7 @@ fn info_command() -> ClapCommand {
     endpoint_command(
         "canic info endpoints",
         "fleet",
-        "Fleet name for live lookup; unused with --release-build",
+        "Deployed Fleet name; unused with --release-build",
         INFO_HELP_AFTER,
     )
 }

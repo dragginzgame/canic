@@ -5,8 +5,8 @@
 //! Boundary: all layers reuse these owned and borrowed validated values.
 
 use crate::model::auth::application_authorization::{
-    MAX_APPLICATION_SCOPE_BYTES, MAX_APPLICATION_SESSION_SCOPE_BYTES,
-    MAX_APPLICATION_SESSION_SCOPES, MAX_VERIFIED_APPLICATION_SCOPES,
+    MAX_APPLICATION_SESSION_SCOPE_BYTES, MAX_APPLICATION_SESSION_SCOPES,
+    MAX_VERIFIED_APPLICATION_SCOPES,
 };
 use std::{
     fmt::{self, Display},
@@ -207,70 +207,20 @@ fn canonicalize(
 }
 
 fn validate_application_scope(value: &str) -> Result<(), ApplicationScopeError> {
-    if value.is_empty() {
-        return Err(ApplicationScopeError::Empty);
-    }
-    if value.len() > MAX_APPLICATION_SCOPE_BYTES {
-        return Err(ApplicationScopeError::TooLong {
-            bytes: value.len(),
-            max: MAX_APPLICATION_SCOPE_BYTES,
-        });
-    }
-
-    let mut segment_start = true;
-    for (offset, byte) in value.bytes().enumerate() {
-        if byte == b':' {
-            if segment_start {
-                return Err(ApplicationScopeError::EmptySegment);
-            }
-            segment_start = true;
-            continue;
+    use ic_auth::canonical::{ScopeLabelError, validate_scope_label_detailed};
+    validate_scope_label_detailed(value).map_err(|error| match error {
+        ScopeLabelError::Empty => ApplicationScopeError::Empty,
+        ScopeLabelError::TooLong { bytes, max } => ApplicationScopeError::TooLong { bytes, max },
+        ScopeLabelError::EmptySegment => ApplicationScopeError::EmptySegment,
+        ScopeLabelError::InvalidSegmentStart { offset } => {
+            ApplicationScopeError::InvalidSegmentStart { offset }
         }
-        if segment_start {
-            if !is_lower_alpha_numeric(byte) {
-                return Err(ApplicationScopeError::InvalidSegmentStart { offset });
-            }
-            segment_start = false;
-        } else if !is_lower_alpha_numeric(byte) && byte != b'_' && byte != b'-' {
-            return Err(ApplicationScopeError::InvalidByte { offset });
-        }
-    }
-    if segment_start {
-        return Err(ApplicationScopeError::EmptySegment);
-    }
-    Ok(())
+        ScopeLabelError::InvalidByte { offset } => ApplicationScopeError::InvalidByte { offset },
+    })
 }
 
 const fn is_valid_application_scope(value: &str) -> bool {
-    let bytes = value.as_bytes();
-    if bytes.is_empty() || bytes.len() > MAX_APPLICATION_SCOPE_BYTES {
-        return false;
-    }
-
-    let mut offset = 0;
-    let mut segment_start = true;
-    while offset < bytes.len() {
-        let byte = bytes[offset];
-        if byte == b':' {
-            if segment_start {
-                return false;
-            }
-            segment_start = true;
-        } else if segment_start {
-            if !is_lower_alpha_numeric(byte) {
-                return false;
-            }
-            segment_start = false;
-        } else if !is_lower_alpha_numeric(byte) && byte != b'_' && byte != b'-' {
-            return false;
-        }
-        offset += 1;
-    }
-    !segment_start
-}
-
-const fn is_lower_alpha_numeric(byte: u8) -> bool {
-    byte.is_ascii_lowercase() || byte.is_ascii_digit()
+    ic_auth::canonical::validate_scope_label_detailed(value).is_ok()
 }
 
 // -----------------------------------------------------------------------------

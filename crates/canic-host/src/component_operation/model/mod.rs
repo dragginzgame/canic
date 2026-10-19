@@ -1,11 +1,11 @@
 //! Durable authority and progress for one host-owned Component invocation.
 //! Root storage remains the authoritative allocation and activation owner.
 
-use candid::Principal;
 use canic_contracts::ids::{
     CanisterRole, ComponentBinding, ComponentInstanceId, ComponentSpecId, FleetSubnetRootBinding,
     FleetSubnetRootReleaseSet,
 };
+use ic_platform::Principal;
 use serde::{Deserialize, Serialize};
 
 /// Exact reviewed local, installation and placement authority.

@@ -1,6 +1,5 @@
 // Category C - Public facade data contracts without canister installation.
 
-use candid::{Principal, decode_one, encode_one};
 use canic::{
     dto::{
         abi::v1::{CanisterInitAuthority, CanisterInitPayload},
@@ -15,6 +14,10 @@ use canic::{
         FleetSubnetRootFundingPolicy, FleetSubnetRootLimits, ManagedCanisterBinding,
         ReleaseBuildId, ReleaseBuildIdParseError, ReleaseBuildNonce, SubnetId,
     },
+};
+use ic_platform::{
+    Principal,
+    candid::{contract::encode_one, decoder::decode_one},
 };
 
 #[test]

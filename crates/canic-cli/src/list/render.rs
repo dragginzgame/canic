@@ -1,16 +1,12 @@
 use super::ListCommandError;
 use crate::support::registry_tree::{RegistryRow, visible_rows};
-use canic_host::{
-    registry::RegistryEntry,
-    table::{ColumnAlign, render_separator, render_table, render_table_row, table_widths},
-};
+use canic_host::registry::RegistryEntry;
+use ic_host_text::table::{self, Alignment, Options};
 use std::collections::{BTreeMap, BTreeSet};
 
-const COLUMN_GAP: &str = "   ";
 const MODULE_PREFIX_CHARS: usize = 8;
 const MODULE_VARIANT_COLOR: &str = "\x1b[38;5;179m";
 const COLOR_RESET: &str = "\x1b[0m";
-const MODULE_COLUMN_INDEX: usize = 1;
 
 const ROLE_HEADER: &str = "ROLE";
 const KIND_HEADER: &str = "KIND";
@@ -33,7 +29,7 @@ const CONFIG_HEADERS: [&str; 6] = [
     METRICS_HEADER,
     TOPUP_HEADER,
 ];
-const CONFIG_ALIGNMENTS: [ColumnAlign; 6] = [ColumnAlign::Left; 6];
+const CONFIG_ALIGNMENTS: [Alignment; 6] = [Alignment::Left; 6];
 const REGISTRY_HEADERS: [&str; 7] = [
     ROLE_HEADER,
     MODULE_HEADER,
@@ -52,14 +48,14 @@ const REGISTRY_VERBOSE_HEADERS: [&str; 7] = [
     WASM_HEADER,
     CYCLES_HEADER,
 ];
-const REGISTRY_ALIGNMENTS: [ColumnAlign; 7] = [
-    ColumnAlign::Left,
-    ColumnAlign::Left,
-    ColumnAlign::Left,
-    ColumnAlign::Left,
-    ColumnAlign::Left,
-    ColumnAlign::Right,
-    ColumnAlign::Right,
+const REGISTRY_ALIGNMENTS: [Alignment; 7] = [
+    Alignment::Left,
+    Alignment::Left,
+    Alignment::Left,
+    Alignment::Left,
+    Alignment::Left,
+    Alignment::Right,
+    Alignment::Right,
 ];
 
 ///
@@ -185,16 +181,23 @@ pub(super) struct ConfigRoleRow {
 
 fn render_config_table(rows: &[ConfigRoleRow], verbose: bool) -> String {
     let table_rows = config_table_rows(rows);
-    let widths = table_widths(&CONFIG_HEADERS, &table_rows);
-    let mut lines = Vec::new();
-    lines.push(render_table_row(
+    let rendered = table::render(
         &CONFIG_HEADERS,
-        &widths,
+        &table_rows,
         &CONFIG_ALIGNMENTS,
-    ));
-    lines.push(render_separator(&widths));
-    for (row, table_row) in rows.iter().zip(table_rows.iter()) {
-        lines.push(render_table_row(table_row, &widths, &CONFIG_ALIGNMENTS));
+        Options {
+            column_gap: 3,
+            header_separator: true,
+        },
+    );
+    let mut rendered_lines = rendered.lines();
+    let mut lines = rendered_lines
+        .by_ref()
+        .take(2)
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    for (row, line) in rows.iter().zip(rendered_lines) {
+        lines.push(line.to_owned());
         if verbose {
             lines.extend(row.details.iter().map(|detail| format!("  - {detail}")));
         }
@@ -225,20 +228,40 @@ fn render_registry_table(rows: &[RegistryRow<'_>], columns: &RegistryColumnData<
         &REGISTRY_HEADERS
     };
     if !columns.color_module_variants {
-        return render_table(headers, &table_rows, &REGISTRY_ALIGNMENTS);
+        return table::render(
+            headers,
+            &table_rows,
+            &REGISTRY_ALIGNMENTS,
+            Options {
+                column_gap: 3,
+                header_separator: true,
+            },
+        );
     }
 
-    let widths = table_widths(headers, &table_rows);
-    let variants = module_variant_flags(rows, columns.module_hashes);
-    let mut lines = Vec::with_capacity(table_rows.len() + 2);
-    lines.push(render_table_row(headers, &widths, &REGISTRY_ALIGNMENTS));
-    lines.push(render_separator(&widths));
-    lines.extend(
-        table_rows
-            .iter()
-            .zip(variants)
-            .map(|(row, variant)| render_registry_row(row, &widths, variant)),
+    let rendered = table::render(
+        headers,
+        &table_rows,
+        &REGISTRY_ALIGNMENTS,
+        Options {
+            column_gap: 3,
+            header_separator: true,
+        },
     );
+    let variants = module_variant_flags(rows, columns.module_hashes);
+    let mut rendered_lines = rendered.lines();
+    let mut lines = rendered_lines
+        .by_ref()
+        .take(2)
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    lines.extend(rendered_lines.zip(variants).map(|(line, variant)| {
+        if variant {
+            format!("{MODULE_VARIANT_COLOR}{line}{COLOR_RESET}")
+        } else {
+            line.to_owned()
+        }
+    }));
     lines.join("\n")
 }
 
@@ -280,29 +303,6 @@ fn registry_table_rows(
         ]);
     }
     table_rows
-}
-
-fn render_registry_row(row: &[String; 7], widths: &[usize; 7], color_module: bool) -> String {
-    widths
-        .iter()
-        .zip(REGISTRY_ALIGNMENTS)
-        .enumerate()
-        .map(|(index, (width, alignment))| {
-            let value = &row[index];
-            let cell = match alignment {
-                ColumnAlign::Left => format!("{value:<width$}"),
-                ColumnAlign::Right => format!("{value:>width$}"),
-            };
-            if color_module && index == MODULE_COLUMN_INDEX {
-                format!("{MODULE_VARIANT_COLOR}{cell}{COLOR_RESET}")
-            } else {
-                cell
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(COLUMN_GAP)
-        .trim_end()
-        .to_string()
 }
 
 fn module_variant_flags(

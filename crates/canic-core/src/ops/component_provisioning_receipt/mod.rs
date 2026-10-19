@@ -16,8 +16,8 @@ use crate::{
         fleet_registry::{FleetDirectorySnapshot, FleetRegistryVersion},
     },
 };
-use candid::CandidType;
 use canic_contracts::ids::{ComponentDeploymentConfigurationDigest, FleetSubnetRootBinding};
+use ic_platform::candid::contract::CandidType;
 use sha2::{Digest, Sha256};
 
 const ACCEPTANCE_RECEIPT_DOMAIN: &[u8] = b"canic/root-component-provisioning-acceptance-receipt/v1";
@@ -35,6 +35,7 @@ const DIRECTORY_SYNCHRONIZATION_RECEIPT_DOMAIN: &[u8] =
 
 /// Exact immutable fields covered by one root's initial `Accepted` receipt.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentProvisioningAcceptanceReceiptAuthority<'a> {
     pub operation_id: [u8; 32],
     pub plan_hash: [u8; 32],
@@ -48,6 +49,7 @@ pub struct RootComponentProvisioningAcceptanceReceiptAuthority<'a> {
 
 /// Exact immutable fields covered by one root's terminal `Provisioned` receipt.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentProvisioningProvisionedReceiptAuthority<'a> {
     pub operation_id: [u8; 32],
     pub plan_hash: [u8; 32],
@@ -61,6 +63,7 @@ pub struct RootComponentProvisioningProvisionedReceiptAuthority<'a> {
 
 /// Exact immutable fields covered by one root's terminal `Published` receipt.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentProvisioningPublishedReceiptAuthority<'a> {
     pub operation_id: [u8; 32],
     pub plan_hash: [u8; 32],
@@ -75,6 +78,7 @@ pub struct RootComponentProvisioningPublishedReceiptAuthority<'a> {
 
 /// Exact immutable fields covered by one root's terminal `RuntimesActive` receipt.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentProvisioningRuntimesActiveReceiptAuthority<'a> {
     pub operation_id: [u8; 32],
     pub plan_hash: [u8; 32],
@@ -87,6 +91,7 @@ pub struct RootComponentProvisioningRuntimesActiveReceiptAuthority<'a> {
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct RootComponentGroupPlacementReceiptAuthority<'a> {
     operation_id: [u8; 32],
     plan_hash: [u8; 32],
@@ -198,7 +203,8 @@ fn receipt_content_hash(
     authority: impl CandidType,
     _label: &str,
 ) -> Result<[u8; 32], InternalError> {
-    let bytes = candid::encode_one(authority).map_err(|_error| InternalError::invariant())?;
+    let bytes = ic_platform::candid::contract::encode_one(authority)
+        .map_err(|_error| InternalError::invariant())?;
     let byte_count = u64::try_from(bytes.len()).map_err(|_| InternalError::resource_exhausted())?;
     let mut hasher = Sha256::new();
     hasher.update(domain);

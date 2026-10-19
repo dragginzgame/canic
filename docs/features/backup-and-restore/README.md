@@ -1,7 +1,7 @@
 # Backup And Restore
 
 A canister snapshot is a saved copy of a canister's state. Canic's backup tools
-download and verify snapshots on the operator's computer. Its restore tools
+plan captures and verify retained snapshots on the operator's computer. Its restore tools
 check those files, map them to the intended canisters, and record progress so an
 interrupted recovery can safely continue.
 
@@ -35,30 +35,29 @@ runners. The [adapter contract](../../architecture/independent-package-adapters.
 defines those boundaries; it does not establish live backup availability.
 
 Verification and restore of existing valid same-release backups retain their
-own artifact, identity and journal checks. Preserve the backup runner and its
-recovery machinery while the missing live preflight remains fail-closed.
+own artifact, identity and journal checks. Canic no longer exposes an injected
+capture executor. New live capture must compose IC Backup’s execution and recovery
+owner with Canic’s Fleet authority and coordinated checkpoint policy. The active
+restore runner and its same-operation recovery remain maintained.
 
 Artifact SHA-256 verification accepts uppercase and lowercase hex as the same
 digest. Malformed hashes and different artifact bytes still reject.
 
-IC Backup owns checksum-verified directory publication and recovery of an exact
-already-published tree. Canic retains the journal binding and only advances its
-receipt after that owner succeeds. Directory publication failures retain the
-upstream typed cause through `PersistenceError::Shared`. This local
-artifact support does not enable live backup creation.
+IC Host owns no-follow artifact traversal and deterministic directory checksum
+framing. Canic maps those identities into IC Backup’s checksum records and retains
+manifest/journal binding checks. This artifact support does not enable live capture.
 
-The local runner resolves the selected backup directory once before deriving
-download and verification paths. Relative paths and directory links selected by
+Layout verification resolves the selected backup directory before deriving
+verification paths. Relative paths and directory links selected by
 the operator are supported; links inside artifact trees remain rejected.
-CLI layout creation and runner execution share the execution-journal lock.
-They also share a layout lifetime lock with restore preparation, execution and
+CLI layout creation retains the execution-journal lock and shares a layout
+lifetime lock with restore preparation, execution and
 prune. That lock lives beside the backup directory so deletion cannot replace
 its identity while another process still holds it.
 
-If manifest publication finishes before its completion receipt, retry preserves
-the published timestamp and tool metadata. It verifies the backup identity,
-topology, snapshots and artifact checksums against the retained plan and journal
-before adopting that file. Conflicting content is never overwritten.
+Retained plans, journals and manifests remain readable for inspection and restore
+admission. Removing the capture executor does not delete retained layouts, settle
+an uncertain paid effect, or make a dry-run plan into a completed backup.
 
 ## Maintained Primitives
 

@@ -5,21 +5,23 @@
 
 // Tag, content/principal digest, and chunk ordinal form a fixed namespace key.
 
-use candid::{CandidType, Deserialize, Principal};
 use canic_contracts::dto::fixture_provisioning::{FixtureDescriptor, FixtureGrant};
-use canic_core::cdk::structures::{DefaultMemoryImpl, btreemap::BTreeMap, memory::RuntimeMemory};
+use canic_core::cdk::structures::{DefaultMemoryImpl, StableBTreeMap as BTreeMap};
+use ic_platform::{Principal, candid::contract::CandidType};
+use serde::Deserialize;
 use std::cell::RefCell;
 
 const KEY_BYTES: usize = 37;
 const ACCOUNTING_KEY: [u8; KEY_BYTES] = [0; KEY_BYTES];
 
 std::thread_local! {
-    static FIXTURES: RefCell<BTreeMap<[u8; KEY_BYTES], Vec<u8>, RuntimeMemory<DefaultMemoryImpl>>> =
+    static FIXTURES: RefCell<BTreeMap<[u8; KEY_BYTES], Vec<u8>, DefaultMemoryImpl>> =
         RefCell::new(BTreeMap::init(canic_core::memory::open(crate::memory::keys::FIXTURE_STORE_V1)));
 }
 
 /// Exact descriptor and monotonic ingestion progress, committed with each chunk.
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FixtureSourceRecord {
     pub descriptor: FixtureDescriptor,
     pub next_chunk: u32,
@@ -59,11 +61,12 @@ impl FixtureStore {
                 expected_chunks: 0,
                 stored_chunks: 0,
             };
-            for entry in map.iter() {
+            for entry in map {
                 match entry.key()[0] {
                     1 => {
                         let source: FixtureSourceRecord =
-                            candid::decode_one(&entry.value()).expect("fixture source record");
+                            ic_platform::candid::decoder::decode_one(&entry.value())
+                                .expect("fixture source record");
                         inventory.sources += 1;
                         inventory.expected_chunks = inventory
                             .expected_chunks
@@ -79,13 +82,15 @@ impl FixtureStore {
     }
 
     pub fn source(content: [u8; 32]) -> Option<FixtureSourceRecord> {
-        get(key(1, content, 0))
-            .map(|bytes| candid::decode_one(&bytes).expect("fixture source record"))
+        get(key(1, content, 0)).map(|bytes| {
+            ic_platform::candid::decoder::decode_one(&bytes).expect("fixture source record")
+        })
     }
 
     pub fn grant(target: Principal) -> Option<FixtureGrant> {
-        get(grant_key(target))
-            .map(|bytes| candid::decode_one(&bytes).expect("fixture grant record"))
+        get(grant_key(target)).map(|bytes| {
+            ic_platform::candid::decoder::decode_one(&bytes).expect("fixture grant record")
+        })
     }
 
     pub fn chunk(content: [u8; 32], index: u32) -> Option<Vec<u8>> {
@@ -98,7 +103,8 @@ impl FixtureStore {
     ) -> FixtureStoreEntryRecord {
         FixtureStoreEntryRecord {
             key: key(1, content, 0),
-            value: candid::encode_one(record).expect("bounded fixture source encoding"),
+            value: ic_platform::candid::contract::encode_one(record)
+                .expect("bounded fixture source encoding"),
         }
     }
 
@@ -112,7 +118,8 @@ impl FixtureStore {
     pub fn grant_entry(target: Principal, grant: &FixtureGrant) -> FixtureStoreEntryRecord {
         FixtureStoreEntryRecord {
             key: grant_key(target),
-            value: candid::encode_one(grant).expect("bounded fixture grant encoding"),
+            value: ic_platform::candid::contract::encode_one(grant)
+                .expect("bounded fixture grant encoding"),
         }
     }
 

@@ -9,7 +9,6 @@ use crate::{
     },
     ids::{TemplateId, TemplateVersion},
 };
-use candid::{CandidType, utils::ArgumentEncoder};
 use canic_contracts::{
     dto::{
         error::Error,
@@ -27,6 +26,7 @@ use canic_core::{
         ops::{cost_guard::CostGuardPermit, ic::call::CallOps},
     },
 };
+use ic_platform::candid::contract::{ArgumentEncoder, CandidType};
 
 ///
 /// WasmStoreInternalClient

@@ -2,18 +2,20 @@
 //! Minimal authority canister for intent reservation tests.
 //!
 
-use candid::{CandidType, Deserialize, Principal};
 use canic::api::intent::{
     BeginReceiptBackedIntentInput, BeginReceiptBackedIntentResult, IntentResourceKey, OperationId,
     PayloadBinding, ReceiptBackedIntent, ReceiptBackedIntentApi, ReceiptBackedIntentState,
     SettleReceiptBackedIntentInput, SettleReceiptBackedIntentResult, TerminalEvidence,
     TerminalEvidenceDecision,
 };
-use ic_cdk::{query, update};
+use ic_platform::cdk::{query, update};
+use ic_platform::{Principal, candid::contract::CandidType};
+use serde::Deserialize;
 
 const RECEIPT_CAPACITY: u64 = 1;
 
 #[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 enum ReceiptStateView {
     Pending,
     Committed {
@@ -27,6 +29,7 @@ enum ReceiptStateView {
 }
 
 #[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct ReceiptIntentView {
     payload_digest: [u8; 32],
     quantity: u64,
@@ -35,6 +38,7 @@ struct ReceiptIntentView {
 }
 
 #[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 enum ReceiptBeginStatus {
     Created,
     ExistingPending,
@@ -60,12 +64,14 @@ enum ReceiptBeginStatus {
 }
 
 #[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct ReceiptBeginView {
     status: ReceiptBeginStatus,
     intent: Option<ReceiptIntentView>,
 }
 
 #[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 enum ReceiptSettlementStatus {
     Settled,
     AlreadySettled,
@@ -75,29 +81,31 @@ enum ReceiptSettlementStatus {
 }
 
 #[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct ReceiptSettlementView {
     status: ReceiptSettlementStatus,
     intent: Option<ReceiptIntentView>,
 }
 
 #[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 enum ReceiptDecisionView {
     Committed,
     RolledBack,
 }
 
-#[ic_cdk::init]
+#[ic_platform::cdk::init]
 fn init() {
     init_timers();
     init_memory();
-    ic_cdk::println!("intent_authority: init");
+    ic_platform::cdk::println!("intent_authority: init");
 }
 
-#[ic_cdk::post_upgrade]
+#[ic_platform::cdk::post_upgrade]
 fn post_upgrade() {
     init_timers();
     init_memory();
-    ic_cdk::println!("intent_authority: post_upgrade memory initialized");
+    ic_platform::cdk::println!("intent_authority: post_upgrade memory initialized");
 }
 
 #[update]

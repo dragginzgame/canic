@@ -42,7 +42,7 @@ impl RootCapabilityLifecycleExecutor for ComponentChildLifecycleExecutor {
     async fn provision_component_child(
         &self,
         request: RootComponentChildProvisionRequest,
-    ) -> Result<candid::Principal, InternalError> {
+    ) -> Result<ic_platform::Principal, InternalError> {
         Box::pin(provision_component_child(request)).await
     }
 
@@ -59,7 +59,7 @@ const MAX_RECYCLE_PHASES_PER_INVOCATION: usize = 16;
 #[derive(Debug, Eq, PartialEq)]
 struct ProvisionedChildIdentity {
     component: ComponentInstanceId,
-    parent_canister_id: candid::Principal,
+    parent_canister_id: ic_platform::Principal,
     role: CanisterRole,
 }
 
@@ -75,7 +75,7 @@ impl ProvisionedChildIdentity {
 
 async fn provision_component_child(
     request: RootComponentChildProvisionRequest,
-) -> Result<candid::Principal, InternalError> {
+) -> Result<ic_platform::Principal, InternalError> {
     let operation_id = request.operation_id;
     let component = request.component;
     let expected_identity = ProvisionedChildIdentity {

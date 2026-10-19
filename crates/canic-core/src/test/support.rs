@@ -1,7 +1,6 @@
 // Category A - Internal runtime-configured tests (ConfigTestBuilder when needed).
 
 use crate::{
-    cdk::candid::Principal,
     config::schema::{
         CanisterAuthConfig, CanisterConfig, CanisterKind, CyclesFundingPolicyConfig,
         DiagnosticsCanisterConfig, MetricsCanisterConfig, ShardPool, ShardPoolPolicy,
@@ -27,6 +26,7 @@ use canic_contracts::{
         ManagedCanisterBinding, SubnetId,
     },
 };
+use ic_platform::Principal;
 
 #[must_use]
 pub fn fleet_key(byte: u8) -> FleetKey {

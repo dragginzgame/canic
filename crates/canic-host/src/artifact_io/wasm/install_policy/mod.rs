@@ -48,7 +48,7 @@ impl InstallReport {
     /// Compare already-inspected facts without reparsing or allocating.
     #[must_use]
     pub(super) fn from_facts(facts: &WasmFacts<'_>) -> Self {
-        InstallReport {
+        Self {
             code_body_bytes: LimitUsage {
                 observed: facts.code_body_bytes as u64,
                 limit: 12 * 1024 * 1024,

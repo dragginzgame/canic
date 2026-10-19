@@ -19,7 +19,7 @@ use crate::{
         FleetSubnetRootLimits, FleetSubnetRootReleaseSet, SubnetId,
     },
 };
-use candid::{CandidType, Principal};
+use ic_platform::{Principal, candid::contract::CandidType};
 use serde::{Deserialize, Serialize};
 
 ///
@@ -29,6 +29,7 @@ use serde::{Deserialize, Serialize};
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum FleetSubnetRootStatus {
     Joining,
     Active,
@@ -43,6 +44,7 @@ pub enum FleetSubnetRootStatus {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetComponentSpecEntry {
     pub component_spec: ComponentSpecId,
     pub spec_hash: [u8; 32],
@@ -57,6 +59,7 @@ pub struct FleetComponentSpecEntry {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetSubnetRootEntry {
     pub placement_subnet: SubnetId,
     pub fleet_subnet_root: Principal,
@@ -70,6 +73,7 @@ pub struct FleetSubnetRootEntry {
 
 /// Published service mode after configuration-only Authority selectors have been resolved.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum FleetServiceMode {
     AuthorityReplica,
     ActivePool,
@@ -77,6 +81,7 @@ pub enum FleetServiceMode {
 
 /// One exact configured Component member of a published Fleet service.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetServiceComponentBinding {
     pub member_purpose: FleetServiceMemberPurpose,
@@ -92,6 +97,7 @@ pub struct FleetServiceComponentBinding {
 /// This is topology intent only. It deliberately carries no health, readiness,
 /// replication progress, promotion, consistency or load-balancer eligibility.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetServiceBinding {
     pub service: FleetServiceId,
@@ -109,6 +115,7 @@ pub struct FleetServiceBinding {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetRegistry {
     pub authority: FleetRegistryAuthority,
     pub revision: u64,
@@ -125,6 +132,7 @@ pub struct FleetRegistry {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetRegistryManifest {
     pub authority: FleetRegistryAuthority,
     pub revision: u64,
@@ -139,6 +147,7 @@ pub struct FleetRegistryManifest {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetRegistryVersion {
     pub authority: FleetRegistryAuthority,
     pub revision: u64,
@@ -152,6 +161,7 @@ pub struct FleetRegistryVersion {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetSubnetRootJoinRequest {
     pub expected_registry: FleetRegistryVersion,
     pub entry: FleetSubnetRootEntry,
@@ -164,6 +174,7 @@ pub struct FleetSubnetRootJoinRequest {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetSubnetRootJoinResponse {
     pub entry: FleetSubnetRootEntry,
     pub version: FleetRegistryVersion,
@@ -176,6 +187,7 @@ pub struct FleetSubnetRootJoinResponse {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetRegistryActivationRequest {
     pub expected_registry: FleetRegistryVersion,
 }
@@ -187,6 +199,7 @@ pub struct FleetRegistryActivationRequest {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetRegistryActivationResponse {
     pub previous_version: FleetRegistryVersion,
     pub version: FleetRegistryVersion,
@@ -199,6 +212,7 @@ pub struct FleetRegistryActivationResponse {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetSubnetRootDrainingReservationRequest {
     pub asset_recipient: Principal,
     pub operation_id: [u8; 32],
@@ -213,6 +227,7 @@ pub struct FleetSubnetRootDrainingReservationRequest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetSubnetRootDrainingReservationStatusRequest {
     pub operation_id: [u8; 32],
     pub fleet_subnet_root: Principal,
@@ -225,6 +240,7 @@ pub struct FleetSubnetRootDrainingReservationStatusRequest {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetSubnetRootDrainingReservationResponse {
     pub request: FleetSubnetRootDrainingReservationRequest,
     pub coordinator: Principal,
@@ -239,6 +255,7 @@ pub struct FleetSubnetRootDrainingReservationResponse {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetSubnetRootDrainingPublicationRequest {
     pub expected_registry: FleetRegistryVersion,
     pub root_draining: FleetSubnetRootDrainingResponse,
@@ -251,6 +268,7 @@ pub struct FleetSubnetRootDrainingPublicationRequest {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetSubnetRootDrainingPublicationResponse {
     pub root_draining: FleetSubnetRootDrainingResponse,
     pub previous_version: FleetRegistryVersion,
@@ -264,6 +282,7 @@ pub struct FleetSubnetRootDrainingPublicationResponse {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetSubnetRootRemovalPublicationRequest {
     pub expected_registry: FleetRegistryVersion,
     pub final_inventory: FleetSubnetRootFinalInventoryResponse,
@@ -276,6 +295,7 @@ pub struct FleetSubnetRootRemovalPublicationRequest {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetSubnetRootRemovalPublicationResponse {
     pub final_inventory: FleetSubnetRootFinalInventoryResponse,
     pub previous_version: FleetRegistryVersion,
@@ -284,6 +304,7 @@ pub struct FleetSubnetRootRemovalPublicationResponse {
 
 /// Exact default-account transfer retained before a Fleet retirement Ledger call.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetLedgerTransferIntent {
     pub source: Principal,
     pub destination: Principal,
@@ -295,6 +316,7 @@ pub struct FleetLedgerTransferIntent {
 
 /// Verified retirement transfer; an initially empty account has no Ledger block.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetLedgerTransferReceipt {
     pub intent: FleetLedgerTransferIntent,
     pub block_index: Option<u128>,
@@ -302,6 +324,7 @@ pub struct FleetLedgerTransferReceipt {
 
 /// Controller authority for returning a fully removed Fleet's Ledger balance.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetRetirementRequest {
     pub operation_id: [u8; 32],
     pub expected_registry: FleetRegistryVersion,
@@ -311,6 +334,7 @@ pub struct FleetRetirementRequest {
 
 /// Coordinator retirement progress retained until the operator deletes the Coordinator.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetRetirementStatus {
     pub request: FleetRetirementRequest,
     pub prepared_at_ns: u64,
@@ -320,6 +344,7 @@ pub struct FleetRetirementStatus {
 
 /// Root-authenticated command freezing its pre-transfer physical-deletion readiness authority.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetSubnetRootDeletionReadinessIntentRequest {
     pub operation_id: [u8; 32],
     pub fleet_subnet_root: Principal,
@@ -335,6 +360,7 @@ pub struct FleetSubnetRootDeletionReadinessIntentRequest {
 
 /// Coordinator receipt proving root-deletion readiness intent is durable before cycle transfer.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetSubnetRootDeletionReadinessIntentResponse {
     pub request: FleetSubnetRootDeletionReadinessIntentRequest,
     pub coordinator: Principal,
@@ -344,6 +370,7 @@ pub struct FleetSubnetRootDeletionReadinessIntentResponse {
 
 /// Root-authenticated command recording its converged post-transfer cycle balance.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetSubnetRootDeletionReadinessRequest {
     pub ledger_receipt: crate::dto::fleet_registry::FleetLedgerTransferReceipt,
     pub operation_id: [u8; 32],
@@ -355,6 +382,7 @@ pub struct FleetSubnetRootDeletionReadinessRequest {
 
 /// Coordinator receipt proving one removed root is ready for an external executor.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetSubnetRootDeletionReadinessResponse {
     pub request: FleetSubnetRootDeletionReadinessRequest,
     pub coordinator: Principal,
@@ -372,6 +400,7 @@ pub struct FleetSubnetRootDeletionReadinessResponse {
 
 /// Controller command freezing independently observed root authority before stop/delete.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetSubnetRootDeletionExecutionRequest {
     pub operation_id: [u8; 32],
     pub fleet_subnet_root: Principal,
@@ -386,6 +415,7 @@ pub struct FleetSubnetRootDeletionExecutionRequest {
 
 /// Durable Coordinator intent binding one authenticated external root-deletion executor.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetSubnetRootDeletionExecutionResponse {
     pub request: FleetSubnetRootDeletionExecutionRequest,
     pub executor: Principal,
@@ -395,6 +425,7 @@ pub struct FleetSubnetRootDeletionExecutionResponse {
 
 /// Controller request confirming typed root absence under one durable execution intent.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetSubnetRootDeletionCompletionRequest {
     pub operation_id: [u8; 32],
     pub fleet_subnet_root: Principal,
@@ -404,6 +435,7 @@ pub struct FleetSubnetRootDeletionCompletionRequest {
 
 /// Read-only lookup key for one durable root-deletion execution intent or receipt.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetSubnetRootDeletionStatusRequest {
     pub operation_id: [u8; 32],
     pub fleet_subnet_root: Principal,
@@ -411,6 +443,7 @@ pub struct FleetSubnetRootDeletionStatusRequest {
 
 /// Terminal Coordinator receipt for externally observed Fleet Subnet Root absence.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetSubnetRootDeletionResponse {
     pub operation_id: [u8; 32],
     pub fleet_subnet_root: Principal,
@@ -433,6 +466,7 @@ pub struct FleetSubnetRootDeletionResponse {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetRegistrySnapshotResponse {
     pub registry: FleetRegistry,
     pub manifest: FleetRegistryManifest,
@@ -446,6 +480,7 @@ pub struct FleetRegistrySnapshotResponse {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetSubnetRootSnapshotAcknowledgementRequest {
     pub version: FleetRegistryVersion,
 }
@@ -457,6 +492,7 @@ pub struct FleetSubnetRootSnapshotAcknowledgementRequest {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetSubnetRootSnapshotAcknowledgement {
     pub fleet_subnet_root: Principal,
     pub version: FleetRegistryVersion,
@@ -464,6 +500,7 @@ pub struct FleetSubnetRootSnapshotAcknowledgement {
 
 /// Controller command asking a Prepared root to synchronize and acknowledge its Registry.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetSubnetRootRegistrySyncRequest {
     pub operation_id: [u8; 32],
     pub expected_registry: FleetRegistryVersion,
@@ -472,6 +509,7 @@ pub struct FleetSubnetRootRegistrySyncRequest {
 
 /// Exact root-local candidate and Coordinator acknowledgement evidence.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetSubnetRootRegistrySyncResponse {
     pub fleet_subnet_root: Principal,
     pub version: FleetRegistryVersion,
@@ -485,6 +523,7 @@ pub struct FleetSubnetRootRegistrySyncResponse {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetDirectoryProvenance {
     pub registry: FleetRegistryVersion,
     pub source_fleet_subnet_root: Principal,
@@ -497,6 +536,7 @@ pub struct FleetDirectoryProvenance {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetSubnetRootDirectoryEntry {
     pub placement_subnet: SubnetId,
     pub fleet_subnet_root: Principal,
@@ -505,6 +545,7 @@ pub struct FleetSubnetRootDirectoryEntry {
 
 /// One exact configured Component projected into a Fleet Directory service.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetDirectoryServiceComponent {
     pub member_purpose: FleetServiceMemberPurpose,
@@ -520,6 +561,7 @@ pub struct FleetDirectoryServiceComponent {
 /// This is topology discovery only. Applications own health, readiness,
 /// replication progress, promotion, consistency and load-balancer policy.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetDirectoryService {
     pub service: FleetServiceId,
@@ -537,6 +579,7 @@ pub struct FleetDirectoryService {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetDirectorySnapshot {
     pub provenance: FleetDirectoryProvenance,
     pub fleet_subnet_roots: Vec<FleetSubnetRootDirectoryEntry>,
@@ -550,6 +593,7 @@ pub struct FleetDirectorySnapshot {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetSubnetRootRegistryMirrorActivationRequest {
     pub previous_registry: FleetRegistryVersion,
     pub expected_registry: FleetRegistryVersion,
@@ -564,6 +608,7 @@ pub struct FleetSubnetRootRegistryMirrorActivationRequest {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetSubnetRootRegistryMirrorActivationResponse {
     pub fleet_subnet_root: Principal,
     pub previous_registry: FleetRegistryVersion,

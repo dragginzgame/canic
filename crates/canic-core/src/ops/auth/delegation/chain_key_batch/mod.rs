@@ -500,7 +500,7 @@ fn build_chain_key_root_delegation_batch(
             cert_hash: leaf.cert_hash,
             delegation_cert: leaf.delegation_cert,
             chain_key_delegation_cert: leaf.chain_key_delegation_cert,
-            issuer_witness,
+            issuer_witness: crate::ops::auth::delegated::protocol::witness_response(issuer_witness),
             refresh_after_ns: leaf.refresh_after_ns,
             installed_at_ns: None,
             last_failure: None,

@@ -67,7 +67,7 @@ impl LifecycleApi {
 
     /// Authenticate one Root admission phase before distribution state is read.
     pub fn authorize_root_admission_caller(
-        caller: candid::Principal,
+        caller: ic_platform::Principal,
     ) -> Result<(), canic_contracts::dto::error::Error> {
         crate::workflow::root_admission::authorize_coordinator(caller).map_err(Into::into)
     }
@@ -136,7 +136,7 @@ impl LifecycleApi {
             Err(error) => {
                 crate::workflow::canister_pool::resume_after_authority_snapshot().unwrap_or_else(
                     |resume_error| {
-                        ic_cdk::trap(format!(
+                        ic_platform::cdk::api::trap(format!(
                             "Root timer rollback failed after snapshot rejection: {resume_error}"
                         ))
                     },
@@ -157,7 +157,7 @@ impl LifecycleApi {
             canic_core::api::authority_restore::AuthorityRestoreApi::resume_root_snapshot(request)
                 .await?;
         crate::workflow::canister_pool::resume_after_authority_snapshot().unwrap_or_else(|error| {
-            ic_cdk::trap(format!(
+            ic_platform::cdk::api::trap(format!(
                 "Root timer reconstruction failed while authority remained sealed: {error}"
             ))
         });
@@ -167,7 +167,7 @@ impl LifecycleApi {
     /// Resolve one indexed Root-owned durable operation for the consolidated status lane.
     pub fn root_operation_status(
         operation_id: [u8; 32],
-        caller: candid::Principal,
+        caller: ic_platform::Principal,
         caller_is_controller: bool,
     ) -> Result<RootOperationStatusResponse, canic_contracts::dto::error::Error> {
         crate::workflow::root_status::operation_status(operation_id, caller, caller_is_controller)
@@ -178,7 +178,7 @@ impl LifecycleApi {
     /// ambiguous lookup across unrelated durable operation owners.
     pub fn root_component_provisioning_status(
         operation_id: [u8; 32],
-        caller: candid::Principal,
+        caller: ic_platform::Principal,
         caller_is_controller: bool,
     ) -> Result<
         canic_contracts::dto::component_provisioning::RootComponentProvisioningStatusResponse,
@@ -196,7 +196,7 @@ impl LifecycleApi {
     /// lookup across unrelated durable operation owners.
     pub fn root_component_child_provisioning_status(
         operation_id: [u8; 32],
-        caller: candid::Principal,
+        caller: ic_platform::Principal,
         caller_is_controller: bool,
     ) -> Result<RootComponentChildAllocationResponse, canic_contracts::dto::error::Error> {
         crate::workflow::root_status::component_child_provisioning_status(
@@ -236,11 +236,13 @@ impl LifecycleApi {
         if let Some(args) = bootstrap_initialization {
             crate::ops::canister_pool::capacity_import::bootstrap::initialize(&args)
                 .unwrap_or_else(|error| {
-                    ic_cdk::trap(format!("Capacity bootstrap initialization failed: {error}"))
+                    ic_platform::cdk::api::trap(format!(
+                        "Capacity bootstrap initialization failed: {error}"
+                    ))
                 });
         }
         crate::workflow::root_funding::initialize().unwrap_or_else(|error| {
-            ic_cdk::trap(format!("Root funding initialization failed: {error}"))
+            ic_platform::cdk::api::trap(format!("Root funding initialization failed: {error}"))
         });
         crate::workflow::canister_pool::declare();
         let now_ns = canic_core::control_plane_support::ops::ic::IcOps::now_nanos();
@@ -256,7 +258,7 @@ impl LifecycleApi {
                 )
             })
             .unwrap_or_else(|error| {
-                ic_cdk::trap(format!("Canister pool initialization failed: {error}"))
+                ic_platform::cdk::api::trap(format!("Canister pool initialization failed: {error}"))
             });
     }
 
@@ -267,7 +269,7 @@ impl LifecycleApi {
 
     /// Authenticate one Root funding acceptance before protected workflow reads.
     pub fn authorize_root_funding_caller(
-        caller: candid::Principal,
+        caller: ic_platform::Principal,
     ) -> Result<(), canic_contracts::dto::error::Error> {
         crate::workflow::root_funding::authorize_coordinator(caller).map_err(Into::into)
     }
@@ -359,7 +361,7 @@ impl LifecycleApi {
     /// Authorize one peer-allocation command before endpoint workflow dispatch.
     pub fn authorize_peer_component_allocation_caller(
         request: &RootPeerComponentAllocationRequest,
-        caller: candid::Principal,
+        caller: ic_platform::Principal,
     ) -> Result<(), canic_contracts::dto::error::Error> {
         crate::workflow::component_registry::authorize_peer_allocation_caller(request, caller)
             .map_err(Into::into)
@@ -405,7 +407,7 @@ impl LifecycleApi {
     }
 
     pub fn authorize_fleet_subnet_root_removal_caller(
-        caller: candid::Principal,
+        caller: ic_platform::Principal,
         caller_is_controller: bool,
     ) -> Result<(), canic_contracts::dto::error::Error> {
         crate::workflow::fleet_subnet_root::authorize_root_removal_caller(
@@ -426,7 +428,7 @@ impl LifecycleApi {
     /// Authorize one direct-child command before endpoint workflow dispatch.
     pub fn authorize_component_child_caller(
         request: &RootComponentChildAllocationRequest,
-        caller: candid::Principal,
+        caller: ic_platform::Principal,
     ) -> Result<(), canic_contracts::dto::error::Error> {
         crate::workflow::component_registry::authorize_child_allocation_caller(request, caller)
             .map_err(Into::into)
@@ -623,17 +625,19 @@ impl LifecycleApi {
                 config_path,
             );
         crate::workflow::component_registry::caller_authority::restore().unwrap_or_else(|error| {
-            ic_cdk::trap(format!("Root caller publication restore failed: {error}"))
+            ic_platform::cdk::api::trap(format!("Root caller publication restore failed: {error}"))
         });
         crate::workflow::canister_pool::declare();
         crate::workflow::component_provisioning::resume_after_restart().unwrap_or_else(|error| {
-            ic_cdk::trap(format!(
+            ic_platform::cdk::api::trap(format!(
                 "Root Component provisioning resume failed: {error}"
             ))
         });
         if active {
             crate::workflow::canister_pool::start().unwrap_or_else(|error| {
-                ic_cdk::trap(format!("Canister pool maintenance start failed: {error}"))
+                ic_platform::cdk::api::trap(format!(
+                    "Canister pool maintenance start failed: {error}"
+                ))
             });
         }
         active

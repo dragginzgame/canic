@@ -16,9 +16,9 @@ use crate::fleet_ensure::{
         infrastructure_bootstrap::InfrastructureBootstrapError,
     },
 };
-use candid::Principal;
 use canic_contracts::ids::SubnetId;
 use canic_core::cdk::utils::hash::decode_hex;
+use ic_platform::Principal;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -144,7 +144,7 @@ pub(in crate::fleet_ensure) fn held_sources(
 
 /// Read certified fields only; no predecessor runtime or management update is called.
 pub(in crate::fleet_ensure) async fn observe_held(
-    agent: &ic_agent::Agent,
+    agent: &ic_platform::agent::Agent,
     expected: &InfrastructureBootstrapHeldSourceRecord,
 ) -> Result<InfrastructureBootstrapCustodyRecord, InfrastructureBootstrapError> {
     let observed = certified_custody::observe_one(agent, expected.custody.canister)

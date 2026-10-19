@@ -7,7 +7,7 @@
 //! Boundary: storage and DTO modules re-export these values to preserve public
 //! API paths while internal code imports the domain owner where practical.
 
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 use std::{fmt, fmt::Display};
 
@@ -16,6 +16,7 @@ use std::{fmt, fmt::Display};
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum FleetMode {
     #[default]
     Enabled,
@@ -40,6 +41,7 @@ impl Display for FleetMode {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum FleetStatus {
     Active,
     Readonly,

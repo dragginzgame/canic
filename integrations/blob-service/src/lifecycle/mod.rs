@@ -17,10 +17,6 @@ pub const REQUEST_LIMITS: ArgumentLimits = ArgumentLimits {
     max_type_len: 64,
     max_header_len: 4096,
 };
-pub const MANIFEST_LIMITS: ArgumentLimits = ArgumentLimits {
-    max_bytes: 131_072,
-    ..REQUEST_LIMITS
-};
 pub const CONFIGURATION_LIMITS: ArgumentLimits = ArgumentLimits {
     max_bytes: 16_384,
     skipping_quota: 0,
@@ -40,7 +36,7 @@ pub const ENVELOPE_LIMITS: ArgumentLimits = ArgumentLimits {
 /// the enclosing installation, including preceding application state changes.
 /// This does not replace the host's application metrics sampler.
 pub fn install(input: &ServiceInstallationInput) {
-    crate::workflow::install(input);
+    crate::ops::install(input);
 }
 
 /// Restore blob state synchronously, retaining the upstream mutation fence.
@@ -48,7 +44,7 @@ pub fn install(input: &ServiceInstallationInput) {
 /// Call from the host's post-upgrade participant before scheduling async work.
 /// This neither replaces the host sampler nor installs missing state.
 pub fn restore() {
-    crate::workflow::restore();
+    crate::ops::restore();
 }
 
 /// Dedicated-canister argument adapter used by [`crate::canister!`].
@@ -59,11 +55,12 @@ pub fn install_from_args() {
     // raw-byte/decoder bounds, then decode the nested service bytes once.
     let (_, application): (canic::dto::abi::v1::CanisterInitPayload, Option<Vec<u8>>) =
         ENVELOPE_LIMITS.read().expect("admitted lifecycle envelope");
-    let (input,): (ServiceInstallationInput,) = CONFIGURATION_LIMITS
-        .decode(
+    let input: ServiceInstallationInput =
+        crate::__private::ic_blob_storage_contracts::wire::decode(
             application
                 .as_deref()
                 .expect("service installation arguments"),
+            16_384,
         )
         .expect("bounded service configuration");
     install(&input);

@@ -15,7 +15,6 @@ use crate::{
     },
     view::fixture_store::FixtureTargetAuthority,
 };
-use candid::Principal;
 use canic_contracts::{
     dto::fixture_provisioning::{
         FixtureChunkRead, FixtureChunkUpload, FixtureDescriptor, FixtureGrant, FixtureGrantRequest,
@@ -24,6 +23,7 @@ use canic_contracts::{
     ids::{FleetSubnetWasmStoreAuthority, ManagedCanisterBinding},
 };
 use canic_core::ingress::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES;
+use ic_platform::Principal;
 
 /// Read the existing executable-template allocation counters for shared admission.
 pub fn template_bytes() -> u64 {
@@ -209,9 +209,11 @@ fn validate_authority(
     {
         return Err(FixtureStoreError::Authority);
     }
-    if candid::encode_one(StoreCommand::SetFixtureGrant(Box::new(request.clone())))
-        .map_err(|_| FixtureStoreError::Bounds)?
-        .len()
+    if ic_platform::candid::contract::encode_one(StoreCommand::SetFixtureGrant(Box::new(
+        request.clone(),
+    )))
+    .map_err(|_| FixtureStoreError::Bounds)?
+    .len()
         > DEFAULT_UPDATE_INGRESS_MAX_BYTES
     {
         return Err(FixtureStoreError::Bounds);

@@ -1,7 +1,7 @@
 //! Provisioning recovery facts retain journal ownership without granting release authority.
 
 use crate::fleet_ensure::view::release::FleetReleaseProvisioningView;
-use candid::Principal;
+use ic_platform::Principal;
 use std::collections::BTreeSet;
 
 /// Separate journals may use the same operation ID without sharing a recovery owner.

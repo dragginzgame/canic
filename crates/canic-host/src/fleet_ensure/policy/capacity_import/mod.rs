@@ -20,8 +20,8 @@ use crate::fleet_ensure::{
         CapacityImportSourceView,
     },
 };
-use candid::Principal;
 use canic_contracts::ids::{MAX_FLEET_CAPACITY_IMPORT_SOURCES, SubnetId};
+use ic_platform::Principal;
 use std::collections::BTreeSet;
 use thiserror::Error;
 

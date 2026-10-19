@@ -7,8 +7,8 @@ pub mod registration_recovery;
 use crate::fleet_ensure::model::capacity_import::{
     CapacityImportDisposition, survey::CapacityImportSampleRecord,
 };
-use candid::Principal;
 use canic_contracts::ids::SubnetId;
+use ic_platform::Principal;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 

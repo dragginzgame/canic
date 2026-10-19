@@ -5,9 +5,7 @@
 //! Boundary: one stable map owns append, count eviction, age deletion, and snapshots.
 
 use crate::{
-    cdk::structures::{
-        DefaultMemoryImpl, Memory, btreemap::BTreeMap as StableBtreeMap, memory::RuntimeMemory,
-    },
+    cdk::structures::{DefaultMemoryImpl, Memory, StableBTreeMap as StableBtreeMap},
     impl_storable_unbounded,
     log::{Level, Topic},
     storage::StorageError,
@@ -16,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
 std::thread_local! {
-    static LOG: RefCell<LogStore<RuntimeMemory<DefaultMemoryImpl>>> = RefCell::new(
+    static LOG: RefCell<LogStore<DefaultMemoryImpl>> = RefCell::new(
         LogStore::new(StableBtreeMap::init(crate::memory::open(crate::memory::keys::LOG_ENTRIES_V1)))
     );
 }
@@ -80,7 +78,7 @@ impl<M: Memory> LogStore<M> {
         entry: LogEntryRecord,
     ) -> Result<Option<u64>, StorageError> {
         if max_entries == 0 {
-            self.entries.clear_new();
+            self.entries.clear();
             return Ok(None);
         }
 
@@ -103,7 +101,7 @@ impl<M: Memory> LogStore<M> {
             // Configuration is compiled per deployment. A lower limit is a
             // hard cut of non-authoritative runtime history, not an unbounded
             // deletion loop during the first post-upgrade append.
-            self.entries.clear_new();
+            self.entries.clear();
         } else if self.entries.len() == max_entries {
             let Some((oldest, _)) = self.entries.first_key_value() else {
                 return Err(StorageError::LogCountInvariant);
@@ -175,7 +173,7 @@ impl<M: Memory> LogStore<M> {
 
     #[cfg(test)]
     fn import(&mut self, data: LogEntriesData) {
-        self.entries.clear_new();
+        self.entries.clear();
         for entry in data.entries {
             self.entries.insert(entry.sequence, entry.record);
         }
@@ -221,7 +219,7 @@ impl Log {
 
     #[cfg(test)]
     pub(crate) fn reset_for_tests() {
-        LOG.with_borrow_mut(|log| log.entries.clear_new());
+        LOG.with_borrow_mut(|log| log.entries.clear());
     }
 }
 

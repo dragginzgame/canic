@@ -42,7 +42,7 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
                 return;
             }
             let Ok(command) =
-                ::canic::__internal::candid::decode_one::<::canic::dto::template::StoreCommand>(&bytes)
+                ::canic::__internal::ic_platform::candid::decoder::decode_one::<::canic::dto::template::StoreCommand>(&bytes)
             else {
                 return;
             };

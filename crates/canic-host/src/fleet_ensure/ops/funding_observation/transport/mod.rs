@@ -27,7 +27,6 @@ use crate::{
     },
     release_set::AppConfigSnapshot,
 };
-use candid::Principal;
 use canic_contracts::{
     dto::{
         canister::{CanisterInspectionRequest, CanisterStatusResponse, CanisterStatusType},
@@ -41,6 +40,7 @@ use canic_contracts::{
     protocol,
 };
 use canic_core::cdk::utils::hash::hex_bytes;
+use ic_platform::Principal;
 use std::collections::BTreeSet;
 
 impl FundingObservationPlatform for IcpEnsurePlatform {

@@ -1,7 +1,7 @@
 use super::*;
 
 fn pid(id: u8) -> String {
-    candid::Principal::from_slice(&[id]).to_text()
+    ic_platform::Principal::from_slice(&[id]).to_text()
 }
 
 fn observed<T>(value: T) -> Observation<T> {

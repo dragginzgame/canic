@@ -21,7 +21,6 @@ use ic_auth::session::{
 /// Target-bound durable backend; no asynchronous work may enter its transaction.
 pub struct ApplicationSessionStore {
     pub fleet: canic_contracts::ids::FleetKey,
-    pub role: canic_contracts::ids::CanisterRole,
 }
 
 impl ApplicationSessionStore {
@@ -30,7 +29,6 @@ impl ApplicationSessionStore {
     ) -> Self {
         Self {
             fleet: authority.fleet(),
-            role: authority.role().clone(),
         }
     }
 }
@@ -42,8 +40,7 @@ struct PairAuthority {
     fingerprint: [u8; 32],
 }
 
-struct Transaction<'a> {
-    owner: &'a ApplicationSessionStore,
+struct Transaction {
     generation: u64,
     staged: Option<(LocalApplicationSessionRecord, LocalApplicationReplayRecord)>,
     removed: Option<Principal>,
@@ -56,7 +53,6 @@ impl SessionStore for ApplicationSessionStore {
         operation: impl FnOnce(&mut dyn SessionTransaction) -> Result<T, SessionError>,
     ) -> Result<T, SessionError> {
         let mut tx = Transaction {
-            owner: self,
             generation: LocalApplicationAuthorizationStateOps::application_authority_generation(),
             staged: None,
             removed: None,
@@ -82,7 +78,7 @@ impl SessionStore for ApplicationSessionStore {
     }
 }
 
-impl SessionTransaction for Transaction<'_> {
+impl SessionTransaction for Transaction {
     fn generation(&self) -> u64 {
         self.generation
     }
@@ -102,21 +98,7 @@ impl SessionTransaction for Transaction<'_> {
                 let record = LocalApplicationAuthorizationState::application_session_record(index)
                     .ok_or(SessionError::StorageFailure)?;
                 let session = Session::decode(&record.shared_session)?;
-                let expected = LocalApplicationSessionRecord {
-                    shared_session: record.shared_session.clone(),
-                    transport_caller: session.caller(),
-                    authenticated_subject: session.subject(),
-                    issuer: session.issuer(),
-                    fleet: self.owner.fleet,
-                    role: self.owner.role.clone(),
-                    scopes: session.scopes().to_vec(),
-                    authority_generation: session.generation(),
-                    established_at_ns: session.established_at_ns(),
-                    expires_at_ns: session.expires_at_ns(),
-                    proof_fingerprint: session.fingerprint(),
-                    establishment_request_hash: session.request_hash(),
-                };
-                if session.caller() != caller || record != expected {
+                if session.caller() != caller {
                     return Err(SessionError::InvalidPolicyOrRecord);
                 }
                 Ok(session)
@@ -157,8 +139,8 @@ impl SessionTransaction for Transaction<'_> {
         if self.replay_exists(replay.fingerprint())? {
             return Err(SessionError::ReplayConflict);
         }
-        let projection = project_session(&session, self.owner, session.encode()?)?;
-        let record = session_to_record(&projection);
+        let record =
+            session_to_record(&session).map_err(|_| SessionError::InvalidPolicyOrRecord)?;
         if encoded_len(&record).map_err(|_| SessionError::StorageFailure)?
             > MAX_APPLICATION_SESSION_RECORD_BYTES
         {
@@ -189,15 +171,14 @@ fn commit_pair(
     generation: u64,
     login: PreparedLogin,
 ) -> Result<(), SessionError> {
+    let canonical =
+        session_from_record(&session).map_err(|_| SessionError::InvalidPolicyOrRecord)?;
     if generation != LocalApplicationAuthorizationStateOps::application_authority_generation() {
         return Err(SessionError::StaleAuthority);
     }
     let (session_index, replay_index, previous) = with_indexes(|indexes| {
         (
-            indexes
-                .session_by_caller
-                .get(&session.transport_caller)
-                .copied(),
+            indexes.session_by_caller.get(&canonical.caller()).copied(),
             indexes.replay_by_fingerprint.len(),
             indexes
                 .replay_by_fingerprint
@@ -208,13 +189,25 @@ fn commit_pair(
     if previous {
         return Err(SessionError::ReplayConflict);
     }
-    let counts = LocalApplicationAuthorizationStateOps::application_session_occupancy(
-        session.transport_caller,
-    )
-    .map_err(|_| SessionError::StorageFailure)?;
+    let counts =
+        LocalApplicationAuthorizationStateOps::application_session_occupancy(canonical.caller())
+            .map_err(|_| SessionError::StorageFailure)?;
     if (session_index.is_none() && counts.active_global >= MAX_ACTIVE_APPLICATION_SESSIONS)
         || counts.replay_global >= MAX_APPLICATION_REPLAY_RECORDS
         || counts.replay_for_caller >= MAX_APPLICATION_REPLAY_RECORDS_PER_CALLER
+    {
+        return Err(SessionError::Capacity);
+    }
+    let retained_for_subject = with_indexes(|indexes| {
+        indexes
+            .session_count_by_subject
+            .get(&canonical.subject())
+            .copied()
+            .unwrap_or(0)
+    })
+    .map_err(|_| SessionError::StorageFailure)?;
+    if session_index.is_none()
+        && retained_for_subject >= MAX_ACTIVE_APPLICATION_SESSIONS_PER_SUBJECT
     {
         return Err(SessionError::Capacity);
     }
@@ -234,7 +227,7 @@ fn commit_pair(
             + usize::from(
                 !indexes
                     .session_count_by_subject
-                    .contains_key(&session.authenticated_subject),
+                    .contains_key(&canonical.subject()),
             );
         let replay_callers = indexes.replay_count_by_caller.len()
             + usize::from(
@@ -265,15 +258,16 @@ fn commit_pair(
     let session_index = session_index.unwrap_or(counts.active_global);
     // All codec, capacity and generation checks precede either stable write.
     LocalApplicationAuthorizationState::commit_shared_session_pair(
+        canonical.caller(),
         session_index,
-        session.clone(),
+        session,
         replay_index,
         replay,
         login.record,
         login.totals,
     );
     update_committed_indexes(
-        &session,
+        &canonical,
         &replay,
         session_index,
         replay_index,
@@ -285,7 +279,7 @@ fn commit_pair(
 
 // The stable pair is committed; updating its derived indexes is infallible.
 fn update_committed_indexes(
-    session: &LocalApplicationSessionRecord,
+    canonical: &Session,
     replay: &LocalApplicationReplayRecord,
     session_index: usize,
     replay_index: usize,
@@ -298,12 +292,12 @@ fn update_committed_indexes(
         indexes.estimated_bytes = index_bytes;
         let replaced = indexes
             .session_by_caller
-            .insert(session.transport_caller, session_index)
+            .insert(canonical.caller(), session_index)
             .is_some();
         if !replaced {
             *indexes
                 .session_count_by_subject
-                .entry(session.authenticated_subject)
+                .entry(canonical.subject())
                 .or_default() += 1;
         }
         indexes
@@ -314,33 +308,4 @@ fn update_committed_indexes(
             .entry(replay.transport_caller)
             .or_default() += 1;
     });
-}
-fn project_session(
-    session: &Session,
-    owner: &ApplicationSessionStore,
-    payload: Vec<u8>,
-) -> Result<LocalApplicationSession, SessionError> {
-    let scopes = session
-        .scopes()
-        .iter()
-        .map(|scope| ApplicationScope::parse(scope.clone()))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|_| SessionError::InvalidPolicyOrRecord)?;
-    let scopes = CanonicalApplicationScopes::for_session(scopes)
-        .map_err(|_| SessionError::InvalidPolicyOrRecord)?;
-    Ok(LocalApplicationSession::new(
-        session.caller(),
-        session.subject(),
-        session.issuer(),
-        owner.fleet,
-        owner.role.clone(),
-        scopes,
-        session.generation(),
-        session.established_at_ns(),
-        session.expires_at_ns(),
-        session.fingerprint(),
-        session.request_hash(),
-    )
-    .map_err(|_| SessionError::InvalidPolicyOrRecord)?
-    .with_shared_session(payload))
 }

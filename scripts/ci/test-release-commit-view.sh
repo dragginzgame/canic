@@ -11,6 +11,9 @@ cp "$root/scripts/ci/check-release-candidate.sh" "$root/scripts/ci/check-release
     "$root/scripts/ci/require-jq.sh" "$root/scripts/ci/check-release-tag.sh" \
     "$root/scripts/ci/read-cargo-workspace-version.sh" "$root/scripts/ci/rewrite-local-lock-versions.pl" "$fixture/scripts/ci/"
 cp "$root/scripts/release/adapter.sh" "$root/scripts/release/rewrite-owned-lock.sh" "$fixture/scripts/release/"
+bash "$root/scripts/ci/prepare-script-fixture.sh" "$root" "$fixture" \
+    scripts/ci/rewrite-local-lock-versions.pl scripts/ci/next-release-version.sh \
+    scripts/ci/read-cargo-workspace-version.sh
 cat > "$fixture/source/Cargo.toml" <<'TOML'
 [workspace]
 resolver = "3"
@@ -39,6 +42,11 @@ release-view-fixture = { path = "../../.." }
 TOML
     printf 'pub fn consumer() {}\n' >"$consumer_root/src/lib.rs"
     cargo generate-lockfile --offline --manifest-path "$consumer_root/Cargo.toml" >> "$fixture/cargo.log" 2>&1
+done
+cargo sort --workspace --grouped "$fixture/source" >> "$fixture/cargo.log" 2>&1
+for consumer in consumer embedded-consumer; do
+    cargo sort --workspace --grouped --order workspace,package,lib,dependencies,dev-dependencies,build-dependencies,profile \
+        "$fixture/source/integrations/blob-service/$consumer" >> "$fixture/cargo.log" 2>&1
 done
 cp -R "$fixture/source" "$fixture/candidate"
 cargo set-version --workspace --offline --manifest-path "$fixture/candidate/Cargo.toml" 1.2.4 >> "$fixture/cargo.log" 2>&1
@@ -94,6 +102,14 @@ printf '{"schema":1,"version":"1.2.4","source":"%s","date":"2026-10-06","gate":"
     "$VIEW_COMMIT" > candidate/release-validation.json
 expect_failure bash scripts/release/adapter.sh committed
 cp original-receipt candidate/release-validation.json
+for source in source candidate; do
+    cp "$source/Cargo.toml" "$source/Cargo.toml.before-order"
+    printf '\n[workspace.dependencies]\nbeta = "1"\nalpha = "1"\n' >> "$source/Cargo.toml"
+done
+expect_failure bash scripts/release/adapter.sh committed
+for source in source candidate; do
+    mv "$source/Cargo.toml.before-order" "$source/Cargo.toml"
+done
 printf '\n[features]\nunvalidated = []\n' >> candidate/Cargo.toml
 expect_failure bash scripts/release/adapter.sh committed
 if rg -q 'HEAD' "$VIEW_EVENTS"; then echo 'commit view unexpectedly observed HEAD' >&2; exit 1; fi

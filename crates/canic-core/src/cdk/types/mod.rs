@@ -9,4 +9,7 @@ pub mod string;
 pub(crate) use canic_contracts::cycles::*;
 pub use string::*;
 
-pub use candid::{Int, Nat, Principal};
+pub use ic_platform::{
+    Principal,
+    candid::contract::{Int, Nat},
+};

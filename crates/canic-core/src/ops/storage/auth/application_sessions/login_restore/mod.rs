@@ -22,8 +22,12 @@ pub(super) fn validate_login_records(
     let sessions = state
         .sessions
         .iter()
-        .map(|record| (record.transport_caller, record))
-        .collect::<BTreeMap<_, _>>();
+        .map(|record| {
+            Session::decode(&record.shared_session)
+                .map(|session| (session.caller(), session))
+                .map_err(|_| invalid.clone())
+        })
+        .collect::<Result<BTreeMap<_, _>, _>>()?;
     let mut admitted = 0;
     for (caller, record) in &state.logins {
         let login = LoginRevocationChange::decode(&record.bytes).map_err(|_| invalid.clone())?;
@@ -34,14 +38,15 @@ pub(super) fn validate_login_records(
             if login.revoked() {
                 return Err(invalid);
             }
-            let session = Session::decode(&record.shared_session).map_err(|_| invalid.clone())?;
-            session
+            record
                 .check_login_change(&login)
                 .map_err(|_| invalid.clone())?;
         }
         admitted += usize::from(login.admitted_pool());
     }
-    if admitted != state.login_totals.admitted {
+    if admitted != state.login_totals.admitted
+        || sessions.keys().any(|caller| !callers.contains(caller))
+    {
         return Err(invalid);
     }
     Ok(())

@@ -6,21 +6,11 @@ use canic_contracts::ids::FleetKey;
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct LocalApplicationSessionRecord {
-    /// Canonical bounded IC Auth session bytes; product fields are read-only projections.
+    /// Canonical bounded IC Auth record; authorization always uses live host inputs.
     #[serde(with = "serde_bytes")]
     pub shared_session: Vec<u8>,
-    pub transport_caller: Principal,
-    pub authenticated_subject: Principal,
-    pub issuer: Principal,
-    pub fleet: FleetKey,
-    pub role: CanisterRole,
-    pub scopes: Vec<String>,
-    pub authority_generation: u64,
-    pub established_at_ns: u64,
-    pub expires_at_ns: u64,
-    pub proof_fingerprint: [u8; 32],
-    pub establishment_request_hash: [u8; 32],
 }
 
 impl LocalApplicationSessionRecord {
@@ -469,21 +459,9 @@ mod current_resource_contract {
     }
 
     fn session(id: u64) -> LocalApplicationSessionRecord {
-        let mut proof_fingerprint = [0_u8; 32];
-        proof_fingerprint[..8].copy_from_slice(&id.to_be_bytes());
         LocalApplicationSessionRecord {
-            shared_session: Vec::new(),
-            transport_caller: principal(id),
-            authenticated_subject: principal(id),
-            issuer: principal(9_000),
-            fleet: crate::test::support::fleet_key(1),
-            role: CanisterRole::new("component"),
-            scopes: vec!["app:read".to_string()],
-            authority_generation: 1,
-            established_at_ns: 1,
-            expires_at_ns: 1_800_000_000_001,
-            proof_fingerprint,
-            establishment_request_hash: [2; 32],
+            // This schema/footprint test treats the Auth payload as opaque.
+            shared_session: id.to_be_bytes().to_vec(),
         }
     }
 
@@ -501,9 +479,6 @@ mod current_resource_contract {
     fn maximum_scope_session(id: u64) -> LocalApplicationSessionRecord {
         let mut session = session(id);
         session.shared_session = vec![0xff; 2_048];
-        session.scopes = (0..16)
-            .map(|scope| format!("app{scope:02}:{}", "x".repeat(58)))
-            .collect();
         session
     }
 
@@ -513,7 +488,9 @@ mod current_resource_contract {
             role: CanisterRole::new("component"),
             verifier_root_canister_id: principal(9_001),
             minimum_accepted_registry_epoch: Some(u64::MAX),
-            allowed_scopes: maximum_scope_session(1).scopes,
+            allowed_scopes: (0..16)
+                .map(|scope| format!("app{scope:02}:{}", "x".repeat(58)))
+                .collect(),
             maximum_session_ttl_secs: 1_800,
         }
     }
@@ -553,7 +530,7 @@ mod current_resource_contract {
         assert!(session_bytes <= MAX_APPLICATION_SESSION_RECORD_BYTES);
         assert!(encoded(&one_session).len() > empty_bytes);
         assert!(encoded(&one_replay).len() > empty_bytes);
-        assert!(replay_bytes < session_bytes);
+        assert!(replay_bytes <= 512);
         assert!(maximum_bytes <= MAX_APPLICATION_SESSION_STABLE_BYTES);
     }
 }

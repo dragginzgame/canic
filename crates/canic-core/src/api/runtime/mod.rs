@@ -409,8 +409,11 @@ fn timer_status_observation(
     snapshots: Result<Vec<ic_timers::TimerSnapshot>, crate::api::timer::TimerError>,
     observed_at_ns: u64,
 ) -> TimerStatusObservation {
-    match snapshots {
-        Ok(snapshots) => TimerStatusObservation {
+    match snapshots
+        .map_err(|error| error.to_string())
+        .and_then(|snapshots| timer_statuses_from(snapshots).map_err(|error| error.to_string()))
+    {
+        Ok(timers) => TimerStatusObservation {
             check: RuntimeCheck {
                 category: "runtime".to_string(),
                 code: "timer_inventory_available".to_string(),
@@ -420,7 +423,7 @@ fn timer_status_observation(
                 next: None,
                 source: "ic_timers".to_string(),
             },
-            timers: timer_statuses_from(snapshots),
+            timers,
             failure: None,
         },
         Err(error) => TimerStatusObservation {
@@ -442,14 +445,20 @@ fn timer_status_observation(
                 subsystem: "timer_runtime".to_string(),
                 code: "timer_inventory_unavailable".to_string(),
                 severity: FailureSeverity::Error,
-                summary: error.to_string(),
+                summary: error,
                 correlation_id: None,
             }),
         },
     }
 }
 
-fn timer_statuses_from(snapshots: Vec<ic_timers::TimerSnapshot>) -> Vec<CanisterTimerStatus> {
+fn timer_statuses_from(
+    snapshots: Vec<ic_timers::TimerSnapshot>,
+) -> Result<Vec<CanisterTimerStatus>, crate::InternalError> {
+    let total = |counters: &[ic_timers::MeasurementCounter]| {
+        crate::ops::runtime::timer_status::counter_total(counters)
+            .ok_or_else(crate::InternalError::invalid_input)
+    };
     let mut timers = snapshots
         .into_iter()
         .map(|snapshot| {
@@ -458,8 +467,8 @@ fn timer_statuses_from(snapshots: Vec<ic_timers::TimerSnapshot>) -> Vec<Canister
             let outcomes = observability.outcomes();
             let counters = observability.counters();
             let performance = observability.performance();
-            let condition = timer_process_condition(snapshot.process_condition());
-            CanisterTimerStatus {
+            let condition = crate::ops::runtime::timer_status::condition(&snapshot);
+            Ok(CanisterTimerStatus {
                 name: identity.name().to_string(),
                 owner: identity.owner().to_string(),
                 subsystem: identity.subsystem().to_string(),
@@ -474,16 +483,15 @@ fn timer_statuses_from(snapshots: Vec<ic_timers::TimerSnapshot>) -> Vec<Canister
                 last_success_at_ns: outcomes.last_success_at_ns(),
                 last_failure_at_ns: outcomes.last_failure_at_ns(),
                 consecutive_expected_failures: outcomes.consecutive_expected_failures(),
-                schedules_since_runtime_start: counters.wakeups_armed(),
-                executions_since_runtime_start: counters.work_started(),
-                successes_since_runtime_start: counters
-                    .succeeded()
-                    .saturating_add(counters.no_work()),
-                expected_failures_since_runtime_start: counters.retryable_failure(),
-                invariant_failures_since_runtime_start: counters.invariant_failure(),
-                stale_callbacks_since_runtime_start: counters
-                    .stale_wakeups()
-                    .saturating_add(counters.stale_work()),
+                schedules_since_runtime_start: total(&[counters.wakeups_armed()])?,
+                executions_since_runtime_start: total(&[counters.work_started()])?,
+                successes_since_runtime_start: total(&[counters.succeeded(), counters.no_work()])?,
+                expected_failures_since_runtime_start: total(&[counters.retryable_failure()])?,
+                invariant_failures_since_runtime_start: total(&[counters.invariant_failure()])?,
+                stale_callbacks_since_runtime_start: total(&[
+                    counters.stale_wakeups(),
+                    counters.stale_work(),
+                ])?,
                 scheduler_performance: timer_callback_performance_status(
                     performance.scheduler_instructions(),
                     performance.scheduler_memory_pages(),
@@ -492,16 +500,16 @@ fn timer_statuses_from(snapshots: Vec<ic_timers::TimerSnapshot>) -> Vec<Canister
                     performance.work_instructions(),
                     performance.work_memory_pages(),
                 ),
-            }
+            })
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, crate::InternalError>>()?;
     timers.sort_by(|left, right| {
         left.owner
             .cmp(&right.owner)
             .then_with(|| left.subsystem.cmp(&right.subsystem))
             .then_with(|| left.name.cmp(&right.name))
     });
-    timers
+    Ok(timers)
 }
 
 fn timer_callback_performance_status(
@@ -561,19 +569,6 @@ const fn timer_registration_status(
         ic_timers::TimerRegistrationStatus::Unregistered => Canic::Unregistered,
         ic_timers::TimerRegistrationStatus::Scheduled => Canic::Scheduled,
         ic_timers::TimerRegistrationStatus::Running => Canic::Running,
-    }
-}
-
-const fn timer_process_condition(
-    value: ic_timers::TimerProcessCondition,
-) -> crate::domain::runtime::TimerProcessCondition {
-    use crate::domain::runtime::TimerProcessCondition as Canic;
-    match value {
-        ic_timers::TimerProcessCondition::Disabled => Canic::Disabled,
-        ic_timers::TimerProcessCondition::Idle => Canic::Idle,
-        ic_timers::TimerProcessCondition::Active => Canic::Active,
-        ic_timers::TimerProcessCondition::Retrying => Canic::Retrying,
-        ic_timers::TimerProcessCondition::Failed => Canic::Failed,
     }
 }
 

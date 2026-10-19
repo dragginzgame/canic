@@ -24,7 +24,7 @@ use crate::{
 };
 use canic_contracts::dto::fleet_registry::FleetRegistry;
 use canic_core::cdk::utils::hash::hex_bytes;
-use ic_agent::Agent;
+use ic_platform::agent::Agent;
 use std::collections::BTreeSet;
 use thiserror::Error;
 

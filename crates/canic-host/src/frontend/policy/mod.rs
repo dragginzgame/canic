@@ -3,8 +3,8 @@
 //! No transport, serialization or state access belongs here.
 
 use crate::frontend::{FrontendError, model::FrontendEnvironmentInput};
-use candid::Principal;
 use canic_contracts::ids::CanonicalNetworkId;
+use ic_platform::Principal;
 use std::collections::BTreeSet;
 use url::Url;
 

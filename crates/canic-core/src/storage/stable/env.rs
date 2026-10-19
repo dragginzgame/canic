@@ -1,5 +1,5 @@
 use crate::{
-    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
+    cdk::structures::{DefaultMemoryImpl, StableCell as Cell},
     storage::prelude::*,
 };
 use std::cell::RefCell;
@@ -9,7 +9,7 @@ std::thread_local! {
     // ENV
     // All the environment variables a canister needs
     //
-    static ENV: RefCell<Cell<EnvRecord, RuntimeMemory<DefaultMemoryImpl>>> =
+    static ENV: RefCell<Cell<EnvRecord, DefaultMemoryImpl>> =
         RefCell::new(Cell::init(
             crate::memory::open(crate::memory::keys::RUNTIME_BINDINGS_V1),
             EnvRecord::default(),

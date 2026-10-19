@@ -32,11 +32,11 @@ pub enum MgmtInfraError {
     #[error("canister {canister_pid} cycle balance does not fit in u128: {value}")]
     CanisterCyclesOverflow {
         canister_pid: crate::cdk::types::Principal,
-        value: crate::cdk::candid::Nat,
+        value: ic_platform::candid::contract::Nat,
     },
 
     #[error(transparent)]
-    SignCost(#[from] ic_cdk::api::SignCostError),
+    SignCost(#[from] ic_platform::cdk::api::SignCostError),
 }
 
 ///

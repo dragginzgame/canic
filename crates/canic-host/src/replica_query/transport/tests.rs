@@ -62,7 +62,7 @@ fn query_posts_anonymous_cbor_and_decodes_a_chunked_reply() {
         stream.write_all(reply).unwrap();
         stream.write_all(b"\r\n0\r\n\r\n").unwrap();
     });
-    let canister = candid::Principal::from_slice(&[1, 2, 3]);
+    let canister = ic_platform::Principal::from_slice(&[1, 2, 3]);
     let arg = [0x44, 0x49, 0x44, 0x4c];
     assert_eq!(
         local_query_with_endpoint(&canister.to_text(), "canic_public_status", &arg, endpoint)
@@ -90,7 +90,7 @@ fn query_posts_anonymous_cbor_and_decodes_a_chunked_reply() {
     let content = field(&envelope, "content");
     assert_eq!(
         field(content, "sender"),
-        &ciborium::value::Value::Bytes(candid::Principal::anonymous().as_slice().to_vec())
+        &ciborium::value::Value::Bytes(ic_platform::Principal::anonymous().as_slice().to_vec())
     );
     assert_eq!(
         field(content, "canister_id"),
@@ -119,7 +119,7 @@ fn query_preserves_replica_rejection_without_another_request() {
         stream.write_all(reply).unwrap();
     });
     let result = local_query_with_endpoint(
-        &candid::Principal::from_slice(&[1, 2, 3]).to_text(),
+        &ic_platform::Principal::from_slice(&[1, 2, 3]).to_text(),
         "canic_public_status",
         b"DIDL",
         endpoint,
@@ -145,7 +145,7 @@ fn query_http_refusal_does_not_retry_or_follow_redirects() {
     ] {
         let (endpoint, server) = serve(move |stream| stream.write_all(response).unwrap());
         let result = local_query_with_endpoint(
-            &candid::Principal::from_slice(&[1, 2, 3]).to_text(),
+            &ic_platform::Principal::from_slice(&[1, 2, 3]).to_text(),
             "canic_public_status",
             b"DIDL",
             endpoint,
@@ -154,8 +154,8 @@ fn query_http_refusal_does_not_retry_or_follow_redirects() {
             panic!("expected an upstream HTTP refusal")
         };
         assert!(match (status, *error) {
-            (503, ic_agent::AgentError::HttpError(response)) => response.status == 503,
-            (302, ic_agent::AgentError::InvalidHttpResponse(_)) => true,
+            (503, ic_platform::agent::AgentError::HttpError(response)) => response.status == 503,
+            (302, ic_platform::agent::AgentError::InvalidHttpResponse(_)) => true,
             _ => false,
         });
         server.join().unwrap();
@@ -170,13 +170,13 @@ fn malformed_query_reply_preserves_the_agent_codec_failure() {
             .unwrap();
     });
     let result = local_query_with_endpoint(
-        &candid::Principal::from_slice(&[1, 2, 3]).to_text(),
+        &ic_platform::Principal::from_slice(&[1, 2, 3]).to_text(),
         "canic_public_status",
         b"DIDL",
         endpoint,
     );
     assert!(
-        matches!(result, Err(ReplicaQueryError::Agent(error)) if matches!(*error, ic_agent::AgentError::InvalidCborData(_)))
+        matches!(result, Err(ReplicaQueryError::Agent(error)) if matches!(*error, ic_platform::agent::AgentError::InvalidCborData(_)))
     );
     server.join().unwrap();
 }
@@ -191,7 +191,7 @@ fn query_deadline_retains_a_typed_timeout() {
         let _ = wait.recv_timeout(Duration::from_secs(5));
     });
     let result = local_query_with_timeout(
-        &candid::Principal::from_slice(&[1, 2, 3]).to_text(),
+        &ic_platform::Principal::from_slice(&[1, 2, 3]).to_text(),
         "canic_public_status",
         b"DIDL",
         &endpoint,

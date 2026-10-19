@@ -1,7 +1,7 @@
 use super::*;
-use candid::{
-    CandidType,
-    types::{Type, TypeEnv, TypeInner, internal::TypeContainer, subtype},
+use ic_platform::candid::contract::{
+    CandidType, TypeEnv,
+    types::{Type, TypeInner, internal::TypeContainer},
 };
 use std::collections::HashSet;
 
@@ -37,7 +37,13 @@ fn response_payload_matches(
         | (TypeInner::Vec(exact), TypeInner::Vec(projected)) => {
             response_payload_matches(env, exact, projected, seen)
         }
-        _ => subtype::subtype(&mut HashSet::new(), env, &sent, &received).is_ok(),
+        _ => ic_platform::candid::contract::types::subtype::subtype(
+            &mut HashSet::new(),
+            env,
+            &sent,
+            &received,
+        )
+        .is_ok(),
     }
 }
 
@@ -136,7 +142,7 @@ fn projection_matches_scoped<P: CandidType>(
         !fields.is_empty(),
         "transport projection must have selectors"
     );
-    let owner_matches = |owner: &Type, field: &candid::types::Field| {
+    let owner_matches = |owner: &Type, field: &ic_platform::candid::contract::types::Field| {
         let owner = env.trace_type(owner).expect("canonical type");
         let TypeInner::Variant(canonical_fields) = owner.as_ref() else {
             return false;
@@ -149,7 +155,13 @@ fn projection_matches_scoped<P: CandidType>(
             if reply {
                 response_payload_matches(&env, &exact.ty, &field.ty, &mut HashSet::new())
             } else {
-                subtype::subtype(&mut HashSet::new(), &env, &field.ty, &exact.ty).is_ok()
+                ic_platform::candid::contract::types::subtype::subtype(
+                    &mut HashSet::new(),
+                    &env,
+                    &field.ty,
+                    &exact.ty,
+                )
+                .is_ok()
             }
         })
     };
@@ -877,19 +889,29 @@ checked_projection!(
 #[test]
 fn compatibility_rejects_renamed_selectors_and_changed_payloads() {
     #[derive(CandidType)]
+    #[candid_path("ic_platform::candid::contract")]
     enum Renamed {
         RenamedMaintainPool,
     }
     #[derive(CandidType)]
+    #[candid_path("ic_platform::candid::contract")]
     enum Changed {
         GetChainKeyPublicKey(u32),
     }
-    let renamed = candid::encode_one(Renamed::RenamedMaintainPool).unwrap();
-    let changed = candid::encode_one(Changed::GetChainKeyPublicKey(0)).unwrap();
-    assert!(candid::decode_one::<crate::dto::wire::root_command::RootCommand>(&renamed).is_err());
+    let renamed = ic_platform::candid::contract::encode_one(Renamed::RenamedMaintainPool).unwrap();
+    let changed =
+        ic_platform::candid::contract::encode_one(Changed::GetChainKeyPublicKey(0)).unwrap();
     assert!(
-        candid::decode_one::<crate::dto::wire::root_command::RootCommandResponse>(&changed)
-            .is_err()
+        ic_platform::candid::decoder::decode_one::<crate::dto::wire::root_command::RootCommand>(
+            &renamed
+        )
+        .is_err()
+    );
+    assert!(
+        ic_platform::candid::decoder::decode_one::<
+            crate::dto::wire::root_command::RootCommandResponse,
+        >(&changed)
+        .is_err()
     );
     assert!(!projection_matches::<Renamed>(false));
     assert!(!projection_matches::<Changed>(true));
@@ -898,23 +920,25 @@ fn compatibility_rejects_renamed_selectors_and_changed_payloads() {
 #[test]
 fn canonical_command_and_reply_roundtrip_into_bounded_projections() {
     use crate::dto::wire::root_command::{RootCommand, RootCommandResponse};
-    let bytes = candid::encode_one(RootCommand::GetOrCreateDelegationProof).unwrap();
-    let projected: delegation_proof::RootCommand = candid::decode_one(&bytes).unwrap();
+    let bytes =
+        ic_platform::candid::contract::encode_one(RootCommand::GetOrCreateDelegationProof).unwrap();
+    let projected: delegation_proof::RootCommand =
+        ic_platform::candid::decoder::decode_one(&bytes).unwrap();
     assert!(matches!(
         projected,
         delegation_proof::RootCommand::GetOrCreateDelegationProof
     ));
-    let bytes = candid::encode_one(&projected).unwrap();
-    let canonical: RootCommand = candid::decode_one(&bytes).unwrap();
+    let bytes = ic_platform::candid::contract::encode_one(&projected).unwrap();
+    let canonical: RootCommand = ic_platform::candid::decoder::decode_one(&bytes).unwrap();
     assert!(matches!(canonical, RootCommand::GetOrCreateDelegationProof));
-    let bytes = candid::encode_one(RootCommandResponse::OperationAccepted(
+    let bytes = ic_platform::candid::contract::encode_one(RootCommandResponse::OperationAccepted(
         crate::dto::role::OperationReceipt {
             operation_id: [1; 32],
         },
     ))
     .unwrap();
     let projected: crate::dto::role::OperationAcceptedResponse =
-        candid::decode_one(&bytes).unwrap();
+        ic_platform::candid::decoder::decode_one(&bytes).unwrap();
     let crate::dto::role::OperationAcceptedResponse::OperationAccepted(receipt) = projected;
     assert_eq!(receipt.operation_id, [1; 32]);
 }
@@ -2274,12 +2298,12 @@ fn nested_operation_reply_decodes_the_selected_canonical_variant() {
         credential_manifest: None,
         activated_at_ns: None,
     };
-    let bytes = candid::encode_one(StoreStatusResponse::Operation(
+    let bytes = ic_platform::candid::contract::encode_one(StoreStatusResponse::Operation(
         StoreOperationStatusResponse::FleetActivation(expected.clone()),
     ))
     .unwrap();
     let projected: store_activation::StoreStatusResponseFragment =
-        candid::decode_one(&bytes).unwrap();
+        ic_platform::candid::decoder::decode_one(&bytes).unwrap();
     let store_activation::StoreStatusResponseFragment::Operation(
         store_activation::StoreOperationStatusFragment::FleetActivation(actual),
     ) = projected;

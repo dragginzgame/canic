@@ -7,8 +7,8 @@
 #[cfg(test)]
 mod tests;
 
-use candid::Principal;
 use ic_host_artifacts::artifact::Sha256Digest;
+use ic_platform::Principal;
 use serde::{Deserialize, Serialize};
 
 ///

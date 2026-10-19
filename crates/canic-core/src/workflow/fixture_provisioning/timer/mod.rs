@@ -93,7 +93,7 @@ impl FixtureImportTimer {
         let Ok(attempt) = AsyncJobWorkflow::claim(owner) else {
             return idle();
         };
-        ic_cdk::futures::spawn(async move {
+        ic_platform::cdk::futures::spawn(async move {
             Self::run(attempt).await;
         });
         WatchdogRunResult::new(TimerCompletion::success(1), WatchdogDecision::Continue)

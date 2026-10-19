@@ -12,16 +12,18 @@ use crate::fleet_ensure::{
     ops::{operator_mint::notification_argument, read_journal, write_journal},
     workflow::{EnsureWorkflowError, operator_mint as workflow},
 };
-use candid::{CandidType, Nat, encode_one};
+use ic_platform::candid::contract::{CandidType, Nat, encode_one};
 use std::fs;
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 enum TransferFailure {
     TxDuplicate { duplicate_of: u64 },
     TxTooOld { allowed_window_nanos: u64 },
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct NotificationSuccess {
     block_index: Nat,
     minted: Nat,
@@ -29,6 +31,7 @@ struct NotificationSuccess {
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 enum NotificationFailure {
     Processing,
     TransactionTooOld(u64),

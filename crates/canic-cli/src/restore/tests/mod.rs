@@ -1,3 +1,4 @@
+use ic_backup::model::artifacts::ArtifactChecksumRecord;
 #[cfg(unix)]
 mod operational_readiness;
 mod options;
@@ -8,7 +9,6 @@ use super::io::{require_prepared_journal_path, verify_selected_journal_backup_ro
 use super::*;
 use crate::test_support::temp_dir;
 use canic_backup::{
-    artifacts::ArtifactChecksum,
     journal::{ArtifactJournalEntry, ArtifactState, DownloadJournal},
     manifest::{
         BackupUnit, BackupUnitKind, ConsistencySection, DeploymentBackupManifest, DeploymentMember,
@@ -291,7 +291,7 @@ fn write_verified_layout(root: &Path, layout: &BackupLayout, manifest: &Deployme
                 fs::create_dir_all(parent).expect("create artifact parent");
             }
             fs::write(&artifact_path, bytes.as_bytes()).expect("write artifact");
-            let checksum = ArtifactChecksum::from_bytes(bytes.as_bytes());
+            let checksum = ArtifactChecksumRecord::from_bytes(bytes.as_bytes());
 
             ArtifactJournalEntry {
                 canister_id: member.canister_id.clone(),
@@ -301,8 +301,8 @@ fn write_verified_layout(root: &Path, layout: &BackupLayout, manifest: &Deployme
                 state: ArtifactState::Durable,
                 temp_path: None,
                 artifact_path: member.source_snapshot.artifact_path.clone(),
-                checksum_algorithm: checksum.algorithm,
-                checksum: Some(checksum.hash),
+                checksum_algorithm: checksum.algorithm().to_owned(),
+                checksum: Some(checksum.hash().to_owned()),
                 updated_at: "2026-05-03T00:00:00Z".to_string(),
             }
         })
@@ -329,8 +329,8 @@ fn write_manifest_artifacts(root: &Path, manifest: &mut DeploymentBackupManifest
             fs::create_dir_all(parent).expect("create artifact parent");
         }
         fs::write(&artifact_path, bytes.as_bytes()).expect("write artifact");
-        let checksum = ArtifactChecksum::from_bytes(bytes.as_bytes());
-        member.source_snapshot.checksum = Some(checksum.hash);
+        let checksum = ArtifactChecksumRecord::from_bytes(bytes.as_bytes());
+        member.source_snapshot.checksum = Some(checksum.hash().to_owned());
     }
 }
 

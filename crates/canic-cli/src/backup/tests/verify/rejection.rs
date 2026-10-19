@@ -64,7 +64,7 @@ fn verify_backup_rejects_incomplete_execution_layout_with_manifest() {
         .publish_manifest(&valid_manifest())
         .expect("write manifest");
     layout
-        .write_journal(&journal_with_checksum(checksum.hash))
+        .write_journal(&journal_with_checksum(checksum.hash().to_owned()))
         .expect("write journal");
     layout
         .write_backup_plan(&valid_backup_plan())
@@ -100,7 +100,7 @@ fn verify_backup_rejects_execution_plan_journal_mismatch() {
         .publish_manifest(&valid_manifest())
         .expect("write manifest");
     layout
-        .write_journal(&journal_with_checksum(checksum.hash))
+        .write_journal(&journal_with_checksum(checksum.hash().to_owned()))
         .expect("write journal");
     layout
         .write_backup_plan(&valid_backup_plan())

@@ -8,7 +8,6 @@ use super::{
     FleetCoordinatorOps, FleetCoordinatorRegistryRecord,
     FleetSubnetRootRemovalPublicationReceiptRecord, receipt_invariant,
 };
-use candid::{CandidType, Principal};
 use canic_contracts::dto::{
     fleet_registry::{
         FleetSubnetRootDeletionCompletionRequest, FleetSubnetRootDeletionExecutionRequest,
@@ -20,6 +19,7 @@ use canic_contracts::dto::{
     fleet_subnet_root::FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
 };
 use canic_core::control_plane_support::error::InternalError;
+use ic_platform::{Principal, candid::contract::CandidType};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
@@ -529,8 +529,8 @@ fn response_hash<T: CandidType + Serialize>(
     response_with_zero_hash: &T,
     _label: &str,
 ) -> Result<[u8; 32], InternalError> {
-    let payload =
-        candid::encode_one(response_with_zero_hash).map_err(|_error| InternalError::invariant())?;
+    let payload = ic_platform::candid::contract::encode_one(response_with_zero_hash)
+        .map_err(|_error| InternalError::invariant())?;
     let mut hasher = Sha256::new();
     hasher.update(domain);
     hasher.update(payload);

@@ -90,7 +90,7 @@ impl RootIssuerRenewalWorkflow {
         let Some(attempt) = AsyncJobWorkflow::claim_expired(owner, now_ns) else {
             return false;
         };
-        ic_cdk::futures::spawn(async move {
+        ic_platform::cdk::futures::spawn(async move {
             let result = crate::perf::with_async_context(Self::run_scheduled()).await;
             let _ = AsyncJobWorkflow::finish(attempt, result);
         });
@@ -462,9 +462,10 @@ mod tests {
 
     #[test]
     fn transport_rejection_remains_retryable_without_admitting_authority_failures() {
-        let rejection = ic_cdk::call::CallRejected::with_rejection(2, "temporary failure".into());
+        let rejection =
+            ic_platform::cdk::call::CallRejected::with_rejection(2, "temporary failure".into());
         let failure = InternalError::from(crate::infra::ic::IcInfraError::from(
-            ic_cdk::call::CallFailed::CallRejected(rejection),
+            ic_platform::cdk::call::CallFailed::CallRejected(rejection),
         ));
         assert!(is_retryable_renewal_error(&failure));
         assert!(!is_retryable_renewal_error(&InternalError::forbidden()));

@@ -12,8 +12,9 @@ impl From<ic::IcInfraError> for InternalError {
     fn from(err: ic::IcInfraError) -> Self {
         use crate::diagnostics::codes;
 
-        if let ic::IcInfraError::CallFailed(ic_cdk::call::CallFailed::CallRejected(rejection)) =
-            &err
+        if let ic::IcInfraError::CallFailed(ic_platform::cdk::call::CallFailed::CallRejected(
+            rejection,
+        )) = &err
         {
             return Self::public(codes::PLATFORM_UNAVAILABLE)
                 .with_platform_rejection(rejection.raw_reject_code(), &rejection.to_string());
@@ -22,7 +23,7 @@ impl From<ic::IcInfraError> for InternalError {
             ic::IcInfraError::CandidDecode(_) => codes::CODEC_INVALID,
             ic::IcInfraError::Candid(_) => codes::CODEC_FAILED,
             ic::IcInfraError::CallFailed(
-                ic_cdk::call::CallFailed::InsufficientLiquidCycleBalance(_),
+                ic_platform::cdk::call::CallFailed::InsufficientLiquidCycleBalance(_),
             ) => codes::PLATFORM_INSUFFICIENT_LIQUID_CYCLES,
             ic::IcInfraError::CallFailed(_) => codes::PLATFORM_UNAVAILABLE,
             ic::IcInfraError::EmbeddedReleaseBuild(_)
@@ -39,7 +40,8 @@ impl From<ic::IcInfraError> for InternalError {
 mod tests {
     use super::*;
     use crate::{diagnostics::codes, dto::error::Error, ops::OpsError};
-    use ic_cdk::call::{CallFailed, CallPerformFailed, InsufficientLiquidCycleBalance};
+    use ic_platform::cdk::call::CallFailed;
+    use ic_platform::cdk::call::{CallPerformFailed, InsufficientLiquidCycleBalance};
 
     #[test]
     fn liquid_cycle_admission_failure_preserves_its_typed_public_cause() {
@@ -53,7 +55,10 @@ mod tests {
             Some(codes::PLATFORM_INSUFFICIENT_LIQUID_CYCLES)
         );
         let public = Error::from(error);
-        let decoded: Error = candid::decode_one(&candid::encode_one(public).unwrap()).unwrap();
+        let decoded: Error = ic_platform::candid::decoder::decode_one(
+            &ic_platform::candid::contract::encode_one(public).unwrap(),
+        )
+        .unwrap();
         assert_eq!(
             decoded.code(),
             codes::PLATFORM_INSUFFICIENT_LIQUID_CYCLES.raw_code()
@@ -63,14 +68,14 @@ mod tests {
     #[test]
     fn platform_rejection_retains_bounded_utf8_without_changing_public_error() {
         let message = "Wasm module defined 50001 functions";
-        let rejection = ic_cdk::call::CallRejected::with_rejection(5, message.to_owned());
+        let rejection = ic_platform::cdk::call::CallRejected::with_rejection(5, message.to_owned());
         let expected = rejection.to_string();
         let error = InternalError::from(OpsError::from(ic::IcInfraError::from(
             CallFailed::CallRejected(rejection),
         )));
         assert_eq!(error.public_code(), Some(codes::PLATFORM_UNAVAILABLE));
         assert_eq!(error.platform_rejection(), Some(expected.as_str()));
-        let target = candid::Principal::from_slice(&[9]);
+        let target = ic_platform::Principal::from_slice(&[9]);
         let error = error
             .with_dependency_failure(target, "canic_wasm_store_command", "inspect_template")
             .with_provisioning_failure(
@@ -80,7 +85,7 @@ mod tests {
                 crate::domain::provisioning_failure::ProvisioningRetryCategory::Backoff,
             )
             .with_dependency_failure(
-                candid::Principal::from_slice(&[8]),
+                ic_platform::Principal::from_slice(&[8]),
                 "outer_method",
                 "outer_step",
             );

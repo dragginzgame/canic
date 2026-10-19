@@ -4,7 +4,6 @@
 //! Does not own: memory-manager instances, ledger cells, allocation policy, or DTO shaping.
 //! Boundary: diagnostics read the already bootstrapped Canic-owned runtime through `ic-memory`.
 
-use crate::memory::{pool, registry::MemoryRegistryError};
 use ic_memory::{DiagnosticExport, MemoryAllocationPool, RuntimeDiagnosticError};
 
 pub const MEMORY_LEDGER_SCHEMA_VERSION: u32 = 1;
@@ -25,13 +24,17 @@ pub struct NativeMemoryLedgerSnapshot {
 
 /// Read the committed allocation ledger from the Canic-owned runtime.
 pub fn try_snapshot() -> Result<NativeMemoryLedgerSnapshot, MemoryLedgerError> {
-    Ok(NativeMemoryLedgerSnapshot {
-        export: super::runtime::with_runtime(ic_memory::MemoryRuntime::diagnostic_export)?,
-        commit_recovery: super::runtime::with_runtime(
-            ic_memory::MemoryRuntime::commit_recovery_diagnostic,
-        )?,
-        allocation_pool: pool::selected()?,
+    super::runtime::with_runtime(|runtime| {
+        Ok(NativeMemoryLedgerSnapshot {
+            export: runtime.diagnostic_export()?,
+            commit_recovery: runtime.commit_recovery_diagnostic()?,
+            allocation_pool: runtime
+                .allocation_pool()
+                .map_err(|_| RuntimeDiagnosticError::NotBootstrapped)?
+                .clone(),
+        })
     })
+    .map_err(Into::into)
 }
 
 /// Failure to read the established runtime or its sealed host pool.
@@ -39,6 +42,4 @@ pub fn try_snapshot() -> Result<NativeMemoryLedgerSnapshot, MemoryLedgerError> {
 pub enum MemoryLedgerError {
     #[error(transparent)]
     Diagnostic(#[from] RuntimeDiagnosticError),
-    #[error(transparent)]
-    Pool(#[from] MemoryRegistryError),
 }

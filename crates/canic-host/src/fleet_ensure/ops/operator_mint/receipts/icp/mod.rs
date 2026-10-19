@@ -20,9 +20,11 @@ use crate::fleet_ensure::{
         validate_intent,
     },
 };
-use candid::Principal;
-use ic_agent::{Agent, AgentError, RequestId, agent::signed::SignedUpdate};
-use ic_certification::LookupResult;
+use ic_platform::{
+    Principal,
+    agent::{Agent, AgentError, RequestId, SignedUpdate},
+    certification::LookupResult,
+};
 use prost::Message;
 use serde_bytes::ByteBuf;
 use sha2_host::{Digest, Sha256};
@@ -55,7 +57,7 @@ pub enum IcpReadError {
     #[error("ICP receipt read could not be signed")]
     Prepare(#[source] AgentError),
     #[error("ICP receipt read arguments could not be encoded")]
-    Arguments(#[source] candid::Error),
+    Arguments(#[source] ic_platform::candid::contract::Error),
     #[error(transparent)]
     Certificate(#[from] CertificateVerificationError),
     #[error("certificate does not contain a replied result for this exact receipt read")]
@@ -207,7 +209,7 @@ fn sign_read(
     source: ReadSource,
 ) -> Result<IcpTransferRead, IcpReadError> {
     verify_reader(agent, intent)?;
-    let argument = candid::encode_one(ReadArgs {
+    let argument = ic_platform::candid::contract::encode_one(ReadArgs {
         start: block_index,
         length: 1,
     })
@@ -270,14 +272,14 @@ pub fn verify_read(
     if reply.len() > limits.reply_bytes {
         return Err(IcpReadError::BudgetExceeded);
     }
-    let mut config = candid::de::DecoderConfig::new();
+    let mut config = ic_platform::candid::decoder::DecoderConfig::new();
     config.set_decoding_quota(limits.decoding_quota);
     config.set_skipping_quota(limits.skipping_quota);
     match read.source {
         ReadSource::Ledger => verify_ledger_reply(read, reply, &config),
         ReadSource::Archive => {
             let blocks: Result<Vec<ByteBuf>, ArchiveReadError> =
-                candid::utils::decode_one_with_config(reply, &config)
+                ic_platform::candid::decoder::decode_one_with_config(reply, &config)
                     .map_err(|_| IcpReadError::InvalidReply)?;
             let blocks = blocks?;
             if blocks.len() != 1 {
@@ -291,10 +293,11 @@ pub fn verify_read(
 fn verify_ledger_reply(
     read: &IcpTransferRead,
     bytes: &[u8],
-    config: &candid::de::DecoderConfig,
+    config: &ic_platform::candid::decoder::DecoderConfig,
 ) -> Result<IcpReadOutcome, IcpReadError> {
-    let reply: EncodedBlocksReply = candid::utils::decode_one_with_config(bytes, config)
-        .map_err(|_| IcpReadError::InvalidReply)?;
+    let reply: EncodedBlocksReply =
+        ic_platform::candid::decoder::decode_one_with_config(bytes, config)
+            .map_err(|_| IcpReadError::InvalidReply)?;
     if reply.chain_length <= read.block_index {
         return Err(IcpReadError::BlockMismatch);
     }

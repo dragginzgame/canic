@@ -13,7 +13,6 @@ use crate::{
         CallerJournalPhase, CallerLifecycleScope, CallerRecipientKind,
     },
 };
-use candid::Principal;
 use canic_contracts::{
     dto::{
         caller_authority::{CallerAuthorityChange, CallerAuthorityCommand, CallerAuthorityStatus},
@@ -33,6 +32,7 @@ use canic_core::control_plane_support::{
     ops::{caller_authority::CallerAuthorityOps, ic::call::CallOps},
     policy::caller_authority::matches_permission,
 };
+use ic_platform::Principal;
 use std::collections::BTreeMap;
 
 const MAX_READINESS_ATTEMPTS: usize = 60;

@@ -5,17 +5,19 @@
 //! role operations, release receipts, and recursive registry payloads into each
 //! transport. Compatibility is checked against the canonical role contracts.
 
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded RemoteCoordinatorStatusResponse wire projection for component provisioning.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RemoteCoordinatorStatusResponse {
     Operation(RemoteCoordinatorOperationStatusResponse),
 }
 
 /// Bounded RemoteCoordinatorOperationStatusResponse wire projection for component provisioning.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RemoteCoordinatorOperationStatusResponse {
     ComponentProvisioning(
         crate::dto::component_provisioning::FleetComponentProvisioningStatusResponse,

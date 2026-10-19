@@ -6,18 +6,20 @@
 //! transport. Compatibility is checked against the canonical role contracts.
 
 use crate::dto::release_receipts::ReplayReleaseResponse;
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded Request wire projection for release receipts.
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum Request {
     ReplayRelease(Option<[u8; 32]>),
 }
 
 /// Bounded Response wire projection for release receipts.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum Response {
     ReplayRelease(ReplayReleaseResponse),
 }

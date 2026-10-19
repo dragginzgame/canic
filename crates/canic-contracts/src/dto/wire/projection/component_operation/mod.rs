@@ -12,12 +12,13 @@ use crate::dto::{
     role::OperationStatusRequest,
     root::RootOperationStatusResponse,
 };
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded RootRead wire projection for component operation.
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootRead {
     FleetAuthority,
     Operation(OperationStatusRequest),
@@ -26,6 +27,7 @@ pub enum RootRead {
 
 /// Bounded RootResponse wire projection for component operation.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootResponse {
     FleetAuthority(Box<FleetSubnetRootAuthority>),
     Operation(Box<RootOperationStatusResponse>),
@@ -34,6 +36,7 @@ pub enum RootResponse {
 
 /// Bounded RootCommand wire projection for component operation.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootCommand {
     ProvisionComponent(RootComponentAllocationRequest),
 }

@@ -101,23 +101,41 @@ fn build_spec(workspace: &Path, source: &Path) -> io::Result<WasmBuildSpec> {
         source,
         &workspace.join("target/embedded-root/cache"),
         &[PACKAGE],
+        std::env::vars_os(),
     )
     .with_shared_incremental_target(workspace.join("target/embedded-root/cargo"))
     .with_additional_inputs(["crates/canic-testing-internal/src/embedded_root"])
-    .with_cargo_profile_args(["--profile", PROFILE, "--locked", "--offline"])
-    .with_extra_env([
-        ("CARGO_INCREMENTAL", "0".to_owned()),
-        ("ICP_ENVIRONMENT", "local".to_owned()),
-        ("CANIC_MEMORY_BUCKET_PAGES", "16".to_owned()),
-        ("CARGO_ENCODED_RUSTFLAGS", source::rustflags(source)?),
-    ]))
+    .with_cargo_selection(ic_build::cargo::selection::CargoSelection {
+        profile: Some(PROFILE.into()),
+        locked: true,
+        offline: true,
+        ..Default::default()
+    })
+    .with_environment(
+        std::env::vars_os().chain(
+            ([
+                ("CARGO_INCREMENTAL", "0".to_owned()),
+                ("ICP_ENVIRONMENT", "local".to_owned()),
+                ("CANIC_MEMORY_BUCKET_PAGES", "16".to_owned()),
+                ("CARGO_ENCODED_RUSTFLAGS", source::rustflags(source)?),
+            ])
+            .into_iter()
+            .map(|(key, value)| {
+                (
+                    std::ffi::OsString::from(key),
+                    std::ffi::OsString::from(value),
+                )
+            }),
+        ),
+    ))
 }
 
 fn build(
     workspace: &Path,
     spec: &WasmBuildSpec,
 ) -> Result<(Vec<u8>, FixtureEvidence), Box<dyn Error>> {
-    let outcome = build_wasm_canisters_cached(spec)?;
+    let outcome =
+        build_wasm_canisters_cached(spec, ic_host_process::child::OwnedChild::spawn_direct)?;
     let record = outcome.record();
     let [artifact] = record.artifacts() else {
         return Err(io::Error::new(

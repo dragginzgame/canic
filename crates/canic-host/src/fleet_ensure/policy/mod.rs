@@ -35,7 +35,6 @@ use crate::{
         RootManagementObservation, RootOwnedCanisterLifecycle,
     },
 };
-use candid::Principal;
 use canic_contracts::{
     cycles::Cycles,
     ids::{FleetName, FleetSubnetCanisterPoolConfig},
@@ -44,6 +43,7 @@ use canic_core::control_plane_support::model::fleet_funding_policy::{
     FleetFundingPolicyValidationError, validate_coordinator_root_funding_policy,
     validate_fleet_root_funding_capacity, validate_fleet_subnet_root_funding_authority,
 };
+use ic_platform::Principal;
 use sha2_host::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;
@@ -3709,7 +3709,7 @@ pub(crate) fn operation_id(desired_sha256: &str, environment: &str, fleet: &str)
 pub fn expected_plan_sha256(plan: &FleetEnsurePlan) -> String {
     let mut canonical = plan.clone();
     canonical.plan_sha256.clear();
-    let bytes = super::json::to_vec(&canonical).expect("Fleet ensure plan is JSON serializable");
+    let bytes = serde_json::to_vec(&canonical).expect("Fleet ensure plan is JSON serializable");
     let mut hasher = Sha256::new();
     hash_field(&mut hasher, b"canic:fleet-ensure:plan:v1");
     hash_field(&mut hasher, &bytes);

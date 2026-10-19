@@ -5,6 +5,9 @@
 //! Does not own: stable data schemas, ops storage APIs, or lifecycle orchestration.
 //! Boundary: lifecycle initializes this before stable structures are accessed.
 
+#[cfg(test)]
+pub(crate) mod fixtures;
+
 pub mod admission;
 pub(crate) mod keys;
 pub(crate) mod ledger;
@@ -37,7 +40,7 @@ pub fn configured_bucket_pages() -> u16 {
 /// Observe the current physical stable-memory extent without allocating or reading data.
 #[cfg(target_arch = "wasm32")]
 pub(crate) fn stable_extent_bytes() -> u64 {
-    ic_cdk::api::stable_size().saturating_mul(65_536)
+    ic_platform::cdk::api::stable_size().saturating_mul(65_536)
 }
 
 /// Complete framework requests, including stores whose lazy initializers have not run.
@@ -107,7 +110,6 @@ pub fn bootstrap(input: MemoryBootstrap) -> Result<(), MemoryBootstrapError> {
         runtime.bootstrap(&declarations, &input.pool, &policy)?;
         Ok(())
     })?;
-    pool::remember(input.pool);
     Ok(())
 }
 
