@@ -136,13 +136,17 @@ pub fn __render_runtime_log_line(topic: Option<Topic>, level: Level, message: &s
     let role = __canister_role_label();
     let topic_prefix = topic.map_or_else(String::new, |topic| format!("[{}] ", topic.as_str()));
 
-    format!(
-        "{}|{:^12}| {}{}",
-        level.ansi_label(),
-        role,
-        topic_prefix,
-        message
-    )
+    // Replica log readers treat ANSI escape bytes as binary data. Keep the
+    // terminal presentation out of this retained replica copy.
+    let label = match level {
+        Level::Debug => "DEBUG",
+        Level::Info => "INFO ",
+        Level::Ok => " OK  ",
+        Level::Warn => "WARN ",
+        Level::Error => "ERROR",
+    };
+
+    format!("{label}|{role:^12}| {topic_prefix}{message}")
 }
 
 #[doc(hidden)]
@@ -155,3 +159,35 @@ pub fn __canister_role_label() -> String {
 }
 
 pub use canic_contracts::log::Level;
+
+///
+/// TESTS
+///
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn replica_log_levels_are_plain_text_and_preserve_event_content() {
+        for (level, label) in [
+            (Level::Debug, "DEBUG"),
+            (Level::Info, "INFO "),
+            (Level::Ok, " OK  "),
+            (Level::Warn, "WARN "),
+            (Level::Error, "ERROR"),
+        ] {
+            for topic in [None, Some(Topic::Init), Some(Topic::CanisterLifecycle)] {
+                let message = "canister marked READY";
+                let line = __render_runtime_log_line(topic, level, message);
+                assert!(!line.as_bytes().contains(&0x1b));
+                assert!(line.starts_with(&format!("{label}|")));
+                let event = topic.map_or_else(
+                    || message.to_string(),
+                    |topic| format!("[{}] {message}", topic.as_str()),
+                );
+                assert!(line.ends_with(&format!("| {event}")));
+            }
+        }
+    }
+}
