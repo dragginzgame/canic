@@ -521,6 +521,8 @@ fn provenance_projects_the_runtime_recipe_without_ambient_reconstruction() {
     let output = write_sample_artifacts(&root, "app");
     let mut request = sample_request(&root, output);
     let facts = &mut request.output.cargo_facts;
+    facts.target = "wasm32-selected-target".into();
+    facts.selection.profile = Some("runtime-profile".into());
     facts
         .selection
         .features
@@ -543,6 +545,11 @@ fn provenance_projects_the_runtime_recipe_without_ambient_reconstruction() {
     assert_eq!(payload.cargo.features, ["selected-feature"]);
     assert_eq!(payload.cargo.default_features, Some(false));
     assert_eq!(
+        payload.cargo.target.as_deref(),
+        Some("wasm32-selected-target")
+    );
+    assert_eq!(payload.cargo.profile, "runtime-profile");
+    assert_eq!(
         payload.cargo.rustflags_digest,
         Some(canic_core::cdk::utils::hash::sha256_hex(b"selected flags"))
     );
@@ -558,6 +565,17 @@ fn provenance_projects_the_runtime_recipe_without_ambient_reconstruction() {
         Some(canic_core::cdk::utils::hash::sha256_hex(
             b"--cfg\x1fselected"
         ))
+    );
+    request
+        .output
+        .cargo_facts
+        .environment
+        .insert("CARGO_ENCODED_RUSTFLAGS".into(), "".into());
+    let envelope = build_provenance_envelope(&request).unwrap();
+    let payload: BuildProvenanceV1 = serde_json::from_value(envelope.payload).unwrap();
+    assert_eq!(
+        payload.cargo.rustflags_digest,
+        Some(canic_core::cdk::utils::hash::sha256_hex(b""))
     );
     fs::remove_dir_all(root).unwrap();
 }
