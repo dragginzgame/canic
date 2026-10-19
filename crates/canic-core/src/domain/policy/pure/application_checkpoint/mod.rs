@@ -8,8 +8,8 @@
 mod tests;
 
 use crate::model::caller_authority::CallerAdmissionError;
-use candid::Principal;
 use canic_contracts::ids::{ApplicationCheckpointBinding, CallerReceiverAuthority};
+use ic_platform::Principal;
 
 /// Root recovery authority is independent from ordinary application admission.
 pub fn require_root(

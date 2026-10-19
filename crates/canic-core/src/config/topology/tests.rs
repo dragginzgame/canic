@@ -5,10 +5,7 @@
 //! Boundary: exercises the complete validated-config to protected-topology transition.
 
 use super::*;
-use crate::{
-    cdk::{candid::Principal, utils::hash::hex_bytes},
-    config::Config,
-};
+use crate::{cdk::utils::hash::hex_bytes, config::Config};
 use canic_contracts::{
     cycles::Cycles,
     ids::{
@@ -18,6 +15,7 @@ use canic_contracts::{
         FleetSubnetRootLimits, SubnetId,
     },
 };
+use ic_platform::Principal;
 
 const CONFIG: &str = r#"
 [app]
@@ -605,8 +603,10 @@ fn canonical_encoding_rejects_oversized_role_package_identity() {
 #[test]
 fn compiled_topology_roundtrips_at_the_candid_boundary() {
     let topology = topology();
-    let bytes = candid::encode_one(&topology).expect("encode Component Topology");
-    let decoded: ComponentTopology = candid::decode_one(&bytes).expect("decode Component Topology");
+    let bytes =
+        ic_platform::candid::contract::encode_one(&topology).expect("encode Component Topology");
+    let decoded: ComponentTopology =
+        ic_platform::candid::decoder::decode_one(&bytes).expect("decode Component Topology");
 
     assert_eq!(decoded, topology);
 }
@@ -710,12 +710,13 @@ fn protected_binding_contracts_roundtrip_at_the_candid_boundary() {
         canister_id: Principal::from_slice(&[11; 29]),
     };
 
-    let root_bytes = candid::encode_one(&root).expect("encode root binding");
-    let child_bytes = candid::encode_one(&child).expect("encode child binding");
+    let root_bytes = ic_platform::candid::contract::encode_one(&root).expect("encode root binding");
+    let child_bytes =
+        ic_platform::candid::contract::encode_one(&child).expect("encode child binding");
     let decoded_root: FleetSubnetRootBinding =
-        candid::decode_one(&root_bytes).expect("decode root binding");
+        ic_platform::candid::decoder::decode_one(&root_bytes).expect("decode root binding");
     let decoded_child: ComponentChildBinding =
-        candid::decode_one(&child_bytes).expect("decode child binding");
+        ic_platform::candid::decoder::decode_one(&child_bytes).expect("decode child binding");
 
     assert_eq!(decoded_root, root);
     assert_eq!(decoded_child, child);

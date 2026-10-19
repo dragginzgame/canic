@@ -3,7 +3,6 @@
 //! Responsibility: qualify controller directory and funding census reads against live fixtures.
 //! Boundary: query-only coverage retains member authorization and exact current-head checks.
 
-use candid::{Principal, decode_one, encode_one};
 use canic::{
     Error,
     dto::component_registry::{
@@ -18,6 +17,10 @@ use canic_contracts::dto::{
         fixture_baseline_funding_inventory::{CommandResponse, Request, Response},
         funding_observation::Command,
     },
+};
+use ic_platform::{
+    Principal,
+    candid::{contract::encode_one, decoder::decode_one},
 };
 use ic_testkit::pic::PocketIc;
 

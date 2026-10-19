@@ -4,7 +4,7 @@
 //! Does not own: inheritance, typed purpose, placement, authorization, or runtime state.
 //! Boundary: source and decoded label text is validated before group compilation.
 
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Deserializer, Serialize, de};
 use std::{borrow::Borrow, fmt};
 use thiserror::Error as ThisError;
@@ -49,13 +49,13 @@ macro_rules! bounded_component_deployment_label_text {
         }
 
         impl CandidType for $name {
-            fn _ty() -> candid::types::Type {
-                candid::types::TypeInner::Text.into()
+            fn _ty() -> ic_platform::candid::contract::types::Type {
+                ic_platform::candid::contract::types::TypeInner::Text.into()
             }
 
             fn idl_serialize<S>(&self, serializer: S) -> Result<(), S::Error>
             where
-                S: candid::types::Serializer,
+                S: ic_platform::candid::contract::types::Serializer,
             {
                 serializer.serialize_text(self.as_str())
             }
@@ -98,6 +98,7 @@ bounded_component_deployment_label_text!(
 
 /// One bounded inert metadata label on a flattened Component occurrence.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ComponentDeploymentLabel {
     pub key: ComponentDeploymentLabelKey,

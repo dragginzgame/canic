@@ -103,7 +103,7 @@ impl EnvWorkflow {
 }
 
 fn validated_managed_env(
-    fleet_subnet_root: candid::Principal,
+    fleet_subnet_root: ic_platform::Principal,
     binding: ManagedCanisterBinding,
 ) -> ValidatedEnv {
     let (component_spec, placement_subnet, canister_role, parent_pid) = match &binding {

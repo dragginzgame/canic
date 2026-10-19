@@ -6,12 +6,13 @@
 //! transport. Compatibility is checked against the canonical role contracts.
 
 use crate::dto::cascade::{StateCascadeReport, StateSnapshotInput, TopologySnapshotInput};
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded StoreCommandFragment wire projection for cascade.
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum StoreCommandFragment<'a> {
     SynchronizeState(&'a StateSnapshotInput),
     SynchronizeTopology(&'a TopologySnapshotInput),
@@ -19,6 +20,7 @@ pub enum StoreCommandFragment<'a> {
 
 /// Bounded StoreCommandResponseFragment wire projection for cascade.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum StoreCommandResponseFragment {
     SynchronizeState(StateCascadeReport),
     SynchronizeTopology,
@@ -26,12 +28,14 @@ pub enum StoreCommandResponseFragment {
 
 /// Bounded ComponentCommandFragment wire projection for cascade.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ComponentCommandFragment<'a> {
     SynchronizeState(&'a StateSnapshotInput),
 }
 
 /// Bounded ComponentCommandResponseFragment wire projection for cascade.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ComponentCommandResponseFragment {
     SynchronizeState(StateCascadeReport),
 }

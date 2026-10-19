@@ -5,10 +5,7 @@
 //! Ops validates transitions and capacity before committing these protected records.
 
 use crate::{
-    cdk::{
-        bounded_cell::BoundedCell,
-        structures::{DefaultMemoryImpl, btreemap::BTreeMap, memory::RuntimeMemory},
-    },
+    cdk::structures::{BoundedCell, DefaultMemoryImpl, StableBTreeMap as BTreeMap},
     model::caller_authority::{
         CallerReceiptRecord, CallerReceiverRecord, CallerRowKey, CallerSourceRecord,
     },
@@ -65,9 +62,9 @@ impl_storable_bounded!(CallerRowRecord, MAX_CALLER_ROW_BYTES, false);
 impl_storable_bounded!(CallerReceiverRecord, MAX_CALLER_ROW_BYTES, false);
 
 thread_local! {
-    static HEADER: RefCell<BoundedCell<Option<CallerReceiverRecord>, RuntimeMemory<DefaultMemoryImpl>>> =
+    static HEADER: RefCell<BoundedCell<Option<CallerReceiverRecord>, DefaultMemoryImpl>> =
         RefCell::new(BoundedCell::init(crate::memory::open(crate::memory::keys::CALLER_AUTHORITY_HEADER_V1), None));
-    static ROWS: RefCell<BTreeMap<CallerRowKey, CallerRowRecord, RuntimeMemory<DefaultMemoryImpl>>> =
+    static ROWS: RefCell<BTreeMap<CallerRowKey, CallerRowRecord, DefaultMemoryImpl>> =
         RefCell::new(BTreeMap::init(crate::memory::open(crate::memory::keys::CALLER_AUTHORITY_ROWS_V1)));
 }
 
@@ -128,7 +125,7 @@ impl CallerRowStore {
         let start = after.map_or_else(
             || {
                 Included(CallerRowKey::source(
-                    candid::Principal::management_canister(),
+                    ic_platform::Principal::management_canister(),
                 ))
             },
             Excluded,
@@ -164,7 +161,7 @@ impl CallerRowStore {
     pub(crate) fn rows() -> Vec<(CallerRowKey, CallerRowRecord)> {
         ROWS.with_borrow(|rows| {
             let mut projection = Vec::new();
-            for entry in rows.iter() {
+            for entry in rows {
                 projection.push(entry.into_pair());
             }
             projection

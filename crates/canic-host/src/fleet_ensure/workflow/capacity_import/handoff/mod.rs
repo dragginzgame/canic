@@ -215,7 +215,7 @@ async fn submit_or_reconcile(
 async fn await_completion(
     transport: &CapacityImportTransport,
     record: &CapacityImportJournalRecord,
-    canister: candid::Principal,
+    canister: ic_platform::Principal,
 ) -> Result<HandoffOutcome, CapacityImportJournalError> {
     tokio::time::timeout(Duration::from_secs(12), async {
         for _ in 0..24 {

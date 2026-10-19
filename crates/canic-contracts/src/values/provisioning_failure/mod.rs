@@ -1,6 +1,6 @@
 //! Passive protocol classifications; runtime decisions remain with Core.
 
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 
 /// Maximum bytes in one exact dependency method label.
@@ -12,9 +12,10 @@ pub const MAX_PROVISIONING_REJECTION_BYTES: usize = 1024;
 
 /// Protected dependency evidence, independent of public diagnostics and spending authority.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ProvisioningDependencyFailure {
-    pub target: candid::Principal,
+    pub target: ic_platform::Principal,
     pub method: String,
     pub step: String,
     #[serde(deserialize_with = "crate::serialization::required_option")]
@@ -24,6 +25,7 @@ pub struct ProvisioningDependencyFailure {
 }
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ProvisioningFailureStage {
     Provisioning,
     CoordinatorStatus,
@@ -43,6 +45,7 @@ pub enum ProvisioningFailureStage {
 }
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ProvisioningRetryCategory {
     Backoff,
     ReviewRequired,

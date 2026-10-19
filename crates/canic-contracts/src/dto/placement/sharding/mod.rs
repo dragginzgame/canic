@@ -5,6 +5,7 @@
 use crate::dto::prelude::*;
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ShardingRegistryEntry {
     pub pid: Principal,
     pub entry: ShardEntry,
@@ -15,6 +16,7 @@ pub struct ShardingRegistryEntry {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ShardingRegistryResponse(pub Vec<ShardingRegistryEntry>);
 
 //
@@ -22,6 +24,7 @@ pub struct ShardingRegistryResponse(pub Vec<ShardingRegistryEntry>);
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ShardingPartitionKeysResponse(pub Vec<String>);
 
 //
@@ -29,6 +32,7 @@ pub struct ShardingPartitionKeysResponse(pub Vec<String>);
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ShardEntry {
     // Logical slot index within the pool (assigned deterministically).
     pub slot: u32,
@@ -44,6 +48,7 @@ pub struct ShardEntry {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ShardingPlanStateResponse {
     // Partition key already has a shard assigned.
     AlreadyAssigned { pid: Principal },

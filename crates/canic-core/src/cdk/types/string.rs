@@ -5,7 +5,7 @@
 //! Boundary: enforces byte-size caps at construction and stable decoding.
 
 use crate::cdk::structures::{Storable, storable::Bound};
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize, de::Deserializer};
 use std::{
     borrow::Cow,
@@ -23,6 +23,7 @@ use thiserror::Error as ThisError;
 ///
 
 #[derive(CandidType, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct BoundedString<const N: u32>(String);
 
 impl<const N: u32> BoundedString<N> {
@@ -236,16 +237,18 @@ mod tests {
     #[test]
     fn candid_decode_enforces_the_bound() {
         let bounded = BoundedString::<16>::new("bounded");
-        let bounded_encoded = candid::encode_one(&bounded).expect("bounded string Candid-encodes");
+        let bounded_encoded = ic_platform::candid::contract::encode_one(&bounded)
+            .expect("bounded string Candid-encodes");
         assert_eq!(
-            candid::decode_one::<BoundedString<16>>(&bounded_encoded)
+            ic_platform::candid::decoder::decode_one::<BoundedString<16>>(&bounded_encoded)
                 .expect("valid bounded string Candid-decodes"),
             bounded
         );
 
-        let oversized = candid::encode_one("a".repeat(17)).expect("string Candid-encodes");
+        let oversized = ic_platform::candid::contract::encode_one("a".repeat(17))
+            .expect("string Candid-encodes");
         assert!(
-            candid::decode_one::<BoundedString<16>>(&oversized).is_err(),
+            ic_platform::candid::decoder::decode_one::<BoundedString<16>>(&oversized).is_err(),
             "Candid decoding must not bypass construction validation"
         );
     }

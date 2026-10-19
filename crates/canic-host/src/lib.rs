@@ -15,12 +15,12 @@ const MAX_ARTIFACT_READ_BYTES: usize = 128 * 1024 * 1024;
 const EXECUTABLE_BUSY_RETRY_ATTEMPTS: usize = 8;
 const EXECUTABLE_BUSY_RETRY_DELAY: Duration = Duration::from_millis(10);
 
+pub mod admission;
 mod artifact_io;
 pub mod binaryen;
 mod bootstrap_candid;
-mod bootstrap_coordinator;
-mod bootstrap_store;
-pub mod build_environment;
+mod bounded_reads;
+mod build_environment;
 mod build_profile;
 pub mod build_provenance;
 pub mod build_toolchain;
@@ -64,7 +64,6 @@ pub mod replica_query;
 pub mod role_contract;
 pub mod state_manifest;
 pub mod subnet_catalog;
-pub mod table;
 pub mod terminal;
 #[cfg(test)]
 mod test_support;

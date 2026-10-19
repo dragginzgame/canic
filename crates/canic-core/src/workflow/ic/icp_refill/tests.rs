@@ -1,6 +1,6 @@
 use super::{cost_guard::*, execution::*, replay::*, *};
 use crate::{
-    cdk::{candid::Nat, types::Principal},
+    cdk::types::Principal,
     domain::icp_refill::{IcpRefillErrorCode, IcpRefillStatus, IcpRefillTrigger},
     infra::ic::icp_refill::{NotifyTopUpError, TransferError},
     model::replay::{ExternalEffectDescriptor, OperationId, RecoveryReason, ReplayReceiptStatus},
@@ -19,6 +19,7 @@ use crate::{
     storage::stable::icp_refill::{IcpRefillRecord, IcpRefillTriggerRecord},
     view::icp_refill::IcpRefillOperation,
 };
+use ic_platform::candid::contract::Nat;
 use std::str::FromStr;
 
 fn p(id: u8) -> Principal {

@@ -171,7 +171,9 @@ async fn apply_async(
     if let Some(completed) = store.completed_review(review_sha256)? {
         return Ok(completed);
     }
-    let record = store.read()?.ok_or(CapacityImportJournalError::Integrity)?;
+    let record = store
+        .read()?
+        .ok_or(CapacityImportJournalError::ReviewMissing)?;
     if record
         .operation
         .as_ref()

@@ -5,10 +5,6 @@ use crate::{
     dto::{page::PageRequest, public_status::PublicMetricsRequest},
     model::public_metrics::{PUBLIC_METRICS_STALE_AFTER_NS, PublicHistoryCache},
 };
-use ic_memory::ic_stable_structures::{
-    Memory, VectorMemory,
-    memory_manager::{MemoryId, MemoryManager},
-};
 use std::{collections::BTreeSet, convert::Infallible};
 
 struct FixturePolicy;
@@ -16,11 +12,7 @@ struct FixturePolicy;
 impl ic_memory::RuntimeBootstrapPolicy for FixturePolicy {
     type Error = Infallible;
 
-    fn validate_key(&self, _: &ic_memory::StableKey) -> Result<(), Infallible> {
-        Ok(())
-    }
-
-    fn validate_slot(
+    fn validate_allocation(
         &self,
         _: &ic_memory::StableKey,
         _: &ic_memory::MemoryManagerSlot,
@@ -28,21 +20,14 @@ impl ic_memory::RuntimeBootstrapPolicy for FixturePolicy {
         Ok(())
     }
 
-    fn runtime_bootstrap_identity(
-        &self,
-    ) -> Result<ic_memory::PolicyIdentity, ic_memory::PolicyIdentityError> {
-        ic_memory::PolicyIdentity::new("public-memory-fixture", 1)
+    fn runtime_bootstrap_identity(&self) -> ic_memory::PolicyIdentity {
+        ic_memory::PolicyIdentity::new([2; 32])
     }
 }
 
 #[test]
 fn measured_nondefault_buckets_cover_every_usable_id_without_growth() {
-    let backing = VectorMemory::default();
-    let manager = MemoryManager::init_with_bucket_size(backing.clone(), 1);
-    for id in 1..ic_memory::MEMORY_MANAGER_INVALID_ID {
-        assert_eq!(manager.get(MemoryId::new(id)).grow(1), 0);
-    }
-    drop(manager);
+    let backing = crate::memory::fixtures::all_slots();
     let mut runtime = ic_memory::MemoryRuntime::new_with_config(
         backing.clone(),
         ic_memory::MemoryManagerConfig::new(1).unwrap(),
@@ -51,11 +36,7 @@ fn measured_nondefault_buckets_cover_every_usable_id_without_growth() {
     runtime
         .bootstrap(
             &ic_memory::SealedDeclarationSnapshot::new(Vec::new()).unwrap(),
-            &ic_memory::MemoryAllocationPool::new(
-                Vec::new(),
-                vec![ic_memory::MemoryManagerIdRange::new(10, 254).unwrap()],
-            )
-            .unwrap(),
+            &ic_memory::MemoryAllocationPool::new(Vec::new(), (10..=254).collect()).unwrap(),
             &FixturePolicy,
         )
         .unwrap();
@@ -263,11 +244,12 @@ fn numeric_summary_preserves_detailed_accounting_and_read_bound() {
         assert_eq!(value(&rows, name), u128::from(expected));
     }
     let mut groups = [ic_memory::MemoryBindingSummary::default(); 3];
-    for entry in detailed.memories {
-        let index = match entry.binding {
-            ic_memory::AllocationBinding::Current { .. } => 0,
-            ic_memory::AllocationBinding::Ledger => 1,
-            ic_memory::AllocationBinding::Unknown => 2,
+    let projection = MemoryRegistryOps::allocation_snapshot().unwrap();
+    for (entry, projected) in detailed.memories.into_iter().zip(projection.memories) {
+        let index = match projected.binding {
+            crate::domain::memory::MemoryAllocationBinding::Current { .. } => 0,
+            crate::domain::memory::MemoryAllocationBinding::Ledger { .. } => 1,
+            crate::domain::memory::MemoryAllocationBinding::Unknown => 2,
         };
         groups[index].allocated_buckets += entry.allocated_buckets;
         groups[index].virtual_extent.wasm_pages += entry.virtual_extent.wasm_pages;

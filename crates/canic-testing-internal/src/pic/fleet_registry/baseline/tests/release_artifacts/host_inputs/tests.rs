@@ -174,7 +174,7 @@ fn excluded_test_edits_still_abort_an_in_flight_cache_transaction() {
         &host,
         &root.join("target"),
         &["native-producer"],
-        canic_host::build_environment::cargo_inputs(std::iter::empty::<(&str, &str)>()),
+        std::env::vars_os(),
     )
     .with_cargo_selection(ic_build::cargo::selection::CargoSelection {
         profile: Some("release".into()),

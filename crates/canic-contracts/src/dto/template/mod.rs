@@ -20,13 +20,14 @@ use crate::{
         TemplateManifestState, TemplateVersion, WasmStoreBinding, WasmStoreGcMode,
     },
 };
-use candid::{CandidType, Principal};
+use ic_platform::{Principal, candid::contract::CandidType};
 use serde::Deserialize;
 
 #[cfg(test)]
 mod chunk_encoding_tests;
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct TemplateManifestInput {
     pub template_id: TemplateId,
     pub role: CanisterRole,
@@ -45,6 +46,7 @@ pub struct TemplateManifestInput {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct TemplateManifestResponse {
     pub template_id: TemplateId,
     pub role: CanisterRole,
@@ -63,6 +65,7 @@ pub struct TemplateManifestResponse {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct TemplateChunkSetPrepareInput {
     /// Optional approved manifest admitted atomically with this exact chunk set.
     pub manifest: Option<TemplateManifestInput>,
@@ -78,6 +81,7 @@ pub struct TemplateChunkSetPrepareInput {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct TemplateChunkInput {
     /// Exact metadata admitted with chunk zero; absent for subsequent chunks.
     pub preparation: Option<TemplateChunkSetPrepareInput>,
@@ -90,6 +94,7 @@ pub struct TemplateChunkInput {
 /// Borrowed encoding of [`TemplateChunkInput`] without copying retained chunk bytes.
 /// Its complete Candid shape and encoded bytes match the owned request.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct TemplateChunkInputRef<'a> {
     pub preparation: Option<&'a TemplateChunkSetPrepareInput>,
     pub template_id: &'a TemplateId,
@@ -103,6 +108,7 @@ pub struct TemplateChunkInputRef<'a> {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct TemplateChunkSetInfoResponse {
     pub chunk_hashes: Vec<Vec<u8>>,
 }
@@ -112,12 +118,14 @@ pub struct TemplateChunkSetInfoResponse {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct TemplateChunkResponse {
     pub bytes: Vec<u8>,
 }
 
 /// Exact template release key used by Store command inspection.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct TemplateLookupRequest {
     pub template_id: TemplateId,
     pub version: TemplateVersion,
@@ -125,6 +133,7 @@ pub struct TemplateLookupRequest {
 
 /// Exact template chunk key used by the Store's bounded read lane.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct TemplateChunkRequest {
     pub template_id: TemplateId,
     pub version: TemplateVersion,
@@ -136,6 +145,7 @@ pub struct TemplateChunkRequest {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct WasmStoreCatalogEntryResponse {
     pub role: CanisterRole,
     pub template_id: TemplateId,
@@ -149,6 +159,7 @@ pub struct WasmStoreCatalogEntryResponse {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct WasmStoreTemplateStatusResponse {
     pub template_id: TemplateId,
     pub versions: u16,
@@ -159,6 +170,7 @@ pub struct WasmStoreTemplateStatusResponse {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct WasmStoreGcStatusResponse {
     pub mode: WasmStoreGcMode,
     pub changed_at: u64,
@@ -173,6 +185,7 @@ pub struct WasmStoreGcStatusResponse {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct WasmStoreStatusResponse {
     pub inventory: WasmStoreInventoryResponse,
     pub gc: WasmStoreGcStatusResponse,
@@ -194,6 +207,7 @@ pub struct WasmStoreStatusResponse {
 
 /// Aggregate retained inventory; template and opaque fixture chunks stay distinct.
 #[derive(CandidType, Clone, Debug, Default, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct WasmStoreInventoryResponse {
     pub approved_catalog_entries: u64,
     pub expected_template_chunks: u64,
@@ -205,6 +219,7 @@ pub struct WasmStoreInventoryResponse {
 
 /// Store garbage-collection detail projected through the operation lane.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct WasmStoreGcOperationStatus {
     pub operation_id: [u8; 32],
     pub gc: WasmStoreGcStatusResponse,
@@ -212,6 +227,7 @@ pub struct WasmStoreGcOperationStatus {
 
 /// Exact outcome requested from the existing Store retirement operation.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum WasmStoreGcTarget {
     Complete,
     Prepared,
@@ -219,6 +235,7 @@ pub enum WasmStoreGcTarget {
 
 /// Root-owned retirement intent; preparation replay never authorizes collection.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct WasmStoreGcRequest {
     pub operation_id: [u8; 32],
     pub target: WasmStoreGcTarget,
@@ -226,6 +243,7 @@ pub struct WasmStoreGcRequest {
 
 /// Closed Store control-plane command union.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum StoreCommand {
     ActivateFleet(FleetActivationRequest),
     InspectTemplate(TemplateLookupRequest),
@@ -243,6 +261,7 @@ pub enum StoreCommand {
 
 /// Closed response union correlated to one accepted Store command.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum StoreCommandResponse {
     FixtureSource(Result<FixtureSourceStatus, FixtureStoreError>),
     FixtureGrant(Box<Result<FixtureGrant, FixtureStoreError>>),
@@ -258,6 +277,7 @@ pub enum StoreCommandResponse {
 
 /// Store diagnostics are uniformly controller-authorized.
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum StoreObservabilityRequest {
     CycleBalance,
     CycleHistory(crate::dto::page::PageRequest),
@@ -265,6 +285,7 @@ pub enum StoreObservabilityRequest {
 
 /// Store diagnostic results under one controller rule.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum StoreObservabilityResponse {
     CycleBalance(crate::dto::role::CycleBalanceStatusResponse),
     CycleHistory(crate::dto::page::Page<crate::dto::cycles::CycleTrackerEntry>),
@@ -272,6 +293,7 @@ pub enum StoreObservabilityResponse {
 
 /// Store catalog reads share the existing Store publication-caller authority.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum StoreCatalogRequest {
     Catalog,
     Fixture([u8; 32]),
@@ -282,6 +304,7 @@ pub enum StoreCatalogRequest {
 
 /// Catalog results under one Store publication-caller rule.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum StoreCatalogResponse {
     Catalog(Vec<WasmStoreCatalogEntryResponse>),
     Fixture(Result<FixtureSourceStatus, FixtureStoreError>),
@@ -292,6 +315,7 @@ pub enum StoreCatalogResponse {
 
 /// Controller-owned Store authority and operation reads.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum StoreStatusRequest {
     Authority,
     Operation(OperationStatusRequest),
@@ -299,6 +323,7 @@ pub enum StoreStatusRequest {
 
 /// Store-owned durable operation detail selected by one operation ID.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[expect(
     clippy::large_enum_variant,
     reason = "the accepted Candid union carries each existing status DTO directly"
@@ -310,6 +335,7 @@ pub enum StoreOperationStatusResponse {
 
 /// Responses to controller-owned Store authority and operation reads.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum StoreStatusResponse {
     Authority(FleetSubnetWasmStoreAuthority),
     Operation(StoreOperationStatusResponse),
@@ -327,6 +353,7 @@ pub const WASM_STORE_DELETION_CALL_REFUND_HEADROOM_CYCLES: u128 = 150_000_000_00
 //
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct WasmStoreDeletionCycleReclamationRequest {
     pub retained_cycles_target: u128,
 }
@@ -336,6 +363,7 @@ pub struct WasmStoreDeletionCycleReclamationRequest {
 //
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct WasmStoreDeletionCycleReclamationResponse {
     pub destination: Principal,
     pub cycles_before: u128,
@@ -349,6 +377,7 @@ pub struct WasmStoreDeletionCycleReclamationResponse {
 //
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum WasmStorePublicationSlotResponse {
     Active,
     Detached,
@@ -360,6 +389,7 @@ pub enum WasmStorePublicationSlotResponse {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct WasmStoreOverviewStoreResponse {
     pub binding: WasmStoreBinding,
     pub pid: Principal,
@@ -387,6 +417,7 @@ pub struct WasmStoreOverviewStoreResponse {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct WasmStoreOverviewResponse {
     pub publication: WasmStorePublicationStateResponse,
     pub stores: Vec<WasmStoreOverviewStoreResponse>,
@@ -397,6 +428,7 @@ pub struct WasmStoreOverviewResponse {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct TemplateStagingStatusResponse {
     pub template_id: TemplateId,
     pub version: TemplateVersion,
@@ -416,6 +448,7 @@ pub struct TemplateStagingStatusResponse {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct WasmStorePublicationStateResponse {
     pub active_binding: Option<WasmStoreBinding>,
     pub detached_binding: Option<WasmStoreBinding>,
@@ -430,6 +463,7 @@ pub struct WasmStorePublicationStateResponse {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum WasmStoreAdminCommand {
     PublishActiveReleaseSet,
 }
@@ -439,6 +473,7 @@ pub enum WasmStoreAdminCommand {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum WasmStoreAdminResponse {
     PublishedActiveReleaseSet,
 }
@@ -446,7 +481,7 @@ pub enum WasmStoreAdminResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use candid::{Decode, Encode};
+    use ic_platform::candid::contract::{Decode, Encode};
 
     #[test]
     fn store_status_request_keeps_the_manifest_exact_flat_variants() {

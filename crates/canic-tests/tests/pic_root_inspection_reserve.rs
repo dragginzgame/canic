@@ -1,16 +1,23 @@
 //! Qualify outbound inspection admission through the maintained Root endpoint.
 //! Only the disposable fixture's freezing threshold changes; no funding policy changes.
 
-use candid::{Nat, Principal, decode_one, encode_one};
 use canic::{
     Error,
     dto::canister::{CanisterInspectionRequest, CanisterInspectionReserveResponse},
 };
-use canic_contracts::dto::wire::projection::capacity_management::RootRequest as RootCommand;
-use canic_contracts::dto::wire::projection::capacity_management::RootResponse;
-use canic_contracts::dto::wire::projection::fixture_root_inspection_reserve::ReserveRequest;
-use canic_contracts::dto::wire::projection::inspection_reserve::InspectionReserveResponse as ReserveResponse;
+use canic_contracts::dto::wire::projection::{
+    capacity_management::{RootRequest as RootCommand, RootResponse},
+    fixture_root_inspection_reserve::ReserveRequest,
+    inspection_reserve::InspectionReserveResponse as ReserveResponse,
+};
 use canic_testing_internal::pic::{CanicWasmBuildProfile, install_audit_root_probe};
+use ic_platform::{
+    Principal,
+    candid::{
+        contract::{Nat, encode_one},
+        decoder::decode_one,
+    },
+};
 use ic_testkit::pic::{ErrorCode, PocketIc, RejectResponse};
 
 #[test]

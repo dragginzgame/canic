@@ -40,7 +40,7 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
             {
                 return;
             }
-            let Ok(command) = ::canic::__internal::candid::decode_one::<
+            let Ok(command) = ::canic::__internal::ic_platform::candid::decoder::decode_one::<
                 ::canic::dto::fleet_coordinator::CoordinatorCommand,
             >(&bytes) else {
                 return;

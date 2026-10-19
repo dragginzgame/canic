@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 pub const BUILD_PROVENANCE_SCHEMA_ID: &str = "canic.build_provenance.v1";
+pub(super) const WASM_TARGET: &str = "wasm32-unknown-unknown";
 pub(super) const DIRTY_SUMMARY_ALGORITHM: &str = "git-status-porcelain-v1-z-sha256";
 
 ///

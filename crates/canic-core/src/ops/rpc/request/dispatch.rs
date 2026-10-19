@@ -20,7 +20,7 @@ use crate::{
         runtime::env::EnvOps,
     },
 };
-use candid::encode_one;
+use ic_platform::candid::contract::encode_one;
 use sha2::{Digest, Sha256};
 use std::sync::atomic::{AtomicU64, Ordering};
 

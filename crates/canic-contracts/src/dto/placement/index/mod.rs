@@ -5,6 +5,7 @@
 use crate::dto::prelude::*;
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct PlacementIndexRegistryEntry {
     pub pool: String,
     pub key_value: String,
@@ -16,6 +17,7 @@ pub struct PlacementIndexRegistryEntry {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct PlacementIndexRegistryResponse(pub Vec<PlacementIndexRegistryEntry>);
 
 //
@@ -23,6 +25,7 @@ pub struct PlacementIndexRegistryResponse(pub Vec<PlacementIndexRegistryEntry>);
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum PlacementIndexStatusResponse {
     Pending {
         owner_pid: Principal,
@@ -40,6 +43,7 @@ pub enum PlacementIndexStatusResponse {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum PlacementIndexRecoveryResponse {
     ReleasedUnavailableBinding {
         instance_pid: Principal,

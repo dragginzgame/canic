@@ -61,6 +61,7 @@ const FORBIDDEN_IMPORT_FRAGMENTS: &[&str] = &[
     "crate::cdk",
     "crate::runtime",
     "ic_cdk",
+    "ic_platform::cdk",
     "ic_cdk_timers",
     "serde_json",
     "serde_cbor",

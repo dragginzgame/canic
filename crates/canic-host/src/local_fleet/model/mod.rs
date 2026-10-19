@@ -1,6 +1,6 @@
 //! Explicit local resource budgets and current persistent ownership records.
 
-use candid::Principal;
+use ic_platform::Principal;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 

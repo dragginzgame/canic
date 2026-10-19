@@ -4,10 +4,10 @@ use crate::component_operation::{
     ComponentOperationError,
     model::{ComponentAuthorityRecord, ComponentPhase, ComponentProgressRecord},
 };
-use candid::Principal;
 use canic_contracts::ids::{
     CanisterRole, ComponentSpecId, FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
 };
+use ic_platform::Principal;
 
 ///
 /// AuthorityBinding
@@ -124,8 +124,8 @@ pub fn validate_progress(
         }
     }
     if let Some(binding) = &observed.binding {
-        if binding.canister_id == candid::Principal::anonymous()
-            || binding.canister_id == candid::Principal::management_canister()
+        if binding.canister_id == ic_platform::Principal::anonymous()
+            || binding.canister_id == ic_platform::Principal::management_canister()
         {
             return Err(ComponentOperationError::Progress);
         }

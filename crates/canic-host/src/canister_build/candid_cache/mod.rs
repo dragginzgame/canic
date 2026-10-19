@@ -44,38 +44,21 @@ pub(super) fn extract_configured_candids(
     cache: Option<&CandidExtractionCache>,
     inputs: &[CandidExtractionInput<'_>],
 ) -> Result<Vec<Vec<u8>>, CandidBatchError> {
-    let mut outputs = Vec::with_capacity(inputs.len());
-    for batch in inputs.chunks(MAX_EXTRACTORS) {
-        let results = std::thread::scope(|scope| {
-            let mut workers = Vec::with_capacity(batch.len());
-            for input in batch {
-                workers.push(scope.spawn(move || {
-                    extract_configured_candid(cache, input.role, &input.wasm).map_err(|error| {
-                        CandidBatchError::Extraction {
-                            role: input.role.to_string(),
-                            detail: error.to_string(),
-                        }
-                    })
-                }));
-            }
-            // Join every issued worker before selecting the first error or starting more.
-            workers
-                .into_iter()
-                .zip(batch)
-                .map(|(worker, input)| {
-                    worker.join().unwrap_or_else(|_| {
-                        Err(CandidBatchError::WorkerPanicked {
-                            role: input.role.to_string(),
-                        })
-                    })
-                })
-                .collect::<Vec<_>>()
-        });
-        for result in results {
-            outputs.push(result?);
-        }
-    }
-    Ok(outputs)
+    crate::bounded_reads::collect(
+        inputs,
+        std::num::NonZeroUsize::new(MAX_EXTRACTORS).expect("nonzero extraction concurrency"),
+        |input| {
+            extract_configured_candid(cache, input.role, &input.wasm).map_err(|error| {
+                CandidBatchError::Extraction {
+                    role: input.role.to_string(),
+                    detail: error.to_string(),
+                }
+            })
+        },
+        |input, _| CandidBatchError::WorkerPanicked {
+            role: input.role.to_string(),
+        },
+    )
 }
 
 /// Invocation-owned extractor identity; declaration Wasm supplies the role's compiled inputs.

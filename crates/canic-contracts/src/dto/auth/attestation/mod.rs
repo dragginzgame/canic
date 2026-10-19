@@ -12,6 +12,7 @@ use super::IcCanisterSignatureProofV1;
 use crate::dto::{prelude::*, rpc::RootRequestMetadata};
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RoleAttestationRequest {
     pub subject: Principal,
     pub role: CanisterRole,
@@ -27,6 +28,7 @@ pub struct RoleAttestationRequest {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RoleAttestation {
     pub subject: Principal,
     pub role: CanisterRole,
@@ -42,6 +44,7 @@ pub struct RoleAttestation {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RoleAttestationRootProof {
     IcCanisterSignatureV1(IcCanisterSignatureProofV1),
 }
@@ -51,6 +54,7 @@ pub enum RoleAttestationRootProof {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RoleAttestationPrepareResponse {
     pub payload: RoleAttestation,
     pub payload_hash: [u8; 32],
@@ -62,6 +66,7 @@ pub struct RoleAttestationPrepareResponse {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RoleAttestationGetRequest {
     pub payload_hash: [u8; 32],
 }
@@ -71,6 +76,7 @@ pub struct RoleAttestationGetRequest {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct SignedRoleAttestation {
     pub payload: RoleAttestation,
     pub root_proof: RoleAttestationRootProof,

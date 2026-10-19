@@ -1,9 +1,13 @@
 //! Shared exact Cycles Ledger creation contracts for maintained host transports.
 
-use candid::{CandidType, Nat, Principal};
+use ic_platform::{
+    Principal,
+    candid::contract::{CandidType, Nat},
+};
 use serde::Deserialize;
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CreateCanisterArgs {
     pub amount: Nat,
     pub created_at_time: Option<u64>,
@@ -12,12 +16,14 @@ pub struct CreateCanisterArgs {
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CmcCreateCanisterArgs {
     pub settings: Option<CanisterSettings>,
     pub subnet_selection: Option<SubnetSelection>,
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CanisterSettings {
     pub compute_allocation: Option<Nat>,
     pub controllers: Option<Vec<Principal>>,
@@ -27,17 +33,20 @@ pub struct CanisterSettings {
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum SubnetSelection {
     Subnet { subnet: Principal },
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CreateCanisterSuccess {
     pub block_id: Nat,
     pub canister_id: Principal,
 }
 
 #[derive(CandidType, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CreateCanisterError {
     CreatedInFuture {
         ledger_time: u64,

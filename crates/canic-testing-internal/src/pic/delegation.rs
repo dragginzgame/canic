@@ -1,10 +1,8 @@
-use candid::Principal;
+use ic_platform::Principal;
 
-use canic::Error;
-use canic::dto::auth::DelegatedRoleGrant;
-use canic::ids::CanisterRole;
+use canic::{Error, dto::auth::DelegatedRoleGrant, ids::CanisterRole};
 
-use ic_testkit::pic::{CandidCallExt, PocketIc};
+use ic_testkit::pic::PocketIc;
 
 /// Create one user shard through the reference `user_hub` path.
 ///
@@ -17,9 +15,16 @@ pub fn create_user_shard(
     user_hub_pid: Principal,
     user_pid: Principal,
 ) -> Principal {
-    let created: Result<Principal, Error> = pic
-        .update_candid(user_hub_pid, "create_account", (user_pid,))
-        .expect("update Candid harness call");
+    let created: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
+        pic,
+        user_hub_pid,
+        ic_platform::Principal::anonymous(),
+        "create_account",
+        (user_pid,),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("update Candid harness call");
     created.expect("create_account application failed")
 }
 

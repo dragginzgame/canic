@@ -7,16 +7,17 @@
 use super::{
     MgmtInfra,
     types::{
-        InfraCanisterIdRecord, InfraCanisterIdRecordExtended, InfraCanisterInstallMode,
-        InfraChunkHash, InfraClearChunkStoreArgs, InfraInstallChunkedCodeArgs,
-        InfraUploadChunkArgs,
+        InfraCanisterIdRecordExtended, InfraCanisterInstallMode, InfraClearChunkStoreArgs,
+        InfraInstallChunkedCodeArgs, InfraUploadChunkArgs,
     },
 };
-use crate::{
-    cdk::candid::{Principal, encode_args, utils::ArgumentEncoder},
-    infra::ic::{IcInfraError, call::Call},
+use crate::infra::ic::{IcInfraError, call::Call};
+use ic_platform::cdk::api;
+use ic_platform::{
+    Principal,
+    candid::contract::{ArgumentEncoder, encode_args},
+    management_canister_types::{CanisterIdRecord, ChunkHash},
 };
-use ic_cdk::api;
 
 impl MgmtInfra {
     /// Upload one wasm chunk into a canister's chunk store.
@@ -33,21 +34,21 @@ impl MgmtInfra {
             .with_arg(args)?
             .execute()
             .await?;
-        let (hash,): (InfraChunkHash,) = response.candid_tuple()?;
+        let (hash,): (ChunkHash,) = response.candid_tuple()?;
 
         Ok(hash.hash)
     }
 
     /// List the chunk hashes currently stored in one canister's chunk store.
     pub async fn stored_chunks(canister_pid: Principal) -> Result<Vec<Vec<u8>>, IcInfraError> {
-        let args = InfraCanisterIdRecord {
+        let args = CanisterIdRecord {
             canister_id: canister_pid,
         };
         let response = Call::bounded_wait(Principal::management_canister(), "stored_chunks")
             .with_arg(args)?
             .execute()
             .await?;
-        let (hashes,): (Vec<InfraChunkHash>,) = response.candid_tuple()?;
+        let (hashes,): (Vec<ChunkHash>,) = response.candid_tuple()?;
 
         Ok(hashes.into_iter().map(|hash| hash.hash).collect())
     }
@@ -81,7 +82,7 @@ impl MgmtInfra {
             store_canister: Some(store_canister),
             chunk_hashes_list: chunk_hashes_list
                 .into_iter()
-                .map(|hash| InfraChunkHash { hash })
+                .map(|hash| ChunkHash { hash })
                 .collect(),
             wasm_module_hash,
             arg,
@@ -124,7 +125,7 @@ impl MgmtInfra {
 
     /// Start an installed canister without changing its code or controllers.
     pub async fn start_canister(canister_pid: Principal) -> Result<(), IcInfraError> {
-        let args = InfraCanisterIdRecord {
+        let args = CanisterIdRecord {
             canister_id: canister_pid,
         };
         Call::unbounded_wait(Principal::management_canister(), "start_canister")
@@ -138,7 +139,7 @@ impl MgmtInfra {
     pub fn stop_canister_call_cost(canister_pid: Principal) -> Result<u128, IcInfraError> {
         Ok(
             Call::unbounded_wait(Principal::management_canister(), "stop_canister")
-                .with_arg(InfraCanisterIdRecord {
+                .with_arg(CanisterIdRecord {
                     canister_id: canister_pid,
                 })?
                 .cost(),
@@ -147,7 +148,7 @@ impl MgmtInfra {
 
     /// Stop a canister.
     pub async fn stop_canister(canister_pid: Principal) -> Result<(), IcInfraError> {
-        let args = InfraCanisterIdRecord {
+        let args = CanisterIdRecord {
             canister_id: canister_pid,
         };
         Call::unbounded_wait(Principal::management_canister(), "stop_canister")
@@ -160,7 +161,7 @@ impl MgmtInfra {
 
     /// Delete a canister through the management canister.
     pub async fn delete_canister(canister_pid: Principal) -> Result<(), IcInfraError> {
-        let args = InfraCanisterIdRecord {
+        let args = CanisterIdRecord {
             canister_id: canister_pid,
         };
         Call::unbounded_wait(Principal::management_canister(), "delete_canister")

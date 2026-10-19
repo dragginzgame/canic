@@ -20,8 +20,9 @@ fn enrollment_request_preserves_installations_and_challenge() {
         binding: binding(),
         challenge: [5; 32],
     };
-    let encoded = candid::encode_one(&request).unwrap();
-    let decoded: ApplicationEnrollmentRequest = candid::decode_one(&encoded).unwrap();
+    let encoded = ic_platform::candid::contract::encode_one(&request).unwrap();
+    let decoded: ApplicationEnrollmentRequest =
+        ic_platform::candid::decoder::decode_one(&encoded).unwrap();
     assert_eq!(decoded, request);
 }
 
@@ -56,7 +57,8 @@ fn complete_enrollment_preserves_both_mechanisms_and_revocation_marks() {
         ],
         revoked_keys: vec![[13; 32], [14; 32]],
     };
-    let encoded = candid::encode_one(&snapshot).unwrap();
-    let decoded: ApplicationEnrollmentSnapshot = candid::decode_one(&encoded).unwrap();
+    let encoded = ic_platform::candid::contract::encode_one(&snapshot).unwrap();
+    let decoded: ApplicationEnrollmentSnapshot =
+        ic_platform::candid::decoder::decode_one(&encoded).unwrap();
     assert_eq!(decoded, snapshot);
 }

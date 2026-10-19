@@ -1,10 +1,15 @@
 //! Exact Cycles Ledger and NNS routing boundaries for Root pool-refill PocketIC tests.
 
-use candid::{CandidType, Deserialize, Nat, Principal};
-use ic_cdk::call::Call;
+use ic_platform::cdk::call::Call;
+use ic_platform::{
+    Principal,
+    candid::contract::{CandidType, Nat},
+};
+use serde::Deserialize;
 use std::{cell::RefCell, collections::BTreeMap};
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 struct InitArgs {
     canister_ids: Vec<Principal>,
     expected_controllers_by_index: Option<Vec<Vec<Principal>>>,
@@ -16,18 +21,21 @@ struct InitArgs {
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 struct AccountBalance {
     balance: Nat,
     owner: Principal,
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct Account {
     owner: Principal,
     subaccount: Option<[u8; 32]>,
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct TransferArgs {
     amount: Nat,
     created_at_time: Option<u64>,
@@ -38,6 +46,7 @@ struct TransferArgs {
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 #[expect(
     dead_code,
     reason = "the stub retains the complete Cycles Ledger transfer error boundary"
@@ -61,6 +70,7 @@ struct TransferRecord {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct WithdrawArgs {
     amount: Nat,
     created_at_time: Option<u64>,
@@ -76,6 +86,7 @@ struct WithdrawalRecord {
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 enum WithdrawError {
     Duplicate { duplicate_of: Nat },
     GenericError { error_code: Nat, message: String },
@@ -84,11 +95,13 @@ enum WithdrawError {
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct CanisterIdRecord {
     canister_id: Principal,
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct CreateCanisterArgs {
     from_subaccount: Option<[u8; 32]>,
     created_at_time: Option<u64>,
@@ -97,12 +110,14 @@ struct CreateCanisterArgs {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct CmcCreateCanisterArgs {
     settings: Option<CanisterSettings>,
     subnet_selection: Option<SubnetSelection>,
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct CanisterSettings {
     controllers: Option<Vec<Principal>>,
     compute_allocation: Option<Nat>,
@@ -112,17 +127,20 @@ struct CanisterSettings {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 enum SubnetSelection {
     Subnet { subnet: Principal },
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct CreateCanisterSuccess {
     block_id: Nat,
     canister_id: Principal,
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 enum CreateCanisterError {
     InsufficientFunds {
         balance: Nat,
@@ -148,6 +166,7 @@ enum CreateCanisterError {
 
 /// Retry-only fault leaves the original debit and creation identity retained.
 #[derive(CandidType, Clone, Copy, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 enum CreationRetryRefusal {
     InsufficientFunds,
     CreatedInFuture,
@@ -175,11 +194,13 @@ impl CreationRetryRefusal {
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 struct GetSubnetForCanisterRequest {
     principal: Principal,
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct GetSubnetForCanisterPayload {
     subnet_id: Option<Principal>,
 }
@@ -208,7 +229,7 @@ thread_local! {
     static STATE: RefCell<Option<State>> = const { RefCell::new(None) };
 }
 
-#[ic_cdk::init]
+#[ic_platform::cdk::init]
 fn init(args: InitArgs) {
     assert!(
         args.canister_ids.len() <= MAX_LANES,
@@ -263,7 +284,7 @@ fn init(args: InitArgs) {
     });
 }
 
-#[ic_cdk::query]
+#[ic_platform::cdk::query]
 fn icrc1_balance_of(account: Account) -> Nat {
     if account.subaccount.is_some() {
         return Nat::from(0_u8);
@@ -281,7 +302,7 @@ fn icrc1_balance_of(account: Account) -> Nat {
     })
 }
 
-#[ic_cdk::query]
+#[ic_platform::cdk::query]
 fn icrc1_fee() -> Nat {
     STATE.with_borrow(|state| {
         Nat::from(
@@ -294,7 +315,7 @@ fn icrc1_fee() -> Nat {
 }
 
 // Models a fee change between the host's final fee query and its transfer.
-#[ic_cdk::update]
+#[ic_platform::cdk::update]
 fn set_transfer_fee_override(fee: Option<Nat>) {
     STATE.with_borrow_mut(|state| {
         state
@@ -306,7 +327,7 @@ fn set_transfer_fee_override(fee: Option<Nat>) {
 }
 
 // Reject after committing one exact transfer to exercise uncertain-response reconciliation.
-#[ic_cdk::update]
+#[ic_platform::cdk::update]
 fn lose_next_transfer_reply() {
     STATE.with_borrow_mut(|state| {
         state
@@ -316,7 +337,7 @@ fn lose_next_transfer_reply() {
     });
 }
 
-#[ic_cdk::update(manual_reply = true)]
+#[ic_platform::cdk::update(manual_reply = true)]
 fn icrc1_transfer(args: TransferArgs) -> Result<Nat, TransferError> {
     let result = transfer(args);
     let lose_reply = STATE.with_borrow_mut(|state| {
@@ -324,15 +345,19 @@ fn icrc1_transfer(args: TransferArgs) -> Result<Nat, TransferError> {
         result.is_ok() && std::mem::take(&mut state.lose_next_transfer_reply)
     });
     if lose_reply {
-        ic_cdk::api::msg_reject("qualification fixture lost the committed transfer reply");
+        ic_platform::cdk::api::msg_reject(
+            "qualification fixture lost the committed transfer reply",
+        );
     } else {
-        ic_cdk::api::msg_reply(candid::encode_one(&result).expect("encode transfer response"));
+        ic_platform::cdk::api::msg_reply(
+            ic_platform::candid::contract::encode_one(&result).expect("encode transfer response"),
+        );
     }
     result
 }
 
 fn transfer(args: TransferArgs) -> Result<Nat, TransferError> {
-    let caller = ic_cdk::api::msg_caller();
+    let caller = ic_platform::cdk::api::msg_caller();
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("Cycles Ledger stub is initialized");
         if let Some(existing) = state
@@ -404,9 +429,9 @@ fn transfer(args: TransferArgs) -> Result<Nat, TransferError> {
     })
 }
 
-#[ic_cdk::update]
+#[ic_platform::cdk::update]
 async fn withdraw(args: WithdrawArgs) -> Result<Nat, WithdrawError> {
-    let caller = ic_cdk::api::msg_caller();
+    let caller = ic_platform::cdk::api::msg_caller();
     let receiver = args.to;
     if args.from_subaccount.is_some() {
         return Err(WithdrawError::InvalidReceiver { receiver });
@@ -469,7 +494,7 @@ async fn withdraw(args: WithdrawArgs) -> Result<Nat, WithdrawError> {
     Ok(Nat::from(block_index))
 }
 
-#[ic_cdk::query]
+#[ic_platform::cdk::query]
 fn withdrawal_count() -> u64 {
     STATE.with_borrow(|state| {
         u64::try_from(
@@ -483,9 +508,11 @@ fn withdrawal_count() -> u64 {
     })
 }
 
-#[ic_cdk::update]
+#[ic_platform::cdk::update]
 fn set_creation_retry_refusal(refusal: Option<CreationRetryRefusal>) {
-    assert!(ic_cdk::api::is_controller(&ic_cdk::api::msg_caller()));
+    assert!(ic_platform::cdk::api::is_controller(
+        &ic_platform::cdk::api::msg_caller()
+    ));
     STATE.with_borrow_mut(|state| {
         state
             .as_mut()
@@ -494,12 +521,12 @@ fn set_creation_retry_refusal(refusal: Option<CreationRetryRefusal>) {
     });
 }
 
-#[ic_cdk::update]
+#[ic_platform::cdk::update]
 fn create_canister(args: CreateCanisterArgs) -> Result<CreateCanisterSuccess, CreateCanisterError> {
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("Cycles Ledger stub is initialized");
         state.request_count = state.request_count.saturating_add(1);
-        let caller = ic_cdk::api::msg_caller();
+        let caller = ic_platform::cdk::api::msg_caller();
         if let Some(index) = state
             .requests
             .iter()
@@ -527,7 +554,7 @@ fn create_canister(args: CreateCanisterArgs) -> Result<CreateCanisterSuccess, Cr
         if !request_has_exact_authority(&args, &expected_controllers, state.expected_subnet) {
             return Err(generic_error("creation authority mismatch"));
         }
-        if let Some(available) = state.balances.get_mut(&ic_cdk::api::msg_caller()) {
+        if let Some(available) = state.balances.get_mut(&ic_platform::cdk::api::msg_caller()) {
             let amount = u128::try_from(args.amount.0.clone())
                 .map_err(|_| generic_error("creation amount exceeds u128"))?;
             let debit = amount
@@ -556,7 +583,7 @@ fn create_canister(args: CreateCanisterArgs) -> Result<CreateCanisterSuccess, Cr
 
 // The fixture installs a separate instance at the canonical NNS Registry
 // identity. Unknown Principals never inherit the known fixture route.
-#[ic_cdk::query]
+#[ic_platform::cdk::query]
 fn get_subnet_for_canister(
     request: GetSubnetForCanisterRequest,
 ) -> Result<GetSubnetForCanisterPayload, String> {
@@ -571,7 +598,7 @@ fn get_subnet_for_canister(
     })
 }
 
-#[ic_cdk::query]
+#[ic_platform::cdk::query]
 fn transfer_count() -> u64 {
     STATE.with_borrow(|state| {
         u64::try_from(
@@ -585,7 +612,7 @@ fn transfer_count() -> u64 {
     })
 }
 
-#[ic_cdk::query]
+#[ic_platform::cdk::query]
 fn request_count() -> u64 {
     STATE.with_borrow(|state| {
         state
@@ -595,7 +622,7 @@ fn request_count() -> u64 {
     })
 }
 
-#[ic_cdk::query]
+#[ic_platform::cdk::query]
 fn requested_amounts() -> Vec<Nat> {
     STATE.with_borrow(|state| {
         state
@@ -649,6 +676,7 @@ mod tests {
     use super::*;
 
     #[derive(CandidType)]
+    #[candid_path("ic_platform::candid::contract")]
     struct CreateOnlyInitArgs {
         canister_ids: Vec<Principal>,
         expected_root: Principal,
@@ -658,14 +686,15 @@ mod tests {
 
     #[test]
     fn create_only_fixture_init_decodes_with_absent_withdrawal_fields() {
-        let bytes = candid::encode_one(CreateOnlyInitArgs {
+        let bytes = ic_platform::candid::contract::encode_one(CreateOnlyInitArgs {
             canister_ids: vec![Principal::from_slice(&[1; 29])],
             expected_root: Principal::from_slice(&[2; 29]),
             expected_subnet: Principal::from_slice(&[3; 29]),
             pending_first_index: None,
         })
         .expect("encode create-only fixture init");
-        let decoded: InitArgs = candid::decode_one(&bytes).expect("decode extended fixture init");
+        let decoded: InitArgs =
+            ic_platform::candid::decoder::decode_one(&bytes).expect("decode extended fixture init");
         assert!(decoded.initial_balances.is_none());
         assert!(decoded.expected_controllers_by_index.is_none());
         assert!(decoded.withdrawal_fee.is_none());

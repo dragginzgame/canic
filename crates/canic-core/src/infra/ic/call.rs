@@ -4,18 +4,11 @@
 //! Does not own: retry policy, workflow decisions, or endpoint error mapping.
 //! Boundary: infra adapters use this before returning raw decoded results to ops.
 
-use crate::{
-    cdk::{
-        candid::{
-            CandidType,
-            utils::{ArgumentDecoder, ArgumentEncoder},
-        },
-        types::Principal,
-    },
-    infra::ic::IcInfraError,
+use crate::{cdk::types::Principal, infra::ic::IcInfraError};
+use ic_platform::candid::contract::{
+    ArgumentDecoder, ArgumentEncoder, CandidType, encode_args, encode_one,
 };
-use candid::{encode_args, encode_one};
-use ic_cdk::call::Response;
+use ic_platform::cdk::call::Response;
 use serde::de::DeserializeOwned;
 use std::borrow::Cow;
 
@@ -118,7 +111,7 @@ impl CallBuilder<'_> {
     /// Return the exact current-Subnet cost of scheduling this call.
     #[must_use]
     pub fn cost(&self) -> u128 {
-        self.cycles.saturating_add(ic_cdk::api::cost_call(
+        self.cycles.saturating_add(ic_platform::cdk::api::cost_call(
             self.method.len() as u64,
             self.args.len() as u64,
         ))
@@ -127,9 +120,11 @@ impl CallBuilder<'_> {
     /// Execute the configured IC call and return the raw response wrapper.
     pub async fn execute(self) -> Result<CallResult, IcInfraError> {
         let mut call = match self.wait {
-            WaitMode::Bounded => ic_cdk::call::Call::bounded_wait(self.canister_id, &self.method),
+            WaitMode::Bounded => {
+                ic_platform::cdk::call::Call::bounded_wait(self.canister_id, &self.method)
+            }
             WaitMode::Unbounded => {
-                ic_cdk::call::Call::unbounded_wait(self.canister_id, &self.method)
+                ic_platform::cdk::call::Call::unbounded_wait(self.canister_id, &self.method)
             }
         };
 

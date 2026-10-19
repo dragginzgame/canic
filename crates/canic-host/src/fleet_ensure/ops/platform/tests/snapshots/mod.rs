@@ -5,7 +5,7 @@ use crate::{
     fleet_ensure::model::EffectState,
     test_support::{start_pocket_ic, synthetic_identity_pem},
 };
-use ic_agent::{Identity, identity::BasicIdentity};
+use ic_platform::agent::{BasicIdentity, Identity};
 use ic_testkit::pocket_ic::{CanisterSettings, PocketIcBuilder};
 use std::{fs, sync::Mutex};
 
@@ -189,6 +189,9 @@ esac
     assert_eq!(after.settings.controllers, [operator]);
     assert_eq!(pic.get_subnet(canister), Some(subnet));
     assert!(after.cycles.0 <= before.cycles.0);
-    assert!(before.cycles.0 - after.cycles.0 < candid::Nat::from(100_000_000_000_u64).0);
+    assert!(
+        before.cycles.0 - after.cycles.0
+            < ic_platform::candid::contract::Nat::from(100_000_000_000_u64).0
+    );
     fs::remove_dir_all(fixture.root).unwrap();
 }

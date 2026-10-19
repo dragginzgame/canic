@@ -10,8 +10,8 @@ use crate::{
     },
     ops::fixture_content,
 };
-use candid::Principal;
 use canic_contracts::ids::{ReleaseBuildId, ReleaseBuildNonce};
+use ic_platform::Principal;
 use sha2::{Digest, Sha256};
 
 fn assignment() -> FixtureAssignment {

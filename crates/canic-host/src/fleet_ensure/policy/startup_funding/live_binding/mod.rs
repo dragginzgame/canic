@@ -14,11 +14,11 @@ use crate::fleet_ensure::{
         StartupUsageUnavailable,
     },
 };
-use candid::Principal;
 use canic_contracts::ids::{
     CanisterRole, FleetBinding, FleetCoordinatorBinding, FleetKey, ReleaseBuildId, SubnetId,
 };
 use canic_core::control_plane_support::config::ComponentTopology;
+use ic_platform::Principal;
 use std::collections::{BTreeMap, BTreeSet};
 
 #[cfg(test)]

@@ -15,7 +15,6 @@ use ic_build::artifacts::{
     any(not(test), feature = "governed-pocketic-tests")
 ))]
 use ic_build::artifacts::{ArtifactCacheOutcome, ArtifactCachePreparation, prepare_artifact_cache};
-use ic_build::cargo::selection::CargoSelection;
 #[cfg(all(
     feature = "pocketic-fixtures",
     any(not(test), feature = "governed-pocketic-tests")
@@ -62,9 +61,17 @@ pub(super) fn with_canonical_root_cargo_inputs(
         &evidence.cargo_workspace_root,
         target_dir,
         &[evidence.role_package_name.as_str()],
-        canic_host::build_environment::cargo_inputs(environment.iter().copied()),
+        std::env::vars_os(),
     )
-    .with_cargo_selection(profile.cargo_selection());
+    .with_cargo_selection(profile.cargo_selection())
+    .with_environment(std::env::vars_os().chain((environment.iter().copied()).map(
+        |(key, value)| {
+            (
+                std::ffi::OsString::from(key),
+                std::ffi::OsString::from(value),
+            )
+        },
+    )));
     let inputs = resolve_cargo_build_inputs(&build).expect("canonical Root cache Cargo inputs");
     cache.with_cargo_build_inputs("canonical-root-cargo", &build, &inputs)
 }
@@ -268,13 +275,21 @@ fn canonical_fleet_coordinator_cache_spec(
         workspace_root,
         target_dir,
         &["canic", "canic-host"],
-        canic_host::build_environment::cargo_inputs(environment),
+        std::env::vars_os(),
     )
     .with_cargo_selection(ic_build::cargo::selection::CargoSelection {
         profile: Some("fast".into()),
         locked: true,
         ..Default::default()
-    });
+    })
+    .with_environment(
+        std::env::vars_os().chain((environment).into_iter().map(|(key, value)| {
+            (
+                std::ffi::OsString::from(key),
+                std::ffi::OsString::from(value),
+            )
+        })),
+    );
     let cargo_inputs = resolve_cargo_build_inputs(&cargo_build)
         .expect("resolve canonical Fleet Coordinator Cargo inputs");
     let config_relative = config_path
@@ -325,9 +340,8 @@ pub enum CanicWasmBuildProfile {
 }
 
 impl CanicWasmBuildProfile {
-    #[must_use]
-    pub(super) fn cargo_selection(self) -> CargoSelection {
-        CargoSelection {
+    pub(super) fn cargo_selection(self) -> ic_build::cargo::selection::CargoSelection {
+        ic_build::cargo::selection::CargoSelection {
             profile: match self {
                 Self::Debug => None,
                 Self::Fast => Some("fast".into()),
@@ -377,20 +391,11 @@ impl InternalTestWasms {
     /// Panics if the package was not built or it did not produce exactly one Wasm.
     #[must_use]
     pub fn path(&self, package: &str) -> &Path {
-        let record = self.record(package);
+        let record = self.records.get(package).expect("built test package");
         let [path] = record.artifacts() else {
             panic!("one-package build must yield exactly one Wasm");
         };
         path
-    }
-
-    /// Borrow the authoritative record while this artifact owner retains it.
-    ///
-    /// # Panics
-    /// Panics if the package was not built.
-    #[must_use]
-    pub fn record(&self, package: &str) -> &WasmBuildRecord {
-        self.records.get(package).expect("built test package")
     }
 
     pub(super) fn extend(&mut self, other: Self) {
@@ -476,7 +481,12 @@ pub(super) fn build_internal_test_wasm_canisters_with_features(
                     workspace_root,
                     target_dir,
                     &[*package],
-                    canic_host::build_environment::cargo_inputs(build_env.iter().copied()),
+                    std::env::vars_os().chain((build_env.iter().copied()).map(|(key, value)| {
+                        (
+                            std::ffi::OsString::from(key),
+                            std::ffi::OsString::from(value),
+                        )
+                    })),
                 )
                 .with_cargo_selection(selection.clone())
                 .with_additional_inputs(additional_inputs.iter().cloned())
@@ -504,19 +514,17 @@ pub(super) fn build_internal_test_wasm_canisters_with_features(
     .unwrap_or_else(|error| panic!("internal test Wasm batch contract failed: {error}"));
     report_wasm_batch(&batch);
     let failures = batch
-        .entries()
-        .iter()
-        .filter_map(|entry| {
-            let error = entry.error()?;
-            let details = entry.failure_details().expect("failed entry details");
-            Some(format!(
+        .failures()
+        .map(|failure| {
+            let details = failure.failure_details().expect("failed batch entry");
+            format!(
                 "`{}` failed in {:?} after {:?}: {}; partial timings: {:?}",
-                entry.label(),
+                failure.label(),
                 details.phase(),
-                entry.entry_elapsed(),
-                error,
+                failure.entry_elapsed(),
+                failure.error().expect("failed batch entry"),
                 details.timings(),
-            ))
+            )
         })
         .collect::<Vec<_>>();
     assert!(
@@ -526,24 +534,19 @@ pub(super) fn build_internal_test_wasm_canisters_with_features(
     );
     InternalTestWasms {
         records: batch
-            .entries()
-            .iter()
-            .filter_map(|entry| {
-                entry
-                    .outcome()
-                    .map(|outcome| (entry.label().to_owned(), outcome.record().clone()))
+            .outcomes()
+            .map(|entry| {
+                let outcome = entry.outcome().expect("successful batch entry");
+                (entry.label().to_owned(), outcome.record().clone())
             })
             .collect(),
     }
 }
 
 fn report_wasm_batch(batch: &WasmBuildBatchReport) {
-    for (entry, outcome) in batch
-        .entries()
-        .iter()
-        .filter_map(|entry| entry.outcome().map(|outcome| (entry, outcome)))
-    {
+    for entry in batch.outcomes() {
         let package = entry.label();
+        let outcome = entry.outcome().expect("successful batch entry");
         progress::timed(
             "WASM",
             if outcome.is_reused() {
@@ -1067,7 +1070,7 @@ mod tests {
             &root,
             &root.join("target/exact"),
             &["retention_fixture"],
-            canic_host::build_environment::cargo_inputs(std::iter::empty::<(&str, &str)>()),
+            std::env::vars_os(),
         )
         .with_shared_incremental_target(&target);
         // Sparse files exercise the actual logical-byte accounting without

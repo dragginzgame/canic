@@ -6,8 +6,8 @@ const T: u128 = 1_000_000_000_000;
 pub(in crate::fleet_ensure) fn funding_binding(
     spec: &ComponentSpec,
 ) -> crate::fleet_ensure::view::startup_funding::StartupChildFundingBinding {
-    use candid::Principal;
     use canic_contracts::ids::*;
+    use ic_platform::Principal;
     let principal = |byte| Principal::from_slice(&[byte]);
     crate::fleet_ensure::view::startup_funding::StartupChildFundingBinding {
         release_set: FleetSubnetRootReleaseSet {

@@ -39,7 +39,7 @@ pub struct FrontendUploadedFileView {
 #[derive(Debug, Eq, PartialEq, serde::Serialize)]
 pub struct FrontendUploadView {
     pub environment: String,
-    pub canister_id: candid::Principal,
+    pub canister_id: ic_platform::Principal,
     pub manifest_sha256: String,
     pub files: Vec<FrontendUploadedFileView>,
 }

@@ -5,7 +5,7 @@
 use crate::frontend::{
     FrontendError,
     model::{FrontendFileRecord, FrontendManifestRecord},
-    ops::{MAX_FRONTEND_BUNDLE_BYTES, MAX_FRONTEND_FILE_BYTES},
+    ops::MAX_FRONTEND_FILE_BYTES,
     view::FrontendBundleView,
 };
 use ic_host_fs::durable::{PublicationMode, WriteOptions, write_bytes};
@@ -13,7 +13,6 @@ use ic_host_fs::read::read_file_no_follow;
 
 use canic_core::cdk::utils::hash::sha256_hex;
 use std::{
-    collections::BTreeSet,
     fs,
     path::{Component, Path},
 };
@@ -108,38 +107,17 @@ fn validate_prepared_bundle(
     directory: &Path,
     bundle: &FrontendBundleView,
 ) -> Result<(), FrontendError> {
-    if manifest_digest(&bundle.manifest)? != bundle.manifest.manifest_sha256
-        || bundle.manifest.schema_version != 1
-    {
+    if manifest_files(&bundle.manifest).len() != bundle.files.len() {
         return Err(FrontendError::Integrity);
     }
-    let records = manifest_files(&bundle.manifest);
-    if records.len() != bundle.files.len()
-        || bundle.manifest.roles.is_empty()
-        || bundle.manifest.roles.len() > crate::frontend::policy::MAX_EXPORTED_ROLES
-    {
-        return Err(FrontendError::Integrity);
-    }
-    let mut names = BTreeSet::new();
-    let mut total = 0_usize;
-    for file in records {
+    super::validation::validate(&bundle.manifest, &bundle.manifest.manifest_sha256, |file| {
         safe_file(directory, &file.path)?;
-        if file.path == "canic-frontend.json" || !names.insert(&file.path) {
-            return Err(FrontendError::Integrity);
-        }
-        let bytes = bundle
+        bundle
             .files
             .get(&file.path)
-            .ok_or(FrontendError::Integrity)?;
-        total = total.saturating_add(bytes.len());
-        if bytes.len() > MAX_FRONTEND_FILE_BYTES || total > MAX_FRONTEND_BUNDLE_BYTES {
-            return Err(FrontendError::Bound("bundle bytes"));
-        }
-        if bytes.len() as u64 != file.bytes || sha256_hex(bytes) != file.sha256 {
-            return Err(FrontendError::Integrity);
-        }
-    }
-    Ok(())
+            .map(Vec::as_slice)
+            .ok_or(FrontendError::Integrity)
+    })
 }
 
 /// Verify bounded files against an independently retained expected manifest digest.
@@ -154,34 +132,10 @@ pub fn verify_bundle(
         )
         .map_err(std::io::Error::from)?,
     )?;
-    if manifest.schema_version != 1 {
-        return Err(FrontendError::Schema);
-    }
-    if manifest.manifest_sha256 != expected_digest || manifest_digest(&manifest)? != expected_digest
-    {
-        return Err(FrontendError::Integrity);
-    }
-    if manifest.roles.is_empty()
-        || manifest.roles.len() > crate::frontend::policy::MAX_EXPORTED_ROLES
-    {
-        return Err(FrontendError::Bound("selected role count"));
-    }
-    let mut names = BTreeSet::new();
-    let mut total = 0_usize;
-    for file in manifest_files(&manifest) {
-        if file.path == "canic-frontend.json" || !names.insert(&file.path) {
-            return Err(FrontendError::Integrity);
-        }
-        let bytes =
-            read_file_no_follow(&safe_file(directory, &file.path)?, MAX_FRONTEND_FILE_BYTES)
-                .map_err(std::io::Error::from)?;
-        total = total.saturating_add(bytes.len());
-        if total > MAX_FRONTEND_BUNDLE_BYTES {
-            return Err(FrontendError::Bound("bundle bytes"));
-        }
-        if bytes.len() as u64 != file.bytes || sha256_hex(&bytes) != file.sha256 {
-            return Err(FrontendError::Integrity);
-        }
-    }
+    super::validation::validate(&manifest, expected_digest, |file| {
+        read_file_no_follow(&safe_file(directory, &file.path)?, MAX_FRONTEND_FILE_BYTES)
+            .map_err(std::io::Error::from)
+            .map_err(FrontendError::from)
+    })?;
     Ok(manifest)
 }

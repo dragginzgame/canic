@@ -6,10 +6,7 @@ use crate::{
     storage::stable::template::key::TemplateReleaseKeyRecord,
 };
 use canic_core::{
-    cdk::structures::{
-        DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, memory::RuntimeMemory,
-        storable::Storable,
-    },
+    cdk::structures::{DefaultMemoryImpl, StableBTreeMap as StableBtreeMap, storable::Storable},
     impl_storable_bounded,
 };
 use serde::{Deserialize, Serialize};
@@ -17,7 +14,7 @@ use std::cell::RefCell;
 
 std::thread_local! {
     static TEMPLATE_MANIFESTS: RefCell<
-        StableBtreeMap<TemplateReleaseKeyRecord, TemplateManifestRecord, RuntimeMemory<DefaultMemoryImpl>>
+        StableBtreeMap<TemplateReleaseKeyRecord, TemplateManifestRecord, DefaultMemoryImpl>
     > = RefCell::new(
         StableBtreeMap::init(canic_core::memory::open(crate::memory::keys::TEMPLATE_MANIFESTS_V1)),
     );
@@ -163,7 +160,7 @@ impl TemplateManifestStateStore {
     // Clear the manifest store.
     #[cfg(any(test, feature = "wasm-store-canister"))]
     pub fn clear() {
-        TEMPLATE_MANIFESTS.with_borrow_mut(StableBtreeMap::clear_new);
+        TEMPLATE_MANIFESTS.with_borrow_mut(StableBtreeMap::clear);
         TEMPLATE_MANIFESTS_OCCUPIED_BYTES.with_borrow_mut(|occupied| {
             *occupied = Some(0);
         });

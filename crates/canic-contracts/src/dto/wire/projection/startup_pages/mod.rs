@@ -8,18 +8,20 @@
 use crate::dto::component_registry::{
     ComponentDirectoryPageRequest, ComponentDirectoryPageResponse,
 };
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded Request wire projection for startup pages.
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum Request {
     ComponentDirectoryPage(ComponentDirectoryPageRequest),
 }
 
 /// Bounded Response wire projection for startup pages.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum Response {
     ComponentDirectoryPage(ComponentDirectoryPageResponse),
 }

@@ -6,8 +6,7 @@
 
 use crate::{
     cdk::{
-        bounded_cell::BoundedCell,
-        structures::{DefaultMemoryImpl, memory::RuntimeMemory},
+        structures::{BoundedCell, DefaultMemoryImpl},
         types::Principal,
     },
     storage::prelude::*,
@@ -19,7 +18,7 @@ pub const MAX_AUTHORITY_RESTORE_FENCE_RECORD_BYTES: u32 = 512;
 
 std::thread_local! {
     static AUTHORITY_RESTORE_FENCE: RefCell<
-        BoundedCell<Option<AuthorityRestoreFenceRecord>, RuntimeMemory<DefaultMemoryImpl>>,
+        BoundedCell<Option<AuthorityRestoreFenceRecord>, DefaultMemoryImpl>,
     > = RefCell::new(BoundedCell::init(crate::memory::open(crate::memory::keys::AUTHORITY_RESTORE_FENCE_V1), None));
 }
 

@@ -1,5 +1,5 @@
 use crate::canister::{APP, SCALE_HUB};
-use candid::Principal;
+use ic_platform::Principal;
 use ic_testkit::pic::{PocketIc, PocketIcBuilder, StandaloneCanisterFixture};
 use std::path::{Path, PathBuf};
 

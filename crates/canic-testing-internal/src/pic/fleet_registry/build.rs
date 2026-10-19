@@ -363,11 +363,20 @@ fn build_bootstrap_wasm_store(workspace_root: &Path, config_path: &Path) -> Vec<
         workspace_root,
         &target_dir,
         &["canic", "canic-host"],
-        canic_host::build_environment::cargo_inputs([
-            ("CARGO_INCREMENTAL", "0"),
-            ("ICP_ENVIRONMENT", "local"),
-            INTERNAL_TEST_RELEASE_BUILD_ID,
-        ]),
+        std::env::vars_os().chain(
+            ([
+                ("CARGO_INCREMENTAL", "0"),
+                ("ICP_ENVIRONMENT", "local"),
+                INTERNAL_TEST_RELEASE_BUILD_ID,
+            ])
+            .into_iter()
+            .map(|(key, value)| {
+                (
+                    std::ffi::OsString::from(key),
+                    std::ffi::OsString::from(value),
+                )
+            }),
+        ),
     )
     .with_cargo_selection(ic_build::cargo::selection::CargoSelection {
         profile: Some("fast".into()),

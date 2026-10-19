@@ -27,11 +27,11 @@ use crate::{
     },
     ops::{OpsError, fleet_funding_policy::fleet_subnet_root_funding_policy_hash},
 };
-use candid::Principal;
 use canic_contracts::ids::{
     AppId, ComponentSpecAdmission, ComponentSpecId, FleetAdmissionPolicy, FleetAdmissionSelector,
     FleetRegistryAuthority, FleetSubnetRootLimits, ReleaseBuildId,
 };
+use ic_platform::Principal;
 use sha2::{Digest, Sha256};
 use std::cmp::Ordering;
 use thiserror::Error as ThisError;

@@ -24,8 +24,8 @@ use crate::{
     },
     icp::{IcpCanisterStatusReport, IcpCli},
 };
-use candid::Principal;
 use canic_contracts::cycles::Cycles;
+use ic_platform::Principal;
 use std::{collections::BTreeSet, path::Path};
 
 /// Unknowns are explicit even when no desired input or caller estimate is supplied.

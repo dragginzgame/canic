@@ -31,13 +31,11 @@ internal-test-fixtures = ["canic-core/internal-test-fixtures"]
 testing = ["dep:ic-testkit"]
 
 [dependencies]
-candid = { workspace = true }
 canic-contracts.workspace = true
 canic-control-plane = { workspace = true, default-features = false, optional = true }
 canic-core = { workspace = true }
 canic-macros = { workspace = true }
-ic-cdk = { workspace = true }
-ic0 = { workspace = true }
+ic-platform = { workspace = true, features = ["cdk", "candid", "executor", "ic0"] }
 serde = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -45,7 +43,7 @@ ic-testkit = { workspace = true, optional = true }
 toml = { workspace = true }
 
 [dev-dependencies]
-candid_parser = { workspace = true }
+ic-platform = { workspace = true, features = ["cdk", "candid-parser"] }
 syn = { workspace = true, features = ["full", "visit"] }
 
 [lints]

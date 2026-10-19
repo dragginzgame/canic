@@ -48,6 +48,11 @@ TOML
     printf 'pub fn consumer() {}\n' >"$consumer_root/src/lib.rs"
     cargo generate-lockfile --offline --manifest-path "$consumer_root/Cargo.toml" >>"$fixture/output.log" 2>&1
 done
+cargo sort --workspace --grouped "$fixture/base" >> "$fixture/cargo.log" 2>&1
+for consumer in consumer embedded-consumer; do
+    cargo sort --workspace --grouped --order workspace,package,lib,dependencies,dev-dependencies,build-dependencies,profile \
+        "$fixture/base/integrations/blob-service/$consumer" >> "$fixture/cargo.log" 2>&1
+done
 cp -R "$fixture/base" "$fixture/candidate"
 mkdir -p "$fixture/candidate/scripts/ci" "$fixture/candidate/scripts/release"
 cp "$ROOT/scripts/release/rewrite-owned-lock.sh" "$fixture/candidate/scripts/release/"
@@ -56,6 +61,9 @@ for script in check-release-candidate check-release-surface-content read-workspa
     cp "$ROOT/scripts/ci/$script.sh" "$fixture/candidate/scripts/ci/"
 done
 cp "$ROOT/scripts/ci/rewrite-local-lock-versions.pl" "$fixture/candidate/scripts/ci/"
+bash "$ROOT/scripts/ci/prepare-script-fixture.sh" "$ROOT" "$fixture/candidate" \
+    scripts/ci/rewrite-local-lock-versions.pl scripts/ci/next-release-version.sh \
+    scripts/ci/read-cargo-workspace-version.sh
 cat >"$fixture/bin/git" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail

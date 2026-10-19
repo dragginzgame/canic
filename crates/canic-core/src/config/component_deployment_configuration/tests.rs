@@ -7,13 +7,13 @@ use crate::{
     },
     dto::component_deployment::ProtectedComponentDeployment,
 };
-use candid::Principal;
 use canic_contracts::ids::{
     AppId, CanisterRole, CanonicalNetworkId, ComponentBinding, ComponentGroupDeploymentId,
     ComponentGroupMemberId, ComponentGroupMemberPath, ComponentGroupPlacementId,
     ComponentGroupSpecId, ComponentInstanceId, ComponentSpecId, FleetBinding,
     FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority, SubnetId,
 };
+use ic_platform::Principal;
 
 const BASELINE: &str = r#"
 [app]
@@ -289,9 +289,10 @@ fn compiled_configuration_round_trips_with_the_exact_semantic_digest() {
         .expect("configuration digest");
 
     assert_eq!(compiled.digest().expect("compiled digest"), expected);
-    let encoded = candid::encode_one(&compiled).expect("encode compiled configuration");
+    let encoded = ic_platform::candid::contract::encode_one(&compiled)
+        .expect("encode compiled configuration");
     let decoded: ComponentDeploymentConfiguration =
-        candid::decode_one(&encoded).expect("decode compiled configuration");
+        ic_platform::candid::decoder::decode_one(&encoded).expect("decode compiled configuration");
     assert_eq!(decoded, compiled);
     assert_eq!(decoded.digest().expect("decoded digest"), expected);
 }
@@ -346,9 +347,10 @@ fn group_member_context_matches_only_the_exact_compiled_projection() {
         .expect("exact protected context");
     let runtime = assert_compiled_role_runtime_projection(&config, &binding);
     assert_runtime_projection_rejects_substitutions(&runtime, &context, &binding);
-    let encoded = candid::encode_one(&context).expect("encode protected context");
+    let encoded =
+        ic_platform::candid::contract::encode_one(&context).expect("encode protected context");
     let decoded: ProtectedComponentDeployment =
-        candid::decode_one(&encoded).expect("decode protected context");
+        ic_platform::candid::decoder::decode_one(&encoded).expect("decode protected context");
     assert_eq!(decoded, context);
 
     let mut wrong_digest = context.clone();

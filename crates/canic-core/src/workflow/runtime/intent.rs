@@ -545,7 +545,8 @@ impl IntentCleanupWorkflow {
         let application = ReceiptBackedIntentOps::receipt_capacity()?.next_eligibility_at_ns;
         #[cfg(any(test, feature = "auth-local-application-authorization"))]
         let application_session =
-            LocalApplicationAuthorizationStateOps::application_session_cleanup_due_at_ns();
+            LocalApplicationAuthorizationStateOps::application_session_cleanup_due_at_ns()
+                .map_err(|_| InternalError::invariant())?;
         #[cfg(not(any(test, feature = "auth-local-application-authorization")))]
         let application_session = None;
         Ok([local, application, application_session]

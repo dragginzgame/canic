@@ -9,7 +9,6 @@ use crate::fleet_ensure::{
     },
     ops::capacity_import::journal::{CapacityImportInventoryStage, CapacityImportJournalError},
 };
-use candid::{CandidType, Principal};
 use canic_contracts::{
     dto::{
         error::Error,
@@ -21,7 +20,7 @@ use canic_contracts::{
     },
     protocol,
 };
-use ic_agent::Agent;
+use ic_platform::{Principal, agent::Agent, candid::contract::CandidType};
 use serde::Deserialize;
 use std::{collections::BTreeSet, time::Duration};
 
@@ -42,7 +41,7 @@ pub(in crate::fleet_ensure::ops) async fn registry(
     agent: &Agent,
     coordinator: Principal,
 ) -> Result<FleetRegistry, CapacityImportJournalError> {
-    let argument = candid::encode_one(CoordinatorRequest::Registry)
+    let argument = ic_platform::candid::contract::encode_one(CoordinatorRequest::Registry)
         .map_err(|_| CapacityImportJournalError::InventoryInvalid)?;
     let bytes = query(
         agent,
@@ -131,10 +130,12 @@ pub(in crate::fleet_ensure::ops) async fn root_inventory(
     let canister = root.fleet_subnet_root;
     let mut inventory = Pages::new(store, scope);
     loop {
-        let argument = candid::encode_one(RootRequest::Pool(CanisterPoolStatusRequest {
-            start_after: inventory.cursor,
-            limit: PAGE_SIZE,
-        }))
+        let argument = ic_platform::candid::contract::encode_one(RootRequest::Pool(
+            CanisterPoolStatusRequest {
+                start_after: inventory.cursor,
+                limit: PAGE_SIZE,
+            },
+        ))
         .map_err(|_| CapacityImportJournalError::InventoryInvalid)?;
         let bytes = query(agent, canister, protocol::CANIC_ROOT_STATUS, argument).await?;
         let response: Result<RootResponse, Error> = decode(canister, &bytes)?;
@@ -186,13 +187,13 @@ fn decode<'a, T: CandidType + Deserialize<'a>>(
     if bytes.len() > RESPONSE_BYTES {
         return Err(invalid());
     }
-    let mut config = candid::de::DecoderConfig::new();
+    let mut config = ic_platform::candid::decoder::DecoderConfig::new();
     config
         .set_decoding_quota(RESPONSE_BYTES * 64)
         .set_skipping_quota(RESPONSE_BYTES * 64)
         .set_max_type_len(4096)
         .set_max_header_len(64 * 1024);
-    candid::utils::decode_one_with_config(bytes, &config).map_err(|_| invalid())
+    ic_platform::candid::decoder::decode_one_with_config(bytes, &config).map_err(|_| invalid())
 }
 
 impl Pages {

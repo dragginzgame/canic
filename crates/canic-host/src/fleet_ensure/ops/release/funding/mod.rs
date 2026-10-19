@@ -17,7 +17,6 @@ use crate::{
     },
     icp::IcpCli,
 };
-use candid::{CandidType, Principal};
 use canic_contracts::{
     dto::{
         error::Error as CanicError,
@@ -28,7 +27,7 @@ use canic_contracts::{
     protocol,
 };
 use canic_core::shared_support::fleet_funding_policy::fleet_subnet_root_funding_policy_hash;
-use ic_agent::Agent;
+use ic_platform::{Principal, agent::Agent, candid::contract::CandidType};
 use serde::Deserialize;
 use std::{collections::BTreeSet, time::Duration};
 use thiserror::Error;
@@ -156,8 +155,9 @@ async fn read_root(
     let mut pages = Pages::new(root, policy_hash);
     loop {
         let fail = |stage| ReleaseFundingError::Observation { root, stage };
-        let argument = candid::encode_one(Request::FundingRelease(pages.cursor))
-            .map_err(|_| fail(ReleaseFundingStage::Query))?;
+        let argument =
+            ic_platform::candid::contract::encode_one(Request::FundingRelease(pages.cursor))
+                .map_err(|_| fail(ReleaseFundingStage::Query))?;
         let bytes = tokio::time::timeout(
             QUERY_DEADLINE,
             agent
@@ -199,13 +199,14 @@ fn decode_response<T: CandidType + for<'de> Deserialize<'de>>(
     *remaining = remaining
         .checked_sub(bytes.len())
         .ok_or_else(|| fail(ReleaseFundingStage::Budget))?;
-    let mut config = candid::de::DecoderConfig::new();
-    config
-        .set_decoding_quota(RESPONSE_BYTES * 8)
-        .set_skipping_quota(RESPONSE_BYTES * 8)
-        .set_max_type_len(512)
-        .set_max_header_len(16 * 1024);
-    let response: Result<T, CanicError> = candid::utils::decode_one_with_config(bytes, &config)
+    let limits = ic_platform::candid::DecodeLimits {
+        reply_bytes: RESPONSE_BYTES,
+        decoding_quota: RESPONSE_BYTES * 8,
+        skipping_quota: RESPONSE_BYTES * 8,
+        type_entries: 512,
+        header_bytes: 16 * 1024,
+    };
+    let response: Result<T, CanicError> = ic_platform::candid::decode_one(bytes, limits)
         .map_err(|_| fail(ReleaseFundingStage::Decode))?;
     response.map_err(|rejection| ReleaseFundingError::Rejected { root, rejection })
 }
@@ -242,7 +243,7 @@ impl Pages {
             return Err(ReleaseFundingStage::Budget);
         }
         // Encode only the bounded header to compare exact policy/request/receipt authority.
-        let header = candid::encode_args((
+        let header = ic_platform::candid::contract::encode_args((
             page.policy_generation,
             &page.icp_refill_policy,
             &page.current_request,

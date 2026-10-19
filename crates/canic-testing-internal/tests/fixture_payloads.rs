@@ -1,6 +1,5 @@
 mod blob_installation_decoding;
 
-use candid::{decode_args, decode_one};
 use canic::{
     dto::abi::v1::{CanisterInitAuthority, CanisterInitPayload},
     ids::{CanisterRole, ComponentSpecId},
@@ -9,6 +8,7 @@ use canic_testing_internal::{
     canister::{APP, SCALE_HUB, SCALE_REPLICA, TEST, USER_HUB, USER_SHARD, WASM_STORE},
     pic::{invalid_init_args, managed_test_init_identity, upgrade_args},
 };
+use ic_platform::candid::decoder::{decode_args, decode_one};
 use ic_testkit::Fake;
 
 // Verify canonical test role constants stay aligned with canister role names.

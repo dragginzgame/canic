@@ -12,7 +12,7 @@ use canic::{
     __internal::core::{dispatch, perf},
     ids::{EndpointCall, EndpointCallKind, EndpointId},
 };
-use ic_management_canister_types::{HttpMethod, HttpRequestArgs};
+use ic_platform::management_canister_types::{HttpMethod, HttpRequestArgs};
 use std::cell::RefCell;
 
 thread_local! {
@@ -21,7 +21,8 @@ thread_local! {
 }
 
 /// Real counter reads bracketing the recorder independently in its own call context.
-#[derive(candid::CandidType)]
+#[derive(ic_platform::candid::contract::CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct PerfProbeObservation {
     before_enter: u64,
     after_enter: u64,
@@ -34,7 +35,8 @@ pub struct PerfProbeObservation {
 }
 
 /// Read-only sample projection from the production table.
-#[derive(candid::CandidType)]
+#[derive(ic_platform::candid::contract::CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct PerfProbeMetric {
     name: String,
     count: u64,
@@ -61,20 +63,23 @@ async fn await_controlled_response(which: u8) {
         // Match the counter probe's version-1 cycle quote rather than changing its budget.
         pricing_version: Some(1),
     };
-    let cycles = ic_cdk::api::cost_http_request(args.url.len() as u64, 256);
-    ic_cdk::call::Call::unbounded_wait(candid::Principal::management_canister(), "http_request")
-        .with_arg(args)
-        .with_cycles(cycles)
-        .await
-        .expect("controlled simulator HTTP reply");
+    let cycles = ic_platform::cdk::api::cost_http_request(args.url.len() as u64, 256);
+    ic_platform::cdk::call::Call::unbounded_wait(
+        ic_platform::Principal::management_canister(),
+        "http_request",
+    )
+    .with_arg(args)
+    .with_cycles(cycles)
+    .await
+    .expect("controlled simulator HTTP reply");
 }
 
-#[ic_cdk::query]
+#[ic_platform::cdk::query]
 fn perf_context_entered() -> Vec<bool> {
     ENTERED.with_borrow(|entered| entered.to_vec())
 }
 
-#[ic_cdk::query]
+#[ic_platform::cdk::query]
 fn perf_context_completed() -> Vec<u8> {
     COMPLETED.with_borrow(Clone::clone)
 }
@@ -122,7 +127,7 @@ async fn perf_context_probe(which: u8) -> Result<PerfProbeObservation, canic::Er
     Ok(observed)
 }
 
-#[ic_cdk::query]
+#[ic_platform::cdk::query]
 fn perf_context_metrics() -> Vec<PerfProbeMetric> {
     perf::entries()
         .into_iter()

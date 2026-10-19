@@ -17,7 +17,6 @@ use crate::{
     },
     workflow::{component_registry, root_authority::validated_root_authority},
 };
-use candid::Principal;
 use canic_contracts::{
     dto::{
         component_deployment::ProtectedComponentDeployment,
@@ -38,6 +37,7 @@ use canic_core::control_plane_support::{
     },
     workflow::runtime::fleet_activation::FleetActivationWorkflow,
 };
+use ic_platform::Principal;
 
 /// Advance one exact affected-root Directory synchronization step.
 

@@ -261,9 +261,9 @@ fn pending_claim_cannot_be_stolen_after_ttl_without_explicit_recovery() {
 
 #[test]
 fn allocation_bound_index_record_survives_stable_reopen() {
-    use crate::cdk::structures::{BTreeMap, VectorMemory};
-    let memory = VectorMemory::default();
-    let mut records = BTreeMap::init(memory.clone());
+    use crate::cdk::structures::StableBTreeMap as BTreeMap;
+    let runtime = crate::memory::fixtures::runtime(&["test.index.v1"], 1);
+    let mut records = BTreeMap::init(runtime.open_memory("test.index.v1").unwrap());
     let key = PlacementIndexKey::try_new("projects", "alpha").unwrap();
     let value = PlacementIndexEntryRecord::Bound {
         instance_pid: p(255),
@@ -272,6 +272,8 @@ fn allocation_bound_index_record_survives_stable_reopen() {
     };
     records.insert(key.clone(), value.clone());
     drop(records);
-    let records = BTreeMap::<PlacementIndexKey, PlacementIndexEntryRecord, _>::init(memory);
+    let records = BTreeMap::<PlacementIndexKey, PlacementIndexEntryRecord, _>::init(
+        runtime.open_memory("test.index.v1").unwrap(),
+    );
     assert_eq!(records.get(&key), Some(value));
 }

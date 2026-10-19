@@ -281,7 +281,7 @@ mod tests {
     fn shortens_metrics_unavailable_errors() {
         let error = MetricsQueryError::Observability(FleetObservabilityError::Protocol(
             CanisterProtocolError::Invocation {
-                canister: candid::Principal::management_canister(),
+                canister: ic_platform::Principal::management_canister(),
                 method: canic_contracts::protocol::CANIC_ROOT_COMMAND,
                 source: IcpCommandError::Failed {
                     command: "icp canister call".to_string(),
@@ -354,7 +354,7 @@ mod tests {
     fn metrics_response_failure_preserves_typed_cause_until_projection() {
         let error = MetricsQueryError::Observability(FleetObservabilityError::Protocol(
             CanisterProtocolError::Response {
-                canister: candid::Principal::management_canister(),
+                canister: ic_platform::Principal::management_canister(),
                 method: canic_contracts::protocol::CANIC_ROOT_COMMAND,
                 source: canic_host::icp::decode_json_result_response::<u64>("{}").unwrap_err(),
             },

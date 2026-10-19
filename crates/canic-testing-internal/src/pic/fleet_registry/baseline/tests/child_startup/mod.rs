@@ -80,10 +80,13 @@ fn qualify_automatic_startup_continuation(
                 parent,
                 root,
                 "test_create_startup_child",
-                candid::encode_args((operation_id, rounds)).unwrap(),
+                ic_platform::candid::contract::encode_args((operation_id, rounds)).unwrap(),
             )
             .unwrap();
-        candid::decode_one::<Result<Principal, Error>>(&complete_ingress(pic, message)).unwrap()
+        ic_platform::candid::decoder::decode_one::<Result<Principal, Error>>(&complete_ingress(
+            pic, message,
+        ))
+        .unwrap()
     };
     assert_eq!(
         request(256_u32),
@@ -136,10 +139,11 @@ fn resolve(
             parent,
             Principal::anonymous(),
             "resolve_item",
-            candid::encode_args((key.to_owned(),)).unwrap(),
+            ic_platform::candid::contract::encode_args((key.to_owned(),)).unwrap(),
         )
         .expect("submit placement");
-    candid::decode_one(&complete_ingress(pic, message)).expect("placement response")
+    ic_platform::candid::decoder::decode_one(&complete_ingress(pic, message))
+        .expect("placement response")
 }
 
 fn bound_child(status: &PlacementIndexStatusResponse) -> Principal {
@@ -150,9 +154,17 @@ fn bound_child(status: &PlacementIndexStatusResponse) -> Principal {
 }
 
 fn startup_calls(pic: &PocketIc, root: Principal, child: Principal) -> u32 {
-    pic.query_candid_as::<Result<u32, Error>, _>(child, root, "test_startup_calls", ())
-        .unwrap()
-        .unwrap()
+    ic_testkit::pic::query_candid_args::<(Result<u32, Error>,), _>(
+        pic,
+        child,
+        root,
+        "test_startup_calls",
+        (),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap()
+    .unwrap()
 }
 
 fn child_operation(
@@ -181,10 +193,13 @@ fn qualify_bounded_startup_retry(pic: &PocketIc, root: Principal, parent: Princi
                 parent,
                 root,
                 "test_create_startup_child",
-                candid::encode_args((operation_id, rounds)).unwrap(),
+                ic_platform::candid::contract::encode_args((operation_id, rounds)).unwrap(),
             )
             .unwrap();
-        candid::decode_one::<Result<Principal, Error>>(&complete_ingress(pic, message)).unwrap()
+        ic_platform::candid::decoder::decode_one::<Result<Principal, Error>>(&complete_ingress(
+            pic, message,
+        ))
+        .unwrap()
     };
     let blocked = request(256_u32);
     assert_eq!(

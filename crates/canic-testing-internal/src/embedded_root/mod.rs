@@ -101,12 +101,7 @@ fn build_spec(workspace: &Path, source: &Path) -> io::Result<WasmBuildSpec> {
         source,
         &workspace.join("target/embedded-root/cache"),
         &[PACKAGE],
-        canic_host::build_environment::cargo_inputs([
-            ("CARGO_INCREMENTAL", "0".to_owned()),
-            ("ICP_ENVIRONMENT", "local".to_owned()),
-            ("CANIC_MEMORY_BUCKET_PAGES", "16".to_owned()),
-            ("CARGO_ENCODED_RUSTFLAGS", source::rustflags(source)?),
-        ]),
+        std::env::vars_os(),
     )
     .with_shared_incremental_target(workspace.join("target/embedded-root/cargo"))
     .with_additional_inputs(["crates/canic-testing-internal/src/embedded_root"])
@@ -115,7 +110,24 @@ fn build_spec(workspace: &Path, source: &Path) -> io::Result<WasmBuildSpec> {
         locked: true,
         offline: true,
         ..Default::default()
-    }))
+    })
+    .with_environment(
+        std::env::vars_os().chain(
+            ([
+                ("CARGO_INCREMENTAL", "0".to_owned()),
+                ("ICP_ENVIRONMENT", "local".to_owned()),
+                ("CANIC_MEMORY_BUCKET_PAGES", "16".to_owned()),
+                ("CARGO_ENCODED_RUSTFLAGS", source::rustflags(source)?),
+            ])
+            .into_iter()
+            .map(|(key, value)| {
+                (
+                    std::ffi::OsString::from(key),
+                    std::ffi::OsString::from(value),
+                )
+            }),
+        ),
+    ))
 }
 
 fn build(

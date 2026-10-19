@@ -4,8 +4,8 @@
 //! Does not own: application rows, import progress, receipts or Store grant mutation.
 //! Boundary: ops converts and validates the complete assignment before persistence.
 
-use candid::Principal;
 use canic_contracts::ids::{ManagedCanisterBinding, ReleaseBuildId};
+use ic_platform::Principal;
 use serde::{Deserialize, Serialize};
 
 /// Protected source authority for one exact managed installation.

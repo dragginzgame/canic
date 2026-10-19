@@ -100,7 +100,6 @@ pub fn build_audit_root(context: &WorkspaceBuildContext) -> CanisterArtifactBuil
     };
     let wasm_path = role_path("wasm");
     let output = CanisterArtifactBuildOutput {
-        cargo_facts: runtime_wasms.record("root_probe").facts().clone(),
         package_name: "root_probe".into(),
         package_version: evidence.role_package_version,
         protocol_release_identity: evidence.canic_version,
@@ -163,7 +162,7 @@ fn finalize_audit_root(output: &CanisterArtifactBuildOutput, runtime: &Path, can
         "{}",
         String::from_utf8_lossy(&metadata.stderr)
     );
-    canic_host::canister_build::validate_wasm_candid_endpoints(&output.wasm_path, &output.did_path)
+    canic_host::canister_build::validate_wasm_endpoints(&output.wasm_path, &output.did_path)
         .unwrap();
     std::fs::write(
         &output.wasm_gz_path,

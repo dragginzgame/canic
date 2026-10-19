@@ -188,7 +188,7 @@ fn capacity_import_second_rejection_is_terminal_and_history_cannot_be_erased() {
 #[test]
 fn retired_pruned_handoff_reconciles_exact_custody_or_renews_original() {
     use crate::fleet_ensure::ops::capacity_import::transport::tests::retired;
-    use ic_agent::agent::RequestStatusResponse;
+    use ic_platform::agent::RequestStatusResponse;
     for status in [RequestStatusResponse::Done, RequestStatusResponse::Unknown] {
         let (issued, source) = issued();
         let id = source.binding.canister_id;

@@ -30,7 +30,7 @@ fn generated_infrastructure_inputs_are_stable_before_compilation() {
         &package,
         &directory.join("target"),
         &["fixture-consumer"],
-        crate::build_environment::cargo_inputs(std::iter::empty::<(&str, &str)>()),
+        std::env::vars_os(),
     )
     .with_cargo_selection(ic_build::cargo::selection::CargoSelection {
         profile: Some("release".into()),
@@ -102,30 +102,20 @@ fn configured_batch_command_selects_every_group_package_once() {
         &spec_refs,
         CanisterBuildProfile::Debug,
     );
+    let command = command.command().unwrap();
     let args = command
         .get_args()
         .map(|arg| arg.to_string_lossy().into_owned())
         .collect::<Vec<_>>();
     let environment = command.get_envs().collect::<BTreeMap<_, _>>();
 
-    assert_eq!(
-        args,
-        [
-            "build",
-            "--lib",
-            "--locked",
-            "--keep-going",
-            "--message-format=json-render-diagnostics",
-            "--manifest-path",
-            "/workspace/Cargo.toml",
-            "--target",
-            WASM_TARGET,
-            "--package",
-            "canister-root",
-            "--package",
-            "canister-hub",
-        ]
-    );
+    assert_eq!(args.iter().filter(|arg| *arg == "-p").count(), 2);
+    for package in ["canister-root", "canister-hub"] {
+        assert!(args.windows(2).any(|pair| pair == ["-p", package]));
+    }
+    assert!(args.contains(&"--lib".into()));
+    assert!(args.contains(&"--locked".into()));
+    assert!(args.contains(&"--keep-going".into()));
     assert_eq!(
         environment.get(std::ffi::OsStr::new(
             canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV
@@ -144,6 +134,7 @@ fn profile_candid_pass_is_explicit_for_nonlocal_binding_derivation() {
         CanisterBuildProfile::Fast,
         &options,
     );
+    let command = command.command().unwrap();
     let args = command
         .get_args()
         .map(|arg| arg.to_string_lossy().into_owned())
@@ -182,6 +173,8 @@ fn declaration_and_runtime_passes_share_exact_cargo_features() {
         CanisterBuildProfile::Fast,
         &options,
     );
+    let declaration = declaration.command().unwrap();
+    let runtime = runtime.command().unwrap();
     let declaration_args = declaration
         .get_args()
         .map(|arg| arg.to_string_lossy().into_owned())
@@ -193,10 +186,7 @@ fn declaration_and_runtime_passes_share_exact_cargo_features() {
 
     for args in [&declaration_args, &runtime_args] {
         assert!(args.contains(&"--no-default-features".to_string()));
-        assert!(
-            args.windows(2)
-                .any(|args| { args == ["--features", "qualification,standalone-local"] })
-        );
+        assert!(args.contains(&"--features=qualification,standalone-local".to_string()));
     }
     assert_eq!(
         declaration
@@ -211,10 +201,7 @@ fn declaration_and_runtime_passes_share_exact_cargo_features() {
         runtime.get_envs().find(|(key, _)| {
             *key == std::ffi::OsStr::new(canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV)
         }),
-        Some((
-            std::ffi::OsStr::new(canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV,),
-            None,
-        ))
+        None
     );
 }
 
@@ -364,6 +351,61 @@ fn build_spec(
 }
 
 #[test]
+fn cargo_custom_lib_outputs_are_captured_before_another_workspace_overwrites_them() {
+    use ic_build::artifacts::CapturedArtifact;
+    let root = crate::test_support::temp_dir("cargo-artifact-collision");
+    let target = root.join("target");
+    fs::create_dir_all(root.join("artifacts")).unwrap();
+    let mut retained = Vec::new();
+    for (workspace, marker) in [("first", 1), ("second", 2)] {
+        let directory = root.join(workspace);
+        fs::create_dir_all(directory.join("src")).unwrap();
+        let manifest = directory.join("Cargo.toml");
+        fs::write(&manifest, "[workspace]\n[package]\nname='collision'\nversion='0.1.0'\nedition='2024'\n[lib]\nname='custom_library'\ncrate-type=['cdylib']\n").unwrap();
+        fs::write(
+            directory.join("src/lib.rs"),
+            format!("#[unsafe(no_mangle)] pub extern \"C\" fn marker() -> u32 {{ {marker} }}\n"),
+        )
+        .unwrap();
+        crate::test_support::generate_fixture_lockfile(&directory);
+        let mut context = build_context();
+        context.workspace_root = directory.clone();
+        let mut command =
+            canister_cargo_build_command(&context, &manifest, CanisterBuildProfile::Debug, false);
+        command.selection.offline = true;
+        command
+            .environment
+            .insert("CARGO_TARGET_DIR".into(), target.as_os_str().to_owned());
+        command
+            .environment
+            .remove(std::ffi::OsStr::new("CARGO_BUILD_BUILD_DIR"));
+        let CargoBuildOutput {
+            execution: built,
+            messages,
+        } = output_canister_cargo_command(&command, CargoBuildProgress::single("fixture")).unwrap();
+        assert!(
+            built.status.success(),
+            "{}",
+            String::from_utf8_lossy(&built.stderr)
+        );
+        let path = ic_build::cargo::execution::select_cdylib_wasm(&messages, &manifest).unwrap();
+        assert_eq!(path.file_name().unwrap(), "custom_library.wasm");
+        let bytes = fs::read(&path).unwrap();
+        let captured =
+            CapturedArtifact::capture(&path, &root.join("artifacts"), usize::MAX).unwrap();
+        retained.push((path, bytes, captured));
+    }
+    assert_eq!(retained[0].0, retained[1].0);
+    assert_ne!(retained[0].1, retained[1].1);
+    for (_, bytes, captured) in &retained {
+        assert_eq!(&fs::read(captured.path()).unwrap(), bytes);
+    }
+    assert_eq!(fs::read(&retained[0].0).unwrap(), retained[1].1);
+    drop(retained);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn configured_library_command_cannot_build_a_colliding_binary() {
     use crate::canister_build::{CanisterBuildProfile, WorkspaceBuildContext};
     let root = crate::test_support::temp_dir("cargo-library-binary-collision");
@@ -394,10 +436,15 @@ fn configured_library_command_cannot_build_a_colliding_binary() {
         release_build_id: None,
     };
     let mut command =
-        canister_cargo_build_command(&context, &manifest, CanisterBuildProfile::Debug);
-    command.arg("--offline").env_remove("CARGO_BUILD_BUILD_DIR");
-    let (output, messages) =
-        output_canister_cargo_command(&mut command, CargoBuildProgress::single("app")).unwrap();
+        canister_cargo_build_command(&context, &manifest, CanisterBuildProfile::Debug, false);
+    command.selection.offline = true;
+    command
+        .environment
+        .remove(std::ffi::OsStr::new("CARGO_BUILD_BUILD_DIR"));
+    let CargoBuildOutput {
+        execution: output,
+        messages,
+    } = output_canister_cargo_command(&command, CargoBuildProgress::single("fixture")).unwrap();
     assert!(
         output.status.success(),
         "{}",

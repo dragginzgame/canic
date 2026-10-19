@@ -14,6 +14,7 @@ pub const CAPABILITY_VERSION_V1: u16 = 1;
 //
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CapabilityService {
     Root,
 }
@@ -23,6 +24,7 @@ pub enum CapabilityService {
 //
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CapabilityRequestMetadata {
     pub request_id: [u8; 32],
     pub issued_at_ns: u64,
@@ -34,6 +36,7 @@ pub struct CapabilityRequestMetadata {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CapabilityProof {
     Structural,
 }
@@ -43,6 +46,7 @@ pub enum CapabilityProof {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootCapabilityEnvelopeV1 {
     pub service: CapabilityService,
     pub capability_version: u16,
@@ -56,6 +60,7 @@ pub struct RootCapabilityEnvelopeV1 {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootCapabilityResponseV1 {
     pub response: Response,
 }
@@ -65,6 +70,7 @@ pub struct RootCapabilityResponseV1 {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct NonrootCyclesCapabilityEnvelopeV1 {
     pub service: CapabilityService,
     pub capability_version: u16,
@@ -78,6 +84,7 @@ pub struct NonrootCyclesCapabilityEnvelopeV1 {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct NonrootCyclesCapabilityResponseV1 {
     pub response: CyclesResponse,
 }

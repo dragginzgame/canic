@@ -1,9 +1,9 @@
 use super::{RestorePlan, RestorePlanError, RestorePlanMember};
 use crate::{
-    artifacts::{ArtifactChecksum, ArtifactChecksumError},
-    manifest::VerificationCheck,
+    artifacts::ArtifactChecksumError, manifest::VerificationCheck,
     persistence::resolve_backup_artifact_path,
 };
+use ic_backup::model::artifacts::ArtifactChecksumRecord;
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -177,7 +177,7 @@ fn validate_restore_apply_artifact(
 
     let (checksum_actual, checksum_verified) =
         if let Some(expected) = &member.source_snapshot.checksum {
-            let checksum = ArtifactChecksum::from_relative_path_no_follow(
+            let checksum = crate::artifacts::checksum_relative_path(
                 backup_root,
                 Path::new(&member.source_snapshot.artifact_path),
             )
@@ -186,14 +186,15 @@ fn validate_restore_apply_artifact(
                 artifact_path: member.source_snapshot.artifact_path.clone(),
                 source,
             })?;
-            checksum.verify(expected).map_err(|source| {
-                RestoreApplyDryRunError::ArtifactChecksum {
+            checksum
+                .verify(expected)
+                .map_err(crate::artifacts::ArtifactChecksumError::from)
+                .map_err(|source| RestoreApplyDryRunError::ArtifactChecksum {
                     source_canister: member.source_canister.clone(),
                     artifact_path: member.source_snapshot.artifact_path.clone(),
                     source,
-                }
-            })?;
-            (Some(checksum.hash), true)
+                })?;
+            (Some(checksum.hash().to_owned()), true)
         } else {
             (None, false)
         };
@@ -422,20 +423,15 @@ fn operation_artifact_path(
 fn operation_artifact_checksum(
     operation: &RestoreApplyOperationKind,
     member: &RestorePlanMember,
-) -> Option<ArtifactChecksum> {
+) -> Option<ArtifactChecksumRecord> {
     matches!(
         operation,
         RestoreApplyOperationKind::UploadSnapshot | RestoreApplyOperationKind::LoadSnapshot
     )
     .then(|| {
-        member
-            .source_snapshot
-            .checksum
-            .as_ref()
-            .map(|hash| ArtifactChecksum {
-                algorithm: member.source_snapshot.checksum_algorithm.clone(),
-                hash: hash.clone(),
-            })
+        member.source_snapshot.checksum.as_ref().map(|hash| {
+            ArtifactChecksumRecord::from_hash(hash).expect("validated restore plan checksum")
+        })
     })
     .flatten()
 }
@@ -521,7 +517,7 @@ pub struct RestoreApplyDryRunOperation {
     #[serde(deserialize_with = "crate::serialization::required_option")]
     pub artifact_path: Option<String>,
     #[serde(deserialize_with = "crate::serialization::required_option")]
-    pub artifact_checksum: Option<ArtifactChecksum>,
+    pub artifact_checksum: Option<ArtifactChecksumRecord>,
     #[serde(deserialize_with = "crate::serialization::required_option")]
     pub expected_module_hash: Option<String>,
     #[serde(deserialize_with = "crate::serialization::required_option")]

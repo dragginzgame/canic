@@ -25,8 +25,7 @@ use canic_host::{
     canister_build::{
         BuildReuseError, BuildReuseProgress, CanisterArtifactBuildOptions, CanisterArtifactBuilder,
         CanisterBuildProfile, CompleteBuildReuse, ConfiguredCanisterArtifactBuildOutput,
-        WorkspaceBuildContext, copy_icp_wasm_output, print_workspace_build_context_once,
-        read_wasm_artifact_metrics,
+        WorkspaceBuildContext, copy_icp_wasm_output, read_wasm_artifact_metrics,
     },
     config_discovery::{
         ConfigDiscoveryError, current_canic_workspace_root,
@@ -46,10 +45,10 @@ use canic_host::{
         compile_and_persist_canic_infrastructure_artifact_manifest,
         compile_and_persist_current_release_set_manifest, display_workspace_path, workspace_root,
     },
-    table::{ColumnAlign, render_bordered_table},
     terminal::{TerminalActivity, TerminalStyle},
 };
 use clap::{ArgAction, Command as ClapCommand};
+use ic_host_text::table::{self, Alignment, Options};
 use std::{
     collections::BTreeSet,
     env,
@@ -243,7 +242,7 @@ where
             "Canic build tools:\n{}",
             builder.diagnostic_lines().join("\n")
         );
-        print_workspace_build_context_once(&context)?;
+        eprintln!("{}", context.lines().join("\n"));
     }
 
     if let Some(role) = &options.role {
@@ -270,8 +269,7 @@ where
                     role: role.clone(),
                     output: output.clone()
                 }],
-                context.profile,
-                TerminalStyle::detected(),
+                context.profile
             )?
         );
         println!("{}", output.wasm_gz_path.display());
@@ -661,7 +659,7 @@ fn build_app(
         );
         println!(
             "{}",
-            render_infrastructure_build_table(&infrastructure, context.profile, style)?
+            render_infrastructure_build_table(&infrastructure, context.profile)?
         );
         println!();
 
@@ -676,7 +674,7 @@ fn build_app(
         );
         println!(
             "{}",
-            render_app_build_table(&artifacts.application, context.profile, style)?
+            render_app_build_table(&artifacts.application, context.profile)?
         );
         println!();
     }
@@ -886,7 +884,6 @@ struct InfrastructureCanisterArtifactBuildOutput {
 fn render_app_build_table(
     outputs: &[ConfiguredCanisterArtifactBuildOutput],
     profile: CanisterBuildProfile,
-    style: TerminalStyle,
 ) -> Result<String, BuildCommandError> {
     let rows = outputs
         .iter()
@@ -896,7 +893,7 @@ fn render_app_build_table(
             Ok([
                 built.role.clone(),
                 built.output.package_version.clone(),
-                style.success("done"),
+                "done".to_owned(),
                 profile.target_dir_name().to_string(),
                 metrics.code_section_bytes.to_string(),
                 metrics.data_section_bytes.to_string(),
@@ -904,27 +901,30 @@ fn render_app_build_table(
             ])
         })
         .collect::<Result<Vec<_>, BuildCommandError>>()?;
-    Ok(render_bordered_table(
+    Ok(table::render(
         &[
             "ROLE", "VERSION", "STATUS", "PROFILE", "CODE (B)", "DATA (B)", "WASM",
         ],
         &rows,
         &[
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-            ColumnAlign::Right,
-            ColumnAlign::Right,
-            ColumnAlign::Right,
+            Alignment::Left,
+            Alignment::Left,
+            Alignment::Left,
+            Alignment::Left,
+            Alignment::Right,
+            Alignment::Right,
+            Alignment::Right,
         ],
+        Options {
+            column_gap: 3,
+            header_separator: true,
+        },
     ))
 }
 
 fn render_infrastructure_build_table(
     outputs: &[InfrastructureCanisterArtifactBuildOutput],
     profile: CanisterBuildProfile,
-    style: TerminalStyle,
 ) -> Result<String, BuildCommandError> {
     let rows = outputs
         .iter()
@@ -935,7 +935,7 @@ fn render_infrastructure_build_table(
                 built.role.clone(),
                 built.output.package_version.clone(),
                 built.deployment_scope.label().to_string(),
-                style.success("done"),
+                "done".to_owned(),
                 profile.target_dir_name().to_string(),
                 metrics.code_section_bytes.to_string(),
                 metrics.data_section_bytes.to_string(),
@@ -944,7 +944,7 @@ fn render_infrastructure_build_table(
             ])
         })
         .collect::<Result<Vec<_>, BuildCommandError>>()?;
-    Ok(render_bordered_table(
+    Ok(table::render(
         &[
             "CANISTER",
             "VERSION",
@@ -958,16 +958,20 @@ fn render_infrastructure_build_table(
         ],
         &rows,
         &[
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-            ColumnAlign::Right,
-            ColumnAlign::Right,
-            ColumnAlign::Right,
-            ColumnAlign::Right,
+            Alignment::Left,
+            Alignment::Left,
+            Alignment::Left,
+            Alignment::Left,
+            Alignment::Left,
+            Alignment::Right,
+            Alignment::Right,
+            Alignment::Right,
+            Alignment::Right,
         ],
+        Options {
+            column_gap: 3,
+            header_separator: true,
+        },
     ))
 }
 
@@ -1408,20 +1412,16 @@ mod tests {
             output: test_artifact_output(&root, "app", 2048, 512),
         }];
 
-        let table = render_app_build_table(
-            &outputs,
-            CanisterBuildProfile::Fast,
-            TerminalStyle::detected(),
-        )
-        .expect("render build table");
+        let table = render_app_build_table(&outputs, CanisterBuildProfile::Fast)
+            .expect("render build table");
 
         fs::remove_dir_all(root).expect("remove temp root");
-        assert!(table.starts_with('+'));
+        assert!(table.starts_with("ROLE"));
         let headers = table
             .lines()
-            .nth(1)
+            .next()
             .expect("build table header")
-            .split('|')
+            .split("   ")
             .filter_map(|cell| {
                 let cell = cell.trim();
                 (!cell.is_empty()).then_some(cell)
@@ -1434,7 +1434,7 @@ mod tests {
             ]
         );
         assert!(table.contains("fast"));
-        assert!(table.contains("| app  |"));
+        assert!(table.lines().any(|line| line.starts_with("app   ")));
         assert!(table.contains("done"));
         assert!(table.contains("2.00 KiB (gz 512.00 B)"));
         assert!(table.contains(env!("CARGO_PKG_VERSION")));
@@ -1460,26 +1460,29 @@ mod tests {
             },
         );
         for profile in [CanisterBuildProfile::Fast, CanisterBuildProfile::Release] {
-            let table =
-                render_app_build_table(&outputs, profile, TerminalStyle::detected()).unwrap();
+            let table = render_app_build_table(&outputs, profile).unwrap();
             for (output, expected) in outputs.iter().zip([[5, 83], [84, 4]]) {
                 let row = table
                     .lines()
                     .find(|line| line.contains(&output.role))
                     .unwrap();
-                let cells = row.split('|').map(str::trim).collect::<Vec<_>>();
-                assert_eq!(cells[4], profile.target_dir_name());
-                assert_eq!(cells[5], expected[0].to_string());
-                assert_eq!(cells[6], expected[1].to_string());
+                let cells = row
+                    .split("   ")
+                    .map(str::trim)
+                    .filter(|cell| !cell.is_empty())
+                    .collect::<Vec<_>>();
+                assert_eq!(cells[3], profile.target_dir_name());
+                assert_eq!(cells[4], expected[0].to_string());
+                assert_eq!(cells[5], expected[1].to_string());
                 let metrics = read_wasm_artifact_metrics(
                     &output.output.wasm_path,
                     &output.output.wasm_gz_path,
                 )
                 .unwrap();
-                assert_eq!(cells[5], metrics.code_section_bytes.to_string());
-                assert_eq!(cells[6], metrics.data_section_bytes.to_string());
+                assert_eq!(cells[4], metrics.code_section_bytes.to_string());
+                assert_eq!(cells[5], metrics.data_section_bytes.to_string());
                 assert_eq!(
-                    cells[7],
+                    cells[6],
                     wasm_size_label(Some(metrics.raw_bytes), Some(metrics.gzip_bytes))
                 );
             }
@@ -1519,17 +1522,13 @@ mod tests {
             },
         ];
 
-        let table = render_infrastructure_build_table(
-            &outputs,
-            CanisterBuildProfile::Release,
-            TerminalStyle::detected(),
-        )
-        .expect("render infrastructure table");
+        let table = render_infrastructure_build_table(&outputs, CanisterBuildProfile::Release)
+            .expect("render infrastructure table");
 
         fs::remove_dir_all(root).expect("remove temp root");
-        assert!(table.contains("| CANISTER"));
-        assert!(table.contains("| VERSION"));
-        assert!(table.contains("| INSTANCES"));
+        assert!(table.contains("CANISTER"));
+        assert!(table.contains("VERSION"));
+        assert!(table.contains("INSTANCES"));
         assert!(table.contains("release"));
         assert!(table.contains("CODE (B)"));
         assert!(table.contains("DATA (B)"));
@@ -1771,13 +1770,6 @@ mod tests {
         fs::write(&wasm_path, wasm).expect("write wasm");
         fs::write(&wasm_gz_path, vec![0_u8; gzip_size]).expect("write gzip");
         canic_host::canister_build::CanisterArtifactBuildOutput {
-            cargo_facts: ic_build::artifacts::CargoBuildFacts {
-                selection: ic_build::cargo::selection::CargoSelection::default(),
-                environment: std::collections::BTreeMap::default(),
-                target: "wasm32-unknown-unknown".into(),
-                cargo_identity: Vec::new(),
-                rustc_identity: Vec::new(),
-            },
             package_name: format!("canister_{role}"),
             package_version: env!("CARGO_PKG_VERSION").to_string(),
             protocol_release_identity: env!("CARGO_PKG_VERSION").to_string(),

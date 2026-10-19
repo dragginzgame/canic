@@ -141,3 +141,22 @@ fn interrupted_local_grant_publication_resumes_exactly_once() {
     }
     std::fs::remove_dir_all(directory).unwrap();
 }
+
+#[test]
+fn idle_review_reports_no_exhausted_counters_without_retaining_a_review() {
+    let directory = crate::test_support::temp_dir("attempt-recovery-idle");
+    std::fs::create_dir_all(&directory).unwrap();
+    let paths = EnsurePaths::under(&directory, "local", "idle");
+    assert!(matches!(
+        crate::fleet_ensure::workflow::attempt_recovery::review(&directory, "local", "idle"),
+        Err(CapacityImportJournalError::NoExhaustedAttempts)
+    ));
+    assert!(!paths.plan.with_file_name("capacity-import.json").exists());
+    assert!(
+        !paths
+            .plan
+            .with_file_name("attempt-recovery-reviews")
+            .exists()
+    );
+    std::fs::remove_dir_all(directory).unwrap();
+}

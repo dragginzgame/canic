@@ -8,7 +8,7 @@ use crate::ids::{
     ComponentBinding, ComponentDeploymentConfigurationDigest, ComponentGroupMemberPath,
     ComponentGroupPlacementId, ComponentGroupSpecId,
 };
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 
 pub use crate::deployment::{
@@ -24,6 +24,7 @@ pub use crate::deployment::{
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     target_pointer_width = "64",

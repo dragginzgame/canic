@@ -20,11 +20,14 @@ use crate::{
     },
     test_support::start_pocket_ic,
 };
-use candid::{CandidType, Nat, Principal};
 use canic_core::cdk::utils::hash::decode_hex;
-use ic_agent::{Agent, identity::BasicIdentity};
+use ic_platform::{
+    Principal,
+    agent::{Agent, BasicIdentity},
+    candid::contract::{CandidType, Nat},
+};
 use ic_testkit::{
-    pic::{CandidCallExt, PocketIcBuilder},
+    pic::PocketIcBuilder,
     pocket_ic::common::rest::{IcpFeatures, IcpFeaturesConfig},
 };
 use serde::Deserialize;
@@ -34,12 +37,14 @@ use std::{
 };
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 struct MintTestAccount {
     owner: Principal,
     subaccount: Option<Vec<u8>>,
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct MintTestTransfer {
     from_subaccount: Option<Vec<u8>>,
     to: MintTestAccount,
@@ -477,9 +482,11 @@ pub(super) fn funded_operator() -> (ic_testkit::pocket_ic::PocketIc, OperatorMin
         .unwrap();
     agent.set_root_key(pic.root_key().unwrap());
     let operator = agent.get_principal().unwrap();
-    let result: Result<Nat, icrc_ledger_types::icrc1::transfer::TransferError> = pic
-        .update_candid(
+    let result: Result<Nat, ic_platform::icrc_ledger_types::TransferError> =
+        ic_testkit::pic::update_candid_args(
+            &(pic),
             ledger,
+            ic_platform::Principal::anonymous(),
             "icrc1_transfer",
             (MintTestTransfer {
                 from_subaccount: None,
@@ -492,7 +499,9 @@ pub(super) fn funded_operator() -> (ic_testkit::pocket_ic::PocketIc, OperatorMin
                 memo: None,
                 created_at_time: None,
             },),
+            crate::test_support::CANDID_REPLY_LIMITS,
         )
+        .map(|(reply,)| reply)
         .unwrap();
     result.unwrap();
     let transport = OperatorMintTransport::from_test_agent(agent);

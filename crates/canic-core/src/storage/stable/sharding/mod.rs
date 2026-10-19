@@ -16,9 +16,7 @@
 pub mod registry;
 
 #[cfg(feature = "sharding")]
-use crate::cdk::structures::{
-    DefaultMemoryImpl, Memory, btreemap::BTreeMap as StableBtreeMap, memory::RuntimeMemory,
-};
+use crate::cdk::structures::{DefaultMemoryImpl, Memory, StableBTreeMap as StableBtreeMap};
 use crate::{
     cdk::types::{BoundedString64, BoundedString128},
     storage::prelude::*,
@@ -32,7 +30,7 @@ use std::cell::RefCell;
 
 #[cfg(feature = "sharding")]
 std::thread_local! {
-    static SHARDING_CORE: RefCell<ShardingCore<RuntimeMemory<DefaultMemoryImpl>>> = RefCell::new(
+    static SHARDING_CORE: RefCell<ShardingCore<DefaultMemoryImpl>> = RefCell::new(
         ShardingCore::new(
             StableBtreeMap::init(crate::memory::open(crate::memory::keys::SHARDING_REGISTRY_V1)),
             StableBtreeMap::init(crate::memory::open(crate::memory::keys::SHARDING_ASSIGNMENTS_V1)),

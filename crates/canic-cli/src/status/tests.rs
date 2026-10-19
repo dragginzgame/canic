@@ -2,7 +2,6 @@
 
 use super::*;
 use crate::test_support::temp_dir;
-use candid::Principal;
 use canic_contracts::{
     dto::fleet_registry::FleetRegistry,
     ids::{
@@ -20,6 +19,7 @@ use canic_host::fleet_ensure::{
     ops::{EnsurePaths, read_journal, write_journal, write_plan, write_state},
     resolve_current_fleet,
 };
+use ic_platform::Principal;
 use std::{collections::BTreeMap, fs};
 
 #[test]

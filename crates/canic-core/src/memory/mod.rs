@@ -5,6 +5,9 @@
 //! Does not own: stable data schemas, ops storage APIs, or lifecycle orchestration.
 //! Boundary: lifecycle initializes this before stable structures are accessed.
 
+#[cfg(test)]
+pub(crate) mod fixtures;
+
 pub mod admission;
 pub(crate) mod keys;
 pub(crate) mod ledger;
@@ -37,7 +40,7 @@ pub fn configured_bucket_pages() -> u16 {
 /// Observe the current physical stable-memory extent without allocating or reading data.
 #[cfg(target_arch = "wasm32")]
 pub(crate) fn stable_extent_bytes() -> u64 {
-    ic_cdk::api::stable_size().saturating_mul(65_536)
+    ic_platform::cdk::api::stable_size().saturating_mul(65_536)
 }
 
 /// Complete framework requests, including stores whose lazy initializers have not run.
@@ -50,9 +53,7 @@ pub fn requests() -> Result<Vec<ic_memory::MemoryRequest>, ic_memory::MemoryDecl
 /// # Panics
 /// Panics if the host has not bootstrapped or omitted this key.
 #[must_use]
-pub fn open(
-    key: &str,
-) -> ic_memory::RuntimeMemory<ic_memory::ic_stable_structures::DefaultMemoryImpl> {
+pub fn open(key: &str) -> ic_memory::RuntimeMemory<ic_memory::DefaultMemoryImpl> {
     runtime::assert_memory_bootstrap_ready(key);
     runtime::with_runtime(|runtime| Ok(runtime.open_memory(key)))
         .expect("initialized memory runtime")
@@ -99,7 +100,7 @@ pub fn bootstrap(input: MemoryBootstrap) -> Result<(), MemoryBootstrapError> {
             .map_err(|_| ic_memory::RuntimeDiagnosticError::ReentrantAccess)?;
         if owner.is_none() {
             *owner = Some(ic_memory::MemoryRuntime::new_with_config(
-                ic_memory::ic_stable_structures::DefaultMemoryImpl::default(),
+                ic_memory::DefaultMemoryImpl::default(),
                 config,
             )?);
         }
@@ -109,7 +110,6 @@ pub fn bootstrap(input: MemoryBootstrap) -> Result<(), MemoryBootstrapError> {
         runtime.bootstrap(&declarations, &input.pool, &policy)?;
         Ok(())
     })?;
-    pool::remember(input.pool);
     Ok(())
 }
 

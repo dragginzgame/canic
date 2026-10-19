@@ -4,8 +4,7 @@
 //! Does not own: compilation, release identity allocation, or Fleet deployment.
 //! Boundary: source bytes and admitted tools key a cache; immutable release records remain authority.
 
-use ic_build::cargo::observation::schema::Metadata;
-use ic_build::cargo::selection::CargoFeatureSelection;
+use ic_build::cargo::{observation::schema::Metadata, selection::CargoFeatureSelection};
 
 mod dependencies;
 mod diagnostics;
@@ -289,35 +288,28 @@ impl CompleteBuildReuse {
     ) -> Result<(), BuildReuseError> {
         self.lock.phase(BuildLockPhase::VerifyingAndPublishing);
         verify_release(&self.context, release_build_id)?;
-        let (after_spec, fixture_hashes) = input_snapshot_spec(&self.context, &self.tool_paths)?;
+        let (after_spec, fixture_hashes) = input_spec(&self.context, &self.tool_paths)?;
         let after = self
             .inputs
             .validate_after(&after_spec)
             .map_err(BuildReuseError::from)
-            .and_then(|after| {
-                validate_snapshot_evidence(
-                    &self.context,
-                    &self.tool_paths,
-                    &after,
-                    &fixture_hashes,
-                )?;
-                Ok(after)
-            })
             .inspect_err(|error| {
-                // A diagnostic-only recapture must never replace the primary rejection.
-                if let Ok(after) = input_snapshot(&self.context, &self.tool_paths)
-                    && let Some(path) = diagnostics::retain_rejection(
-                        &self.context,
-                        release_build_id,
-                        &self.input_locations,
-                        &self.inputs,
-                        &after,
-                        error,
-                    )
-                {
+                // A recapture is advisory rejection evidence, never release authority.
+                let Ok(after) = InputEvidence::capture(&after_spec) else {
+                    return;
+                };
+                if let Some(path) = diagnostics::retain_rejection(
+                    &self.context,
+                    release_build_id,
+                    &self.input_locations,
+                    &self.inputs,
+                    &after,
+                    error,
+                ) {
                     eprintln!("Build input rejection evidence: {}", path.display());
                 }
             })?;
+        validate_input_snapshot(&self.context, &self.tool_paths, &after, fixture_hashes)?;
         let inputs = after.digest()?.to_hex();
         let record_path = self.record_path.with_file_name(format!("{inputs}.json"));
         let record = CompleteBuildReuseRecord {
@@ -392,13 +384,13 @@ fn input_snapshot(
     context: &WorkspaceBuildContext,
     tools: &[PathBuf],
 ) -> Result<InputEvidence, BuildReuseError> {
-    let (spec, fixture_hashes) = input_snapshot_spec(context, tools)?;
+    let (spec, fixture_hashes) = input_spec(context, tools)?;
     let evidence = InputEvidence::capture(&spec)?;
-    validate_snapshot_evidence(context, tools, &evidence, &fixture_hashes)?;
+    validate_input_snapshot(context, tools, &evidence, fixture_hashes)?;
     Ok(evidence)
 }
 
-fn input_snapshot_spec(
+fn input_spec(
     context: &WorkspaceBuildContext,
     tools: &[PathBuf],
 ) -> Result<(InputEvidenceSpec, BTreeMap<PathBuf, String>), BuildReuseError> {
@@ -492,11 +484,11 @@ fn input_snapshot_spec(
     ))
 }
 
-fn validate_snapshot_evidence(
+fn validate_input_snapshot(
     context: &WorkspaceBuildContext,
     tools: &[PathBuf],
     evidence: &InputEvidence,
-    fixture_hashes: &BTreeMap<PathBuf, String>,
+    fixture_hashes: BTreeMap<PathBuf, String>,
 ) -> Result<(), BuildReuseError> {
     for required in std::iter::once(&context.config_path).chain(tools) {
         if !matches!(
@@ -509,9 +501,9 @@ fn validate_snapshot_evidence(
         }
     }
     for (path, expected) in fixture_hashes {
-        if !matches!(evidence.entries().get(path), Some(InputEvidenceValue::File { sha256 }) if sha256.to_string() == *expected)
+        if !matches!(evidence.entries().get(&path), Some(InputEvidenceValue::File { sha256 }) if sha256.to_string() == expected)
         {
-            return Err(BuildReuseError::ChangedInput(path.clone()));
+            return Err(BuildReuseError::ChangedInput(path));
         }
     }
     // Refuse the consumer's non-UTF-8 record encoding before any work or diagnostics.

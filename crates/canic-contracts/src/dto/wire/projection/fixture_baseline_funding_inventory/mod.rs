@@ -12,11 +12,12 @@ use crate::dto::{
     },
     root::RootFundingReleaseResponse,
 };
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded transport selectors used by fleet_registry baseline tests funding_inventory validation.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum Request {
     ComponentDirectoryHead(ComponentDirectoryHeadRequest),
     ComponentDirectoryPage(Box<ComponentDirectoryPageRequest>),
@@ -25,6 +26,7 @@ pub enum Request {
 
 /// Bounded transport selectors used by fleet_registry baseline tests funding_inventory validation.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum Response {
     ComponentDirectoryHead(ComponentDirectoryHead),
     ComponentDirectoryPage(ComponentDirectoryPageResponse),
@@ -33,6 +35,7 @@ pub enum Response {
 
 /// Bounded transport selectors used by fleet_registry baseline tests funding_inventory validation.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CommandResponse {
     InspectCanister(Box<crate::dto::canister::CanisterStatusResponse>),
     ObserveCanister(crate::dto::observability::CanisterObservabilityResponse),

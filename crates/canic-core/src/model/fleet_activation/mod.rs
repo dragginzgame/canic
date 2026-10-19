@@ -12,11 +12,11 @@ use crate::{
         FleetFundingPolicyValidationError, validate_fleet_subnet_root_funding_authority,
     },
 };
-use candid::Principal;
 use canic_contracts::ids::{
     AppId, CanonicalNetworkId, FleetBinding, FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
     FleetSubnetWasmStoreActivationAuthority, FleetSubnetWasmStoreAuthority, ReleaseBuildId,
 };
+use ic_platform::Principal;
 use std::collections::BTreeSet;
 use thiserror::Error as ThisError;
 

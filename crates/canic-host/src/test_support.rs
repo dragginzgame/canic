@@ -23,12 +23,15 @@ pub fn start_pocket_ic(builder: PocketIcBuilder) -> PocketIc {
                 "{POCKET_IC_SERVER_URL_ENV} must name the governed PocketIC server; use the workspace test runner"
             )
         });
-    PocketIcStartupConfig::connect(server_url, POCKET_IC_STARTUP_TIMEOUT)
-        .build_instance(builder)
-        .map_or_else(
-            |error| panic!("start governed PocketIC instance: {error}"),
-            |owned| owned.instance,
-        )
+    PocketIcStartupConfig::Connect {
+        server_url,
+        timeout: POCKET_IC_STARTUP_TIMEOUT,
+    }
+    .build_instance(builder)
+    .map_or_else(
+        |error| panic!("start governed PocketIC instance: {error}"),
+        |owned| owned.instance,
+    )
 }
 
 pub fn fleet_subnet_root_funding_authority() -> FleetSubnetRootFundingAuthority {
@@ -137,3 +140,13 @@ pub fn synthetic_identity_pem(seed: u8) -> String {
     }
     format!("-----BEGIN PRIVATE KEY-----\n{body}\n-----END PRIVATE KEY-----\n")
 }
+
+/// Finite reply budgets for small mint, withdrawal and fee fixture responses.
+pub const CANDID_REPLY_LIMITS: ic_platform::candid::DecodeLimits =
+    ic_platform::candid::DecodeLimits {
+        reply_bytes: 64 * 1024,
+        decoding_quota: 1_000_000,
+        skipping_quota: 100_000,
+        type_entries: 256,
+        header_bytes: 16 * 1024,
+    };

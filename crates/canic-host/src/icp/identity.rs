@@ -36,18 +36,10 @@ impl IcpCli {
 
     /// Return the Principal text for the identity that will execute ICP commands.
     pub fn identity_principal_text(&self) -> Result<String, IcpCommandError> {
-        self.identity_lookups
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let started = std::time::Instant::now();
         let mut command = self.identity_principal_command();
-        let result = self.measure_request(super::IcpRequestKind::Identity, None, None, || {
+        self.measure_request(super::IcpRequestKind::Identity, None, None, || {
             run_output(&mut command, self)
-        });
-        self.identity_lookup_millis.fetch_add(
-            u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
-            std::sync::atomic::Ordering::Relaxed,
-        );
-        result
+        })
     }
 
     /// Return the selected identity's exact default account in the requested ledger format.

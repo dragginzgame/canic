@@ -11,9 +11,9 @@ homepage.workspace = true
 publish = true
 
 [dependencies]
-candid = { workspace = true, features = ["bignum"] }
 ciborium.workspace = true
 ic-auth-protocol-types.workspace = true
+ic-platform = { workspace = true, features = ["candid"] }
 remain.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_bytes.workspace = true

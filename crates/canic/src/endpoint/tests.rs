@@ -10,7 +10,7 @@ const LIMITS: ArgumentLimits = ArgumentLimits {
 
 #[test]
 fn argument_limits_accept_valid_input_and_bound_each_decoder_dimension() {
-    let bytes = candid::encode_args(("hello",)).unwrap();
+    let bytes = ic_platform::candid::contract::encode_args(("hello",)).unwrap();
     assert_eq!(LIMITS.decode::<(String,)>(&bytes).unwrap().0, "hello");
     let exact = ArgumentLimits {
         max_bytes: bytes.len(),
@@ -44,7 +44,7 @@ fn argument_limits_accept_valid_input_and_bound_each_decoder_dimension() {
     );
 
     // Two nested vector types: reject the type table independently of value work.
-    let types = candid::encode_args((Vec::<Vec<u8>>::new(),)).unwrap();
+    let types = ic_platform::candid::contract::encode_args((Vec::<Vec<u8>>::new(),)).unwrap();
     assert!(LIMITS.decode::<(Vec<Vec<u8>>,)>(&types).is_ok());
     let one_type = ArgumentLimits {
         max_type_len: 1,
@@ -64,7 +64,7 @@ fn argument_limits_accept_valid_input_and_bound_each_decoder_dimension() {
     );
 
     // A compact zero-byte-element sequence still consumes skipping work.
-    let skipped = candid::encode_args((Vec::<()>::from([(); 40]),)).unwrap();
+    let skipped = ic_platform::candid::contract::encode_args((Vec::<()>::from([(); 40]),)).unwrap();
     let ample = ArgumentLimits {
         skipping_quota: 10_000,
         decoding_quota: 100_000,

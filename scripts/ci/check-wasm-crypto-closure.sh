@@ -69,9 +69,21 @@ expected_signature_packages() {
     case "$1" in
         none)
             ;;
-        root-sign | delegated-verify)
-            # IC Auth's bounded proof verifier is selected by chain-key ECDSA;
-            # its token-verification feature also owns canister-signature verification.
+        root-sign)
+            # Root batch signing and proof validation need ECDSA, not BLS verification.
+            printf '%s\n' \
+                crypto-bigint \
+                ecdsa \
+                elliptic-curve \
+                hmac \
+                ic-canister-sig-creation \
+                ic-certification \
+                k256 \
+                rfc6979 \
+                signature
+            ;;
+        delegated-verify)
+            # Certified receivers still require both Root ECDSA and canister signatures.
             printf '%s\n' \
                 crypto-bigint \
                 ecdsa \

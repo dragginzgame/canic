@@ -37,7 +37,7 @@ impl ReceiptTransport {
             });
         fs::write(
             self.root.join(format!("{index}.bin")),
-            candid::encode_one(input).unwrap(),
+            ic_platform::candid::contract::encode_one(input).unwrap(),
         )
         .unwrap();
         let response = Ok::<_, canic_contracts::dto::error::Error>(
@@ -46,7 +46,7 @@ impl ReceiptTransport {
         fs::write(
             self.root.join(format!("{index}.json")),
             serde_json::json!({
-                "response_bytes": hex_bytes(candid::encode_one(response).unwrap()),
+                "response_bytes": hex_bytes(ic_platform::candid::contract::encode_one(response).unwrap()),
             })
             .to_string(),
         )

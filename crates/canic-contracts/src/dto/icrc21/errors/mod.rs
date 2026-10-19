@@ -8,10 +8,11 @@
 // ErrorInfo
 //
 
-use candid::{CandidType, Deserialize, Nat};
-use serde::Serialize;
+use ic_platform::candid::contract::{CandidType, Nat};
+use serde::{Deserialize, Serialize};
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ErrorInfo {
     pub description: String,
 }
@@ -21,6 +22,7 @@ pub struct ErrorInfo {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum Icrc21Error {
     UnsupportedCanisterCall(ErrorInfo),
     ConsentMessageUnavailable(ErrorInfo),

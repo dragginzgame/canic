@@ -8,7 +8,6 @@ use crate::info_subnets::{
     model::{SubnetInventoryError, SubnetInventoryPlan},
     render::text_report,
 };
-use candid::Principal;
 use canic_contracts::{
     cycles::Cycles,
     dto::{
@@ -25,6 +24,7 @@ use canic_contracts::{
         FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
     },
 };
+use ic_platform::Principal;
 
 #[test]
 fn parses_fleet_json_and_forwarded_global_options() {

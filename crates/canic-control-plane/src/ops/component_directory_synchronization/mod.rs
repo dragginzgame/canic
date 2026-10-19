@@ -21,7 +21,6 @@ use crate::{
         RootComponentDirectorySynchronizationTargetView, RootComponentDirectorySynchronizationView,
     },
 };
-use candid::Principal;
 use canic_contracts::dto::component_provisioning::{
     RootComponentDirectorySynchronizationRequest, RootComponentDirectorySynchronizationResponse,
 };
@@ -29,6 +28,7 @@ use canic_core::control_plane_support::{
     error::InternalError,
     ops::component_provisioning_plan::MAX_FLEET_COMPONENT_PROVISIONING_PLAN_ENTRIES,
 };
+use ic_platform::Principal;
 
 /// Root-local operations over the durable scale-out Directory journal.
 pub struct RootComponentDirectorySynchronizationOps;

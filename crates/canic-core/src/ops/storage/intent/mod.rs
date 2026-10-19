@@ -736,7 +736,7 @@ impl IntentStoreOps {
     ) -> Result<Vec<IntentId>, InternalError> {
         IntentStore::with_expiry_entries(|index| -> Result<Vec<IntentId>, IntentStoreOpsError> {
             let mut due = Vec::with_capacity(limit);
-            for entry in index.iter() {
+            for entry in index {
                 let key = *entry.key();
                 if key.due_at_secs > now_secs || due.len() == limit {
                     break;
@@ -776,7 +776,7 @@ impl IntentStoreOps {
             }
 
             let mut entries = Vec::new();
-            for pending_entry in pending.iter() {
+            for pending_entry in pending {
                 let intent_id = *pending_entry.key();
                 let pending_record = pending_entry.value();
                 let record = IntentStore::get_record(intent_id)
@@ -813,7 +813,7 @@ impl IntentStoreOps {
 
     #[cfg(test)]
     pub(crate) fn expiry_index_total_for_tests() -> u64 {
-        IntentStore::with_expiry_entries(crate::cdk::structures::btreemap::BTreeMap::len)
+        IntentStore::with_expiry_entries(crate::cdk::structures::StableBTreeMap::len)
     }
 
     // -------------------------------------------------------------------------
@@ -1051,7 +1051,7 @@ impl ReceiptBackedIntentOps {
             "Canic-owned receipt records",
         )?;
         let terminal_records = ReceiptBackedIntentStore::with_application_eligibility(
-            crate::cdk::structures::btreemap::BTreeMap::len,
+            crate::cdk::structures::StableBTreeMap::len,
         );
         let pending_records = checked_sub(
             application_records,
@@ -1461,7 +1461,7 @@ fn collect_expected_receipt_indexes()
         let mut placement = Vec::new();
         let mut eligibility = Vec::new();
         let mut application_count = 0;
-        for entry in records.iter() {
+        for entry in records {
             let record = entry.value();
             ensure_receipt_backed_record_schema(&record)?;
             if let Some(retention) = application_retention(&record)? {

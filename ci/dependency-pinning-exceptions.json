@@ -9,14 +9,6 @@
   },
   {
     "rule": "cargo-exact",
-    "file": "Cargo.toml",
-    "subject": "ic-secp256k1",
-    "value": "=0.3.0",
-    "reason": "Retain the qualified host batch-signature boundary and its concrete upstream public signing API.",
-    "evidence": "docs/audits/reports/2026-09/2026-09-28/pr32-toko-auth.md"
-  },
-  {
-    "rule": "cargo-exact",
     "file": "docs/audits/reports/2026-09/2026-09-24/release-binding-feasibility/Cargo.toml",
     "subject": "candid",
     "value": "=0.10.36",

@@ -21,10 +21,7 @@ use crate::{
         },
     },
 };
-use candid::{
-    CandidType,
-    utils::{ArgumentDecoder, ArgumentEncoder},
-};
+use ic_platform::candid::contract::{ArgumentDecoder, ArgumentEncoder, CandidType};
 use serde::de::DeserializeOwned;
 use std::borrow::Cow;
 

@@ -1,10 +1,10 @@
 //! Read-only fixture grant authority projected from the Registry identity.
 
-use candid::Principal;
 #[cfg(feature = "root-control-plane")]
 use canic_contracts::dto::fixture_provisioning::FixtureTargetBinding;
 #[cfg(feature = "wasm-store-canister")]
 use canic_contracts::ids::ComponentBinding;
+use ic_platform::Principal;
 
 /// Existing Component authority and the exact Component or child caller.
 

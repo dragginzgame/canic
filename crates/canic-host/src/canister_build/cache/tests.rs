@@ -201,22 +201,23 @@ fn cargo_keeps_explicit_wrapper_and_returns_its_failure_without_retry() {
     for selected in ["", "configured-wrapper"] {
         let root = temp_dir("explicit-compiler-wrapper");
         fs::create_dir_all(&root).unwrap();
-        let mut cargo = Command::new("/bin/sh");
-        cargo.current_dir(&root).args([
-            "-c",
+        let mut cargo = cargo_fixture(
+            &root,
             "printf 'run\\n' >> calls; printf '%s' \"$RUSTC_WRAPPER\" > selected-wrapper; printf 'compiler failure' >&2; exit 7",
-        ]);
-        cargo.env("RUSTC_WRAPPER", selected);
-        configure_canister_cargo_command(&mut cargo, &root);
-        let (output, _) =
-            output_canister_cargo_command(&mut cargo, CargoBuildProgress::single("fixture"))
-                .unwrap();
+        );
+        cargo
+            .environment
+            .insert("RUSTC_WRAPPER".into(), selected.into());
+        let CargoBuildOutput {
+            execution: output,
+            messages: _,
+        } = output_canister_cargo_command(&cargo, CargoBuildProgress::single("fixture")).unwrap();
         assert_eq!(output.status.code(), Some(7));
-        assert_eq!(output.stderr, b"compiler failure");
         assert_eq!(
             fs::read(root.join("selected-wrapper")).unwrap(),
             selected.as_bytes()
         );
+        assert_eq!(output.stderr, b"compiler failure");
         assert_eq!(fs::read(root.join("calls")).unwrap(), b"run\n");
         fs::remove_dir_all(root).unwrap();
     }
@@ -253,59 +254,96 @@ fn artifact_materialization_lock_excludes_a_second_builder() {
 
 #[test]
 #[cfg(unix)]
-fn runtime_facts_are_bound_to_the_command_and_tool_changes_refuse() {
-    use ic_host_process::testing::write_executable_script;
-    let root = temp_dir("runtime-cargo-facts");
-    fs::create_dir_all(&root).unwrap();
-    let cargo = root.join("cargo");
-    let rustc = root.join("rustc");
-    write_executable_script(
-        &cargo,
+fn cargo_protocol_failure_preserves_failed_exit_and_refuses_success() {
+    for code in [0, 7] {
+        let root = temp_dir("cargo-protocol");
+        let command = cargo_fixture(
+            &root,
+            &format!("printf '{{invalid}}\\n'; printf 'compiler failure' >&2; exit {code}"),
+        );
+        let result = output_canister_cargo_command(&command, CargoBuildProgress::single("fixture"));
+        if code == 0 {
+            assert_eq!(result.unwrap_err().kind(), io::ErrorKind::InvalidData);
+        } else {
+            let CargoBuildOutput {
+                execution: output,
+                messages: _,
+            } = result.unwrap();
+            assert_eq!(output.status.code(), Some(code));
+            assert_eq!(output.stderr, b"compiler failure");
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[test]
+#[cfg(unix)]
+fn cargo_shared_execution_retains_typed_build_script_evidence() {
+    let message = r#"{"reason":"build-script-executed","package_id":"path+file:///fixture#0.1.0","linked_libs":[],"linked_paths":[],"cfgs":[],"env":[["CANIC_CONFIG_SOURCE_PATH","/fixture/canic.toml"]],"out_dir":"/fixture/out"}"#;
+    let root = temp_dir("cargo-build-script");
+    let command = cargo_fixture(&root, &format!("printf '%s' '{message}'"));
+    let CargoBuildOutput {
+        execution: output,
+        messages,
+    } = output_canister_cargo_command(&command, CargoBuildProgress::single("fixture")).unwrap();
+    assert!(output.status.success());
+    let [Message::BuildScriptExecuted(script)] = messages.as_slice() else {
+        panic!("one build-script record");
+    };
+    assert_eq!(
+        script.env,
+        [(
+            "CANIC_CONFIG_SOURCE_PATH".into(),
+            "/fixture/canic.toml".into()
+        )]
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+#[cfg(unix)]
+fn cargo_success_requires_stable_tool_observations() {
+    let root = temp_dir("cargo-tool-drift");
+    let command = cargo_fixture(&root, ": > changed");
+    fs::write(
+        &command.cargo_program,
         r#"#!/bin/sh
-if [ "$1" = --version ]; then
-  if [ -f changed ]; then printf 'changed cargo\n'; else printf 'selected cargo\n'; fi
-else
-  printf '{"reason":"build-finished","success":true}\n'
-  if [ "${CHANGE_TOOL-}" = 1 ]; then touch changed; fi
-fi
+case "$1" in
+  --version|-vV)
+    if [ -f changed ]; then printf changed; else printf original; fi
+    exit 0;;
+esac
+: > changed
 "#,
     )
     .unwrap();
-    write_executable_script(&rustc, "#!/bin/sh\nprintf 'selected rustc\\n'\n").unwrap();
-    let mut command = Command::new(&cargo);
-    command
-        .arg("build")
-        .current_dir(&root)
-        .env("RUSTC", &rustc)
-        .env("RUSTFLAGS", "selected flags");
-    let mut options = crate::canister_build::CanisterArtifactBuildOptions {
-        default_features: false,
-        ..Default::default()
-    };
-    options.cargo_features.insert("selected".into());
-    let selection =
-        runtime_cargo_selection(crate::canister_build::CanisterBuildProfile::Fast, &options);
-    let (execution, _, facts) = output_runtime_cargo_command(
-        &mut command,
-        CargoBuildProgress::single("fixture"),
-        selection.clone(),
-    )
-    .unwrap();
-    assert!(execution.status.success());
-    assert_eq!(facts.selection, selection);
-    assert_eq!(facts.cargo_identity, b"selected cargo\n");
-    assert_eq!(facts.rustc_identity, b"selected rustc\n");
-    assert_eq!(
-        facts.environment[OsStr::new("RUSTFLAGS")],
-        OsStr::new("selected flags")
-    );
-    command.env("CHANGE_TOOL", "1");
-    let error = output_runtime_cargo_command(
-        &mut command,
-        CargoBuildProgress::single("fixture"),
-        selection,
-    )
-    .unwrap_err();
+    let error =
+        output_canister_cargo_command(&command, CargoBuildProgress::single("fixture")).unwrap_err();
     assert_eq!(error.kind(), io::ErrorKind::InvalidData);
     fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(unix)]
+fn cargo_fixture(root: &Path, body: &str) -> CargoInvocation {
+    use std::os::unix::fs::PermissionsExt;
+    fs::create_dir_all(root).unwrap();
+    let executable = root.join("cargo-fixture");
+    fs::write(&executable, format!("#!/bin/sh\ncase \"$1\" in --version|-vV) printf 'fixture identity'; exit 0;; esac\n{body}\n")).unwrap();
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+    CargoInvocation {
+        cargo_program: executable.as_os_str().to_owned(),
+        working_directory: root.to_owned(),
+        environment: [("RUSTC".into(), executable.into_os_string())].into(),
+        target: "wasm32-unknown-unknown".into(),
+        selection: ic_build::cargo::selection::CargoSelection {
+            locked: true,
+            ..Default::default()
+        },
+        packages: vec![],
+        manifest_path: None,
+        recipe: ic_build::cargo::execution::CargoRecipe::Library,
+        configurations: vec![],
+        render_diagnostics: true,
+        keep_going: false,
+    }
 }

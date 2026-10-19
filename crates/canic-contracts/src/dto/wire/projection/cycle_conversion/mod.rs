@@ -6,17 +6,19 @@
 //! transport. Compatibility is checked against the canonical role contracts.
 
 use crate::dto::icp_refill::IcpRefillResponse;
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded RootOperationStatusResponse wire projection for cycle conversion.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootOperationStatusResponse {
     RefillCycles(IcpRefillResponse),
 }
 
 /// Bounded RootStatusResponse wire projection for cycle conversion.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootStatusResponse {
     Operation(RootOperationStatusResponse),
 }

@@ -14,7 +14,6 @@ use crate::{
         RootComponentInstallEffectView,
     },
 };
-use candid::Principal;
 use canic_contracts::{
     cycles::Cycles,
     dto::{
@@ -44,6 +43,7 @@ use canic_core::{
     control_plane_support::{config::ComponentTopology, model::replay::ReplayCostGuardSettlement},
     ids::IntentId,
 };
+use ic_platform::Principal;
 use std::collections::{BTreeMap, BTreeSet};
 
 #[test]
@@ -96,9 +96,9 @@ fn release_census_discovers_both_journals_without_admission_or_mutation() {
         Phase::DirectorySynchronized
     );
     assert_eq!(second.next_after, None);
-    let bytes = candid::encode_one(&second).unwrap();
+    let bytes = ic_platform::candid::contract::encode_one(&second).unwrap();
     assert_eq!(
-        candid::decode_one::<crate::dto::root::RootProvisioningReleaseResponse>(&bytes).unwrap(),
+        ic_platform::candid::decoder::decode_one::<crate::dto::root::RootProvisioningReleaseResponse>(&bytes).unwrap(),
         second
     );
     assert_eq!(
@@ -1921,7 +1921,7 @@ fn provisioning_failure_rejects_unbounded_or_incomplete_dependency_without_mutat
     let mut incomplete = valid.clone();
     incomplete.rejection_code = None;
     let mut anonymous = valid;
-    anonymous.target = candid::Principal::anonymous();
+    anonymous.target = ic_platform::Principal::anonymous();
     for dependency in [oversized, incomplete, anonymous] {
         let result = RootComponentProvisioningOps::record_failure(
             accepted.operation_id,

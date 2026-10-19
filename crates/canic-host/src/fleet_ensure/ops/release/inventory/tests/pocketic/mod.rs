@@ -7,7 +7,6 @@ mod provisioning;
 mod receipts;
 
 use super::*;
-use candid::Principal;
 use canic_contracts::{
     dto::{
         error::Error,
@@ -21,7 +20,7 @@ use canic_contracts::{
     },
     ids::{CanonicalNetworkId, SubnetId},
 };
-use ic_agent::identity::BasicIdentity;
+use ic_platform::{Principal, agent::BasicIdentity};
 use ic_testkit::pocket_ic::{CanisterSettings, PocketIcBuilder};
 use sha2_host::{Digest, Sha256};
 use std::{fs, process::Command, time::SystemTime};
@@ -141,13 +140,13 @@ fn governed_pocketic_release_inventory_binds_complete_ownership() {
     registry.authority.binding.recovery_controllers = vec![operator];
     registry.fleet_subnet_roots[0].fleet_subnet_root = ids[1];
     registry.fleet_subnet_roots[0].placement_subnet = review.sources[1].binding.subnet;
-    let registry_reply = candid::encode_one(Ok::<_, Error>(RegistryReply::Registry(Box::new(
-        registry.clone(),
-    ))))
+    let registry_reply = ic_platform::candid::contract::encode_one(Ok::<_, Error>(
+        RegistryReply::Registry(Box::new(registry.clone())),
+    ))
     .unwrap();
-    let pool_reply = candid::encode_one(Ok::<_, Error>(PoolReply::Pool(Box::new(pool(
-        &review, &registry,
-    )))))
+    let pool_reply = ic_platform::candid::contract::encode_one(Ok::<_, Error>(PoolReply::Pool(
+        Box::new(pool(&review, &registry)),
+    )))
     .unwrap();
     for (index, id) in ids.iter().enumerate() {
         let reply = if index == 0 {

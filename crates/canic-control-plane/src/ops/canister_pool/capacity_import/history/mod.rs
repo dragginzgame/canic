@@ -1,11 +1,12 @@
 //! Decode replicated management history into exact Root effect evidence.
 
 use crate::view::canister_pool::{PoolImportHistoryKind, PoolImportHistoryView};
-use candid::{CandidType, Principal};
 use canic_core::control_plane_support::error::InternalError;
+use ic_platform::{Principal, candid::contract::CandidType};
 use serde::Deserialize;
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 struct History {
     module_hash: Option<Vec<u8>>,
     controllers: Vec<Principal>,
@@ -13,6 +14,7 @@ struct History {
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 struct Change {
     canister_version: u64,
     origin: Option<Origin>,
@@ -20,6 +22,7 @@ struct Change {
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 enum Origin {
     #[serde(rename = "from_canister")]
     FromCanister {
@@ -29,6 +32,7 @@ enum Origin {
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 enum Details {
     #[serde(rename = "controllers_change")]
     Controllers { controllers: Vec<Principal> },
@@ -40,7 +44,8 @@ pub(super) fn decode(
     canister_id: Principal,
     bytes: &[u8],
 ) -> Result<PoolImportHistoryView, InternalError> {
-    let mut history: History = candid::decode_one(bytes).map_err(|_| InternalError::conflict())?;
+    let mut history: History =
+        ic_platform::candid::decoder::decode_one(bytes).map_err(|_| InternalError::conflict())?;
     if history.recent_changes.len() != 1 {
         return Err(InternalError::conflict());
     }
@@ -90,6 +95,7 @@ mod tests {
     use super::*;
 
     #[derive(CandidType)]
+    #[candid_path("ic_platform::candid::contract")]
     struct WireHistory {
         controllers: Vec<Principal>,
         module_hash: Option<Vec<u8>>,
@@ -98,6 +104,7 @@ mod tests {
     }
 
     #[derive(CandidType)]
+    #[candid_path("ic_platform::candid::contract")]
     struct WireChange {
         canister_version: u64,
         origin: WireOrigin,
@@ -106,6 +113,7 @@ mod tests {
     }
 
     #[derive(CandidType, Deserialize)]
+    #[candid_path("ic_platform::candid::contract")]
     enum WireOrigin {
         #[serde(rename = "from_user")]
         User { user_id: Principal },
@@ -134,15 +142,31 @@ mod tests {
                 details: Some(Details::Uninstall),
             }],
         };
-        let decoded = decode(source, &candid::encode_one(&history).unwrap()).unwrap();
+        let decoded = decode(
+            source,
+            &ic_platform::candid::contract::encode_one(&history).unwrap(),
+        )
+        .unwrap();
         assert_eq!(decoded.sender_canister_version, 44);
         history.recent_changes[0].origin = WireOrigin::User { user_id: root };
-        assert!(decode(source, &candid::encode_one(&history).unwrap()).is_err());
+        assert!(
+            decode(
+                source,
+                &ic_platform::candid::contract::encode_one(&history).unwrap()
+            )
+            .is_err()
+        );
         history.recent_changes[0].origin = WireOrigin::Canister {
             canister_id: root,
             canister_version: None,
         };
-        assert!(decode(source, &candid::encode_one(&history).unwrap()).is_err());
+        assert!(
+            decode(
+                source,
+                &ic_platform::candid::contract::encode_one(&history).unwrap()
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -161,11 +185,21 @@ mod tests {
                 details: Some(Details::Uninstall),
             }],
         };
-        let decoded = decode(canister_id, &candid::encode_one(&history).unwrap()).unwrap();
+        let decoded = decode(
+            canister_id,
+            &ic_platform::candid::contract::encode_one(&history).unwrap(),
+        )
+        .unwrap();
         assert_eq!(decoded.originator, root);
         assert_eq!(decoded.sender_canister_version, 44);
         assert_eq!(decoded.kind, PoolImportHistoryKind::Uninstall);
         history.recent_changes[0].origin = None;
-        assert!(decode(canister_id, &candid::encode_one(&history).unwrap()).is_err());
+        assert!(
+            decode(
+                canister_id,
+                &ic_platform::candid::contract::encode_one(&history).unwrap()
+            )
+            .is_err()
+        );
     }
 }

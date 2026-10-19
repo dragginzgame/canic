@@ -7,7 +7,7 @@
 //! Boundary: DTOs re-export these values to preserve the public API path while
 //! internal code imports them from the domain owner.
 
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 
 ///
@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[remain::sorted]
 pub enum CycleTopupEventStatus {
     RequestErr,
@@ -24,6 +25,7 @@ pub enum CycleTopupEventStatus {
 
 /// Scheduling decision after a failed automatic parent funding request.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CycleTopupFailureDisposition {
     Retry,
     Terminal,

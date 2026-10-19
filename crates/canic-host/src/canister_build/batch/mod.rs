@@ -14,6 +14,7 @@ pub(super) fn compatible_package_groups(
         packages,
         "wasm32-unknown-unknown",
         &ic_build::cargo::selection::CargoSelection {
+            // Grouping serves the default-feature, locked configured-role build.
             locked: true,
             ..Default::default()
         },

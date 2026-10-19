@@ -3,7 +3,6 @@ use super::{
     verify_overview_binding,
 };
 use crate::protocol_binding::{RegistryProtocolBinding, ResolvedProtocolBinding};
-use candid::{CandidType, Encode};
 use canic_contracts::{
     dto::{
         error::Error,
@@ -17,6 +16,8 @@ use canic_core::{
     cdk::utils::hash::hex_bytes,
     role_contract::{ProtocolProfileDigest, RoleCapabilityKey},
 };
+use ic_platform::candid::contract::CandidType;
+use ic_platform::candid::contract::Encode;
 use std::{collections::BTreeSet, path::PathBuf};
 
 #[test]

@@ -1,7 +1,7 @@
 #![expect(clippy::unused_async)]
 
-use candid::Principal;
 use canic::{Error, prelude::*};
+use ic_platform::Principal;
 use std::cell::Cell;
 
 thread_local! {
@@ -13,7 +13,7 @@ canic::start!();
 async fn canic_setup() {}
 async fn canic_install(args: Option<Vec<u8>>) {
     let rounds = args.map_or(4, |bytes| {
-        candid::decode_one::<u32>(&bytes).expect("fixture startup rounds")
+        ic_platform::candid::decoder::decode_one::<u32>(&bytes).expect("fixture startup rounds")
     });
     assert!(rounds <= 256, "bounded fixture startup work");
     for _ in 0..rounds {
@@ -37,7 +37,7 @@ fn test_startup_calls() -> Result<u32, Error> {
 /// Prove direct Fleet-admitted ingress for an index-created managed child.
 #[canic_query(requires(caller::is_fleet_admitted()))]
 async fn test_fleet_admission_probe() -> Result<Principal, Error> {
-    Ok(ic_cdk::api::msg_caller())
+    Ok(ic_platform::cdk::api::msg_caller())
 }
 
 canic::finish!();

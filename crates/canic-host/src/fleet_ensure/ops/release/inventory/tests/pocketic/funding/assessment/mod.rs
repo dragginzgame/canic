@@ -88,9 +88,9 @@ pub(super) fn assert_assessment(
     let mut coordinator = funding::tests::coordinator_status(registry);
     coordinator.roots[0].current_operation = page.current_request.clone();
     coordinator.roots[0].window.reserved_cycles = Cycles::new(200);
-    let coordinator_bytes = candid::encode_one(Ok::<_, Error>(CoordinatorReply::Funding(
-        Box::new(coordinator.clone()),
-    )))
+    let coordinator_bytes = ic_platform::candid::contract::encode_one(Ok::<_, Error>(
+        CoordinatorReply::Funding(Box::new(coordinator.clone())),
+    ))
     .unwrap();
     pic.update_call(
         review.authority.coordinator,
@@ -104,13 +104,15 @@ pub(super) fn assert_assessment(
     completed.response.status = IcpRefillStatus::Completed;
     completed.response.error_code = None;
     completed.response.ledger_block_index = Some(42);
-    completed.response.cycles_sent = Some(candid::Nat::from(500_u64));
+    completed.response.cycles_sent = Some(ic_platform::candid::contract::Nat::from(500_u64));
     let unresolved = refill(root, 2);
     let mut refused = refill(root, 3);
     refused.transfer_uncertain = false;
     page.icp_refills = vec![completed, unresolved, refused];
-    let bytes =
-        candid::encode_one(Ok::<_, Error>(RootReply::FundingRelease(Box::new(page)))).unwrap();
+    let bytes = ic_platform::candid::contract::encode_one(Ok::<_, Error>(
+        RootReply::FundingRelease(Box::new(page)),
+    ))
+    .unwrap();
     pic.update_call(root, review.authority.operator, "replace", bytes.clone())
         .unwrap();
     let evidence = runtime
@@ -137,9 +139,9 @@ pub(super) fn assert_assessment(
     let retained = report.evidence.roots[0].pages[0].clone();
     assert_eq!(retained.icp_refills[0].source_subaccount, Some([4; 32]));
     assert_eq!(
-        candid::encode_one(Ok::<_, Error>(RootReply::FundingRelease(Box::new(
-            retained
-        ))))
+        ic_platform::candid::contract::encode_one(Ok::<_, Error>(RootReply::FundingRelease(
+            Box::new(retained)
+        )))
         .unwrap(),
         bytes
     );

@@ -131,7 +131,7 @@ pub struct RootComponentProvisioningFailureView {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootComponentPublicationIntentView {
     pub component_index: u32,
-    pub canister_id: candid::Principal,
+    pub canister_id: ic_platform::Principal,
     pub directory_authority_hash: [u8; 32],
     pub started_at_ns: u64,
 }

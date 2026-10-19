@@ -4,11 +4,11 @@
 //! Does not own: Wasm optimization, installation, or replica validation.
 //! Boundary: parses top-level sections around artifact transforms and before publication.
 
-mod install_policy;
-
 use crate::canister_build::WasmArtifactMetrics;
 use canic_contracts::ids::BuildNetwork;
 use ic_host_artifacts::wasm::{InspectionError, InspectionLimits, WasmFacts};
+mod install_policy;
+
 use install_policy::InstallReport;
 use std::{fs, path::Path};
 

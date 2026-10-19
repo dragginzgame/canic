@@ -15,9 +15,9 @@ use crate::fleet_ensure::{
     policy::release::{FleetReleaseError, reserve_observation_calls},
     view::release::FleetReleaseObservation,
 };
-use candid::Principal;
 use canic_contracts::ids::SubnetId;
 use canic_core::cdk::utils::hash::hex_bytes;
+use ic_platform::Principal;
 use std::{collections::BTreeMap, fs::File};
 use thiserror::Error;
 

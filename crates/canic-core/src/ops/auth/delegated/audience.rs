@@ -4,16 +4,14 @@
 //! Does not own: token verification, storage, or endpoint authorization.
 //! Boundary: pure delegated auth helper used by cert and token validation.
 
-use super::{
-    canonical::{CanonicalAuthError, validate_scope_label},
-    protocol,
-};
+use super::{canonical::CanonicalAuthError, protocol};
 use crate::dto::auth::DelegatedRoleGrant;
 #[cfg(test)]
 use crate::dto::auth::DelegationAudience;
 use canic_contracts::ids::CanisterRole;
 #[cfg(test)]
 use canic_contracts::ids::FleetKey;
+use ic_auth::certificate_issuance::{GrantValidationError, validate_grants};
 use thiserror::Error;
 
 pub const MAX_DELEGATED_ROLE_GRANTS: usize = 16;
@@ -60,6 +58,7 @@ pub enum AudienceError {
 }
 
 pub fn validate_role_grants(grants: &[DelegatedRoleGrant]) -> Result<(), AudienceError> {
+    // Bound unchecked DTO projection before allocating canonical Auth values.
     if grants.is_empty() {
         return Err(AudienceError::GrantsEmpty);
     }
@@ -70,31 +69,46 @@ pub fn validate_role_grants(grants: &[DelegatedRoleGrant]) -> Result<(), Audienc
         });
     }
 
-    let mut previous = None;
-    for grant in grants {
-        protocol::role(&grant.target)?;
-        let current = grant.target.as_str().as_bytes();
-        if previous.is_some_and(|previous| previous >= current) {
-            return Err(AudienceError::NonCanonicalGrants);
+    let validate = |grants: &[ic_auth_protocol_types::DelegatedRoleGrant]| {
+        validate_grants(grants, MAX_DELEGATED_ROLE_GRANTS, MAX_SCOPES_PER_ROLE_GRANT)
+            .map_err(map_grant_validation_error)
+    };
+    // DTO roles are unchecked strings. Preserve failures in the preceding grants
+    // before returning a later role-conversion error; Auth owns all grant rules.
+    for (index, grant) in grants.iter().enumerate() {
+        if let Err(cause) = protocol::role(&grant.target) {
+            if index != 0 {
+                validate(&protocol::grants(&grants[..index])?)?;
+            }
+            return Err(AudienceError::Canonical(cause));
         }
-        previous = Some(current);
-
-        if grant.scopes.is_empty() {
-            return Err(AudienceError::EmptyGrantScopes {
-                role: grant.target.clone(),
-            });
-        }
-        if grant.scopes.len() > MAX_SCOPES_PER_ROLE_GRANT {
-            return Err(AudienceError::TooManyGrantScopes {
-                role: grant.target.clone(),
-                found: grant.scopes.len(),
-                max: MAX_SCOPES_PER_ROLE_GRANT,
-            });
-        }
-        validate_grant_scopes(&grant.scopes)?;
     }
+    validate(&protocol::grants(grants)?)
+}
 
-    Ok(())
+fn map_grant_validation_error(error: GrantValidationError) -> AudienceError {
+    use ic_auth::canonical::CanonicalAuthError as Canonical;
+    match error {
+        GrantValidationError::Empty => AudienceError::GrantsEmpty,
+        GrantValidationError::TooMany { found, max } => AudienceError::TooManyGrants { found, max },
+        GrantValidationError::EmptyScopes { role } => AudienceError::EmptyGrantScopes {
+            role: CanisterRole::owned(role.as_str().to_owned()),
+        },
+        GrantValidationError::TooManyScopes { role, found, max } => {
+            AudienceError::TooManyGrantScopes {
+                role: CanisterRole::owned(role.as_str().to_owned()),
+                found,
+                max,
+            }
+        }
+        GrantValidationError::Canonical(Canonical::NonCanonicalRoles) => {
+            AudienceError::NonCanonicalGrants
+        }
+        GrantValidationError::Canonical(Canonical::InvalidScope { scope }) => {
+            AudienceError::GrantScopeRejected { scope }
+        }
+        GrantValidationError::Canonical(cause) => AudienceError::Canonical(cause.into()),
+    }
 }
 
 #[cfg(test)]
@@ -115,26 +129,6 @@ pub fn role_grants_subset(child: &[DelegatedRoleGrant], parent: &[DelegatedRoleG
             .find(|parent_grant| parent_grant.target == child_grant.target)
             .is_some_and(|parent_grant| scopes_subset(&child_grant.scopes, &parent_grant.scopes))
     })
-}
-
-fn validate_grant_scopes(scopes: &[String]) -> Result<(), AudienceError> {
-    let mut previous = None;
-    for scope in scopes {
-        validate_scope_label(scope).map_err(|err| match err {
-            CanonicalAuthError::InvalidScope { scope } => {
-                AudienceError::GrantScopeRejected { scope }
-            }
-            other => AudienceError::Canonical(other),
-        })?;
-        let current = scope.as_bytes();
-        if previous.is_some_and(|previous| previous >= current) {
-            return Err(AudienceError::Canonical(
-                CanonicalAuthError::NonCanonicalScopes,
-            ));
-        }
-        previous = Some(current);
-    }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -223,6 +217,97 @@ mod tests {
             Err(AudienceError::Canonical(CanonicalAuthError::InvalidRole {
                 role: "Upper".to_string(),
             }))
+        );
+    }
+
+    #[test]
+    fn grant_limits_and_scope_failures_keep_typed_causes() {
+        let scopes: Vec<_> = (0..32).map(|index| format!("s{index:02}")).collect();
+        let maximum: Vec<_> = (0..16)
+            .map(|index| DelegatedRoleGrant {
+                target: CanisterRole::owned(format!("r{index:02}")),
+                scopes: scopes.clone(),
+            })
+            .collect();
+        assert_eq!(validate_role_grants(&maximum), Ok(()));
+        assert_eq!(validate_role_grants(&[]), Err(AudienceError::GrantsEmpty));
+        assert_eq!(
+            validate_role_grants(&vec![grant("Upper", &[]); 17]),
+            Err(AudienceError::TooManyGrants { found: 17, max: 16 })
+        );
+        for (scopes, expected) in [
+            (
+                vec![],
+                AudienceError::EmptyGrantScopes {
+                    role: CanisterRole::new("app"),
+                },
+            ),
+            (
+                vec!["read"; 33],
+                AudienceError::TooManyGrantScopes {
+                    role: CanisterRole::new("app"),
+                    found: 33,
+                    max: 32,
+                },
+            ),
+            (
+                vec!["Read"],
+                AudienceError::GrantScopeRejected {
+                    scope: "Read".into(),
+                },
+            ),
+            (
+                vec![""],
+                AudienceError::Canonical(CanonicalAuthError::EmptyScope),
+            ),
+            (
+                vec!["read", "read"],
+                AudienceError::Canonical(CanonicalAuthError::NonCanonicalScopes),
+            ),
+            (
+                vec!["write", "read"],
+                AudienceError::Canonical(CanonicalAuthError::NonCanonicalScopes),
+            ),
+        ] {
+            assert_eq!(
+                validate_role_grants(&[grant("app", &scopes)]),
+                Err(expected)
+            );
+        }
+    }
+
+    #[test]
+    fn earlier_grant_errors_precede_later_unrepresentable_roles() {
+        for (first, expected) in [
+            (
+                grant("app", &[]),
+                AudienceError::EmptyGrantScopes {
+                    role: CanisterRole::new("app"),
+                },
+            ),
+            (
+                grant("app", &["Read"]),
+                AudienceError::GrantScopeRejected {
+                    scope: "Read".into(),
+                },
+            ),
+            (
+                grant("app", &["read", "read"]),
+                AudienceError::Canonical(CanonicalAuthError::NonCanonicalScopes),
+            ),
+        ] {
+            assert_eq!(
+                validate_role_grants(&[first, grant("Upper", &[])]),
+                Err(expected)
+            );
+        }
+        assert_eq!(
+            validate_role_grants(&[
+                grant("z", &["read"]),
+                grant("a", &["read"]),
+                grant("Upper", &[])
+            ]),
+            Err(AudienceError::NonCanonicalGrants)
         );
     }
 

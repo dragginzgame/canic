@@ -12,12 +12,13 @@ use crate::dto::{
     },
     role::{OperationReceipt, OperationStatusRequest},
 };
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded Command wire projection for caller authority.
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum Command {
     CallerAuthority(CallerAuthorityCommand),
     ReleaseApplicationStartup(CallerAuthorityPublication),
@@ -25,6 +26,7 @@ pub enum Command {
 
 /// Bounded CommandResponse wire projection for caller authority.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CommandResponse {
     CallerAuthority(Box<CallerAuthorityReceipt>),
     OperationAccepted(OperationReceipt),
@@ -32,12 +34,14 @@ pub enum CommandResponse {
 
 /// Bounded StatusRequest wire projection for caller authority.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum StatusRequest {
     CallerAuthority(OperationStatusRequest),
 }
 
 /// Bounded StatusResponse wire projection for caller authority.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum StatusResponse {
     CallerAuthority(CallerAuthorityStatus),
 }

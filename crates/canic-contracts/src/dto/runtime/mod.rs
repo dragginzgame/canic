@@ -13,6 +13,7 @@ pub const RUNTIME_INTROSPECTION_SCHEMA_VERSION: u32 = 1;
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CanicHealthStatus {
     pub schema_version: u32,
     pub status: HealthStatus,
@@ -25,6 +26,7 @@ pub struct CanicHealthStatus {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CanicReadinessStatus {
     pub fixture: Result<
         crate::dto::fixture_provisioning::FixtureProvisioningStatus,
@@ -44,6 +46,7 @@ pub struct CanicReadinessStatus {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CanicRuntimeStatus {
     pub schema_version: u32,
     pub observed_at_ns: u64,
@@ -70,6 +73,7 @@ pub struct CanicRuntimeStatus {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RuntimeBuildInfo {
     pub package_name: String,
     pub package_version: String,
@@ -82,6 +86,7 @@ pub struct RuntimeBuildInfo {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RuntimeCheck {
     pub category: String,
     pub code: String,
@@ -97,6 +102,7 @@ pub struct RuntimeCheck {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RuntimeDiagnostic {
     pub category: String,
     pub code: String,
@@ -112,6 +118,7 @@ pub struct RuntimeDiagnostic {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RuntimeFeatureStatus {
     pub name: String,
     pub enabled: bool,
@@ -124,6 +131,7 @@ pub struct RuntimeFeatureStatus {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RuntimeTopologyStatus {
     pub root: Option<Principal>,
     pub parent: Option<Principal>,
@@ -140,6 +148,7 @@ pub struct RuntimeTopologyStatus {
 /// A transient `RemoveWhenStopped` registration is absent after reaching its
 /// terminal state; its final observation is therefore not retained here.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CanisterTimerStatus {
     pub name: String,
     pub owner: String,
@@ -174,6 +183,7 @@ pub struct CanisterTimerStatus {
 /// Samples cover the complete accepted shared-runtime callback path rather
 /// than isolating the consumer function from registry and completion work.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct TimerCallbackPerformanceStatus {
     pub instruction_samples_since_runtime_start: u64,
     pub instructions_latest: Option<u64>,
@@ -191,6 +201,7 @@ pub struct TimerCallbackPerformanceStatus {
 
 /// Wasm and stable-memory page extents bracketing one completed callback.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct TimerMemoryPageSampleStatus {
     pub start: TimerMemoryPageExtentStatus,
     pub end: TimerMemoryPageExtentStatus,
@@ -202,6 +213,7 @@ pub struct TimerMemoryPageSampleStatus {
 
 /// Runtime high-water memory extents measured in 64-KiB pages.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct TimerMemoryPageExtentStatus {
     pub wasm_pages: u64,
     pub stable_pages: u64,
@@ -212,6 +224,7 @@ pub struct TimerMemoryPageExtentStatus {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RuntimeStateSummary {
     pub manifest_schema_version: u32,
     pub domains: Vec<RuntimeStateDomainSummary>,
@@ -223,6 +236,7 @@ pub struct RuntimeStateSummary {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RuntimeStateDomainSummary {
     pub domain: String,
     pub version: u32,
@@ -236,6 +250,7 @@ pub struct RuntimeStateDomainSummary {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RuntimeAuthStatusSummary {
     pub auth_features: Vec<RuntimeFeatureStatus>,
 }
@@ -245,6 +260,7 @@ pub struct RuntimeAuthStatusSummary {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RuntimeReceiptCapacityStatus {
     pub status: RuntimeCheckStatus,
     pub receipt_records: u64,
@@ -269,6 +285,7 @@ pub struct RuntimeReceiptCapacityStatus {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RecentFailure {
     pub occurred_at_ns: u64,
     pub subsystem: String,
@@ -284,6 +301,7 @@ pub struct RecentFailure {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RuntimeVisibilityEntry {
     pub field: String,
     pub visibility: RuntimeFieldVisibility,
@@ -292,9 +310,8 @@ pub struct RuntimeVisibilityEntry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use candid::{Decode, Encode};
-    use serde::Serialize;
-    use serde::de::DeserializeOwned;
+    use ic_platform::candid::contract::{Decode, Encode};
+    use serde::{Serialize, de::DeserializeOwned};
     use std::fmt::Debug;
 
     #[test]
@@ -309,9 +326,10 @@ mod tests {
             maximum_wasm_memory_growth_pages: None,
             maximum_stable_memory_growth_pages: None,
         };
-        let bytes = candid::encode_one(&status).unwrap();
+        let bytes = ic_platform::candid::contract::encode_one(&status).unwrap();
         assert_eq!(
-            candid::decode_one::<TimerCallbackPerformanceStatus>(&bytes).unwrap(),
+            ic_platform::candid::decoder::decode_one::<TimerCallbackPerformanceStatus>(&bytes)
+                .unwrap(),
             status
         );
         let json = serde_json::to_string(&status).unwrap();

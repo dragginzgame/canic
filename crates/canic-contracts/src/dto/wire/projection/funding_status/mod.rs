@@ -18,12 +18,16 @@ use crate::{
         FleetSubnetRootIcpRefillPolicy,
     },
 };
-use candid::{CandidType, Principal, Reserved};
+use ic_platform::{
+    Principal,
+    candid::contract::{CandidType, Reserved},
+};
 use serde::{Deserialize, Serialize};
 
 /// Bounded RemoteCoordinatorStatusResponse wire projection for funding status.
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RemoteCoordinatorStatusResponse {
     Funding(Box<RemoteCoordinatorFundingStatus>),
     Registry(Box<FleetRegistry>),
@@ -31,6 +35,7 @@ pub enum RemoteCoordinatorStatusResponse {
 
 /// Bounded RemoteCoordinatorRootFundingStatus wire projection for funding status.
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RemoteCoordinatorRootFundingStatus {
     pub fleet_subnet_root: Principal,
     pub lifecycle_status: FleetSubnetRootStatus,
@@ -48,6 +53,7 @@ pub struct RemoteCoordinatorRootFundingStatus {
 
 /// Bounded RemoteFundingPolicyRotationPhase wire projection for funding status.
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RemoteFundingPolicyRotationPhase {
     ActivatingRoots {
         activated_root_count: u32,
@@ -67,6 +73,7 @@ pub enum RemoteFundingPolicyRotationPhase {
 
 /// Bounded RemoteFundingPolicyRotationStatus wire projection for funding status.
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RemoteFundingPolicyRotationStatus {
     pub operation_id: [u8; 32],
     pub plan_digest: [u8; 32],
@@ -77,6 +84,7 @@ pub struct RemoteFundingPolicyRotationStatus {
 
 /// Bounded RemoteCoordinatorFundingStatus wire projection for funding status.
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RemoteCoordinatorFundingStatus {
     pub coordinator: Principal,
     pub current_cycles: Cycles,
@@ -98,12 +106,14 @@ pub struct RemoteCoordinatorFundingStatus {
 
 /// Bounded RemoteRootStatusResponse wire projection for funding status.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RemoteRootStatusResponse {
     Funding(RemoteRootFundingStatus),
 }
 
 /// Bounded RemoteRootFundingStatus wire projection for funding status.
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RemoteRootFundingStatus {
     pub fleet_subnet_root: Principal,
     pub lifecycle_status: FleetSubnetRootStatus,

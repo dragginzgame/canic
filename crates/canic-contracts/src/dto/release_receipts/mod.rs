@@ -4,12 +4,13 @@
 //! Does not own: authentication, replay decisions, accounting or settlement.
 //! Boundary: metadata preserves original identities without returning cached application replies.
 
-use candid::{CandidType, Principal};
+use ic_platform::{Principal, candid::contract::CandidType};
 use serde::Deserialize;
 
 /// Authentication class retained by the original operation, independent of the current observer.
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ReplayReleaseAuthentication {
     DirectCaller,
     DelegatedToken,
@@ -18,6 +19,7 @@ pub enum ReplayReleaseAuthentication {
 
 /// Exact retained replay phase; expiry never proves an uncertain paid effect absent.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ReplayReleasePhase {
     Reserved,
     ExternalEffectInFlight,
@@ -27,6 +29,7 @@ pub enum ReplayReleasePhase {
 
 /// Original recovery reason, including unsettled accounting after a known effect.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ReplayReleaseRecoveryReason {
     ExternalEffectStatusUnknown,
     ComponentChildLifecycleInterrupted,
@@ -36,6 +39,7 @@ pub enum ReplayReleaseRecoveryReason {
 
 /// Original effect identity; no field authorizes another dispatch.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ReplayReleaseEffect {
     RootCanisterProvision { command_kind: String },
     ManagementCall { canister: Principal, method: String },
@@ -44,6 +48,7 @@ pub enum ReplayReleaseEffect {
 
 /// Retained accounting state; TTL expiry does not establish an external effect's outcome.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ReplayReleaseIntentState {
     Pending,
     Committed,
@@ -52,6 +57,7 @@ pub enum ReplayReleaseIntentState {
 
 /// Exact bounded local reservation record, observed in the same query as its receipt.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ReplayReleaseIntent {
     pub resource_key: String,
     pub quantity: u64,
@@ -62,6 +68,7 @@ pub struct ReplayReleaseIntent {
 
 /// Original cost-guard identities and current records; missing records are not settlement proof.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ReplayReleaseSettlement {
     pub quota_intent_id: u64,
     pub reservation_intent_id: u64,
@@ -71,6 +78,7 @@ pub struct ReplayReleaseSettlement {
 
 /// Compact authority metadata for one retained replay receipt.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ReplayReleaseEntry {
     pub slot: [u8; 32],
     pub command_kind: String,
@@ -89,6 +97,7 @@ pub struct ReplayReleaseEntry {
 
 /// One bounded stable row per page, with key-only lookahead and no expiry pruning.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ReplayReleaseResponse {
     pub owner: Principal,
     pub entry: Option<ReplayReleaseEntry>,

@@ -6,11 +6,12 @@
 //! transport. Compatibility is checked against the canonical role contracts.
 
 use crate::dto::component_registry::RootComponentInitializationRequest;
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 
 /// Bounded RootCommand wire projection for component initialization.
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootCommand<'a> {
     BindComponentInitialization(&'a RootComponentInitializationRequest),
 }

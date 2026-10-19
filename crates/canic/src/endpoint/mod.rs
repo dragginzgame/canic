@@ -16,7 +16,8 @@
 //!     max_bytes: 32 * 1024, decoding_quota: 100_000, skipping_quota: 10_000,
 //!     max_type_len: 128, max_header_len: 4096,
 //! };
-//! #[derive(candid::CandidType)]
+//! #[derive(ic_platform::candid::contract::CandidType)]
+//! #[candid_path("ic_platform::candid::contract")]
 //! struct Receipt { accepted_bytes: u64 }
 //! #[canic::canic_update(requires(caller::is_controller()),
 //!     on_access_denied = "reject", decode = LIMITS)]
@@ -84,7 +85,8 @@
 //! fn duplicate_limits() -> Result<(), canic::Error> { Ok(()) }
 //! ```
 
-use candid::{DecoderConfig, utils::ArgumentDecoder};
+use ic_platform::candid::contract::ArgumentDecoder;
+use ic_platform::candid::decoder::DecoderConfig;
 use std::fmt;
 
 ///
@@ -172,7 +174,7 @@ impl ArgumentLimits {
         } else {
             bytes
         };
-        candid::utils::decode_args_with_config(bytes, &config)
+        ic_platform::candid::decoder::decode_args_with_config(bytes, &config)
             .map_err(|_| ArgumentDecodeError::InvalidCandid)
     }
 
@@ -184,8 +186,8 @@ impl ArgumentLimits {
     /// Returns a size refusal without copying, or a bounded Candid refusal.
     #[doc(hidden)]
     pub fn read<T: for<'a> ArgumentDecoder<'a>>(self) -> Result<T, ArgumentDecodeError> {
-        self.check_size(ic0::msg_arg_data_size())?;
-        let bytes = ic_cdk::api::msg_arg_data();
+        self.check_size(ic_platform::ic0::msg_arg_data_size())?;
+        let bytes = ic_platform::cdk::api::msg_arg_data();
         self.decode(&bytes)
     }
 }

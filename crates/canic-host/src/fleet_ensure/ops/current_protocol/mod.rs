@@ -34,7 +34,6 @@ use crate::{
         validate_release_artifact_relative_path,
     },
 };
-use candid::{CandidType, Principal};
 use canic_contracts::{
     cycles::Cycles,
     dto::{
@@ -90,6 +89,7 @@ use canic_core::control_plane_support::{
     },
 };
 use ic_host_artifacts::artifact::chunk_digests;
+use ic_platform::{Principal, candid::contract::CandidType};
 use sha2_host::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -1398,7 +1398,7 @@ pub(super) fn apply(
             if !component_registry_progresses(expected, &response) {
                 return Err(CurrentProtocolError::ResponseMismatch);
             }
-            candid::encode_one(response)
+            ic_platform::candid::contract::encode_one(response)
                 .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?
         }
         CurrentFleetProtocolAction::SynchronizeRegistry { request, .. }
@@ -1585,7 +1585,7 @@ fn observation<T: CandidType>(
     applied: bool,
     value: &T,
 ) -> Result<EffectObservation, CurrentProtocolError> {
-    let bytes = candid::encode_one(value)
+    let bytes = ic_platform::candid::contract::encode_one(value)
         .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?;
     Ok(EffectObservation {
         provisioning_progress: None,
@@ -2386,7 +2386,7 @@ fn append_chunk_actions(
             })?,
             bytes: bytes.to_vec(),
         };
-        let encoded = candid::encode_one(&request)
+        let encoded = ic_platform::candid::contract::encode_one(&request)
             .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?;
         if encoded.len() > canic_core::CANIC_WASM_CHUNK_REQUEST_MAX_BYTES {
             return Err(CurrentProtocolError::Configuration(

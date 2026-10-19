@@ -17,8 +17,8 @@ use crate::{
     },
     view::provisioning_release::RootComponentOperationEntryView,
 };
-use candid::Principal;
 use canic_core::control_plane_support::error::InternalError;
+use ic_platform::Principal;
 
 impl RootComponentProvisioningOps {
     /// Read at most one bounded record and two keys; never scan unrelated operation bodies.

@@ -6,8 +6,7 @@
 
 use crate::{
     cdk::structures::{
-        DefaultMemoryImpl, Storable, btreemap::BTreeMap as StableBtreeMap, memory::RuntimeMemory,
-        storable::Bound,
+        DefaultMemoryImpl, StableBTreeMap as StableBtreeMap, Storable, storable::Bound,
     },
     domain::cycles::CycleTopupFailureDisposition,
     storage::prelude::*,
@@ -52,7 +51,7 @@ std::thread_local! {
 ///
 
 pub struct CycleTracker {
-    map: StableBtreeMap<u64, CycleTrackerBalanceRecord, RuntimeMemory<DefaultMemoryImpl>>,
+    map: StableBtreeMap<u64, CycleTrackerBalanceRecord, DefaultMemoryImpl>,
 }
 
 ///
@@ -145,12 +144,12 @@ impl CyclesFundingLedgerData {
 ///
 
 pub struct CyclesFundingLedger {
-    map: StableBtreeMap<Principal, CyclesFundingLedgerRecord, RuntimeMemory<DefaultMemoryImpl>>,
+    map: StableBtreeMap<Principal, CyclesFundingLedgerRecord, DefaultMemoryImpl>,
 }
 
 impl CyclesFundingLedger {
     pub const fn new(
-        map: StableBtreeMap<Principal, CyclesFundingLedgerRecord, RuntimeMemory<DefaultMemoryImpl>>,
+        map: StableBtreeMap<Principal, CyclesFundingLedgerRecord, DefaultMemoryImpl>,
     ) -> Self {
         Self { map }
     }
@@ -181,7 +180,7 @@ impl CyclesFundingLedger {
 
     #[cfg(test)]
     pub(crate) fn clear_for_tests() {
-        CYCLES_FUNDING_LEDGER.with_borrow_mut(|ledger| ledger.map.clear_new());
+        CYCLES_FUNDING_LEDGER.with_borrow_mut(|ledger| ledger.map.clear());
     }
 
     #[cfg(test)]
@@ -204,7 +203,7 @@ impl CyclesFundingLedger {
     #[cfg(test)]
     pub(crate) fn import(data: CyclesFundingLedgerData) {
         CYCLES_FUNDING_LEDGER.with_borrow_mut(|ledger| {
-            ledger.map.clear_new();
+            ledger.map.clear();
             for entry in data.entries {
                 ledger.map.insert(entry.child, entry.record);
             }
@@ -354,17 +353,12 @@ impl CycleTopupEventsData {
 ///
 
 pub struct CycleTopupEvents {
-    map:
-        StableBtreeMap<CycleTopupEventKey, CycleTopupEventRecord, RuntimeMemory<DefaultMemoryImpl>>,
+    map: StableBtreeMap<CycleTopupEventKey, CycleTopupEventRecord, DefaultMemoryImpl>,
 }
 
 impl CycleTopupEvents {
     pub const fn new(
-        map: StableBtreeMap<
-            CycleTopupEventKey,
-            CycleTopupEventRecord,
-            RuntimeMemory<DefaultMemoryImpl>,
-        >,
+        map: StableBtreeMap<CycleTopupEventKey, CycleTopupEventRecord, DefaultMemoryImpl>,
     ) -> Self {
         Self { map }
     }
@@ -418,7 +412,7 @@ impl CycleTopupEvents {
     #[cfg(test)]
     pub(crate) fn import(data: CycleTopupEventsData) {
         CYCLE_TOPUP_EVENTS.with_borrow_mut(|events| {
-            events.map.clear_new();
+            events.map.clear();
             for entry in data.entries {
                 events.map.insert(entry.key, entry.record);
             }
@@ -427,7 +421,7 @@ impl CycleTopupEvents {
 
     #[cfg(test)]
     pub(crate) fn clear_for_tests() {
-        CYCLE_TOPUP_EVENTS.with_borrow_mut(|events| events.map.clear_new());
+        CYCLE_TOPUP_EVENTS.with_borrow_mut(|events| events.map.clear());
     }
 
     fn purge_inner(&mut self, cutoff: u64, limit: usize) -> usize {
@@ -467,7 +461,7 @@ impl CycleTopupEvents {
 
 impl CycleTracker {
     pub const fn new(
-        map: StableBtreeMap<u64, CycleTrackerBalanceRecord, RuntimeMemory<DefaultMemoryImpl>>,
+        map: StableBtreeMap<u64, CycleTrackerBalanceRecord, DefaultMemoryImpl>,
     ) -> Self {
         Self { map }
     }
@@ -523,7 +517,7 @@ impl CycleTracker {
     #[cfg(test)]
     pub(crate) fn import(data: CycleTrackerData) {
         CYCLE_TRACKER.with_borrow_mut(|tracker| {
-            tracker.map.clear_new();
+            tracker.map.clear();
             for entry in data.entries {
                 tracker.map.insert(
                     entry.timestamp_secs,

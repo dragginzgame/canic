@@ -13,8 +13,9 @@ pub mod mgmt;
 pub mod nns;
 pub mod release_build;
 
-use crate::cdk::candid::Error as CandidError;
-use ic_cdk::call::{CallFailed, CandidDecodeFailed, Error as CdkCallError};
+use ic_platform::candid::contract::Error as CandidError;
+use ic_platform::cdk::call::CallFailed;
+use ic_platform::cdk::call::{CandidDecodeFailed, Error as CdkCallError};
 use thiserror::Error as ThisError;
 
 ///
@@ -74,7 +75,7 @@ impl IcInfraError {
             Self::CallFailed(CallFailed::CallRejected(rejection))
                 if matches!(
                     rejection.reject_code(),
-                    Ok(ic_cdk::call::RejectCode::DestinationInvalid)
+                    Ok(ic_platform::cdk::call::RejectCode::DestinationInvalid)
                 )
         )
     }

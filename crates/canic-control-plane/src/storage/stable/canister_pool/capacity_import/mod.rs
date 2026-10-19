@@ -12,9 +12,9 @@ use serde::{Deserialize, Serialize};
 pub struct PoolImportBootstrapRecord {
     pub review_sha256: [u8; 32],
     pub install_id: [u8; 32],
-    pub operator: candid::Principal,
-    pub store: candid::Principal,
-    pub sources: Vec<candid::Principal>,
+    pub operator: ic_platform::Principal,
+    pub store: ic_platform::Principal,
+    pub sources: Vec<ic_platform::Principal>,
 }
 
 /// Root-issued effect awaiting exact post-effect management evidence.

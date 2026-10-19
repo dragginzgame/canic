@@ -32,44 +32,44 @@ use crate::{
     },
     role_contract::{PackageValidationMode, resolve_declared_role_contracts},
 };
-use candid::Principal;
-use canic_contracts::dto::canister::CanisterInfo;
-use canic_contracts::dto::canister::CanisterInspectionRequest;
-use canic_contracts::dto::canister::CanisterStatusResponse;
-use canic_contracts::dto::canister::CanisterStatusType;
-use canic_contracts::dto::component_provisioning::FleetComponentProvisioningPhase;
-use canic_contracts::dto::component_provisioning::FleetComponentProvisioningStatusResponse;
-use canic_contracts::dto::component_provisioning::RootComponentProvisioningPhase;
-use canic_contracts::dto::component_provisioning::RootComponentProvisioningResult;
-use canic_contracts::dto::component_provisioning::RootComponentProvisioningStatusResponse;
-use canic_contracts::dto::component_registry::ComponentLifecycleStatus;
-use canic_contracts::dto::component_registry::ComponentProvisioningOrigin;
-use canic_contracts::dto::component_registry::ComponentRegistryActivePartitionRequest;
-use canic_contracts::dto::component_registry::ComponentRegistryActivePartitionResponse;
-use canic_contracts::dto::component_registry::ComponentRegistryPartitionResponse;
-use canic_contracts::dto::component_registry::RootComponentAllocationPhase;
-use canic_contracts::dto::component_registry::RootComponentChildAllocationResponse;
-use canic_contracts::dto::fleet_registry::FleetRegistry;
-use canic_contracts::dto::fleet_registry::FleetRegistryVersion;
-use canic_contracts::dto::fleet_registry::FleetSubnetRootEntry;
-use canic_contracts::dto::fleet_registry::FleetSubnetRootStatus;
-use canic_contracts::dto::page::PageRequest;
-use canic_contracts::dto::pool::CanisterPoolAssetStatus;
-use canic_contracts::dto::pool::CanisterPoolClaim;
-use canic_contracts::dto::pool::CanisterPoolStatusRequest;
-use canic_contracts::dto::role::OperationStatusRequest;
-use canic_contracts::dto::wire::projection::capacity_management::RootRequest as RootInventoryCommand;
-use canic_contracts::dto::wire::projection::capacity_management::RootResponse as RootInventoryCommandResponse;
-use canic_contracts::dto::wire::projection::current_inventory::ChildrenStatusRequest;
-use canic_contracts::dto::wire::projection::current_inventory::ChildrenStatusResponse;
-use canic_contracts::dto::wire::projection::current_inventory::RootInventoryStatusRequest;
-use canic_contracts::dto::wire::projection::current_inventory::RootInventoryStatusResponse;
-use canic_contracts::ids::CanisterRole;
-use canic_contracts::ids::ComponentBinding;
-use canic_contracts::ids::ComponentDeploymentConfigurationDigest;
-use canic_contracts::ids::ComponentInstanceId;
-use canic_contracts::ids::FleetSubnetRootReleaseSet;
-use canic_contracts::protocol;
+use canic_contracts::{
+    dto::{
+        canister::{
+            CanisterInfo, CanisterInspectionRequest, CanisterStatusResponse, CanisterStatusType,
+        },
+        component_provisioning::{
+            FleetComponentProvisioningPhase, FleetComponentProvisioningStatusResponse,
+            RootComponentProvisioningPhase, RootComponentProvisioningResult,
+            RootComponentProvisioningStatusResponse,
+        },
+        component_registry::{
+            ComponentLifecycleStatus, ComponentProvisioningOrigin,
+            ComponentRegistryActivePartitionRequest, ComponentRegistryActivePartitionResponse,
+            ComponentRegistryPartitionResponse, RootComponentAllocationPhase,
+            RootComponentChildAllocationResponse,
+        },
+        fleet_registry::{
+            FleetRegistry, FleetRegistryVersion, FleetSubnetRootEntry, FleetSubnetRootStatus,
+        },
+        page::PageRequest,
+        pool::{CanisterPoolAssetStatus, CanisterPoolClaim, CanisterPoolStatusRequest},
+        role::OperationStatusRequest,
+        wire::projection::{
+            capacity_management::{
+                RootRequest as RootInventoryCommand, RootResponse as RootInventoryCommandResponse,
+            },
+            current_inventory::{
+                ChildrenStatusRequest, ChildrenStatusResponse, RootInventoryStatusRequest,
+                RootInventoryStatusResponse,
+            },
+        },
+    },
+    ids::{
+        CanisterRole, ComponentBinding, ComponentDeploymentConfigurationDigest,
+        ComponentInstanceId, FleetSubnetRootReleaseSet,
+    },
+    protocol,
+};
 use canic_core::{
     cdk::utils::hash::hex_bytes,
     control_plane_support::{config::ComponentTopology, ops::fleet_registry::FleetRegistryOps},
@@ -77,6 +77,7 @@ use canic_core::{
 };
 use ic_host_artifacts::artifact::ArtifactError;
 use ic_host_fs::read::read_optional_file_no_follow;
+use ic_platform::Principal;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     fs,

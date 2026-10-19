@@ -148,8 +148,9 @@ Canic defaults to 16-page (1 MiB) buckets. The build-time
 `CANIC_MEMORY_BUCKET_PAGES` setting selects larger buckets for applications
 requiring more manager capacity. See the [stable-memory layout](stable-memory-layout.md)
 for the capacity tradeoff, consolidated stores and measured template decisions.
-Storage uses `ic_memory::RuntimeMemory`; collections and memory traits come from
-`ic_memory::ic_stable_structures`, the exact re-exported substrate dependency.
+Storage collections use `ic_storage::adapter` and consume exclusive
+`ic_memory::RuntimeMemory` leases. Capacity reservation and observation use the
+collection owner’s API; they do not open a second handle to its allocation.
 
 ## Optional Public Metrics
 

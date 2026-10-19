@@ -3,13 +3,13 @@ use crate::dto::fleet_registry::{
     FleetRegistryVersion, FleetSubnetRootDrainingReservationRequest,
     FleetSubnetRootDrainingReservationResponse, FleetSubnetRootEntry, FleetSubnetRootStatus,
 };
-use candid::Principal;
 use canic_contracts::ids::{
     AppId, CanonicalNetworkId, ComponentTopologyDigest, CyclesFundingBudget, FleetBinding,
     FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority,
     FleetSubnetCanisterPoolConfig, FleetSubnetRootLimits, FleetSubnetRootReleaseSet,
     ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
 };
+use ic_platform::Principal;
 
 #[test]
 fn reservation_hash_is_domain_separated_and_excludes_only_its_hash_field() {

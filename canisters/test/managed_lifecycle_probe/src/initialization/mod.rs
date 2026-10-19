@@ -25,18 +25,12 @@ canic::memory::memory_allocation_pool!(
 pub fn memory() -> canic::memory::MemoryBootstrap {
     let mut input = canic::memory::framework();
     input.pool = memory_pool().expect("fixture grants");
-    input.requests.push(
-        ic_memory::MemoryRequest::new("managed-probe", KEY, ic_memory::SchemaMetadata::default())
-            .unwrap(),
-    );
-    input.requests.push(
-        ic_memory::MemoryRequest::new(
-            "managed-probe",
-            super::checkpoint::KEY,
-            ic_memory::SchemaMetadata::default(),
-        )
-        .unwrap(),
-    );
+    input
+        .requests
+        .push(ic_memory::MemoryRequest::new("managed-probe", KEY).unwrap());
+    input
+        .requests
+        .push(ic_memory::MemoryRequest::new("managed-probe", super::checkpoint::KEY).unwrap());
     input
 }
 

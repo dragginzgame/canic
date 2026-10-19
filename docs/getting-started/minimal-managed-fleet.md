@@ -223,7 +223,20 @@ canisters. Pre-1.0 release transitions use explicit reviewed reinstall.
 
 Both the hub Component and its potential registry child declare their role in
 Cargo metadata and use Canic endpoint macros for application methods. Each
-canister package must produce a `cdylib` Wasm artifact:
+canister package must produce a `cdylib` Wasm artifact. Declare versions in the
+workspace catalog, with Canic defaults disabled:
+
+```toml
+[workspace.dependencies]
+candid = "<version>"
+canic = { version = "<same-version-as-canic-cli>", default-features = false }
+ic-cdk = "0.20"
+ic-platform = { version = "0.1.5", default-features = false }
+```
+
+In each canister member, use dependency tables and an explicit runtime feature
+array. Use `features = []` when no runtime features are needed; select required
+features on the normal dependency, not the workspace catalog or build dependency:
 
 ```toml
 [lib]
@@ -234,18 +247,19 @@ app = "example"
 role = "hub"
 
 [dependencies]
-candid = "<version>"
-canic = "<same-version-as-canic-cli>"
-ic-cdk = "0.20"
+candid.workspace = true
+ic-platform = { workspace = true, features = ["candid"] }
+canic = { workspace = true, features = [] }
+ic-cdk.workspace = true
 
 [build-dependencies]
-canic = "<same-version-as-canic-cli>"
+canic = { workspace = true, features = [] }
 ```
 
 ```rust
 #![expect(clippy::unused_async)]
 
-use candid::Principal;
+use ic_platform::Principal;
 use canic::{Error, prelude::*};
 use ic_cdk::api::msg_caller;
 

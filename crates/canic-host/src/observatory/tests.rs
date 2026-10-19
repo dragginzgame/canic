@@ -454,7 +454,7 @@ fn exhausted_collection_never_launches_a_query_or_version_probe() {
         compatibility: None,
     };
     let entry = RegistryEntry {
-        pid: candid::Principal::anonymous().to_text(),
+        pid: ic_platform::Principal::anonymous().to_text(),
         role: Some("root".into()),
         parent_pid: None,
         module_hash: None,
@@ -487,7 +487,7 @@ fn coordinator_metric_selectors_are_unsupported_without_transport_effects() {
         compatibility: None,
     };
     let entry = RegistryEntry {
-        pid: candid::Principal::anonymous().to_text(),
+        pid: ic_platform::Principal::anonymous().to_text(),
         role: Some(CanisterRole::FLEET_COORDINATOR.to_string()),
         parent_pid: None,
         module_hash: None,
@@ -535,7 +535,7 @@ fn metric_and_history_capabilities_are_independent() {
         compatibility: None,
     };
     let mut entry = RegistryEntry {
-        pid: candid::Principal::anonymous().to_text(),
+        pid: ic_platform::Principal::anonymous().to_text(),
         role: Some("configured_component".into()),
         parent_pid: None,
         module_hash: None,

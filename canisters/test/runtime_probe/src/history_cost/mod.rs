@@ -20,13 +20,14 @@ pub fn sample(rows: u16) -> Result<u64, Error> {
     assert!(rows <= 256);
     ROWS.set(rows);
     PublicStatusApi::set_application_sampler(Some(ApplicationMetricsSampler::new(provider)));
-    let start = ic_cdk::api::performance_counter(0);
+    let start = ic_platform::cdk::api::performance_counter(0);
     PublicStatusApi::sample_metrics()?;
-    Ok(ic_cdk::api::performance_counter(0) - start)
+    Ok(ic_platform::cdk::api::performance_counter(0) - start)
 }
 
 /// Separate query-message cost and response evidence for one exact series.
-#[derive(candid::CandidType)]
+#[derive(ic_platform::candid::contract::CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct HistoryCost {
     instructions: u64,
     points: u64,
@@ -36,14 +37,14 @@ pub struct HistoryCost {
 }
 
 pub fn history(limit: u64) -> HistoryCost {
-    let start = ic_cdk::api::performance_counter(0);
+    let start = ic_platform::cdk::api::performance_counter(0);
     let history = PublicStatusApi::history(PublicHistoryRequest {
         family: PublicMetricFamily::Application,
         name: metric_name(0),
         canister_id: None,
         page: PageRequest { offset: 0, limit },
     });
-    let instructions = ic_cdk::api::performance_counter(0) - start;
+    let instructions = ic_platform::cdk::api::performance_counter(0) - start;
     HistoryCost {
         instructions,
         points: history.points.entries.len() as u64,
@@ -62,7 +63,7 @@ fn metric_name(index: u16) -> String {
     reason = "production sampler callback signature"
 )]
 fn provider() -> Result<Vec<PublicMetric>, Error> {
-    let now = ic_cdk::api::time();
+    let now = ic_platform::cdk::api::time();
     Ok((0..ROWS.get())
         .map(|index| PublicMetric {
             name: metric_name(index),

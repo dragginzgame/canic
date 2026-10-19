@@ -69,9 +69,9 @@ fn page(ids: impl IntoIterator<Item = u64>, next_after: Option<u64>) -> RootFund
 }
 
 fn wire(page: RootFundingReleaseResponse) -> Vec<u8> {
-    candid::encode_one(Ok::<_, CanicError>(Response::FundingRelease(Box::new(
-        page,
-    ))))
+    ic_platform::candid::contract::encode_one(Ok::<_, CanicError>(Response::FundingRelease(
+        Box::new(page),
+    )))
     .unwrap()
 }
 
@@ -82,15 +82,17 @@ fn release_assessment_retains_accounts_and_does_not_treat_overflow_as_zero() {
     completed.transfer_uncertain = false;
     completed.response.status = IcpRefillStatus::Completed;
     completed.response.error_code = None;
-    completed.response.cycles_sent = Some(candid::Nat::from(123_u64));
+    completed.response.cycles_sent = Some(ic_platform::candid::contract::Nat::from(123_u64));
     completed.refund_block_index = None;
     completed.transaction_too_old_min_block_index = None;
     history.icp_refills[1].refund_block_index = None;
     history.icp_refills[1].transaction_too_old_min_block_index = None;
     history.icp_refills[1].response.status = IcpRefillStatus::Completed;
     history.icp_refills[1].response.error_code = None;
-    history.icp_refills[1].response.cycles_sent =
-        Some(candid::Nat::from(u128::MAX) + candid::Nat::from(1_u8));
+    history.icp_refills[1].response.cycles_sent = Some(
+        ic_platform::candid::contract::Nat::from(u128::MAX)
+            + ic_platform::candid::contract::Nat::from(1_u8),
+    );
     let expected = wire(history.clone());
     let evidence = FleetReleaseFundingView {
         coordinator: coordinator_status(&registry()),
@@ -242,7 +244,7 @@ fn decoder_bounds_raw_skipping_work_and_aggregate_bytes() {
     for invalid in [
         vec![0; RESPONSE_BYTES + 1],
         b"DIDL".to_vec(),
-        candid::encode_one("wrong reply").unwrap(),
+        ic_platform::candid::contract::encode_one("wrong reply").unwrap(),
     ] {
         let mut remaining = MAXIMUM_CENSUS_BYTES;
         assert!(matches!(
@@ -255,9 +257,11 @@ fn decoder_bounds_raw_skipping_work_and_aggregate_bytes() {
     }
     // Zero-sized values have small wire size but expensive skipping work.
     let reply = Ok::<_, CanicError>(Response::FundingRelease(Box::new(page([], None))));
-    let extra = candid::encode_args((reply, vec![(); RESPONSE_BYTES * 8 + 1])).unwrap();
+    let extra =
+        ic_platform::candid::contract::encode_args((reply, vec![(); RESPONSE_BYTES * 8 + 1]))
+            .unwrap();
     assert!(extra.len() < RESPONSE_BYTES);
-    candid::decode_one::<Result<Response, CanicError>>(&extra)
+    ic_platform::candid::decoder::decode_one::<Result<Response, CanicError>>(&extra)
         .unwrap()
         .unwrap();
     let mut remaining = MAXIMUM_CENSUS_BYTES;

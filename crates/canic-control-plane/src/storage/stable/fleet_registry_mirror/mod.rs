@@ -13,7 +13,7 @@ use canic_contracts::dto::{
 };
 #[cfg(feature = "root-control-plane")]
 use canic_core::{
-    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
+    cdk::structures::{DefaultMemoryImpl, StableCell as Cell},
     impl_storable_bounded,
 };
 use serde::{Deserialize, Serialize};
@@ -26,7 +26,7 @@ const ROOT_FLEET_REGISTRY_MIRROR_MAX_BYTES: u32 = 4_194_304;
 #[cfg(feature = "root-control-plane")]
 std::thread_local! {
     static ROOT_FLEET_REGISTRY_MIRROR:
-        RefCell<Cell<RootFleetRegistryMirrorStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
+        RefCell<Cell<RootFleetRegistryMirrorStateRecord, DefaultMemoryImpl>> =
         RefCell::new(Cell::init(
             canic_core::memory::open(crate::memory::keys::ROOT_FLEET_REGISTRY_MIRROR_V1),
             RootFleetRegistryMirrorStateRecord::default(),

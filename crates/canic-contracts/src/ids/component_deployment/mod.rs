@@ -4,7 +4,7 @@
 //! Does not own: group compilation, placement policy, service authority, or runtime parentage.
 //! Boundary: source identities and member paths are bounded canonical values at decode time.
 
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Deserializer, Serialize, de};
 use std::{borrow::Borrow, fmt, str::FromStr};
 use thiserror::Error as ThisError;
@@ -48,13 +48,13 @@ macro_rules! bounded_deployment_name {
         }
 
         impl CandidType for $name {
-            fn _ty() -> candid::types::Type {
-                candid::types::TypeInner::Text.into()
+            fn _ty() -> ic_platform::candid::contract::types::Type {
+                ic_platform::candid::contract::types::TypeInner::Text.into()
             }
 
             fn idl_serialize<S>(&self, serializer: S) -> Result<(), S::Error>
             where
-                S: candid::types::Serializer,
+                S: ic_platform::candid::contract::types::Serializer,
             {
                 serializer.serialize_text(self.as_str())
             }
@@ -119,6 +119,7 @@ bounded_deployment_name!(
 #[derive(
     CandidType, Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
 )]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(transparent)]
 pub struct ComponentDeploymentConfigurationDigest([u8; 32]);
 
@@ -152,6 +153,7 @@ impl fmt::Display for ComponentDeploymentConfigurationDigest {
 #[derive(
     CandidType, Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
 )]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ComponentGroupPlacementId {
     pub deployment: ComponentGroupDeploymentId,
@@ -190,13 +192,13 @@ impl TryFrom<Vec<ComponentGroupMemberId>> for ComponentGroupMemberPath {
 }
 
 impl CandidType for ComponentGroupMemberPath {
-    fn _ty() -> candid::types::Type {
+    fn _ty() -> ic_platform::candid::contract::types::Type {
         <Vec<ComponentGroupMemberId> as CandidType>::_ty()
     }
 
     fn idl_serialize<S>(&self, serializer: S) -> Result<(), S::Error>
     where
-        S: candid::types::Serializer,
+        S: ic_platform::candid::contract::types::Serializer,
     {
         self.0.idl_serialize(serializer)
     }
@@ -324,23 +326,28 @@ mod tests {
 
     #[test]
     fn deployment_names_validate_serde_and_candid_input() {
-        let invalid_candid = candid::encode_one("bad/name").expect("encode invalid service ID");
+        let invalid_candid = ic_platform::candid::contract::encode_one("bad/name")
+            .expect("encode invalid service ID");
         let invalid_cbor = {
             let mut bytes = Vec::new();
             ciborium::ser::into_writer("bad/name", &mut bytes).expect("encode invalid service ID");
             bytes
         };
 
-        assert!(candid::decode_one::<FleetServiceId>(&invalid_candid).is_err());
+        assert!(
+            ic_platform::candid::decoder::decode_one::<FleetServiceId>(&invalid_candid).is_err()
+        );
         assert!(ciborium::de::from_reader::<FleetServiceId, _>(invalid_cbor.as_slice()).is_err());
     }
 
     #[test]
     fn configuration_digest_preserves_exact_bytes_and_hex_boundary() {
         let digest = ComponentDeploymentConfigurationDigest::from_bytes([0xab; 32]);
-        let encoded = candid::encode_one(digest).expect("encode configuration digest");
+        let encoded =
+            ic_platform::candid::contract::encode_one(digest).expect("encode configuration digest");
         let decoded: ComponentDeploymentConfigurationDigest =
-            candid::decode_one(&encoded).expect("decode configuration digest");
+            ic_platform::candid::decoder::decode_one(&encoded)
+                .expect("decode configuration digest");
 
         assert_eq!(decoded, digest);
         assert_eq!(digest.as_bytes(), &[0xab; 32]);
@@ -356,9 +363,10 @@ mod tests {
                 .expect("Component Group deployment ID"),
             ordinal: 7,
         };
-        let candid = candid::encode_one(&placement).expect("encode placement identity");
+        let candid = ic_platform::candid::contract::encode_one(&placement)
+            .expect("encode placement identity");
         let decoded: ComponentGroupPlacementId =
-            candid::decode_one(&candid).expect("decode placement identity");
+            ic_platform::candid::decoder::decode_one(&candid).expect("decode placement identity");
 
         assert_eq!(decoded, placement);
         assert!(crate::serialization::serialize(&placement).unwrap().len() <= 128);
@@ -371,9 +379,9 @@ mod tests {
             "database_a".parse().expect("Component member"),
         ])
         .expect("member path");
-        let candid = candid::encode_one(&path).expect("encode member path");
+        let candid = ic_platform::candid::contract::encode_one(&path).expect("encode member path");
         let decoded: ComponentGroupMemberPath =
-            candid::decode_one(&candid).expect("decode member path");
+            ic_platform::candid::decoder::decode_one(&candid).expect("decode member path");
 
         assert_eq!(decoded, path);
         assert_eq!(path.len(), 2);

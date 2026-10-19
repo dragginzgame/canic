@@ -34,8 +34,8 @@ use crate::{
         fleet_registry::FleetRegistryOps,
     },
 };
-use candid::Principal;
 use canic_contracts::ids::{ComponentGroupPlacementId, ComponentInstanceId, FleetServiceId};
+use ic_platform::Principal;
 use std::{
     cmp::Ordering,
     collections::{BTreeMap, BTreeSet},

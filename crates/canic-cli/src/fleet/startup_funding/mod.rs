@@ -302,7 +302,7 @@ mod tests {
     fn child_binding() -> canic_host::fleet_ensure::view::startup_funding::StartupChildFundingBinding
     {
         use canic_contracts::ids::*;
-        let principal = |byte| candid::Principal::from_slice(&[byte]);
+        let principal = |byte| ic_platform::Principal::from_slice(&[byte]);
         canic_host::fleet_ensure::view::startup_funding::StartupChildFundingBinding {
             release_set: FleetSubnetRootReleaseSet {
                 release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes(

@@ -42,18 +42,16 @@ use canic_contracts::{
         FleetSubnetRootFundingPolicy,
     },
 };
+use canic_core::shared_support::fleet_admission_policy::{
+    bind_initial_fleet_admission_policy, compile_fleet_admission_policy_template,
+};
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+use cases::GovernedTestCase;
 #[cfg(all(
     feature = "pocketic-fixtures",
     any(not(test), feature = "governed-pocketic-tests")
 ))]
-use canic_core::{
-    cdk::candid::Principal,
-    shared_support::fleet_admission_policy::{
-        bind_initial_fleet_admission_policy, compile_fleet_admission_policy_template,
-    },
-};
-#[cfg(all(test, feature = "governed-pocketic-tests"))]
-use cases::GovernedTestCase;
+use ic_platform::Principal;
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
 use std::{
     collections::BTreeSet,

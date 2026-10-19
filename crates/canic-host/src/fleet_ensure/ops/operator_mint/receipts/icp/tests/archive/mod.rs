@@ -10,10 +10,12 @@ use crate::fleet_ensure::ops::operator_mint::receipts::{
     },
     test_support::{cbor, der_key, sign, signing_key},
 };
-use candid::Principal;
-use ic_agent::agent::signed_update_inspect;
-use ic_certification::{Certificate, Delegation, fork, labeled, leaf};
-use icrc_ledger_types::icrc3::archive::QueryArchiveFn;
+use ic_platform::{
+    Principal,
+    agent::signed_update_inspect,
+    certification::{Certificate, Delegation, fork, labeled, leaf},
+    icrc_ledger_types::QueryArchiveFn,
+};
 use serde_bytes::ByteBuf;
 use sha2_host::{Digest, Sha256};
 
@@ -56,7 +58,7 @@ fn evidence(
     fixture.certificate(
         read.request_id(),
         b"replied",
-        &candid::encode_one(reply).unwrap(),
+        &ic_platform::candid::contract::encode_one(reply).unwrap(),
     )
 }
 
@@ -70,7 +72,7 @@ fn certified_redirect_and_archive_reply_authenticate_the_original_transfer() {
         fixture.intent.authority.operator,
         archive.canister(),
         "get_encoded_blocks",
-        &candid::encode_one(ReadArgs {
+        &ic_platform::candid::contract::encode_one(ReadArgs {
             start: 77,
             length: 1,
         })
@@ -245,7 +247,7 @@ fn archive_cannot_reuse_ledger_reply_redirect_again_or_change_transfer() {
     let cert = fixture.certificate(
         read.request_id(),
         b"replied",
-        &candid::encode_one(reply).unwrap(),
+        &ic_platform::candid::contract::encode_one(reply).unwrap(),
     );
     assert!(matches!(
         verify_read(&fixture.agent, &read, &cert, limits()),

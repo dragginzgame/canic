@@ -103,7 +103,7 @@ pub fn declare() {
         WatchdogReconcileState::Inactive,
     )
     .unwrap_or_else(|error| {
-        ic_cdk::trap(format!(
+        ic_platform::cdk::api::trap(format!(
             "canister-pool maintenance declaration rejected: {error}"
         ))
     });
@@ -428,7 +428,7 @@ fn cancel_maintenance_timer() -> Result<(), AuthorityTimerError> {
 }
 
 fn spawn_maintenance(attempt: AsyncJobAttempt) {
-    ic_cdk::futures::spawn(async move {
+    ic_platform::cdk::futures::spawn(async move {
         let _result = finish_maintenance_timer(attempt, maintain_once_inner().await);
     });
 }

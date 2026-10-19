@@ -147,3 +147,52 @@ pub(super) fn pair_for_account(
     let login = logins.records().next().unwrap();
     (session, replay, login)
 }
+
+/// Run the actual shared session decision with protected fixture enrollment.
+pub(super) fn authorize(
+    store: &mut impl SessionStore,
+    ledger: &mut MemoryLoginRevocations,
+    now_ns: u64,
+    generation: u64,
+    required_scopes: &[String],
+) -> Result<Session, SessionError> {
+    let signer = SigningKey::from_bytes(&[42; 32]);
+    let audience = audience();
+    let role: AuthRole = "app_service".parse().unwrap();
+    let grants = vec![DelegatedRoleGrant {
+        target: role.clone(),
+        scopes: vec!["read".into()],
+    }];
+    let context = SessionContext {
+        authority: PortableClaimsContext {
+            audience: &audience,
+            issuer: Principal::from_slice(&[42]),
+            mechanism: PortableMechanism::Ed25519,
+            key_binding_id: Sha256::digest(signer.verifying_key().to_bytes()).into(),
+            grants: &grants,
+            caller: browser(1),
+            now_ns,
+            authority_not_before_ns: 0,
+            authority_expires_at_ns: NOW + 120_000_000_000,
+            enrollment_expires_at_ns: NOW + 90_000_000_000,
+            min_login_started_at_ns: 0,
+            min_proof_issued_at_ns: 0,
+            max_login_ttl_ns: 86_400_000_000_000,
+            max_proof_ttl_ns: 60_000_000_000,
+        },
+        role: &role,
+        required_scopes,
+    };
+    ic_auth::session::authorize_session(
+        store,
+        ledger,
+        &context,
+        SessionPolicy {
+            generation,
+            enabled: true,
+            subject_admissible: true,
+            default_ttl_secs: 5,
+            max_ttl_secs: 30,
+        },
+    )
+}

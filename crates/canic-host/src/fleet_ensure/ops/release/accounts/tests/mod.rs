@@ -9,23 +9,27 @@ use crate::fleet_ensure::policy::release::tests::fixture;
 fn balances_preserve_zero_and_full_precision_and_refuse_invalid_replies() {
     for value in [0, 1, u128::MAX] {
         assert_eq!(
-            decode_balance(&candid::encode_one(Nat::from(value)).unwrap()),
+            decode_balance(&ic_platform::candid::contract::encode_one(Nat::from(value)).unwrap()),
             Ok(value)
         );
     }
     let overflow = Nat::from(u128::MAX) + Nat::from(1_u8);
     assert_eq!(
-        decode_balance(&candid::encode_one(overflow).unwrap()),
+        decode_balance(&ic_platform::candid::contract::encode_one(overflow).unwrap()),
         Err(ReleaseAccountStage::Overflow)
     );
     for bytes in [
         vec![0; RESPONSE_BYTES + 1],
         b"DIDL".to_vec(),
-        candid::encode_one("not a balance").unwrap(),
+        ic_platform::candid::contract::encode_one("not a balance").unwrap(),
     ] {
         assert_eq!(decode_balance(&bytes), Err(ReleaseAccountStage::Decode));
     }
-    let extra = candid::encode_args((Nat::from(1_u8), vec![1_u8; RESPONSE_BYTES * 2])).unwrap();
+    let extra = ic_platform::candid::contract::encode_args((
+        Nat::from(1_u8),
+        vec![1_u8; RESPONSE_BYTES * 2],
+    ))
+    .unwrap();
     assert_eq!(decode_balance(&extra), Err(ReleaseAccountStage::Decode));
     // Valid Candid with seventeen unused empty-record types must still respect
     // the header work bound even though its actual result is the small Nat 1.
@@ -35,7 +39,10 @@ fn balances_preserve_zero_and_full_precision_and_refuse_invalid_replies() {
         header.extend([0x6c, 0]);
     }
     header.extend([1, 0x7d, 1]);
-    assert_eq!(candid::decode_one::<Nat>(&header).unwrap(), Nat::from(1_u8));
+    assert_eq!(
+        ic_platform::candid::decoder::decode_one::<Nat>(&header).unwrap(),
+        Nat::from(1_u8)
+    );
     assert_eq!(decode_balance(&header), Err(ReleaseAccountStage::Decode));
 }
 

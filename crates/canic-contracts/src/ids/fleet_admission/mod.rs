@@ -8,7 +8,7 @@ use super::{
     ComponentInstanceId, ComponentSpecId, FleetBinding, FleetCoordinatorBinding,
     ManagedCanisterBinding, SubnetId,
 };
-use candid::{CandidType, Principal};
+use ic_platform::{Principal, candid::contract::CandidType};
 use serde::{Deserialize, Serialize};
 
 /// Maintained generation and wire schema for Fleet admission authority.
@@ -29,6 +29,7 @@ pub const MAX_FLEET_ADMISSION_PROJECTION_PAGE: u64 = 128;
 
 /// Exact policy scope selected by protected input or a controller mutation.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum FleetAdmissionSelector {
     #[serde(rename = "fleet")]
     Fleet,
@@ -42,6 +43,7 @@ pub enum FleetAdmissionSelector {
 
 /// One canonical narrower admission rule.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetAdmissionRule {
     pub selector: FleetAdmissionSelector,
@@ -50,6 +52,7 @@ pub struct FleetAdmissionRule {
 
 /// Protected generation-one policy before a fresh Fleet identity exists.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetAdmissionPolicyTemplate {
     pub schema_version: u16,
@@ -60,6 +63,7 @@ pub struct FleetAdmissionPolicyTemplate {
 
 /// One exact Coordinator-owned Fleet admission policy.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetAdmissionPolicy {
     pub schema_version: u16,
@@ -80,6 +84,7 @@ pub struct FleetAdmissionTarget {
 
 /// One complete target-bound local enforcement projection.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetAdmissionProjection {
     pub schema_version: u16,
@@ -94,7 +99,7 @@ pub struct FleetAdmissionProjection {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use candid::{Decode, Encode};
+    use ic_platform::candid::contract::{Decode, Encode};
 
     #[test]
     fn selector_candid_labels_round_trip_through_serde() {

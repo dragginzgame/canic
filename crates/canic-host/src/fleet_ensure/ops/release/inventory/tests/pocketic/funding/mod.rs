@@ -127,7 +127,10 @@ pub(super) fn assert_census(
 }
 
 fn root_funding_reply(page: RootFundingReleaseResponse) -> Vec<u8> {
-    candid::encode_one(Ok::<_, Error>(RootReply::FundingRelease(Box::new(page)))).unwrap()
+    ic_platform::candid::contract::encode_one(Ok::<_, Error>(RootReply::FundingRelease(Box::new(
+        page,
+    ))))
+    .unwrap()
 }
 
 fn assert_coordinator_refusals(
@@ -171,9 +174,9 @@ fn replace_coordinator(
     review: &FleetReleaseReviewRecord,
     status: &CoordinatorFundingStatusResponse,
 ) {
-    let bytes = candid::encode_one(Ok::<_, Error>(CoordinatorReply::Funding(Box::new(
-        status.clone(),
-    ))))
+    let bytes = ic_platform::candid::contract::encode_one(Ok::<_, Error>(
+        CoordinatorReply::Funding(Box::new(status.clone())),
+    ))
     .unwrap();
     pic.update_call(
         review.authority.coordinator,

@@ -1,15 +1,10 @@
 //! Module: cdk::structures
 //!
-//! Responsibility: re-export stable-structure types used by Canic storage code.
+//! Responsibility: expose governed storage adapters used by Canic storage code.
 //! Does not own: schema definitions or memory allocation policy.
-//! Boundary: keeps external stable-structure imports inside Canic's runtime substrate.
+//! Boundary: collections consume exclusive IC Memory leases through IC Storage.
 
-pub mod memory {
-    pub use ic_memory::RuntimeMemory;
-    pub use ic_memory::ic_stable_structures::memory_manager::*;
-}
-
-pub use ic_memory::ic_stable_structures::{
-    BTreeMap, DefaultMemoryImpl, Memory, StableVec, Storable, Vec, VectorMemory, btreemap, cell,
-    storable,
+pub use ic_memory::{DefaultMemoryImpl, Memory, VectorMemory};
+pub use ic_storage::adapter::{
+    BoundedCell, StableBTreeMap, StableCell, StableVec, Storable, storable,
 };

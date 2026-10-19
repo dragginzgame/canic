@@ -4,13 +4,11 @@
 //! Boundary: deterministic text/table formatting for app listing and role lifecycle commands.
 
 use crate::cli::render::append_dry_run_footer;
-use canic_host::{
-    release_set::{
-        AppConfigSnapshot, AttachedAppRole, ConfiguredRoleLifecycle, DeclaredAppRole,
-        RenamedAppRole, display_workspace_path,
-    },
-    table::{ColumnAlign, render_table},
+use canic_host::release_set::{
+    AppConfigSnapshot, AttachedAppRole, ConfiguredRoleLifecycle, DeclaredAppRole, RenamedAppRole,
+    display_workspace_path,
 };
+use ic_host_text::table::{self, Alignment, Options};
 use std::path::{Path, PathBuf};
 
 const APP_HEADER: &str = "APP";
@@ -49,7 +47,7 @@ pub(super) fn render_app_rows(rows: Vec<AppListRow>) -> String {
         .into_iter()
         .map(|row| [row.app, row.environment, row.config, row.canisters])
         .collect::<Vec<_>>();
-    render_table(
+    table::render(
         &[
             APP_HEADER,
             ENVIRONMENT_HEADER,
@@ -57,7 +55,11 @@ pub(super) fn render_app_rows(rows: Vec<AppListRow>) -> String {
             CANISTERS_HEADER,
         ],
         &rows,
-        &[ColumnAlign::Left; 4],
+        &[Alignment::Left; 4],
+        Options {
+            column_gap: 3,
+            header_separator: true,
+        },
     )
 }
 
@@ -110,10 +112,14 @@ pub(super) fn render_role_lifecycle_rows(rows: &[ConfiguredRoleLifecycle]) -> St
             ]
         })
         .collect::<Vec<_>>();
-    render_table(
+    table::render(
         &["ROLE", "PACKAGE", "STATE", "TOPOLOGY"],
         &rows,
-        &[ColumnAlign::Left; 4],
+        &[Alignment::Left; 4],
+        Options {
+            column_gap: 3,
+            header_separator: true,
+        },
     )
 }
 

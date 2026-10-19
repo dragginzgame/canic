@@ -1,4 +1,7 @@
-use candid::{CandidType, Decode, Deserialize, Encode};
+use ic_platform::candid::contract::CandidType;
+use ic_platform::candid::contract::Decode;
+use serde::Deserialize;
+use ic_platform::candid::contract::Encode;
 
 /// A documented named record.
 #[derive(CandidType, Debug, Deserialize, PartialEq)]

@@ -6,7 +6,7 @@
 
 use super::ROLE_ATTESTATION_PROOF_HASH_DOMAIN;
 use crate::{InternalError, dto::auth::RoleAttestation, ops::auth::AuthValidationError};
-use candid::encode_one;
+use ic_platform::candid::contract::encode_one;
 use sha2::{Digest, Sha256};
 
 pub(super) fn role_attestation_hash(

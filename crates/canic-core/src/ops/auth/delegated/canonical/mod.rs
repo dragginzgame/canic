@@ -47,8 +47,6 @@ pub enum CanonicalAuthError {
     NonCanonicalAudiences,
     #[error("delegated auth issuer policies must be strictly sorted and unique")]
     NonCanonicalIssuerPolicies,
-    #[error("delegated auth token ext is {len} bytes and exceeds max {max} bytes")]
-    TokenExtTooLarge { len: usize, max: usize },
 }
 
 impl From<ic_auth::canonical::CanonicalAuthError> for CanonicalAuthError {
@@ -59,7 +57,6 @@ impl From<ic_auth::canonical::CanonicalAuthError> for CanonicalAuthError {
             ProtocolError::InvalidScope { scope } => Self::InvalidScope { scope },
             ProtocolError::NonCanonicalScopes => Self::NonCanonicalScopes,
             ProtocolError::NonCanonicalRoles => Self::NonCanonicalRoles,
-            ProtocolError::TokenExtTooLarge { len, max } => Self::TokenExtTooLarge { len, max },
         }
     }
 }
@@ -71,7 +68,9 @@ pub fn cert_hash(cert: &DelegationCert) -> Result<[u8; 32], CanonicalAuthError> 
 pub fn chain_key_batch_header_hash(
     header: &ChainKeyBatchHeaderV1,
 ) -> Result<[u8; 32], CanonicalAuthError> {
-    Ok(ic_auth::canonical::chain_key_batch_header_hash(header)?)
+    Ok(ic_auth::canonical::chain_key_batch_header_hash(
+        &protocol::header(header),
+    )?)
 }
 
 pub fn chain_key_delegation_cert_hash(
@@ -111,8 +110,8 @@ pub fn issuer_proof_binding_hash(
 ) -> Result<[u8; 32], CanonicalAuthError> {
     Ok(ic_auth::canonical::issuer_proof_binding_hash(
         issuer_pid,
-        issuer_proof_alg,
-        issuer_proof_binding,
+        protocol::issuer_algorithm(issuer_proof_alg),
+        protocol::issuer_binding(issuer_proof_binding),
     )?)
 }
 

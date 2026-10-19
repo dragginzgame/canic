@@ -25,37 +25,36 @@ use crate::{
         runtime::fleet_activation as root_fleet_activation,
     },
 };
-use candid::Principal;
-use canic_contracts::diagnostics::codes;
-use canic_contracts::dto::component_provisioning::RootComponentActivationEvidence;
-use canic_contracts::dto::component_provisioning::RootComponentActivationRequest;
-use canic_contracts::dto::component_provisioning::RootComponentProvisioningAcceptanceRequest;
-use canic_contracts::dto::component_provisioning::RootComponentProvisioningAdvanceRequest;
-use canic_contracts::dto::component_provisioning::RootComponentProvisioningPhase;
-use canic_contracts::dto::component_provisioning::RootComponentProvisioningStatusRequest;
-use canic_contracts::dto::component_provisioning::RootComponentProvisioningStatusResponse;
-use canic_contracts::dto::component_provisioning::RootComponentPublicationRequest;
-use canic_contracts::dto::component_registry::ComponentLifecycleStatus;
-use canic_contracts::dto::component_registry::ComponentProvisioningOrigin;
-use canic_contracts::dto::component_registry::ComponentRuntimeDirectoryAuthority;
-use canic_contracts::dto::component_registry::ComponentRuntimeDirectoryPreparationRequest;
-use canic_contracts::dto::component_registry::RootComponentAllocationRequest;
-use canic_contracts::dto::component_registry::RootComponentMembershipActivationRequest;
-use canic_contracts::dto::component_registry::RootComponentRuntimeActivationRequest;
-use canic_contracts::dto::error::Error;
-use canic_contracts::dto::fleet_activation::FleetActivationPhase;
-use canic_contracts::dto::fleet_activation::FleetActivationResumeRequest;
-use canic_contracts::dto::fleet_activation::FleetActivationStatusResponse;
-use canic_contracts::dto::fleet_coordinator::CoordinatorOperationReadRequest as RemoteCoordinatorStatusRequest;
-use canic_contracts::dto::fleet_registry::FleetSubnetRootStatus;
-use canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority;
-use canic_contracts::dto::role::OperationReceipt;
-use canic_contracts::dto::role::OperationStatusRequest;
-use canic_contracts::dto::wire::projection::component_provisioning::RemoteCoordinatorOperationStatusResponse;
-use canic_contracts::dto::wire::projection::component_provisioning::RemoteCoordinatorStatusResponse;
-use canic_contracts::ids::ComponentInstanceId;
-use canic_contracts::ids::ManagedCanisterBinding;
-use canic_contracts::protocol;
+use canic_contracts::{
+    diagnostics::codes,
+    dto::{
+        component_provisioning::{
+            RootComponentActivationEvidence, RootComponentActivationRequest,
+            RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningAdvanceRequest,
+            RootComponentProvisioningPhase, RootComponentProvisioningStatusRequest,
+            RootComponentProvisioningStatusResponse, RootComponentPublicationRequest,
+        },
+        component_registry::{
+            ComponentLifecycleStatus, ComponentProvisioningOrigin,
+            ComponentRuntimeDirectoryAuthority, ComponentRuntimeDirectoryPreparationRequest,
+            RootComponentAllocationRequest, RootComponentMembershipActivationRequest,
+            RootComponentRuntimeActivationRequest,
+        },
+        error::Error,
+        fleet_activation::{
+            FleetActivationPhase, FleetActivationResumeRequest, FleetActivationStatusResponse,
+        },
+        fleet_coordinator::CoordinatorOperationReadRequest as RemoteCoordinatorStatusRequest,
+        fleet_registry::FleetSubnetRootStatus,
+        fleet_subnet_root::FleetSubnetRootAuthority,
+        role::{OperationReceipt, OperationStatusRequest},
+        wire::projection::component_provisioning::{
+            RemoteCoordinatorOperationStatusResponse, RemoteCoordinatorStatusResponse,
+        },
+    },
+    ids::{ComponentInstanceId, ManagedCanisterBinding},
+    protocol,
+};
 use canic_core::{
     api::timer::TimerApi,
     control_plane_support::{
@@ -72,6 +71,7 @@ use canic_core::{
     },
     log::Topic,
 };
+use ic_platform::Principal;
 use std::time::Duration;
 
 /// Discover retained operations under protected Root identity without admitting new work.
@@ -319,7 +319,7 @@ async fn advance_scheduled_provisioning(operation_id: [u8; 32], plan_hash: [u8; 
     }
     if complete || RootComponentProvisioningOps::progress_changed(&current, &latest) {
         RootComponentProvisioningOps::clear_failure(operation_id, plan_hash).unwrap_or_else(
-            |error| ic_cdk::trap(format!("provisioning progress evidence: {error}")),
+            |error| ic_platform::cdk::api::trap(format!("provisioning progress evidence: {error}")),
         );
         if !complete {
             schedule_provisioning(operation_id, plan_hash, Duration::ZERO);
@@ -348,7 +348,9 @@ async fn advance_scheduled_provisioning(operation_id: [u8; 32], plan_hash: [u8; 
         error.provisioning_failure().expect("failure context"),
         now_ns,
     )
-    .unwrap_or_else(|error| ic_cdk::trap(format!("provisioning failure evidence: {error}")));
+    .unwrap_or_else(|error| {
+        ic_platform::cdk::api::trap(format!("provisioning failure evidence: {error}"))
+    });
     canic_core::log!(
         Topic::Fleet,
         Warn,

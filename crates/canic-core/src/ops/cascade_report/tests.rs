@@ -60,7 +60,7 @@ fn bounded_report_and_local_receipt_fit_detail_budget() {
         propagation: report,
         reconciliation_error: Some(InternalError::conflict().into()),
     });
-    let bytes = candid::encode_one(response).unwrap();
+    let bytes = ic_platform::candid::contract::encode_one(response).unwrap();
     assert!(bytes.len() < CASCADE_SNAPSHOT_MAX_BYTES);
 }
 

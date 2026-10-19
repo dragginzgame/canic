@@ -16,24 +16,27 @@ use crate::dto::{
     pool::{CanisterPoolResponse, CanisterPoolStatusRequest},
     role::OperationStatusRequest,
 };
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded ChildrenStatusRequest wire projection for current inventory.
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ChildrenStatusRequest {
     Children(PageRequest),
 }
 
 /// Bounded ChildrenStatusResponse wire projection for current inventory.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ChildrenStatusResponse {
     Children(Page<CanisterInfo>),
 }
 
 /// Bounded RootInventoryStatusRequest wire projection for current inventory.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootInventoryStatusRequest {
     ComponentChildProvisioning(OperationStatusRequest),
     ComponentRegistryActivePartition(ComponentRegistryActivePartitionRequest),
@@ -43,6 +46,7 @@ pub enum RootInventoryStatusRequest {
 
 /// Bounded RootInventoryStatusResponse wire projection for current inventory.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootInventoryStatusResponse {
     ComponentChildProvisioning(Box<RootComponentChildAllocationResponse>),
     ComponentRegistryActivePartition(Box<ComponentRegistryActivePartitionResponse>),

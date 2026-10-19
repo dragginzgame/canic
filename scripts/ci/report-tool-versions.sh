@@ -7,14 +7,16 @@ root="${BASH_SOURCE[0]}"
 [[ "$root" == /* ]] || root="$PWD/$root"
 root="$(cd -P "${root%/*}/../.." && printf '%s/.' "$PWD")"
 root="${root%/.}"
-if [[ $# != 1 && $# != 3 ]]; then
-    echo 'usage: report-tool-versions.sh CONSUMER [VERSIONS IC_PINS]' >&2
+if [[ $# -lt 1 || $# -gt 3 ]]; then
+    echo 'usage: report-tool-versions.sh CONSUMER [VERSIONS [IC_PINS]]' >&2
     exit 2
 fi
 consumer="$1"
 versions="${2:-$root/ci/tool-versions.env}"
-pins="${3:-$root/ci/ic-tools.tsv}"
-for kind in host rust ic; do
+kinds=(host rust)
+pins="${3:-}"
+[[ $# != 3 ]] || kinds+=(ic)
+for kind in "${kinds[@]}"; do
     catalog="$versions"
     option=--versions
     if [[ "$kind" == ic ]]; then catalog="$pins"; option=--pins; fi

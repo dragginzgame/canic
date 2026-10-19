@@ -43,11 +43,12 @@ use crate::{
     },
     ids::ManagedCanisterBinding,
 };
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded transport selectors used by framework validation.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootCommandFragment {
     AdoptStore(FleetSubnetWasmStoreAdoptionRequest),
     BootstrapStore(RootStoreBootstrapRequest),
@@ -69,6 +70,7 @@ pub enum RootCommandFragment {
 
 /// Bounded transport selectors used by framework validation.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[expect(
     clippy::large_enum_variant,
     reason = "the direct Root wire decoder retains its component registry response inline"
@@ -88,6 +90,7 @@ pub enum RootCommandResponseFragment {
 
 /// Bounded transport selectors used by framework validation.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootStatusRequestFragment {
     Admission(PageRequest),
     AuthorityRestore,
@@ -107,6 +110,7 @@ pub enum RootStatusRequestFragment {
 
 /// Bounded transport selectors used by framework validation.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[expect(
     clippy::large_enum_variant,
     reason = "the PocketIC decoder mirrors the direct Root status wire"
@@ -130,6 +134,7 @@ pub enum RootStatusResponseFragment {
 
 /// Bounded transport selectors used by framework validation.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ManagedStatusRequestFragment {
     Binding,
     CycleHistory(PageRequest),
@@ -138,6 +143,7 @@ pub enum ManagedStatusRequestFragment {
 
 /// Bounded transport selectors used by framework validation.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ManagedStatusResponseFragment {
     Binding(Box<ManagedCanisterBinding>),
     CycleHistory(Page<CycleTrackerEntry>),
@@ -146,12 +152,14 @@ pub enum ManagedStatusResponseFragment {
 
 /// Bounded transport selectors used by framework validation.
 #[derive(CandidType, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ManagedAdmissionStatusResponseFragment {
     Admission(FleetAdmissionProjectionStatusResponse),
 }
 
 /// Bounded transport selectors used by framework validation.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum PublicMemoryRequest {
     Health,
     Metrics(PublicMetricsRequest),
@@ -159,6 +167,7 @@ pub enum PublicMemoryRequest {
 
 /// Bounded transport selectors used by framework validation.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum PublicMemoryResponse {
     Health(PublicHealth),
     Metrics(PublicMetricsSnapshot),

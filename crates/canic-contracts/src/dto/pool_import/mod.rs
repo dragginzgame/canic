@@ -1,12 +1,13 @@
 //! Passive authority and progress contracts for reviewed Root capacity import.
 
-use candid::{CandidType, Principal};
+use ic_platform::{Principal, candid::contract::CandidType};
 use serde::{Deserialize, Serialize};
 
 /// Initialization hold for supplied capacity awaiting reviewed clearing and publication.
 /// The host review binds this declaration; only its exact import may release allocation.
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct PoolImportBootstrap {
     pub review_sha256: [u8; 32],
@@ -16,6 +17,7 @@ pub struct PoolImportBootstrap {
 
 /// Exact source identity and destructive disposition frozen before controller handoff.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct PoolImportSource {
     pub canister_id: Principal,
     /// Actual source custody before any optional operator handoff.
@@ -33,6 +35,7 @@ pub struct PoolImportSource {
 
 /// Exact current-Root reservation; sequence prevents replay after a later import.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct PoolImportReservation {
     pub sequence: u64,
     pub plan_sha256: [u8; 32],
@@ -52,6 +55,7 @@ pub struct PoolImportReservation {
 
 /// Identifies one exact retained reservation without allowing changed bounds.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct PoolImportIdentity {
     pub sequence: u64,
     pub plan_sha256: [u8; 32],
@@ -59,6 +63,7 @@ pub struct PoolImportIdentity {
 
 /// Exact protected evidence retained before releasing imported assets to allocation.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct PoolImportSourceReceipt {
     pub root_sender_canister_version: u64,
     pub canister_id: Principal,
@@ -73,6 +78,7 @@ pub struct PoolImportSourceReceipt {
 
 /// Protected progress for a source; issued work is reconciled, never blindly repeated.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum PoolImportSourceProgress {
     AwaitingHandoff,
     ControllersIssued,
@@ -85,6 +91,7 @@ pub enum PoolImportSourceProgress {
 
 /// Root retains Ready evidence until the host confirms durable local publication.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum PoolImportPhase {
     Reserved,
     Ready,
@@ -93,6 +100,7 @@ pub enum PoolImportPhase {
 
 /// Controller-visible evidence for one bounded import, including original debit limits.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct PoolImportStatus {
     pub reserved_at_ns: u64,
     pub reservation: PoolImportReservation,
@@ -107,6 +115,7 @@ pub struct PoolImportStatus {
 
 /// Protected current placement, authority and next import number used during host review.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct PoolImportContext {
     /// Effect-free upper quote for any supported import call on this Root.
     pub maximum_call_debit_cycles: u128,
@@ -119,6 +128,7 @@ pub struct PoolImportContext {
 
 /// Root balance boundary observed after all source effects and paid reconciliation.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct PoolImportRootReceipt {
     pub retained_cycles: u128,
     pub retained_reserved_cycles: u128,
@@ -129,6 +139,7 @@ pub struct PoolImportRootReceipt {
 
 /// Authenticated operator actions for one reviewed import into the current Root.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum PoolImportCommand {
     Advance {
         identity: PoolImportIdentity,

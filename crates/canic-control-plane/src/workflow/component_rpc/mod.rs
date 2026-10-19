@@ -45,7 +45,7 @@ pub async fn response_capability_v1_root(
 }
 
 fn root_capability_authority(
-    caller: candid::Principal,
+    caller: ic_platform::Principal,
     request: &Request,
     operation_id: [u8; 32],
 ) -> Result<RootCapabilityAuthority, Error> {
@@ -101,8 +101,8 @@ fn recycle_target_authority(
 }
 
 fn caller_authority(
-    caller: candid::Principal,
-    root: candid::Principal,
+    caller: ic_platform::Principal,
+    root: ic_platform::Principal,
     request: &Request,
 ) -> Result<RootCapabilityCallerAuthority, Error> {
     if caller == root {
@@ -145,7 +145,7 @@ fn caller_authority(
 }
 
 /// Resolve membership after the enclosing request has established active-root authority.
-fn resolve_active_member(caller: candid::Principal) -> Result<ManagedCanisterBinding, Error> {
+fn resolve_active_member(caller: ic_platform::Principal) -> Result<ManagedCanisterBinding, Error> {
     super::component_registry::active_component_member(caller)
         .map_err(InternalError::from)
         .map_err(Into::into)
@@ -177,8 +177,8 @@ mod tests {
     use super::*;
     use canic_contracts::ids::CanisterRole;
 
-    fn p(byte: u8) -> candid::Principal {
-        candid::Principal::from_slice(&[byte; 29])
+    fn p(byte: u8) -> ic_platform::Principal {
+        ic_platform::Principal::from_slice(&[byte; 29])
     }
 
     #[test]

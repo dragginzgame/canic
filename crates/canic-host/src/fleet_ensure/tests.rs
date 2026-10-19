@@ -28,7 +28,6 @@ use crate::{
     registry::RegistryEntry,
     test_support::{start_pocket_ic, temp_dir},
 };
-use candid::Principal;
 use canic_contracts::{
     cycles::Cycles,
     dto::{
@@ -52,6 +51,7 @@ use canic_contracts::{
     },
 };
 use canic_core::cdk::utils::hash::sha256_hex;
+use ic_platform::Principal;
 use std::{
     collections::{BTreeMap, BTreeSet},
     env, fs,
@@ -5392,7 +5392,7 @@ fn current_plan_retains_store_chunks_by_hash_instead_of_inline_bytes() {
     };
     plan.plan_sha256 = crate::fleet_ensure::policy::expected_plan_sha256(&plan);
 
-    let in_memory_size = crate::fleet_ensure::json::to_vec(&plan)
+    let in_memory_size = serde_json::to_vec(&plan)
         .expect("encode in-memory plan")
         .len();
     crate::fleet_ensure::ops::write_plan(&paths, &plan).expect("retain current plan");

@@ -8,7 +8,6 @@ use crate::{
     fleet_ensure::view::startup_funding::{StartupChildFundingBinding, StartupUsageUnavailable},
     icp::IcpCli,
 };
-use candid::Principal;
 use canic_contracts::{
     dto::{
         component_registry::{
@@ -20,6 +19,7 @@ use canic_contracts::{
     ids::ComponentChildBinding,
     protocol,
 };
+use ic_platform::Principal;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,

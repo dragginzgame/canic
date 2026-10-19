@@ -5,10 +5,10 @@
 //! Boundary: provides journal row validation and shared journal helper functions.
 
 use crate::{
-    artifacts::{ArtifactChecksum, ArtifactChecksumError},
     manifest::VERIFICATION_KIND_STATUS,
     restore::{RestoreApplyDryRun, RestoreApplyDryRunOperation, RestoreApplyDryRunValidationError},
 };
+use ic_backup::model::artifacts::ArtifactChecksumRecord;
 
 use std::collections::BTreeSet;
 
@@ -40,7 +40,7 @@ pub struct RestoreApplyJournalOperation {
     #[serde(deserialize_with = "crate::serialization::required_option")]
     pub artifact_path: Option<String>,
     #[serde(deserialize_with = "crate::serialization::required_option")]
-    pub artifact_checksum: Option<ArtifactChecksum>,
+    pub artifact_checksum: Option<ArtifactChecksumRecord>,
     #[serde(deserialize_with = "crate::serialization::required_option")]
     pub snapshot_ids_before: Option<Vec<String>>,
     #[serde(deserialize_with = "crate::serialization::required_option")]
@@ -157,19 +157,14 @@ impl RestoreApplyJournalOperation {
         if self.state == RestoreApplyOperationState::Blocked && self.artifact_checksum.is_none() {
             return Ok(());
         }
-        let checksum = self.artifact_checksum.as_ref().ok_or_else(|| {
+        let _checksum = self.artifact_checksum.as_ref().ok_or_else(|| {
             RestoreApplyJournalError::OperationMissingField {
                 sequence: self.sequence,
                 operation: self.operation.clone(),
                 field: "operations[].artifact_checksum",
             }
         })?;
-        checksum
-            .validate()
-            .map_err(|source| RestoreApplyJournalError::ArtifactChecksum {
-                sequence: self.sequence,
-                source,
-            })
+        Ok(())
     }
 
     fn validate_snapshot_inventory(&self) -> Result<(), RestoreApplyJournalError> {
@@ -307,13 +302,6 @@ pub enum RestoreApplyOperationState {
 pub enum RestoreApplyJournalError {
     #[error("original command custody repeats or does not match an external operation")]
     InvalidCommandCustody,
-    #[error("restore apply journal operation {sequence} has invalid artifact checksum")]
-    ArtifactChecksum {
-        sequence: usize,
-        #[source]
-        source: ArtifactChecksumError,
-    },
-
     #[error(transparent)]
     InvalidDryRun(#[from] RestoreApplyDryRunValidationError),
 

@@ -3,11 +3,11 @@
 //! Responsibility: retain exact observation approval and consumed single-pass attempts.
 //! Boundary: a missing reply never restores an attempt; these records do not issue calls.
 
-use candid::Principal;
 use canic_contracts::ids::{
     CanisterRole, ComponentBinding, ComponentInstanceId, FleetRegistryAuthority,
     FleetSubnetRootReleaseSet,
 };
+use ic_platform::Principal;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 

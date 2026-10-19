@@ -1,4 +1,4 @@
-use super::{WorkspaceBuildContext, parse_parent_process_id, remove_stale_icp_candid_sidecars};
+use super::{WorkspaceBuildContext, remove_stale_icp_candid_sidecars};
 use crate::{canister_build::model::CanisterArtifactSource, test_support::temp_dir};
 use canic_contracts::ids::BuildNetwork;
 use std::fs;
@@ -17,12 +17,6 @@ fn infrastructure_roles_use_the_canonical_built_in_artifact_sources() {
         CanisterArtifactSource::for_role("root"),
         CanisterArtifactSource::Root
     );
-}
-
-#[test]
-fn parse_parent_process_id_accepts_proc_stat_shape() {
-    let stat = "12345 (build_canister_ar) S 67890 0 0 0";
-    assert_eq!(parse_parent_process_id(stat), Some(67890));
 }
 
 #[test]
@@ -256,7 +250,10 @@ fn configured_canister_build_uses_the_locked_resolver() {
         &context,
         std::path::Path::new("/workspace/Cargo.toml"),
         super::CanisterBuildProfile::Fast,
-    );
+        false,
+    )
+    .command()
+    .unwrap();
     assert!(command.get_args().any(|argument| argument == "--locked"));
     assert!(command.get_args().any(|argument| argument == "--lib"));
 }

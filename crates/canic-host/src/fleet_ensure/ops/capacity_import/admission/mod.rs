@@ -17,9 +17,9 @@ use crate::fleet_ensure::{
     },
     ops::capacity_import::CapacityImportReviewError,
 };
-use candid::Principal;
 use canic_contracts::dto::fleet_registry::FleetRegistry;
 use canic_core::cdk::utils::hash::decode_hex;
+use ic_platform::Principal;
 use sha2_host::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -55,7 +55,8 @@ pub(super) fn registry(
     }
     let bytes = decode_hex(&admission.registry_candid_hex)
         .map_err(|_| CapacityImportReviewError::AdmissionInvalid)?;
-    candid::decode_one(&bytes).map_err(|_| CapacityImportReviewError::AdmissionInvalid)
+    ic_platform::candid::decoder::decode_one(&bytes)
+        .map_err(|_| CapacityImportReviewError::AdmissionInvalid)
 }
 
 fn validate_infrastructure(

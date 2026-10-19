@@ -7,7 +7,7 @@ publish = false
 
 [package.metadata.cargo-machete]
 # Canic/CDK macro expansion resolves `candid` in the destination crate.
-ignored = ["candid"]
+ignored = []
 
 [package.metadata.canic]
 app = "test"
@@ -17,9 +17,8 @@ role = "test"
 crate-type = ["cdylib"]
 
 [dependencies]
-candid = { workspace = true }
-canic = { workspace = true, features = ["auth-delegated-token-verify"] }
-ic-cdk = { workspace = true }
+canic = { workspace = true, features = ["auth-chain-key-ecdsa", "auth-root-canister-sig-verify"] }
+ic-platform = { workspace = true, features = ["cdk", "candid"] }
 ic-timers = { workspace = true }
 
 [build-dependencies]

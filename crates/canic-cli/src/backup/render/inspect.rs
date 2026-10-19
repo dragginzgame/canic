@@ -5,7 +5,7 @@
 //! Boundary: table formatting for inspect summary, targets, and operations.
 
 use super::super::BackupInspectReport;
-use canic_host::table::{ColumnAlign, render_table};
+use ic_host_text::table::{self, Alignment, Options};
 
 pub(super) fn render_inspect_report(report: &BackupInspectReport) -> String {
     let summary_rows = [[
@@ -53,7 +53,7 @@ pub(super) fn render_inspect_report(report: &BackupInspectReport) -> String {
         format!("Plan: {}", report.plan_id),
         format!("Run:  {}", report.run_id),
         String::new(),
-        render_table(
+        table::render(
             &[
                 "STATUS",
                 "FLEET",
@@ -64,11 +64,15 @@ pub(super) fn render_inspect_report(report: &BackupInspectReport) -> String {
                 "NEXT",
             ],
             &summary_rows,
-            &[ColumnAlign::Left; 7],
+            &[Alignment::Left; 7],
+            Options {
+                column_gap: 3,
+                header_separator: true,
+            },
         ),
         String::new(),
         "Targets".to_string(),
-        render_table(
+        table::render(
             &[
                 "ROLE",
                 "CANISTER_ID",
@@ -79,20 +83,28 @@ pub(super) fn render_inspect_report(report: &BackupInspectReport) -> String {
                 "SNAPSHOT_READ",
             ],
             &target_rows,
-            &[ColumnAlign::Left; 7],
+            &[Alignment::Left; 7],
+            Options {
+                column_gap: 3,
+                header_separator: true,
+            },
         ),
         String::new(),
         "Operations".to_string(),
-        render_table(
+        table::render(
             &["SEQ", "KIND", "TARGET", "STATE", "REASONS"],
             &operation_rows,
             &[
-                ColumnAlign::Right,
-                ColumnAlign::Left,
-                ColumnAlign::Left,
-                ColumnAlign::Left,
-                ColumnAlign::Left,
+                Alignment::Right,
+                Alignment::Left,
+                Alignment::Left,
+                Alignment::Left,
+                Alignment::Left,
             ],
+            Options {
+                column_gap: 3,
+                header_separator: true,
+            },
         ),
     ]
     .join("\n")

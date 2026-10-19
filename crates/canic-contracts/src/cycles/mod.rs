@@ -4,7 +4,7 @@
 //! Does not own: billing policy, cycle transfer workflows, or ledger calls.
 //! Boundary: provides stable serialization and display behavior for cycle values.
 
-use candid::{CandidType, Nat};
+use ic_platform::candid::contract::{CandidType, Nat};
 use serde::{
     Deserialize, Serialize,
     de::{Deserializer, Visitor},
@@ -31,8 +31,24 @@ pub const QC: u128 = 1_000_000_000_000_000;
 /// helpers for cycle balances.
 ///
 
-#[derive(CandidType, Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(CandidType, Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct Cycles(u128);
+
+// Human-readable boundaries retain all 128 bits as decimal text. Binary formats
+// keep the newtype's numeric representation; Candid is owned by CandidType.
+impl Serialize for Cycles {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&self.0.to_string())
+        } else {
+            serializer.serialize_newtype_struct("Cycles", &self.0)
+        }
+    }
+}
 
 impl<'de> Deserialize<'de> for Cycles {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -348,10 +364,35 @@ mod tests {
     use super::*;
 
     #[test]
+    fn cycle_serialization_preserves_decimal_json_and_numeric_binary() {
+        for amount in [0, 1, u128::from(u64::MAX) + 1, u128::MAX] {
+            let cycles = Cycles::new(amount);
+            let json = serde_json::to_value(&cycles).unwrap();
+            assert_eq!(json, serde_json::Value::String(amount.to_string()));
+            assert_eq!(serde_json::from_value::<Cycles>(json).unwrap(), cycles);
+            let mut numeric = Vec::new();
+            let mut wrapped = Vec::new();
+            ciborium::ser::into_writer(&amount, &mut numeric).unwrap();
+            ciborium::ser::into_writer(&cycles, &mut wrapped).unwrap();
+            assert_eq!(wrapped, numeric);
+            assert_eq!(
+                ciborium::de::from_reader::<Cycles, _>(wrapped.as_slice()).unwrap(),
+                cycles
+            );
+            assert_eq!(
+                ic_platform::candid::contract::encode_one(&cycles).unwrap(),
+                ic_platform::candid::contract::encode_one(amount).unwrap()
+            );
+        }
+    }
+
+    #[test]
     fn candid_cycle_amount_remains_an_exact_u128() {
         let expected = Cycles::new(u128::MAX);
-        let encoded = candid::encode_one(&expected).expect("encode Candid Cycles");
-        let decoded = candid::decode_one::<Cycles>(&encoded).expect("decode exact Candid Cycles");
+        let encoded =
+            ic_platform::candid::contract::encode_one(&expected).expect("encode Candid Cycles");
+        let decoded = ic_platform::candid::decoder::decode_one::<Cycles>(&encoded)
+            .expect("decode exact Candid Cycles");
 
         assert_eq!(decoded, expected);
     }

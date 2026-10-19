@@ -4,7 +4,7 @@ use super::{
     OperatorMintAuthority, OperatorMintIntentRecord, OperatorMintNotificationOutcomeRecord,
     OperatorMintReceiptRecord,
 };
-use candid::Principal;
+use ic_platform::Principal;
 use serde_json::json;
 
 fn receipt() -> OperatorMintReceiptRecord {

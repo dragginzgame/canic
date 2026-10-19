@@ -25,8 +25,8 @@ use canic_contracts::{
 };
 use canic_core::{
     cdk::structures::{
-        DefaultMemoryImpl, Storable, btreemap::BTreeMap as StableBtreeMap, cell::Cell,
-        memory::RuntimeMemory, storable::Bound,
+        DefaultMemoryImpl, StableBTreeMap as StableBtreeMap, StableCell as Cell, Storable,
+        storable::Bound,
     },
     impl_storable_bounded,
 };
@@ -50,7 +50,7 @@ std::thread_local! {
         StableBtreeMap<
             RootComponentOperationKey,
             RootComponentOperationRecord,
-            RuntimeMemory<DefaultMemoryImpl>,
+            DefaultMemoryImpl,
         >,
     > = RefCell::new(StableBtreeMap::init(
         canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_PROVISIONING_OPERATIONS_V1),
@@ -62,7 +62,7 @@ std::thread_local! {
         StableBtreeMap<
             RootComponentProvisioningPlacementKey,
             RootComponentProvisioningPlacementRecord,
-            RuntimeMemory<DefaultMemoryImpl>,
+            DefaultMemoryImpl,
         >,
     > = RefCell::new(StableBtreeMap::init(
         canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_PROVISIONING_PLACEMENTS_V1),
@@ -71,7 +71,7 @@ std::thread_local! {
 
 std::thread_local! {
     static ROOT_COMPONENT_PROVISIONING_STATE: RefCell<
-        Cell<RootComponentProvisioningStateRecord, RuntimeMemory<DefaultMemoryImpl>>,
+        Cell<RootComponentProvisioningStateRecord, DefaultMemoryImpl>,
     > = RefCell::new(Cell::init(
         canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_PROVISIONING_STATE_V1),
         RootComponentProvisioningStateRecord::default(),
@@ -168,7 +168,7 @@ pub struct RootComponentProvisioningFailureRecord {
     pub dependency:
         Option<canic_contracts::values::provisioning_failure::ProvisioningDependencyFailure>,
     pub stage: canic_contracts::dto::component_provisioning::ProvisioningFailureStage,
-    pub target: candid::Principal,
+    pub target: ic_platform::Principal,
     pub operation_id: [u8; 32],
     pub diagnostic_code: u16,
     pub retry_category: canic_contracts::dto::component_provisioning::ProvisioningRetryCategory,
@@ -191,7 +191,7 @@ pub struct RootComponentDirectorySynchronizationRecord {
     pub plan_hash: [u8; 32],
     pub source_fleet_registry: FleetRegistryVersion,
     pub published_fleet_registry: FleetRegistryVersion,
-    pub fleet_subnet_root: candid::Principal,
+    pub fleet_subnet_root: ic_platform::Principal,
     pub fleet_directory_content_hash: [u8; 32],
     pub targets: Vec<RootComponentDirectorySynchronizationTargetRecord>,
     pub state: RootComponentDirectorySynchronizationStateRecord,
@@ -201,7 +201,7 @@ pub struct RootComponentDirectorySynchronizationRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentDirectorySynchronizationTargetRecord {
     pub component: ComponentInstanceId,
-    pub canister_id: candid::Principal,
+    pub canister_id: ic_platform::Principal,
     pub allocation_operation_id: [u8; 32],
     pub source_registry: ComponentRegistryHead,
 }
@@ -229,7 +229,7 @@ pub enum RootComponentDirectorySynchronizationStateRecord {
 pub struct RootComponentDirectorySynchronizationIntentRecord {
     pub component_index: u32,
     pub component: ComponentInstanceId,
-    pub canister_id: candid::Principal,
+    pub canister_id: ic_platform::Principal,
     pub allocation_operation_id: [u8; 32],
     pub previous_registry: ComponentRegistryHead,
     pub registry: ComponentRegistryHead,
@@ -313,7 +313,7 @@ pub enum RootComponentProvisioningStateRecordPhase {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentPublicationIntentRecord {
     pub component_index: u32,
-    pub canister_id: candid::Principal,
+    pub canister_id: ic_platform::Principal,
     pub directory_authority_hash: [u8; 32],
     pub started_at_ns: u64,
 }
@@ -747,8 +747,8 @@ impl RootComponentProvisioningStore {
 
     #[cfg(test)]
     pub(crate) fn import(data: RootComponentProvisioningData) {
-        ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow_mut(StableBtreeMap::clear_new);
-        ROOT_COMPONENT_PROVISIONING_PLACEMENTS.with_borrow_mut(StableBtreeMap::clear_new);
+        ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow_mut(StableBtreeMap::clear);
+        ROOT_COMPONENT_PROVISIONING_PLACEMENTS.with_borrow_mut(StableBtreeMap::clear);
         ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow_mut(|operations| {
             for record in data.operations {
                 operations.insert(

@@ -1,23 +1,16 @@
-//! Module: artifact_io::wasm::install_policy
-//!
-//! Responsibility: apply Canic-selected replica structural limits.
-//! Does not own: generic Wasm inspection, which stays in Host Artifacts.
+//! Canic-selected replica structural limits; generic inspection stays in Host Artifacts.
 //!
 //! Thresholds retain the previously selected replica revision
 //! `9499f64bda8bcf087188dd8a1bb594115640ba9e`: 12 MiB code bodies, 50,000 local
 //! functions and 1,000 imported plus local globals. Passing these checks does not
 //! establish instruction validity or every other replica installation constraint.
 
+use ic_host_artifacts::wasm::WasmFacts;
+
 #[cfg(test)]
 mod tests;
 
-use ic_host_artifacts::wasm::WasmFacts;
-
-///
-/// LimitUsage
-///
-/// Canic structural observation and its inclusive selected limit.
-///
+/// One exact observation and its inclusive selected limit.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct LimitUsage {
     /// Observed bytes or entries.
@@ -40,11 +33,7 @@ impl LimitUsage {
     }
 }
 
-///
-/// InstallReport
-///
-/// Canic structural headroom; this does not establish installation success.
-///
+/// Structural headroom only; this is not evidence that installation will succeed.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct InstallReport {
     /// Remaining code-body allowance.

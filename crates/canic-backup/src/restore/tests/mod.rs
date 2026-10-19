@@ -1,11 +1,12 @@
 use super::*;
-use crate::artifacts::{ArtifactChecksum, ArtifactChecksumError};
+use crate::artifacts::ArtifactChecksumError;
 use crate::manifest::{
     BackupUnit, BackupUnitKind, ConsistencySection, DeploymentBackupManifest, DeploymentMember,
     DeploymentSection, IdentityMode, MemberVerificationChecks, SourceMetadata, SourceSnapshot,
     ToolMetadata, VerificationCheck, VerificationPlan,
 };
 use crate::test_support::temp_dir;
+use ic_backup::model::artifacts::ArtifactChecksumRecord;
 use std::{fs, path::Path};
 
 const ROOT: &str = "aaaaa-aa";
@@ -32,10 +33,7 @@ fn command_preview_journal(
         operation,
         RestoreApplyOperationKind::UploadSnapshot | RestoreApplyOperationKind::LoadSnapshot
     )
-    .then(|| ArtifactChecksum {
-        algorithm: "sha256".to_string(),
-        hash: HASH.to_string(),
-    });
+    .then(|| ArtifactChecksumRecord::from_hash(HASH).expect("valid fixture checksum"));
     let mut journal = RestoreApplyJournal {
         journal_version: 1,
         backup_id: "fbk_test_001".to_string(),
@@ -154,7 +152,7 @@ fn set_member_artifact(
     let full_path = root.join(artifact_path);
     fs::create_dir_all(full_path.parent().expect("artifact parent")).expect("create parent");
     fs::write(&full_path, bytes).expect("write artifact");
-    let checksum = ArtifactChecksum::from_bytes(bytes);
+    let checksum = ArtifactChecksumRecord::from_bytes(bytes);
     let member = manifest
         .deployment
         .members
@@ -162,7 +160,7 @@ fn set_member_artifact(
         .find(|member| member.canister_id == canister_id)
         .expect("member should exist");
     member.source_snapshot.artifact_path = artifact_path.to_string();
-    member.source_snapshot.checksum = Some(checksum.hash);
+    member.source_snapshot.checksum = Some(checksum.hash().to_owned());
 }
 
 mod apply_dry_run;

@@ -6,7 +6,6 @@ use super::{
     ComponentOperationError, model::*, ops, ops::ComponentTransport, policy, view::*, workflow,
 };
 use crate::test_support::{fleet_subnet_root_funding_authority, temp_dir};
-use candid::Principal;
 use canic_contracts::{
     cycles::Cycles,
     ids::{
@@ -17,6 +16,7 @@ use canic_contracts::{
         ReleaseSetDigest, SubnetId,
     },
 };
+use ic_platform::Principal;
 use std::{io, path::PathBuf};
 
 fn authority() -> ComponentAuthorityRecord {

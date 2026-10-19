@@ -4,7 +4,7 @@ use super::{OperatorMintCredit, OperatorMintReceiptError, admit_receipt};
 use crate::fleet_ensure::model::operator_mint::{
     OperatorMintAuthority, OperatorMintIntentRecord, OperatorMintReceiptRecord,
 };
-use candid::Principal;
+use ic_platform::Principal;
 
 fn receipt() -> OperatorMintReceiptRecord {
     OperatorMintReceiptRecord {
