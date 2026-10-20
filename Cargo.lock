@@ -2152,9 +2152,9 @@ dependencies = [
 
 [[package]]
 name = "ic-auth"
-version = "0.11.0"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1137351029ee262631ba3b47ba96767ef2f932a36eb4fddf900f1f12fe97a6ea"
+checksum = "47346bd5dafcf5c8a50fb2304351b95a3d8e0ec023cf6b1d43bfb295bf81a736"
 dependencies = [
  "ic-auth-protocol-types",
  "ic-platform",
@@ -2168,9 +2168,9 @@ dependencies = [
 
 [[package]]
 name = "ic-auth-protocol-types"
-version = "0.11.0"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d39c48baab19aa994177606d6bed7790c42576e5ebdb406128df8015d0e25e7"
+checksum = "536c0d1ae8d96564f28cef33ccb3392881c7cc9714ad9eed70c9603d30903049"
 dependencies = [
  "ic-platform",
  "serde",
@@ -2369,9 +2369,9 @@ dependencies = [
 
 [[package]]
 name = "ic-memory"
-version = "0.49.2"
+version = "0.49.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d363a8a008e16f5ec128174d9582f3c234e6674b6b90e73d88f2363d21f2f12"
+checksum = "4b9067c35765346994d800c0547a091546a596dea3d24470840a0341a37ada33"
 dependencies = [
  "ic-stable-structures",
  "serde",
@@ -2381,9 +2381,9 @@ dependencies = [
 
 [[package]]
 name = "ic-metrics"
-version = "0.14.10"
+version = "0.14.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dcf4f309aa8672f9af8c685461078d74759f50037abc4b3e66bc53c67fcef9be"
+checksum = "3795b66bb74cecc72ee8dc15d6a9ecf585709896f33cc42992bf440055c2aca0"
 
 [[package]]
 name = "ic-platform"
@@ -2562,9 +2562,9 @@ dependencies = [
 
 [[package]]
 name = "ic-wire"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bdfc9e7a6686d78854a2a06f408492313ce10c985a17976e7395fc6cef776479"
+checksum = "26fb39de180b6f60f9c0fe9795645fad37f1c287b847e2aad6f78a632a6fbe1c"
 dependencies = [
  "ic-wire-derive",
  "postcard",
@@ -2573,9 +2573,9 @@ dependencies = [
 
 [[package]]
 name = "ic-wire-derive"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4130f546bdba41fba60506d50fa4eed3d8885bf863569a271cf9b7beb75ce61e"
+checksum = "0c1bbe9d43864c09f07889ce004c1215d235196c75ff12df8c294b452e151306"
 dependencies = [
  "proc-macro2",
  "quote",

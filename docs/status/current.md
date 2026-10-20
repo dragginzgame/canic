@@ -1,5 +1,44 @@
 # Current handoff — 2026-10-20
 
+## Shared Tooling 0.25.8 adoption — 2026-10-20
+
+Refreshed through the canonical exporter to upstream published main commit
+`0a2d2ee3b5e0ae77755c2915ac28836d4d5ba359` (version 0.25.8; no current GitHub
+release entry). Verified all 132 snapshot files. Catalog/tool pins are unchanged.
+Validation now admits tools then runs existing full Clippy before invariant
+fixtures/check/tests. Packaging, publication and fast-patch validation also gate
+expensive work on Clippy after admission. Sequential recipes retain ordering
+under parallel Make; the fast lane still avoids PocketIC.
+
+Adopted retained Cargo metadata diagnostics and numbered `- Unreleased` support;
+Canic's detailed-note test accepts both pending heading forms. Pass: snapshot
+integrity, shared release-runner fixtures, canonical metadata fixtures with the
+selected IC Build editor, parallel-Make ordering, publication/fast-lane refusal
+fixtures, focused changelog test/Clippy, scoped ShellCheck/rustfmt/whitespace and
+three workspace dependency-boundary checks plus the framework Wasm graph check.
+Logs: `/tmp/canic-shared0258-*.log`. Automatic artifact-bound dependency-role
+enforcement remains incomplete; existing explicit graph checks remain in place.
+
+Preserved pending fixture, documentation and dependency work. Memory now resolves
+0.49.3 rather than the earlier fixture-refresh lock's 0.49.2; fixture freshness on
+that selection was not requalified here. Tooling changes and open 0.112 notes are
+ready for review, not whole-release sign-off. No broad validation, real release,
+publication, deployment or native macOS qualification was performed.
+
+## Embedded allocation-peer refresh — 2026-10-20
+
+Regenerated the checked-in allocation peer and `scripts/dev/managed-root-fixture.json`
+through `refresh_embedded_root`, then passed the read-only `verify_embedded_root`
+preflight. The artifact now binds current source, Rust 1.99.1 and the maintainer's
+selected dependencies, including Auth 0.11.1, Metrics 0.14.11 and Wire 0.5.1.
+Fetched missing locked packages; preserved the incoming Cargo.lock byte-for-byte.
+The refresh's second build confirmed the artifact does not change its own build.
+
+Logs: `/tmp/canic-peer-refresh.log` and `/tmp/canic-peer-verify.log`.
+The reported stale-fixture blocker is resolved and the open 0.112 notes updated.
+No full test suite, PocketIC suite, release or deployment was run. Whole-batch
+release readiness remains subject to the remaining maintainer validation.
+
 ## Full workspace Clippy — 2026-10-20
 
 Maintainer explicitly requested the full Clippy target. `RUSTC_WRAPPER='' make

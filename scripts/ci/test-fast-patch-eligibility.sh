@@ -32,4 +32,28 @@ for path in Cargo.lock Cargo.toml crates/canic/src/lib.rs canisters/test/shardin
         exit 1
     fi
 done
+cat >"$fixture/bin/make" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "$*" == '--no-print-directory clippy' ]] || exit 99
+printf 'clippy\n' >>"$FAST_GATE_EVENTS"
+exit "${FAST_CLIPPY_STATUS:-0}"
+SH
+chmod +x "$fixture/bin/make"
+for gate in check-current-document-semantics check-release-validation-matrix; do
+    cat >"$fixture/scripts/ci/$gate.sh" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$(basename "$0" .sh)" >>"$FAST_GATE_EVENTS"
+SH
+done
+export CHANGED_PATHS=docs/note.md FAST_GATE_EVENTS="$fixture/events"
+status=0
+FAST_CLIPPY_STATUS=23 bash "$fixture/scripts/ci/check-fast-patch-eligibility.sh" \
+    >"$fixture/output" 2>&1 || status=$?
+[[ "$status" == 23 && "$(cat "$FAST_GATE_EVENTS")" == clippy ]]
+: >"$FAST_GATE_EVENTS"
+bash "$fixture/scripts/ci/check-fast-patch-eligibility.sh" >"$fixture/output" 2>&1
+printf '%s\n' clippy check-current-document-semantics check-release-validation-matrix \
+    >"$fixture/expected"
+cmp "$fixture/expected" "$FAST_GATE_EVENTS"
 echo 'fast eligibility fixtures passed (docs admitted; behavior inputs require complete validation)'

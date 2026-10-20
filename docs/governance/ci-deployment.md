@@ -21,9 +21,11 @@ Git hooks, format before checking, or invoke unrelated invariant, feature,
 lint, build, or test targets. `make validate` is the explicit composition
 boundary for the complete local workflow.
 
-`make validate` has four sequential barriers. The first runs every independent
+After tool admission, `make validate` first runs the existing warning-denied
+workspace Clippy gate. Failure stops before invariant fixtures, builds or tests,
+including under parallel Make. The next barrier runs every independent
 formatting, repository-invariant, dependency and shell check, then
-reports their complete failure set. Workspace checking and Clippy start only
+reports their complete failure set. Workspace checking starts only
 when that barrier passes. The control-plane feature matrix starts only after
 compile and warning-denied Clippy pass; the complete test graph starts only
 after that feature matrix passes. A deterministic compiler or warning failure
@@ -32,6 +34,11 @@ within each barrier remain sequential so independent Cargo processes do not
 contend for the same build graph. Complete failed-target logs are retained under
 `target/validation-failures/`; the terminal summary repeats bounded failure
 detail and the exact failed target list.
+
+Package and publication entrypoints run the same Clippy gate after source
+admission and before packaging or publication. The fast patch lane retains its
+eligibility and prior complete-validation evidence, then runs Clippy before its
+targeted checks; it still does not run PocketIC.
 
 Every validation target also retains its raw output and a `timings.tsv` record
 under a unique `target/validation-runs/` directory, including successful runs.

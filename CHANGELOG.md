@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Refresh the embedded allocation peer and its provenance for the current
+  dependency graph and Rust 1.99.1.
+
 - Adapt Cargo discovery and build grouping to IC Build 0.23 command recipes,
   retaining Host-owned capture limits and successful, complete-output checks.
 
@@ -188,11 +191,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Delegate Cargo communication and typed artifact selection to IC Build; remove
   the local JSON selector and heartbeat thread while retaining Canic export policy.
 
-- **Shared Tooling:** adopt 0.25.4, label dependency roles, preserve grouped
+- **Shared Tooling:** adopt 0.25.8, label dependency roles, preserve grouped
   manifest ordering through formatting and release checks, and explicitly own
   Candid extractor setup. Use the pinned IC Build editor for manifest and lock
   candidates instead of Cargo Edit and the removed Perl renderer. Deployment
-  role exclusions remain manually inspected.
+  role exclusions retain explicit graph checks; automatic artifact-bound admission
+  remains incomplete. Run Clippy before expensive release and publication stages.
 
 - **Platform boundary:** use IC Platform for principal identities, contract
   types/encoding, bounded decoding, certification, native Agent APIs, management

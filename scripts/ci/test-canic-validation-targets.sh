@@ -33,4 +33,45 @@ rg -F '[ERR:failure-probe] [CANIC-TEST:E001] [SUITE] FAIL canic-probe-marker' "$
 timings="$(rg --files "$FIXTURE/target/validation-runs" | rg '/timings.tsv$')"
 pass_log="$(awk -F '\t' '$1 == "pass-probe" && $2 == "PASS" { print $4 }' "$timings")"
 rg -F canic-pass-marker "$pass_log" > /dev/null
+
+# Exercise the real sequential recipes under parallel Make with inert gates.
+cat >"$FIXTURE/gate" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+for target in "$@"; do
+    printf '%s\n' "$target" >>"$ORDER_EVENTS"
+    if [[ "$target" == clippy ]]; then
+        exit "${ORDER_CLIPPY_STATUS:-0}"
+    fi
+done
+SH
+chmod +x "$FIXTURE/gate"
+cat >>"$FIXTURE/Makefile" <<'MAKE'
+VALIDATION_RUNNER = bash ./gate
+tools-check:
+	@echo tools-check >>"$(ORDER_EVENTS)"
+ensure-clean:
+	@echo ensure-clean >>"$(ORDER_EVENTS)"
+clippy:
+	@bash ./gate clippy
+MAKE
+export ORDER_EVENTS="$FIXTURE/order"
+status=0
+ORDER_CLIPPY_STATUS=23 make -j4 --no-print-directory -C "$FIXTURE" validate \
+    >"$FIXTURE/order.log" 2>&1 || status=$?
+[[ "$status" != 0 ]]
+printf 'tools-check\nclippy\n' >"$FIXTURE/expected"
+cmp "$FIXTURE/expected" "$ORDER_EVENTS"
+: >"$ORDER_EVENTS"
+status=0
+ORDER_CLIPPY_STATUS=23 make -j4 --no-print-directory -C "$FIXTURE" package \
+    >"$FIXTURE/package.log" 2>&1 || status=$?
+[[ "$status" != 0 ]]
+printf 'ensure-clean\nclippy\n' >"$FIXTURE/expected"
+cmp "$FIXTURE/expected" "$ORDER_EVENTS"
+: >"$ORDER_EVENTS"
+make -j4 --no-print-directory -C "$FIXTURE" validate >"$FIXTURE/order.log" 2>&1
+printf '%s\n' tools-check clippy fmt-check check-invariants dependency-risk-gate \
+    shellcheck check control-plane-feature-gate test >"$FIXTURE/expected"
+cmp "$FIXTURE/expected" "$ORDER_EVENTS"
 echo 'Canic validation policy and actual Make adapter pass'

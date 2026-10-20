@@ -17,6 +17,7 @@ fn pending_changelog_version_has_matching_detailed_notes() {
 
     let candidates = root_source
         .lines()
+        .map(|line| line.strip_suffix(" - Unreleased").unwrap_or(line))
         .filter_map(|line| line.strip_prefix("## [")?.strip_suffix(']'))
         .filter(|version| {
             let components = version.split('.').collect::<Vec<_>>();
@@ -32,5 +33,7 @@ fn pending_changelog_version_has_matching_detailed_notes() {
     let minor = version.rsplit_once('.').expect("release minor line").0;
     let detailed = root.join(format!("docs/changelog/{minor}.md"));
     let source = fs::read_to_string(detailed).expect("selected detailed notes must exist");
-    assert!(source.lines().any(|line| line == format!("## [{version}]")));
+    assert!(source.lines().any(|line| {
+        line.strip_suffix(" - Unreleased").unwrap_or(line) == format!("## [{version}]")
+    }));
 }

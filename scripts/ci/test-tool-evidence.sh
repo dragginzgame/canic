@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared companions: scripts/ci/select-tool-evidence.sh scripts/ci/archive-evidence.sh .github/actions/retain-failure-evidence/action.yml scripts/ci/fixture-lifecycle.sh
+# Shared companions: scripts/ci/select-tool-evidence.sh scripts/ci/archive-evidence.sh .github/actions/retain-failure-evidence/action.yml scripts/ci/fixture-lifecycle.sh scripts/ci/extract-workflow-step.sh
 set -euo pipefail
 [[ $# == 3 ]] || { echo 'usage: test-tool-evidence.sh CONSUMER host|ic CALLER-PINS' >&2; exit 2; }
 ROOT="${BASH_SOURCE[0]}"
@@ -116,8 +116,9 @@ ln -s "$active" "$consumer/.tools/$kind"
 rmdir "$consumer/.tools/$kind-set.evidenceRace"
 
 # Run the actual composite-action collector and check its original logs too.
-yq -o json '.' "$ROOT/.github/actions/retain-failure-evidence/action.yml" |
-    jq -er '.runs.steps[] | select(.id == "archive") | .run' > "$fixture/collector.sh"
+yq -o json '.' "$ROOT/.github/actions/retain-failure-evidence/action.yml" > "$fixture/action.json"
+jq -e '.runs.steps' "$fixture/action.json" > "$fixture/steps.json"
+bash "$ROOT/scripts/ci/extract-workflow-step.sh" "$fixture/steps.json" archive > "$fixture/collector.sh"
 mkdir "$fixture/action-temp"
 printf 'original_status=23\n' > "$fixture/action-temp/portable-regression.log"
 EVIDENCE_TEMP_ROOT="$fixture/action-temp" EVIDENCE_REPOSITORY_ROOT="$consumer" \
@@ -156,8 +157,7 @@ ln -s "$fixture/rejected/outside" "$fixture/rejected/store-link"
 mkdir "$fixture/rejected/writable-store"
 chmod 0777 "$fixture/rejected/writable-store"
 ln -s "$fixture/rejected/outside" "$fixture/rejected/consumer/.tools/ic-set.reference"
-yq -o json '.' "$ROOT/.github/actions/retain-failure-evidence/action.yml" |
-    jq -er '.runs.steps[] | select(.id == "completeness") | .run' > "$fixture/completeness.sh"
+bash "$ROOT/scripts/ci/extract-workflow-step.sh" "$fixture/steps.json" completeness > "$fixture/completeness.sh"
 for bad_store in "$fixture/rejected/store-link" relative-store "$fixture/rejected/new/./store" "$fixture/rejected/writable-store"; do
     for compact in true false; do
         attempt="$(mktemp -d "$fixture/rejected/attempt.XXXXXX")"
@@ -242,7 +242,7 @@ done
 # Always upload available prepared diagnostics before enforcing completeness;
 # native collection retains its existing cancellation boundary.
 # shellcheck disable=SC2016 # Compare literal GitHub expressions.
-yq -o json '.' "$ROOT/.github/actions/retain-failure-evidence/action.yml" | jq -e \
+jq -e \
     --arg guard "inputs.prepared-archive != '' || inputs.collection-log != '' || !cancelled()" \
     --arg nonempty "steps.archive.outputs.path != ''" \
     --arg incomplete "steps.archive.outputs.collection-complete == 'false'" '
@@ -251,7 +251,7 @@ yq -o json '.' "$ROOT/.github/actions/retain-failure-evidence/action.yml" | jq -
     $steps[1].if == ("${{ always() && " + $nonempty + " && (" + $guard + ") }}") and
     $steps[2].if == ("${{ always() && " + $incomplete + " && (" + $guard + ") }}") and
     $steps[1].with["compression-level"] == 0 and $steps[1].with.path == "${{ steps.archive.outputs.path }}"
-' > /dev/null
+' "$fixture/action.json" > /dev/null
 rm -rf "$candidate"
 echo 'Successful tool compaction, failed verification, unknown selections and actual collector passed'
 fixture_complete=true

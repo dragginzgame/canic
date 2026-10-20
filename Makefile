@@ -256,6 +256,7 @@ release-cadence:
 	@bash scripts/dev/report-release-cadence.sh
 
 package: ensure-clean
+	+@$(MAKE) --no-print-directory clippy
 	$(CARGO_ENV) cargo package --locked
 
 publish: ensure-clean
@@ -281,22 +282,19 @@ test: test-unit
 # PocketIC suite.
 test-wasm: test-unit-fast
 
-# Complete local validation has four sequential barriers. Each barrier collects
-# every independent target failure before returning. Compile/lint work starts
-# only after cheap source, policy, and security checks pass. The feature matrix
-# starts only after compile and warning-denied Clippy pass, and the complete test
-# graph starts only after the feature matrix passes.
+# Clippy must pass before invariant fixtures, compilation and tests start.
+# Each later barrier collects every independent target failure before returning.
 # Primitive development targets retain only the operation named by that target.
 validate:
 	+@$(MAKE) --no-print-directory tools-check
+	+@$(VALIDATION_RUNNER) clippy
 	+@$(VALIDATION_RUNNER) \
 		fmt-check \
 		check-invariants \
 		dependency-risk-gate \
 		shellcheck
 	+@$(VALIDATION_RUNNER) \
-		check \
-		clippy
+		check
 	+@$(VALIDATION_RUNNER) \
 		control-plane-feature-gate
 	+@$(VALIDATION_RUNNER) \

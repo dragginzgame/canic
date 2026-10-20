@@ -60,6 +60,14 @@ printf '%s' "$http"
 exit "${FAKE_REGISTRY_TRANSPORT:-0}"
 SH
 chmod +x "$FIXTURE/bin/cargo" "$FIXTURE/bin/curl"
+cat >"$FIXTURE/bin/make" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "$*" == '--no-print-directory clippy' ]] || exit 99
+printf 'clippy\n' >>"$PUBLICATION_TEST_EVENTS"
+exit "${FAKE_CLIPPY_STATUS:-0}"
+SH
+chmod +x "$FIXTURE/bin/make"
 export PUBLICATION_TEST_EVENTS="$FIXTURE/events"
 export PUBLICATION_TEST_REGISTRY="$FIXTURE/registry"
 export CANIC_PUBLICATION_LOG_DIR="$FIXTURE/logs"
@@ -84,6 +92,9 @@ FAKE_MANIFEST_STATUS=19 run_case 19
 [[ ! -e "$PUBLICATION_TEST_EVENTS" ]]
 CARGO_NET_OFFLINE=true run_case 2
 [[ ! -e "$PUBLICATION_TEST_EVENTS" ]]
+FAKE_CLIPPY_STATUS=23 run_case 23
+[[ "$(cat "$PUBLICATION_TEST_EVENTS")" == clippy ]]
+: >"$PUBLICATION_TEST_EVENTS"
 FAKE_FAIL_PACKAGE=canic-core run_case 37
 [[ -f "$PUBLICATION_TEST_REGISTRY/canic-backup" ]]
 [[ ! -f "$PUBLICATION_TEST_REGISTRY/canic-core" ]]
@@ -134,12 +145,12 @@ done
 for http in 401 429 503 malformed; do
     : >"$PUBLICATION_TEST_EVENTS"
     FAKE_LOOKUP_PACKAGE=canic-backup FAKE_LOOKUP_HTTP="$http" run_case 2
-    [[ "$(cat "$PUBLICATION_TEST_EVENTS")" == 'lookup canic-backup' ]]
+    [[ "$(cat "$PUBLICATION_TEST_EVENTS")" == $'clippy\nlookup canic-backup' ]]
 done
 for http in 200 404; do
     : >"$PUBLICATION_TEST_EVENTS"
     FAKE_LOOKUP_PACKAGE=canic-backup FAKE_LOOKUP_HTTP="$http" FAKE_REGISTRY_TRANSPORT=28 run_case 2
-    [[ "$(cat "$PUBLICATION_TEST_EVENTS")" == 'lookup canic-backup' ]]
+    [[ "$(cat "$PUBLICATION_TEST_EVENTS")" == $'clippy\nlookup canic-backup' ]]
 done
 
 # A lost registry observation after upload stops the next package. One definite

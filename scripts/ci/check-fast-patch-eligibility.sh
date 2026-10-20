@@ -91,6 +91,7 @@ echo "fast patch eligibility passed against $base_tag using complete basis $vali
 
 [ "$ELIGIBILITY_ONLY" -eq 0 ] || exit 0
 
+make --no-print-directory clippy
 bash scripts/ci/check-current-document-semantics.sh
 bash scripts/ci/check-release-validation-matrix.sh
 

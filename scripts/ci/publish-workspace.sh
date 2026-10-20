@@ -92,6 +92,7 @@ run_publication_step() {
 
 run_publication_step release-candidate bash "$ROOT_DIR/scripts/ci/check-release-candidate.sh"
 run_publication_step manifest-boundary bash "$ROOT_DIR/scripts/ci/check-publish-manifest-boundary.sh"
+run_publication_step clippy make --no-print-directory clippy
 
 started=0
 if [ -z "$PUBLISH_FROM" ]; then
