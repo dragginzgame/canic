@@ -1,5 +1,21 @@
 # Current handoff — 2026-10-20
 
+## Root fixture feature gates — 2026-10-20
+
+Aligned Root baseline/topology orchestration, exports and orchestration-only
+imports/constants with Fleet Registry fixture availability. Ordinary native tests
+no longer compile references to the excluded Fleet Registry module. Moved pure
+snapshot-target selection and its controller/uniqueness test into a separate
+Root snapshot module, retaining ordinary coverage and updating runner classification.
+
+Pass: targeted internal-testing Clippy with warnings denied in default and
+all-feature configurations; exact native snapshot-selection and governed worker
+partition regressions; scoped formatting and whitespace checks.
+Logs: `/tmp/canic-fixture-gates-{default,governed,native,inventory}.log`.
+Open 0.112 changelogs are updated. This clears the reported compilation blocker;
+whole-batch release readiness remains unconfirmed. No full suite, PocketIC run,
+commit, push, release or deployment was performed.
+
 ## Shared Tooling 0.25.8 adoption — 2026-10-20
 
 Refreshed through the canonical exporter to upstream published main commit

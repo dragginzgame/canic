@@ -42,6 +42,10 @@ use canic_contracts::{
         FleetSubnetRootFundingPolicy,
     },
 };
+#[cfg(all(
+    feature = "pocketic-fixtures",
+    any(not(test), feature = "governed-pocketic-tests")
+))]
 use canic_core::shared_support::fleet_admission_policy::{
     bind_initial_fleet_admission_policy, compile_fleet_admission_policy_template,
 };
@@ -91,12 +95,22 @@ pub use lifecycle::{
     upgrade_args,
 };
 pub use root::{
-    RootBaselineMetadata, RootBaselineRecipe, RootBaselineRecipeError, RootBaselineSpec,
-    build_root_cached_baseline, ensure_root_release_artifacts_built, load_root_wasm,
+    RootBaselineMetadata, RootBaselineSpec, ensure_root_release_artifacts_built, load_root_wasm,
+};
+#[cfg(all(
+    feature = "pocketic-fixtures",
+    any(not(test), feature = "governed-pocketic-tests")
+))]
+pub use root::{
+    RootBaselineRecipe, RootBaselineRecipeError, build_root_cached_baseline,
     restore_root_cached_baseline, setup_root_topology,
 };
 pub use startup::start_pocket_ic;
 
+#[cfg(all(
+    feature = "pocketic-fixtures",
+    any(not(test), feature = "governed-pocketic-tests")
+))]
 pub(super) const SNAPSHOT_RESTORE_MINIMUM_CYCLES: u128 = 200_000_000_000_000;
 
 #[cfg(all(

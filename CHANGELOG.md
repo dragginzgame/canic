@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Align Root fixture compilation with the governed PocketIC feature gate while
+  retaining ordinary native snapshot-inventory coverage.
+
 - Refresh the embedded allocation peer and its provenance for the current
   dependency graph and Rust 1.99.1.
 

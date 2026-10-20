@@ -2,6 +2,10 @@
 
 use canic::ids::{BuildNetwork, CanisterRole};
 use ic_platform::principal::ExternalPrincipal as Principal;
+#[cfg(all(
+    feature = "pocketic-fixtures",
+    any(not(test), feature = "governed-pocketic-tests")
+))]
 use ic_testkit::pic::PocketIc;
 use std::{collections::HashMap, path::PathBuf, time::Instant};
 
@@ -11,14 +15,32 @@ use super::{
 };
 
 mod artifacts;
+#[cfg(all(
+    feature = "pocketic-fixtures",
+    any(not(test), feature = "governed-pocketic-tests")
+))]
 mod baseline;
+#[cfg(any(test, feature = "pocketic-fixtures"))]
+mod snapshot;
+#[cfg(all(
+    feature = "pocketic-fixtures",
+    any(not(test), feature = "governed-pocketic-tests")
+))]
 mod topology;
 
 pub use artifacts::{ensure_root_release_artifacts_built, load_root_wasm};
+#[cfg(all(
+    feature = "pocketic-fixtures",
+    any(not(test), feature = "governed-pocketic-tests")
+))]
 pub use baseline::{
     RootBaselineRecipe, RootBaselineRecipeError, build_root_cached_baseline,
     restore_root_cached_baseline,
 };
+#[cfg(all(
+    feature = "pocketic-fixtures",
+    any(not(test), feature = "governed-pocketic-tests")
+))]
 pub use topology::setup_root_topology;
 
 ///
@@ -73,6 +95,10 @@ fn progress_elapsed(spec: &RootBaselineSpec<'_>, phase: &str, started_at: Instan
 /// InitializedRootTopology
 ///
 
+#[cfg(all(
+    feature = "pocketic-fixtures",
+    any(not(test), feature = "governed-pocketic-tests")
+))]
 pub struct InitializedRootTopology {
     pub pic: PocketIc,
     pub metadata: RootBaselineMetadata,

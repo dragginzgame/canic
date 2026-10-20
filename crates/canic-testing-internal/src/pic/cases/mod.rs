@@ -40,7 +40,7 @@ const ORDINARY_NATIVE_MODULES: &[&str] = &[
     "pic::journey_policy::tests::",
     "pic::lifecycle::fast_tests::",
     "pic::progress::tests::",
-    "pic::root::baseline::tests::",
+    "pic::root::snapshot::tests::",
     "pic::timing::tests::",
 ];
 

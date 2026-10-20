@@ -1,14 +1,15 @@
 use super::{
     InitializedRootTopology, RootBaselineMetadata, RootBaselineSpec, progress, progress_elapsed,
+    snapshot::root_baseline_snapshot_targets,
     topology::{wait_for_bootstrap, wait_for_children_ready, wait_for_snapshot_pids_ready},
 };
 use ic_testkit::pic::{
     BaselinePoolContractError, BaselinePreparationStage, CachedPocketIcBaseline,
-    CanisterSnapshotTarget, ControllerSnapshotError, FailureDisposition, PocketIcBaselineRecipe,
-    PreparedBaseline, RebuildReason, ResetPolicies, ResetReceipt, ResetRequirements,
-    SnapshotRestoreFunding, TimeResetPolicy, is_dead_pocket_ic_transport_error,
+    ControllerSnapshotError, FailureDisposition, PocketIcBaselineRecipe, PreparedBaseline,
+    RebuildReason, ResetPolicies, ResetReceipt, ResetRequirements, SnapshotRestoreFunding,
+    TimeResetPolicy, is_dead_pocket_ic_transport_error,
 };
-use std::{collections::BTreeMap, error::Error as StdError, fmt, path::PathBuf, time::Instant};
+use std::{error::Error as StdError, fmt, path::PathBuf, time::Instant};
 
 /// Typed lifecycle recipe for one reusable root topology profile.
 pub struct RootBaselineRecipe {
@@ -260,65 +261,4 @@ fn capture_cached_root_baseline(
     .expect("cached root snapshots must be available");
     progress_elapsed(spec, "captured cached root snapshots", started_at);
     baseline
-}
-
-fn root_baseline_snapshot_targets(metadata: &RootBaselineMetadata) -> Vec<CanisterSnapshotTarget> {
-    let mut senders = BTreeMap::from([(metadata.root_id, None), (metadata.coordinator_id, None)]);
-    for canister_id in metadata
-        .snapshot_pids
-        .iter()
-        .chain(&metadata.managed_store_pids)
-    {
-        senders
-            .entry(*canister_id)
-            .or_insert(Some(metadata.root_id));
-    }
-    senders
-        .into_iter()
-        .map(|(canister_id, sender)| CanisterSnapshotTarget {
-            canister_id,
-            sender,
-        })
-        .collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::collections::HashMap;
-
-    #[test]
-    fn root_baseline_snapshot_targets_are_unique_and_controller_exact() {
-        let root_id = ic_platform::principal::ExternalPrincipal::from_slice(&[0x41; 29]);
-        let child_id = ic_platform::principal::ExternalPrincipal::from_slice(&[0x42; 29]);
-        let store_id = ic_platform::principal::ExternalPrincipal::from_slice(&[0x43; 29]);
-        let metadata = RootBaselineMetadata {
-            root_id,
-            coordinator_id: ic_platform::principal::ExternalPrincipal::from_slice(&[0x44; 29]),
-            pool_assets: vec![
-                ic_platform::principal::ExternalPrincipal::from_slice(&[0x45; 29]),
-                child_id,
-            ],
-            component_canisters: HashMap::new(),
-            snapshot_pids: vec![child_id, store_id],
-            managed_store_pids: vec![store_id, root_id],
-        };
-
-        let targets = root_baseline_snapshot_targets(&metadata);
-
-        assert_eq!(targets.len(), 4);
-        assert_eq!(targets[0].canister_id, root_id);
-        assert_eq!(targets[0].sender, None);
-        assert_eq!(targets[1].canister_id, child_id);
-        assert_eq!(targets[1].sender, Some(root_id));
-        assert_eq!(targets[2].canister_id, store_id);
-        assert_eq!(targets[2].sender, Some(root_id));
-        assert_eq!(targets[3].canister_id, metadata.coordinator_id);
-        assert_eq!(targets[3].sender, None);
-        assert!(
-            !targets
-                .iter()
-                .any(|target| target.canister_id == metadata.pool_assets[0])
-        );
-    }
 }
