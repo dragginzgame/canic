@@ -27,14 +27,16 @@ macro_rules! __canic_managed_wire_types {
         caller_authority_attributes = [$($caller_authority_attributes:tt)*],
         fleet_admission_attributes = [$($fleet_admission_attributes:tt)*],
     ) => {
-        #[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
+        #[derive($crate::__reexports::ic_platform::candid::contract::CandidType, $crate::__reexports::serde::Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
         #[serde(crate = $serde_crate)]
         /// CanisterOperationStatusResponse wire union selected from the role's compiled capabilities.
         pub enum CanisterOperationStatusResponse {
             ConfigureRuntime($crate::dto::role::ComponentRuntimeOperationStatus),
         }
 
-#[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
+#[derive($crate::__reexports::ic_platform::candid::contract::CandidType, $crate::__reexports::serde::Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
         #[serde(crate = $serde_crate)]
         /// PublicStatusRequest wire union selected from the role's compiled capabilities.
         pub enum PublicStatusRequest {
@@ -48,7 +50,8 @@ macro_rules! __canic_managed_wire_types {
             Children($crate::dto::page::PageRequest),
         }
 
-#[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
+#[derive($crate::__reexports::ic_platform::candid::contract::CandidType, $crate::__reexports::serde::Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
         #[serde(crate = $serde_crate)]
         /// PublicStatusResponse wire union selected from the role's compiled capabilities.
         pub enum PublicStatusResponse {
@@ -62,12 +65,13 @@ macro_rules! __canic_managed_wire_types {
             Children($crate::dto::page::Page<$crate::dto::canister::CanisterInfo>),
         }
 
-#[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
+#[derive($crate::__reexports::ic_platform::candid::contract::CandidType, $crate::__reexports::serde::Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
         #[serde(crate = $serde_crate)]
         /// ObservabilityRequest wire union selected from the role's compiled capabilities.
         pub enum ObservabilityRequest {
             Binding,
-            ChildFunding($crate::__reexports::candid::Principal),
+            ChildFunding($crate::__reexports::ic_platform::candid::contract::Principal),
             CycleBalance,
             $($history_attributes)*
             CycleHistory($crate::dto::page::PageRequest),
@@ -86,7 +90,8 @@ macro_rules! __canic_managed_wire_types {
             Runtime,
         }
 
-#[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
+#[derive($crate::__reexports::ic_platform::candid::contract::CandidType, $crate::__reexports::serde::Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
         #[serde(crate = $serde_crate)]
         /// ObservabilityResponse wire union selected from the role's compiled capabilities.
         pub enum ObservabilityResponse {
@@ -111,7 +116,8 @@ macro_rules! __canic_managed_wire_types {
         }
 
 $($token_issuer_attributes)*
-        #[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
+        #[derive($crate::__reexports::ic_platform::candid::contract::CandidType, $crate::__reexports::serde::Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
         #[serde(crate = $serde_crate)]
         /// AuthStatusRequest wire union selected from the role's compiled capabilities.
         pub enum AuthStatusRequest {
@@ -120,7 +126,8 @@ $($token_issuer_attributes)*
         }
 
 $($token_issuer_attributes)*
-        #[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
+        #[derive($crate::__reexports::ic_platform::candid::contract::CandidType, $crate::__reexports::serde::Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
         #[serde(crate = $serde_crate)]
         /// AuthStatusResponse wire union selected from the role's compiled capabilities.
         pub enum AuthStatusResponse {
@@ -128,7 +135,8 @@ $($token_issuer_attributes)*
             ActiveDelegationProof($crate::dto::auth::ActiveDelegationProofStatusResponse),
         }
 
-#[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
+#[derive($crate::__reexports::ic_platform::candid::contract::CandidType, $crate::__reexports::serde::Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
         #[serde(crate = $serde_crate)]
         /// ControlStatusRequest wire union selected from the role's compiled capabilities.
         pub enum ControlStatusRequest {
@@ -137,7 +145,8 @@ $($token_issuer_attributes)*
             Operation($crate::dto::role::OperationStatusRequest),
         }
 
-#[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
+#[derive($crate::__reexports::ic_platform::candid::contract::CandidType, $crate::__reexports::serde::Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
         #[serde(crate = $serde_crate)]
         /// ControlStatusResponse wire union selected from the role's compiled capabilities.
         pub enum ControlStatusResponse {
@@ -147,7 +156,8 @@ $($token_issuer_attributes)*
         }
 
 $($fleet_admission_attributes)*
-        #[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
+        #[derive($crate::__reexports::ic_platform::candid::contract::CandidType, $crate::__reexports::serde::Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
         #[serde(crate = $serde_crate)]
         /// AdmissionStatusRequest wire union selected from the role's compiled capabilities.
         pub enum AdmissionStatusRequest {
@@ -156,7 +166,8 @@ $($fleet_admission_attributes)*
         }
 
 $($fleet_admission_attributes)*
-        #[derive($crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize)]
+        #[derive($crate::__reexports::ic_platform::candid::contract::CandidType, $crate::__reexports::serde::Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
         #[serde(crate = $serde_crate)]
         /// AdmissionStatusResponse wire union selected from the role's compiled capabilities.
         pub enum AdmissionStatusResponse {

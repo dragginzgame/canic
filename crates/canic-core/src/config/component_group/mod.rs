@@ -9,11 +9,11 @@ mod label;
 mod tests;
 
 use crate::config::schema::{ComponentGroupSpecConfig, ConfigModel};
-use candid::CandidType;
 use canic_contracts::ids::{
     ComponentGroupMemberId, ComponentGroupMemberPath, ComponentGroupMemberPathError,
     ComponentGroupSpecId, ComponentSpecId, FleetServiceId,
 };
+use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;
@@ -51,6 +51,7 @@ impl ConfigModel {
 
 /// Canonical checked-in Component Group declaration graph.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ComponentGroupTopology {
     pub component_groups: Vec<ComponentGroupSpec>,
@@ -396,6 +397,7 @@ impl ComponentGroupTopology {
 
 /// One canonical Component Group declaration.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ComponentGroupSpec {
     pub component_group: ComponentGroupSpecId,
@@ -404,6 +406,7 @@ pub struct ComponentGroupSpec {
 
 /// One direct declaration member; included groups remain configuration-only edges.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ComponentGroupMember {
     Component {
         member: ComponentGroupMemberId,
@@ -450,6 +453,7 @@ impl ComponentGroupMember {
 
 /// Typed declaration kind for one flattened Component Group leaf.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ComponentGroupLeafKind {
     Ordinary,
     FleetService { service: FleetServiceId },
@@ -459,6 +463,7 @@ pub enum ComponentGroupLeafKind {
 
 /// Complete flattened direct-Component occurrences for one selected group.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FlattenedComponentGroup {
     pub component_group: ComponentGroupSpecId,
@@ -467,6 +472,7 @@ pub struct FlattenedComponentGroup {
 
 /// One distinct flattened Component occurrence identified by its full member path.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FlattenedComponentGroupMember {
     pub member_path: ComponentGroupMemberPath,

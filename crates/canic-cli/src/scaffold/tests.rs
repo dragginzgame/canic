@@ -157,7 +157,7 @@ fn scaffold_app_writes_application_files_with_canonical_root() {
     assert!(app_manifest.contains("role = \"app\""));
     assert!(app_manifest.contains("Add runtime Canic features here"));
     assert!(app_manifest.contains("canic = \""));
-    assert!(app_manifest.contains("ic-cdk = \"0.20\""));
+    assert!(app_manifest.contains("ic-platform"));
     assert!(!app_manifest.contains("workspace = true"));
     assert!(app_lib.contains("canic::start!();"));
     assert!(app_lib.contains("canic::finish!();"));

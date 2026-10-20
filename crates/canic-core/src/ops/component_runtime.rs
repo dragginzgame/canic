@@ -22,7 +22,8 @@ impl ComponentRuntimeOps {
         authority: &ComponentRuntimeDirectoryAuthority,
     ) -> Result<[u8; 32], InternalError> {
         const DOMAIN: &[u8] = b"canic.component-runtime.directory-authority.v1";
-        let payload = candid::encode_one(authority).map_err(|_error| InternalError::invariant())?;
+        let payload = ic_platform::candid::contract::encode_one(authority)
+            .map_err(|_error| InternalError::invariant())?;
         let mut hasher = Sha256::new();
         hasher.update(DOMAIN);
         hasher.update((payload.len() as u64).to_be_bytes());
@@ -35,8 +36,8 @@ impl ComponentRuntimeOps {
         direct_children: &[ComponentRuntimeDirectChild],
     ) -> Result<[u8; 32], InternalError> {
         const DOMAIN: &[u8] = b"canic.component-runtime.direct-children.v1";
-        let payload =
-            candid::encode_one(direct_children).map_err(|_error| InternalError::invariant())?;
+        let payload = ic_platform::candid::contract::encode_one(direct_children)
+            .map_err(|_error| InternalError::invariant())?;
         let mut hasher = Sha256::new();
         hasher.update(DOMAIN);
         hasher.update((payload.len() as u64).to_be_bytes());

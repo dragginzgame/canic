@@ -8,19 +8,20 @@
 mod tests;
 
 use crate::{
+    cdk::serialize::canonical::CanonicalEncoder,
     config::{
         ComponentGroupDeploymentTopology, ComponentGroupDeploymentTopologyError,
         ComponentGroupTopology, ComponentGroupTopologyError, ComponentTopology,
         ComponentTopologyError, FleetServiceTopology, FleetServiceTopologyError,
-        canonical::CanonicalEncoder, schema::ConfigModel,
+        schema::ConfigModel,
     },
     dto::component_deployment::ProtectedComponentDeployment,
 };
-use candid::CandidType;
 use canic_contracts::ids::{
     ComponentBinding, ComponentDeploymentConfigurationDigest, ComponentGroupDeploymentId,
     ComponentGroupMemberPath, ComponentGroupSpecId, ComponentSpecId,
 };
+use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error as ThisError;
@@ -63,6 +64,7 @@ impl ConfigModel {
 
 /// Canonical compiled App authority required to validate provisioning without source TOML.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ComponentDeploymentConfiguration {
     pub component_topology: ComponentTopology,

@@ -24,7 +24,8 @@ pub(in crate::fleet_ensure::ops::release) fn fixture(owner: Principal) -> Intent
 }
 
 pub(in crate::fleet_ensure::ops::release) fn wire(page: IntentReleaseResponse) -> Vec<u8> {
-    candid::encode_one(Ok::<_, CanicError>(Response::IntentRelease(page))).unwrap()
+    ic_platform::candid::contract::encode_one(Ok::<_, CanicError>(Response::IntentRelease(page)))
+        .unwrap()
 }
 
 #[test]

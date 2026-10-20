@@ -1,20 +1,18 @@
 use crate::{
     cdk::{
-        candid::Principal,
-        structures::{
-            DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, memory::RuntimeMemory,
-        },
+        structures::{DefaultMemoryImpl, StableBTreeMap as StableBtreeMap},
         types::BoundedString64,
     },
     impl_storable_bounded,
 };
 use canic_contracts::ids::CanisterRole;
+use ic_platform::Principal;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
 std::thread_local! {
     static SCALING_REGISTRY: RefCell<
-        StableBtreeMap<Principal, WorkerEntryRecord, RuntimeMemory<DefaultMemoryImpl>>
+        StableBtreeMap<Principal, WorkerEntryRecord, DefaultMemoryImpl>
     > = RefCell::new(
         StableBtreeMap::init(crate::memory::open(crate::memory::keys::PLACEMENT_SCALING_REGISTRY_V1)),
     );

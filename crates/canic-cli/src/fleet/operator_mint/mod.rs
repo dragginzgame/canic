@@ -6,7 +6,6 @@
 use crate::fleet::{EnsureOptions, FleetCommandError, now_nanoseconds};
 use std::path::Path;
 
-use candid::Principal;
 use canic_core::cdk::utils::hash::decode_hex;
 use canic_host::{
     fleet_ensure::{
@@ -23,6 +22,7 @@ use canic_host::{
     },
     icp::IcpCli,
 };
+use ic_platform::Principal;
 
 pub(super) fn run(
     root: &Path,

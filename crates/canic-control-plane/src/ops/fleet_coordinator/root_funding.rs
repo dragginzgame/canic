@@ -19,7 +19,6 @@ use crate::{
     },
     view::fleet_coordinator::{FleetRootFundingCallView, FleetRootFundingDisposition},
 };
-use candid::Principal;
 use canic_contracts::{
     dto::{
         fleet_funding::{
@@ -50,6 +49,7 @@ use canic_core::{
         fleet_subnet_root_funding_policy_hash, validate_fleet_funding_policy_rotation_plan,
     },
 };
+use ic_platform::Principal;
 use std::collections::BTreeMap;
 
 impl FleetCoordinatorOps {

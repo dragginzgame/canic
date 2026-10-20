@@ -6,10 +6,10 @@
 use crate::fleet_ensure::ops::operator_mint::receipts::{
     DepositVerificationError as Error, ReceiptVerificationLimits,
 };
-use candid::Principal;
-use ic_agent::{Agent, Certificate};
+use ic_platform::{
+    Principal, agent::Agent, certification::Certificate, icrc_ledger_types::ICRC3DataCertificate,
+};
 use ic_query::certificate::{self, CertificateEvidenceLimits};
-use icrc_ledger_types::icrc3::blocks::ICRC3DataCertificate;
 
 pub use ic_query::certificate::CertificateVerificationError;
 use ic_query::certificate::CertifiedLedgerTip;

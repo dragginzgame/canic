@@ -251,10 +251,11 @@ fn allocation_observation_is_query_only_and_skips_non_workloads() {
             operation_id: value.allocation.operation_id,
         },
     };
-    let bytes = candid::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
-        Response::Operation(Box::new(RootOperationStatusResponse::ProvisionChild(value))),
-    ))
-    .unwrap();
+    let bytes =
+        ic_platform::candid::contract::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
+            Response::Operation(Box::new(RootOperationStatusResponse::ProvisionChild(value))),
+        ))
+        .unwrap();
     std::fs::write(
         &response_file,
         serde_json::json!({"response_bytes": canic_core::cdk::utils::hash::hex_bytes(&bytes)})

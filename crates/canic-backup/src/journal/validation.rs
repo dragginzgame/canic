@@ -4,10 +4,8 @@
 //! Does not own: journal persistence, download execution, or reporting.
 //! Boundary: returns typed validation errors for persisted journal input.
 
-use crate::{
-    artifacts::ArtifactChecksum,
-    journal::{ArtifactJournalEntry, ArtifactState, DownloadJournal},
-};
+use crate::journal::{ArtifactJournalEntry, ArtifactState, DownloadJournal};
+use ic_backup::model::artifacts::ArtifactChecksumRecord;
 
 use std::{
     collections::BTreeSet,
@@ -15,7 +13,7 @@ use std::{
     str::FromStr,
 };
 
-use candid::Principal;
+use ic_platform::Principal;
 use thiserror::Error as ThisError;
 
 const SUPPORTED_JOURNAL_VERSION: u16 = 1;
@@ -218,5 +216,7 @@ fn validate_required_hash(
 
 fn validate_hash(field: &'static str, value: &str) -> Result<(), JournalValidationError> {
     validate_nonempty(field, value)?;
-    ArtifactChecksum::validate_hash(value).map_err(|_| JournalValidationError::InvalidHash(field))
+    ArtifactChecksumRecord::from_hash(value)
+        .map(|_| ())
+        .map_err(|_| JournalValidationError::InvalidHash(field))
 }

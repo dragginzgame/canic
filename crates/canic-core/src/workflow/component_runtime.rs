@@ -704,13 +704,13 @@ mod tests {
             },
         },
     };
-    use candid::Principal;
     use canic_contracts::ids::{
         AppId, CanisterRole, CanonicalNetworkId, ComponentDeploymentConfigurationDigest,
         ComponentGroupMemberPath, ComponentGroupPlacementId, ComponentInstanceId, FleetBinding,
         FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority, FleetServiceId,
         SubnetId,
     };
+    use ic_platform::Principal;
 
     #[test]
     fn directory_progression_accepts_exact_replay_and_skipped_revisions() {

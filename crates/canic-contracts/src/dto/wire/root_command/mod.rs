@@ -15,9 +15,10 @@ macro_rules! __canic_root_command_wire_types {
         role_attestation_attributes = [$($role_attestation_attributes:tt)*],
     ) => {
         #[derive(
-            $crate::__reexports::candid::CandidType,
+            $crate::__reexports::ic_platform::candid::contract::CandidType,
             $crate::__reexports::serde::Deserialize,
         )]
+#[candid_path("ic_platform::candid::contract")]
         #[serde(crate = $serde_crate)]
         /// RootCommand wire union selected from the role's compiled capabilities.
         pub enum RootCommand {
@@ -87,9 +88,10 @@ macro_rules! __canic_root_command_wire_types {
         }
 
 #[derive(
-            $crate::__reexports::candid::CandidType,
+            $crate::__reexports::ic_platform::candid::contract::CandidType,
             $crate::__reexports::serde::Deserialize,
         )]
+#[candid_path("ic_platform::candid::contract")]
         #[serde(crate = $serde_crate)]
         /// RootCommandResponse wire union selected from the role's compiled capabilities.
         pub enum RootCommandResponse {

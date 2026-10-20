@@ -245,7 +245,8 @@ fn initial_inventory_hash(
     entries: &[RootComponentInitialInventoryHashEntry],
 ) -> Result<[u8; 32], InternalError> {
     const DOMAIN: &[u8] = b"canic.root-component-initial-inventory.v1";
-    let payload = candid::encode_one(entries).map_err(|_error| InternalError::invariant())?;
+    let payload = ic_platform::candid::contract::encode_one(entries)
+        .map_err(|_error| InternalError::invariant())?;
     let mut hasher = Sha256::new();
     hasher.update(DOMAIN);
     hasher.update((payload.len() as u64).to_be_bytes());

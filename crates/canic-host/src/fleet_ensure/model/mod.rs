@@ -83,6 +83,7 @@ pub enum CanisterRuntimeStatus {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetObservation {
+    #[serde(with = "u128_text_map")]
     pub additional_controlled_cycles: BTreeMap<String, u128>,
     pub canisters: BTreeMap<String, Option<LiveCanister>>,
     pub estate_funding_domains: BTreeMap<String, EstateFundingDomainObservation>,
@@ -684,7 +685,7 @@ pub enum CurrentFleetProtocolAction {
         maximum_attempts: u32,
         request: canic_contracts::dto::root_store::RootStoreFixturePrepareRequest,
         source: canic_contracts::dto::root_store::RootStoreFixture,
-        store: candid::Principal,
+        store: ic_platform::Principal,
     },
     PublishStoreFixtureChunk {
         /// Total paid calls admitted by this exact reviewed action.
@@ -1405,6 +1406,7 @@ pub struct FleetEnsureStateRecord {
     pub fleet: String,
     pub pending_principals: BTreeMap<String, String>,
     pub principals: BTreeMap<String, String>,
+    #[serde(with = "u128_text_map")]
     pub retained_cycles_by_principal: BTreeMap<String, u128>,
     pub schema_version: u16,
     pub topology: BTreeMap<String, FleetEnsureTopologyRecord>,

@@ -17,7 +17,7 @@ pub mod values;
 /// Passive external dependencies needed by exported contract macros.
 #[doc(hidden)]
 pub mod __reexports {
-    pub use candid;
+    pub use ic_platform;
     pub use serde;
 }
 

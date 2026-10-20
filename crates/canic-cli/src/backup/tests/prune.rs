@@ -297,8 +297,8 @@ fn write_complete_layout(path: &std::path::Path, backup_id: &str, created_at: &s
     let layout = BackupLayout::new(path.to_path_buf());
     let checksum = write_artifact(path, b"restorable snapshot");
     let mut manifest = valid_manifest_with(backup_id, created_at);
-    manifest.deployment.members[0].source_snapshot.checksum = Some(checksum.hash.clone());
-    let mut download = journal_with_checksum(checksum.hash);
+    manifest.deployment.members[0].source_snapshot.checksum = Some(checksum.hash().to_owned());
+    let mut download = journal_with_checksum(checksum.hash().to_owned());
     download.backup_id = backup_id.to_string();
     layout
         .write_journal(&download)

@@ -7,7 +7,7 @@ owns storage, tenant policy, accounting and provider behavior.
 This package is published at 0.111.0 with the coherent Canic family
 ([#33](https://github.com/dragginzgame/canic/issues/33)). It belongs to the main
 Canic workspace and inherits its package version, Canic dependency and published
-Blob runtime/contracts `0.22.11` or later from the root catalog. The upstream
+Blob runtime/contracts `0.35` from the root catalog. The upstream
 contracts macro owns service method signatures; the adapter supplies Canic
 authentication, bounded decoding, caller context and lifecycle composition.
 Local paths support
@@ -54,7 +54,9 @@ application's sole Canic lifecycle. See the
 [composition guide](https://github.com/dragginzgame/canic/blob/main/docs/features/blob-storage/README.md).
 
 Construct `dto::configuration::ServiceInstallationInput` for the actual allocated
-service Principal. Bind the exact encoded bytes through Canic's production Root
+service Principal and encode it with `ic_blob_storage_contracts::wire::encode`.
+The dedicated nested payload is CBOR; an embedded application owns its outer
+envelope and carries the same Blob bytes. Bind the exact encoded bytes through Canic's production Root
 initializer before installation; retries retain those bytes and the member
 operation. A dependency change does not supply controller or provider authority.
 

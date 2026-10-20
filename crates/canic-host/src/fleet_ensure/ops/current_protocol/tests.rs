@@ -260,7 +260,7 @@ cat "$id.json"
     fn respond(root: &Path, id: Principal, response: impl CandidType) {
         let response = Ok::<_, canic_contracts::dto::error::Error>(response);
         fs::write(root.join(format!("{id}.json")), serde_json::json!({
-            "response_bytes": canic_core::cdk::utils::hash::hex_bytes(candid::encode_one(response).unwrap()),
+            "response_bytes": canic_core::cdk::utils::hash::hex_bytes(ic_platform::candid::contract::encode_one(response).unwrap()),
         }).to_string()).unwrap();
     }
 
@@ -496,7 +496,7 @@ esac
             self.status.clone(),
         ));
         fs::write(self.root.join("response.json"), serde_json::json!({
-            "response_bytes": canic_core::cdk::utils::hash::hex_bytes(candid::encode_one(response).unwrap()),
+            "response_bytes": canic_core::cdk::utils::hash::hex_bytes(ic_platform::candid::contract::encode_one(response).unwrap()),
         }).to_string()).unwrap();
     }
 
@@ -919,7 +919,7 @@ fn assert_activation_source_review(
         **action = CurrentFleetProtocolAction::BootstrapStore {
             expected: canic_contracts::dto::root_store::RootStoreBootstrapResponse {
                 fleet_subnet_root: root.fleet_subnet_root,
-                wasm_store: candid::Principal::anonymous(),
+                wasm_store: ic_platform::Principal::anonymous(),
                 release_set: root.active_release_set,
                 catalog: Vec::new(),
                 fixtures: Vec::new(),
@@ -953,7 +953,7 @@ fn assert_activation_source_review(
         "plan_sha256": digest, "canisters": [{"actions": []}],
         "conservation": { "maximum_new_funding_cycles": "0", "maximum_operator_debit_cycles": "0",
             "maximum_unavoidable_fee_cycles": "0", "scheduled_transfer_cycles": "0", "maximum_execution_burn_cycles": "0" },
-        "protocol_actions": crate::fleet_ensure::json::to_value(&actions).expect("actions"),
+        "protocol_actions": serde_json::to_value(&actions).expect("actions"),
         "reviewed_desired": { "desired": source_desired },
     });
     let mut journal = serde_json::json!({
@@ -978,10 +978,9 @@ fn assert_activation_source_review(
     if completed_bootstrap {
         // Freeze the completed source bytes before the fixture field existed.
         // Hash that independent serialized fixture, never a default-filled action.
-        let current = String::from_utf8(
-            crate::fleet_ensure::json::to_vec(&actions[0]).expect("bootstrap fixture"),
-        )
-        .expect("JSON UTF-8");
+        let current =
+            String::from_utf8(serde_json::to_vec(&actions[0]).expect("bootstrap fixture"))
+                .expect("JSON UTF-8");
         assert_eq!(current.matches(",\"fixtures\":[]").count(), 1);
         let source = current.replace(",\"fixtures\":[]", "");
         journal["effects"][0]["action_sha256"] =
@@ -2371,7 +2370,9 @@ fn store_chunk_compilation_fuses_only_the_first_chunk_within_the_byte_envelope()
             assert_eq!(preparation.chunk_hashes, expected_hashes);
         }
         assert!(
-            candid::encode_one(request).unwrap().len()
+            ic_platform::candid::contract::encode_one(request)
+                .unwrap()
+                .len()
                 <= canic_core::CANIC_WASM_CHUNK_REQUEST_MAX_BYTES
         );
     }

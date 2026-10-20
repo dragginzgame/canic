@@ -8,7 +8,6 @@ use super::FleetCoordinatorOps;
 use crate::storage::stable::fleet_coordinator::{
     FleetCoordinatorRegistryRecord, FleetRetirementRecord,
 };
-use candid::Principal;
 use canic_contracts::dto::fleet_registry::{
     FleetLedgerTransferIntent, FleetLedgerTransferReceipt, FleetRetirementRequest,
     FleetRetirementStatus, FleetSubnetRootStatus,
@@ -16,6 +15,7 @@ use canic_contracts::dto::fleet_registry::{
 use canic_core::control_plane_support::{
     error::InternalError, ops::fleet_registry::FleetRegistryOps,
 };
+use ic_platform::Principal;
 
 impl FleetCoordinatorOps {
     pub(crate) fn retirement_preflight(

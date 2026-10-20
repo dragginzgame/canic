@@ -36,12 +36,15 @@ use crate::{
     },
     icp::IcpCli,
 };
-use candid::{CandidType, Nat, Principal};
 use canic_contracts::{dto::fleet_registry::FleetRegistry, ids::CanonicalNetworkId};
 use canic_core::{
     cdk::utils::hash::{decode_hex, hex_bytes},
     control_plane_support::ops::fleet_registry::FleetRegistryOps,
     shared_support::fleet_admission_policy::bind_initial_fleet_admission_policy,
+};
+use ic_platform::{
+    Principal,
+    candid::contract::{CandidType, Nat},
 };
 use sha2_host::{Digest, Sha256};
 use std::{
@@ -452,8 +455,8 @@ fn verify_ready_coordinator(
         .as_ref()
         .ok_or(InfrastructureBootstrapError::Integrity)?;
     let bytes = decode_hex(encoded).map_err(|_| InfrastructureBootstrapError::Integrity)?;
-    let observed: FleetRegistry =
-        candid::decode_one(&bytes).map_err(|_| InfrastructureBootstrapError::Integrity)?;
+    let observed: FleetRegistry = ic_platform::candid::decoder::decode_one(&bytes)
+        .map_err(|_| InfrastructureBootstrapError::Integrity)?;
     let principals = desired
         .canisters
         .iter()
@@ -553,6 +556,7 @@ pub(in crate::fleet_ensure::ops) fn verify_registry(
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct LedgerAccount {
     owner: Principal,
     subaccount: Option<Vec<u8>>,
@@ -646,7 +650,7 @@ fn authenticated_agent(
     icp: &IcpCli,
     desired: &DesiredFleet,
     record: &InfrastructureBootstrapRecord,
-) -> Result<ic_agent::Agent, InfrastructureBootstrapError> {
+) -> Result<ic_platform::agent::Agent, InfrastructureBootstrapError> {
     let agent = icp
         .authenticated_agent_with_response_limit(2 * 1024 * 1024)
         .map_err(|error| InfrastructureBootstrapError::Observation(error.to_string()))?;
@@ -736,7 +740,7 @@ pub(in crate::fleet_ensure) fn verify_initial(
     let actual_registry = observed
         .coordinator_registry
         .as_ref()
-        .map(candid::encode_one)
+        .map(ic_platform::candid::contract::encode_one)
         .transpose()
         .map_err(|_| InfrastructureBootstrapError::Integrity)?
         .map(hex_bytes);

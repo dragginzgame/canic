@@ -25,7 +25,7 @@ pub(in crate::fleet_ensure) fn review(
 ) -> Result<AttemptRecoveryReviewRecord, CapacityImportJournalError> {
     let owners = owner::discover(paths)?;
     if owners.is_empty() {
-        return Err(CapacityImportJournalError::RequestInvalid);
+        return Err(CapacityImportJournalError::NoExhaustedAttempts);
     }
     let mut review = AttemptRecoveryReviewRecord {
         schema_version: 1,

@@ -20,9 +20,7 @@ use crate::{
         load_persisted_current_release_set_manifest,
     },
 };
-use candid::Principal;
-use ic_agent::Agent;
-
+use ic_platform::{Principal, agent::Agent};
 pub(super) async fn inspect(
     paths: &EnsurePaths,
     desired: &DesiredFleet,

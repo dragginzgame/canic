@@ -28,7 +28,7 @@ fn backup_list_reports_execution_backed_manifest_status() {
     }
     write_manifest_plan_journal(&complete, complete_journal);
     BackupLayout::new(complete.clone())
-        .write_journal(&journal_with_checksum(checksum.hash))
+        .write_journal(&journal_with_checksum(checksum.hash().to_owned()))
         .expect("write download journal");
 
     let mut invalid_journal = accepted_execution_journal();

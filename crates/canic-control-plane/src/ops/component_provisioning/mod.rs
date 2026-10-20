@@ -38,7 +38,6 @@ use crate::{
         },
     },
 };
-use candid::{CandidType, Principal};
 use canic_contracts::{
     dto::{
         component_deployment::{
@@ -76,6 +75,7 @@ use canic_core::control_plane_support::{
     },
 };
 use failure::{failure_response, failure_view};
+use ic_platform::{Principal, candid::contract::CandidType};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -86,6 +86,7 @@ const INSTALL_CURSOR_DOMAIN: &[u8] = b"canic/root-component-provisioning-install
 const REGISTRY_CURSOR_DOMAIN: &[u8] = b"canic/root-component-provisioning-registry-cursor/v1";
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct RootComponentProvisioningMemberOperationAuthority<'a> {
     fleet_subnet_root: Principal,
     operation_id: [u8; 32],
@@ -95,6 +96,7 @@ struct RootComponentProvisioningMemberOperationAuthority<'a> {
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct RootComponentProvisioningReservationCursorAuthority {
     operation_id: [u8; 32],
     plan_hash: [u8; 32],
@@ -104,6 +106,7 @@ struct RootComponentProvisioningReservationCursorAuthority {
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct RootComponentProvisioningClaimCursorAuthority {
     operation_id: [u8; 32],
     plan_hash: [u8; 32],
@@ -113,6 +116,7 @@ struct RootComponentProvisioningClaimCursorAuthority {
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct RootComponentProvisioningInstallCursorAuthority {
     operation_id: [u8; 32],
     plan_hash: [u8; 32],
@@ -122,6 +126,7 @@ struct RootComponentProvisioningInstallCursorAuthority {
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct RootComponentProvisioningRegistryCursorAuthority {
     operation_id: [u8; 32],
     plan_hash: [u8; 32],
@@ -3370,7 +3375,8 @@ fn domain_separated_candid_hash<T: CandidType>(
     domain: &[u8],
     value: T,
 ) -> Result<[u8; 32], InternalError> {
-    let bytes = candid::encode_one(value).map_err(|_error| InternalError::invariant())?;
+    let bytes = ic_platform::candid::contract::encode_one(value)
+        .map_err(|_error| InternalError::invariant())?;
     let byte_count = u64::try_from(bytes.len()).map_err(|_| InternalError::resource_exhausted())?;
     let mut hasher = Sha256::new();
     hasher.update(domain);

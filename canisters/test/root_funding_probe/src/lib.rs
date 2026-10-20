@@ -4,15 +4,17 @@
 //! proves attached-cycle atomicity, exact replay and bounded request/refill
 //! recovery costs without adding a production funding surface.
 
-use candid::{CandidType, Deserialize, Principal, encode_one};
-use ic_cdk::{
-    api::{
-        canister_cycle_balance, canister_self, cost_call, is_controller, msg_caller,
-        msg_cycles_accept, msg_cycles_available,
-    },
+use ic_platform::cdk::api::canister_cycle_balance;
+use ic_platform::cdk::api::{msg_cycles_accept, msg_cycles_available};
+use ic_platform::cdk::{
+    api::{canister_self, cost_call, is_controller, msg_caller, trap},
     call::Call,
-    trap,
 };
+use ic_platform::{
+    Principal,
+    candid::contract::{CandidType, encode_one},
+};
+use serde::Deserialize;
 use std::cell::RefCell;
 
 const ROOT_ACCEPT_METHOD: &str = "root_funding_probe_accept";
@@ -38,6 +40,7 @@ thread_local! {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 enum ProbeInit {
     Coordinator,
     Root { coordinator: Principal },
@@ -56,12 +59,14 @@ enum ProbeRole {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct GrantRequest {
     operation_id: [u8; 32],
     amount: u128,
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct GrantReceipt {
     operation_id: [u8; 32],
     coordinator: Principal,
@@ -70,12 +75,14 @@ struct GrantReceipt {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct AcceptanceObservation {
     balance_before_accept: u128,
     balance_after_accept: u128,
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct RootRequestObservation {
     result: IssueResult,
     call_cost: u128,
@@ -84,6 +91,7 @@ struct RootRequestObservation {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct EmergencyTransferRequest {
     operation_id: [u8; 32],
     from_subaccount: Option<[u8; 32]>,
@@ -96,30 +104,35 @@ struct EmergencyTransferRequest {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct CmcNotifyRequest {
     block_index: u64,
     canister_id: Principal,
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct LedgerTransferReceipt {
     operation_id: [u8; 32],
     block_index: u64,
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 enum LedgerTransferResult {
     Transferred { block_index: u64 },
     Duplicate { block_index: u64 },
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct CmcNotifyReceipt {
     request: CmcNotifyRequest,
     cycles_sent: u128,
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 enum EmergencyRefillPhase {
     Prepared,
     Transferred { block_index: u64 },
@@ -127,6 +140,7 @@ enum EmergencyRefillPhase {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct EmergencyRefillOperation {
     transfer: EmergencyTransferRequest,
     max_call_cost: u128,
@@ -141,12 +155,14 @@ enum EmergencyTrapPoint {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 enum IntentState {
     Prepared,
     Committed { receipt: GrantReceipt },
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct GrantIntent {
     root: Principal,
     request: GrantRequest,
@@ -156,6 +172,7 @@ struct GrantIntent {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 enum RootAcceptResult {
     Accepted {
         receipt: GrantReceipt,
@@ -168,6 +185,7 @@ enum RootAcceptResult {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 enum IssueResult {
     Committed {
         receipt: GrantReceipt,
@@ -183,7 +201,7 @@ enum IssueResult {
     RootBindingConflict,
 }
 
-#[ic_cdk::init]
+#[ic_platform::cdk::init]
 fn init(arg: ProbeInit) {
     let role = match arg {
         ProbeInit::Coordinator => ProbeRole::Coordinator,
@@ -195,7 +213,7 @@ fn init(arg: ProbeInit) {
     ROLE.with_borrow_mut(|stored| *stored = Some(role));
 }
 
-#[ic_cdk::update(name = "root_funding_probe_prepare")]
+#[ic_platform::cdk::update(name = "root_funding_probe_prepare")]
 fn prepare(root: Principal, operation_id: [u8; 32], amount: u128) -> GrantIntent {
     require_controller();
     require_coordinator_role();
@@ -247,7 +265,7 @@ fn prepare_intent(root: Principal, operation_id: [u8; 32], amount: u128) -> Gran
     })
 }
 
-#[ic_cdk::update(name = "root_funding_probe_handle_request")]
+#[ic_platform::cdk::update(name = "root_funding_probe_handle_request")]
 async fn handle_request(request: GrantRequest) -> IssueResult {
     require_coordinator_role();
     let root = msg_caller();
@@ -255,7 +273,7 @@ async fn handle_request(request: GrantRequest) -> IssueResult {
     issue_prepared(ROOT_ACCEPT_METHOD).await
 }
 
-#[ic_cdk::update(name = "root_funding_probe_request")]
+#[ic_platform::cdk::update(name = "root_funding_probe_request")]
 async fn request() -> RootRequestObservation {
     let coordinator = require_root_role();
     let request = GrantRequest {
@@ -288,43 +306,43 @@ async fn request() -> RootRequestObservation {
     }
 }
 
-#[ic_cdk::update(name = "root_funding_probe_emergency_refill")]
+#[ic_platform::cdk::update(name = "root_funding_probe_emergency_refill")]
 async fn emergency_refill() -> EmergencyRefillOperation {
     require_controller();
     advance_emergency_refill(EmergencyTrapPoint::None).await
 }
 
-#[ic_cdk::update(name = "root_funding_probe_emergency_refill_transfer_then_trap")]
+#[ic_platform::cdk::update(name = "root_funding_probe_emergency_refill_transfer_then_trap")]
 async fn emergency_refill_transfer_then_trap() -> EmergencyRefillOperation {
     require_controller();
     advance_emergency_refill(EmergencyTrapPoint::TransferCallback).await
 }
 
-#[ic_cdk::update(name = "root_funding_probe_emergency_refill_notify_then_trap")]
+#[ic_platform::cdk::update(name = "root_funding_probe_emergency_refill_notify_then_trap")]
 async fn emergency_refill_notify_then_trap() -> EmergencyRefillOperation {
     require_controller();
     advance_emergency_refill(EmergencyTrapPoint::NotifyCallback).await
 }
 
-#[ic_cdk::query(name = "root_funding_probe_emergency_operation")]
+#[ic_platform::cdk::query(name = "root_funding_probe_emergency_operation")]
 fn emergency_operation() -> Option<EmergencyRefillOperation> {
     require_emergency_root_role();
     EMERGENCY_OPERATION.with_borrow(Clone::clone)
 }
 
-#[ic_cdk::update(name = "icrc1_fee")]
+#[ic_platform::cdk::update(name = "icrc1_fee")]
 fn ledger_fee() -> u64 {
     require_ledger_role();
     10_000
 }
 
-#[ic_cdk::update(name = "icrc1_decimals")]
+#[ic_platform::cdk::update(name = "icrc1_decimals")]
 fn ledger_decimals() -> u8 {
     require_ledger_role();
     8
 }
 
-#[ic_cdk::update(name = "icrc1_transfer")]
+#[ic_platform::cdk::update(name = "icrc1_transfer")]
 fn ledger_transfer(request: EmergencyTransferRequest) -> LedgerTransferResult {
     require_ledger_role();
     LEDGER_TRANSFER.with_borrow_mut(|stored| {
@@ -347,13 +365,13 @@ fn ledger_transfer(request: EmergencyTransferRequest) -> LedgerTransferResult {
     })
 }
 
-#[ic_cdk::update(name = "get_icp_xdr_conversion_rate")]
+#[ic_platform::cdk::update(name = "get_icp_xdr_conversion_rate")]
 fn cmc_rate() -> u64 {
     require_cmc_role();
     1_000_000
 }
 
-#[ic_cdk::update(name = "notify_top_up")]
+#[ic_platform::cdk::update(name = "notify_top_up")]
 fn cmc_notify(request: CmcNotifyRequest) -> u128 {
     require_cmc_role();
     CMC_NOTIFY.with_borrow_mut(|stored| {
@@ -462,7 +480,7 @@ async fn prepare_emergency_refill() -> EmergencyRefillOperation {
         amount_e8s: 100_000_000,
         fee_e8s,
         memo: b"TPUP\0\0\0\0".to_vec(),
-        created_at_time_ns: ic_cdk::api::time(),
+        created_at_time_ns: ic_platform::cdk::api::time(),
     };
     let notify = CmcNotifyRequest {
         block_index: 77,
@@ -501,21 +519,21 @@ fn store_emergency_operation(operation: &EmergencyRefillOperation) {
     EMERGENCY_OPERATION.with_borrow_mut(|stored| *stored = Some(operation.clone()));
 }
 
-#[ic_cdk::update(name = "root_funding_probe_issue")]
+#[ic_platform::cdk::update(name = "root_funding_probe_issue")]
 async fn issue() -> IssueResult {
     require_controller();
     require_coordinator_role();
     issue_prepared(ROOT_ACCEPT_METHOD).await
 }
 
-#[ic_cdk::update(name = "root_funding_probe_issue_root_accept_then_trap")]
+#[ic_platform::cdk::update(name = "root_funding_probe_issue_root_accept_then_trap")]
 async fn issue_root_accept_then_trap() -> IssueResult {
     require_controller();
     require_coordinator_role();
     issue_prepared(ROOT_ACCEPT_THEN_TRAP_METHOD).await
 }
 
-#[ic_cdk::update(name = "root_funding_probe_issue_then_trap")]
+#[ic_platform::cdk::update(name = "root_funding_probe_issue_then_trap")]
 async fn issue_then_trap() -> IssueResult {
     require_controller();
     require_coordinator_role();
@@ -526,30 +544,30 @@ async fn issue_then_trap() -> IssueResult {
     result
 }
 
-#[ic_cdk::query(name = "root_funding_probe_intent")]
+#[ic_platform::cdk::query(name = "root_funding_probe_intent")]
 fn intent() -> Option<GrantIntent> {
     require_coordinator_role();
     INTENT.with_borrow(Clone::clone)
 }
 
-#[ic_cdk::query(name = "root_funding_probe_receipt")]
+#[ic_platform::cdk::query(name = "root_funding_probe_receipt")]
 fn receipt() -> Option<GrantReceipt> {
     require_root_role();
     RECEIPT.with_borrow(Clone::clone)
 }
 
-#[ic_cdk::query(name = "root_funding_probe_acceptance_observation")]
+#[ic_platform::cdk::query(name = "root_funding_probe_acceptance_observation")]
 fn acceptance_observation() -> Option<AcceptanceObservation> {
     require_root_role();
     ACCEPTANCE_OBSERVATION.with_borrow(Clone::clone)
 }
 
-#[ic_cdk::update(name = "root_funding_probe_accept")]
+#[ic_platform::cdk::update(name = "root_funding_probe_accept")]
 fn accept(request: GrantRequest) -> RootAcceptResult {
     accept_request(request)
 }
 
-#[ic_cdk::update(name = "root_funding_probe_accept_then_trap")]
+#[ic_platform::cdk::update(name = "root_funding_probe_accept_then_trap")]
 fn accept_then_trap(request: GrantRequest) -> RootAcceptResult {
     let _ = accept_request(request);
     trap("intentional trap after exact grant acceptance and receipt persistence");

@@ -8,6 +8,7 @@ use super::{
     ComponentProvisioningPlanOpsError, MAX_FLEET_COMPONENT_PROVISIONING_PLAN_CANONICAL_BYTES,
     MAX_FLEET_SUBNET_ROOT_PROVISIONING_BATCH_CANONICAL_BYTES,
 };
+use crate::cdk::serialize::canonical::CanonicalEncoder;
 use crate::{
     config::{ComponentDeploymentLimits, ComponentDeploymentPurpose, FleetServiceMemberPurpose},
     dto::{
@@ -31,17 +32,23 @@ const PLAN_SCHEMA_VERSION: u32 = 1;
 pub(super) fn plan_bytes(
     plan: &FleetComponentProvisioningPlan,
 ) -> Result<Vec<u8>, ComponentProvisioningPlanOpsError> {
-    let mut encoder = CanonicalEncoder::new();
+    let mut encoder = CanonicalEncoder::new(PLAN_DOMAIN, PLAN_SCHEMA_VERSION);
     encode_plan(&mut encoder, plan);
-    encoder.finish()
+    finish_with_bound(
+        encoder,
+        MAX_FLEET_COMPONENT_PROVISIONING_PLAN_CANONICAL_BYTES,
+    )
 }
 
 pub(super) fn root_batch_bytes(
     batch: &FleetSubnetRootProvisioningBatch,
 ) -> Result<Vec<u8>, ComponentProvisioningPlanOpsError> {
-    let mut encoder = CanonicalEncoder::with_domain(ROOT_BATCH_DOMAIN);
+    let mut encoder = CanonicalEncoder::new(ROOT_BATCH_DOMAIN, PLAN_SCHEMA_VERSION);
     encode_batch(&mut encoder, batch);
-    encoder.finish_with_bound(MAX_FLEET_SUBNET_ROOT_PROVISIONING_BATCH_CANONICAL_BYTES)
+    finish_with_bound(
+        encoder,
+        MAX_FLEET_SUBNET_ROOT_PROVISIONING_BATCH_CANONICAL_BYTES,
+    )
 }
 
 fn encode_plan(encoder: &mut CanonicalEncoder, plan: &FleetComponentProvisioningPlan) {
@@ -198,61 +205,16 @@ fn encode_limits(encoder: &mut CanonicalEncoder, limits: &ComponentDeploymentLim
     }
 }
 
-struct CanonicalEncoder {
-    bytes: Vec<u8>,
-}
-
-impl CanonicalEncoder {
-    fn new() -> Self {
-        Self::with_domain(PLAN_DOMAIN)
+fn finish_with_bound(
+    encoder: CanonicalEncoder,
+    maximum_bytes: usize,
+) -> Result<Vec<u8>, ComponentProvisioningPlanOpsError> {
+    let bytes = encoder.finish();
+    if bytes.len() > maximum_bytes {
+        return Err(ComponentProvisioningPlanOpsError::CanonicalBytesExceeded {
+            actual_bytes: bytes.len(),
+            maximum_bytes,
+        });
     }
-
-    fn with_domain(domain: &[u8]) -> Self {
-        let mut encoder = Self { bytes: Vec::new() };
-        encoder.bytes(domain);
-        encoder.u32(PLAN_SCHEMA_VERSION);
-        encoder
-    }
-
-    fn bytes(&mut self, value: &[u8]) {
-        self.u64(value.len() as u64);
-        self.bytes.extend_from_slice(value);
-    }
-
-    fn string(&mut self, value: &str) {
-        self.bytes(value.as_bytes());
-    }
-
-    fn u8(&mut self, value: u8) {
-        self.bytes.push(value);
-    }
-
-    fn u32(&mut self, value: u32) {
-        self.bytes.extend_from_slice(&value.to_be_bytes());
-    }
-
-    fn u64(&mut self, value: u64) {
-        self.bytes.extend_from_slice(&value.to_be_bytes());
-    }
-
-    fn u128(&mut self, value: u128) {
-        self.bytes.extend_from_slice(&value.to_be_bytes());
-    }
-
-    fn finish(self) -> Result<Vec<u8>, ComponentProvisioningPlanOpsError> {
-        self.finish_with_bound(MAX_FLEET_COMPONENT_PROVISIONING_PLAN_CANONICAL_BYTES)
-    }
-
-    fn finish_with_bound(
-        self,
-        maximum_bytes: usize,
-    ) -> Result<Vec<u8>, ComponentProvisioningPlanOpsError> {
-        if self.bytes.len() > maximum_bytes {
-            return Err(ComponentProvisioningPlanOpsError::CanonicalBytesExceeded {
-                actual_bytes: self.bytes.len(),
-                maximum_bytes,
-            });
-        }
-        Ok(self.bytes)
-    }
+    Ok(bytes)
 }

@@ -223,6 +223,7 @@ fn sidecar_only_runtime_matches_declared_methods_without_candid_payload() {
             "canister_query read",
             "canister_update write",
             "canister_update <ic-cdk internal> timer_executor",
+            "canister_update <ic-timers internal> dispatch",
         ]),
     )
     .expect("write runtime Wasm");
@@ -464,7 +465,14 @@ fn release_wasm_optimization_records_metrics_and_preserves_contract() {
 #[cfg(unix)]
 #[test]
 fn release_wasm_optimization_rejects_export_or_candid_drift() {
+    let mut raw_drift = minimal_wasm_with_contract();
+    let name = b"icp:private canic:raw";
+    let mut section = vec![u8::try_from(name.len()).unwrap()];
+    section.extend_from_slice(name);
+    section.extend_from_slice(&[2, 2, 0, b'g', b'o']);
+    push_section(&mut raw_drift, 0, &section);
     let cases = [
+        ("raw", raw_drift),
         (
             "exports",
             minimal_wasm_with_contract_parts("other", b"service : {}"),
@@ -566,9 +574,10 @@ fn minimal_wasm_with_exports(exports: &[&str]) -> Vec<u8> {
     push_section(&mut wasm, 1, &[1, 0x60, 0, 0]);
     push_section(&mut wasm, 3, &[1, 0]);
 
-    let mut export_section = vec![u8::try_from(exports.len()).expect("short export inventory")];
+    let mut export_section = Vec::new();
+    push_u32_leb128(&mut export_section, u32::try_from(exports.len()).unwrap());
     for export in exports {
-        export_section.push(u8::try_from(export.len()).expect("short export name"));
+        push_u32_leb128(&mut export_section, u32::try_from(export.len()).unwrap());
         export_section.extend_from_slice(export.as_bytes());
         export_section.extend_from_slice(&[0, 0]);
     }
@@ -579,7 +588,10 @@ fn minimal_wasm_with_exports(exports: &[&str]) -> Vec<u8> {
 
 fn push_section(wasm: &mut Vec<u8>, id: u8, payload: &[u8]) {
     wasm.push(id);
-    wasm.push(u8::try_from(payload.len()).expect("short test section"));
+    push_u32_leb128(
+        wasm,
+        u32::try_from(payload.len()).expect("test section length"),
+    );
     wasm.extend_from_slice(payload);
 }
 

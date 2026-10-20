@@ -210,9 +210,21 @@ pub(super) fn literal_zero_release_artifact_cache_spec(
         workspace_root,
         &canic_host::canister_build::canister_build_target_root(workspace_root),
         &packages,
+        std::env::vars_os(),
     )
-    .with_cargo_profile_args(["--profile", "fast", "--locked"])
-    .with_extra_env(environment);
+    .with_cargo_selection(ic_build::cargo::selection::CargoSelection {
+        profile: Some("fast".into()),
+        locked: true,
+        ..Default::default()
+    })
+    .with_environment(
+        std::env::vars_os().chain((environment).into_iter().map(|(key, value)| {
+            (
+                std::ffi::OsString::from(key),
+                std::ffi::OsString::from(value),
+            )
+        })),
+    );
     let config_relative = config_path
         .strip_prefix(workspace_root)
         .expect("literal-zero config must be workspace-confined")
@@ -277,9 +289,21 @@ fn bind_host_producer_inputs(
         workspace_root,
         &canic_host::canister_build::canister_build_target_root(workspace_root),
         &["canic-host"],
+        std::env::vars_os(),
     )
-    .with_cargo_profile_args(["--profile", "fast", "--locked"])
-    .with_extra_env(environment.iter().copied());
+    .with_cargo_selection(ic_build::cargo::selection::CargoSelection {
+        profile: Some("fast".into()),
+        locked: true,
+        ..Default::default()
+    })
+    .with_environment(std::env::vars_os().chain((environment.iter().copied()).map(
+        |(key, value)| {
+            (
+                std::ffi::OsString::from(key),
+                std::ffi::OsString::from(value),
+            )
+        },
+    )));
     let host_inputs = resolve_cargo_build_inputs(&host_build)
         .expect("resolve native artifact producer Cargo inputs");
     host_inputs::FixtureArtifactCache::bind(

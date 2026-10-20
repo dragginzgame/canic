@@ -31,8 +31,7 @@ use canic_contracts::{
 #[cfg(feature = "root-control-plane")]
 use canic_core::{
     cdk::structures::{
-        DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, cell::Cell, memory::RuntimeMemory,
-        storable::Storable,
+        DefaultMemoryImpl, StableBTreeMap as StableBtreeMap, StableCell as Cell, storable::Storable,
     },
     impl_storable_bounded,
 };
@@ -77,7 +76,7 @@ fn root_deletion_retained_cycles_target(
 #[cfg(feature = "root-control-plane")]
 std::thread_local! {
     static ROOT_COMPONENT_REGISTRY:
-        RefCell<Cell<RootComponentRegistryStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
+        RefCell<Cell<RootComponentRegistryStateRecord, DefaultMemoryImpl>> =
         RefCell::new(Cell::init(
             canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_REGISTRY_STATE_V1),
             RootComponentRegistryStateRecord::default(),
@@ -90,7 +89,7 @@ std::thread_local! {
         StableBtreeMap<
             RootComponentDrainingKey,
             RootComponentDrainingRecord,
-            RuntimeMemory<DefaultMemoryImpl>,
+            DefaultMemoryImpl,
         >,
     > = RefCell::new(StableBtreeMap::init(
         canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_DRAINING_V1),
@@ -103,7 +102,7 @@ std::thread_local! {
         StableBtreeMap<
             RootComponentSubtreeRemovalHistoryKey,
             RootComponentSubtreeRemovalCompletedLeafRecord,
-            RuntimeMemory<DefaultMemoryImpl>,
+            DefaultMemoryImpl,
         >,
     > = RefCell::new(StableBtreeMap::init(
         canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_V1),
@@ -116,7 +115,7 @@ std::thread_local! {
         StableBtreeMap<
             ComponentRegistryEntryKey,
             ComponentRegistryEntryRecord,
-            RuntimeMemory<DefaultMemoryImpl>,
+            DefaultMemoryImpl,
         >,
     > = RefCell::new(StableBtreeMap::init(
         canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_REGISTRY_ENTRIES_V1),
@@ -129,7 +128,7 @@ std::thread_local! {
         StableBtreeMap<
             ComponentRegistryPrincipalKey,
             ComponentRegistryPrincipalIndexRecord,
-            RuntimeMemory<DefaultMemoryImpl>,
+            DefaultMemoryImpl,
         >,
     > = RefCell::new(StableBtreeMap::init(
         canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_PRINCIPAL_INDEX_V1),
@@ -142,7 +141,7 @@ std::thread_local! {
         StableBtreeMap<
             RootComponentAllocationOperationKey,
             RootComponentAllocationRecord,
-            RuntimeMemory<DefaultMemoryImpl>,
+            DefaultMemoryImpl,
         >,
     > = RefCell::new(StableBtreeMap::init(
         canic_core::memory::open(crate::memory::keys::ROOT_COMPONENT_ALLOCATIONS_V1),
@@ -5862,9 +5861,9 @@ impl RootComponentRegistryStore {
         reason = "test snapshot import repopulates every normalized stable domain explicitly"
     )]
     pub(crate) fn import(data: RootComponentRegistryData) {
-        ROOT_COMPONENT_ALLOCATIONS.with_borrow_mut(StableBtreeMap::clear_new);
-        ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY.with_borrow_mut(StableBtreeMap::clear_new);
-        ROOT_COMPONENT_DRAINING.with_borrow_mut(StableBtreeMap::clear_new);
+        ROOT_COMPONENT_ALLOCATIONS.with_borrow_mut(StableBtreeMap::clear);
+        ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY.with_borrow_mut(StableBtreeMap::clear);
+        ROOT_COMPONENT_DRAINING.with_borrow_mut(StableBtreeMap::clear);
         for record in data.allocations {
             ROOT_COMPONENT_ALLOCATIONS.with_borrow_mut(|map| {
                 map.insert(
@@ -5873,8 +5872,8 @@ impl RootComponentRegistryStore {
                 );
             });
         }
-        COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(StableBtreeMap::clear_new);
-        COMPONENT_REGISTRY_PRINCIPAL_INDEX.with_borrow_mut(StableBtreeMap::clear_new);
+        COMPONENT_REGISTRY_ENTRIES.with_borrow_mut(StableBtreeMap::clear);
+        COMPONENT_REGISTRY_PRINCIPAL_INDEX.with_borrow_mut(StableBtreeMap::clear);
         for record in data.partitions {
             let component = record.binding.component;
             let canister = record.binding.canister_id;

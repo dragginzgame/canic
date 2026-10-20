@@ -8,7 +8,6 @@ use crate::fleet_ensure::{
     },
     workflow::release::assess_pools,
 };
-use candid::CandidType;
 use canic_contracts::{
     cycles::Cycles,
     dto::{
@@ -23,6 +22,7 @@ use canic_contracts::{
         root::RootPoolBootstrapReleaseEvidence,
     },
 };
+use ic_platform::candid::contract::CandidType;
 
 pub(in crate::fleet_ensure::ops::release) fn fixture(
     root: Principal,
@@ -101,11 +101,14 @@ pub(in crate::fleet_ensure::ops::release) fn fixture(
 }
 
 pub(in crate::fleet_ensure::ops::release) fn wire(status: RootPoolReleaseResponse) -> Vec<u8> {
-    candid::encode_one(Ok::<_, CanicError>(Response::PoolRelease(Box::new(status)))).unwrap()
+    ic_platform::candid::contract::encode_one(Ok::<_, CanicError>(Response::PoolRelease(Box::new(
+        status,
+    ))))
+    .unwrap()
 }
 
 pub(in crate::fleet_ensure::ops::release) fn refused(error: CanicError) -> Vec<u8> {
-    candid::encode_one(Err::<Response, _>(error)).unwrap()
+    ic_platform::candid::contract::encode_one(Err::<Response, _>(error)).unwrap()
 }
 
 #[test]
@@ -160,6 +163,7 @@ fn every_root_and_subnet_binding_is_checked_independently() {
 #[test]
 fn decoder_bounds_bytes_work_and_total_collection() {
     #[derive(CandidType)]
+    #[candid_path("ic_platform::candid::contract")]
     enum Extended {
         PoolRelease { root: Principal, extra: Vec<()> },
     }
@@ -184,14 +188,15 @@ fn decoder_bounds_bytes_work_and_total_collection() {
         ));
     }
     // An unknown field containing millions of null values is tiny on the wire.
-    let expensive = candid::encode_one(Ok::<_, CanicError>(Extended::PoolRelease {
-        root,
-        extra: vec![(); RESPONSE_BYTES * 8 + 1],
-    }))
-    .unwrap();
+    let expensive =
+        ic_platform::candid::contract::encode_one(Ok::<_, CanicError>(Extended::PoolRelease {
+            root,
+            extra: vec![(); RESPONSE_BYTES * 8 + 1],
+        }))
+        .unwrap();
     assert!(expensive.len() < RESPONSE_BYTES);
     assert!(
-        candid::decode_one::<Result<Response, CanicError>>(&expensive)
+        ic_platform::candid::decoder::decode_one::<Result<Response, CanicError>>(&expensive)
             .unwrap()
             .is_ok()
     );

@@ -12,12 +12,12 @@ use crate::model::fleet_admission_authority::{
     FleetAdmissionMutationResponseModel, FleetAdmissionRetainedResultModel,
     FleetAdmissionTransitionModel,
 };
-use candid::Principal;
 use canic_contracts::ids::{
     FleetAdmissionPolicy, FleetAdmissionPolicyTemplate, FleetAdmissionRule, FleetAdmissionSelector,
     FleetAdmissionTarget, MAX_FLEET_ADMISSION_PRINCIPALS,
     MAX_FLEET_ADMISSION_RULE_PRINCIPAL_REFERENCES, MAX_FLEET_ADMISSION_RULES,
 };
+use ic_platform::Principal;
 use thiserror::Error as ThisError;
 
 /// Pure mutation rejection before a successor policy is compiled.

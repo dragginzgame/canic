@@ -67,10 +67,12 @@ build's contract. This checks the declaration, not deployed Wasm or live admissi
 
 Without `--release-build`,
 `canic --environment staging info endpoints <fleet> <canister> --json` inspects
-live metadata when available, otherwise the selected environment's local sidecar.
-JSON identifies `source_kind` (`built`, `live` or `local`), `source`, and nullable
-`release_build_id`; plain output identifies the source path or live metadata.
-A local sidecar alone does not prove a selected build's identity.
+the exact Candid declaration in the deployed Fleet's retained release. Target
+selection requires a unique role or an exact member Principal. Missing Fleet,
+release or protocol evidence is an error. JSON identifies `source_kind` (`built`
+or `installed`), `source`, and the exact `release_build_id`; plain output identifies
+the retained source path. Inspection describes retained installation authority,
+not a live query or proof that the deployed Wasm has not changed.
 
 Each update's `payload_limits` reports
 `ingress_max_bytes`, `update_guard_max_bytes` and `ingress_basis`. The basis is
@@ -121,7 +123,8 @@ const REQUEST_LIMITS: ArgumentLimits = ArgumentLimits {
     max_header_len: 4096,
 };
 
-#[derive(candid::CandidType)]
+#[derive(ic_platform::candid::contract::CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct Receipt {
     accepted_bytes: u64,
 }

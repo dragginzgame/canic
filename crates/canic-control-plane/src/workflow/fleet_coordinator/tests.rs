@@ -182,7 +182,8 @@ fn maximum_production_root_prepare_command_fits_update_envelope() {
         stage: FleetAdmissionPrepareRootStage::Reserve,
     });
 
-    let bytes = candid::encode_one(command).expect("production Root command Candid");
+    let bytes =
+        ic_platform::candid::contract::encode_one(command).expect("production Root command Candid");
     eprintln!(
         "maximum production Root prepare command bytes: {}",
         bytes.len()
@@ -7060,7 +7061,7 @@ fn provisioning_wait_does_not_block_coordinator_publication() {
     let failure = RootComponentProvisioningFailure {
         dependency: Some(
             canic_contracts::values::provisioning_failure::ProvisioningDependencyFailure {
-                target: candid::Principal::from_slice(&[8]),
+                target: ic_platform::Principal::from_slice(&[8]),
                 method: canic_contracts::protocol::CANIC_WASM_STORE_COMMAND.into(),
                 step: "inspect_template".into(),
                 rejection_code: Some(5),
@@ -7068,7 +7069,7 @@ fn provisioning_wait_does_not_block_coordinator_publication() {
             },
         ),
         stage: ProvisioningFailureStage::StoreStatus,
-        target: candid::Principal::from_slice(&[8]),
+        target: ic_platform::Principal::from_slice(&[8]),
         operation_id: [9; 32],
         diagnostic_code: 61,
         retry_category: ProvisioningRetryCategory::Backoff,

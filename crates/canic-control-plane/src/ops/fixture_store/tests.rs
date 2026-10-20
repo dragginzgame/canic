@@ -351,16 +351,23 @@ fn child_grant_preserves_component_identity_and_authenticates_only_the_child() {
 fn descriptor_admission_accounts_for_the_full_command_envelope() {
     let _scope = FixtureScope::new();
     let mut description = descriptor(&[vec![1]]);
-    while candid::encode_one(StoreCommand::PrepareFixture(description.clone()))
-        .unwrap()
-        .len()
+    while ic_platform::candid::contract::encode_one(StoreCommand::PrepareFixture(
+        description.clone(),
+    ))
+    .unwrap()
+    .len()
         <= DEFAULT_UPDATE_INGRESS_MAX_BYTES
     {
         description.chunks.push(description.chunks[0].clone());
         description.encoded_length += 1;
     }
     // The descriptor alone still fits; the actual endpoint argument does not.
-    assert!(candid::encode_one(&description).unwrap().len() <= DEFAULT_UPDATE_INGRESS_MAX_BYTES);
+    assert!(
+        ic_platform::candid::contract::encode_one(&description)
+            .unwrap()
+            .len()
+            <= DEFAULT_UPDATE_INGRESS_MAX_BYTES
+    );
     assert_eq!(
         prepare(description, u64::MAX, 0),
         Err(FixtureStoreError::Bounds)

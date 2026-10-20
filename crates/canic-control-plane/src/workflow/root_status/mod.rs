@@ -18,7 +18,6 @@ use crate::{
         root_authority::validated_root_authority,
     },
 };
-use candid::Principal;
 use canic_contracts::dto::{
     component_provisioning::RootComponentProvisioningStatusResponse,
     component_registry::RootComponentChildAllocationResponse,
@@ -27,6 +26,7 @@ use canic_core::control_plane_support::{
     error::InternalError, ops::icp_refill::IcpRefillStoreOps,
     workflow::runtime::fleet_activation::FleetActivationWorkflow,
 };
+use ic_platform::Principal;
 
 #[derive(Clone, Copy)]
 enum RootOperationObserver {

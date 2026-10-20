@@ -23,13 +23,19 @@ include tool-versions.env
 include ci/tool-versions.env
 override SHARED_TOOLING_ROOT := $(CURDIR)
 CLOC_REPORT := $(CURDIR)/scripts/dev/report-cloc.sh
-LOCAL_TOOL_INSTALL_TARGETS += install-testkit-server
-LOCAL_TOOL_CHECK_TARGETS += testkit-server-check
+LOCAL_TOOL_INSTALL_TARGETS += install-ic-tools install-candid-extractor install-testkit-server
+LOCAL_TOOL_CHECK_TARGETS += ic-tools-check candid-extractor-check testkit-server-check
 FORMAT_WRITE_COMMAND = bash scripts/ci/run-canic-formatters.sh --write $(CANIC_BLOB_WORKSPACES)
 FORMAT_CHECK_COMMAND = bash scripts/ci/run-canic-formatters.sh --check $(CANIC_BLOB_WORKSPACES)
 include make/consumer.mk
 
-.PHONY: install-testkit-server testkit-server-check
+.PHONY: install-candid-extractor candid-extractor-check install-testkit-server testkit-server-check
+install-candid-extractor:
+	@bash scripts/dev/candid-extractor.sh
+
+candid-extractor-check:
+	@bash scripts/dev/candid-extractor.sh --check
+
 install-testkit-server:
 	@runner="$$(bash scripts/ci/testkit-server.sh)" && "$$runner" setup
 
@@ -289,6 +295,8 @@ validate:
 
 check-invariants:
 	+@$(VALIDATION_RUNNER) \
+		cargo-dependency-boundaries-gate \
+		runtime-dependency-graph-gate \
 		dependency-pins-gate \
 		layering-gate \
 		current-document-semantics-gate \
@@ -304,6 +312,8 @@ check-invariants:
 # independent preflight or security failure before gating expensive jobs.
 ci-preflight:
 	+@$(VALIDATION_RUNNER) \
+		cargo-dependency-boundaries-gate \
+		runtime-dependency-graph-gate \
 		dependency-pins-gate \
 		lint-workflows \
 		shellcheck \
@@ -514,3 +524,17 @@ release-commit-check:
 	@bash scripts/ci/check-release-candidate.sh
 release-push-check:
 	@bash scripts/release/adapter.sh tagged
+
+.PHONY: cargo-dependency-boundaries-gate
+cargo-dependency-boundaries-gate:
+	@bash scripts/ci/check-cargo-dependency-boundaries.sh --consumer "$(CURDIR)"
+	@bash scripts/ci/check-cargo-dependency-boundaries.sh --consumer "$(CURDIR)/integrations/blob-service/consumer"
+	@bash scripts/ci/check-cargo-dependency-boundaries.sh --consumer "$(CURDIR)/integrations/blob-service/embedded-consumer"
+
+# Canic owns the runtime roots and single-provider policy; Shared observes them.
+.PHONY: runtime-dependency-graph-gate
+runtime-dependency-graph-gate:
+	@perl scripts/ci/check-cargo-graph.pl --consumer "$(CURDIR)" \
+		--package canic --package canic-core --package canic-control-plane --package canic-macros \
+		--target wasm32-unknown-unknown --all-features \
+		--require ic-memory=1 --require ic-timers=1 --forbid ic-cdk-timers

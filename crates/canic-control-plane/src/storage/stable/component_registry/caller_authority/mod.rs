@@ -4,13 +4,13 @@
 //!
 //! Rows bind the original lifecycle operation; acknowledgements never rewrite its census.
 
-use candid::Principal;
 use canic_contracts::ids::{
     CallerInstallation, CallerReceiverAuthority, CallerRootAuthority, CanisterRole,
 };
 use canic_core::control_plane_support::model::caller_authority::{
     CallerPublicationRecord, CallerReceiptPhase,
 };
+use ic_platform::Principal;
 use serde::{Deserialize, Serialize};
 
 ///

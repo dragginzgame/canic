@@ -94,13 +94,13 @@ fn census_retains_expired_uncertainty_and_history_without_pruning_or_mutation() 
                 method: "deposit_cycles".into()
             })
         );
-        let bytes = candid::encode_one(&page).unwrap();
+        let bytes = ic_platform::candid::contract::encode_one(&page).unwrap();
         assert!(
             bytes.len() < 4096,
             "cached response bytes must stay outside the census"
         );
         assert_eq!(
-            candid::decode_one::<ReplayReleaseResponse>(&bytes).unwrap(),
+            ic_platform::candid::decoder::decode_one::<ReplayReleaseResponse>(&bytes).unwrap(),
             page
         );
         seen.push((entry.operation_id, entry.phase));

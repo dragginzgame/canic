@@ -4,14 +4,12 @@
 //! Does not own: section-level validation, topology binding, or persistence.
 //! Boundary: returns typed manifest validation errors for primitive fields.
 
-use crate::{
-    artifacts::ArtifactChecksum,
-    manifest::{ManifestValidationError, validation::SUPPORTED_MANIFEST_VERSION},
-};
+use crate::manifest::{ManifestValidationError, validation::SUPPORTED_MANIFEST_VERSION};
+use ic_backup::model::artifacts::ArtifactChecksumRecord;
 
 use std::{collections::BTreeSet, str::FromStr};
 
-use candid::Principal;
+use ic_platform::Principal;
 
 pub(super) const fn validate_manifest_version(version: u16) -> Result<(), ManifestValidationError> {
     if version == SUPPORTED_MANIFEST_VERSION {
@@ -89,7 +87,9 @@ pub(super) fn validate_hash(
     value: &str,
 ) -> Result<(), ManifestValidationError> {
     validate_nonempty(field, value)?;
-    ArtifactChecksum::validate_hash(value).map_err(|_| ManifestValidationError::InvalidHash(field))
+    ArtifactChecksumRecord::from_hash(value)
+        .map(|_| ())
+        .map_err(|_| ManifestValidationError::InvalidHash(field))
 }
 
 pub(super) fn validate_optional_hash(

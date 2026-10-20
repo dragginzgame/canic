@@ -918,11 +918,10 @@ pub fn write_journal(
 
 pub fn write_plan(paths: &EnsurePaths, plan: &FleetEnsurePlan) -> Result<(), EnsureStateError> {
     plan_content::retain(paths, plan)?;
-    let mut projection =
-        super::json::to_value(plan).map_err(|source| EnsureStateError::Decode {
-            path: paths.plan.clone(),
-            source,
-        })?;
+    let mut projection = serde_json::to_value(plan).map_err(|source| EnsureStateError::Decode {
+        path: paths.plan.clone(),
+        source,
+    })?;
     plan_content::remove_inline_bytes(&mut projection)?;
     let bytes =
         serde_json::to_vec_pretty(&projection).map_err(|source| EnsureStateError::Decode {
@@ -1001,7 +1000,7 @@ pub fn write_state(
 ///
 /// Panics only if the maintained action enum stops being JSON serializable.
 pub fn action_sha256(action: &EnsureAction) -> String {
-    sha256_hex(&super::json::to_vec(action).expect("ensure action is JSON serializable"))
+    sha256_hex(&serde_json::to_vec(action).expect("ensure action is JSON serializable"))
 }
 
 fn read_current<T>(path: &Path) -> Result<Option<T>, EnsureStateError>

@@ -4,9 +4,9 @@ use crate::local_fleet::{
     LocalFleetError,
     view::{LocalFleetDiscoveryView, LocalFleetView, LocalRoleView},
 };
-use candid::Principal;
 use canic_contracts::ids::CanonicalNetworkId;
 use canic_core::cdk::utils::hash::hex_bytes;
+use ic_platform::Principal;
 use ic_testkit::pocket_ic::PocketIc;
 use std::{collections::BTreeMap, path::Path};
 

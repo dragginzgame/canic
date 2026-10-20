@@ -121,6 +121,14 @@ fi
 
 bash "$ROOT/scripts/ci/check-release-surface-content.sh" "$validated_source" "$workspace_version" "$release_date" "$release_commit"
 
+# Match the formatter policy against the exact selected release source.
+(cd "$view" && cargo sort --workspace --grouped --check) || fail "release manifests are not ordered"
+for consumer in consumer embedded-consumer; do
+    cargo sort --workspace --grouped --check \
+        --order workspace,package,lib,dependencies,dev-dependencies,build-dependencies,profile \
+        "$view/integrations/blob-service/$consumer" || fail "consumer manifests are not ordered"
+done
+
 metadata="$(cd "$view" && cargo metadata --locked --offline --format-version 1 --no-deps)" ||
     fail "locked offline Cargo metadata is unavailable"
 # jq expressions use literal variable names.

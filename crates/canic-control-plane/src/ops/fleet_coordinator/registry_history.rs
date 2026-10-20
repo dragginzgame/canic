@@ -19,8 +19,8 @@ use super::{
         validate_removal_publication_request,
     },
 };
-use candid::Principal;
 use canic_contracts::ids::{ComponentTopologyDigest, FleetSubnetRootReleaseSet, SubnetId};
+use ic_platform::Principal;
 
 pub(super) fn validate_registry_lifecycle_history(
     current: &FleetCoordinatorRegistryRecord,

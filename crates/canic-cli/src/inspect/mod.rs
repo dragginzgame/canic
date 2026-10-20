@@ -16,7 +16,6 @@ use crate::{
     support::candid::registry_entry_candid_path,
     version_text,
 };
-use candid::{Principal, types::principal::PrincipalError};
 use canic_contracts::{
     dto::{
         runtime::{
@@ -34,6 +33,8 @@ use canic_host::{
     protocol_binding::ResolvedProtocolBinding,
 };
 use clap::{Arg, Command as ClapCommand};
+use ic_platform::Principal;
+use ic_platform::PrincipalError;
 use serde::Serialize;
 use std::{ffi::OsString, path::PathBuf};
 use thiserror::Error as ThisError;
@@ -566,8 +567,8 @@ fn print_leaf_help_or_version(args: &[OsString]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use candid::Encode;
     use canic_core::cdk::utils::hash::hex_bytes;
+    use ic_platform::candid::contract::Encode;
 
     #[test]
     fn parses_fleet_role_target() {

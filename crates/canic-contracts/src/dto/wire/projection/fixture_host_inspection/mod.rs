@@ -3,13 +3,18 @@
 //! Keep status, controllers, module hash, and cycles. Real Root replies include the
 //! complete management record; selector and retained field parity is checked here.
 
-use candid::{CandidType, Nat, Principal};
+use ic_platform::{
+    Principal,
+    candid::contract::{CandidType, Nat},
+};
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum FixturePoolInspectionResponse {
     InspectCanister(FixturePoolInspection),
 }
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FixturePoolInspection {
     pub status: crate::dto::canister::CanisterStatusType,
     pub cycles: Nat,
@@ -17,6 +22,7 @@ pub struct FixturePoolInspection {
     pub settings: FixturePoolControllers,
 }
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FixturePoolControllers {
     pub controllers: Vec<Principal>,
 }

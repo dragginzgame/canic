@@ -22,15 +22,16 @@ pub(in crate::pic::fleet_registry::baseline) fn running_application_import_clear
         .unwrap();
     let before = pic.canister_status(source, Some(root)).unwrap();
     let running: canic_contracts::dto::canister::CanisterStatusType =
-        candid::decode_one(&encode_one(before.status).unwrap()).unwrap();
+        ic_platform::candid::decoder::decode_one(&encode_one(before.status).unwrap()).unwrap();
     assert_eq!(
         running,
         canic_contracts::dto::canister::CanisterStatusType::Running
     );
     let root_before = pic.cycle_balance(root);
     let import = || {
-        let response: Result<RootCommandResponseFragment, Error> = pic
-            .update_candid_as(
+        let response: Result<RootCommandResponseFragment, Error> =
+            ic_testkit::pic::update_candid_args(
+                &(pic),
                 root,
                 Principal::anonymous(),
                 canic_contracts::protocol::CANIC_ROOT_COMMAND,
@@ -39,7 +40,9 @@ pub(in crate::pic::fleet_registry::baseline) fn running_application_import_clear
                         canister_id: source,
                     },
                 ),),
+                canic::testing::CANDID_REPLY_LIMITS,
             )
+            .map(|(reply,)| reply)
             .unwrap();
         assert!(
             matches!(response.unwrap(), RootCommandResponseFragment::ImportPoolCanister(PoolImportResponse::Imported { canister_id }) if canister_id == source)
@@ -49,7 +52,7 @@ pub(in crate::pic::fleet_registry::baseline) fn running_application_import_clear
     import();
     let cleared = pic.canister_status(source, Some(root)).unwrap();
     let stopped: canic_contracts::dto::canister::CanisterStatusType =
-        candid::decode_one(&encode_one(cleared.status).unwrap()).unwrap();
+        ic_platform::candid::decoder::decode_one(&encode_one(cleared.status).unwrap()).unwrap();
     assert_eq!(
         stopped,
         canic_contracts::dto::canister::CanisterStatusType::Stopped

@@ -23,12 +23,13 @@ use crate::dto::{
     role::{OperationReceipt, RootRemovalRequest},
     root::RootRemovalOperationStatus,
 };
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded RemoteRootCommand wire projection for coordinator root.
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RemoteRootCommand {
     AcceptFunding(crate::dto::fleet_funding::FleetRootFundingAcceptanceRequest),
     ActivateFleetAdmission(FleetAdmissionActivateRootRequest),
@@ -43,6 +44,7 @@ pub enum RemoteRootCommand {
 
 /// Bounded RemoteRootCommandResponse wire projection for coordinator root.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RemoteRootCommandResponse {
     AcceptFunding(Box<FleetRootFundingAcceptanceReceipt>),
     ActivateFleetAdmission(Box<FleetAdmissionRootReceipt>),
@@ -56,12 +58,14 @@ pub enum RemoteRootCommandResponse {
 
 /// Bounded RemoteRootStatusResponse wire projection for coordinator root.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RemoteRootStatusResponse {
     Operation(RemoteRootOperationStatusResponse),
 }
 
 /// Bounded RemoteRootOperationStatusResponse wire projection for coordinator root.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RemoteRootOperationStatusResponse {
     ProvisionComponents(Box<RootComponentProvisioningStatusResponse>),
     RemoveRoot(Box<RootRemovalOperationStatus>),

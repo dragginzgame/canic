@@ -15,8 +15,8 @@ use crate::{
     },
     protocol_binding::ResolvedProtocolBinding,
 };
-use candid::{CandidType, Principal};
 use canic_contracts::diagnostics::RegisteredDiagnosticCode;
+use ic_platform::{Principal, candid::contract::CandidType};
 use serde::de::DeserializeOwned;
 use std::io;
 use thiserror::Error as ThisError;
@@ -61,7 +61,7 @@ pub enum CanisterProtocolError {
         canister: Principal,
         method: &'static str,
         #[source]
-        source: candid::Error,
+        source: ic_platform::candid::contract::Error,
     },
 
     #[error(
@@ -258,12 +258,13 @@ fn invoke_output<I>(
 where
     I: CandidType,
 {
-    let bytes =
-        candid::encode_one(input).map_err(|source| CanisterProtocolError::ArgumentEncoding {
+    let bytes = ic_platform::candid::contract::encode_one(input).map_err(|source| {
+        CanisterProtocolError::ArgumentEncoding {
             canister,
             method,
             source,
-        })?;
+        }
+    })?;
     let args_path = write_candid_argument_file(&bytes).map_err(|source| {
         CanisterProtocolError::ArgumentFile {
             canister,
@@ -319,6 +320,7 @@ mod tests {
     use std::fs;
 
     #[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
+    #[candid_path("ic_platform::candid::contract")]
     struct EmptyVectorArgument {
         values: Vec<u64>,
     }
@@ -353,7 +355,7 @@ exit "$(cat exit-code)"
         let icp = IcpCli::new(executable.to_str().unwrap(), None).with_cwd(&root);
         let reply: Result<u64, canic_contracts::dto::error::Error> = Ok(42);
         let response = serde_json::json!({
-            "response_bytes": hex_bytes(candid::encode_one(reply).unwrap()),
+            "response_bytes": hex_bytes(ic_platform::candid::contract::encode_one(reply).unwrap()),
         });
         for mode in [ProtocolCallMode::Update, ProtocolCallMode::Query] {
             for outcome in 0..3 {
@@ -452,12 +454,13 @@ exit "$(cat exit-code)"
     #[test]
     fn typed_arguments_are_written_to_private_binary_files() {
         let argument = EmptyVectorArgument { values: Vec::new() };
-        let path =
-            write_candid_argument_file(&candid::encode_one(&argument).expect("encode argument"))
-                .expect("write argument file");
+        let path = write_candid_argument_file(
+            &ic_platform::candid::contract::encode_one(&argument).expect("encode argument"),
+        )
+        .expect("write argument file");
 
         let decoded: EmptyVectorArgument =
-            candid::decode_one(&fs::read(&path).expect("read argument file"))
+            ic_platform::candid::decoder::decode_one(&fs::read(&path).expect("read argument file"))
                 .expect("decode argument");
         assert_eq!(decoded, argument);
         #[cfg(unix)]

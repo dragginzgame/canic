@@ -35,12 +35,18 @@ impl EntryKind {
 
     pub(crate) fn candid_attribute(&self, method: &syn::LitStr) -> TokenStream {
         match self {
-            Self::Query => quote!(#[::candid::candid_method(query, rename = #method)]),
-            Self::CompositeQuery => {
-                quote!(#[::candid::candid_method(composite_query, rename = #method)])
+            Self::Query => {
+                quote!(#[::canic::__internal::ic_platform::candid::contract::candid_method(query, rename = #method)])
             }
-            Self::Update => quote!(#[::candid::candid_method(update, rename = #method)]),
-            Self::Init => quote!(#[::candid::candid_method(init)]),
+            Self::CompositeQuery => {
+                quote!(#[::canic::__internal::ic_platform::candid::contract::candid_method(composite_query, rename = #method)])
+            }
+            Self::Update => {
+                quote!(#[::canic::__internal::ic_platform::candid::contract::candid_method(update, rename = #method)])
+            }
+            Self::Init => {
+                quote!(#[::canic::__internal::ic_platform::candid::contract::candid_method(init)])
+            }
             Self::PostUpgrade => quote!(),
         }
     }
@@ -72,12 +78,6 @@ impl RawAdapter<'_> {
         let name = &self.signature.ident;
         let adapter_name = format_ident!("__canic_raw_{}", name);
         let lifecycle = matches!(self.kind, EntryKind::Init | EntryKind::PostUpgrade);
-        let export = if lifecycle {
-            self.kind.export().to_string()
-        } else {
-            format!("{} {}", self.kind.export(), self.method)
-        };
-        let host_export = export.replace(' ', ".").replace(['-', '<', '>'], "_");
         let mut names = Vec::new();
         let mut types = Vec::new();
         for input in &self.signature.inputs {
@@ -122,20 +122,13 @@ impl RawAdapter<'_> {
         } else {
             execute
         };
-        let executor = if matches!(self.kind, EntryKind::Query | EntryKind::CompositeQuery) {
-            format_ident!("in_query_executor_context")
-        } else {
-            format_ident!("in_executor_context")
-        };
-        Ok(quote! {
-            #[cfg_attr(target_family = "wasm", unsafe(export_name = #export))]
-            #[cfg_attr(not(target_family = "wasm"), unsafe(export_name = #host_export))]
-            fn #adapter_name() {
-                ::canic::__internal::cdk::futures::internals::#executor(|| {
-                    #execute
-                });
-            }
-        })
+        Ok(entrypoint(
+            &self.kind,
+            &self.method,
+            &adapter_name,
+            quote!(::canic::__internal::ic_platform),
+            execute,
+        ))
     }
 
     fn decode(&self, names: &[syn::Ident], types: &[&Type]) -> TokenStream {
@@ -170,9 +163,9 @@ impl RawAdapter<'_> {
             #size_guard
             let mut __canic_arg_bytes = vec![0_u8; __canic_payload_len];
             ::canic::__internal::cdk::raw::msg_arg_data_copy(&mut __canic_arg_bytes, 0);
-            let mut __canic_decoder_config = ::candid::DecoderConfig::new();
+            let mut __canic_decoder_config = ::canic::__internal::ic_platform::candid::decoder::DecoderConfig::new();
             __canic_decoder_config.set_skipping_quota(10_000);
-            let (#(#names,)*): (#(#types,)*) = ::candid::utils::decode_args_with_config(
+            let (#(#names,)*): (#(#types,)*) = ::canic::__internal::ic_platform::candid::decoder::decode_args_with_config(
                 &__canic_arg_bytes, &__canic_decoder_config,
             ).unwrap_or_else(|error| ::canic::__internal::cdk::trap(error.to_string()));
         }
@@ -182,9 +175,13 @@ impl RawAdapter<'_> {
         let encode = match &self.signature.output {
             syn::ReturnType::Type(_, ty) if matches!(&**ty, Type::Tuple(tuple) if tuple.elems.len() > 1) =>
             {
-                quote!(::candid::utils::encode_args(__canic_result))
+                quote!(
+                    ::canic::__internal::ic_platform::candid::contract::encode_args(__canic_result)
+                )
             }
-            _ => quote!(::candid::utils::encode_one(__canic_result)),
+            _ => quote!(
+                ::canic::__internal::ic_platform::candid::contract::encode_one(__canic_result)
+            ),
         };
         quote! {
             let __canic_reply = #encode.unwrap_or_else(|error| {
@@ -193,4 +190,95 @@ impl RawAdapter<'_> {
             ::canic::__internal::cdk::api::msg_reply(__canic_reply);
         }
     }
+}
+
+/// Emit only the IC export and executor context, independent of payload protocol.
+#[expect(
+    clippy::redundant_pub_crate,
+    reason = "shared by sibling endpoint expansion modules"
+)]
+pub(crate) fn entrypoint(
+    kind: &EntryKind,
+    method: &str,
+    name: &syn::Ident,
+    sdk: TokenStream,
+    execute: TokenStream,
+) -> TokenStream {
+    let export = if matches!(kind, EntryKind::Init | EntryKind::PostUpgrade) {
+        kind.export().to_string()
+    } else {
+        format!("{} {}", kind.export(), method)
+    };
+    let host_export = export.replace(' ', ".").replace(['-', '<', '>'], "_");
+    let executor = if matches!(kind, EntryKind::Query | EntryKind::CompositeQuery) {
+        format_ident!("in_tracking_query_executor_context")
+    } else {
+        format_ident!("in_tracking_executor_context")
+    };
+    quote! {
+        #[cfg_attr(target_family = "wasm", unsafe(export_name = #export))]
+        #[cfg_attr(not(target_family = "wasm"), unsafe(export_name = #host_export))]
+        fn #name() {
+            #sdk::executor::#executor(|| { #execute });
+        }
+    }
+}
+
+/// Bind one protocol-neutral method declaration to the shared export owner.
+#[expect(
+    clippy::redundant_pub_crate,
+    reason = "shared by native and framework adapters"
+)]
+pub(crate) fn raw_declaration(
+    kind: &EntryKind,
+    method: &str,
+    signature: &Signature,
+) -> syn::Result<TokenStream> {
+    let mode = match kind {
+        EntryKind::Query => 1,
+        EntryKind::Update => 2,
+        EntryKind::CompositeQuery => 3,
+        EntryKind::Init | EntryKind::PostUpgrade => return Ok(TokenStream::new()),
+    };
+    let length = u16::try_from(method.len())
+        .map_err(|_| syn::Error::new_spanned(signature, "raw endpoint name is too long"))?;
+    if method.is_empty() || method.chars().any(char::is_control) {
+        return Err(syn::Error::new_spanned(
+            signature,
+            "raw endpoint name must be nonempty without controls",
+        ));
+    }
+    let mut declaration = vec![mode];
+    declaration.extend_from_slice(&length.to_le_bytes());
+    declaration.extend_from_slice(method.as_bytes());
+    let declaration_length = declaration.len();
+    Ok(quote! {
+        #[used]
+        #[unsafe(link_section = "icp:private canic:raw")]
+        static DECLARATION: [u8; #declaration_length] = [#(#declaration),*];
+    })
+}
+
+/// Validate a zero-argument unit handler; only managed updates may be async.
+#[expect(
+    clippy::redundant_pub_crate,
+    reason = "shared by native and framework adapters"
+)]
+pub(crate) fn validate_raw_signature(sig: &Signature, allow_async: bool) -> syn::Result<()> {
+    if (!allow_async && sig.asyncness.is_some())
+        || sig.constness.is_some()
+        || sig.abi.is_some()
+        || sig.variadic.is_some()
+        || sig.generics.where_clause.is_some()
+        || !matches!(sig.safety, syn::Safety::Default)
+        || !sig.inputs.is_empty()
+        || !sig.generics.params.is_empty()
+        || !matches!(sig.output, syn::ReturnType::Default)
+    {
+        return Err(syn::Error::new_spanned(
+            sig,
+            "raw entrypoints require a safe zero-argument function with an implicit unit result",
+        ));
+    }
+    Ok(())
 }

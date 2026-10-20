@@ -15,7 +15,9 @@
 //! For lower-level access, use the `api`, `dto`, and `memory` modules.
 //! These surfaces are for configured canister role packages. Shared runtime
 //! libraries should remain independent of Canic and use upstream crates such
-//! as `candid` or `ic-cdk` directly when they need generic IC types or APIs.
+//! as `ic-platform` for generic IC types and supported runtime APIs. Direct
+//! Platform owns the Candid/CDK boundary documented in
+//! `docs/governance/platform-boundary.md`.
 //! Direct access to internal core modules is intentionally unsupported.
 
 #![deny(unreachable_pub)]
@@ -42,7 +44,6 @@ pub mod __internal {
     // NOTE:
     // This module exists ONLY for macro expansion.
     // Do NOT re-export canic_core publicly.
-    pub use candid;
     pub use canic_contracts as contracts;
     #[cfg(any(
         feature = "control-plane",
@@ -51,23 +52,25 @@ pub mod __internal {
     ))]
     pub use canic_control_plane as control_plane;
     pub use canic_core as core;
+    pub use ic_platform;
     pub use serde;
 
     pub mod cdk {
-        pub use candid::Principal;
-        pub use ic_cdk::{
-            export_candid, futures, init, inspect_message, post_upgrade, query, trap, update,
+        pub use ic_platform::Principal;
+        pub use ic_platform::cdk::api::trap;
+        pub use ic_platform::cdk::{
+            export_candid, futures, init, inspect_message, post_upgrade, query, update,
         };
 
         pub mod api {
-            pub use ic_cdk::api::{
-                canister_cycle_balance, canister_version, is_controller, msg_caller, msg_reject,
-                msg_reply, time,
+            pub use ic_platform::cdk::api::{canister_cycle_balance, canister_version};
+            pub use ic_platform::cdk::api::{
+                is_controller, msg_caller, msg_reject, msg_reply, time,
             };
         }
 
         pub mod raw {
-            pub use ic0::{msg_arg_data_copy, msg_arg_data_size};
+            pub use ic_platform::ic0::{msg_arg_data_copy, msg_arg_data_size};
         }
     }
 
@@ -100,7 +103,7 @@ pub mod memory;
 // -----------------------------------------------------------------------------
 pub use canic_contracts::dto::error::Error;
 pub use canic_core::{impl_storable_bounded, impl_storable_unbounded};
-pub use canic_macros::{canic_query, canic_update};
+pub use canic_macros::{canic_query, canic_raw_query, canic_raw_update, canic_update};
 pub use diagnostics::{DiagnosticCode, RegisteredDiagnosticCode};
 
 // -----------------------------------------------------------------------------

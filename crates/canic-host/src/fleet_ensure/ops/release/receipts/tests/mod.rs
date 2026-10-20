@@ -4,12 +4,12 @@ use super::*;
 use crate::fleet_ensure::{
     view::release::receipts::ReleaseReplayDisposition, workflow::release::assess_receipts,
 };
-use candid::CandidType;
 use canic_contracts::dto::release_receipts::{
     ReplayReleaseAuthentication, ReplayReleaseEffect, ReplayReleaseEntry, ReplayReleaseIntent,
     ReplayReleaseIntentState, ReplayReleasePhase, ReplayReleaseRecoveryReason,
     ReplayReleaseSettlement,
 };
+use ic_platform::candid::contract::CandidType;
 
 pub(in crate::fleet_ensure::ops::release) fn fixture(owner: Principal) -> ReplayReleaseResponse {
     ReplayReleaseResponse {
@@ -56,7 +56,8 @@ pub(in crate::fleet_ensure::ops::release) fn fixture(owner: Principal) -> Replay
 }
 
 pub(in crate::fleet_ensure::ops::release) fn wire(page: ReplayReleaseResponse) -> Vec<u8> {
-    candid::encode_one(Ok::<_, CanicError>(Response::ReplayRelease(page))).unwrap()
+    ic_platform::candid::contract::encode_one(Ok::<_, CanicError>(Response::ReplayRelease(page)))
+        .unwrap()
 }
 
 #[test]
@@ -203,6 +204,7 @@ fn exact_record_allowance_requires_a_terminal_page() {
 #[test]
 fn rejects_raw_aggregate_and_skipping_budget_exhaustion() {
     #[derive(CandidType)]
+    #[candid_path("ic_platform::candid::contract")]
     enum Extended {
         ReplayRelease { owner: Principal, extra: Vec<()> },
     }
@@ -215,14 +217,15 @@ fn rejects_raw_aggregate_and_skipping_budget_exhaustion() {
             ..
         })
     ));
-    let skipped = candid::encode_one(Ok::<_, CanicError>(Extended::ReplayRelease {
-        owner,
-        extra: vec![(); RESPONSE_BYTES * 8 + 1],
-    }))
-    .unwrap();
+    let skipped =
+        ic_platform::candid::contract::encode_one(Ok::<_, CanicError>(Extended::ReplayRelease {
+            owner,
+            extra: vec![(); RESPONSE_BYTES * 8 + 1],
+        }))
+        .unwrap();
     assert!(skipped.len() < RESPONSE_BYTES);
     assert!(
-        candid::decode_one::<Result<Response, CanicError>>(&skipped)
+        ic_platform::candid::decoder::decode_one::<Result<Response, CanicError>>(&skipped)
             .unwrap()
             .is_ok()
     );
@@ -254,7 +257,7 @@ fn distinguishes_empty_inventory_from_typed_refusal() {
     );
     let rejected =
         CanicError::from_registered(canic_contracts::diagnostics::codes::AUTHORITY_UNAVAILABLE);
-    let bytes = candid::encode_one(Err::<Response, _>(rejected)).unwrap();
+    let bytes = ic_platform::candid::contract::encode_one(Err::<Response, _>(rejected)).unwrap();
     assert!(
         matches!(decode_response(owner, &bytes, &mut remaining), Err(ReleaseReceiptsError::Rejected { rejection, .. }) if rejection.code() == rejected.code())
     );

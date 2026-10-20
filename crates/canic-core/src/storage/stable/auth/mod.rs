@@ -2,7 +2,7 @@ mod records;
 
 use crate::{
     cdk::structures::{
-        DefaultMemoryImpl, Vec as StableVec, btreemap::BTreeMap, cell::Cell, memory::RuntimeMemory,
+        DefaultMemoryImpl, StableBTreeMap as BTreeMap, StableCell as Cell, StableVec,
     },
     impl_storable_bounded, impl_storable_unbounded,
     storage::prelude::*,
@@ -31,35 +31,35 @@ pub use records::LocalApplicationLoginTotalsRecord;
 
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
 thread_local! {
-    pub(super) static LOCAL_APPLICATION_AUTHORIZATION_STATE: RefCell<Cell<LocalApplicationAuthorizationStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
+    pub(super) static LOCAL_APPLICATION_AUTHORIZATION_STATE: RefCell<Cell<LocalApplicationAuthorizationStateRecord, DefaultMemoryImpl>> =
         RefCell::new(init_local_application_authorization_state());
 }
 
 thread_local! {
-    static APPLICATION_LOGINS: RefCell<BTreeMap<Principal, LocalApplicationLoginRecord, RuntimeMemory<DefaultMemoryImpl>>> = RefCell::new(BTreeMap::init(
+    static APPLICATION_LOGINS: RefCell<BTreeMap<Principal, LocalApplicationLoginRecord, DefaultMemoryImpl>> = RefCell::new(BTreeMap::init(
         crate::memory::open(crate::memory::keys::AUTH_LOCAL_APPLICATION_AUTHORIZATION_LOGINS_V1)
     ));
-    static APPLICATION_SESSIONS: RefCell<StableVec<LocalApplicationSessionRecord, RuntimeMemory<DefaultMemoryImpl>>> = RefCell::new(StableVec::init(
+    static APPLICATION_SESSIONS: RefCell<StableVec<LocalApplicationSessionRecord, DefaultMemoryImpl>> = RefCell::new(StableVec::init(
         crate::memory::open(crate::memory::keys::AUTH_LOCAL_APPLICATION_AUTHORIZATION_SESSIONS_V1)
     ));
-    static APPLICATION_REPLAYS: RefCell<StableVec<LocalApplicationReplayRecord, RuntimeMemory<DefaultMemoryImpl>>> = RefCell::new(StableVec::init(
+    static APPLICATION_REPLAYS: RefCell<StableVec<LocalApplicationReplayRecord, DefaultMemoryImpl>> = RefCell::new(StableVec::init(
         crate::memory::open(crate::memory::keys::AUTH_LOCAL_APPLICATION_AUTHORIZATION_REPLAYS_V1)
     ));
 }
 
 thread_local! {
-    pub(super) static DELEGATED_TOKEN_ISSUER_STATE: RefCell<Cell<DelegatedTokenIssuerStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
+    pub(super) static DELEGATED_TOKEN_ISSUER_STATE: RefCell<Cell<DelegatedTokenIssuerStateRecord, DefaultMemoryImpl>> =
         RefCell::new(init_delegated_token_issuer_state());
 }
 
 thread_local! {
-    pub(super) static ROOT_DELEGATION_STATE: RefCell<Cell<RootDelegationStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
+    pub(super) static ROOT_DELEGATION_STATE: RefCell<Cell<RootDelegationStateRecord, DefaultMemoryImpl>> =
         RefCell::new(init_root_delegation_state());
 }
 
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
 fn init_local_application_authorization_state()
--> Cell<LocalApplicationAuthorizationStateRecord, RuntimeMemory<DefaultMemoryImpl>> {
+-> Cell<LocalApplicationAuthorizationStateRecord, DefaultMemoryImpl> {
     #[cfg(any(test, feature = "auth-local-application-authorization"))]
     {
         Cell::init(
@@ -72,8 +72,7 @@ fn init_local_application_authorization_state()
     panic!("local application authorization state requires its compile-time capability");
 }
 
-fn init_delegated_token_issuer_state()
--> Cell<DelegatedTokenIssuerStateRecord, RuntimeMemory<DefaultMemoryImpl>> {
+fn init_delegated_token_issuer_state() -> Cell<DelegatedTokenIssuerStateRecord, DefaultMemoryImpl> {
     #[cfg(any(test, feature = "auth-delegated-token-issuer-state"))]
     {
         Cell::init(
@@ -86,8 +85,7 @@ fn init_delegated_token_issuer_state()
     panic!("delegated-token issuer state requires its compile-time capability");
 }
 
-fn init_root_delegation_state() -> Cell<RootDelegationStateRecord, RuntimeMemory<DefaultMemoryImpl>>
-{
+fn init_root_delegation_state() -> Cell<RootDelegationStateRecord, DefaultMemoryImpl> {
     #[cfg(any(test, feature = "auth-root-delegation-state"))]
     {
         Cell::init(
@@ -173,7 +171,7 @@ impl LocalApplicationAuthorizationState {
             cell.set(data);
         });
         APPLICATION_LOGINS.with_borrow_mut(|rows| {
-            rows.clear_new();
+            rows.clear();
             for (caller, record) in state.logins {
                 rows.insert(caller, record);
             }
@@ -210,6 +208,7 @@ impl LocalApplicationAuthorizationState {
     /// No fallible work or asynchronous boundary may separate these writes.
     #[cfg(test)]
     pub(crate) fn commit_shared_session_pair(
+        caller: Principal,
         session_index: usize,
         session: LocalApplicationSessionRecord,
         replay_index: usize,
@@ -217,7 +216,7 @@ impl LocalApplicationAuthorizationState {
         login: LocalApplicationLoginRecord,
         totals: LocalApplicationLoginTotalsRecord,
     ) {
-        Self::commit_application_login(session.transport_caller, login, totals);
+        Self::commit_application_login(caller, login, totals);
         APPLICATION_SESSIONS.with_borrow(|rows| {
             let index = u64::try_from(session_index).expect("bounded index");
             if index < rows.len() {

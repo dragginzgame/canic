@@ -25,6 +25,9 @@ cp "$ROOT/scripts/ci/check-release-draft-ready.sh" \
 cp "$ROOT/scripts/ci/next-release-version.sh" \
     "$ROOT/scripts/ci/finalize-release-changelog.awk" \
     "$ROOT/scripts/ci/validate-release-inputs.pl" "$FIXTURE/scripts/ci/"
+bash "$ROOT/scripts/ci/prepare-script-fixture.sh" "$ROOT" "$FIXTURE" \
+    scripts/ci/next-release-version.sh scripts/ci/finalize-release-changelog.awk \
+    scripts/ci/validate-release-inputs.pl
 printf '## [1.2.4]\n' >"$FIXTURE/docs/changelog/1.2.md"
 printf '## [1.3.0]\n' >"$FIXTURE/docs/changelog/1.3.md"
 printf '## [2.0.0]\n' >"$FIXTURE/docs/changelog/2.0.md"

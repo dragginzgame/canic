@@ -11,7 +11,7 @@ use crate::{
         ReleaseSetDigest, SubnetId,
     },
 };
-use candid::{CandidType, Principal};
+use ic_platform::{Principal, candid::contract::CandidType};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -24,6 +24,7 @@ use std::fmt;
 #[derive(
     CandidType, Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
 )]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(transparent)]
 pub struct ComponentTopologyDigest([u8; 32]);
 
@@ -60,6 +61,7 @@ impl fmt::Display for ComponentTopologyDigest {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct CyclesFundingBudget {
     pub window_secs: u64,
@@ -68,6 +70,7 @@ pub struct CyclesFundingBudget {
 
 /// Protected physical-topology class that selects the minimum Root funding baseline.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum FleetFundingProfile {
     #[serde(rename = "single_subnet")]
     SingleSubnet,
@@ -102,6 +105,7 @@ pub const MAX_FLEET_CAPACITY_IMPORT_SOURCES: usize = 256;
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetCoordinatorRootFundingPolicy {
     pub funding_profile: FleetFundingProfile,
@@ -118,6 +122,7 @@ pub struct FleetCoordinatorRootFundingPolicy {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetSubnetRootFundingPolicy {
     pub funding_profile: FleetFundingProfile,
@@ -136,6 +141,7 @@ pub struct FleetSubnetRootFundingPolicy {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetSubnetRootAutomaticIcpRefillPolicy {
     pub emergency_threshold: Cycles,
@@ -151,6 +157,7 @@ pub struct FleetSubnetRootAutomaticIcpRefillPolicy {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetSubnetRootIcpRefillPolicy {
     pub max_refill_e8s_per_call: u64,
@@ -171,6 +178,7 @@ pub struct FleetSubnetRootIcpRefillPolicy {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetSubnetRootFundingAuthority {
     pub root_funding: FleetSubnetRootFundingPolicy,
@@ -184,6 +192,7 @@ pub struct FleetSubnetRootFundingAuthority {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetSubnetCanisterPoolConfig {
     /// Ready empty Canisters automatically maintained for the root.
@@ -206,6 +215,7 @@ pub struct FleetSubnetCanisterPoolConfig {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ComponentSpecAdmission {
     pub component_spec: ComponentSpecId,
@@ -220,6 +230,7 @@ pub struct ComponentSpecAdmission {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetSubnetRootLimits {
     pub maximum_component_instances: u32,
@@ -238,6 +249,7 @@ pub struct FleetSubnetRootLimits {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetCoordinatorBinding {
     pub fleet: FleetBinding,
@@ -274,6 +286,7 @@ impl FleetCoordinatorBinding {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetRegistryAuthority {
     pub binding: FleetCoordinatorBinding,
@@ -287,6 +300,7 @@ pub struct FleetRegistryAuthority {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetSubnetRootBinding {
     pub authority: FleetRegistryAuthority,
@@ -305,6 +319,7 @@ pub struct FleetSubnetRootBinding {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetSubnetWasmStoreAuthority {
     pub authority: FleetRegistryAuthority,
@@ -318,6 +333,7 @@ pub struct FleetSubnetWasmStoreAuthority {
 
 /// Exact child identity Root must use while activating its independently installed Store.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetSubnetWasmStoreActivationAuthority {
     pub fleet: FleetBinding,
     pub operation_id: [u8; 32],
@@ -336,6 +352,7 @@ pub struct FleetSubnetWasmStoreActivationAuthority {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ComponentBinding {
     pub authority: FleetRegistryAuthority,
@@ -355,6 +372,7 @@ pub struct ComponentBinding {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ComponentChildBinding {
     pub component: ComponentBinding,
@@ -370,6 +388,7 @@ pub struct ComponentChildBinding {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub enum ManagedCanisterBinding {
     Component(ComponentBinding),
@@ -412,9 +431,10 @@ mod tests {
             FleetFundingProfile::PreviewMultiSubnet,
             FleetFundingProfile::MultiSubnet,
         ] {
-            let bytes = candid::encode_one(profile).expect("encode funding profile Candid");
+            let bytes = ic_platform::candid::contract::encode_one(profile)
+                .expect("encode funding profile Candid");
             assert_eq!(
-                candid::decode_one::<FleetFundingProfile>(&bytes)
+                ic_platform::candid::decoder::decode_one::<FleetFundingProfile>(&bytes)
                     .expect("decode funding profile Candid"),
                 profile
             );

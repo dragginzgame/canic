@@ -250,10 +250,11 @@ fn protected_query_uses_canonical_candid_and_does_not_cache_usage() {
     std::fs::write(&executable, script).unwrap();
     std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
     let write = |value| {
-        let bytes = candid::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
-            CoordinatorObservabilityResponse::Funding(value),
-        ))
-        .unwrap();
+        let bytes =
+            ic_platform::candid::contract::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
+                CoordinatorObservabilityResponse::Funding(value),
+            ))
+            .unwrap();
         std::fs::write(
             &response_file,
             serde_json::json!({"response_bytes": canic_core::cdk::utils::hash::hex_bytes(&bytes)})

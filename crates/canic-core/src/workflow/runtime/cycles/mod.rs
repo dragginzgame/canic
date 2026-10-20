@@ -137,7 +137,7 @@ impl CycleWorkflow {
         let Some(attempt) = AsyncJobWorkflow::claim_expired(owner, now_ns) else {
             return false;
         };
-        ic_cdk::futures::spawn(async move {
+        ic_platform::cdk::futures::spawn(async move {
             let result = Self::run_attempt(attempt).await;
             let _ = AsyncJobWorkflow::finish(attempt, result);
         });
@@ -1015,9 +1015,10 @@ mod tests {
 
     #[test]
     fn only_transport_and_in_flight_funding_failures_retry() {
-        let rejection = ic_cdk::call::CallRejected::with_rejection(2, "temporary failure".into());
+        let rejection =
+            ic_platform::cdk::call::CallRejected::with_rejection(2, "temporary failure".into());
         let failure = InternalError::from(crate::infra::ic::IcInfraError::from(
-            ic_cdk::call::CallFailed::CallRejected(rejection),
+            ic_platform::cdk::call::CallFailed::CallRejected(rejection),
         ));
         let retry = CycleWorkflow::finish_funding_failure(&failure);
         assert!(matches!(retry.decision(), OnceDecision::RetryAfter(delay) if delay <= RETRY_MAX));

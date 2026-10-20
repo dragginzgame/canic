@@ -43,7 +43,6 @@ pub fn bootstrap(input: MemoryBootstrap) -> Result<(), MemoryBootstrapError> {
         }
         Ok(())
     })?;
-    super::pool::remember(input.pool);
     Ok(())
 }
 

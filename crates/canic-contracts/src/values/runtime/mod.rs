@@ -10,7 +10,7 @@
 // CandidType supports explicit serde(rename) labels, but not rename_all. Keep
 // runtime introspection enum labels canonical and alias-free.
 
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 
 ///
@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum FailureSeverity {
     #[serde(rename = "info")]
     Info,
@@ -46,6 +47,7 @@ impl FailureSeverity {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RuntimeFieldVisibility {
     #[serde(rename = "public_safe")]
     PublicSafe,
@@ -77,6 +79,7 @@ impl RuntimeFieldVisibility {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RuntimeCheckStatus {
     #[serde(rename = "pass")]
     Pass,
@@ -105,6 +108,7 @@ impl RuntimeCheckStatus {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RuntimeDiagnosticSeverity {
     #[serde(rename = "info")]
     Info,
@@ -133,6 +137,7 @@ impl RuntimeDiagnosticSeverity {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RuntimeStateDomainStatus {
     #[serde(rename = "ok")]
     Ok,
@@ -161,6 +166,7 @@ impl RuntimeStateDomainStatus {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum HealthStatus {
     #[serde(rename = "healthy")]
     Healthy,
@@ -189,6 +195,7 @@ impl HealthStatus {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ReadinessStatus {
     #[serde(rename = "ready")]
     Ready,
@@ -217,6 +224,7 @@ impl ReadinessStatus {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RuntimeStatus {
     #[serde(rename = "ok")]
     Ok,
@@ -245,6 +253,7 @@ impl RuntimeStatus {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum TimerRegistrationStatus {
     #[serde(rename = "unregistered")]
     Unregistered,
@@ -270,6 +279,7 @@ impl TimerRegistrationStatus {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum TimerProcessCondition {
     #[serde(rename = "disabled")]
     Disabled,
@@ -304,6 +314,7 @@ impl TimerProcessCondition {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum TimerSchedulingMode {
     #[serde(rename = "once")]
     Once,
@@ -338,6 +349,7 @@ impl TimerSchedulingMode {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum TimerExecutionOutcome {
     #[serde(rename = "success")]
     Success,

@@ -25,11 +25,13 @@ fn review_requires_current_completed_records_before_icp() {
     ));
     assert!(matches!(
         apply(&directory, "staging", "fleet", [1; 32], &icp),
-        Err(CapacityImportJournalError::Integrity)
+        Err(CapacityImportJournalError::ReviewMissing)
     ));
     assert!(matches!(
         apply(&directory, "../elsewhere", "fleet", [1; 32], &icp),
         Err(CapacityImportJournalError::Integrity)
     ));
+    let paths = EnsurePaths::under(&directory, "staging", "fleet");
+    assert!(!paths.plan.with_file_name("capacity-import.json").exists());
     std::fs::remove_dir_all(directory).unwrap();
 }

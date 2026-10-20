@@ -7,7 +7,7 @@ use canic_contracts::{
     },
     ids::{CanisterRole, CanonicalNetworkId, FleetId, FleetKey},
 };
-use canic_core::cdk::{candid, types::Principal};
+use canic_core::cdk::types::Principal;
 use criterion::Criterion;
 use std::hint::black_box;
 
@@ -23,15 +23,19 @@ fn bench_delegation_proof_serialization(criterion: &mut Criterion) {
         cert: sample_cert(),
         root_proof: sample_chain_key_root_proof(),
     };
-    let encoded = candid::encode_one(&proof).expect("sample delegation proof must encode");
+    let encoded = ic_platform::candid::contract::encode_one(&proof)
+        .expect("sample delegation proof must encode");
 
     criterion.bench_function("delegation_proof_candid_encode", |bench| {
-        bench.iter(|| candid::encode_one(black_box(&proof)).expect("proof encodes"));
+        bench.iter(|| {
+            ic_platform::candid::contract::encode_one(black_box(&proof)).expect("proof encodes")
+        });
     });
 
     criterion.bench_function("delegation_proof_candid_decode", |bench| {
         bench.iter(|| {
-            candid::decode_one::<DelegationProof>(black_box(&encoded)).expect("proof decodes")
+            ic_platform::candid::decoder::decode_one::<DelegationProof>(black_box(&encoded))
+                .expect("proof decodes")
         });
     });
 

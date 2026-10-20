@@ -62,7 +62,10 @@ fn raw_kind(attribute: &Attribute) -> Option<&'static str> {
     let path = attribute.path();
     let kind = path.segments.last()?.ident.to_string();
     let recognized_path = path.segments.len() == 1
-        || (path.segments.len() == 2 && path.segments[0].ident == "ic_cdk");
+        || (path.segments.len() == 2 && path.segments[0].ident == "ic_cdk")
+        || (path.segments.len() == 3
+            && path.segments[0].ident == "ic_platform"
+            && path.segments[1].ident == "cdk");
     match (recognized_path, kind.as_str()) {
         (true, "query") => Some("query"),
         (true, "update") => Some("update"),
@@ -206,16 +209,16 @@ mod tests {
         let path = "apps/test/user_hub/src/fixture_importer/mod.rs";
         assert!(
             check(
-                r#"#[ic_cdk::update(guard = "require_controller")] fn test_release_fixture() {}"#,
+                r#"#[ic_platform::cdk::update(guard = "require_controller")] fn test_release_fixture() {}"#,
                 path
             )
             .is_empty()
         );
         for attribute in [
-            "#[ic_cdk::update]",
-            r#"#[ic_cdk::update(guard = "different_guard")]"#,
-            r#"#[ic_cdk::update(guard = "require_controller", name = "application_method")]"#,
-            r#"#[ic_cdk::query(guard = "require_controller")]"#,
+            "#[ic_platform::cdk::update]",
+            r#"#[ic_platform::cdk::update(guard = "different_guard")]"#,
+            r#"#[ic_platform::cdk::update(guard = "require_controller", name = "application_method")]"#,
+            r#"#[ic_platform::cdk::query(guard = "require_controller")]"#,
         ] {
             assert!(
                 !check(&format!("{attribute} fn test_release_fixture() {{}}"), path).is_empty()
@@ -226,14 +229,15 @@ mod tests {
     #[test]
     fn bare_payload_probe_exception_is_exact() {
         let path = "canisters/test/payload_limit_probe/src/lib.rs";
-        let probe = "#[ic_cdk::update] fn bare_echo(payload: String) -> usize { payload.len() }";
+        let probe =
+            "#[ic_platform::cdk::update] fn bare_echo(payload: String) -> usize { payload.len() }";
         assert!(check(probe, path).is_empty());
         assert!(!check(probe, "apps/production/src/lib.rs").is_empty());
         for source in [
-            "#[ic_cdk::update] fn another_update() {}",
-            "#[ic_cdk::query] fn bare_echo() {}",
-            r#"#[ic_cdk::update(name = "application_method")] fn bare_echo() {}"#,
-            r#"#[ic_cdk::update(guard = "different_guard")] fn bare_echo() {}"#,
+            "#[ic_platform::cdk::update] fn another_update() {}",
+            "#[ic_platform::cdk::query] fn bare_echo() {}",
+            r#"#[ic_platform::cdk::update(name = "application_method")] fn bare_echo() {}"#,
+            r#"#[ic_platform::cdk::update(guard = "different_guard")] fn bare_echo() {}"#,
         ] {
             assert!(!check(source, path).is_empty());
         }
@@ -248,25 +252,25 @@ mod tests {
             "perf_context_completed",
             "perf_context_metrics",
         ] {
-            let probe = format!("#[ic_cdk::query] fn {name}() {{}}");
+            let probe = format!("#[ic_platform::cdk::query] fn {name}() {{}}");
             assert!(check(&probe, path).is_empty());
             assert!(!check(&probe, "apps/production/src/lib.rs").is_empty());
             assert!(!check(&format!("{probe}\n{probe}"), path).is_empty());
             for attribute in [
-                "#[ic_cdk::update]",
-                r#"#[ic_cdk::query(name = "application_method")]"#,
-                "#[ic_cdk::query(composite = true)]",
-                r#"#[ic_cdk::query(guard = "different_guard")]"#,
+                "#[ic_platform::cdk::update]",
+                r#"#[ic_platform::cdk::query(name = "application_method")]"#,
+                "#[ic_platform::cdk::query(composite = true)]",
+                r#"#[ic_platform::cdk::query(guard = "different_guard")]"#,
             ] {
                 assert!(!check(&format!("{attribute} fn {name}() {{}}"), path).is_empty());
             }
         }
-        assert!(!check("#[ic_cdk::query] fn another_query() {}", path).is_empty());
+        assert!(!check("#[ic_platform::cdk::query] fn another_query() {}", path).is_empty());
     }
 
     #[test]
     fn raw_application_endpoints_and_additions_to_reviewed_files_are_rejected() {
-        let source = "#[::ic_cdk::update] fn application_write() {}";
+        let source = "#[::ic_platform::cdk::update] fn application_write() {}";
         assert!(!check(source, "apps/production/src/lib.rs").is_empty());
         assert!(!check(source, "apps/test/user_hub/src/fixture_importer/mod.rs").is_empty());
         assert!(

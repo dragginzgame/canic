@@ -11,11 +11,9 @@ use super::{
         InfraSignWithEcdsaResult,
     },
 };
-use crate::{
-    cdk::candid::Principal,
-    infra::ic::{IcInfraError, call::Call},
-};
-use ic_cdk::api;
+use crate::infra::ic::{IcInfraError, call::Call};
+use ic_platform::Principal;
+use ic_platform::cdk::api;
 
 impl MgmtInfra {
     /// Fetch the caller-derived ECDSA public key for one root signing policy.

@@ -195,12 +195,14 @@ pub(super) fn validate_failure(
             (None, None) => true,
             _ => false,
         };
-        if dependency.target == candid::Principal::anonymous() || !valid_labels || !valid_rejection
+        if dependency.target == ic_platform::Principal::anonymous()
+            || !valid_labels
+            || !valid_rejection
         {
             return Err(InternalError::invariant());
         }
     }
-    let valid_identity = failure.target != candid::Principal::anonymous()
+    let valid_identity = failure.target != ic_platform::Principal::anonymous()
         && failure.operation_id != [0; 32]
         && failure.diagnostic_code != 0;
     let valid_time = failure.failed_at_ns >= accepted_at_ns && failure.consecutive_failures > 0;

@@ -195,7 +195,7 @@ mod tests {
                     "registry_revision": 1, "admission_principals": 1
                 }},
             "operation": unavailable,
-            "roles": [{"role": "root", "canister_id": candid::Principal::from_slice(&[1]).to_text(),
+            "roles": [{"role": "root", "canister_id": ic_platform::Principal::from_slice(&[1]).to_text(),
                 "parent_canister_id": null, "subnet_id": null, "release_identity": "release-a",
                 "expected_module_sha256": "a".repeat(64), "overview": unavailable,
                 "funding": unavailable, "estate": unavailable, "store": unavailable,

@@ -7,7 +7,7 @@
 mod async_tests;
 
 use crate::icp::IcpCli;
-use candid::Principal;
+use ic_platform::Principal;
 use serde::Serialize;
 use std::{
     cell::RefCell,
@@ -81,6 +81,8 @@ pub struct IcpRequestTiming {
 pub(super) struct Timing {
     handler: Option<Box<dyn Fn(IcpRequestTiming) + Send + Sync>>,
     active: AtomicU64,
+    identity_lookups: Arc<AtomicU64>,
+    identity_lookup_millis: Arc<AtomicU64>,
 }
 
 impl fmt::Debug for Timing {
@@ -89,7 +91,40 @@ impl fmt::Debug for Timing {
     }
 }
 
+impl Timing {
+    fn start(&self, kind: IcpRequestKind) -> Instant {
+        if kind == IcpRequestKind::Identity {
+            self.identity_lookups.fetch_add(1, Ordering::Relaxed);
+        }
+        Instant::now()
+    }
+
+    fn finish(&self, kind: IcpRequestKind, started: Instant) -> u128 {
+        let elapsed = started.elapsed();
+        if kind == IcpRequestKind::Identity {
+            self.identity_lookup_millis.fetch_add(
+                u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX),
+                Ordering::Relaxed,
+            );
+        }
+        elapsed.as_micros()
+    }
+}
+
 impl IcpCli {
+    /// Local Principal resolution attempts, shared across transport clones.
+    pub(crate) fn identity_lookup_count(&self) -> u64 {
+        self.timing
+            .identity_lookups
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub(crate) fn identity_lookup_millis(&self) -> u64 {
+        self.timing
+            .identity_lookup_millis
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
     /// Attribute a protected history read to its child without inspecting request payloads.
     pub(crate) fn measure_canister_history<T, E>(
         &self,
@@ -130,6 +165,8 @@ impl IcpCli {
     ) -> Self {
         self.timing = Arc::new(Timing {
             handler: Some(Box::new(handler)),
+            identity_lookups: Arc::clone(&self.timing.identity_lookups),
+            identity_lookup_millis: Arc::clone(&self.timing.identity_lookup_millis),
             ..Timing::default()
         });
         self
@@ -155,9 +192,10 @@ impl IcpCli {
         subject: Option<Principal>,
         run: impl Future<Output = Result<T, E>>,
     ) -> Result<T, E> {
-        let Some(handler) = &self.timing.handler else {
+        let handler = self.timing.handler.as_ref();
+        if handler.is_none() && kind != IcpRequestKind::Identity {
             return run.await;
-        };
+        }
         let event = IcpRequestTiming {
             request_id: NEXT_REQUEST.fetch_add(1, Ordering::Relaxed),
             parent_request_id: None,
@@ -170,13 +208,17 @@ impl IcpCli {
             succeeded: None,
         };
         let guard = AsyncRequestGuard(&self.timing);
-        let started = Instant::now();
-        handler(event.clone());
+        let started = self.timing.start(kind);
+        if let Some(handler) = handler {
+            handler(event.clone());
+        }
         let result = run.await;
         let mut event = event;
-        event.elapsed_micros = started.elapsed().as_micros();
+        event.elapsed_micros = self.timing.finish(kind, started);
         event.succeeded = Some(result.is_ok());
-        handler(event);
+        if let Some(handler) = handler {
+            handler(event);
+        }
         drop(guard);
         result
     }
@@ -189,9 +231,10 @@ impl IcpCli {
         subject: Option<Principal>,
         run: impl FnOnce() -> Result<T, E>,
     ) -> Result<T, E> {
-        let Some(handler) = &self.timing.handler else {
+        let handler = self.timing.handler.as_ref();
+        if handler.is_none() && kind != IcpRequestKind::Identity {
             return run();
-        };
+        }
         let context = Arc::as_ptr(&self.timing) as usize;
         let parent = ACTIVE.with_borrow(|active| {
             active
@@ -228,13 +271,17 @@ impl IcpCli {
             context,
             outer: parent.is_none(),
         };
-        let started = Instant::now();
-        handler(event.clone());
+        let started = self.timing.start(kind);
+        if let Some(handler) = handler {
+            handler(event.clone());
+        }
         let result = run();
         let mut event = event;
-        event.elapsed_micros = started.elapsed().as_micros();
+        event.elapsed_micros = self.timing.finish(kind, started);
         event.succeeded = Some(result.is_ok());
-        handler(event);
+        if let Some(handler) = handler {
+            handler(event);
+        }
         drop(guard);
         result
     }
@@ -271,6 +318,44 @@ impl Drop for RequestGuard<'_> {
 mod tests {
     use super::*;
     use std::sync::{Barrier, Mutex};
+
+    #[test]
+    fn identity_totals_survive_absent_and_replaced_handlers_and_count_failures() {
+        let icp = IcpCli::new("unused", None);
+        let clone = icp.clone();
+        assert_eq!(
+            icp.measure_request(IcpRequestKind::Identity, None, None, || Ok::<_, u8>(3)),
+            Ok(3)
+        );
+        assert_eq!(
+            clone.measure_request(IcpRequestKind::Identity, None, None, || Err::<(), _>(7)),
+            Err(7)
+        );
+        assert_eq!(icp.identity_lookup_count(), 2);
+        let before = icp.identity_lookup_millis();
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let sink = Arc::clone(&events);
+        let icp = icp.with_timing_handler(move |event| sink.lock().unwrap().push(event));
+        icp.measure_request(IcpRequestKind::Identity, None, None, || {
+            std::thread::sleep(std::time::Duration::from_millis(2));
+            Ok::<_, u8>(())
+        })
+        .unwrap();
+        let elapsed_micros = events
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|event| event.succeeded.is_some())
+            .unwrap()
+            .elapsed_micros;
+        assert_eq!(icp.identity_lookup_count(), 3);
+        assert_eq!(clone.identity_lookup_count(), 3);
+        assert_eq!(
+            icp.identity_lookup_millis() - before,
+            u64::try_from(elapsed_micros / 1_000).unwrap()
+        );
+        assert_eq!(clone.identity_lookup_millis(), icp.identity_lookup_millis());
+    }
 
     #[test]
     fn concurrent_clones_pair_requests_and_keep_nested_identity_out_of_worker_count() {

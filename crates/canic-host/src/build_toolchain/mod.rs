@@ -14,8 +14,8 @@ use crate::{
     },
     build_profile::CanisterBuildProfile,
     ic_wasm::{
-        IcWasmExecutable, IcWasmToolError, current_ic_wasm_authority, install_required_ic_wasm,
-        resolve_required_ic_wasm,
+        IcWasmExecutable, IcWasmToolError, current_ic_wasm_authority, default_ic_wasm_install_path,
+        install_required_ic_wasm, resolve_required_ic_wasm,
     },
 };
 use std::{
@@ -183,38 +183,28 @@ pub enum BuildToolchainError {
         resolved: CanisterBuildProfile,
         requested: CanisterBuildProfile,
     },
-
-    #[error(
-        "installed Wasm tools resolved different directories: ic-wasm at {ic_wasm}, wasm-opt at {binaryen}"
-    )]
-    SplitInstallDirectories { ic_wasm: PathBuf, binaryen: PathBuf },
 }
 
 /// Install and admit both canonical Wasm tools for the current host.
+///
+/// # Panics
+///
+/// Panics if the canonical installation path has no parent.
 pub fn install_required_build_toolchain() -> Result<InstalledBuildToolchain, BuildToolchainError> {
     // Fail unsupported platform projections before downloading or publishing either tool.
     current_binaryen_authority()?;
     current_ic_wasm_authority()?;
 
+    // Report the public destination, not the admitted executable inside a bundle.
+    let install_directory = default_ic_wasm_install_path()?
+        .parent()
+        .expect("the fixed ic-wasm installation path has a parent")
+        .to_path_buf();
     let ic_wasm = install_required_ic_wasm()?;
     let binaryen = install_required_binaryen()?;
-    let ic_wasm_directory = ic_wasm
-        .path()
-        .parent()
-        .map(Path::to_path_buf)
-        .ok_or_else(|| BuildToolchainError::SplitInstallDirectories {
-            ic_wasm: ic_wasm.path().to_path_buf(),
-            binaryen: binaryen.path().to_path_buf(),
-        })?;
-    if binaryen.path().parent() != Some(ic_wasm_directory.as_path()) {
-        return Err(BuildToolchainError::SplitInstallDirectories {
-            ic_wasm: ic_wasm.path().to_path_buf(),
-            binaryen: binaryen.path().to_path_buf(),
-        });
-    }
     Ok(InstalledBuildToolchain {
         ic_wasm,
         binaryen,
-        install_directory: ic_wasm_directory,
+        install_directory,
     })
 }

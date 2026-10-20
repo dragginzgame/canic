@@ -38,7 +38,7 @@ pub(in crate::ops::auth) enum RootDelegationProofError {
     RootPolicyRejected,
     #[cfg(any(feature = "auth-chain-key-ecdsa", test))]
     #[error(transparent)]
-    Verification(#[from] ic_auth::token::TokenVerificationError),
+    Verification(#[from] ic_auth::delegation::DelegationProofError),
     #[cfg(any(feature = "auth-chain-key-ecdsa", test))]
     #[error(transparent)]
     Canonical(#[from] CanonicalAuthError),
@@ -50,11 +50,11 @@ pub(in crate::ops::auth) enum RootDelegationProofError {
 #[cfg(any(feature = "auth-chain-key-ecdsa", test))]
 pub(in crate::ops::auth) fn project_root_policy(
     policy: &crate::dto::auth::RootKeyPolicyV1,
-) -> ic_auth::token::RootKeyPolicy {
-    ic_auth::token::RootKeyPolicy {
+) -> ic_auth::delegation::RootKeyPolicy {
+    ic_auth::delegation::RootKeyPolicy {
         root_canister_id: policy.root_canister_id,
-        algorithm: policy.algorithm,
-        key_id: policy.key_id.clone(),
+        algorithm: super::protocol::algorithm(policy.algorithm),
+        key_id: super::protocol::key_id(&policy.key_id),
         derivation_path_hash: policy.derivation_path_hash,
         public_key: policy.public_key.clone(),
         key_version: policy.key_version,
@@ -83,13 +83,13 @@ pub(in crate::ops::auth) fn verify_root_delegation_proof(
     }
     let root_key = project_root_policy(policy);
     let proof = super::protocol::proof_parts(input.cert, input.root_proof)?;
-    let verified = ic_auth::token::verify_delegation_proof(
+    let verified = ic_auth::delegation::verify_delegation_proof(
         &proof,
-        &ic_auth::token::DelegationProofVerificationContext {
+        &ic_auth::delegation::DelegationProofVerificationContext {
             expected_issuer: input.expected_issuer,
             root_key: &root_key,
             now_ns: input.now_ns,
-            limits: ic_auth::token::DelegationProofVerificationLimits {
+            limits: ic_auth::delegation::DelegationProofVerificationLimits {
                 max_cert_ttl_ns: input.ttl_limits.max_cert_ttl_ns,
                 max_token_ttl_ns: input.ttl_limits.max_token_ttl_ns,
                 max_future_skew_ns: crate::ops::auth::AUTH_TIME_SKEW_ALLOWANCE_NS,
@@ -121,23 +121,23 @@ pub(in crate::ops::auth) const fn verify_root_delegation_proof(
 
 #[cfg(any(feature = "auth-chain-key-ecdsa", test))]
 pub(in crate::ops::auth) fn map_verification_error(
-    cause: ic_auth::token::TokenVerificationError,
+    cause: ic_auth::delegation::DelegationProofError,
 ) -> crate::InternalError {
-    use ic_auth::token::TokenVerificationError;
+    use ic_auth::delegation::DelegationProofError;
     match cause {
-        TokenVerificationError::Expired {
+        DelegationProofError::Expired {
             target: "root_key_policy",
         }
-        | TokenVerificationError::StaleAuthority { .. }
-        | TokenVerificationError::RootKeyPolicyBindingMismatch { .. }
-        | TokenVerificationError::BindingMismatch {
+        | DelegationProofError::StaleAuthority { .. }
+        | DelegationProofError::RootKeyPolicyBindingMismatch { .. }
+        | DelegationProofError::BindingMismatch {
             field: "root_public_key" | "key_version",
         } => crate::InternalError::auth_material_stale(),
-        TokenVerificationError::RootSignatureBindingMismatch { .. } => {
+        DelegationProofError::RootSignatureBindingMismatch { .. } => {
             crate::InternalError::invalid_input()
         }
-        TokenVerificationError::Expired { .. } => crate::InternalError::auth_proof_expired(),
-        TokenVerificationError::NotYetValid { .. } => crate::InternalError::auth_proof_pending(),
+        DelegationProofError::Expired { .. } => crate::InternalError::auth_proof_expired(),
+        DelegationProofError::NotYetValid { .. } => crate::InternalError::auth_proof_pending(),
         _ => crate::InternalError::invalid_input(),
     }
 }

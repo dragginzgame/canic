@@ -34,7 +34,10 @@ pub(super) fn verify_canister_signature(
             .map_err(|error| AuthSignatureError::ProofInvalid(error.to_string()))?;
     ic_auth::canister_signature::verify_canister_signature(
         &message,
-        input.proof,
+        &ic_auth_protocol_types::IcCanisterSignatureProofV1 {
+            signature_cbor: input.proof.signature_cbor.clone(),
+            public_key_der: input.proof.public_key_der.clone(),
+        },
         &ic_auth::canister_signature::CanisterSignaturePolicy {
             signing_canister: input.signing_canister,
             seed_hash: Sha256::digest(input.seed).into(),

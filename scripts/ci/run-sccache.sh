@@ -21,11 +21,8 @@ fail() {
     exit 1
 }
 
-if [[ -z "$SCCACHE_BIN" ]]; then
-    SCCACHE_BIN="$(command -v sccache 2>/dev/null || true)"
-fi
-[[ -n "$SCCACHE_BIN" && -x "$SCCACHE_BIN" ]] ||
-    fail "the configured sccache executable is unavailable"
+[[ "$SCCACHE_BIN" == /* && -f "$SCCACHE_BIN" && -x "$SCCACHE_BIN" ]] ||
+    fail "SCCACHE_BIN must select an absolute executable file"
 
 [[ ! -L "$ROOT/.tmp" ]] ||
     fail "repository scratch parent may not be a symlink"

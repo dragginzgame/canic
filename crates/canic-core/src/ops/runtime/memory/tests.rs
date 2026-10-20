@@ -3,12 +3,7 @@
 use super::*;
 use crate::storage::stable::env::{Env, EnvData, EnvRecord};
 use ic_memory::{
-    AllocationDeclaration, MemoryManagerSlot, SchemaMetadata,
-    ic_stable_structures::{
-        Memory, VectorMemory,
-        memory_manager::{MemoryId, MemoryManager},
-    },
-    testing::allocation_record,
+    AllocationDeclaration, Memory, MemoryManagerSlot, VectorMemory, testing::allocation_record,
 };
 
 #[test]
@@ -40,7 +35,7 @@ fn bootstrap_retains_declarations_and_opens_only_the_accessed_store() {
             .all(|entry| entry.virtual_extent.wasm_pages == 0)
     );
 
-    let parent = candid::Principal::from_slice(&[73]);
+    let parent = ic_platform::Principal::from_slice(&[73]);
     Env::import(EnvData {
         record: EnvRecord {
             parent_pid: Some(parent),
@@ -137,9 +132,9 @@ fn allocation_snapshot_preserves_unopened_memories_and_ledger_generation() {
         report.allocated_bucket_bytes,
         report.virtual_extent.bytes + report.bucket_slack_bytes
     );
-    let bytes = candid::encode_one(&report).expect("encode bounded report");
+    let bytes = ic_platform::candid::contract::encode_one(&report).expect("encode bounded report");
     let decoded: MemoryAllocationsResponse =
-        candid::decode_one(&bytes).expect("decode bounded report");
+        ic_platform::candid::decoder::decode_one(&bytes).expect("decode bounded report");
     assert_eq!(decoded, report);
 }
 
@@ -152,27 +147,29 @@ fn allocation_snapshot_requires_existing_bootstrap() {
 
 #[test]
 fn allocation_projection_preserves_unknown_owners_and_measured_nondefault_buckets() {
-    let backing = VectorMemory::default();
-    let manager = MemoryManager::init_with_bucket_size(backing.clone(), 16);
-    assert_eq!(manager.get(MemoryId::new(200)).grow(1), 0);
-    drop(manager);
+    let backing = crate::memory::fixtures::unmanaged(16);
     let runtime = ic_memory::MemoryRuntime::new(backing).expect("reopen owned manager");
     let report = runtime
         .memory_allocations()
         .expect("bounded unbound allocations");
     assert_eq!(report.summary.bucket_size_pages, 16);
     assert_eq!(report.summary.unknown_binding_bytes(), 1_048_576);
+    let pool = memory::pool::framework_pool(Vec::new(), vec![200]).unwrap();
     let entry = memory_allocation_entry_response(
         report.memories[200].clone(),
         report.summary.bucket_size_pages,
-    );
+        &[],
+        &pool,
+    )
+    .unwrap();
     assert_eq!(entry.binding, MemoryAllocationBinding::Unknown);
+    assert_eq!(entry.pool_eligible, Some(false));
     assert_eq!(entry.virtual_extent.bytes, 65_536);
     assert_eq!(entry.allocated_bytes, 1_048_576);
     assert_eq!(entry.bucket_slack_bytes, 983_040);
     assert_eq!(entry.payload_bytes, None);
-    let error =
-        memory_allocations_response(report).expect_err("Canic requires committed bootstrap");
+    let error = memory_allocations_response(report, &[], &pool)
+        .expect_err("Canic requires committed bootstrap");
     assert_eq!(error.code(), crate::diagnostics::codes::STATE_INVALID);
 }
 
@@ -228,8 +225,7 @@ fn commit_snapshot_response_maps_runtime_variants_exactly() {
 
 #[test]
 fn commit_recovery_response_maps_invalid_snapshot_without_unknown_fallback() {
-    let response =
-        commit_recovery_response(Some(CommitSnapshotDiagnostic::Invalid { generation: 3 }));
+    let response = commit_recovery_response(CommitSnapshotDiagnostic::Invalid { generation: 3 });
 
     assert_eq!(response.authoritative_generation, None);
     assert_eq!(
@@ -243,17 +239,15 @@ fn memory_allocation_record_response_includes_live_backing_memory_size() {
     let declaration = AllocationDeclaration::new(
         "app.users.v1",
         MemoryManagerSlot::new(100).expect("usable slot"),
-        SchemaMetadata::new(Some(7)).expect("current schema"),
     )
     .expect("declaration");
     let record = DiagnosticRecord {
-        allocation: allocation_record(&declaration, AllocationState::Reserved),
+        allocation: allocation_record(&declaration),
         memory_size: Some(DiagnosticMemorySize::from_wasm_pages(3)),
     };
 
     let response = memory_allocation_record_response(record);
 
-    assert_eq!(response.schema_version, Some(7));
     assert_eq!(
         response.memory_size,
         Some(MemoryAllocationSizeEntry {
@@ -266,7 +260,6 @@ fn memory_allocation_record_response_includes_live_backing_memory_size() {
         Some(MemoryLedgerMemoryEntry {
             memory_manager_id: 100,
             stable_key: "app.users.v1".to_string(),
-            state: MemoryAllocationState::Reserved,
             size: MemoryAllocationSizeEntry {
                 wasm_pages: 3,
                 bytes: 196_608,
@@ -280,11 +273,10 @@ fn memory_allocation_record_response_omits_unmeasured_sizes() {
     let declaration = AllocationDeclaration::new(
         "app.users.v1",
         MemoryManagerSlot::new(100).expect("usable slot"),
-        SchemaMetadata::default(),
     )
     .expect("declaration");
     let record = DiagnosticRecord {
-        allocation: allocation_record(&declaration, AllocationState::Reserved),
+        allocation: allocation_record(&declaration),
         memory_size: None,
     };
 
@@ -395,20 +387,14 @@ fn ledger_growth_refusal_publishes_no_authority_and_retries_canic_bootstrap() {
     ));
     assert_eq!(*backing.bytes.borrow(), before);
     backing.refuse.set(false);
-    assert_eq!(
-        runtime
-            .bootstrap(&declarations, &pool, &policy)
-            .unwrap()
-            .generation(),
-        1
-    );
+    assert_eq!(runtime.bootstrap(&declarations, &pool, &policy).unwrap(), 1);
     runtime
         .verify_authority(&declarations, memory::CANIC_CORE_MEMORY_AUTHORITY)
         .unwrap();
 }
 
 #[test]
-fn application_growth_refusal_preserves_shared_extents_and_retry() {
+fn application_growth_refusal_preserves_extents_and_retry() {
     let backing = RefusableMemory::default();
     let mut runtime = ic_memory::MemoryRuntime::new_with_config(
         backing.clone(),
@@ -425,12 +411,11 @@ fn application_growth_refusal_preserves_shared_extents_and_retry() {
     let rows = runtime
         .open_memory("canic.core.runtime.bindings.v1")
         .unwrap();
-    let clone = rows.clone();
     let before = backing.bytes.borrow().clone();
     let summary = runtime.memory_allocation_summary().unwrap();
     backing.refuse.set(true);
     assert_eq!(
-        clone.grow(1),
+        rows.grow(1),
         Err(ic_memory::RuntimeGrowError::BackingRefused {
             additional_pages: 1
         })
@@ -439,7 +424,7 @@ fn application_growth_refusal_preserves_shared_extents_and_retry() {
     assert_eq!(*backing.bytes.borrow(), before);
     assert_eq!(runtime.memory_allocation_summary().unwrap(), summary);
     backing.refuse.set(false);
-    assert_eq!(clone.grow(1), Ok(0));
+    assert_eq!(rows.grow(1), Ok(0));
     rows.write(0, b"retained");
     let before = backing.bytes.borrow().clone();
     assert_eq!(
@@ -454,7 +439,7 @@ fn application_growth_refusal_preserves_shared_extents_and_retry() {
     drop(runtime);
     assert_eq!(rows.grow(1), Ok(1));
     let mut bytes = [0; 8];
-    clone.read(0, &mut bytes);
+    rows.read(0, &mut bytes);
     assert_eq!(&bytes, b"retained");
 }
 
@@ -496,16 +481,18 @@ fn receipt_capacity_growth_exhaustion_preserves_store_and_typed_ops_failure() {
 }
 
 #[test]
-fn ledger_snapshot_preserves_anchor_commit_evidence_and_current_schema_over_candid() {
+fn ledger_snapshot_preserves_anchor_commit_evidence_over_candid() {
     MemoryRegistryOps::init_registry().expect("bootstrap canonical memory runtime");
     let source = ledger::try_snapshot().unwrap();
     let response = MemoryRegistryOps::ledger_snapshot().unwrap();
-    let bytes = candid::encode_one(&response).expect("ledger response Candid");
-    let decoded: MemoryLedgerResponse = candid::decode_one(&bytes).expect("current Candid");
+    let bytes =
+        ic_platform::candid::contract::encode_one(&response).expect("ledger response Candid");
+    let decoded: MemoryLedgerResponse =
+        ic_platform::candid::decoder::decode_one(&bytes).expect("current Candid");
     assert_eq!(decoded.current_generation, source.export.current_generation);
     assert_eq!(
         decoded.ledger_memory_manager_id,
-        source.export.ledger_anchor.id()
+        ic_memory::MEMORY_MANAGER_LEDGER_ID
     );
     assert_eq!(
         decoded.commit_recovery.authoritative_generation,
@@ -515,25 +502,62 @@ fn ledger_snapshot_preserves_anchor_commit_evidence_and_current_schema_over_cand
     for (row, original) in decoded.records.iter().zip(source.export.records) {
         assert_eq!(row.memory_manager_id, Some(original.allocation.slot().id()));
         assert_eq!(row.stable_key, original.allocation.stable_key().as_str());
-        assert_eq!(
-            row.schema_version,
-            original.allocation.schema().schema_version()
-        );
     }
 }
 
 #[test]
-fn retired_allocation_projection_keeps_its_slot_and_latest_schema() {
+fn allocation_projection_keeps_permanent_key_and_slot() {
     let slot = MemoryManagerSlot::new(100).unwrap();
     let key = "app.users.v1";
-    let declaration =
-        AllocationDeclaration::new(key, slot, SchemaMetadata::new(Some(7)).unwrap()).unwrap();
+    let declaration = AllocationDeclaration::new(key, slot).unwrap();
     let response = memory_allocation_record_response(DiagnosticRecord {
-        allocation: allocation_record(&declaration, AllocationState::Retired),
+        allocation: allocation_record(&declaration),
         memory_size: None,
     });
     assert_eq!(response.memory_manager_id, Some(100));
     assert_eq!(response.stable_key, key);
-    assert_eq!(response.state, MemoryAllocationState::Retired);
-    assert_eq!(response.schema_version, Some(7));
+}
+
+#[test]
+fn allocation_projection_uses_committed_bindings_and_current_pool() {
+    let pool = ic_memory::MemoryAllocationPool::new(
+        vec![ic_memory::MemoryAuthority::new("app", "app.").unwrap()],
+        vec![200],
+    )
+    .unwrap();
+    let declarations = ic_memory::SealedDeclarationSnapshot::new(vec![
+        ic_memory::MemoryRequest::new("app", "app.rows.v1").unwrap(),
+    ])
+    .unwrap();
+    let mut runtime = ic_memory::MemoryRuntime::new(ic_memory::VectorMemory::default()).unwrap();
+    runtime
+        .bootstrap(&declarations, &pool, &ic_memory::GenericAllocationPolicy)
+        .unwrap();
+    let id = runtime.memory_id("app.rows.v1").unwrap();
+    let report = memory_allocations_response(
+        runtime.memory_allocations().unwrap(),
+        runtime.committed_allocations().unwrap(),
+        runtime.allocation_pool().unwrap(),
+    )
+    .unwrap();
+    let row = &report.memories[usize::from(id)];
+    assert_eq!(
+        row.binding,
+        MemoryAllocationBinding::Current {
+            stable_key: "app.rows.v1".into(),
+            owner: "app".into(),
+        }
+    );
+    assert_eq!(row.pool_eligible, Some(true));
+    let ledger = &report.memories[usize::from(ic_memory::MEMORY_MANAGER_LEDGER_ID)];
+    assert!(matches!(
+        ledger.binding,
+        MemoryAllocationBinding::Ledger { .. }
+    ));
+    assert_eq!(ledger.pool_eligible, Some(false));
+    assert_eq!(
+        report.memories[200].binding,
+        MemoryAllocationBinding::Unknown
+    );
+    assert_eq!(report.memories[200].pool_eligible, Some(false));
 }

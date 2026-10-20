@@ -163,7 +163,7 @@ fn named_components_preserve_instances_unknown_state_and_current_owner() {
             deployment: "cells".into(),
             placement,
             member_path: vec!["worker".into()],
-            root: candid::Principal::from_slice(&[u8::try_from(placement).unwrap()]),
+            root: ic_platform::Principal::from_slice(&[u8::try_from(placement).unwrap()]),
             state: FleetComponentProgressState::Unknown,
             current: placement == 5,
         })
@@ -306,7 +306,7 @@ fn reported_retry_is_distinct_from_waiting_and_keeps_root_evidence_in_json() {
     let mut event = activating();
     let failure = canic_contracts::dto::component_provisioning::FleetComponentProvisioningRootFailure {
         origin: None,
-        fleet_subnet_root: candid::Principal::anonymous(),
+        fleet_subnet_root: ic_platform::Principal::anonymous(),
         stage: canic_contracts::dto::component_provisioning::FleetComponentProvisioningRetryStage::RuntimeActivation,
         diagnostic_code: 42,
         failed_at_ns: 123,
@@ -354,7 +354,7 @@ fn observed_retry_deadlines_reach_human_and_json_output_without_advancement() {
             origin: Some(ProvisioningFailureOrigin {
                 dependency: Some(
                     canic_contracts::values::provisioning_failure::ProvisioningDependencyFailure {
-                        target: candid::Principal::from_slice(&[8]),
+                        target: ic_platform::Principal::from_slice(&[8]),
                         method: canic_contracts::protocol::CANIC_WASM_STORE_COMMAND.into(),
                         step: "inspect_template".into(),
                         rejection_code: Some(5),
@@ -364,12 +364,12 @@ fn observed_retry_deadlines_reach_human_and_json_output_without_advancement() {
                 failed_at_ns: 123,
                 retry_at_ns,
                 stage: ProvisioningFailureStage::ComponentMembership,
-                target: candid::Principal::from_slice(&[8]),
+                target: ic_platform::Principal::from_slice(&[8]),
                 operation_id: [9; 32],
                 diagnostic_code: 137,
                 retry_category: ProvisioningRetryCategory::Backoff,
             }),
-            fleet_subnet_root: candid::Principal::from_slice(&[7]),
+            fleet_subnet_root: ic_platform::Principal::from_slice(&[7]),
             stage: FleetComponentProvisioningRetryStage::RuntimeActivation,
             diagnostic_code: 137,
             failed_at_ns: 124,
@@ -651,7 +651,7 @@ fn retry_timestamps_do_not_reset_the_last_real_transition() {
     } = &mut repeated.state
     {
         detail.pending_root_failure = Some(Box::new(canic_contracts::dto::component_provisioning::FleetComponentProvisioningRootFailure {
-            origin: None, fleet_subnet_root: candid::Principal::anonymous(),
+            origin: None, fleet_subnet_root: ic_platform::Principal::anonymous(),
             stage: canic_contracts::dto::component_provisioning::FleetComponentProvisioningRetryStage::RuntimeActivation,
             diagnostic_code: 42, failed_at_ns: 123,
         }));

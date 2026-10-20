@@ -13,7 +13,6 @@ use self::transport::local_query;
 use crate::icp_config::{
     IcpConfigError, resolve_current_canic_icp_root, resolve_icp_build_network_from_root,
 };
-use candid::{Decode, Encode};
 use canic_contracts::{
     dto::{
         error::Error as CanicError,
@@ -21,6 +20,7 @@ use canic_contracts::{
     },
     ids::BuildNetwork,
 };
+use ic_platform::candid::contract::Decode;
 use std::path::Path;
 use thiserror::Error as ThisError;
 
@@ -33,13 +33,13 @@ pub use self::status::local_replica_status_reachable_from_root;
 #[derive(Debug, ThisError)]
 pub enum ReplicaQueryError {
     #[error(transparent)]
-    Candid(candid::Error),
+    Candid(ic_platform::candid::contract::Error),
 
     #[error("{0}")]
     Canister(CanicError),
 
     #[error(transparent)]
-    Agent(Box<ic_agent::AgentError>),
+    Agent(Box<ic_platform::agent::AgentError>),
 
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -80,7 +80,8 @@ pub(crate) fn query_ready(
     endpoint: &str,
     icp_root: Option<&Path>,
 ) -> Result<bool, ReplicaQueryError> {
-    let arg = Encode!(&RoleStatusRequest::Overview).map_err(ReplicaQueryError::Candid)?;
+    let arg = ic_platform::candid::contract::encode_one(RoleStatusRequest::Overview)
+        .map_err(ReplicaQueryError::Candid)?;
     let bytes = local_query(environment, canister, endpoint, &arg, icp_root)?;
     let result = Decode!(&bytes, Result<RoleStatusResponse, CanicError>)
         .map_err(ReplicaQueryError::Candid)?;

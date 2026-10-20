@@ -25,20 +25,22 @@ impl ApplicationStartupApi {
     /// Stop a later lifecycle effect if its retained startup release has been fenced.
     pub fn require_initialization_effect() {
         application_startup::require_initialization_effect().unwrap_or_else(|error| {
-            ic_cdk::trap(format!("application initialization fenced: {error}"))
+            ic_platform::cdk::api::trap(format!("application initialization fenced: {error}"))
         });
     }
 
     /// Stop a later upgrade hook if application admission changed during setup.
     pub fn require_upgrade_effect() {
-        application_startup::require_started()
-            .unwrap_or_else(|error| ic_cdk::trap(format!("application upgrade fenced: {error}")));
+        application_startup::require_started().unwrap_or_else(|error| {
+            ic_platform::cdk::api::trap(format!("application upgrade fenced: {error}"))
+        });
     }
 
     /// Schedule pending original initialization through the retained native claim.
     pub fn schedule_required<F: Future<Output = ()> + 'static>(hook: fn(Option<Vec<u8>>) -> F) {
-        application_startup::schedule(hook)
-            .unwrap_or_else(|error| ic_cdk::trap(format!("application startup rejected: {error}")));
+        application_startup::schedule(hook).unwrap_or_else(|error| {
+            ic_platform::cdk::api::trap(format!("application startup rejected: {error}"))
+        });
     }
 
     /// Application upgrade hooks are admitted only after the original initialization finished.

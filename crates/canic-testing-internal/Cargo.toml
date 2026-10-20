@@ -21,7 +21,6 @@ governed-pocketic-tests = ["pocketic-fixtures", "canic-host/local-fleet"]
 pocketic-fixtures = []
 
 [dependencies]
-candid = { workspace = true }
 canic = { workspace = true, features = ["testing"] }
 canic-contracts.workspace = true
 canic-control-plane = { workspace = true, features = [
@@ -35,13 +34,13 @@ flate2 = { workspace = true }
 ic-build.workspace = true
 ic-host-fs = { workspace = true }
 ic-host-process.workspace = true
+ic-platform = { workspace = true, features = ["candid", "candid-parser"] }
 ic-testkit = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }
 
 [dev-dependencies]
-candid_parser = { workspace = true }
 canic-blob-service = { workspace = true }
 canic-cli = { workspace = true }
 ic-query = { workspace = true }

@@ -295,7 +295,7 @@ pub fn reserve_submission(
 /// Bound paid source or Root management observations without resetting budgets on restart.
 pub fn reserve_inspection(
     journal: &CapacityImportJournalRecord,
-    canister: candid::Principal,
+    canister: ic_platform::Principal,
 ) -> Result<CapacityImportJournalRecord, CapacityImportJournalError> {
     validate(journal)?;
     let known = journal
@@ -370,7 +370,8 @@ pub fn retain_settled(
     validate_root_status(&journal.plan, observed)?;
     let mut result = journal.clone();
     let operation = result.operation.as_mut().ok_or_else(conflict)?;
-    let encoded = hex_bytes(candid::encode_one(observed).map_err(|_| conflict())?);
+    let encoded =
+        hex_bytes(ic_platform::candid::contract::encode_one(observed).map_err(|_| conflict())?);
     if operation
         .settled_status_candid_hex
         .as_ref()
@@ -484,7 +485,7 @@ pub fn retain_released(
         .as_mut()
         .ok_or_else(conflict)?
         .released_status_candid_hex = Some(hex_bytes(
-        candid::encode_one(observed).map_err(|_| conflict())?,
+        ic_platform::candid::contract::encode_one(observed).map_err(|_| conflict())?,
     ));
     validate(&result)?;
     Ok(result)
@@ -534,7 +535,7 @@ fn status(
         return Err(conflict());
     }
     let bytes = decode_hex(value).map_err(|_| conflict())?;
-    let status = candid::decode_one(&bytes).map_err(|_| conflict())?;
+    let status = ic_platform::candid::decoder::decode_one(&bytes).map_err(|_| conflict())?;
     validate_root_status(&journal.plan, &status)?;
     Ok(status)
 }

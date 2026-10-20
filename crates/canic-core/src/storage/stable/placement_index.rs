@@ -2,9 +2,7 @@
 
 use crate::{
     cdk::{
-        structures::{
-            DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, memory::RuntimeMemory,
-        },
+        structures::{DefaultMemoryImpl, StableBTreeMap as StableBtreeMap},
         types::{BoundedString64, BoundedString128},
     },
     storage::prelude::*,
@@ -13,7 +11,7 @@ use std::cell::RefCell;
 
 std::thread_local! {
     static PLACEMENT_INDEX_REGISTRY: RefCell<
-        StableBtreeMap<PlacementIndexKey, PlacementIndexEntryRecord, RuntimeMemory<DefaultMemoryImpl>>
+        StableBtreeMap<PlacementIndexKey, PlacementIndexEntryRecord, DefaultMemoryImpl>
     > = RefCell::new(
         StableBtreeMap::init(crate::memory::open(crate::memory::keys::PLACEMENT_INDEX_REGISTRY_V1)),
     );
@@ -145,6 +143,6 @@ impl PlacementIndexRegistry {
 
     #[cfg(test)]
     pub(crate) fn clear() {
-        PLACEMENT_INDEX_REGISTRY.with_borrow_mut(StableBtreeMap::clear_new);
+        PLACEMENT_INDEX_REGISTRY.with_borrow_mut(StableBtreeMap::clear);
     }
 }

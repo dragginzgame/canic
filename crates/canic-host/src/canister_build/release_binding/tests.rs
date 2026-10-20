@@ -213,13 +213,13 @@ fn assert_runtime_identity(
     let reply = pic
         .query_call(
             canister,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "binding",
-            candid::encode_args(()).unwrap(),
+            ic_platform::candid::contract::encode_args(()).unwrap(),
         )
         .unwrap();
     assert_eq!(
-        candid::decode_one::<String>(&reply).unwrap(),
+        ic_platform::candid::decoder::decode_one::<String>(&reply).unwrap(),
         id.to_string()
     );
     // A mismatched initializer must not replace a working installation.
@@ -252,13 +252,13 @@ fn assert_runtime_identity(
     let reply = pic
         .query_call(
             canister,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "binding",
-            candid::encode_args(()).unwrap(),
+            ic_platform::candid::contract::encode_args(()).unwrap(),
         )
         .unwrap();
     assert_eq!(
-        candid::decode_one::<String>(&reply).unwrap(),
+        ic_platform::candid::decoder::decode_one::<String>(&reply).unwrap(),
         id.to_string()
     );
 }

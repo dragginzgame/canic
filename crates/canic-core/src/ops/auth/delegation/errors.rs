@@ -39,7 +39,7 @@ pub(super) fn map_install_active_delegation_proof_error(
         // maps inconsistent submitted metadata to invalid input at its own boundary.
         #[cfg(any(feature = "auth-chain-key-ecdsa", test))]
         InstallActiveDelegationProofError::RootProofInvalid(
-            ic_auth::token::TokenVerificationError::RootSignatureBindingMismatch { .. },
+            ic_auth::delegation::DelegationProofError::RootSignatureBindingMismatch { .. },
         ) => InternalError::auth_material_stale(),
         #[cfg(any(feature = "auth-chain-key-ecdsa", test))]
         InstallActiveDelegationProofError::RootProofInvalid(cause) => {
@@ -87,13 +87,13 @@ mod tests {
 
     #[test]
     fn active_proof_install_preserves_typed_root_proof_cause() {
-        use ic_auth::token::TokenVerificationError;
+        use ic_auth::delegation::DelegationProofError;
         for cause in [
-            TokenVerificationError::StaleAuthority {
+            DelegationProofError::StaleAuthority {
                 field: "proof_epoch",
             },
-            TokenVerificationError::RootSignatureBindingMismatch { field: "key_id" },
-            TokenVerificationError::RootKeyPolicyBindingMismatch { field: "key_id" },
+            DelegationProofError::RootSignatureBindingMismatch { field: "key_id" },
+            DelegationProofError::RootKeyPolicyBindingMismatch { field: "key_id" },
         ] {
             let mapped = map_install_active_delegation_proof_error(
                 InstallActiveDelegationProofError::RootProofInvalid(cause),

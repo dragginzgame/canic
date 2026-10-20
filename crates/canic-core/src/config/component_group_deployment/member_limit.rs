@@ -8,10 +8,10 @@ use crate::config::{
     ComponentSpec, ComponentTopology, FlattenedComponentGroupMember,
     schema::{ComponentChildKind, ComponentDeploymentMemberLimitConfig as SourceMemberLimit},
 };
-use candid::CandidType;
 use canic_contracts::ids::{
     CanisterRole, ComponentGroupDeploymentId, ComponentGroupMemberPath, ComponentSpecId,
 };
+use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;
@@ -24,6 +24,7 @@ pub const MAX_COMPONENT_DEPLOYMENT_SPAWN_GRANT_REDUCTIONS: usize = 4_096;
 
 /// Canonical reduction-only declaration for one exact flattened member.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ComponentDeploymentMemberLimit {
     pub member: ComponentGroupMemberPath,

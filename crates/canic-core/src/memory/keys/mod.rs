@@ -4,7 +4,7 @@ macro_rules! keys {
     ($( $(#[$attr:meta])* $name:ident = $key:literal; )*) => {
         $( $(#[$attr])* pub const $name: &str = $key; )*
         pub(super) fn requests() -> Result<Vec<ic_memory::MemoryRequest>, ic_memory::MemoryDeclarationError> {
-            Ok(vec![$( $(#[$attr])* ic_memory::MemoryRequest::new(super::MEMORY_AUTHORITY, $name, ic_memory::SchemaMetadata::default())?, )*])
+            Ok(vec![$( $(#[$attr])* ic_memory::MemoryRequest::new(super::MEMORY_AUTHORITY, $name)?, )*])
         }
     };
 }

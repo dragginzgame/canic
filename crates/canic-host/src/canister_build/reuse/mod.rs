@@ -4,7 +4,7 @@
 //! Does not own: compilation, release identity allocation, or Fleet deployment.
 //! Boundary: source bytes and admitted tools key a cache; immutable release records remain authority.
 
-use ic_build::cargo::observation::{CargoFeatureSelection, schema::Metadata};
+use ic_build::cargo::{observation::schema::Metadata, selection::CargoFeatureSelection};
 
 mod dependencies;
 mod diagnostics;
@@ -288,11 +288,16 @@ impl CompleteBuildReuse {
     ) -> Result<(), BuildReuseError> {
         self.lock.phase(BuildLockPhase::VerifyingAndPublishing);
         verify_release(&self.context, release_build_id)?;
-        let after = input_snapshot(&self.context, &self.tool_paths)?;
-        self.inputs
-            .validate_after(&after)
+        let (after_spec, fixture_hashes) = input_spec(&self.context, &self.tool_paths)?;
+        let after = self
+            .inputs
+            .validate_after(&after_spec)
             .map_err(BuildReuseError::from)
             .inspect_err(|error| {
+                // A recapture is advisory rejection evidence, never release authority.
+                let Ok(after) = InputEvidence::capture(&after_spec) else {
+                    return;
+                };
                 if let Some(path) = diagnostics::retain_rejection(
                     &self.context,
                     release_build_id,
@@ -304,6 +309,7 @@ impl CompleteBuildReuse {
                     eprintln!("Build input rejection evidence: {}", path.display());
                 }
             })?;
+        validate_input_snapshot(&self.context, &self.tool_paths, &after, fixture_hashes)?;
         let inputs = after.digest()?.to_hex();
         let record_path = self.record_path.with_file_name(format!("{inputs}.json"));
         let record = CompleteBuildReuseRecord {
@@ -378,6 +384,16 @@ fn input_snapshot(
     context: &WorkspaceBuildContext,
     tools: &[PathBuf],
 ) -> Result<InputEvidence, BuildReuseError> {
+    let (spec, fixture_hashes) = input_spec(context, tools)?;
+    let evidence = InputEvidence::capture(&spec)?;
+    validate_input_snapshot(context, tools, &evidence, fixture_hashes)?;
+    Ok(evidence)
+}
+
+fn input_spec(
+    context: &WorkspaceBuildContext,
+    tools: &[PathBuf],
+) -> Result<(InputEvidenceSpec, BTreeMap<PathBuf, String>), BuildReuseError> {
     let metadata = cargo_metadata_catalog_for_manifest(
         &context.workspace_root.join("Cargo.toml"),
         true,
@@ -462,7 +478,18 @@ fn input_snapshot(
     paths.extend(tools.iter().cloned());
     append_rust_toolchain_inputs(context, &mut paths)?;
 
-    let evidence = InputEvidence::capture(&source_evidence_spec(input_identity(context)?, &paths))?;
+    Ok((
+        source_evidence_spec(input_identity(context)?, &paths),
+        fixture_hashes,
+    ))
+}
+
+fn validate_input_snapshot(
+    context: &WorkspaceBuildContext,
+    tools: &[PathBuf],
+    evidence: &InputEvidence,
+    fixture_hashes: BTreeMap<PathBuf, String>,
+) -> Result<(), BuildReuseError> {
     for required in std::iter::once(&context.config_path).chain(tools) {
         if !matches!(
             evidence.entries().get(required),
@@ -474,14 +501,14 @@ fn input_snapshot(
         }
     }
     for (path, expected) in fixture_hashes {
-        if !matches!(evidence.entries().get(&path), Some(InputEvidenceValue::File { sha256 }) if sha256.to_hex() == expected)
+        if !matches!(evidence.entries().get(&path), Some(InputEvidenceValue::File { sha256 }) if sha256.to_string() == expected)
         {
             return Err(BuildReuseError::ChangedInput(path));
         }
     }
     // Refuse the consumer's non-UTF-8 record encoding before any work or diagnostics.
     evidence.digest()?;
-    Ok(evidence)
+    Ok(())
 }
 
 fn selected_export_producers(
@@ -689,7 +716,7 @@ fn output_files(root: &Path) -> Result<BTreeMap<String, String>, BuildReuseError
                 let key = relative
                     .to_str()
                     .ok_or_else(|| BuildReuseError::Unsupported(path.clone()))?;
-                files.insert(key.to_owned(), sha256.to_hex());
+                files.insert(key.to_owned(), sha256.to_string());
             }
             InputEvidenceValue::Directory => {}
             InputEvidenceValue::Missing => {

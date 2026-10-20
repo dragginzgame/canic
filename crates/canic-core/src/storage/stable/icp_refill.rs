@@ -4,16 +4,12 @@
 //! Does not own: workflow decisions, ledger/CMC calls, or DTO projection.
 //! Boundary: storage ops wrap these records for ICP refill workflows.
 
+use crate::storage::prelude::*;
 use crate::{
-    cdk::{
-        candid::Nat,
-        structures::{
-            DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, memory::RuntimeMemory,
-        },
-    },
+    cdk::structures::{DefaultMemoryImpl, StableBTreeMap as StableBtreeMap},
     impl_storable_bounded,
-    storage::prelude::*,
 };
+use ic_platform::candid::contract::Nat;
 use std::{
     cell::RefCell,
     ops::Bound::{Excluded, Unbounded},
@@ -176,12 +172,12 @@ impl IcpRefillRecordsData {
 ///
 
 pub struct IcpRefillRecords {
-    map: StableBtreeMap<IcpRefillRecordKey, IcpRefillRecord, RuntimeMemory<DefaultMemoryImpl>>,
+    map: StableBtreeMap<IcpRefillRecordKey, IcpRefillRecord, DefaultMemoryImpl>,
 }
 
 impl IcpRefillRecords {
     pub const fn new(
-        map: StableBtreeMap<IcpRefillRecordKey, IcpRefillRecord, RuntimeMemory<DefaultMemoryImpl>>,
+        map: StableBtreeMap<IcpRefillRecordKey, IcpRefillRecord, DefaultMemoryImpl>,
     ) -> Self {
         Self { map }
     }
@@ -238,7 +234,7 @@ impl IcpRefillRecords {
     #[cfg(test)]
     pub(crate) fn import(data: IcpRefillRecordsData) {
         ICP_REFILL_RECORDS.with_borrow_mut(|records| {
-            records.map.clear_new();
+            records.map.clear();
             for entry in data.entries {
                 records.map.insert(entry.key, entry.record);
             }
@@ -247,7 +243,7 @@ impl IcpRefillRecords {
 
     #[cfg(test)]
     pub(crate) fn clear_for_tests() {
-        ICP_REFILL_RECORDS.with_borrow_mut(|records| records.map.clear_new());
+        ICP_REFILL_RECORDS.with_borrow_mut(|records| records.map.clear());
     }
 }
 

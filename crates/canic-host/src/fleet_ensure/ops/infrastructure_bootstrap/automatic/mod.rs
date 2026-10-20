@@ -27,9 +27,9 @@ use crate::{
     },
     icp::IcpCli,
 };
-use candid::Principal;
 use canic_contracts::ids::CanonicalNetworkId;
 use canic_core::cdk::utils::hash::hex_bytes;
+use ic_platform::Principal;
 use sha2_host::{Digest, Sha256};
 use std::collections::BTreeMap;
 
@@ -64,7 +64,7 @@ pub(in crate::fleet_ensure) fn retained(
 pub(in crate::fleet_ensure) fn agent(
     icp: &IcpCli,
     desired: &DesiredFleet,
-) -> Result<ic_agent::Agent, InfrastructureBootstrapError> {
+) -> Result<ic_platform::agent::Agent, InfrastructureBootstrapError> {
     let agent = icp
         .authenticated_agent_with_response_limit(2 * 1024 * 1024)
         .map_err(|error| InfrastructureBootstrapError::Observation(error.to_string()))?;
@@ -84,7 +84,7 @@ pub(in crate::fleet_ensure) fn agent(
 pub(in crate::fleet_ensure) async fn custody(
     paths: &EnsurePaths,
     desired: &DesiredFleet,
-    agent: &ic_agent::Agent,
+    agent: &ic_platform::agent::Agent,
 ) -> Result<BTreeMap<String, InfrastructureBootstrapCustodyRecord>, InfrastructureBootstrapError> {
     let observed = reset_custody(desired, agent).await?;
     let path = paths.plan.with_file_name("clean-reinstall-custody.json");
@@ -99,7 +99,7 @@ pub(in crate::fleet_ensure) async fn custody(
 /// Establish executable custody of each selected physical ID without predecessor interfaces.
 pub(in crate::fleet_ensure) async fn reset_custody(
     desired: &DesiredFleet,
-    agent: &ic_agent::Agent,
+    agent: &ic_platform::agent::Agent,
 ) -> Result<BTreeMap<String, InfrastructureBootstrapCustodyRecord>, InfrastructureBootstrapError> {
     let mut observed = BTreeMap::new();
     for configured in &desired.canisters {
@@ -243,7 +243,7 @@ pub(in crate::fleet_ensure) fn declarations(
 
 /// One current Root management observation, after the workflow reserves its durable allowance.
 pub(in crate::fleet_ensure) async fn observe_child(
-    agent: &ic_agent::Agent,
+    agent: &ic_platform::agent::Agent,
     root: Principal,
     child: Principal,
 ) -> Result<

@@ -10,12 +10,13 @@ use crate::dto::{
     role::OperationStatusRequest,
     root::RootOperationStatusResponse,
 };
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded Request wire projection for ordinary inventory.
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum Request {
     ComponentRegistryPartition(ComponentRegistryPartitionRequest),
     Operation(OperationStatusRequest),
@@ -23,6 +24,7 @@ pub enum Request {
 
 /// Bounded Response wire projection for ordinary inventory.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum Response {
     ComponentRegistryPartition(Box<ComponentRegistryPartitionResponse>),
     Operation(Box<RootOperationStatusResponse>),

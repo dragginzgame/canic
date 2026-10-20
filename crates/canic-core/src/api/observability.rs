@@ -11,7 +11,7 @@ use crate::{
     },
     workflow::runtime::observability,
 };
-use candid::Principal;
+use ic_platform::Principal;
 
 /// Public façade for the controller-authenticated Root observability relay.
 pub struct ObservabilityApi;

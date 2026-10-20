@@ -20,6 +20,7 @@ pub mod recent_failure;
 pub mod release_intents;
 pub mod release_receipts;
 pub mod root_funding;
+pub mod timer_status;
 
 use crate::InternalError;
 use thiserror::Error as ThisError;

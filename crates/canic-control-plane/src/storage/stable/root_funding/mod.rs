@@ -9,7 +9,7 @@ use canic_contracts::dto::fleet_funding::{
     FleetRootFundingAcceptanceReceipt, FleetRootFundingRequest, FleetRootFundingResponse,
 };
 use canic_core::{
-    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
+    cdk::structures::{DefaultMemoryImpl, StableCell as Cell},
     impl_storable_bounded,
 };
 use serde::{Deserialize, Serialize};
@@ -19,7 +19,7 @@ const ROOT_FUNDING_STATE_MAX_BYTES: u32 = 32_768;
 
 std::thread_local! {
     static ROOT_FUNDING_STATE:
-        RefCell<Cell<RootFundingStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
+        RefCell<Cell<RootFundingStateRecord, DefaultMemoryImpl>> =
         RefCell::new(Cell::init(
             canic_core::memory::open(crate::memory::keys::ROOT_FUNDING_V1),
             RootFundingStateRecord::default(),
@@ -231,7 +231,7 @@ mod tests {
                 proposed_policy: crate::test_support::fleet_subnet_root_funding_authority()
                     .root_funding,
                 placement: FleetFundingPolicyRotationPlacementEvidence {
-                    subnet: SubnetId::from_principal(candid::Principal::from_slice(&[94; 29])),
+                    subnet: SubnetId::from_principal(ic_platform::Principal::from_slice(&[94; 29])),
                     node_count: u64::MAX,
                     cost_multiplier_numerator: u64::MAX,
                     cost_multiplier_denominator: u64::MAX,

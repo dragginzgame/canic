@@ -16,7 +16,6 @@ use crate::storage::stable::component_registry::{
         CallerStepRecord,
     },
 };
-use candid::Principal;
 use canic_contracts::{
     dto::caller_authority::{
         CallerAuthorityChange, CallerAuthorityPhase, CallerAuthorityReceipt, CallerAuthorityStatus,
@@ -28,6 +27,7 @@ use canic_core::control_plane_support::{
     model::caller_authority::{CallerPublicationRecord, CallerReceiptPhase},
     ops::caller_authority::CallerAuthorityOps,
 };
+use ic_platform::Principal;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 

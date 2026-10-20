@@ -94,7 +94,7 @@ fn committed_placement_authority(
 
 fn fresh_install_root_authority(
     fresh: &FleetComponentProvisioningRecord,
-) -> Result<Vec<candid::Principal>, InternalError> {
+) -> Result<Vec<ic_platform::Principal>, InternalError> {
     if fresh.plan.operation != FleetComponentProvisioningOperation::FreshInstall {
         return Err(receipt_invariant(
             "installed-root authority does not come from fresh provisioning",

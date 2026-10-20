@@ -6,7 +6,7 @@ use crate::{
     },
     output,
 };
-use canic_host::table::{ColumnAlign, render_table};
+use ic_host_text::table::{self, Alignment, Options};
 
 const DEFAULT_LABEL_MAX_CHARS: usize = 56;
 
@@ -72,20 +72,24 @@ fn render_default_metrics_table(report: &MetricsReport) -> String {
         }
     }
 
-    render_table(
+    table::render(
         &[
             "ROLE", "STATUS", "METRIC", "LABELS", "COUNT", "AVG/CALL", "AMOUNT",
         ],
         &rows,
         &[
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-            ColumnAlign::Right,
-            ColumnAlign::Right,
-            ColumnAlign::Right,
+            Alignment::Left,
+            Alignment::Left,
+            Alignment::Left,
+            Alignment::Left,
+            Alignment::Right,
+            Alignment::Right,
+            Alignment::Right,
         ],
+        Options {
+            column_gap: 3,
+            header_separator: true,
+        },
     )
 }
 
@@ -127,7 +131,7 @@ fn render_verbose_metrics_table(report: &MetricsReport) -> String {
         }
     }
 
-    render_table(
+    table::render(
         &[
             "ROLE",
             "CANISTER_ID",
@@ -143,18 +147,22 @@ fn render_verbose_metrics_table(report: &MetricsReport) -> String {
         ],
         &rows,
         &[
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-            ColumnAlign::Right,
-            ColumnAlign::Right,
-            ColumnAlign::Right,
-            ColumnAlign::Right,
+            Alignment::Left,
+            Alignment::Left,
+            Alignment::Left,
+            Alignment::Left,
+            Alignment::Left,
+            Alignment::Left,
+            Alignment::Left,
+            Alignment::Right,
+            Alignment::Right,
+            Alignment::Right,
+            Alignment::Right,
         ],
+        Options {
+            column_gap: 3,
+            header_separator: true,
+        },
     )
 }
 

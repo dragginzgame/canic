@@ -14,11 +14,12 @@ use crate::dto::{
     },
     template::WasmStoreGcRequest,
 };
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded transport selectors used by fleet_registry baseline tests state_cascade validation.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum StateCommand {
     MaintainPool,
     SetCyclesFunding(SetCyclesFundingRequest),
@@ -27,6 +28,7 @@ pub enum StateCommand {
 
 /// Bounded transport selectors used by fleet_registry baseline tests state_cascade validation.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum StateResponse {
     SetCyclesFunding(FleetStateCommandResult<bool>),
     SetFleetStatus(FleetStateCommandResult<FleetStatus>),
@@ -34,30 +36,35 @@ pub enum StateResponse {
 
 /// Bounded transport selectors used by fleet_registry baseline tests state_cascade validation.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum StateQuery {
     FleetState,
 }
 
 /// Bounded transport selectors used by fleet_registry baseline tests state_cascade validation.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum StateQueryResponse {
     FleetState(FleetStateResponse),
 }
 
 /// Bounded transport selectors used by fleet_registry baseline tests state_cascade validation.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum SnapshotCommand {
     SynchronizeState(StateSnapshotInput),
 }
 
 /// Bounded transport selectors used by fleet_registry baseline tests state_cascade validation.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ManagedAdminCommand {
     OpenFleetAdmission(FleetAdmissionOpenTargetRequest),
 }
 
 /// Bounded transport selectors used by fleet_registry baseline tests state_cascade validation.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum StoreAdminCommand {
     RunGc(WasmStoreGcRequest),
 }

@@ -22,7 +22,7 @@ pub enum FrontendError {
     AssetPrefix,
 
     #[error("asset query failed: {0}")]
-    AssetQuery(#[source] Box<ic_agent::AgentError>),
+    AssetQuery(#[source] Box<ic_platform::agent::AgentError>),
 
     #[error("asset query returned an invalid or oversized Candid response")]
     AssetResponse,

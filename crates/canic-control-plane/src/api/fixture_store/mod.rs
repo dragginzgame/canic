@@ -1,7 +1,6 @@
 //! Fixture Store boundary adapters; endpoints authenticate Root commands and exact target reads.
 
 use crate::{ops::fixture_store, workflow::fixture_store as workflow};
-use candid::Principal;
 use canic_contracts::dto::{
     error::Error,
     fixture_provisioning::{
@@ -9,6 +8,7 @@ use canic_contracts::dto::{
         FixtureSourceStatus, FixtureStoreError,
     },
 };
+use ic_platform::Principal;
 
 /// Typed Store API for immutable fixture publication and installation-bound delivery.
 

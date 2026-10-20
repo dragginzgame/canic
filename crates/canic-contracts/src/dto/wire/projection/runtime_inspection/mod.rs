@@ -6,12 +6,13 @@
 //! transport. Compatibility is checked against the canonical role contracts.
 
 use crate::dto::runtime::CanicRuntimeStatus;
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded RoleStatusResponse wire projection for runtime inspection.
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RoleStatusResponse {
     Runtime(CanicRuntimeStatus),
 }

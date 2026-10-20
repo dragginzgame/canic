@@ -73,7 +73,9 @@ if [[ "$store_test_kind" == host ]]; then
     cp "$fixture/assets/jq-linux-amd64" "$fixture/store-original-asset"
     sed 's/jq-1.8.2/jq-1.8.3/' "$fixture/jq" > "$fixture/assets/jq-linux-amd64"
     digest="$(shasum -a 256 "$fixture/assets/jq-linux-amd64")"
-    printf 'export SHARED_TOOLING_JQ_VERSION=1.8.3\nexport SHARED_TOOLING_JQ_SHA256_LINUX_AMD64=%s\n' "${digest%% *}" >> "$fixture/store-upgrade.env"
+    sed -e 's/SHARED_TOOLING_JQ_VERSION=.*/SHARED_TOOLING_JQ_VERSION=1.8.3/' \
+        -e "s/SHARED_TOOLING_JQ_SHA256_LINUX_AMD64=.*/SHARED_TOOLING_JQ_SHA256_LINUX_AMD64=${digest%% *}/" \
+        "$pins" > "$fixture/store-upgrade.env"
     pins="$fixture/store-upgrade.env"
 else
     previous_pins="$selected_pins"

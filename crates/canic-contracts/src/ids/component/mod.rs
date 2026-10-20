@@ -5,7 +5,7 @@
 //! Boundary: declared IDs are bounded canonical names; generated IDs use lowercase hex.
 
 use crate::ids::FleetKey;
-use candid::{CandidType, Principal};
+use ic_platform::{Principal, candid::contract::CandidType};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 use sha2::{Digest, Sha256};
 use std::{borrow::Borrow, fmt, str::FromStr};
@@ -50,13 +50,13 @@ impl Borrow<str> for ComponentSpecId {
 }
 
 impl CandidType for ComponentSpecId {
-    fn _ty() -> candid::types::Type {
-        candid::types::TypeInner::Text.into()
+    fn _ty() -> ic_platform::candid::contract::types::Type {
+        ic_platform::candid::contract::types::TypeInner::Text.into()
     }
 
     fn idl_serialize<S>(&self, serializer: S) -> Result<(), S::Error>
     where
-        S: candid::types::Serializer,
+        S: ic_platform::candid::contract::types::Serializer,
     {
         serializer.serialize_text(self.as_str())
     }
@@ -148,13 +148,13 @@ impl fmt::Display for ComponentInstanceId {
 }
 
 impl CandidType for ComponentInstanceId {
-    fn _ty() -> candid::types::Type {
-        candid::types::TypeInner::Text.into()
+    fn _ty() -> ic_platform::candid::contract::types::Type {
+        ic_platform::candid::contract::types::TypeInner::Text.into()
     }
 
     fn idl_serialize<S>(&self, serializer: S) -> Result<(), S::Error>
     where
-        S: candid::types::Serializer,
+        S: ic_platform::candid::contract::types::Serializer,
     {
         serializer.serialize_text(&self.to_string())
     }
@@ -325,14 +325,17 @@ mod tests {
 
         assert!(ciborium::de::from_reader::<ComponentSpecId, _>(invalid_bytes.as_slice()).is_err());
 
-        let candid_bytes = candid::encode_one("projects").expect("encode Component Spec ID");
-        let spec =
-            candid::decode_one::<ComponentSpecId>(&candid_bytes).expect("decode Component Spec ID");
-        let invalid_candid =
-            candid::encode_one("bad/name").expect("encode invalid Component Spec ID");
+        let candid_bytes = ic_platform::candid::contract::encode_one("projects")
+            .expect("encode Component Spec ID");
+        let spec = ic_platform::candid::decoder::decode_one::<ComponentSpecId>(&candid_bytes)
+            .expect("decode Component Spec ID");
+        let invalid_candid = ic_platform::candid::contract::encode_one("bad/name")
+            .expect("encode invalid Component Spec ID");
 
         assert_eq!(spec.as_str(), "projects");
-        assert!(candid::decode_one::<ComponentSpecId>(&invalid_candid).is_err());
+        assert!(
+            ic_platform::candid::decoder::decode_one::<ComponentSpecId>(&invalid_candid).is_err()
+        );
     }
 
     #[test]
@@ -365,15 +368,20 @@ mod tests {
             .expect("decode Component Instance ID");
         assert_eq!(decoded, component);
 
-        let candid_bytes = candid::encode_one(component).expect("encode Component Instance ID");
-        let decoded: ComponentInstanceId =
-            candid::decode_one(&candid_bytes).expect("decode Component Instance ID");
-        let invalid_candid =
-            candid::encode_one("A000000000000000000000000000000000000000000000000000000000000000")
-                .expect("encode invalid Component Instance ID");
+        let candid_bytes = ic_platform::candid::contract::encode_one(component)
+            .expect("encode Component Instance ID");
+        let decoded: ComponentInstanceId = ic_platform::candid::decoder::decode_one(&candid_bytes)
+            .expect("decode Component Instance ID");
+        let invalid_candid = ic_platform::candid::contract::encode_one(
+            "A000000000000000000000000000000000000000000000000000000000000000",
+        )
+        .expect("encode invalid Component Instance ID");
 
         assert_eq!(decoded, component);
-        assert!(candid::decode_one::<ComponentInstanceId>(&invalid_candid).is_err());
+        assert!(
+            ic_platform::candid::decoder::decode_one::<ComponentInstanceId>(&invalid_candid)
+                .is_err()
+        );
     }
 
     #[test]
@@ -384,7 +392,7 @@ mod tests {
             canonical_network_id: CanonicalNetworkId::ic_mainnet(),
             fleet_id: FleetId::from_generated_bytes([1; 32]),
         };
-        let root = candid::Principal::from_slice(&[2; 29]);
+        let root = ic_platform::Principal::from_slice(&[2; 29]);
         let first = ComponentInstanceId::from_root_allocation(fleet, 1, root, 1);
 
         assert_eq!(
@@ -400,7 +408,7 @@ mod tests {
             ComponentInstanceId::from_root_allocation(
                 fleet,
                 1,
-                candid::Principal::from_slice(&[3; 29]),
+                ic_platform::Principal::from_slice(&[3; 29]),
                 1,
             )
         );

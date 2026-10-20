@@ -5,7 +5,6 @@ use crate::storage::stable::fleet_coordinator::{
     FleetComponentProvisioningRootAcceptanceIntentRecord, FleetComponentProvisioningStateRecord,
     FleetComponentRuntimeActivationRecord,
 };
-use candid::Principal;
 use canic_contracts::{
     cycles::Cycles,
     dto::{
@@ -25,6 +24,7 @@ use canic_contracts::{
     },
 };
 use canic_core::bootstrap::parse_config_model;
+use ic_platform::Principal;
 
 const CONFIG: &str = r#"
 [app]

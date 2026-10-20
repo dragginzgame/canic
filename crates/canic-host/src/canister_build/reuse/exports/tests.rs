@@ -1,17 +1,16 @@
 use super::*;
 use crate::canister_build::reuse::tests::infrastructure_build_fixture;
 use serde_json::json;
-use std::{fmt::Write as _, fs};
+use std::fs;
 
-fn messages(manifest: &Path, package: &str, input: &Path) -> Vec<u8> {
+fn messages(manifest: &Path, package: &str, input: &Path) -> Vec<Message> {
     [
-        json!({"reason": "compiler-artifact", "package_id": package, "manifest_path": manifest, "target": {"kind": ["custom-build"]}}),
-        json!({"reason": "build-script-executed", "package_id": package, "env": [["CANIC_CONFIG_SOURCE_PATH", input]]}),
-    ].into_iter().flat_map(|message| {
-        let mut bytes = serde_json::to_vec(&message).unwrap();
-        bytes.push(b'\n');
-        bytes
-    }).collect()
+        json!({"reason":"compiler-artifact","package_id":package,"manifest_path":manifest,
+            "target":{"name":"build-script-build","kind":["custom-build"],"crate_types":["bin"],"src_path":"/fixture/build.rs","edition":"2024","doc":false,"doctest":false,"test":false},
+            "profile":{"opt_level":"0","debuginfo":0,"debug_assertions":true,"overflow_checks":true,"test":false},
+            "features":[],"filenames":[],"executable":null,"fresh":false}),
+        json!({"reason":"build-script-executed","package_id":package,"linked_libs":[],"linked_paths":[],"cfgs":[],"env":[["CANIC_CONFIG_SOURCE_PATH",input]],"out_dir":"/fixture/out"}),
+    ].into_iter().map(|value| serde_json::from_value(value).unwrap()).collect()
 }
 
 #[test]
@@ -95,19 +94,12 @@ fn replaced_selected_records_decline_reuse_and_current_messages_clear_exports() 
             Err(BuildReuseError::Evidence(_))
         ));
     }
-    let mut current: Vec<serde_json::Value> = messages(&manifest, package, &input)
-        .split(|b| *b == b'\n')
-        .filter(|line| !line.is_empty())
-        .map(|line| serde_json::from_slice(line).unwrap())
-        .collect();
-    current[1]["env"] = json!([]);
-    let current = current
-        .into_iter()
-        .fold(String::new(), |mut text, message| {
-            writeln!(text, "{message}").unwrap();
-            text
-        });
-    retain(&context, current.as_bytes()).unwrap();
+    let mut current = messages(&manifest, package, &input);
+    let Message::BuildScriptExecuted(script) = &mut current[1] else {
+        panic!("fixture build script");
+    };
+    script.env.clear();
+    retain(&context, &current).unwrap();
     let mut paths = BTreeSet::new();
     append_observed(&context, &producers, &mut paths).unwrap();
     assert!(paths.is_empty());
@@ -118,13 +110,22 @@ fn replaced_selected_records_decline_reuse_and_current_messages_clear_exports() 
 fn export_messages_require_an_unambiguous_current_producer() {
     let (root, context) = infrastructure_build_fixture();
     let manifest = context.workspace_root.join("Cargo.toml");
-    let script = json!({"reason": "build-script-executed", "package_id": "unknown", "env": []});
+    let script = messages(&manifest, "unknown", &root.join("input"))
+        .pop()
+        .unwrap();
     assert!(matches!(
-        retain(&context, &serde_json::to_vec(&script).unwrap()),
+        retain(&context, &[script]),
         Err(BuildReuseError::Evidence(_))
     ));
     let mut ambiguous = messages(&manifest, "same identity", &root.join("input"));
-    ambiguous.extend(serde_json::to_vec(&json!({"reason": "compiler-artifact", "package_id": "same identity", "manifest_path": root.join("upstream/canic/Cargo.toml"), "target": {"kind": ["custom-build"]}})).unwrap());
+    ambiguous.push(
+        messages(
+            &root.join("upstream/canic/Cargo.toml"),
+            "same identity",
+            &root.join("input"),
+        )
+        .remove(0),
+    );
     assert!(matches!(
         retain(&context, &ambiguous),
         Err(BuildReuseError::Evidence(_))

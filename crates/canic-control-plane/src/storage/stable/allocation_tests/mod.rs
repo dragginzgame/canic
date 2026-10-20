@@ -14,9 +14,9 @@ use crate::ids::{TemplateChunkKey, TemplateId, TemplateReleaseKey, TemplateVersi
 use canic_contracts::dto::memory::MemoryAllocationBinding;
 use canic_core::{
     api::memory::MemoryQuery,
-    cdk::{
-        bounded_cell::BoundedCell,
-        structures::{BTreeMap, Memory, Storable, Vec as StableVec, VectorMemory, storable::Bound},
+    cdk::structures::{
+        BoundedCell, Memory, StableBTreeMap as BTreeMap, StableVec, Storable, VectorMemory,
+        storable::Bound,
     },
     role_contract::allocation::memory::control_plane::FIXTURE_STORE_KEY,
 };
@@ -60,12 +60,33 @@ impl Storable for OverflowChunk {
     }
 }
 
+fn runtime<M: Memory>(memory: M) -> ic_memory::MemoryRuntime<M> {
+    ic_memory::testing::fixture_runtime(
+        memory,
+        "test",
+        "test.",
+        &["test.rows.v1"],
+        ic_memory::MemoryManagerConfig::new(1).unwrap(),
+    )
+    .unwrap()
+}
+
 #[test]
 fn coordinator_admission_cell_has_one_page_when_empty() {
     let memory = VectorMemory::default();
-    let cell = BoundedCell::init(memory.clone(), None::<FleetAdmissionAuthorityRecord>);
+    let runtime = runtime(memory);
+    let cell = BoundedCell::init(
+        runtime.open_memory("test.rows.v1").unwrap(),
+        None::<FleetAdmissionAuthorityRecord>,
+    );
     assert!(cell.get().is_none());
-    assert_eq!(memory.size(), 1);
+    assert_eq!(
+        runtime.memory_allocations().unwrap().memories
+            [usize::from(runtime.memory_id("test.rows.v1").unwrap())]
+        .virtual_extent
+        .wasm_pages,
+        1
+    );
 }
 
 #[test]
@@ -74,9 +95,12 @@ fn template_payload_layout_tradeoff_is_measured() {
         let refs_memory = ObservedMemory::default();
         let payload_memory = ObservedMemory::default();
         let direct_memory = ObservedMemory::default();
-        let mut refs = BTreeMap::init(refs_memory.clone());
-        let payloads = StableVec::init(payload_memory.clone());
-        let mut direct = BTreeMap::init(direct_memory.clone());
+        let refs_runtime = runtime(refs_memory.clone());
+        let mut refs = BTreeMap::init(refs_runtime.open_memory("test.rows.v1").unwrap());
+        let payload_runtime = runtime(payload_memory.clone());
+        let payloads = StableVec::init(payload_runtime.open_memory("test.rows.v1").unwrap());
+        let direct_runtime = runtime(direct_memory.clone());
+        let mut direct = BTreeMap::init(direct_runtime.open_memory("test.rows.v1").unwrap());
         let release = TemplateReleaseKey::new(
             TemplateId::new("measurement"),
             TemplateVersion::new("current"),

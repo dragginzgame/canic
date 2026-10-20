@@ -12,7 +12,7 @@ use crate::fleet_ensure::{
     },
     policy::capacity_import::{CapacityImportPolicyError, custody, require_headroom, source_total},
 };
-use candid::Principal;
+use ic_platform::Principal;
 use std::collections::BTreeSet;
 
 /// Every credit names exactly one reviewed source or its destination Root.

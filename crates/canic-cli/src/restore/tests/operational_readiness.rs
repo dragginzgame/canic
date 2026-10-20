@@ -13,11 +13,12 @@ use canic_backup::{
         restore_run_execute_with_executor,
     },
 };
+use ic_host_process::testing::crash_barrier::{
+    hold_at_acknowledged_barrier, kill_child_at_acknowledged_barrier,
+};
 use std::{
     path::{Path, PathBuf},
-    process::{Child, Command},
-    thread,
-    time::{Duration, Instant},
+    process::Command,
 };
 
 const JOURNAL_ENV: &str = "CANIC_TEST_REAL_RESTORE_JOURNAL";
@@ -59,7 +60,8 @@ fn real_upload_effect_survives_process_death() {
         .spawn()
         .expect("spawn real upload crash child");
 
-    kill_child_at_acknowledged_barrier(&mut child, &handshake);
+    kill_child_at_acknowledged_barrier(&mut child, &handshake, std::time::Duration::from_secs(30))
+        .expect("complete crash barrier handshake");
     let interrupted = read_journal(&journal_path);
     assert_eq!(
         interrupted.operations[0].state,
@@ -137,7 +139,7 @@ impl RestoreRunnerCommandExecutor for RealRestoreExecutor {
             && output.success
             && let Some(barrier) = &self.barrier
         {
-            hold_at_acknowledged_barrier(barrier);
+            hold_at_acknowledged_barrier(barrier, std::time::Duration::from_secs(30));
         }
         Ok(RestoreRunnerCommandOutput {
             success: output.success,
@@ -167,48 +169,4 @@ fn runner_config(
 fn read_journal(path: &Path) -> RestoreApplyJournal {
     serde_json::from_slice(&fs::read(path).expect("read restore apply journal"))
         .expect("decode restore apply journal")
-}
-
-fn kill_child_at_acknowledged_barrier(child: &mut Child, root: &Path) {
-    wait_for_child_path(child, &root.join("barrier-ready"), "child barrier");
-    fs::write(root.join("barrier-acknowledged"), b"acknowledged\n")
-        .expect("acknowledge child barrier");
-    wait_for_child_path(child, &root.join("barrier-armed"), "armed child barrier");
-    child.kill().expect("kill child at acknowledged barrier");
-    child.wait().expect("reap killed child");
-}
-
-fn hold_at_acknowledged_barrier(root: &Path) -> ! {
-    fs::write(root.join("barrier-ready"), b"ready\n").expect("signal child barrier");
-    wait_for_path(&root.join("barrier-acknowledged"), "parent acknowledgement");
-    fs::write(root.join("barrier-armed"), b"armed\n").expect("arm child crash");
-    loop {
-        thread::sleep(Duration::from_secs(1));
-    }
-}
-
-fn wait_for_child_path(child: &mut Child, path: &Path, description: &str) {
-    let deadline = Instant::now() + Duration::from_secs(30);
-    while !path.is_file() {
-        assert!(
-            child.try_wait().expect("inspect crash child").is_none(),
-            "crash child exited before {description}"
-        );
-        assert!(
-            Instant::now() < deadline,
-            "timed out waiting for {description}"
-        );
-        thread::sleep(Duration::from_millis(10));
-    }
-}
-
-fn wait_for_path(path: &Path, description: &str) {
-    let deadline = Instant::now() + Duration::from_secs(30);
-    while !path.is_file() {
-        assert!(
-            Instant::now() < deadline,
-            "timed out waiting for {description}"
-        );
-        thread::sleep(Duration::from_millis(10));
-    }
 }

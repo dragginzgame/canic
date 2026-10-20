@@ -17,11 +17,11 @@ use crate::config::{
     component_group::source_labels,
     schema::{ComponentGroupDeploymentConfig, ConfigModel},
 };
-use candid::CandidType;
 use canic_contracts::ids::{
     ComponentGroupDeploymentId, ComponentGroupMemberPath, ComponentGroupSpecId, ComponentSpecId,
     FleetServiceId,
 };
+use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use thiserror::Error as ThisError;
@@ -49,6 +49,7 @@ impl ConfigModel {
 
 /// Canonical independent Component Group deployments in raw deployment-ID order.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ComponentGroupDeploymentTopology {
     pub component_group_deployments: Vec<ComponentGroupDeploymentSpec>,
@@ -227,6 +228,7 @@ impl ComponentGroupDeploymentTopology {
 
 /// One canonical independently scalable Component Group selection.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ComponentGroupDeploymentSpec {
     pub deployment: ComponentGroupDeploymentId,
@@ -242,6 +244,7 @@ pub struct ComponentGroupDeploymentSpec {
 
 /// Protected density and spread envelope before concrete roots are selected.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ComponentGroupPlacementPolicy {
     pub maximum_per_root: u32,
@@ -250,6 +253,7 @@ pub struct ComponentGroupPlacementPolicy {
 
 /// One exact flattened Component occurrence within an independent deployment.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FlattenedComponentGroupDeploymentMember {
     pub member_path: ComponentGroupMemberPath,

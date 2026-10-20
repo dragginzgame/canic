@@ -1,11 +1,13 @@
 //! Qualify generated role declarations against the canonical wire owner.
 //! Capability selection may remove selectors; every retained payload stays exact.
 
-use candid::{
-    CandidType,
-    types::{FuncMode, Type, TypeEnv, TypeInner, internal::TypeContainer, subtype},
-};
 use canic_contracts::{dto, dto::wire, protocol};
+use ic_platform::candid::contract::TypeEnv;
+use ic_platform::candid::contract::types::{FuncMode, internal::TypeContainer, subtype};
+use ic_platform::candid::contract::{
+    CandidType,
+    types::{Type, TypeInner},
+};
 use std::{any::TypeId, collections::HashSet, fs};
 
 fn selected<T: CandidType + 'static>(env: &TypeEnv, actual: &Type) {
@@ -27,7 +29,7 @@ fn selected<T: CandidType + 'static>(env: &TypeEnv, actual: &Type) {
                 // inside their reply. All other nested DTOs remain exact.
                 if TypeId::of::<T>()
                     == TypeId::of::<wire::managed_command::CanisterCommandResponse>()
-                    && field.id.get_id() == candid::idl_hash("Observe")
+                    && field.id.get_id() == ic_platform::candid::contract::idl_hash("Observe")
                 {
                     selected::<wire::relay::RelayedObservabilityResponse>(&env, &field.ty);
                 } else {
@@ -49,7 +51,7 @@ fn field(env: &TypeEnv, ty: &Type, name: &str) -> Type {
     assert_eq!(fields.len(), 2, "Result has exactly Ok and Err");
     fields
         .iter()
-        .find(|field| field.id.get_id() == candid::idl_hash(name))
+        .find(|field| field.id.get_id() == ic_platform::candid::contract::idl_hash(name))
         .expect("Result label")
         .ty
         .clone()
@@ -241,9 +243,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if args.next().is_some() {
         return Err("expected exactly role and generated .did path".into());
     }
-    let program = fs::read_to_string(path)?.parse::<candid_parser::IDLProg>()?;
+    let program = fs::read_to_string(path)?.parse::<ic_platform::candid_parser::IDLProg>()?;
     let mut env = TypeEnv::new();
-    let actor = candid_parser::check_prog(&mut env, &program)?.ok_or("requires service")?;
+    let actor =
+        ic_platform::candid_parser::check_prog(&mut env, &program)?.ok_or("requires service")?;
     match role.as_str() {
         "root" => qualify_root(&env, &actor),
         "managed" => qualify_managed(&env, &actor),

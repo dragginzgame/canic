@@ -30,7 +30,10 @@ use crate::{
         storage::replay::ReplayReceiptOps,
     },
 };
-use candid::{CandidType, decode_one, encode_one};
+use ic_platform::candid::{
+    contract::{CandidType, encode_one},
+    decoder::decode_one,
+};
 
 pub const ICP_REFILL_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
 pub const ROLE_ATTESTATION_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;

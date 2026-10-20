@@ -11,9 +11,13 @@ use crate::{
     },
     icp::IcpCli,
 };
-use candid::{CandidType, Deserialize, Nat, Principal};
 use canic_core::cdk::utils::hash::sha256_hex;
 use ic_host_fs::read::read_file_no_follow;
+use ic_platform::{
+    Principal,
+    candid::contract::{CandidType, Nat},
+};
+use serde::Deserialize;
 use std::time::{Duration, Instant};
 
 ///
@@ -106,7 +110,7 @@ fn validate_prefix(prefix: &str) -> Result<(), FrontendError> {
 ///
 
 pub struct IcpFrontendAssetReader {
-    agent: ic_agent::Agent,
+    agent: ic_platform::agent::Agent,
     canister: Principal,
     runtime: tokio::runtime::Runtime,
     deadline: Instant,
@@ -143,7 +147,8 @@ impl IcpFrontendAssetReader {
         method: &str,
         input: &I,
     ) -> Result<O, FrontendError> {
-        let argument = candid::encode_one(input).map_err(|_| FrontendError::AssetResponse)?;
+        let argument = ic_platform::candid::contract::encode_one(input)
+            .map_err(|_| FrontendError::AssetResponse)?;
         let remaining = self
             .deadline
             .checked_duration_since(Instant::now())
@@ -165,20 +170,22 @@ impl IcpFrontendAssetReader {
         if response.len() > MAX_FRONTEND_FILE_BYTES + 4096 {
             return Err(FrontendError::Bound("asset response bytes"));
         }
-        let mut config = candid::de::DecoderConfig::new();
+        let mut config = ic_platform::candid::decoder::DecoderConfig::new();
         config.set_decoding_quota((MAX_FRONTEND_FILE_BYTES + 4096) * 64);
         config.set_skipping_quota(MAX_FRONTEND_FILE_BYTES + 4096);
-        candid::utils::decode_one_with_config(&response, &config)
+        ic_platform::candid::decoder::decode_one_with_config(&response, &config)
             .map_err(|_| FrontendError::AssetResponse)
     }
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct GetAsset {
     key: String,
     accept_encodings: Vec<String>,
 }
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 struct AssetReply {
     content: Vec<u8>,
     total_length: Nat,
@@ -186,6 +193,7 @@ struct AssetReply {
     sha256: Option<Vec<u8>>,
 }
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct GetChunk {
     key: String,
     content_encoding: String,
@@ -193,6 +201,7 @@ struct GetChunk {
     sha256: Option<Vec<u8>>,
 }
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 struct ChunkReply {
     content: Vec<u8>,
 }

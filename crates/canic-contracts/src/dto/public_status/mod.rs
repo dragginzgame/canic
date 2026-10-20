@@ -15,6 +15,7 @@ pub use crate::values::public_metrics::{
 
 /// Public query responsiveness; no runtime diagnostics or Fleet readiness assessment.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum PublicHealthStatus {
     #[serde(rename = "responding")]
     Responding,
@@ -22,6 +23,7 @@ pub enum PublicHealthStatus {
 
 /// Local identity and responsiveness without diagnostic checks or Fleet readiness.
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct PublicHealth {
     pub canister_id: Principal,
     pub role: Option<String>,
@@ -31,6 +33,7 @@ pub struct PublicHealth {
 
 /// Select a published aggregate family and one bounded page.
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct PublicMetricsRequest {
     pub family: PublicMetricFamily,
     pub page: PageRequest,
@@ -38,6 +41,7 @@ pub struct PublicMetricsRequest {
 
 /// An explicitly named aggregate value with an optional canister dimension.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct PublicMetric {
     pub name: String,
     pub canister_id: Option<Principal>,
@@ -49,6 +53,7 @@ pub struct PublicMetric {
 
 /// Availability is data, independent of caller identity.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum PublicSnapshotState {
     Disabled,
     Unavailable,
@@ -58,6 +63,7 @@ pub enum PublicSnapshotState {
 
 /// One cached aggregate snapshot. Reading it never refreshes it.
 #[derive(CandidType, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct PublicMetricsSnapshot {
     pub family: PublicMetricFamily,
     pub state: PublicSnapshotState,
@@ -69,6 +75,7 @@ pub struct PublicMetricsSnapshot {
 
 /// Select one exact cached series; points are ordered by five-minute slot.
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct PublicHistoryRequest {
     pub family: PublicMetricFamily,
     pub name: String,
@@ -78,6 +85,7 @@ pub struct PublicHistoryRequest {
 
 /// One actual observation, never an interpolated or replayed sample.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct PublicHistoryPoint {
     pub delta: Option<PublicCounterDelta>,
     pub slot_start_ns: u64,
@@ -88,6 +96,7 @@ pub struct PublicHistoryPoint {
 
 /// Heap-only chart coverage. Missing slots are gaps, including across suspension.
 #[derive(CandidType, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct PublicHistorySnapshot {
     pub state: PublicSnapshotState,
     pub unit: Option<String>,
@@ -106,6 +115,7 @@ pub struct PublicHistorySnapshot {
 
 /// Comparable cumulative-counter movement across adjacent slots in the same window.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct PublicCounterDelta {
     pub amount: u128,
     pub elapsed_ns: u64,

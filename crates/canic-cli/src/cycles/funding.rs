@@ -12,23 +12,24 @@ use crate::{
     cycles::CyclesCommandError,
     support::icp_target::IcpTargetOptions,
 };
-use candid::decode_one;
-use canic_contracts::dto::error::Error;
-use canic_contracts::dto::fleet_coordinator::CoordinatorFundingWindowStatusResponse as RemoteFundingWindowStatus;
 use canic_contracts::dto::fleet_coordinator::{
     CoordinatorRegistryRequest, CoordinatorRegistryResponse,
 };
-use canic_contracts::dto::fleet_funding::FleetRootFundingResponse;
-use canic_contracts::dto::fleet_registry::FleetRegistry;
-use canic_contracts::dto::fleet_registry::FleetSubnetRootEntry;
-use canic_contracts::dto::wire::projection::funding_status::RemoteCoordinatorFundingStatus;
-use canic_contracts::dto::wire::projection::funding_status::RemoteCoordinatorRootFundingStatus;
-use canic_contracts::dto::wire::projection::funding_status::RemoteCoordinatorStatusResponse;
-use canic_contracts::dto::wire::projection::funding_status::RemoteRootFundingStatus;
-use canic_contracts::dto::wire::projection::funding_status::RemoteRootStatusResponse;
-use canic_contracts::ids::FleetFundingProfile;
-use canic_contracts::ids::FleetSubnetRootFundingAuthority;
-use canic_contracts::ids::FleetSubnetRootFundingPolicy;
+use canic_contracts::dto::{
+    error::Error,
+    fleet_coordinator::CoordinatorFundingWindowStatusResponse as RemoteFundingWindowStatus,
+};
+use canic_contracts::{
+    dto::{
+        fleet_funding::FleetRootFundingResponse,
+        fleet_registry::{FleetRegistry, FleetSubnetRootEntry},
+        wire::projection::funding_status::{
+            RemoteCoordinatorFundingStatus, RemoteCoordinatorRootFundingStatus,
+            RemoteCoordinatorStatusResponse, RemoteRootFundingStatus, RemoteRootStatusResponse,
+        },
+    },
+    ids::{FleetFundingProfile, FleetSubnetRootFundingAuthority, FleetSubnetRootFundingPolicy},
+};
 use canic_core::{
     cdk::{
         types::Principal,
@@ -43,6 +44,7 @@ use canic_host::{
     protocol_binding::{ResolvedProtocolBinding, resolve_registry_protocol_binding},
 };
 use clap::Command as ClapCommand;
+use ic_platform::candid::decoder::decode_one;
 use serde::Serialize;
 use std::ffi::OsString;
 
@@ -577,7 +579,7 @@ mod tests {
             Ok(CoordinatorRegistryResponse::Registry(registry.clone()));
         fs::write(
             root.join("response.json"),
-            serde_json::json!({ "response_bytes": hex_bytes(candid::encode_one(reply).unwrap()) })
+            serde_json::json!({ "response_bytes": hex_bytes(ic_platform::candid::contract::encode_one(reply).unwrap()) })
                 .to_string(),
         )
         .unwrap();
@@ -587,9 +589,9 @@ mod tests {
         );
         let request = fs::read(root.join("request.bin")).unwrap();
         assert_eq!(
-            candid::decode_one::<canic_contracts::dto::fleet_coordinator::CoordinatorRegistryRequest>(
-                &request,
-            )
+            ic_platform::candid::decoder::decode_one::<
+                canic_contracts::dto::fleet_coordinator::CoordinatorRegistryRequest,
+            >(&request,)
             .unwrap(),
             canic_contracts::dto::fleet_coordinator::CoordinatorRegistryRequest::Registry,
         );
@@ -598,7 +600,7 @@ mod tests {
         let reply: Result<CoordinatorRegistryResponse, Error> = Err(rejected);
         fs::write(
             root.join("response.json"),
-            serde_json::json!({ "response_bytes": hex_bytes(candid::encode_one(reply).unwrap()) })
+            serde_json::json!({ "response_bytes": hex_bytes(ic_platform::candid::contract::encode_one(reply).unwrap()) })
                 .to_string(),
         )
         .unwrap();

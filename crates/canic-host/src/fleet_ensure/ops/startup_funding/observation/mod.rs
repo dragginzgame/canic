@@ -16,7 +16,6 @@ use crate::{
     },
     icp::IcpCli,
 };
-use candid::Principal;
 use canic_contracts::{
     dto::fleet_coordinator::{
         CoordinatorFundingStatusResponse, CoordinatorObservabilityRequest,
@@ -27,6 +26,7 @@ use canic_contracts::{
 use canic_core::control_plane_support::policy::fleet_funding::{
     FleetFundingWindowSnapshot, funding_window_remaining,
 };
+use ic_platform::Principal;
 use std::{collections::BTreeSet, path::Path};
 
 /// Read one exact parent's child ledger; callers bind installed code and the Candid sidecar.

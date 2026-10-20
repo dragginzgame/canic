@@ -7,7 +7,7 @@
 use super::super::super::*;
 use super::super::fixtures::*;
 use crate::test_support::temp_dir;
-use canic_backup::{persistence::BackupLayout, runner::BackupRunnerError};
+use canic_backup::persistence::{BackupLayout, JournalLockError};
 use std::fs;
 
 // Ensure dry-run persistence writes a plan and matching execution journal.
@@ -78,7 +78,7 @@ fn backup_create_rejects_concurrent_execution_before_reading_or_publishing_layou
 
         std::assert_matches!(
             error,
-            BackupCommandError::BackupRunner(BackupRunnerError::JournalLocked { .. })
+            BackupCommandError::JournalLock(JournalLockError::Locked { .. })
         );
         assert_eq!(fs::read(layout.backup_plan_path()).ok(), plan_before);
         assert_eq!(

@@ -85,6 +85,7 @@ const FORBIDDEN_EFFECT_FRAGMENTS: &[&str] = &[
     "MgmtOps",
     "CallOps",
     "ic_cdk::",
+    "ic_platform::cdk::",
 ];
 
 fn dto_roots() -> Vec<PathBuf> {

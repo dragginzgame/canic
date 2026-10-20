@@ -6,17 +6,19 @@
 //! Application probe payloads and external IC protocols stay with the fixture.
 
 use crate::dto::caller_authority::{CallerAuthorityCommand, CallerAuthorityReceipt};
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded transport selectors used by caller_authority validation.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum Command {
     CallerAuthority(CallerAuthorityCommand),
 }
 
 /// Bounded transport selectors used by caller_authority validation.
 #[derive(CandidType, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum Response {
     CallerAuthority(CallerAuthorityReceipt),
 }

@@ -5,7 +5,7 @@
 //! Boundary: IDs use canonical lowercase hexadecimal text; names are validated labels.
 
 use super::{AppId, CanonicalNetworkId};
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 use std::{fmt, str::FromStr};
 use thiserror::Error as ThisError;
@@ -47,13 +47,13 @@ impl fmt::Display for FleetId {
 }
 
 impl CandidType for FleetId {
-    fn _ty() -> candid::types::Type {
-        candid::types::TypeInner::Text.into()
+    fn _ty() -> ic_platform::candid::contract::types::Type {
+        ic_platform::candid::contract::types::TypeInner::Text.into()
     }
 
     fn idl_serialize<S>(&self, serializer: S) -> Result<(), S::Error>
     where
-        S: candid::types::Serializer,
+        S: ic_platform::candid::contract::types::Serializer,
     {
         serializer.serialize_text(&self.to_string())
     }
@@ -166,6 +166,7 @@ impl<'de> Deserialize<'de> for FleetName {
 #[derive(
     CandidType, Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
 )]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetKey {
     pub canonical_network_id: CanonicalNetworkId,
@@ -179,6 +180,7 @@ pub struct FleetKey {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetBinding {
     pub fleet: FleetKey,
@@ -316,9 +318,10 @@ mod tests {
             }
         );
 
-        let current_candid = candid::encode_one(fleet).expect("encode current Candid Fleet key");
-        let decoded_candid: FleetKey =
-            candid::decode_one(&current_candid).expect("decode current Candid Fleet key");
+        let current_candid = ic_platform::candid::contract::encode_one(fleet)
+            .expect("encode current Candid Fleet key");
+        let decoded_candid: FleetKey = ic_platform::candid::decoder::decode_one(&current_candid)
+            .expect("decode current Candid Fleet key");
         assert_eq!(decoded_candid, fleet);
     }
 

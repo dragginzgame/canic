@@ -4,12 +4,14 @@ pub use crate::values::state::{FleetMode, FleetStatus};
 
 /// Explicit input for changing automatic cycles funding.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct SetCyclesFundingRequest {
     pub enabled: bool,
 }
 
 /// Explicit input for changing the Fleet's public status.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct SetFleetStatusRequest {
     pub status: FleetStatus,
 }
@@ -19,6 +21,7 @@ pub struct SetFleetStatusRequest {
 //
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum FleetCommand {
     SetStatus(FleetStatus),
     SetCyclesFundingEnabled(bool),
@@ -29,6 +32,7 @@ pub enum FleetCommand {
 //
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum FleetCommandResponse {
     Status(SetStateResponse<FleetStatus>),
     CyclesFundingEnabled(SetStateResponse<bool>),
@@ -39,6 +43,7 @@ pub enum FleetCommandResponse {
 //
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct SetStateResponse<T> {
     pub previous: T,
     pub current: T,
@@ -47,6 +52,7 @@ pub struct SetStateResponse<T> {
 
 /// Local mutation receipt and the independently observed downstream results.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetStateCommandResult<T> {
     pub change: SetStateResponse<T>,
     pub propagation: crate::dto::cascade::StateCascadeReport,
@@ -55,6 +61,7 @@ pub struct FleetStateCommandResult<T> {
 
 /// Workflow result before the endpoint selects its command-specific response.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetCommandExecutionResponse {
     pub change: FleetCommandResponse,
     pub propagation: crate::dto::cascade::StateCascadeReport,
@@ -66,6 +73,7 @@ pub struct FleetCommandExecutionResponse {
 //
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetStateInput {
     pub mode: FleetMode,
     pub cycles_funding_enabled: bool,
@@ -76,6 +84,7 @@ pub struct FleetStateInput {
 //
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetStateResponse {
     pub mode: FleetMode,
     pub cycles_funding_enabled: bool,
@@ -86,6 +95,7 @@ pub struct FleetStateResponse {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct BootstrapStatusResponse {
     pub ready: bool,
     pub phase: String,
@@ -95,7 +105,7 @@ pub struct BootstrapStatusResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use candid::{Decode, Encode};
+    use ic_platform::candid::contract::{Decode, Encode};
     use serde::de::DeserializeOwned;
     use std::fmt::Debug;
 

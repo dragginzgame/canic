@@ -23,7 +23,6 @@ use crate::{
         runtime::template::publication::WasmStorePublicationWorkflow,
     },
 };
-use candid::{Nat, Principal};
 use canic_contracts::{
     dto::{
         component_registry::{ComponentRegistryHead, RootComponentDrainingRequest},
@@ -77,6 +76,7 @@ use canic_core::{
     },
     replay_policy::CostClass,
 };
+use ic_platform::{Principal, candid::contract::Nat};
 use sha2::{Digest, Sha256};
 use std::time::Duration;
 
@@ -1027,7 +1027,7 @@ fn validated_root_state() -> Result<ValidatedFleetSubnetRootState, InternalError
 
 fn validate_protected_root(
     authority: &FleetSubnetRootAuthority,
-    root: candid::Principal,
+    root: ic_platform::Principal,
 ) -> Result<(), InternalError> {
     if authority.binding.fleet_subnet_root != root {
         return Err(InternalError::invalid_input());
@@ -1392,7 +1392,7 @@ fn root_deletion_readiness_request(
 }
 
 fn validate_root_deletion_readiness_intent_response(
-    coordinator: candid::Principal,
+    coordinator: ic_platform::Principal,
     request: &FleetSubnetRootDeletionReadinessIntentRequest,
     response: &FleetSubnetRootDeletionReadinessIntentResponse,
 ) -> Result<(), InternalError> {
@@ -1411,7 +1411,7 @@ fn validate_root_deletion_readiness_intent_response(
 }
 
 fn validate_root_deletion_readiness_response(
-    coordinator: candid::Principal,
+    coordinator: ic_platform::Principal,
     intent: &RootFleetSubnetDeletionPreparationIntentView,
     request: &FleetSubnetRootDeletionReadinessRequest,
     response: &FleetSubnetRootDeletionReadinessResponse,
@@ -1439,7 +1439,7 @@ fn validate_root_deletion_readiness_response(
 }
 
 async fn reclaim_root_deletion_cycles(
-    coordinator: candid::Principal,
+    coordinator: ic_platform::Principal,
     retained_cycles_target: u128,
     observed_cycles_before_reclamation: u128,
 ) -> Result<u128, InternalError> {
@@ -1498,7 +1498,7 @@ const fn transferable_root_deletion_cycles(
 }
 
 pub(super) fn reserve_root_deletion_cycle_reclamation(
-    coordinator: candid::Principal,
+    coordinator: ic_platform::Principal,
     maximum_transfer: u128,
     retained_cycles: u128,
     current_cycle_balance: u128,
@@ -1674,7 +1674,7 @@ mod tests {
     #[test]
     fn sibling_store_controllers_accept_only_exact_reconciler_authority() {
         let mut authority = authority().wasm_store_authority;
-        let recovery = candid::Principal::from_slice(&[91; 29]);
+        let recovery = ic_platform::Principal::from_slice(&[91; 29]);
         authority
             .authority
             .binding
@@ -1716,7 +1716,7 @@ mod tests {
         );
         assert!(
             require_sibling_wasm_store_controllers(
-                &evidence(vec![candid::Principal::anonymous()]),
+                &evidence(vec![ic_platform::Principal::anonymous()]),
                 &expected,
             )
             .is_err(),
@@ -1725,7 +1725,7 @@ mod tests {
         assert!(
             sibling_wasm_store_requires_controller_update(
                 &authority,
-                &evidence(vec![candid::Principal::anonymous()]),
+                &evidence(vec![ic_platform::Principal::anonymous()]),
                 &expected,
             )
             .is_err(),
@@ -1749,16 +1749,17 @@ mod tests {
                     },
                     app: AppId::from("toko"),
                 },
-                coordinator_subnet: SubnetId::from_principal(candid::Principal::from_slice(
+                coordinator_subnet: SubnetId::from_principal(ic_platform::Principal::from_slice(
                     &[2; 29],
                 )),
-                coordinator: candid::Principal::from_slice(&[3; 29]),
+                coordinator: ic_platform::Principal::from_slice(&[3; 29]),
                 recovery_controllers: Vec::new(),
             },
             epoch: 1,
         };
-        let placement_subnet = SubnetId::from_principal(candid::Principal::from_slice(&[4; 29]));
-        let fleet_subnet_root = candid::Principal::from_slice(&[5; 29]);
+        let placement_subnet =
+            SubnetId::from_principal(ic_platform::Principal::from_slice(&[4; 29]));
+        let fleet_subnet_root = ic_platform::Principal::from_slice(&[5; 29]);
         FleetSubnetRootAuthority {
             binding: FleetSubnetRootBinding {
                 authority: registry_authority.clone(),
@@ -1790,8 +1791,8 @@ mod tests {
                 authority: registry_authority,
                 placement_subnet,
                 fleet_subnet_root,
-                wasm_store: candid::Principal::from_slice(&[10; 29]),
-                installation_controller: candid::Principal::from_slice(&[11; 29]),
+                wasm_store: ic_platform::Principal::from_slice(&[10; 29]),
+                installation_controller: ic_platform::Principal::from_slice(&[11; 29]),
                 release_build_id: release_set.release_build_id,
                 wasm_module_hash: [12; 32],
             },

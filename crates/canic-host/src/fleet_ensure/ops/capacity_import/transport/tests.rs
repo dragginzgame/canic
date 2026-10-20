@@ -4,7 +4,7 @@ use super::*;
 use crate::fleet_ensure::{
     ops::capacity_import::prepare_review, policy::capacity_import::tests::plan,
 };
-use ic_agent::agent::{Envelope, ReplyResponse};
+use ic_platform::agent::{Envelope, ReplyResponse};
 use std::borrow::Cow;
 
 pub fn with_agent(agent: Agent) -> CapacityImportTransport {
@@ -54,7 +54,7 @@ pub fn request_with_expiry(
         arg: argument(plan, canister_id).unwrap(),
         sender_info: None,
     };
-    let request_id = *ic_agent::to_request_id(&content).unwrap();
+    let request_id = *ic_platform::agent::to_request_id(&content).unwrap();
     let envelope = Envelope {
         content: Cow::Owned(content),
         sender_pubkey: None,
@@ -78,7 +78,7 @@ pub fn completion(
         canister_id,
         request,
         RequestStatusResponse::Replied(ReplyResponse {
-            arg: candid::encode_args(()).unwrap(),
+            arg: ic_platform::candid::contract::encode_args(()).unwrap(),
         }),
     )
     .unwrap()
@@ -123,7 +123,7 @@ fn capacity_import_handoff_rejects_substituted_ingress_and_nonterminal_status() 
 fn capacity_import_handoff_signs_only_with_the_reviewed_network_and_operator() {
     let agent = Agent::builder()
         .with_url("http://127.0.0.1:1")
-        .with_identity(ic_agent::identity::BasicIdentity::from_raw_key(&[7; 32]))
+        .with_identity(ic_platform::agent::BasicIdentity::from_raw_key(&[7; 32]))
         .build()
         .unwrap();
     let initial = plan();
@@ -157,13 +157,13 @@ pub fn rejected(
     canister_id: Principal,
     request: &CapacityImportHandoffRequestRecord,
 ) -> RetiredHandoff {
-    let certificate = ic_agent::Certificate {
-        tree: ic_certification::empty(),
+    let certificate = ic_platform::certification::Certificate {
+        tree: ic_platform::certification::empty(),
         signature: vec![1],
         delegation: None,
     };
-    let status = RequestStatusResponse::Rejected(ic_agent::agent::RejectResponse {
-        reject_code: ic_agent::agent::RejectCode::SysTransient,
+    let status = RequestStatusResponse::Rejected(ic_platform::agent::RejectResponse {
+        reject_code: ic_platform::agent::RejectCode::SysTransient,
         reject_message: "transient failure".into(),
         error_code: None,
     });
@@ -194,7 +194,7 @@ pub fn retired(
     }
 }
 
-fn timed_certificate(mut time: u64) -> ic_agent::Certificate {
+fn timed_certificate(mut time: u64) -> ic_platform::certification::Certificate {
     let mut bytes = Vec::new();
     loop {
         let byte = (time & 0x7f) as u8;
@@ -204,8 +204,11 @@ fn timed_certificate(mut time: u64) -> ic_agent::Certificate {
             break;
         }
     }
-    ic_agent::Certificate {
-        tree: ic_certification::labeled(b"time".to_vec(), ic_certification::leaf(bytes)),
+    ic_platform::certification::Certificate {
+        tree: ic_platform::certification::labeled(
+            b"time".to_vec(),
+            ic_platform::certification::leaf(bytes),
+        ),
         signature: vec![1],
         delegation: None,
     }
@@ -279,8 +282,10 @@ fn capacity_import_retirement_requires_certified_absence_after_expiry() {
         vec![2, 0],
     ] {
         let mut certificate = timed_certificate(2);
-        certificate.tree =
-            ic_certification::labeled(b"time".to_vec(), ic_certification::leaf(bytes));
+        certificate.tree = ic_platform::certification::labeled(
+            b"time".to_vec(),
+            ic_platform::certification::leaf(bytes),
+        );
         assert!(matches!(
             retirement::outcome(
                 &plan,
@@ -293,7 +298,7 @@ fn capacity_import_retirement_requires_certified_absence_after_expiry() {
         ));
     }
     let mut incomplete = timed_certificate(2);
-    incomplete.tree = ic_certification::empty();
+    incomplete.tree = ic_platform::certification::empty();
     assert!(matches!(
         retirement::outcome(
             &plan,

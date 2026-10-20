@@ -17,7 +17,7 @@ use crate::{
     storage::stable::env::{Env, EnvData, EnvRecord},
 };
 use canic_contracts::ids::{ComponentSpecId, ManagedCanisterBinding};
-use ic_cdk::api::canister_self;
+use ic_platform::cdk::api::canister_self;
 use thiserror::Error as ThisError;
 
 ///

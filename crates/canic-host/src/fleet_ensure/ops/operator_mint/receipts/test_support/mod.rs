@@ -1,7 +1,7 @@
 //! Ephemeral native certificate fixtures shared by the Ledger receipt tests.
 
-use ic_certification::{Certificate, HashTree};
-use ic_verify_bls_signature::PrivateKey;
+use ic_platform::bls::PrivateKey;
+use ic_platform::certification::{Certificate, HashTree};
 use serde::Serialize;
 use std::time::{SystemTime, UNIX_EPOCH};
 

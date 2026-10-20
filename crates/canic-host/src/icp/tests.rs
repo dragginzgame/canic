@@ -64,8 +64,7 @@ fn icp_cli_version_range_requires_1_5_or_newer_within_major_one() {
 #[cfg(unix)]
 #[test]
 fn command_runner_rejects_unparseable_icp_cli_before_running_command() {
-    use std::fs;
-    use std::os::unix::fs::PermissionsExt;
+    use std::{fs, os::unix::fs::PermissionsExt};
 
     let root = unique_temp_dir("canic-unsupported-icp-cli");
     fs::create_dir_all(&root).expect("create temp dir");
@@ -95,8 +94,7 @@ fn command_runner_rejects_unparseable_icp_cli_before_running_command() {
 #[test]
 fn command_output_retries_a_transient_executable_busy_race() {
     use std::fs::{self, OpenOptions};
-    use std::os::unix::fs::PermissionsExt;
-    use std::time::Duration;
+    use std::{os::unix::fs::PermissionsExt, time::Duration};
 
     let root = unique_temp_dir("canic-icp-executable-busy");
     fs::create_dir_all(&root).expect("create temp dir");
@@ -129,8 +127,7 @@ fn command_output_retries_a_transient_executable_busy_race() {
 #[test]
 fn inherited_status_runner_retries_a_transient_executable_busy_race() {
     use std::fs::{self, OpenOptions};
-    use std::os::unix::fs::PermissionsExt;
-    use std::time::Duration;
+    use std::{os::unix::fs::PermissionsExt, time::Duration};
 
     let root = unique_temp_dir("canic-icp-inherited-executable-busy");
     fs::create_dir_all(&root).expect("create temp dir");
@@ -322,7 +319,7 @@ fn visibility_accepts_additive_fields_without_changing_its_authority() {
     for visibility in [
         IcpCanisterVisibility::Controllers,
         IcpCanisterVisibility::Public,
-        IcpCanisterVisibility::AllowedViewers(vec![::candid::Principal::anonymous()]),
+        IcpCanisterVisibility::AllowedViewers(vec![::ic_platform::Principal::anonymous()]),
     ] {
         let mut output = serde_json::to_value(&visibility).unwrap();
         output["description"] = serde_json::json!("upstream metadata");
@@ -474,7 +471,7 @@ fn current_visibility_and_query_statistics_preserve_viewers_without_controller_a
     assert_eq!(
         settings.status_visibility,
         Some(IcpCanisterVisibility::AllowedViewers(vec![
-            ::candid::Principal::anonymous()
+            ::ic_platform::Principal::anonymous()
         ]))
     );
     assert_eq!(

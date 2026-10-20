@@ -1,7 +1,6 @@
 //! Reuse the Coordinator's bounded funding status while binding every Root to the reviewed Registry.
 
 use super::{QUERY_DEADLINE, ReleaseFundingError, ReleaseFundingStage, decode_response};
-use candid::Principal;
 use canic_contracts::{
     dto::{
         fleet_coordinator::CoordinatorFundingStatusResponse,
@@ -11,7 +10,7 @@ use canic_contracts::{
     protocol,
 };
 use canic_core::shared_support::fleet_funding_policy::fleet_subnet_root_funding_policy_hash;
-use ic_agent::Agent;
+use ic_platform::{Principal, agent::Agent};
 use std::collections::BTreeSet;
 
 pub(super) async fn collect(
@@ -24,8 +23,8 @@ pub(super) async fn collect(
         root: coordinator,
         stage,
     };
-    let argument =
-        candid::encode_one(Request::Funding).map_err(|_| fail(ReleaseFundingStage::Query))?;
+    let argument = ic_platform::candid::contract::encode_one(Request::Funding)
+        .map_err(|_| fail(ReleaseFundingStage::Query))?;
     let bytes = tokio::time::timeout(
         QUERY_DEADLINE,
         agent

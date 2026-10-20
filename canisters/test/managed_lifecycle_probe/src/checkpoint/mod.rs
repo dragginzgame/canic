@@ -1,18 +1,20 @@
 //! Application-owned durable freeze and counter used to qualify the checkpoint SDK.
 //! No Root sequencing, snapshot authority or production application policy lives here.
 
-use candid::CandidType;
 use canic::api::application_checkpoint::{
     ApplicationCheckpointPhase as Phase, ApplicationCheckpointRecord as Record,
     ApplicationCheckpointRootPredicate, ApplicationCheckpointTransition as Transition,
 };
-use canic::dto::application_checkpoint::ApplicationCheckpointParticipantStatus;
-use canic::ids::ApplicationCheckpointBinding;
 use canic::{Error, prelude::*};
+use canic::{
+    dto::application_checkpoint::ApplicationCheckpointParticipantStatus,
+    ids::ApplicationCheckpointBinding,
+};
 use ic_memory::{
     RuntimeMemory,
     ic_stable_structures::{Cell, DefaultMemoryImpl},
 };
+use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
@@ -30,6 +32,7 @@ struct BusinessRecord {
 
 /// Read-only evidence of business admission and exactly-once completed hooks.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct CheckpointView {
     retained: Option<ApplicationCheckpointParticipantStatus>,
     counter: u64,

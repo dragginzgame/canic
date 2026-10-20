@@ -451,26 +451,30 @@ pub(super) fn command(
     caller: Principal,
     action: PoolImportCommand,
 ) -> Result<PoolImportStatus, Error> {
-    let response: Result<Response, Error> = pic
-        .update_candid_as(
-            root,
-            caller,
-            canic::protocol::CANIC_ROOT_COMMAND,
-            (Command::ImportPoolCapacity(action),),
-        )
-        .unwrap();
+    let response: Result<Response, Error> = ic_testkit::pic::update_candid_args(
+        pic,
+        root,
+        caller,
+        canic::protocol::CANIC_ROOT_COMMAND,
+        (Command::ImportPoolCapacity(action),),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap();
     response.map(|Response::ImportPoolCapacity(status)| status)
 }
 
 pub(super) fn context(pic: &PocketIc, root: Principal, caller: Principal) -> PoolImportContext {
-    let response: Result<StatusResponse, Error> = pic
-        .query_candid_as(
-            root,
-            caller,
-            canic::protocol::CANIC_ROOT_STATUS,
-            (StatusRequest::PoolImportContext,),
-        )
-        .unwrap();
+    let response: Result<StatusResponse, Error> = ic_testkit::pic::query_candid_args(
+        pic,
+        root,
+        caller,
+        canic::protocol::CANIC_ROOT_STATUS,
+        (StatusRequest::PoolImportContext,),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap();
     let StatusResponse::PoolImportContext(context) = response.unwrap() else {
         panic!("Root import context response");
     };
@@ -483,14 +487,16 @@ pub(super) fn status(
     caller: Principal,
     identity: PoolImportIdentity,
 ) -> PoolImportStatus {
-    let response: Result<StatusResponse, Error> = pic
-        .query_candid_as(
-            root,
-            caller,
-            canic::protocol::CANIC_ROOT_STATUS,
-            (StatusRequest::PoolImport(identity),),
-        )
-        .unwrap();
+    let response: Result<StatusResponse, Error> = ic_testkit::pic::query_candid_args(
+        pic,
+        root,
+        caller,
+        canic::protocol::CANIC_ROOT_STATUS,
+        (StatusRequest::PoolImport(identity),),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap();
     let StatusResponse::PoolImport(status) = response.unwrap() else {
         panic!("Root import status response");
     };

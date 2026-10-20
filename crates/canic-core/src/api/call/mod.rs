@@ -10,9 +10,9 @@ use crate::{
         CallBuilder as WorkflowCallBuilder, CallResult as WorkflowCallResult, CallWorkflow,
     },
 };
-use candid::{
-    CandidType, Principal,
-    utils::{ArgumentDecoder, ArgumentEncoder},
+use ic_platform::{
+    Principal,
+    candid::contract::{ArgumentDecoder, ArgumentEncoder, CandidType},
 };
 use serde::de::DeserializeOwned;
 use std::borrow::Cow;

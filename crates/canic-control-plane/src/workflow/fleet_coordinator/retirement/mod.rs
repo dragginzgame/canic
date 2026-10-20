@@ -5,7 +5,6 @@
 //! Boundary: exact durable transfer identity and verified empty source precede completion.
 
 use crate::ops::fleet_coordinator::FleetCoordinatorOps;
-use candid::Principal;
 use canic_contracts::dto::fleet_registry::{FleetRetirementRequest, FleetRetirementStatus};
 use canic_core::{
     control_plane_support::{
@@ -22,6 +21,7 @@ use canic_core::{
     },
     replay_policy::CostClass,
 };
+use ic_platform::Principal;
 
 pub async fn retire(
     caller: Principal,

@@ -9,11 +9,11 @@ readme = false
 publish = false
 
 [dependencies]
-candid = { workspace = true }
 canic = { workspace = true, features = [] }
 canic-contracts.workspace = true
 canic-testing-internal = { workspace = true }
 ic-build.workspace = true
+ic-platform = { workspace = true, features = ["candid"] }
 ic-testkit = { workspace = true }
 ic-timers = { workspace = true }
 serde = { workspace = true }
@@ -26,8 +26,9 @@ canic-control-plane = { workspace = true, features = [
 canic-core = { workspace = true }
 canic-host = { workspace = true }
 ciborium = { workspace = true }
-ic-agent = { workspace = true }
-ic-memory = { workspace = true }
+ic-memory = { workspace = true, features = ["test-support"] }
+ic-platform = { workspace = true, features = ["agent"] }
+ic-stable-structures.workspace = true
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 tokio = { workspace = true }

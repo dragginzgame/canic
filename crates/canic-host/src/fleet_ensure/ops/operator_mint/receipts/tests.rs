@@ -12,11 +12,13 @@ use crate::fleet_ensure::{
     },
     ops::operator_mint::prepare_intent,
 };
-use candid::Principal;
-use ic_agent::Agent;
-use ic_certification::{Certificate, Delegation, HashTree, fork, labeled, leaf};
-use ic_verify_bls_signature::PrivateKey;
-use icrc_ledger_types::{icrc::generic_value::Value, icrc3::blocks::ICRC3DataCertificate};
+use ic_platform::bls::PrivateKey;
+use ic_platform::{
+    Principal,
+    agent::Agent,
+    certification::{Certificate, Delegation, HashTree, fork, labeled, leaf},
+    icrc_ledger_types::{ICRC3DataCertificate, Value},
+};
 
 struct Fixture {
     key: PrivateKey,
@@ -193,7 +195,10 @@ fn authenticated_certificate_accepts_owned_pruned_nodes() {
     let witness = fixture.witness();
     let certificate = fixture.certificate(&witness, now());
     let certificate = sign(
-        fork(ic_certification::pruned([7; 32]), certificate.tree),
+        fork(
+            ic_platform::certification::pruned([7; 32]),
+            certificate.tree,
+        ),
         &fixture.key,
     );
     let evidence = ICRC3DataCertificate {
@@ -480,8 +485,10 @@ fn unresolved_notification_is_never_a_deposit_proof() {
 fn oversized_signed_values_reject_before_the_upstream_hasher_can_panic() {
     let mut fixture = Fixture::new();
     let evidence = fixture.evidence();
-    fields(&mut fixture.chain[0].block)
-        .insert("extra".into(), Value::Int(candid::Int(u128::MAX.into())));
+    fields(&mut fixture.chain[0].block).insert(
+        "extra".into(),
+        Value::Int(ic_platform::candid::contract::Int(u128::MAX.into())),
+    );
     assert!(matches!(
         fixture.verify(&evidence),
         Err(Error::UnsupportedBlockValue)
@@ -518,14 +525,14 @@ fn block_wire_projection_matches_the_published_ledger_value_contract() {
         };
         type Block = record { id : nat; block : Value };
     ";
-    let (mut env, _) = candid_parser::utils::CandidSource::Text(contract)
+    let (mut env, _) = ic_platform::candid_parser::CandidSource::Text(contract)
         .load()
         .unwrap();
     let expected = env.find_type("Block").unwrap().clone();
-    let mut rust = candid::types::internal::TypeContainer::new();
+    let mut rust = ic_platform::candid::contract::types::internal::TypeContainer::new();
     let ty = rust.add::<LedgerBlock>();
     let actual = env.merge_type(rust.env, ty);
-    candid::types::subtype::equal(
+    ic_platform::candid::contract::types::subtype::equal(
         &mut std::collections::HashSet::new(),
         &env,
         &expected,

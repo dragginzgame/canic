@@ -971,6 +971,7 @@ fn isolated_memory_runtime_check_uses_selected_wasm_graph_before_compilation() {
                 BTreeSet::new()
             },
             default_features: name != "disabled-default",
+            all_features: false,
         };
         let config =
             parse_config_model(&fs::read_to_string(fixture.root.join("canic.toml")).unwrap())

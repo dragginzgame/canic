@@ -6,7 +6,7 @@
 #[cfg(test)]
 mod tests;
 
-use candid::Principal;
+use ic_platform::Principal;
 use serde::{Deserialize, Serialize};
 
 ///

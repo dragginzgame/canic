@@ -4,14 +4,19 @@
 //! Does not own: lifecycle orchestration, deployment policy, or public DTO schemas.
 //! Boundary: management infra leaves encode and decode these raw payloads.
 
+use ic_platform::{
+    Principal,
+    candid::contract::{CandidType, Nat},
+    management_canister_types::ChunkHash,
+};
 //
 // InfraCanisterSettings
 //
 
-use crate::cdk::candid::{CandidType, Nat, Principal};
 use serde::Deserialize;
 
 #[derive(CandidType, Clone, Debug, Default, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct InfraCanisterSettings {
     pub controllers: Option<Vec<Principal>>,
     pub compute_allocation: Option<Nat>,
@@ -26,47 +31,14 @@ pub struct InfraCanisterSettings {
 }
 
 //
-// InfraCanisterIdRecord
-//
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-pub(super) struct InfraCanisterIdRecord {
-    pub(super) canister_id: Principal,
-}
-
-//
 // InfraCanisterIdRecordExtended
 //
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub(super) struct InfraCanisterIdRecordExtended {
     pub(super) canister_id: Principal,
     pub(super) sender_canister_version: Option<u64>,
-}
-
-/// Exact management snapshot identity and physical storage observation.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub(super) struct InfraCanisterSnapshot {
-    pub(super) id: Vec<u8>,
-    pub(super) taken_at_timestamp: u64,
-    pub(super) total_size: u64,
-}
-
-/// Management request deleting one exact retained snapshot.
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub(super) struct InfraDeleteCanisterSnapshotArgs {
-    pub(super) canister_id: Principal,
-    pub(super) snapshot_id: Vec<u8>,
-}
-
-//
-// InfraCanisterInfoArgs
-//
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-pub(super) struct InfraCanisterInfoArgs {
-    pub(super) canister_id: Principal,
-    pub(super) num_requested_changes: Option<u64>,
 }
 
 //
@@ -74,6 +46,7 @@ pub(super) struct InfraCanisterInfoArgs {
 //
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub(super) struct InfraCanisterInfoResult {
     pub(super) total_num_changes: u64,
 }
@@ -83,18 +56,10 @@ pub(super) struct InfraCanisterInfoResult {
 //
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub(super) enum InfraCanisterInstallMode {
     #[serde(rename = "install")]
     Install,
-}
-
-//
-// InfraChunkHash
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub(super) struct InfraChunkHash {
-    pub(super) hash: Vec<u8>,
 }
 
 //
@@ -102,6 +67,7 @@ pub(super) struct InfraChunkHash {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub(super) struct InfraUploadChunkArgs {
     pub(super) canister_id: Principal,
     pub(super) chunk: Vec<u8>,
@@ -112,6 +78,7 @@ pub(super) struct InfraUploadChunkArgs {
 //
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub(super) struct InfraClearChunkStoreArgs {
     pub(super) canister_id: Principal,
 }
@@ -121,11 +88,12 @@ pub(super) struct InfraClearChunkStoreArgs {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub(super) struct InfraInstallChunkedCodeArgs {
     pub(super) mode: InfraCanisterInstallMode,
     pub(super) target_canister: Principal,
     pub(super) store_canister: Option<Principal>,
-    pub(super) chunk_hashes_list: Vec<InfraChunkHash>,
+    pub(super) chunk_hashes_list: Vec<ChunkHash>,
     pub(super) wasm_module_hash: Vec<u8>,
     pub(super) arg: Vec<u8>,
     pub(super) sender_canister_version: Option<u64>,
@@ -136,6 +104,7 @@ pub(super) struct InfraInstallChunkedCodeArgs {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct InfraUpdateSettingsArgs {
     pub canister_id: Principal,
     pub settings: InfraCanisterSettings,
@@ -147,6 +116,7 @@ pub struct InfraUpdateSettingsArgs {
 //
 
 #[derive(CandidType, Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum InfraEcdsaCurve {
     #[default]
     #[serde(rename = "secp256k1")]
@@ -166,6 +136,7 @@ impl From<InfraEcdsaCurve> for u32 {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct InfraEcdsaKeyId {
     pub curve: InfraEcdsaCurve,
     pub name: String,
@@ -176,6 +147,7 @@ pub struct InfraEcdsaKeyId {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct InfraEcdsaPublicKeyArgs {
     pub canister_id: Option<Principal>,
     pub derivation_path: Vec<Vec<u8>>,
@@ -187,6 +159,7 @@ pub struct InfraEcdsaPublicKeyArgs {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct InfraEcdsaPublicKeyResult {
     pub public_key: Vec<u8>,
     pub chain_code: Vec<u8>,
@@ -197,6 +170,7 @@ pub struct InfraEcdsaPublicKeyResult {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct InfraSignWithEcdsaArgs {
     pub message_hash: Vec<u8>,
     pub derivation_path: Vec<Vec<u8>>,
@@ -208,6 +182,7 @@ pub struct InfraSignWithEcdsaArgs {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct InfraSignWithEcdsaResult {
     pub signature: Vec<u8>,
 }
@@ -217,6 +192,7 @@ pub struct InfraSignWithEcdsaResult {
 //
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum InfraCanisterStatusType {
     #[serde(rename = "running")]
     Running,
@@ -231,6 +207,7 @@ pub enum InfraCanisterStatusType {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum InfraLogVisibility {
     #[serde(rename = "controllers")]
     Controllers,
@@ -245,6 +222,7 @@ pub enum InfraLogVisibility {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct InfraEnvironmentVariable {
     pub name: String,
     pub value: String,
@@ -255,6 +233,7 @@ pub struct InfraEnvironmentVariable {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct InfraDefiniteCanisterSettings {
     pub controllers: Vec<Principal>,
     pub compute_allocation: Nat,
@@ -273,6 +252,7 @@ pub struct InfraDefiniteCanisterSettings {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct InfraMemoryMetrics {
     pub wasm_memory_size: Nat,
     pub stable_memory_size: Nat,
@@ -289,6 +269,7 @@ pub struct InfraMemoryMetrics {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct InfraQueryStats {
     pub num_calls_total: Nat,
     pub num_instructions_total: Nat,
@@ -301,6 +282,7 @@ pub struct InfraQueryStats {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct InfraCanisterStatusResult {
     pub version: u64,
     pub status: InfraCanisterStatusType,

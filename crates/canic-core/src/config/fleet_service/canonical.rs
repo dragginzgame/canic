@@ -4,8 +4,9 @@
 //! Does not own: source parsing, relationship validation, hashing, or protected persistence.
 //! Boundary: validated service targets become schema-v1 domain-separated bytes.
 
-use crate::config::{
-    FleetServiceTarget, FleetServiceTargetMode, FleetServiceTopology, canonical::CanonicalEncoder,
+use crate::{
+    cdk::serialize::canonical::CanonicalEncoder,
+    config::{FleetServiceTarget, FleetServiceTargetMode, FleetServiceTopology},
 };
 
 const FLEET_SERVICE_TOPOLOGY_DOMAIN: &[u8] = b"canic/fleet-service-topology/v1";

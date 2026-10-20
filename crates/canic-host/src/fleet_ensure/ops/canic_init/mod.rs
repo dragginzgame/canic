@@ -26,7 +26,6 @@ use crate::{
         load_persisted_current_release_set_manifest,
     },
 };
-use candid::{Principal, encode_one};
 use canic_contracts::{
     dto::fleet_subnet_root::{
         FleetSubnetRootAuthority, FleetSubnetRootInitArgs, FleetSubnetWasmStoreInitArgs,
@@ -39,6 +38,7 @@ use canic_contracts::{
 };
 use canic_control_plane::installation::FleetCoordinatorInitArgs;
 use canic_core::shared_support::fleet_admission_policy::bind_initial_fleet_admission_policy;
+use ic_platform::{Principal, candid::contract::encode_one};
 use sha2_host::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
@@ -92,7 +92,7 @@ pub enum CanicInitError {
     Release(String),
 
     #[error("generated Fleet bootstrap init Candid encoding failed: {0}")]
-    Candid(#[from] candid::Error),
+    Candid(#[from] ic_platform::candid::contract::Error),
 
     #[error(transparent)]
     Argument(#[from] ProtocolEffectError),
@@ -119,7 +119,7 @@ fn bind_capacity_bootstrap(
     bytes: &[u8],
     hold: canic_contracts::dto::pool_import::PoolImportBootstrap,
 ) -> Result<Vec<u8>, CanicInitError> {
-    let mut args: FleetSubnetRootInitArgs = candid::decode_one(bytes)?;
+    let mut args: FleetSubnetRootInitArgs = ic_platform::candid::decoder::decode_one(bytes)?;
     args.capacity_import_bootstrap = Some(hold);
     canic_control_plane::api::canister_pool::CanisterPoolApi::validate_bootstrap(&args).map_err(
         |error| CanicInitError::Authority(format!("invalid capacity bootstrap: {error}")),

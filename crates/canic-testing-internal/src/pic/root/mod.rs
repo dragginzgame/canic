@@ -1,7 +1,7 @@
 //! Root-specific cached baseline and topology helpers for internal test suites.
 
-use candid::Principal;
 use canic::ids::{BuildNetwork, CanisterRole};
+use ic_platform::Principal;
 use ic_testkit::pic::PocketIc;
 use std::{collections::HashMap, path::PathBuf, time::Instant};
 
@@ -30,8 +30,6 @@ pub use topology::setup_root_topology;
 pub struct RootBaselineSpec<'a> {
     pub progress_prefix: &'a str,
     pub workspace_root: PathBuf,
-    pub root_wasm_path: PathBuf,
-    pub root_release_artifacts_dir: PathBuf,
     pub artifact_watch_paths: &'a [&'a str],
     pub release_roles: &'a [&'a str],
     pub build_network: BuildNetwork,
