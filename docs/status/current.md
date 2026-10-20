@@ -1,79 +1,67 @@
 # Current handoff
 
-## Isolated PR #596 source and scope
+## Published Build adoption contribution
 
-This contribution follows committed main `4caeec25d`, retaining shared branch
-history, and was last pushed as `5bcdc7677`. The normal checkout's wider pending
-work and newer dependency adoption are excluded. Own package versions remain
-0.111.0, with the existing 0.112.0 changelog batch. No merge, version bump, release,
-publication, lifecycle operation or normal-checkout mutation is included.
+This isolated contribution is based on PR #596 head `e47cd628d`, preserving its
+shared history and runtime Cargo facts work. Normal sibling checkouts and their
+pending changes are excluded. Own package versions remain 0.111.0; the existing
+0.112.0 changelog batch includes this adoption. No merge, version bump, release,
+publication, installed lifecycle operation or normal-checkout mutation is included.
 
-Canic keeps its recipes, source/config custody, transformation, release admission,
-application protocols and retained-artifact policy. IC Build's unified engine
-executes Cargo; Canic now retains successful runtime CargoBuildFacts through
-configured single/batched and infrastructure artifacts, provenance, CLI/internal
-fixture callers and embedded allocation-peer evidence. Provenance projects actual
-selection, observed tool identities and captured Rust flags. Failed exits retain
-original status and diagnostics without claiming successful facts. Fresh tool
-probes and ambient recipe reconstruction are removed; evidence schema and UTF-8
-refusal are preserved. Constructors must provide facts from the runtime build.
+The root catalog now selects published Build 0.23, Host 0.31 and Backup 0.35.
+The registry lock selects Build 0.23.0, Host 0.31.2 and Backup 0.35.1. Build's
+metadata/tree specifications render commands; Canic's Host owns their execution,
+output limits and typed failures. Success is admitted before completeness and
+canonical decoding. Feature-safe grouping receives a tree observer using the
+same build context/environment. Workspace discovery and embedded fixture inventory
+retain locked/offline choices, I/O error kinds, existing budgets and no deadline.
 
-The maintainer's narrow authority-recovery repair from `8c2dda483` is carried with
-attribution, using existing IcOps traps and identical messages. Its wider
-unpublished parent is excluded. The layering guard remains unchanged.
+Backup supplies the matching Host checksum/publication error identities. Its
+published artifact checksum implementation is unchanged from 0.31.4; existing
+Canic custody, framing and error adapters are retained. Host Tools explicitly
+selects the Candid parser already required by artifact service checks. No local
+compatibility implementation or public re-export is added.
 
-## Published-owner CI completion
+Canic keeps recipes, source/config custody, transformation, release admission,
+application protocols and retained-artifact policy. The root application Platform
+requirement is unchanged. Upstream packages still select older Host 0.27 and
+Platform 0.1, while the selected Host/Backup owners also require Platform 0.4;
+these transitive identities do not establish runtime migration. The two private
+Blob consumer catalogs and lockfiles are unchanged.
 
-The branch retains published Build 0.19.0 and Host 0.27.6. Root and both private
-Cargo graphs are fetched locked before offline CI admission. The private locks
-align only Timers 0.28.0 with the root's existing 0.29.0 selection. ShellCheck follows
-sourced helpers. Formatter failures retain/replay diagnostics through the shared
-fixture lifecycle; preflight explicitly prepares and checks pinned Cargo tools.
-Development CI selects Rust 1.99.1; consumer MSRV stays 1.91.
+## Validation and remaining acceptance
 
-At `5bcdc7677`, hosted preflight and security pass. Subsequent jobs exposed fixture
-imports from Memory's removed substrate re-export and hook qualification using
-the installer's retired no-argument form. Six fixture modules now use published
-IC Storage StableCell/StableBTreeMap over the same checked IC Memory leases.
-Backing types and the Memory trait come from IC Memory. Constructor, iterator,
-payload, key and allocation contracts are preserved; no storage migration, raw
-manager or compatibility export is added. Three private packages inherit the
-already-selected IC Storage 0.5.4 dependency. Only those root lock edges change;
-all selected package identities remain unchanged. The Canic-owned hook fixture
-passes --consumer explicitly; shared installer/hook bytes are unchanged.
+Host, CLI and Testing Internal all-target compilation and actual Rust 1.91 library
+checking pass against the real registry graph. Strict Host/CLI all-target and
+Internal library Clippy pass. Testing Internal's default-feature test target emits
+the pre-existing unused admission-helper import warning. Nine build/grouping,
+13 provenance, nine backup artifact, 22 persistence and four embedded-inventory
+cases pass. The explicit real-Wasm reproduction remains ignored. Grouped formatting,
+direct/inherited dependency policy and the maintained runtime graph check pass.
 
-The next hosted run passes preflight, security and MSRV, then exposes a missing
-cache-executable binding and macOS logical/physical path assertions. CI now binds
-the installer's admitted executable into CANIC_SCCACHE_BIN in each cache-enabled
-job. The repository development pin matches the existing 1.99.1 workflow/tool
-selection. Shared wrappers and strict tool admission remain unchanged. Optimizer
-fixtures assert physical identity; an explicit directory-symlink regression also
-covers that contract on Linux.
+The role-package group passes 34 cases and fails seven identically on this graph
+and the unchanged parent. Fresh fixture resolution selects both Memory 0.48 and
+0.49; the contracts closure assertion and a missing delegated-verifier fixture
+feature also fail. The initial run additionally encountered unavailable registry
+DNS; the comparison uses inherited offline mode. Do not weaken runtime admission
+or change storage graphs to make this adoption appear qualified. The existing
+[component handoff PR](https://github.com/dragginzgame/canic/pull/595) records the
+coordinated Memory/Storage/Blob selection prerequisite.
 
-The Build 0.23 observer API port is separate. Keep its published adoption and
-remaining Host alignment out of this CI/facts contribution.
+The parent PR's eight Binaryen controls, compiler-cache wrapper controls, actual
+three workflow binding blocks with substituted installer/compiler, Actionlint,
+strict Host Clippy and grouped formatting pass. Its cache installer binding,
+physical-path assertions and development-toolchain repair are separate from this
+adoption. Its latest hosted preflight, security and MSRV pass; workspace checks
+stop at existing Core/Contracts Clippy failures, before ordinary/managed tests.
+See the retained
+[parent handoff](https://github.com/dragginzgame/canic/blob/e47cd628d69b8cca8dbc1a4637670e74703ca300/docs/status/current.md).
 
-## Validation and remaining qualification
-
-Current focused Linux checks pass: eight Binaryen controls, compiler-cache wrapper
-controls, actual workflow cache-binding blocks with substituted installer/compiler,
-Actionlint, strict Host library/test Clippy and real hook fixture. Prior focused
-source-following ShellCheck,
-grouped formatting, dependency inheritance/pins, strict Clippy and actual Rust
-1.91 native library checks for Hub, Shard and the managed lifecycle probe.
 Direct Cargo Wasm checking is refused by the existing authoritative-build guard;
-do not bypass it or claim Wasm/installed acceptance. Hosted exact-head checks,
-authoritative Canic builds and the owning managed tests remain necessary.
+do not bypass it or claim installed acceptance. Exact-head hosted checks,
+authoritative Canic builds and owning managed tests remain necessary. Consumer
+acceptance stays with [Canic #530](https://github.com/dragginzgame/canic/issues/530)
+and [Build #9](https://github.com/dragginzgame/ic-build/issues/9).
 
-Prior facts qualification includes 41 focused build/provenance cases, twenty
-enabled reuse cases, 26 provenance cases and four embedded-evidence cases.
-One explicit real-Wasm reproduction remains ignored. Host/CLI/Internal caller
-checks and strict Host Clippy passed; full suites, native macOS and complete
-managed/PocketIC qualification are separate. Preserve the historical identities
-and limits in the immutable
-[5bcdc7677 handoff](https://github.com/dragginzgame/canic/blob/5bcdc7677f72917be600b5c8bfa62e0c3196f627/docs/status/current.md).
-
-Current evidence/before-images: `/tmp/ic-build-hardcut-more.RkD1D3/`.
-Earlier facts evidence: `/tmp/ic-build-fleet-followup.KGzFhf/` and
-`/tmp/ic-build-followthrough.epj0I5/`. Leave review/integration to the owner;
-consumer release and installed acceptance remain outside this contribution.
+Current evidence/before-images: `/tmp/ic-build-adoption-delivery.O20V1y/`.
+Leave review and integration to the owner.

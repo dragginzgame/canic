@@ -1,14 +1,14 @@
 //! Cargo evidence recipes for Canic discovery and role admission.
 //!
 //! Canic selects features, budgets and graph interpretation. IC Build owns
-//! bounded observation and Cargo's canonical schema owns metadata decoding.
+//! command rendering/decoding; Canic's selected Host owns bounded execution.
 
 use crate::cargo_command;
 use ic_build::cargo::observation::{
-    CargoMetadataSpec, CargoTreeSpec, observe_metadata, observe_tree, schema::Metadata,
+    CargoMetadataSpec, CargoTreeSpec, decode_metadata, schema::Metadata,
 };
 use ic_build::cargo::selection::CargoFeatureSelection;
-use ic_host_process::tool::{OutputLimit, OutputLimits};
+use ic_host_process::tool::{OutputLimit, OutputLimits, capture_command};
 use std::path::Path;
 
 const fn limits() -> OutputLimits {
@@ -23,18 +23,19 @@ pub fn cargo_metadata(
     workspace_root: &Path,
     include_deps: bool,
 ) -> Result<Metadata, Box<dyn std::error::Error>> {
-    observe_metadata(
-        &CargoMetadataSpec {
-            manifest_path: &workspace_root.join("Cargo.toml"),
-            include_dependencies: include_deps,
-            filter_platform: None,
-            locked: true,
-            offline: false,
-            features: &CargoFeatureSelection::default(),
-        },
-        limits(),
-        cargo_command(),
-    )
+    let mut command = CargoMetadataSpec {
+        manifest_path: &workspace_root.join("Cargo.toml"),
+        include_dependencies: include_deps,
+        filter_platform: None,
+        locked: true,
+        offline: false,
+        features: &CargoFeatureSelection::default(),
+    }
+    .command(cargo_command())?;
+    let output = capture_command(&mut command, limits())?
+        .require_success()?
+        .require_complete()?;
+    Ok(decode_metadata(&output.stdout)?)
 }
 
 pub fn cargo_metadata_for_manifest(
@@ -44,18 +45,19 @@ pub fn cargo_metadata_for_manifest(
     offline: bool,
     features: &CargoFeatureSelection,
 ) -> Result<Metadata, Box<dyn std::error::Error>> {
-    observe_metadata(
-        &CargoMetadataSpec {
-            manifest_path,
-            include_dependencies: true,
-            filter_platform: Some(filter_platform),
-            locked,
-            offline,
-            features,
-        },
-        limits(),
-        cargo_command(),
-    )
+    let mut command = CargoMetadataSpec {
+        manifest_path,
+        include_dependencies: true,
+        filter_platform: Some(filter_platform),
+        locked,
+        offline,
+        features,
+    }
+    .command(cargo_command())?;
+    let output = capture_command(&mut command, limits())?
+        .require_success()?
+        .require_complete()?;
+    Ok(decode_metadata(&output.stdout)?)
 }
 
 pub fn cargo_metadata_catalog_for_manifest(
@@ -64,18 +66,19 @@ pub fn cargo_metadata_catalog_for_manifest(
     offline: bool,
     features: &CargoFeatureSelection,
 ) -> Result<Metadata, Box<dyn std::error::Error>> {
-    observe_metadata(
-        &CargoMetadataSpec {
-            manifest_path,
-            include_dependencies: true,
-            filter_platform: None,
-            locked,
-            offline,
-            features,
-        },
-        limits(),
-        cargo_command(),
-    )
+    let mut command = CargoMetadataSpec {
+        manifest_path,
+        include_dependencies: true,
+        filter_platform: None,
+        locked,
+        offline,
+        features,
+    }
+    .command(cargo_command())?;
+    let output = capture_command(&mut command, limits())?
+        .require_success()?
+        .require_complete()?;
+    Ok(decode_metadata(&output.stdout)?)
 }
 
 pub fn cargo_tree_for_package(
@@ -87,18 +90,19 @@ pub fn cargo_tree_for_package(
     features: &CargoFeatureSelection,
     format: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    observe_tree(
-        &CargoTreeSpec {
-            manifest_path,
-            packages: &[package_spec],
-            target: filter_platform,
-            edges: "normal",
-            format,
-            locked,
-            offline,
-            features,
-        },
-        limits(),
-        cargo_command(),
-    )
+    let mut command = CargoTreeSpec {
+        manifest_path,
+        packages: &[package_spec],
+        target: filter_platform,
+        edges: "normal",
+        format,
+        locked,
+        offline,
+        features,
+    }
+    .command(cargo_command())?;
+    let output = capture_command(&mut command, limits())?
+        .require_success()?
+        .require_complete()?;
+    Ok(String::from_utf8(output.stdout)?)
 }
