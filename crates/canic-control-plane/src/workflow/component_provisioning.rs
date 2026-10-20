@@ -319,7 +319,7 @@ async fn advance_scheduled_provisioning(operation_id: [u8; 32], plan_hash: [u8; 
     }
     if complete || RootComponentProvisioningOps::progress_changed(&current, &latest) {
         RootComponentProvisioningOps::clear_failure(operation_id, plan_hash).unwrap_or_else(
-            |error| ic_platform::cdk::api::trap(format!("provisioning progress evidence: {error}")),
+            |error| IcOps::trap(format!("provisioning progress evidence: {error}")),
         );
         if !complete {
             schedule_provisioning(operation_id, plan_hash, Duration::ZERO);
@@ -348,9 +348,7 @@ async fn advance_scheduled_provisioning(operation_id: [u8; 32], plan_hash: [u8; 
         error.provisioning_failure().expect("failure context"),
         now_ns,
     )
-    .unwrap_or_else(|error| {
-        ic_platform::cdk::api::trap(format!("provisioning failure evidence: {error}"))
-    });
+    .unwrap_or_else(|error| IcOps::trap(format!("provisioning failure evidence: {error}")));
     canic_core::log!(
         Topic::Fleet,
         Warn,

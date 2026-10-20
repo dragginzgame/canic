@@ -123,8 +123,9 @@ fn hidden_macro_cdk_exports_compile() {
         msg_reply as _, time as _,
     };
     use canic::__internal::cdk::raw::{msg_arg_data_copy as _, msg_arg_data_size as _};
+    use canic::__internal::cdk::update as _;
     use canic::__internal::cdk::{
         futures as _, init as _, inspect_message as _, post_upgrade as _, query as _,
     };
-    use canic::__internal::cdk::{trap as _, update as _};
+    use canic::__internal::core::control_plane_support::ops::ic::IcOps as _;
 }

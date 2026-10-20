@@ -4,8 +4,11 @@
 //! Does not own: timer state, recurrence, arbitration, or domain scheduling policy.
 //! Boundary: framework lifecycle and the exact Root owner delegate to timer authority.
 
-use crate::workflow::runtime::timer::{
-    TimerAuthorityWorkflow, recovery_watchdog_identity, require_active,
+use crate::{
+    ops::ic::IcOps,
+    workflow::runtime::timer::{
+        TimerAuthorityWorkflow, recovery_watchdog_identity, require_active,
+    },
 };
 use ic_timers::OnceRunResult;
 use std::{future::Future, time::Duration};
@@ -20,25 +23,22 @@ impl TimerApi {
     /// Initialize the shared runtime and fixed non-root declarations during lifecycle restore.
     #[doc(hidden)]
     pub fn initialize_nonroot_runtime_required() {
-        TimerAuthorityWorkflow::initialize_nonroot_runtime().unwrap_or_else(|error| {
-            ic_platform::cdk::api::trap(format!("timer runtime init failed: {error}"))
-        });
+        TimerAuthorityWorkflow::initialize_nonroot_runtime()
+            .unwrap_or_else(|error| IcOps::trap(format!("timer runtime init failed: {error}")));
     }
 
     /// Initialize the shared runtime and fixed root declarations during lifecycle restore.
     #[doc(hidden)]
     pub fn initialize_root_runtime_required() {
-        TimerAuthorityWorkflow::initialize_root_runtime().unwrap_or_else(|error| {
-            ic_platform::cdk::api::trap(format!("timer runtime init failed: {error}"))
-        });
+        TimerAuthorityWorkflow::initialize_root_runtime()
+            .unwrap_or_else(|error| IcOps::trap(format!("timer runtime init failed: {error}")));
     }
 
     /// Initialize the shared runtime for a canister with no Canic runtime jobs.
     #[doc(hidden)]
     pub fn initialize_shared_runtime_required() {
-        TimerAuthorityWorkflow::initialize_shared_runtime().unwrap_or_else(|error| {
-            ic_platform::cdk::api::trap(format!("timer runtime init failed: {error}"))
-        });
+        TimerAuthorityWorkflow::initialize_shared_runtime()
+            .unwrap_or_else(|error| IcOps::trap(format!("timer runtime init failed: {error}")));
     }
 
     /// Restore volatile suspension from the durable authority fence.
@@ -86,9 +86,8 @@ impl TimerApi {
         label: impl Into<String>,
         task: impl Future<Output = ()> + 'static,
     ) {
-        TimerAuthorityWorkflow::defer_lifecycle_once(delay, label, task).unwrap_or_else(|error| {
-            ic_platform::cdk::api::trap(format!("lifecycle timer rejected: {error}"))
-        });
+        TimerAuthorityWorkflow::defer_lifecycle_once(delay, label, task)
+            .unwrap_or_else(|error| IcOps::trap(format!("lifecycle timer rejected: {error}")));
     }
 
     /// Schedule framework lifecycle work with a truthful typed completion.
@@ -98,8 +97,7 @@ impl TimerApi {
         label: impl Into<String>,
         task: impl Future<Output = OnceRunResult> + 'static,
     ) {
-        TimerAuthorityWorkflow::defer_lifecycle_result_once(delay, label, task).unwrap_or_else(
-            |error| ic_platform::cdk::api::trap(format!("lifecycle timer rejected: {error}")),
-        );
+        TimerAuthorityWorkflow::defer_lifecycle_result_once(delay, label, task)
+            .unwrap_or_else(|error| IcOps::trap(format!("lifecycle timer rejected: {error}")));
     }
 }

@@ -1,5 +1,22 @@
 # Current handoff — 2026-10-20
 
+## Ordinary endpoint and trap gates — 2026-10-20
+
+Resolved both failures in the 14:04 workspace ordinary-test log. Reviewed raw
+fixture exports now require exact explicit decoder/encoder options as well as
+their guard, kind and identity. Lifecycle, funding, provisioning and generated
+endpoint traps delegate to the existing `IcOps::trap`; messages and rollback
+semantics are retained. Removed the hidden direct CDK trap reexport and migrated
+its generated consumers and compile inventory.
+
+Pass: 15 endpoint/export/trap integration tests, 13 endpoint-expansion unit tests,
+warning-denied Clippy for affected runtime/macro libraries and the runtime probe
+with all features, focused integration-test Clippy, scoped formatting/whitespace,
+and embedded-peer verification against a rebuilt Wasm fixture (no artifact change).
+Logs: `/tmp/canic-ordinary-*.log`. Open 0.112 notes are updated. No full workspace
+or serial PocketIC suite was run; complete release-batch readiness remains
+unconfirmed. No commit, push, release or deployment was performed.
+
 ## Root fixture feature gates — 2026-10-20
 
 Aligned Root baseline/topology orchestration, exports and orchestration-only

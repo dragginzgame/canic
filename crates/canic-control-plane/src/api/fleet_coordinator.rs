@@ -38,7 +38,7 @@ use canic_contracts::dto::{
     },
     state::{SetCyclesFundingRequest, SetStateResponse},
 };
-use canic_core::control_plane_support::ops::runtime::env::EnvOps;
+use canic_core::control_plane_support::ops::{ic::IcOps, runtime::env::EnvOps};
 use ic_platform::cdk::api::{canister_self, is_controller, msg_caller};
 
 ///
@@ -83,13 +83,12 @@ impl FleetCoordinatorApi {
     /// Restore memory invariants and synchronously commit fresh genesis during install.
     pub fn init(args: FleetCoordinatorInitArgs) {
         canic_core::api::timer::TimerApi::initialize_shared_runtime_required();
-        canic_core::memory::bootstrap(crate::memory::framework()).unwrap_or_else(|error| {
-            ic_platform::cdk::api::trap(format!("memory bootstrap failed: {error}"))
-        });
+        canic_core::memory::bootstrap(crate::memory::framework())
+            .unwrap_or_else(|error| IcOps::trap(format!("memory bootstrap failed: {error}")));
         EnvOps::initialize_fleet_coordinator_runtime();
         canic_core::api::authority_restore::AuthorityRestoreApi::initialize(canister_self().into())
             .unwrap_or_else(|error| {
-                ic_platform::cdk::api::trap(format!("authority restore fence init failed: {error}"))
+                IcOps::trap(format!("authority restore fence init failed: {error}"))
             });
         let caller = msg_caller().into();
         FleetCoordinatorWorkflow::initialize(
@@ -98,9 +97,7 @@ impl FleetCoordinatorApi {
             is_controller(&caller.into()),
             canister_self().into(),
         )
-        .unwrap_or_else(|error| {
-            ic_platform::cdk::api::trap(format!("Fleet Coordinator init failed: {error}"))
-        });
+        .unwrap_or_else(|error| IcOps::trap(format!("Fleet Coordinator init failed: {error}")));
         canic_core::api::ready::ReadyApi::mark_ready();
     }
 

@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Require exact fixture codec options in the managed-endpoint gate and route
+  runtime and generated endpoint traps through the existing IC operations owner.
+
 - Align Root fixture compilation with the governed PocketIC feature gate while
   retaining ordinary native snapshot-inventory coverage.
 

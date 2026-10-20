@@ -118,7 +118,7 @@ macro_rules! __canic_fixture_reply_support {
                     return;
                 }
             }
-            $crate::__internal::cdk::trap("fixture reply barrier exhausted");
+            $crate::__internal::core::control_plane_support::ops::ic::IcOps::trap("fixture reply barrier exhausted");
         }
     };
 }

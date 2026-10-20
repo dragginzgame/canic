@@ -209,14 +209,12 @@ pub fn accept(
         RootFundingAcceptanceDisposition::Fresh => {
             let accepted = IcOps::msg_cycles_accept(request.granted_cycles.to_u128());
             if accepted != request.granted_cycles.to_u128() {
-                ic_platform::cdk::api::trap(
-                    "Root funding acceptance did not accept the exact validated grant",
-                );
+                IcOps::trap("Root funding acceptance did not accept the exact validated grant");
             }
             Ok(
                 RootFundingOps::record_acceptance(&authority, &request, IcOps::now_nanos())
                     .unwrap_or_else(|error| {
-                        ic_platform::cdk::api::trap(format!(
+                        IcOps::trap(format!(
                             "Root funding receipt commitment failed after cycle acceptance: {error}"
                         ))
                     }),

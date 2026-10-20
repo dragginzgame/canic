@@ -77,7 +77,7 @@ pub(super) fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) 
     let startup_denial = if returns_fallible(&orig_sig) || args.reject_access {
         quote!(return Err(err.into());)
     } else {
-        quote!(::canic::__internal::cdk::trap(format!("application startup rejected: {err}"));)
+        quote!(::canic::__internal::core::control_plane_support::ops::ic::IcOps::trap(format!("application startup rejected: {err}"));)
     };
     let startup_stage = quote! {
         #[cfg(target_arch = "wasm32")]
@@ -469,11 +469,11 @@ fn candid_codecs(signature: &Signature) -> TokenStream2 {
             let mut config = ::canic::__internal::ic_platform::candid::decoder::DecoderConfig::new();
             config.set_skipping_quota(10_000);
             let decoded: (#(#types,)*) = ::canic::__internal::ic_platform::candid::decoder::decode_args_with_config(&bytes, &config)
-                .unwrap_or_else(|error| ::canic::__internal::cdk::trap(error.to_string()));
+                .unwrap_or_else(|error| ::canic::__internal::core::control_plane_support::ops::ic::IcOps::trap(error.to_string()));
             #decoded_value
         }
         fn #encode(#parameter) -> Vec<u8> {
-            #encoding.unwrap_or_else(|error| ::canic::__internal::cdk::trap(format!("failed to encode response: {error}")))
+            #encoding.unwrap_or_else(|error| ::canic::__internal::core::control_plane_support::ops::ic::IcOps::trap(format!("failed to encode response: {error}")))
         }
     }
 }

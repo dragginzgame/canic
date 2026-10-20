@@ -103,7 +103,7 @@ pub fn declare() {
         WatchdogReconcileState::Inactive,
     )
     .unwrap_or_else(|error| {
-        ic_platform::cdk::api::trap(format!(
+        IcOps::trap(format!(
             "canister-pool maintenance declaration rejected: {error}"
         ))
     });

@@ -136,14 +136,14 @@ impl RawAdapter<'_> {
             return quote! {
                 const __CANIC_ARGUMENT_LIMITS: ::canic::endpoint::ArgumentLimits = #limits;
                 let (#(#names,)*): (#(#types,)*) = __CANIC_ARGUMENT_LIMITS.read()
-                    .unwrap_or_else(|error| ::canic::__internal::cdk::trap(error.to_string()));
+                    .unwrap_or_else(|error| ::canic::__internal::core::control_plane_support::ops::ic::IcOps::trap(error.to_string()));
             };
         }
         let size_guard = self.max_bytes.map(|limit| {
             quote! {
                 const __CANIC_MAX_BYTES: usize = #limit;
                 if __canic_payload_len > __CANIC_MAX_BYTES {
-                    ::canic::__internal::cdk::trap(format!(
+                    ::canic::__internal::core::control_plane_support::ops::ic::IcOps::trap(format!(
                         "argument envelope is {__canic_payload_len} bytes; maximum is {}",
                         __CANIC_MAX_BYTES,
                     ));
@@ -167,7 +167,7 @@ impl RawAdapter<'_> {
             __canic_decoder_config.set_skipping_quota(10_000);
             let (#(#names,)*): (#(#types,)*) = ::canic::__internal::ic_platform::candid::decoder::decode_args_with_config(
                 &__canic_arg_bytes, &__canic_decoder_config,
-            ).unwrap_or_else(|error| ::canic::__internal::cdk::trap(error.to_string()));
+            ).unwrap_or_else(|error| ::canic::__internal::core::control_plane_support::ops::ic::IcOps::trap(error.to_string()));
         }
     }
 
@@ -185,7 +185,7 @@ impl RawAdapter<'_> {
         };
         quote! {
             let __canic_reply = #encode.unwrap_or_else(|error| {
-                ::canic::__internal::cdk::trap(format!("failed to encode response: {error}"))
+                ::canic::__internal::core::control_plane_support::ops::ic::IcOps::trap(format!("failed to encode response: {error}"))
             });
             ::canic::__internal::cdk::api::msg_reply(__canic_reply);
         }

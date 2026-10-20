@@ -32,7 +32,7 @@ use canic_core::{
         LifecycleMetricOutcome, LifecycleMetricPhase, LifecycleMetricRole, LifecycleMetricsApi,
     },
     bootstrap::compiled::{ConfigModel, RoleRuntimeAuthority},
-    control_plane_support::view::fleet_activation::FleetActivationTransition,
+    control_plane_support::{ops::ic::IcOps, view::fleet_activation::FleetActivationTransition},
 };
 use std::time::Duration;
 
@@ -136,7 +136,7 @@ impl LifecycleApi {
             Err(error) => {
                 crate::workflow::canister_pool::resume_after_authority_snapshot().unwrap_or_else(
                     |resume_error| {
-                        ic_platform::cdk::api::trap(format!(
+                        IcOps::trap(format!(
                             "Root timer rollback failed after snapshot rejection: {resume_error}"
                         ))
                     },
@@ -157,7 +157,7 @@ impl LifecycleApi {
             canic_core::api::authority_restore::AuthorityRestoreApi::resume_root_snapshot(request)
                 .await?;
         crate::workflow::canister_pool::resume_after_authority_snapshot().unwrap_or_else(|error| {
-            ic_platform::cdk::api::trap(format!(
+            IcOps::trap(format!(
                 "Root timer reconstruction failed while authority remained sealed: {error}"
             ))
         });
@@ -236,13 +236,11 @@ impl LifecycleApi {
         if let Some(args) = bootstrap_initialization {
             crate::ops::canister_pool::capacity_import::bootstrap::initialize(&args)
                 .unwrap_or_else(|error| {
-                    ic_platform::cdk::api::trap(format!(
-                        "Capacity bootstrap initialization failed: {error}"
-                    ))
+                    IcOps::trap(format!("Capacity bootstrap initialization failed: {error}"))
                 });
         }
         crate::workflow::root_funding::initialize().unwrap_or_else(|error| {
-            ic_platform::cdk::api::trap(format!("Root funding initialization failed: {error}"))
+            IcOps::trap(format!("Root funding initialization failed: {error}"))
         });
         crate::workflow::canister_pool::declare();
         let now_ns = canic_core::control_plane_support::ops::ic::IcOps::now_nanos();
@@ -258,7 +256,7 @@ impl LifecycleApi {
                 )
             })
             .unwrap_or_else(|error| {
-                ic_platform::cdk::api::trap(format!("Canister pool initialization failed: {error}"))
+                IcOps::trap(format!("Canister pool initialization failed: {error}"))
             });
     }
 
@@ -625,19 +623,17 @@ impl LifecycleApi {
                 config_path,
             );
         crate::workflow::component_registry::caller_authority::restore().unwrap_or_else(|error| {
-            ic_platform::cdk::api::trap(format!("Root caller publication restore failed: {error}"))
+            IcOps::trap(format!("Root caller publication restore failed: {error}"))
         });
         crate::workflow::canister_pool::declare();
         crate::workflow::component_provisioning::resume_after_restart().unwrap_or_else(|error| {
-            ic_platform::cdk::api::trap(format!(
+            IcOps::trap(format!(
                 "Root Component provisioning resume failed: {error}"
             ))
         });
         if active {
             crate::workflow::canister_pool::start().unwrap_or_else(|error| {
-                ic_platform::cdk::api::trap(format!(
-                    "Canister pool maintenance start failed: {error}"
-                ))
+                IcOps::trap(format!("Canister pool maintenance start failed: {error}"))
             });
         }
         active

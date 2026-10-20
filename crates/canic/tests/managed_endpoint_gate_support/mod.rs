@@ -17,6 +17,8 @@ struct ReviewedEndpoint {
     name: &'static str,
     kind: &'static str,
     guard: Option<&'static str>,
+    decoder: &'static str,
+    encoder: &'static str,
 }
 
 fn reviewed_endpoints() -> Vec<ReviewedEndpoint> {
@@ -26,6 +28,8 @@ fn reviewed_endpoints() -> Vec<ReviewedEndpoint> {
             name: "test_release_fixture",
             kind: "update",
             guard: Some("require_controller"),
+            decoder: "decode_release",
+            encoder: "encode_release",
         },
         // This standalone probe must use the bare CDK adapter to qualify the
         // inherited inspector limit independently of Canic's update macro.
@@ -34,6 +38,8 @@ fn reviewed_endpoints() -> Vec<ReviewedEndpoint> {
             name: "bare_echo",
             kind: "update",
             guard: None,
+            decoder: "codec::decode_one",
+            encoder: "codec::encode_reply",
         },
         // Simulator polling must observe invocation state and measurements
         // without dispatch instrumentation adding samples to the measured table.
@@ -42,18 +48,24 @@ fn reviewed_endpoints() -> Vec<ReviewedEndpoint> {
             name: "perf_context_entered",
             kind: "query",
             guard: None,
+            decoder: "codec::decode_args",
+            encoder: "codec::encode_reply",
         },
         ReviewedEndpoint {
             path: "canisters/test/runtime_probe/src/perf_context/mod.rs".into(),
             name: "perf_context_completed",
             kind: "query",
             guard: None,
+            decoder: "codec::decode_args",
+            encoder: "codec::encode_reply",
         },
         ReviewedEndpoint {
             path: "canisters/test/runtime_probe/src/perf_context/mod.rs".into(),
             name: "perf_context_metrics",
             kind: "query",
             guard: None,
+            decoder: "codec::decode_args",
+            encoder: "codec::encode_reply",
         },
     ]
 }
@@ -73,7 +85,7 @@ fn raw_kind(attribute: &Attribute) -> Option<&'static str> {
     }
 }
 
-fn options_match(attribute: &Attribute, guard: Option<&str>) -> bool {
+fn options_match(attribute: &Attribute, endpoint: &ReviewedEndpoint) -> bool {
     let args = match &attribute.meta {
         Meta::Path(_) => Punctuated::<Meta, Token![,]>::new(),
         Meta::List(_) => {
@@ -84,22 +96,33 @@ fn options_match(attribute: &Attribute, guard: Option<&str>) -> bool {
         }
         Meta::NameValue(_) => return false,
     };
-    let Some(expected) = guard else {
-        return args.is_empty();
-    };
-    if args.len() != 1 {
+    let mut expected = vec![
+        ("decode_with", endpoint.decoder),
+        ("encode_with", endpoint.encoder),
+    ];
+    if let Some(guard) = endpoint.guard {
+        expected.push(("guard", guard));
+    }
+    if args.len() != expected.len() {
         return false;
     }
-    let Some(Meta::NameValue(value)) = args.first() else {
-        return false;
-    };
-    let Expr::Lit(value_expr) = &value.value else {
-        return false;
-    };
-    let Lit::Str(actual) = &value_expr.lit else {
-        return false;
-    };
-    value.path.is_ident("guard") && actual.value() == expected
+    expected.into_iter().all(|(name, expected)| {
+        args.iter()
+            .filter(|arg| {
+                let Meta::NameValue(value) = arg else {
+                    return false;
+                };
+                let Expr::Lit(value_expr) = &value.value else {
+                    return false;
+                };
+                let Lit::Str(actual) = &value_expr.lit else {
+                    return false;
+                };
+                value.path.is_ident(name) && actual.value() == expected
+            })
+            .count()
+            == 1
+    })
 }
 
 struct EndpointVisitor<'a> {
@@ -119,7 +142,7 @@ impl<'ast> Visit<'ast> for EndpointVisitor<'_> {
                 entry.path == self.path
                     && function.sig.ident == entry.name
                     && entry.kind == kind
-                    && options_match(attribute, entry.guard)
+                    && options_match(attribute, entry)
             });
             if let Some((index, _)) = accepted {
                 if !self.seen.insert(index) {
@@ -207,31 +230,41 @@ mod tests {
     #[test]
     fn reviewed_instrumentation_requires_exact_guard_and_export_options() {
         let path = "apps/test/user_hub/src/fixture_importer/mod.rs";
-        assert!(
-            check(
-                r#"#[ic_platform::cdk::update(guard = "require_controller")] fn test_release_fixture() {}"#,
-                path
-            )
-            .is_empty()
-        );
-        for attribute in [
-            "#[ic_platform::cdk::update]",
-            r#"#[ic_platform::cdk::update(guard = "different_guard")]"#,
-            r#"#[ic_platform::cdk::update(guard = "require_controller", name = "application_method")]"#,
-            r#"#[ic_platform::cdk::query(guard = "require_controller")]"#,
+        let probe = r#"#[ic_platform::cdk::update(guard = "require_controller", decode_with = "decode_release", encode_with = "encode_release")] fn test_release_fixture() {}"#;
+        assert!(check(probe, path).is_empty());
+        for invalid in [
+            probe.replace(r#"guard = "require_controller", "#, ""),
+            probe.replace("require_controller", "different_guard"),
+            probe.replace("decode_release", "other_decoder"),
+            probe.replace("encode_release", "other_encoder"),
+            probe.replace("guard =", r#"name = "application_method", guard ="#),
+            probe.replace("cdk::update", "cdk::query"),
         ] {
-            assert!(
-                !check(&format!("{attribute} fn test_release_fixture() {{}}"), path).is_empty()
-            );
+            assert!(!check(&invalid, path).is_empty());
         }
     }
 
     #[test]
     fn bare_payload_probe_exception_is_exact() {
         let path = "canisters/test/payload_limit_probe/src/lib.rs";
-        let probe =
-            "#[ic_platform::cdk::update] fn bare_echo(payload: String) -> usize { payload.len() }";
+        let probe = r#"#[ic_platform::cdk::update(decode_with = "codec::decode_one", encode_with = "codec::encode_reply")] fn bare_echo(payload: String) -> usize { payload.len() }"#;
         assert!(check(probe, path).is_empty());
+        for invalid in [
+            probe.replace("codec::decode_one", "codec::decode_args"),
+            probe.replace("codec::encode_reply", "other_encoder"),
+            probe.replace(r#"decode_with = "codec::decode_one", "#, ""),
+            probe.replace(
+                r#"encode_with = "codec::encode_reply""#,
+                r#"name = "bare_echo""#,
+            ),
+            probe.replace(
+                "decode_with =",
+                r#"decode_with = "codec::decode_one", decode_with ="#,
+            ),
+            probe.replace("decode_with =", "composite = true, decode_with ="),
+        ] {
+            assert!(!check(&invalid, path).is_empty());
+        }
         assert!(!check(probe, "apps/production/src/lib.rs").is_empty());
         for source in [
             "#[ic_platform::cdk::update] fn another_update() {}",
@@ -252,17 +285,27 @@ mod tests {
             "perf_context_completed",
             "perf_context_metrics",
         ] {
-            let probe = format!("#[ic_platform::cdk::query] fn {name}() {{}}");
+            let probe = format!(
+                r#"#[ic_platform::cdk::query(decode_with = "codec::decode_args", encode_with = "codec::encode_reply")] fn {name}() {{}}"#
+            );
             assert!(check(&probe, path).is_empty());
             assert!(!check(&probe, "apps/production/src/lib.rs").is_empty());
             assert!(!check(&format!("{probe}\n{probe}"), path).is_empty());
-            for attribute in [
-                "#[ic_platform::cdk::update]",
-                r#"#[ic_platform::cdk::query(name = "application_method")]"#,
-                "#[ic_platform::cdk::query(composite = true)]",
-                r#"#[ic_platform::cdk::query(guard = "different_guard")]"#,
+            for invalid in [
+                probe.replace("cdk::query", "cdk::update"),
+                probe.replace(
+                    "decode_with =",
+                    r#"name = "application_method", decode_with ="#,
+                ),
+                probe.replace("decode_with =", "composite = true, decode_with ="),
+                probe.replace(
+                    "decode_with =",
+                    r#"guard = "different_guard", decode_with ="#,
+                ),
+                probe.replace("codec::decode_args", "codec::decode_one"),
+                probe.replace("codec::encode_reply", "other_encoder"),
             ] {
-                assert!(!check(&format!("{attribute} fn {name}() {{}}"), path).is_empty());
+                assert!(!check(&invalid, path).is_empty());
             }
         }
         assert!(!check("#[ic_platform::cdk::query] fn another_query() {}", path).is_empty());
