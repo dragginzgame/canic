@@ -2152,9 +2152,9 @@ dependencies = [
 
 [[package]]
 name = "ic-auth"
-version = "0.12.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d3061ebfa713f428178d31bdc817a0efb77c044b2ebe031504cdb80394fabd8"
+checksum = "da7e82a2a41838a41dfd9a26ec35faf26dbb72f07080c231ad77f5d326ed28b6"
 dependencies = [
  "ic-auth-protocol-types",
  "ic-platform 0.5.0",
@@ -2168,9 +2168,9 @@ dependencies = [
 
 [[package]]
 name = "ic-auth-protocol-types"
-version = "0.12.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a459a879827b7f8da9655d275a54ba0d1db68abeea0f59626ac4e019a6216a11"
+checksum = "df1d4fba12d7bbfd5bd94940ba525449c69abd06fed585bf0592266ea067695f"
 dependencies = [
  "ic-platform 0.5.0",
  "serde",
