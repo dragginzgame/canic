@@ -33,7 +33,7 @@ if [[ "$CRYPTO_TEST_CASE" == duplicate-version ]]; then
 fi
 case "$package/$features" in
     delegation_root_stub/)
-        printf '%s v0.1.0\n' signature rfc6979 hmac elliptic-curve ecdsa crypto-bigint signature ic-canister-sig-creation ic-certification
+        printf '%s v0.1.0\n' signature rfc6979 hmac elliptic-curve ecdsa crypto-bigint signature ic-certification
         if [[ "$CRYPTO_TEST_CASE" != missing-root-ecdsa ]]; then
             printf 'k256 v0.1.0\n'
         fi
@@ -44,8 +44,8 @@ case "$package/$features" in
     canister_test/|canister_user_shard/)
         # Deliberately unordered and repeated identities must compare as a set.
         printf '%s v0.1.0\n' signature rfc6979 k256 ic_bls12_381 \
-            ic-verify-bls-signature ic-signature-verification ic-certification \
-            ic-canister-sig-creation hmac elliptic-curve ecdsa crypto-bigint signature
+            ic-verify-bls-signature ic-certification \
+            hmac elliptic-curve ecdsa crypto-bigint signature
         if [[ "$CRYPTO_TEST_CASE" != missing-signature ]]; then
             printf 'pairing v0.1.0\n'
         fi

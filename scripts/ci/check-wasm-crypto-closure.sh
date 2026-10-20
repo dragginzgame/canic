@@ -66,6 +66,9 @@ signature_names() {
 }
 
 expected_signature_packages() {
+    # Platform 0.4 packages canister-signature creation/verification internally.
+    # Keep their former package names in detection above: a separate provider is
+    # still unexpected, even though those names no longer belong in these sets.
     case "$1" in
         none)
             ;;
@@ -76,7 +79,6 @@ expected_signature_packages() {
                 ecdsa \
                 elliptic-curve \
                 hmac \
-                ic-canister-sig-creation \
                 ic-certification \
                 k256 \
                 rfc6979 \
@@ -89,9 +91,7 @@ expected_signature_packages() {
                 ecdsa \
                 elliptic-curve \
                 hmac \
-                ic-canister-sig-creation \
                 ic-certification \
-                ic-signature-verification \
                 ic-verify-bls-signature \
                 ic_bls12_381 \
                 k256 \

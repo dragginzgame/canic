@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Align the Wasm crypto gate with Platform-owned canister-signature code while
+  retaining exact signature package sets and duplicate-provider checks.
+
 - Clear Core lint failures while preserving auth session admission ordering; adapt
   Auth 0.11 principal identities at existing DTO/storage boundaries. Use Clap in
   the four maintainer utilities, preserving their operations and selected inputs.

@@ -2433,9 +2433,9 @@ dependencies = [
 
 [[package]]
 name = "ic-query"
-version = "0.65.0"
+version = "0.65.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "554e3708d37796edb1c2fe96ecb4aa8689c9de08ff9eae15ec6f6e8d50ffdca6"
+checksum = "ceda86ec09d4b854d9fe47dca0451ab653079ad8b88866aceda00d15c1b5bd24"
 dependencies = [
  "futures",
  "ic-host-artifacts",
@@ -2447,7 +2447,6 @@ dependencies = [
  "prost",
  "serde",
  "serde_json",
- "sha2 0.10.9",
  "thiserror 2.0.18",
  "tokio",
  "url",

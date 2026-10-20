@@ -1,5 +1,22 @@
 # Current handoff — 2026-10-20
 
+## Crypto-closure gate correction — 2026-10-20
+
+The latest invariant failure required standalone `ic-canister-sig-creation` and
+`ic-signature-verification` packages that published Platform 0.4.1 now packages
+internally. Verified its registry source notice, feature wiring and Auth 0.11's
+Platform calls before updating the gate's exact expected sets and Cargo fixtures.
+The detection inventory still rejects unexpected separate signature providers;
+ECDSA/BLS, SHA-256, duplicate-version and zero-auth checks remain enforced.
+
+Pass: `make wasm-crypto-closure-gate` (fixtures and all 12 real canonical role
+graphs, including nine zero-auth roles), focused ShellCheck and whitespace checks.
+No runtime or dependency change; no broad validation or external deployment.
+This reported blocker is fixed. The checkout was clean at starting commit
+`e2f08b0cd47ba3155d1236a6a0917de80fffccb9`, superseding the prior dirty-work
+prerequisite below. This fix and its open 0.112 notes are ready for review;
+whole-batch release qualification is not established by this targeted gate.
+
 ## Blob 0.38 deployment qualification — 2026-10-20
 
 Retained the maintainer's published Blob/contracts 0.38.0 and Platform 0.4.1
