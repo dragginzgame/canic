@@ -379,7 +379,7 @@ mod tests {
         assert_eq!(reopened.get(&p(2)), Some(inactive));
         ShardingRegistryOps::clear_for_test();
         ShardingRegistry::with_mut(|core| {
-            for entry in reopened.iter() {
+            for entry in &reopened {
                 core.insert_entry(*entry.key(), entry.value());
             }
         });

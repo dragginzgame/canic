@@ -466,7 +466,8 @@ fn restoration_requires_unique_sessions_and_a_reservation_for_every_session() {
     ));
     let mut missing = original;
     missing.logins.clear();
-    missing.login_totals = Default::default();
+    missing.login_totals =
+        crate::storage::stable::auth::LocalApplicationLoginTotalsRecord::default();
     assert!(matches!(
         build_indexes(&missing),
         Err(ApplicationSessionStateError::InvalidLoginRecord)

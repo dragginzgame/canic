@@ -3,7 +3,7 @@
 ## Isolated PR #596 source and scope
 
 This contribution follows committed main `4caeec25d`, retaining shared branch
-history, and was last pushed as `5bcdc7677`. The normal checkout's wider pending
+history, continuing the CI repairs observed at `e47cd628d`. The normal checkout's wider pending
 work and newer dependency adoption are excluded. Own package versions remain
 0.111.0, with the existing 0.112.0 changelog batch. No merge, version bump, release,
 publication, lifecycle operation or normal-checkout mutation is included.
@@ -50,6 +50,23 @@ selection. Shared wrappers and strict tool admission remain unchanged. Optimizer
 fixtures assert physical identity; an explicit directory-symlink regression also
 covers that contract on Linux.
 
+The subsequent pinned-compiler failures in Core/Contracts/CLI are corrected
+without lint suppressions. Session admission reads its subject count with the
+existing indexes once; generation, replay, capacity and pre-write checks retain
+their order and errors. Storage iteration, test visibility/defaults and Candid
+test imports use the maintained contracts. Native and Wasm Rust 1.91 checking
+passes for Core/Contracts with all features; 18 session, 28 memory, 11 sharding,
+one pending-intent and one Candid round-trip case pass. Strict all-target,
+all-feature Core/Contracts/CLI Clippy passes.
+
+The managed test role now selects the delegated-token verifier required by its
+existing configuration. Passive-contract qualification uses a package-selected
+Cargo tree instead of workspace-unified metadata features. Both regressions and
+strict Host test Clippy pass on this parent graph as well as the published Build
+0.23 adoption graph. The test canister passes actual Rust 1.91 native checking.
+Five fresh-fixture Memory 0.48/0.49 conflicts remain a coordinated
+upstream adoption prerequisite; do not weaken the runtime-identity guard.
+
 The Build 0.23 observer API port is separate. Keep its published adoption and
 remaining Host alignment out of this CI/facts contribution.
 
@@ -73,7 +90,8 @@ managed/PocketIC qualification are separate. Preserve the historical identities
 and limits in the immutable
 [5bcdc7677 handoff](https://github.com/dragginzgame/canic/blob/5bcdc7677f72917be600b5c8bfa62e0c3196f627/docs/status/current.md).
 
-Current evidence/before-images: `/tmp/ic-build-hardcut-more.RkD1D3/`.
+Current evidence/before-images: `/tmp/ic-build-patch1-fixes.LDF1Oa/`.
+Prior evidence: `/tmp/ic-build-hardcut-more.RkD1D3/`.
 Earlier facts evidence: `/tmp/ic-build-fleet-followup.KGzFhf/` and
 `/tmp/ic-build-followthrough.epj0I5/`. Leave review/integration to the owner;
 consumer release and installed acceptance remain outside this contribution.

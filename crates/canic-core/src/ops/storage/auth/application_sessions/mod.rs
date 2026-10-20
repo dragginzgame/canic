@@ -541,7 +541,7 @@ fn authority_binding_to_record(
     }
 }
 
-fn replay_from_record(
+const fn replay_from_record(
     record: &LocalApplicationReplayRecord,
 ) -> Result<&LocalApplicationReplayRecord, ApplicationSessionStateError> {
     if record.remove_at_ns == 0 {

@@ -519,21 +519,25 @@ fn repository_canic_runtime_closure_separates_contracts_from_protected_catalog()
                     )
         })
         .expect("canonical wire owner");
-    let mut contract_closure = BTreeSet::new();
-    let mut frontier = vec![contracts.id.repr.as_str()];
-    while let Some(id) = frontier.pop() {
-        if !contract_closure.insert(id) {
-            continue;
-        }
-        let package = packages[id];
+    // Workspace metadata unifies sibling features; the selected tree owns this closure.
+    let tree = cargo_tree_for_package(
+        contracts.manifest_path.as_std_path(),
+        &contracts.id.repr,
+        WASM_TARGET,
+        true,
+        true,
+        &CargoFeatureSelection::default(),
+        TREE_FORMAT,
+    )
+    .expect("package-selected contracts tree");
+    let contract_graph = correlate_package_tree(&metadata, &metadata, contracts, &tree)
+        .expect("package-selected contracts closure");
+    for package in contract_graph.packages.values() {
         assert!(protected_canic_package(&package.name).is_none());
         assert!(!matches!(
             package.name.as_str(),
             "ic-cdk" | "ic-memory" | "ic-timers"
         ));
-        for dependency in normal_dependencies(nodes[id]) {
-            frontier.push(dependency.pkg.repr.as_str());
-        }
     }
     let expected = PROTECTED_CANIC_PACKAGES
         .iter()
