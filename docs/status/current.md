@@ -1,5 +1,17 @@
 # Current handoff — 2026-10-18
 
+## Authority-recovery layering fix — 2026-10-20
+
+The reported layering failure came from two direct Platform trap calls in
+`workflow/runtime/authority_restore`. Both now use the existing `IcOps::trap`,
+which delegates to the same Platform trap with the same message. Atomic rollback
+semantics and the layering guard remain unchanged.
+
+Pass: complete layering script, scoped Rust formatting and diff whitespace checks.
+No compilation or broad validation rerun for this two-call substitution. The
+reported layering blocker is resolved locally; this is not a complete 0.112
+release closeout. Both changelog surfaces include the fix.
+
 ## Blob and Platform integration unblock — 2026-10-20
 
 Adapted Blob 0.37 owned requests/replies and installation bytes to method-bound

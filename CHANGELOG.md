@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Route authority-recovery traps through the existing IC operations boundary,
+  fixing the layering check while preserving atomic rollback.
+
 - Select Rust 1.99.1 for development and matching CI checks, retaining existing
   package MSRVs.
 
