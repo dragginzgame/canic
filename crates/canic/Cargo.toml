@@ -35,7 +35,7 @@ canic-contracts.workspace = true
 canic-control-plane = { workspace = true, default-features = false, optional = true }
 canic-core = { workspace = true }
 canic-macros = { workspace = true }
-ic-platform = { workspace = true, features = ["cdk", "candid", "executor", "ic0"] }
+ic-platform = { workspace = true, features = ["cdk", "candid-service", "executor", "ic0"] }
 serde = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

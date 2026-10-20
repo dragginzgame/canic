@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Declare Platform's explicit Candid service-generation feature and preserve
+  authenticated ledger-tip evidence across Host dependency versions.
+
 - Preserve backup artifact error categories across independently selected Host
   and Backup dependency versions.
 
