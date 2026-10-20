@@ -2,7 +2,7 @@ name: CI
 
 env:
   CANIC_MSRV: 1.91.0
-  CANIC_INTERNAL_TOOLCHAIN: 1.99.0
+  CANIC_INTERNAL_TOOLCHAIN: 1.99.1
   CARGO_INCREMENTAL: 0
 
 permissions:
@@ -37,8 +37,10 @@ jobs:
         run: |
           source tool-versions.env
           make install-host-tools
+          make install-rust-tools
           echo "$GITHUB_WORKSPACE/.tools/host/bin" >> "$GITHUB_PATH"
-          export PATH="$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
+          echo "$GITHUB_WORKSPACE/.tools/rust/common/bin" >> "$GITHUB_PATH"
+          export PATH="$GITHUB_WORKSPACE/.tools/rust/common/bin:$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
           cargo install cargo-edit --version "$CANIC_CARGO_EDIT_VERSION" --locked
           bash scripts/ci/testkit-server.sh >/dev/null
           ACTIONLINT_BIN="$(bash scripts/ci/install-pinned-ci-tool.sh actionlint)"
@@ -52,6 +54,15 @@ jobs:
           rg --pcre2-version
           "$ACTIONLINT_BIN" -version
           "$SHELLCHECK_BIN" --version
+          make rust-tools-check format-tools-check
+      - name: Prepare locked dependency graphs
+        shell: bash
+        run: |
+          for manifest in Cargo.toml \
+            integrations/blob-service/consumer/Cargo.toml \
+            integrations/blob-service/embedded-consumer/Cargo.toml; do
+            cargo fetch --locked --manifest-path "$manifest"
+          done
       - name: Run preflight validation with complete feedback
         shell: bash
         run: make ci-preflight
@@ -229,8 +240,9 @@ jobs:
       - name: Install compiler cache
         shell: bash
         run: |
-          bash scripts/ci/install-pinned-ci-tool.sh sccache
+          cache_binary="$(bash scripts/ci/install-pinned-ci-tool.sh sccache)"
           {
+            echo "CANIC_SCCACHE_BIN=$cache_binary"
             echo "SCCACHE_DIR=$RUNNER_TEMP/canic-sccache"
             echo "SCCACHE_CACHE_SIZE=2G"
             echo "RUSTC_WRAPPER=$GITHUB_WORKSPACE/scripts/ci/run-canic-sccache.sh"
@@ -295,8 +307,9 @@ jobs:
       - name: Install compiler cache
         shell: bash
         run: |
-          bash scripts/ci/install-pinned-ci-tool.sh sccache
+          cache_binary="$(bash scripts/ci/install-pinned-ci-tool.sh sccache)"
           {
+            echo "CANIC_SCCACHE_BIN=$cache_binary"
             echo "SCCACHE_DIR=$RUNNER_TEMP/canic-sccache"
             echo "SCCACHE_CACHE_SIZE=2G"
             echo "RUSTC_WRAPPER=$GITHUB_WORKSPACE/scripts/ci/run-canic-sccache.sh"
@@ -363,8 +376,9 @@ jobs:
       - name: Install compiler cache
         shell: bash
         run: |
-          bash scripts/ci/install-pinned-ci-tool.sh sccache
+          cache_binary="$(bash scripts/ci/install-pinned-ci-tool.sh sccache)"
           {
+            echo "CANIC_SCCACHE_BIN=$cache_binary"
             echo "SCCACHE_DIR=$RUNNER_TEMP/canic-sccache"
             echo "SCCACHE_CACHE_SIZE=2G"
             echo "RUSTC_WRAPPER=$GITHUB_WORKSPACE/scripts/ci/run-canic-sccache.sh"

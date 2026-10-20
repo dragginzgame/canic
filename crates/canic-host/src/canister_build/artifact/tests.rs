@@ -382,12 +382,16 @@ fn cargo_custom_lib_outputs_are_captured_before_another_workspace_overwrites_the
         let CargoBuildOutput {
             execution: built,
             messages,
+            facts,
         } = output_canister_cargo_command(&command, CargoBuildProgress::single("fixture")).unwrap();
         assert!(
             built.status.success(),
             "{}",
             String::from_utf8_lossy(&built.stderr)
         );
+        let facts = facts.expect("runtime build retains observed facts");
+        assert_eq!(facts.selection, command.selection);
+        assert_eq!(facts.environment, command.environment);
         let path = ic_build::cargo::execution::select_cdylib_wasm(&messages, &manifest).unwrap();
         assert_eq!(path.file_name().unwrap(), "custom_library.wasm");
         let bytes = fs::read(&path).unwrap();
@@ -444,7 +448,9 @@ fn configured_library_command_cannot_build_a_colliding_binary() {
     let CargoBuildOutput {
         execution: output,
         messages,
+        facts,
     } = output_canister_cargo_command(&command, CargoBuildProgress::single("fixture")).unwrap();
+    assert!(facts.is_some());
     assert!(
         output.status.success(),
         "{}",

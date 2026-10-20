@@ -539,6 +539,7 @@ dependencies = [
  "canic-host",
  "clap",
  "ic-backup",
+ "ic-build",
  "ic-host-fs",
  "ic-host-process",
  "ic-host-text",
@@ -790,6 +791,7 @@ dependencies = [
  "canic",
  "ic-memory",
  "ic-platform",
+ "ic-storage",
 ]
 
 [[package]]
@@ -799,6 +801,7 @@ dependencies = [
  "canic",
  "ic-memory",
  "ic-platform",
+ "ic-storage",
 ]
 
 [[package]]
@@ -3281,6 +3284,7 @@ dependencies = [
  "ciborium",
  "ic-memory",
  "ic-platform",
+ "ic-storage",
  "serde",
 ]
 

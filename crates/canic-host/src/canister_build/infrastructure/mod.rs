@@ -113,7 +113,7 @@ pub(super) fn compile(
         &capabilities,
         &candid,
     );
-    let built_wasm_path = run_build(
+    let (built_wasm_path, cargo_facts) = run_build(
         role,
         context,
         &source.manifest_path,
@@ -127,6 +127,7 @@ pub(super) fn compile(
     let did_path = artifact_root.join(format!("{}.did", role.name()));
 
     let output = CanisterArtifactBuildOutput {
+        cargo_facts,
         package_name: source.package_name,
         package_version: source.package_version.clone(),
         protocol_release_identity: source.package_version,
@@ -258,7 +259,7 @@ fn run_build(
     manifest_path: &Path,
     protocol_profile_digest: Option<canic_core::role_contract::ProtocolProfileDigest>,
     force_candid_export: bool,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
+) -> Result<(PathBuf, ic_build::artifacts::CargoBuildFacts), Box<dyn std::error::Error>> {
     let mut command = cargo_command_for_role(role, context, manifest_path, force_candid_export);
     if let Some(digest) = protocol_profile_digest {
         command.environment.insert(
@@ -270,6 +271,7 @@ fn run_build(
     let CargoBuildOutput {
         execution: output,
         messages,
+        facts,
     } = output_canister_cargo_command(
         &command,
         CargoBuildProgress::batch([role.name()], 1, 1, started),
@@ -287,10 +289,10 @@ fn run_build(
 
     if output.status.success() {
         crate::canister_build::retain_cargo_include_exports(context, &messages)?;
-        return Ok(ic_build::cargo::execution::select_cdylib_wasm(
-            &messages,
-            manifest_path,
-        )?);
+        return Ok((
+            ic_build::cargo::execution::select_cdylib_wasm(&messages, manifest_path)?,
+            facts.ok_or("successful infrastructure build omitted Cargo facts")?,
+        ));
     }
     Err(format!(
         "Cargo failed to build {}: {}",
@@ -339,7 +341,7 @@ fn resolve_candid(
     source: &InfrastructureSource,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let Some(canonical_did_path) = &source.canonical_did_path else {
-        let wasm = run_build(role, context, &source.manifest_path, None, true)?;
+        let (wasm, _) = run_build(role, context, &source.manifest_path, None, true)?;
         let cache = super::candid_cache::CandidExtractionCache::prepare(context);
         return super::candid_cache::extract_configured_candid(cache.as_ref(), role.name(), &wasm);
     };

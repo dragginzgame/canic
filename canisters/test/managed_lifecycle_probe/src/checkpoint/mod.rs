@@ -10,16 +10,14 @@ use canic::{
     dto::application_checkpoint::ApplicationCheckpointParticipantStatus,
     ids::ApplicationCheckpointBinding,
 };
-use ic_memory::{
-    RuntimeMemory,
-    ic_stable_structures::{Cell, DefaultMemoryImpl},
-};
+use ic_memory::DefaultMemoryImpl;
 use ic_platform::candid::contract::CandidType;
+use ic_storage::adapter::StableCell;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
 pub const KEY: &str = "managed_probe.checkpoint.v1";
-type Storage = Cell<Vec<u8>, RuntimeMemory<DefaultMemoryImpl>>;
+type Storage = StableCell<Vec<u8>, DefaultMemoryImpl>;
 
 /// Business state and its freeze record are committed in one application-owned cell.
 #[derive(Default, Deserialize, Serialize)]
@@ -48,7 +46,7 @@ pub fn open() {
     let memory = canic::memory::open(KEY);
     let mut initial = Vec::new();
     ciborium::ser::into_writer(&BusinessRecord::default(), &mut initial).unwrap();
-    STORAGE.with_borrow_mut(|storage| *storage = Some(Cell::init(memory, initial)));
+    STORAGE.with_borrow_mut(|storage| *storage = Some(StableCell::init(memory, initial)));
 }
 
 fn read() -> BusinessRecord {

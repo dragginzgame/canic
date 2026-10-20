@@ -1,13 +1,11 @@
 //! Own the generic fixture's initialization evidence in application memory.
 
 use canic::{dto::abi::v1::CanisterInitPayload, endpoint::ArgumentLimits};
-use ic_memory::{
-    RuntimeMemory,
-    ic_stable_structures::{Cell, DefaultMemoryImpl, Memory},
-};
+use ic_memory::{DefaultMemoryImpl, Memory};
+use ic_storage::adapter::StableCell;
 use std::cell::RefCell;
 
-type Evidence = Cell<Vec<u8>, RuntimeMemory<DefaultMemoryImpl>>;
+type Evidence = StableCell<Vec<u8>, DefaultMemoryImpl>;
 const KEY: &str = "managed_probe.initialization.v1";
 pub const LIMITS: ArgumentLimits = ArgumentLimits {
     max_bytes: 65_536,
@@ -44,14 +42,15 @@ pub fn install() {
         LIMITS.read().expect("bounded init envelope");
     let memory = canic::memory::open(KEY);
     assert_eq!(memory.size(), 0);
-    EVIDENCE.with_borrow_mut(|cell| *cell = Some(Cell::init(memory, args.unwrap_or_default())));
+    EVIDENCE
+        .with_borrow_mut(|cell| *cell = Some(StableCell::init(memory, args.unwrap_or_default())));
 }
 
 pub fn restore() {
     super::checkpoint::open();
     let memory = canic::memory::open(KEY);
     assert!(memory.size() > 0);
-    EVIDENCE.with_borrow_mut(|cell| *cell = Some(Cell::init(memory, Vec::new())));
+    EVIDENCE.with_borrow_mut(|cell| *cell = Some(StableCell::init(memory, Vec::new())));
 }
 
 pub fn bytes() -> Vec<u8> {

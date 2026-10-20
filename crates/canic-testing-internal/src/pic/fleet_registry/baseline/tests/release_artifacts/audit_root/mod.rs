@@ -100,6 +100,7 @@ pub fn build_audit_root(context: &WorkspaceBuildContext) -> CanisterArtifactBuil
     };
     let wasm_path = role_path("wasm");
     let output = CanisterArtifactBuildOutput {
+        cargo_facts: runtime_wasms.record("root_probe").facts().clone(),
         package_name: "root_probe".into(),
         package_version: evidence.role_package_version,
         protocol_release_identity: evidence.canic_version,

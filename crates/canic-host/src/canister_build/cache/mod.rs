@@ -109,6 +109,7 @@ impl CargoBuildProgress {
 pub struct CargoBuildOutput {
     pub execution: ic_host_process::tool::CompletedExecution,
     pub messages: Vec<Message>,
+    pub facts: Option<ic_build::artifacts::CargoBuildFacts>,
 }
 
 /// Run Cargo once with its selected compiler configuration and retain its result.
@@ -163,15 +164,19 @@ pub fn output_canister_cargo_command(
         },
     )?;
     let execution = observed.execution.map_err(io::Error::other)?;
-    if execution.status.success() {
-        observed.messages?;
-        observed
-            .facts?
-            .ok_or_else(|| io::Error::other("successful Cargo build omitted execution facts"))?;
-    }
+    let facts =
+        if execution.status.success() {
+            observed.messages?;
+            Some(observed.facts?.ok_or_else(|| {
+                io::Error::other("successful Cargo build omitted execution facts")
+            })?)
+        } else {
+            None
+        };
     Ok(CargoBuildOutput {
         execution,
         messages,
+        facts,
     })
 }
 

@@ -201,13 +201,13 @@ fn quiesce_release(
 }
 
 fn trap_timer_transition(context: &str, error: TimerError) -> ! {
-    ic_platform::cdk::api::trap(format!(
+    IcOps::trap(format!(
         "authority transition failed closed while attempting to {context}: {error}"
     ))
 }
 
 fn trap_authority_transition(context: &str, error: InternalError) -> ! {
-    ic_platform::cdk::api::trap(format!(
+    IcOps::trap(format!(
         "authority transition failed closed while attempting to {context}: {error}"
     ))
 }

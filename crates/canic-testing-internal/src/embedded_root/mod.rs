@@ -10,7 +10,7 @@ use canic_core::cdk::utils::hash::sha256_hex;
 use ic_build::artifacts::{WasmBuildSpec, build_wasm_canisters_cached, resolve_cargo_build_inputs};
 use ic_host_fs::durable::{PublicationMode, WriteOptions};
 use serde::{Deserialize, Serialize};
-use std::{error::Error, fs, io, path::Path, process::Command};
+use std::{error::Error, fs, io, path::Path};
 
 const ARTIFACT: &str =
     "crates/canic/src/testing/managed_component_group/fixture/sharding_root_stub.wasm";
@@ -145,6 +145,7 @@ fn build(
         .into());
     };
     let bytes = fs::read(artifact)?;
+    let facts = record.facts();
     let evidence = FixtureEvidence {
         schema_version: 1,
         package: PACKAGE.into(),
@@ -156,20 +157,10 @@ fn build(
         lock_sha256: sha256_hex(&fs::read(workspace.join("Cargo.lock"))?),
         producer_lock_sha256: sha256_hex(&fs::read(spec.workspace_root().join("Cargo.lock"))?),
         artifact_sha256: sha256_hex(&bytes),
-        cargo: tool_identity("cargo", &["--version", "--verbose"])?,
-        rustc: tool_identity("rustc", &["-vV"])?,
+        cargo: String::from_utf8(facts.cargo_identity.clone()).map_err(io::Error::other)?,
+        rustc: String::from_utf8(facts.rustc_identity.clone()).map_err(io::Error::other)?,
     };
     Ok((bytes, evidence))
-}
-
-fn tool_identity(tool: &str, arguments: &[&str]) -> io::Result<String> {
-    let output = Command::new(tool).args(arguments).output()?;
-    if !output.status.success() {
-        return Err(io::Error::other(
-            String::from_utf8_lossy(&output.stderr).into_owned(),
-        ));
-    }
-    String::from_utf8(output.stdout).map_err(io::Error::other)
 }
 
 fn recorded_match(evidence: &FixtureEvidence, inputs: &str, bytes: &[u8]) -> io::Result<bool> {
