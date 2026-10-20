@@ -1,5 +1,32 @@
 # Current handoff — 2026-10-20
 
+## Authorized 0.112 release retries — 2026-10-20
+
+Maintainer authorized `make release-minor && make publish` with fixes/retries.
+Five attempts stopped before version preparation: uncommitted dependency inputs,
+Backup/Host error-type mismatch, newly selected unfetched Auth, Platform/Host/Blob
+type boundaries, then only Blob composition errors. Source fixes and incoming
+dependency selections are committed through `0521f7925`; version remains 0.111.0.
+No release tag, push or package upload occurred.
+
+Fixed Backup error conversion across Host versions, explicitly enabled Platform
+0.5 Candid service generation for existing contracts, and projected authenticated
+ledger index/hash into the selected Host type. Pass: 10 backup artifact tests,
+one generated-codec regression and 15 authenticated-ledger regressions.
+Latest full Clippy attempt reports only `canic-blob-service` failures; subsequent
+release gates/tests have not run. Evidence: `target/validation-runs/validation.Iz5tgA`
+and `/tmp/canic-release-{backup-artifacts,codecs,ledger-receipts}.log`.
+
+Blocked on published Blob: latest registry release 0.38.0 still uses Memory
+0.49.4 / Storage 0.5.8 / Platform 0.4.1. Canic selects Memory/Storage 0.50.0 and
+Platform 0.5.0. Public requests, runtime handles and principal types do not compose.
+Do not bridge memory owners or remove the single-runtime gate. Approved evidence
+is posted on [Blob issue #93](https://github.com/dragginzgame/ic-blob-storage/issues/93#issuecomment-6297546427).
+Next: adopt a compatible published Blob graph, qualify dedicated/embedded adapters,
+then resume the authorized release/publish cycle. Open 0.112 changelogs include
+the local fixes; the complete batch is not ready to publish. Keep dependency
+inputs fixed during validation; one concurrent Auth lock update required a restart.
+
 ## Cache executable fixture race — 2026-10-20
 
 Replaced both direct executable-script writes in Host cache tests with published
