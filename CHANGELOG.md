@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Reconcile root and Blob consumer lockfiles with the selected dependencies so
+  locked release preparation uses the declared graphs.
+
 - Declare Platform's explicit Candid service-generation feature and preserve
   authenticated ledger-tip evidence across Host dependency versions.
 

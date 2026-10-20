@@ -1,5 +1,22 @@
 # Current handoff — 2026-10-20
 
+## Lockfile preparation repair — 2026-10-20
+
+Commit `3b0710189` changed Backup ^0.35 to ^0.36 and Query ^0.65 to ^0.66
+without updating Cargo.lock, which still selected 0.35.1 / 0.65.2. Canic's local
+release preflight correctly refused `cargo fetch --locked`; the shared runner
+had not mutated versions or locks. Published Shared Tooling 0.25.9 at `85aded19`
+explicitly separates dependency reconciliation from locked release fetching.
+Reviewed that guidance; the adopted snapshot remains 0.25.8.
+
+Narrowly resolved root Backup 0.36.0 / Query 0.66.0 and reconciled both independent
+Blob consumer locks through offline metadata, preserving their declarations.
+Pass: root `cargo fetch --locked` and locked/offline metadata for all three graphs.
+Metadata evidence is `/tmp/canic-lock-*-verified.json`; no compile/full suite ran.
+Graph consistency does not fix Blob's Memory/Platform identity mismatch described
+below. Release remains blocked on a compatible published Blob graph. Commit
+manifests and every affected lockfile together before source-bound validation.
+
 ## Authorized 0.112 release retries — 2026-10-20
 
 Maintainer authorized `make release-minor && make publish` with fixes/retries.
