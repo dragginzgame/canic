@@ -213,14 +213,15 @@ fn directory_declaration_errors_preserve_backup_categories() {
     use ic_host_artifacts::artifact::tree::DirectoryChecksumError;
     let path = std::path::PathBuf::from("entry");
     assert!(matches!(
-        artifact_error(ArtifactError::from(DirectoryChecksumError::NonUtf8Path { path: path.clone() })),
+        artifact_error(directory_artifact_error(DirectoryChecksumError::NonUtf8Path { path: path.clone() })),
         ArtifactChecksumError::Artifact(ArtifactError::NonUtf8Path { path: observed }) if observed == path
     ));
     for error in [
         DirectoryChecksumError::InvalidRelativePath { path: path.clone() },
         DirectoryChecksumError::DuplicatePath { path },
     ] {
-        let ArtifactChecksumError::Io(error) = artifact_error(ArtifactError::from(error)) else {
+        let ArtifactChecksumError::Io(error) = artifact_error(directory_artifact_error(error))
+        else {
             panic!("expected invalid-data IO error");
         };
         assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);

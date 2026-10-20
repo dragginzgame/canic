@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Preserve backup artifact error categories across independently selected Host
+  and Backup dependency versions.
+
 - Select Metrics 0.15 with the updated Timers and Wire dependency resolutions.
 
 - Publish cache-test executable scripts through Host's isolated writer to avoid

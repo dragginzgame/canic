@@ -17,6 +17,7 @@ use ic_backup::{
     model::artifacts::{ArtifactChecksumRecord, ChecksumError},
     ops::artifacts::ArtifactError,
 };
+use ic_host_artifacts::artifact::tree::DirectoryChecksumError;
 use thiserror::Error as ThisError;
 
 /// Hash one file without following its final symlink.
@@ -56,7 +57,7 @@ pub fn checksum_directory(path: &Path) -> Result<ArtifactChecksumRecord, Artifac
             .map_err(|error| match error {
                 TreeChecksumError::Io(error) => ArtifactError::Io(error),
                 TreeChecksumError::Input(error) => ArtifactError::Io(error.into()),
-                TreeChecksumError::Declaration(error) => ArtifactError::from(error),
+                TreeChecksumError::Declaration(error) => directory_artifact_error(error),
                 TreeChecksumError::NonUtf8Path { path } => ArtifactError::NonUtf8Path { path },
                 TreeChecksumError::InvalidPath { path } => ArtifactError::UnsupportedEntry {
                     path: path.display().to_string(),
@@ -113,6 +114,14 @@ pub(crate) fn stage_relative_path(
         Err(artifact_error(ArtifactError::UnsupportedPlatform(
             std::env::consts::OS,
         )))
+    }
+}
+
+// Convert at Canic's boundary: Backup may select a different Host crate version.
+fn directory_artifact_error(error: DirectoryChecksumError) -> ArtifactError {
+    match error {
+        DirectoryChecksumError::NonUtf8Path { path } => ArtifactError::NonUtf8Path { path },
+        error => ArtifactError::Io(io::Error::new(io::ErrorKind::InvalidData, error)),
     }
 }
 
