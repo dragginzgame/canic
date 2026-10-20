@@ -1,5 +1,19 @@
 # Current handoff — 2026-10-20
 
+## Cache executable fixture race — 2026-10-20
+
+Replaced both direct executable-script writes in Host cache tests with published
+Host Process 0.31.2's isolated-writer helper. This prevents parallel forks from
+inheriting writable script descriptors, the documented ETXTBSY failure mechanism.
+Production execution, failure propagation and no-retry assertions are unchanged.
+
+Pass: four focused cache tests, 20 repeated four-thread runs (80 further passes),
+Host library/test Clippy with warnings denied, scoped formatting and whitespace.
+Logs: `/tmp/canic-cache-script-{tests,stress,clippy}.log`. Open 0.112 notes updated.
+The reported test-fixture blocker is addressed; full-suite and serial PocketIC
+qualification remain unrun here, so complete release readiness is unconfirmed.
+No dependency changes, commit, push, release or deployment.
+
 ## Ordinary endpoint and trap gates — 2026-10-20
 
 Resolved both failures in the 14:04 workspace ordinary-test log. Reviewed raw

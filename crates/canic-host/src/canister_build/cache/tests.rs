@@ -305,8 +305,8 @@ fn cargo_shared_execution_retains_typed_build_script_evidence() {
 fn cargo_success_requires_stable_tool_observations() {
     let root = temp_dir("cargo-tool-drift");
     let command = cargo_fixture(&root, ": > changed");
-    fs::write(
-        &command.cargo_program,
+    ic_host_process::testing::write_executable_script(
+        Path::new(&command.cargo_program),
         r#"#!/bin/sh
 case "$1" in
   --version|-vV)
@@ -325,11 +325,9 @@ esac
 
 #[cfg(unix)]
 fn cargo_fixture(root: &Path, body: &str) -> CargoInvocation {
-    use std::os::unix::fs::PermissionsExt;
     fs::create_dir_all(root).unwrap();
     let executable = root.join("cargo-fixture");
-    fs::write(&executable, format!("#!/bin/sh\ncase \"$1\" in --version|-vV) printf 'fixture identity'; exit 0;; esac\n{body}\n")).unwrap();
-    fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+    ic_host_process::testing::write_executable_script(&executable, format!("#!/bin/sh\ncase \"$1\" in --version|-vV) printf 'fixture identity'; exit 0;; esac\n{body}\n")).unwrap();
     CargoInvocation {
         cargo_program: executable.as_os_str().to_owned(),
         working_directory: root.to_owned(),

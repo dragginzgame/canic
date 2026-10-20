@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Publish cache-test executable scripts through Host's isolated writer to avoid
+  intermittent Linux text-file-busy failures during parallel tests.
+
 - Require exact fixture codec options in the managed-endpoint gate and route
   runtime and generated endpoint traps through the existing IC operations owner.
 
