@@ -425,7 +425,7 @@ macro_rules! __canic_emit_managed_command_endpoint {
             ) {
                 return;
             }
-            if ::canic::__internal::candid::decode_one::<CanisterCommand>(&bytes).is_ok() {
+            if ::canic::__internal::ic_platform::candid::decoder::decode_one::<CanisterCommand>(&bytes).is_ok() {
                 $crate::__internal::core::ingress::payload::accept_current_message();
             }
         }

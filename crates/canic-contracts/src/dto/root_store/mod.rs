@@ -8,7 +8,7 @@ use crate::{
     },
     protocol::profile::ProtocolProfileDigest,
 };
-use candid::{CandidType, Principal};
+use ic_platform::{Principal, candid::contract::CandidType};
 use serde::{Deserialize, Serialize};
 
 /// Maximum canonical root release-set manifest bytes admitted at the runtime boundary.
@@ -26,6 +26,7 @@ pub const ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX: &str = "component:";
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct RootStoreArtifact {
     pub role: CanisterRole,
@@ -50,6 +51,7 @@ pub struct RootStoreArtifact {
 #[derive(
     CandidType, Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize,
 )]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootStoreReleaseSetEntryKind {
     #[serde(rename = "component")]
     Component,
@@ -65,6 +67,7 @@ pub enum RootStoreReleaseSetEntryKind {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct RootStoreReleaseSetEntry {
     pub component_spec: ComponentSpecId,
@@ -78,6 +81,7 @@ pub struct RootStoreReleaseSetEntry {
 /// One admitted role's immutable source, protected by the installed Root release digest.
 ///
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct RootStoreFixture {
     pub role: CanisterRole,
@@ -92,6 +96,7 @@ pub struct RootStoreFixture {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct RootStoreReleaseSetManifest {
     pub release_build_id: ReleaseBuildId,
@@ -107,6 +112,7 @@ pub struct RootStoreReleaseSetManifest {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootStoreBootstrapRequest {
     pub operation_id: [u8; 32],
     pub manifest_payload_size_bytes: u64,
@@ -119,6 +125,7 @@ pub struct RootStoreBootstrapRequest {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootStoreCatalogEntry {
     pub role: CanisterRole,
     /// SHA-256 of the raw Wasm qualified by the release set.
@@ -139,6 +146,7 @@ pub struct RootStoreCatalogEntry {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootStoreBootstrapResponse {
     pub fleet_subnet_root: Principal,
     pub wasm_store: Principal,
@@ -153,6 +161,7 @@ pub struct RootStoreBootstrapResponse {
 /// Select one source from Root's protected staged release manifest; carries no payload authority.
 ///
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct RootStoreFixturePrepareRequest {
     pub bootstrap: RootStoreBootstrapRequest,

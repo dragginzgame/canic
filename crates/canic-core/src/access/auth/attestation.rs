@@ -5,15 +5,11 @@
 //! Boundary: the access DSL calls this before invoking application endpoint code.
 
 use crate::{
-    access::AccessError,
-    cdk::{
-        candid::de::{DecoderConfig, IDLDeserialize},
-        types::Principal,
-    },
-    dto::auth::SignedRoleAttestation,
+    access::AccessError, cdk::types::Principal, dto::auth::SignedRoleAttestation,
     workflow::runtime::auth::RuntimeAuthWorkflow,
 };
-use ic_cdk::api::msg_arg_data;
+use ic_platform::candid::decoder::{DecoderConfig, IDLDeserialize};
+use ic_platform::cdk::api::msg_arg_data;
 
 const ROLE_ATTESTATION_DECODING_QUOTA: usize = 384 * 1024;
 const ROLE_ATTESTATION_MAX_TYPE_LEN: usize = 16 * 1024;
@@ -64,14 +60,12 @@ fn role_attestation_from_bytes(bytes: &[u8]) -> Result<SignedRoleAttestation, St
 #[cfg(test)]
 mod tests {
     use super::role_attestation_from_ingress_bytes;
-    use crate::{
-        cdk::candid::{Principal, encode_args},
-        dto::auth::{
-            IcCanisterSignatureProofV1, RoleAttestation, RoleAttestationRootProof,
-            SignedRoleAttestation,
-        },
+    use crate::dto::auth::{
+        IcCanisterSignatureProofV1, RoleAttestation, RoleAttestationRootProof,
+        SignedRoleAttestation,
     };
     use canic_contracts::ids::CanisterRole;
+    use ic_platform::{Principal, candid::contract::encode_args};
 
     fn p(byte: u8) -> Principal {
         Principal::from_slice(&[byte; 29])

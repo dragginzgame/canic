@@ -13,9 +13,9 @@ pub(super) fn assert_complete(
 ) {
     let (expanded, expanded_registry, second) = add_root(pic, review, registry);
     let replace_registry = |registry: &FleetRegistry| {
-        let bytes = candid::encode_one(Ok::<_, Error>(RegistryReply::Registry(Box::new(
-            registry.clone(),
-        ))))
+        let bytes = ic_platform::candid::contract::encode_one(Ok::<_, Error>(
+            RegistryReply::Registry(Box::new(registry.clone())),
+        ))
         .unwrap();
         pic.update_call(
             review.authority.coordinator,

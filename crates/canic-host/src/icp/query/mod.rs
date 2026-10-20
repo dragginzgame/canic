@@ -7,8 +7,11 @@
 mod tests;
 
 use crate::icp::{IcpCli, IcpManagementCallError};
-use candid::{CandidType, Principal};
-use ic_agent::{Agent, AgentError, agent::agent_error::TransportError};
+use ic_platform::{
+    Principal,
+    agent::{Agent, AgentError, TransportError},
+    candid::contract::CandidType,
+};
 use serde::de::DeserializeOwned;
 use std::{future::Future, sync::Arc, time::Duration};
 use thiserror::Error;
@@ -37,10 +40,10 @@ pub enum IcpQueryError {
     Deadline,
 
     #[error("query response decoding failed: {0}")]
-    Decode(#[source] candid::Error),
+    Decode(#[source] ic_platform::candid::contract::Error),
 
     #[error("query argument encoding failed: {0}")]
-    Encode(#[source] candid::Error),
+    Encode(#[source] ic_platform::candid::contract::Error),
 
     #[error("query runtime failed: {0}")]
     Runtime(#[source] std::io::Error),
@@ -122,7 +125,8 @@ impl IcpCli {
             Some(&canister.to_text()),
             Some(method),
             || {
-                let argument = candid::encode_one(input).map_err(IcpQueryError::Encode)?;
+                let argument = ic_platform::candid::contract::encode_one(input)
+                    .map_err(IcpQueryError::Encode)?;
                 let transport = self.query_transport()?;
                 let agent = self
                     .build_authenticated_agent(
@@ -132,10 +136,10 @@ impl IcpCli {
                     )
                     .map_err(|error| IcpQueryError::Authority(Box::new(error)))?;
                 let bytes = query_bytes(self, &agent, canister, method, &argument)?;
-                let mut config = candid::de::DecoderConfig::new();
+                let mut config = ic_platform::candid::decoder::DecoderConfig::new();
                 config.set_decoding_quota(RESPONSE_BYTES * 64);
                 config.set_skipping_quota(RESPONSE_BYTES);
-                candid::utils::decode_one_with_config(&bytes, &config)
+                ic_platform::candid::decoder::decode_one_with_config(&bytes, &config)
                     .map_err(IcpQueryError::Decode)
             },
         )

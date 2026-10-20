@@ -1,8 +1,3 @@
-use candid::{
-    Principal, decode_one, encode_one,
-    types::{Type, TypeEnv, TypeInner, internal::TypeContainer},
-};
-use candid_parser::utils::CandidSource;
 use canic::{
     api::protocol::icrc21::Icrc21Dispatcher,
     dto::{
@@ -50,6 +45,17 @@ use canic::{
         FleetBinding, FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority,
         ManagedCanisterBinding, SubnetId,
     },
+};
+use ic_platform::{
+    Principal,
+    candid::{
+        contract::{
+            TypeEnv, encode_one,
+            types::{Type, TypeInner, internal::TypeContainer},
+        },
+        decoder::decode_one,
+    },
+    candid_parser::CandidSource,
 };
 use std::{
     collections::{BTreeSet, HashSet},
@@ -121,29 +127,38 @@ fn read_text(path: &Path) -> String {
 
 fn assert_candid_roundtrip<T>(value: T)
 where
-    T: candid::CandidType + for<'de> candid::Deserialize<'de> + Eq + Debug,
+    T: ic_platform::candid::contract::CandidType + for<'de> serde::Deserialize<'de> + Eq + Debug,
 {
     let encoded = encode_one(&value).expect("encode Candid value");
     let decoded = decode_one::<T>(&encoded).expect("decode Candid value");
     assert_eq!(decoded, value);
 }
 
-fn candid_type_env<T: candid::CandidType>() -> String {
+fn candid_type_env<T: ic_platform::candid::contract::CandidType>() -> String {
     let mut types = TypeContainer::new();
     types.add::<T>();
     types.env.to_string()
 }
 
 // Compare wire structure, independent of aliases, formatting and field order.
-fn candid_type_matches<T: candid::CandidType>(env: &TypeEnv, actual: &Type) -> bool {
+fn candid_type_matches<T: ic_platform::candid::contract::CandidType>(
+    env: &TypeEnv,
+    actual: &Type,
+) -> bool {
     let mut env = env.clone();
     let mut rust = TypeContainer::new();
     let expected = rust.add::<T>();
     let expected = env.merge_type(rust.env, expected);
-    candid::types::subtype::equal(&mut HashSet::default(), &env, actual, &expected).is_ok()
+    ic_platform::candid::contract::types::subtype::equal(
+        &mut HashSet::default(),
+        &env,
+        actual,
+        &expected,
+    )
+    .is_ok()
 }
 
-fn assert_candid_type<T: candid::CandidType>(env: &TypeEnv, name: &str) {
+fn assert_candid_type<T: ic_platform::candid::contract::CandidType>(env: &TypeEnv, name: &str) {
     let actual = env
         .find_type(name)
         .unwrap_or_else(|err| panic!("{name}: {err}"));
@@ -161,7 +176,7 @@ fn candid_field(env: &TypeEnv, name: &str, field: &str) -> Type {
     };
     fields
         .iter()
-        .find(|entry| entry.id.get_id() == candid::idl_hash(field))
+        .find(|entry| entry.id.get_id() == ic_platform::candid::contract::idl_hash(field))
         .unwrap_or_else(|| panic!("{name} has no field {field}"))
         .ty
         .clone()
@@ -330,7 +345,13 @@ fn authority_restore_release_status_matches_canonical_candid() {
     let mut rust = TypeContainer::new();
     let response = rust.add::<AuthorityRestoreFenceStatusResponse>();
     let response = env.merge_type(rust.env, response);
-    candid::types::subtype::equal(&mut HashSet::default(), &env, &canonical, &response).unwrap();
+    ic_platform::candid::contract::types::subtype::equal(
+        &mut HashSet::default(),
+        &env,
+        &canonical,
+        &response,
+    )
+    .unwrap();
     assert_candid_roundtrip(AuthorityRestoreFenceStatusResponse {
         authority_canister: Principal::from_slice(&[1]),
         phase: AuthorityRestoreFencePhase::ReleaseSealed {
@@ -676,7 +697,7 @@ fn fleet_coordinator_candid_contains_protected_admission_and_funding_protocol_ty
 
 #[test]
 fn fleet_coordinator_diagnostic_and_retirement_types_match_rust() {
-    fn assert_current_type<T: candid::CandidType>(name: &str) {
+    fn assert_current_type<T: ic_platform::candid::contract::CandidType>(name: &str) {
         let did = read_text(&workspace_root().join("crates/canic/candid/fleet_coordinator.did"));
         let (mut env, _) = CandidSource::Text(&did)
             .load()
@@ -688,8 +709,13 @@ fn fleet_coordinator_diagnostic_and_retirement_types_match_rust() {
         let mut rust = TypeContainer::new();
         let ty = rust.add::<T>();
         let ty = env.merge_type(rust.env, ty);
-        candid::types::subtype::equal(&mut HashSet::default(), &env, &canonical, &ty)
-            .expect("canonical retirement type must equal the current Rust contract");
+        ic_platform::candid::contract::types::subtype::equal(
+            &mut HashSet::default(),
+            &env,
+            &canonical,
+            &ty,
+        )
+        .expect("canonical retirement type must equal the current Rust contract");
     }
     use canic::dto::fleet_registry::{
         FleetRetirementStatus, FleetSubnetRootDeletionReadinessRequest,
@@ -764,7 +790,7 @@ fn fleet_coordinator_command_surface_is_profile_exact() {
             .collect::<BTreeSet<_>>(),
         expected
             .into_iter()
-            .map(candid::idl_hash)
+            .map(ic_platform::candid::contract::idl_hash)
             .collect::<BTreeSet<_>>(),
         "CoordinatorCommand must expose the reviewed command identities"
     );
@@ -778,7 +804,13 @@ fn fleet_coordinator_command_surface_is_profile_exact() {
 mod infrastructure_read_contracts {
     use super::*;
 
-    fn assert_contract<Q: candid::CandidType, R: candid::CandidType>(path: &str, method: &str) {
+    fn assert_contract<
+        Q: ic_platform::candid::contract::CandidType,
+        R: ic_platform::candid::contract::CandidType,
+    >(
+        path: &str,
+        method: &str,
+    ) {
         let did = read_text(&workspace_root().join(path));
         let (mut env, actor) = CandidSource::Text(&did)
             .load()
@@ -793,7 +825,10 @@ mod infrastructure_read_contracts {
         let function = env.as_func(ty).unwrap();
         assert_eq!(function.args.len(), 1);
         assert_eq!(function.rets.len(), 1);
-        assert_eq!(function.modes, vec![candid::types::FuncMode::Query]);
+        assert_eq!(
+            function.modes,
+            vec![ic_platform::candid::contract::types::FuncMode::Query]
+        );
         let canonical_request = function.args[0].clone();
         let canonical_response = function.rets[0].clone();
         let mut rust = TypeContainer::new();
@@ -802,8 +837,13 @@ mod infrastructure_read_contracts {
         let request = env.merge_type(rust.env.clone(), request);
         let response = env.merge_type(rust.env, response);
         for (canonical, ty) in [(canonical_request, request), (canonical_response, response)] {
-            candid::types::subtype::equal(&mut HashSet::default(), &env, &canonical, &ty)
-                .expect("read contract matches its current authority owner");
+            ic_platform::candid::contract::types::subtype::equal(
+                &mut HashSet::default(),
+                &env,
+                &canonical,
+                &ty,
+            )
+            .expect("read contract matches its current authority owner");
         }
     }
 
@@ -1179,11 +1219,10 @@ fn memory_ledger_dto_candid_shape_includes_backing_memory_size() {
     assert!(
         ledger_env.contains("memories : vec MemoryLedgerMemoryEntry")
             && ledger_env.contains("ledger_memory_manager_id : nat8")
-            && ledger_env.contains("schema_version : opt nat32")
+            && ledger_env.contains("excluded_ids : blob")
             && ledger_env.contains("type MemoryLedgerMemoryEntry = record")
             && ledger_env.contains("memory_manager_id : nat8")
             && ledger_env.contains("stable_key : text")
-            && ledger_env.contains("state : MemoryAllocationState")
             && ledger_env.contains("size : MemoryAllocationSizeEntry")
             && ledger_env.contains("memory_size : opt MemoryAllocationSizeEntry")
             && ledger_env.contains("type MemoryAllocationSizeEntry = record")
@@ -1335,7 +1374,7 @@ fn missing_finish_marker_stays_actionable() {
 
 #[test]
 fn public_history_canonical_types_match_rust() {
-    fn check<T: candid::CandidType>(name: &str) {
+    fn check<T: ic_platform::candid::contract::CandidType>(name: &str) {
         let did = read_text(&workspace_root().join("crates/canic/candid/wasm_store.did"));
         let (mut env, _) = CandidSource::Text(&did)
             .load()
@@ -1344,8 +1383,13 @@ fn public_history_canonical_types_match_rust() {
         let mut rust = TypeContainer::new();
         let ty = rust.add::<T>();
         let ty = env.merge_type(rust.env, ty);
-        candid::types::subtype::equal(&mut HashSet::default(), &env, &canonical, &ty)
-            .expect("canonical public metrics type equals current Rust contract");
+        ic_platform::candid::contract::types::subtype::equal(
+            &mut HashSet::default(),
+            &env,
+            &canonical,
+            &ty,
+        )
+        .expect("canonical public metrics type equals current Rust contract");
     }
     use canic::dto::public_status::{PublicHistoryRequest, PublicHistorySnapshot, PublicMetric};
     check::<PublicMetric>("PublicMetric");
@@ -1362,8 +1406,13 @@ fn public_health_canonical_types_match_rust() {
         let mut rust = TypeContainer::new();
         let ty = rust.add::<canic::dto::public_status::PublicHealth>();
         let ty = env.merge_type(rust.env, ty);
-        candid::types::subtype::equal(&mut HashSet::default(), &env, &canonical, &ty)
-            .expect("canonical public health equals current Rust contract");
+        ic_platform::candid::contract::types::subtype::equal(
+            &mut HashSet::default(),
+            &env,
+            &canonical,
+            &ty,
+        )
+        .expect("canonical public health equals current Rust contract");
     }
 }
 
@@ -1376,8 +1425,13 @@ fn fleet_recovery_controller_binding_matches_canonical_candid() {
         let mut rust = TypeContainer::new();
         let ty = rust.add::<ids::FleetCoordinatorBinding>();
         let ty = env.merge_type(rust.env, ty);
-        candid::types::subtype::equal(&mut HashSet::default(), &env, &canonical, &ty)
-            .expect("Fleet recovery controller binding matches canonical Candid");
+        ic_platform::candid::contract::types::subtype::equal(
+            &mut HashSet::default(),
+            &env,
+            &canonical,
+            &ty,
+        )
+        .expect("Fleet recovery controller binding matches canonical Candid");
     }
 }
 
@@ -1394,8 +1448,13 @@ fn fleet_funding_rotation_status_matches_canonical_candid_after_recovery_binding
     let ty = rust
         .add::<canic_contracts::dto::fleet_coordinator::FleetFundingPolicyRotationStatusPhase>();
     let ty = env.merge_type(rust.env, ty);
-    candid::types::subtype::equal(&mut HashSet::default(), &env, &canonical, &ty)
-        .expect("funding rotation status retains its canonical Candid shape");
+    ic_platform::candid::contract::types::subtype::equal(
+        &mut HashSet::default(),
+        &env,
+        &canonical,
+        &ty,
+    )
+    .expect("funding rotation status retains its canonical Candid shape");
 }
 
 #[test]
@@ -1411,8 +1470,13 @@ fn provisioning_failure_stage_matches_canonical_candid() {
     for (name, ty) in types {
         let canonical = env.find_type(name).unwrap().clone();
         let ty = env.merge_type(rust.env.clone(), ty);
-        candid::types::subtype::equal(&mut HashSet::default(), &env, &canonical, &ty)
-            .expect("protected provisioning evidence equals the current Rust contract");
+        ic_platform::candid::contract::types::subtype::equal(
+            &mut HashSet::default(),
+            &env,
+            &canonical,
+            &ty,
+        )
+        .expect("protected provisioning evidence equals the current Rust contract");
     }
 }
 
@@ -1427,8 +1491,13 @@ fn state_cascade_store_response_matches_canonical_candid() {
     let mut rust = TypeContainer::new();
     let ty = rust.add::<canic_contracts::dto::template::StoreCommandResponse>();
     let ty = env.merge_type(rust.env, ty);
-    candid::types::subtype::equal(&mut HashSet::default(), &env, &canonical, &ty)
-        .expect("Store response contract equals current Rust, including cascade outcomes");
+    ic_platform::candid::contract::types::subtype::equal(
+        &mut HashSet::default(),
+        &env,
+        &canonical,
+        &ty,
+    )
+    .expect("Store response contract equals current Rust, including cascade outcomes");
 }
 
 #[cfg(feature = "wasm-store-canister")]
@@ -1444,15 +1513,21 @@ fn store_preparation_command_matches_canonical_candid() {
     for (name, ty) in [("StoreCommand", command), ("TemplateChunkInput", chunk)] {
         let canonical = env.find_type(name).unwrap().clone();
         let ty = env.merge_type(rust.env.clone(), ty);
-        candid::types::subtype::equal(&mut HashSet::default(), &env, &canonical, &ty)
-            .expect("Store publication matches its canonical Candid contract");
+        ic_platform::candid::contract::types::subtype::equal(
+            &mut HashSet::default(),
+            &env,
+            &canonical,
+            &ty,
+        )
+        .expect("Store publication matches its canonical Candid contract");
     }
 }
 
 #[cfg(feature = "control-plane")]
 mod capacity_import_surface {
-    use candid::{decode_one, encode_one};
     use canic::dto::pool_import::{PoolImportCommand, PoolImportIdentity};
+    use ic_platform::candid::contract::encode_one;
+    use ic_platform::candid::decoder::decode_one;
 
     canic::canic_emit_root_command_endpoint!();
 

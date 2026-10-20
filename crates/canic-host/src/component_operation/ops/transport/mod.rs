@@ -17,22 +17,21 @@ use crate::{
     icp::IcpCli,
     protocol_binding::{ResolvedProtocolBinding, resolve_registry_protocol_binding},
 };
-use candid::Principal;
-use canic_contracts::diagnostics::codes::STATE_UNAVAILABLE;
-use canic_contracts::dto::component_registry::RootComponentAllocationRequest;
-use canic_contracts::dto::fleet_coordinator::CoordinatorRegistryRequest;
-use canic_contracts::dto::fleet_coordinator::CoordinatorRegistryResponse;
-use canic_contracts::dto::fleet_registry::FleetSubnetRootStatus;
-use canic_contracts::dto::pool::CanisterPoolStatusRequest;
-use canic_contracts::dto::role::OperationAcceptedResponse as RootCommandResponse;
-use canic_contracts::dto::role::OperationStatusRequest;
-use canic_contracts::dto::root::RootOperationStatusResponse;
-use canic_contracts::dto::wire::projection::component_operation::RootCommand;
-use canic_contracts::dto::wire::projection::component_operation::RootRead;
-use canic_contracts::dto::wire::projection::component_operation::RootResponse;
-use canic_contracts::ids::ComponentSpecId;
-use canic_contracts::ids::FleetSubnetRootBinding;
-use canic_contracts::protocol;
+use canic_contracts::{
+    diagnostics::codes::STATE_UNAVAILABLE,
+    dto::{
+        component_registry::RootComponentAllocationRequest,
+        fleet_coordinator::{CoordinatorRegistryRequest, CoordinatorRegistryResponse},
+        fleet_registry::FleetSubnetRootStatus,
+        pool::CanisterPoolStatusRequest,
+        role::{OperationAcceptedResponse as RootCommandResponse, OperationStatusRequest},
+        root::RootOperationStatusResponse,
+        wire::projection::component_operation::{RootCommand, RootRead, RootResponse},
+    },
+    ids::{ComponentSpecId, FleetSubnetRootBinding},
+    protocol,
+};
+use ic_platform::Principal;
 use sha2_host::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 

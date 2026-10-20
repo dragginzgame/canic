@@ -8,12 +8,12 @@ pub mod handler;
 
 use crate::{
     InternalError,
-    cdk::candid::CandidType,
     dto::rpc::{CreateCanisterParent, CreateCanisterResponse, CyclesResponse},
     model::replay::OperationId,
     ops::rpc::request::RequestOps,
 };
 use canic_contracts::ids::CanisterRole;
+use ic_platform::candid::contract::CandidType;
 
 ///
 /// RpcRequestWorkflow

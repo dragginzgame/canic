@@ -12,11 +12,11 @@ use crate::{
     },
     icp::IcpCli,
 };
-use candid::{CandidType, Principal};
 use canic_contracts::dto::{
     canister::CanisterInspectionRequest,
     wire::projection::install_history::{Command, Response},
 };
+use ic_platform::{Principal, candid::contract::CandidType};
 use serde::Deserialize;
 use std::path::Path;
 
@@ -30,6 +30,7 @@ pub(super) enum HistoryEffect {
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 struct History {
     module_hash: Option<Vec<u8>>,
     controllers: Vec<Principal>,
@@ -37,6 +38,7 @@ struct History {
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 struct Change {
     canister_version: u64,
     origin: Option<Origin>,
@@ -44,18 +46,21 @@ struct Change {
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 enum Origin {
     #[serde(rename = "from_user")]
     FromUser { user_id: Principal },
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 enum Details {
     #[serde(rename = "code_deployment")]
     CodeDeployment { mode: Mode, module_hash: Vec<u8> },
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 enum Mode {
     #[serde(rename = "install")]
     Install,
@@ -96,7 +101,7 @@ pub(super) fn observe(
         if response.canister_id != principal {
             return Err(CurrentProtocolError::ResponseMismatch);
         }
-        let history: History = candid::decode_one(&response.history_candid)
+        let history: History = ic_platform::candid::decoder::decode_one(&response.history_candid)
             .map_err(|_| CurrentProtocolError::ResponseMismatch)?;
         Ok(classify_history(&history, operator, before, live))
     })
@@ -223,7 +228,7 @@ mod tests {
             }} }}
         }})"#
         );
-        let (environment, actor) = candid_parser::utils::CandidSource::Text(
+        let (environment, actor) = ic_platform::candid_parser::CandidSource::Text(
             r"
             type Origin = variant {
                 from_user : record { user_id : principal };
@@ -253,13 +258,13 @@ mod tests {
             .unwrap()
             .rets;
         let encode = |wire: &str| {
-            candid_parser::parse_idl_args(wire)
+            ic_platform::candid_parser::parse_idl_args(wire)
                 .unwrap()
                 .to_bytes_with_types(&environment, types)
                 .unwrap()
         };
         let bytes = encode(&wire);
-        let history: History = candid::decode_one(&bytes).unwrap();
+        let history: History = ic_platform::candid::decoder::decode_one(&bytes).unwrap();
         assert!(matches!(
             history.recent_changes[0].origin,
             Some(Origin::FromUser { .. })
@@ -275,7 +280,7 @@ mod tests {
         let foreign = wire
             .replace("from_user", "from_canister")
             .replace("user_id", "canister_id");
-        let foreign: History = candid::decode_one(&encode(&foreign)).unwrap();
+        let foreign: History = ic_platform::candid::decoder::decode_one(&encode(&foreign)).unwrap();
         assert!(foreign.recent_changes[0].origin.is_none());
     }
 

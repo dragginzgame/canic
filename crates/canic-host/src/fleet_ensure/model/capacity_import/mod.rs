@@ -7,8 +7,8 @@ pub mod operation;
 pub mod retirement;
 pub mod survey;
 
-use candid::Principal;
 use canic_contracts::ids::{FleetBinding, SubnetId};
+use ic_platform::Principal;
 use serde::{Deserialize, Serialize};
 
 /// Source debit used by clean reinstall and its advance headroom forecast.

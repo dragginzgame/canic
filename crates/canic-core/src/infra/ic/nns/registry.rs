@@ -10,7 +10,7 @@ use crate::{
     log,
     log::Topic,
 };
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 use thiserror::Error as ThisError;
 
@@ -22,6 +22,7 @@ use thiserror::Error as ThisError;
 ///
 
 #[derive(CandidType, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct GetSubnetForCanisterRequest {
     pub principal: Principal,
 }
@@ -34,6 +35,7 @@ pub struct GetSubnetForCanisterRequest {
 ///
 
 #[derive(CandidType, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct GetSubnetForCanisterPayload {
     pub subnet_id: Option<Principal>,
 }

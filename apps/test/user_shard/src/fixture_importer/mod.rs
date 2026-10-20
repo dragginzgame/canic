@@ -20,7 +20,8 @@ pub const MEMORY_KEY: &str = "test.fixture_import.v1";
 
 const PAYLOAD: &[u8] = b"reviewed fixture source";
 
-#[derive(candid::CandidType, canic::__internal::serde::Deserialize)]
+#[derive(ic_platform::candid::contract::CandidType, canic::__internal::serde::Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(crate = "canic::__internal::serde")]
 struct ImportRecord {
     bytes: Vec<u8>,
@@ -54,14 +55,18 @@ fn load() -> ImportRecord {
                 progress: None,
             }
         } else {
-            candid::decode_one(cell.get()).expect("decode application import record")
+            ic_platform::candid::decoder::decode_one(cell.get())
+                .expect("decode application import record")
         }
     })
 }
 
 fn persist(record: &ImportRecord) {
     IMPORT.with_borrow_mut(|cell| {
-        cell.set(candid::encode_one(record).expect("encode application import record"));
+        cell.set(
+            ic_platform::candid::contract::encode_one(record)
+                .expect("encode application import record"),
+        );
     });
 }
 

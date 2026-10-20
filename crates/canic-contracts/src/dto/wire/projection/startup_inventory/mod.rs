@@ -9,12 +9,13 @@ use crate::dto::component_registry::{
     ComponentDirectoryHead, ComponentDirectoryHeadRequest, ComponentRegistryPartitionRequest,
     ComponentRegistryPartitionResponse,
 };
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded Request wire projection for startup inventory.
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum Request {
     ComponentDirectoryHead(ComponentDirectoryHeadRequest),
     ComponentRegistryPartition(ComponentRegistryPartitionRequest),
@@ -22,6 +23,7 @@ pub enum Request {
 
 /// Bounded Response wire projection for startup inventory.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum Response {
     ComponentDirectoryHead(Box<ComponentDirectoryHead>),
     ComponentRegistryPartition(Box<ComponentRegistryPartitionResponse>),

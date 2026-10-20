@@ -16,14 +16,13 @@ use crate::fleet_ensure::{
         },
     },
 };
-use candid::{CandidType, Principal};
-use ic_agent::{
-    Agent, RequestId,
-    agent::{EnvelopeContent, signed_update_inspect},
-    identity::BasicIdentity,
+use ic_platform::bls::PrivateKey;
+use ic_platform::{
+    Principal,
+    agent::{Agent, BasicIdentity, EnvelopeContent, RequestId, signed_update_inspect},
+    candid::contract::CandidType,
+    certification::{fork, labeled, leaf},
 };
-use ic_certification::{fork, labeled, leaf};
-use ic_verify_bls_signature::PrivateKey;
 use prost::Message;
 use serde::Deserialize;
 use sha2_host::{Digest, Sha256};
@@ -37,6 +36,7 @@ struct Fixture {
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 struct Args {
     start: u64,
     length: u64,
@@ -138,7 +138,7 @@ impl Fixture {
         self.certificate(
             self.read.request_id(),
             b"replied",
-            &candid::encode_one(reply).unwrap(),
+            &ic_platform::candid::contract::encode_one(reply).unwrap(),
         )
     }
 
@@ -175,7 +175,7 @@ const fn limits() -> IcpReadLimits {
 #[test]
 fn signed_read_binds_operator_ledger_method_and_single_block_index() {
     let fixture = Fixture::new();
-    let arg = candid::encode_one(Args {
+    let arg = ic_platform::candid::contract::encode_one(Args {
         start: 77,
         length: 1,
     })
@@ -200,7 +200,7 @@ fn signed_read_binds_operator_ledger_method_and_single_block_index() {
         sender_info: request.sender_info.clone(),
     };
     assert_eq!(
-        ic_agent::to_request_id(&content).unwrap(),
+        ic_platform::agent::to_request_id(&content).unwrap(),
         *fixture.read.request_id()
     );
     let IcpReadOutcome::Transfer(result) = verify_read(
@@ -227,7 +227,7 @@ fn certificate_for_a_different_read_cannot_authorize_this_block() {
     let certificate = fixture.certificate(
         other.request_id(),
         b"replied",
-        &candid::encode_one(fixture.reply()).unwrap(),
+        &ic_platform::candid::contract::encode_one(fixture.reply()).unwrap(),
     );
     assert!(matches!(
         verify_read(&fixture.agent, &fixture.read, &certificate, limits()),
@@ -242,7 +242,7 @@ fn pending_rejected_and_deleted_read_states_never_become_transfer_proofs() {
         let cert = fixture.certificate(
             fixture.read.request_id(),
             status,
-            &candid::encode_one(fixture.reply()).unwrap(),
+            &ic_platform::candid::contract::encode_one(fixture.reply()).unwrap(),
         );
         assert!(matches!(
             verify_read(&fixture.agent, &fixture.read, &cert, limits()),
@@ -271,7 +271,7 @@ fn changed_network_signer_and_certificate_signature_reject() {
         verify_read(&other.agent, &fixture.read, &cert, limits()),
         Err(Error::ReaderMismatch)
     ));
-    let mut certificate: ic_certification::Certificate =
+    let mut certificate: ic_platform::certification::Certificate =
         ciborium::de::from_reader(cert.as_slice()).unwrap();
     certificate.signature[0] ^= 1;
     assert!(matches!(

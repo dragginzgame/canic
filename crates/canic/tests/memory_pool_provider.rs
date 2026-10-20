@@ -5,7 +5,7 @@ use canic::__internal::core::__reexports::ic_memory;
 canic::memory::memory_allocation_pool!(
     provider = application_memory_pool,
     authorities = [("provider-test", "provider_test.")],
-    exclusions = [(240, 244)],
+    exclusions = [240, 241, 242, 243, 244],
 );
 
 fn grow_application_memory() -> u64 {
@@ -33,27 +33,17 @@ fn checked_provider_is_available_before_bootstrap_and_after_warm_adoption() {
     assert_eq!(application_memory_pool().unwrap(), before);
     let mut input = canic::memory::framework();
     input.pool = application_memory_pool().unwrap();
-    input.requests.push(
-        ic_memory::MemoryRequest::new(
-            "provider-test",
-            "provider_test.rows.v1",
-            ic_memory::SchemaMetadata::default(),
-        )
-        .unwrap(),
-    );
+    input
+        .requests
+        .push(ic_memory::MemoryRequest::new("provider-test", "provider_test.rows.v1").unwrap());
     canic::memory::bootstrap(input).unwrap();
     assert_eq!(grow_application_memory(), 0);
     assert_eq!(application_memory_pool().unwrap(), before);
     let mut input = canic::memory::framework();
     input.pool = application_memory_pool().unwrap();
-    input.requests.push(
-        ic_memory::MemoryRequest::new(
-            "provider-test",
-            "provider_test.rows.v1",
-            ic_memory::SchemaMetadata::default(),
-        )
-        .unwrap(),
-    );
+    input
+        .requests
+        .push(ic_memory::MemoryRequest::new("provider-test", "provider_test.rows.v1").unwrap());
     canic::memory::bootstrap(input).unwrap();
     assert_eq!(grow_application_memory(), 1);
     assert_eq!(application_memory_pool().unwrap(), before);
@@ -82,7 +72,7 @@ fn explicit_composition_refuses_duplicates_and_admission_before_publication() {
 
         let mut rejected = canic::memory::framework();
         rejected.admission = Some(MemoryBootstrapAdmission::new(
-            PolicyIdentity::new("test.host-admission", 1).unwrap(),
+            PolicyIdentity::new([3; 32]),
             |_| {
                 Err(MemoryRegistryError::InvalidDeclaration {
                     stable_key: "test.refused.v1".to_string(),

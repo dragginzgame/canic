@@ -11,9 +11,7 @@
 //! The contents are replaced wholesale on import.
 
 use crate::{
-    cdk::structures::{
-        DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, memory::RuntimeMemory,
-    },
+    cdk::structures::{DefaultMemoryImpl, StableBTreeMap as StableBtreeMap},
     storage::{canister::CanisterRecord, prelude::*},
 };
 use std::cell::RefCell;
@@ -23,7 +21,7 @@ std::thread_local! {
     // CANISTER_CHILDREN
     //
     static CANISTER_CHILDREN: RefCell<
-        StableBtreeMap<Principal, CanisterChildRecord, RuntimeMemory<DefaultMemoryImpl>>
+        StableBtreeMap<Principal, CanisterChildRecord, DefaultMemoryImpl>
     > = RefCell::new(
         StableBtreeMap::init(crate::memory::open(crate::memory::keys::RUNTIME_CANISTER_CHILDREN_V1)),
     );
@@ -93,7 +91,7 @@ impl CanisterChildren {
 
     pub(crate) fn import(data: CanisterChildrenData) {
         CANISTER_CHILDREN.with_borrow_mut(|map| {
-            map.clear_new();
+            map.clear();
             for entry in data.entries {
                 map.insert(entry.pid, entry.record);
             }

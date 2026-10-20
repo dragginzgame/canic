@@ -50,7 +50,8 @@ macro_rules! __canic_fixture_reply_checkpoint {
 #[macro_export]
 macro_rules! __canic_fixture_reply_support {
     () => {
-        #[derive(::canic::__internal::candid::CandidType, Clone, Copy, ::canic::__internal::serde::Deserialize, Eq, PartialEq)]
+        #[derive(::canic::__internal::ic_platform::candid::contract::CandidType, Clone, Copy, ::canic::__internal::serde::Deserialize, Eq, PartialEq)]
+        #[candid_path("::canic::__internal::ic_platform::candid::contract")]
         #[serde(crate = "::canic::__internal::serde")]
         enum __CanicFixtureReplyKind { Grant, Revoke, Chunk }
 
@@ -109,7 +110,7 @@ macro_rules! __canic_fixture_reply_support {
             // The finite round cap prevents a hung qualification.
             for _ in 0..256 {
                 $crate::prelude::Call::unbounded_wait(
-                    $crate::__internal::candid::Principal::management_canister(), "raw_rand",
+                    $crate::__internal::ic_platform::Principal::management_canister(), "raw_rand",
                 ).with_args(()).expect("fixture round arguments")
                     .execute_candid::<Vec<u8>>().await.expect("fixture consensus round");
                 if __CANIC_FIXTURE_REPLY_BARRIER.with_borrow(|barrier| barrier.released) {

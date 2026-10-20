@@ -14,12 +14,13 @@ use crate::dto::{
     fleet_registry::{FleetRegistry, FleetRegistryVersion},
     page::PageRequest,
 };
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded RemoteCoordinatorStatusRequest wire projection for admission.
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RemoteCoordinatorStatusRequest {
     Admission(FleetAdmissionStatusRequest),
     Registry,
@@ -28,6 +29,7 @@ pub enum RemoteCoordinatorStatusRequest {
 
 /// Bounded RemoteCoordinatorStatusResponse wire projection for admission.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RemoteCoordinatorStatusResponse {
     Admission(FleetAdmissionStatusResponse),
     Registry(FleetRegistry),
@@ -36,24 +38,28 @@ pub enum RemoteCoordinatorStatusResponse {
 
 /// Bounded RemoteCoordinatorCommand wire projection for admission.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RemoteCoordinatorCommand {
     MutateAdmission(FleetAdmissionMutationRequest),
 }
 
 /// Bounded RemoteCoordinatorCommandResponse wire projection for admission.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RemoteCoordinatorCommandResponse {
     MutateAdmission(FleetAdmissionMutationResponse),
 }
 
 /// Bounded RemoteRootStatusRequest wire projection for admission.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RemoteRootStatusRequest {
     Admission(PageRequest),
 }
 
 /// Bounded RemoteRootStatusResponse wire projection for admission.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RemoteRootStatusResponse {
     Admission(FleetAdmissionRootStatusResponse),
 }

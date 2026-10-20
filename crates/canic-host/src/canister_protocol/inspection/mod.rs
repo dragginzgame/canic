@@ -8,10 +8,6 @@ use crate::{
     canister_protocol::{CanisterProtocolError, contract::parse_text, query_with_candid},
     icp::IcpCli,
 };
-use candid::{
-    CandidType, Principal,
-    types::{FuncMode, TypeInner},
-};
 use canic_contracts::{
     dto::{
         canister::{CanisterInspectionRequest, CanisterInspectionReserveResponse},
@@ -20,6 +16,11 @@ use canic_contracts::{
         },
     },
     protocol,
+};
+use ic_platform::candid::contract::types::FuncMode;
+use ic_platform::{
+    Principal,
+    candid::contract::{CandidType, types::TypeInner},
 };
 use std::{fs, path::Path};
 
@@ -85,17 +86,16 @@ fn declares_inspection_reserve(contract: &str) -> Result<bool, String> {
     let TypeInner::Variant(fields) = argument.as_ref() else {
         return Err("observability must accept one request variant".to_string());
     };
-    let Some(field) = fields
-        .iter()
-        .find(|field| field.id.get_id() == candid::idl_hash("InspectionReserve"))
-    else {
+    let Some(field) = fields.iter().find(|field| {
+        field.id.get_id() == ic_platform::candid::contract::idl_hash("InspectionReserve")
+    }) else {
         return Ok(false);
     };
     if function.modes != [FuncMode::Query] {
         return Err("inspection reserve must be a query".to_string());
     }
-    candid::types::subtype::equal(
-        &mut candid::types::subtype::Gamma::new(),
+    ic_platform::candid::contract::types::subtype::equal(
+        &mut std::collections::HashSet::default(),
         &environment,
         &field.ty,
         &CanisterInspectionRequest::ty(),

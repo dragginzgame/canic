@@ -13,6 +13,7 @@ pub use ic_auth_protocol_types::AuthRequestMetadata;
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum DelegationAudience {
     Fleet(FleetKey),
 }
@@ -22,6 +23,7 @@ pub enum DelegationAudience {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct DelegatedRoleGrant {
     pub target: CanisterRole,
     pub scopes: Vec<String>,

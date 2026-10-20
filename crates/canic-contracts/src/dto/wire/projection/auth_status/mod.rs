@@ -6,18 +6,20 @@
 //! transport. Compatibility is checked against the canonical role contracts.
 
 use crate::dto::auth::{ActiveDelegationProofStatusResponse, RootIssuerRenewalStatusResponse};
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded RootStatusResponse wire projection for auth status.
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootStatusResponse {
     IssuerRenewal(RootIssuerRenewalStatusResponse),
 }
 
 /// Bounded CanisterStatusResponse wire projection for auth status.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CanisterStatusResponse {
     ActiveDelegationProof(ActiveDelegationProofStatusResponse),
 }

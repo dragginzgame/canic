@@ -1,3 +1,4 @@
+mod raw;
 mod wasm;
 
 use crate::{
@@ -11,10 +12,11 @@ use crate::{
     output_with_executable_busy_retry,
 };
 use canic_contracts::ids::BuildNetwork;
-use ic_build::artifacts::ArtifactStagingDirectory;
 use ic_host_artifacts::artifact::encode_gzip;
 use ic_host_fs::{
+    directory::create_unique_directory,
     durable::{PublicationMode, WriteOptions, write_bytes, write_named_with, write_with},
+    owned_directory::OwnedDirectory,
     read::read_file_no_follow,
 };
 use ic_host_tools::{
@@ -24,6 +26,7 @@ use ic_host_tools::{
 use std::{
     collections::BTreeSet,
     fs,
+    num::NonZeroUsize,
     path::{Path, PathBuf},
     time::Instant,
 };
@@ -182,7 +185,7 @@ fn stage_and_publish_artifact_set<T>(
 }
 
 struct StagedArtifactSet {
-    _staging: ArtifactStagingDirectory,
+    _staging: OwnedDirectory,
     wasm_path: PathBuf,
     did_path: PathBuf,
     wasm_gz_path: PathBuf,
@@ -196,7 +199,12 @@ impl StagedArtifactSet {
                 final_wasm_path.display()
             )
         })?;
-        let staging = ArtifactStagingDirectory::new(parent)?;
+        let staging = OwnedDirectory::new(create_unique_directory(
+            parent,
+            ".ic-build-artifact-stage",
+            0o777,
+            NonZeroUsize::new(64),
+        )?);
         Ok(Self {
             wasm_path: staging.path().join("candidate.wasm"),
             did_path: staging.path().join("candidate.did"),
@@ -233,11 +241,11 @@ pub fn validate_sidecar_only_candid_artifact(
     validate_candid_methods(wasm_path, did_path, &snapshot, &candid)
 }
 
-/// Verify that a Wasm exports exactly the application methods declared in its Candid.
+/// Verify exact exports against Candid plus declared protocol-neutral methods.
 ///
 /// Lifecycle and IC CDK internal exports are outside the public method inventory.
 /// This compares endpoint names and modes; release-bound Candid hashes retain the type authority.
-pub fn validate_wasm_candid_endpoints(
+pub fn validate_wasm_endpoints(
     wasm_path: &Path,
     did_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -261,12 +269,18 @@ fn validate_candid_methods(
             methods: candid.len(),
         },
     )?;
-    let declared = methods
+    let mut declared = methods
         .iter()
         .map(|method| method.as_export())
         .collect::<BTreeSet<_>>();
+    declared.extend(raw::methods(&snapshot.facts, &declared)?);
     let exported = interface::exported_methods(&snapshot.facts)
-        .filter(|method| !method.name.starts_with(IC_CDK_INTERNAL_METHOD_PREFIX))
+        .filter(|method| {
+            let cdk_internal = method.name.starts_with(IC_CDK_INTERNAL_METHOD_PREFIX);
+            let timer_dispatch = method.name == "<ic-timers internal> dispatch"
+                && method.mode == interface::MethodMode::Update;
+            !(cdk_internal || timer_dispatch)
+        })
         .collect::<BTreeSet<_>>();
 
     if declared != exported {
@@ -581,6 +595,15 @@ fn validate_optimized_wasm(
     {
         return Err(format!(
             "Binaryen optimization changed the export inventory for {}",
+            wasm_path.display()
+        )
+        .into());
+    }
+    if raw::methods(&after_contract.facts, &BTreeSet::new())?
+        != raw::methods(&before_contract.facts, &BTreeSet::new())?
+    {
+        return Err(format!(
+            "Binaryen optimization changed raw endpoint declarations for {}",
             wasm_path.display()
         )
         .into());

@@ -1,5 +1,5 @@
 use crate::{cycles::Cycles, ids::*};
-use candid::Principal;
+use ic_platform::Principal;
 
 pub fn fleet_key(byte: u8) -> FleetKey {
     FleetKey {

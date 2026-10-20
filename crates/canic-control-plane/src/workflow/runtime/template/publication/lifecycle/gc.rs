@@ -37,7 +37,7 @@ use crate::{
     },
 };
 use canic_core::{
-    cdk::{candid::Nat, types::Principal},
+    cdk::types::Principal,
     control_plane_support::{
         error::InternalError,
         ops::ic::{
@@ -48,6 +48,7 @@ use canic_core::{
     log,
     log::Topic,
 };
+use ic_platform::candid::contract::Nat;
 use std::cell::Cell;
 
 const SECONDS_PER_DAY: u128 = 86_400;

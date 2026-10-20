@@ -1,10 +1,7 @@
-use super::{
-    CanisterBuildProfile,
-    process::{icp_ancestor_process_id, parent_process_id},
-};
+use super::CanisterBuildProfile;
 use crate::icp::LocalReplicaTarget;
 use canic_contracts::ids::{BuildNetwork, RELEASE_BUILD_ID_ENV, ReleaseBuildId};
-use std::{fs, path::PathBuf, process::Command};
+use std::{path::PathBuf, process::Command};
 
 /// Exact authority for one canister artifact build.
 ///
@@ -87,7 +84,6 @@ impl WorkspaceBuildContext {
 
     /// Apply the exact Canic build authority to one child command.
     pub fn apply_to_command(&self, command: &mut Command) {
-        crate::build_environment::apply(command);
         command
             .env_remove(canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV)
             .env_remove(RELEASE_BUILD_ID_ENV)
@@ -104,37 +100,4 @@ impl WorkspaceBuildContext {
         // Release identity is bound into a private Wasm copy during finalization.
         // Keeping it out of Cargo inputs preserves unchanged role compilation.
     }
-}
-
-// Print the current build context once per caller session so caller builds
-// stay readable without repeating root/profile diagnostics for every canister.
-pub fn print_workspace_build_context_once(
-    context: &WorkspaceBuildContext,
-) -> Result<(), Box<dyn std::error::Error>> {
-    if workspace_build_context_once(context)? {
-        eprintln!("{}", context.lines().join("\n"));
-    }
-
-    Ok(())
-}
-
-// Return whether this caller should print its explicit build context.
-pub fn workspace_build_context_once(
-    context: &WorkspaceBuildContext,
-) -> Result<bool, Box<dyn std::error::Error>> {
-    let marker_dir = context.icp_root.join(".icp");
-    fs::create_dir_all(&marker_dir)?;
-
-    let marker_key = icp_ancestor_process_id()
-        .or_else(parent_process_id)
-        .unwrap_or_else(std::process::id)
-        .to_string();
-    let marker_file = marker_dir.join(format!(".canic-build-context-{marker_key}"));
-
-    if marker_file.exists() {
-        return Ok(false);
-    }
-
-    fs::write(&marker_file, [])?;
-    Ok(true)
 }

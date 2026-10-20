@@ -4,7 +4,7 @@ use super::*;
 use crate::fleet_ensure::view::release::provisioning::{
     ReleaseProvisioningIdentity, ReleaseProvisioningOwner,
 };
-use candid::Principal;
+use ic_platform::Principal;
 
 fn operation(state: ReleaseProvisioningState) -> ReleaseProvisioningFacts {
     ReleaseProvisioningFacts {

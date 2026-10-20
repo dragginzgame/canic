@@ -4,42 +4,38 @@ use super::{
     },
     startup::start_pocket_ic,
 };
-use candid::Principal;
-use candid::encode_one;
-use canic::Error;
-use canic::dto::fleet_activation::FleetActivationPhase;
-use canic::dto::fleet_activation::FleetActivationResumeRequest;
-use canic::dto::fleet_activation::FleetActivationStatusResponse;
-use canic::dto::fleet_subnet_root::FleetSubnetRootAuthority;
-use canic::dto::fleet_subnet_root::FleetSubnetRootInitArgs;
-use canic::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionRequest;
-use canic::dto::fleet_subnet_root::FleetSubnetWasmStoreInitArgs;
-use canic::dto::role::OperationStatusRequest;
-use canic::dto::runtime::CanicReadinessStatus;
-use canic::dto::runtime::ReadinessStatus;
-use canic::ids::CanisterRole;
-use canic::ids::ComponentSpecAdmission;
-use canic::ids::CyclesFundingBudget;
-use canic::ids::FleetCoordinatorBinding;
-use canic::ids::FleetRegistryAuthority;
-use canic::ids::FleetSubnetCanisterPoolConfig;
-use canic::ids::FleetSubnetRootBinding;
-use canic::ids::FleetSubnetRootLimits;
-use canic::ids::FleetSubnetRootReleaseSet;
-use canic::ids::FleetSubnetWasmStoreActivationAuthority;
-use canic::ids::FleetSubnetWasmStoreAuthority;
-use canic::ids::ReleaseSetDigest;
-use canic::ids::SubnetId;
-use canic::protocol;
-use canic_contracts::dto::fleet_coordinator::CoordinatorOperationReadRequest as StoreStatusRequestFragment;
-use canic_contracts::dto::role::OperationAcceptedResponse as RootCommandResponseFragment;
-use canic_contracts::dto::wire::projection::fixture_canic::CanisterStatusRequestFragment;
-use canic_contracts::dto::wire::projection::fixture_canic::CanisterStatusResponseFragment;
-use canic_contracts::dto::wire::projection::fixture_canic::RootCommandFragment;
-use canic_contracts::dto::wire::projection::fixture_canic::RootStatusRequestFragment;
-use canic_contracts::dto::wire::projection::fixture_canic::RootStatusResponseFragment;
-use canic_contracts::dto::wire::projection::store_activation::StoreOperationStatusFragment;
-use canic_contracts::dto::wire::projection::store_activation::StoreStatusResponseFragment;
+use canic::{
+    Error,
+    dto::{
+        fleet_activation::{
+            FleetActivationPhase, FleetActivationResumeRequest, FleetActivationStatusResponse,
+        },
+        fleet_subnet_root::{
+            FleetSubnetRootAuthority, FleetSubnetRootInitArgs, FleetSubnetWasmStoreAdoptionRequest,
+            FleetSubnetWasmStoreInitArgs,
+        },
+        role::OperationStatusRequest,
+        runtime::{CanicReadinessStatus, ReadinessStatus},
+    },
+    ids::{
+        CanisterRole, ComponentSpecAdmission, CyclesFundingBudget, FleetCoordinatorBinding,
+        FleetRegistryAuthority, FleetSubnetCanisterPoolConfig, FleetSubnetRootBinding,
+        FleetSubnetRootLimits, FleetSubnetRootReleaseSet, FleetSubnetWasmStoreActivationAuthority,
+        FleetSubnetWasmStoreAuthority, ReleaseSetDigest, SubnetId,
+    },
+    protocol,
+};
+use canic_contracts::dto::{
+    fleet_coordinator::CoordinatorOperationReadRequest as StoreStatusRequestFragment,
+    role::OperationAcceptedResponse as RootCommandResponseFragment,
+    wire::projection::{
+        fixture_canic::{
+            CanisterStatusRequestFragment, CanisterStatusResponseFragment, RootCommandFragment,
+            RootStatusRequestFragment, RootStatusResponseFragment,
+        },
+        store_activation::{StoreOperationStatusFragment, StoreStatusResponseFragment},
+    },
+};
 use canic_contracts::{
     cycles::Cycles,
     dto::root::RootOperationStatusResponse,
@@ -47,8 +43,9 @@ use canic_contracts::{
 };
 use canic_core::cdk::utils::hash::wasm_hash;
 use canic_host::release_set::AppConfigSnapshot;
+use ic_platform::{Principal, candid::contract::encode_one};
 use ic_testkit::pic::{
-    CandidCallError, CandidCallExt, CanisterDiagnosticsRequest, CanisterInstallExt, InstallSpec,
+    CandidCallError, CanisterDiagnosticsRequest, CanisterInstallExt, InstallSpec,
     LabeledCanisterDiagnosticsRequest, PocketIc, PocketIcBuilder, PocketIcDiagnosticsExt,
     StandaloneCanisterFixture,
 };
@@ -66,8 +63,16 @@ fn root_command(
     root: Principal,
     command: RootCommandFragment,
 ) -> Result<RootCommandResponseFragment, Error> {
-    pic.update_candid(root, protocol::CANIC_ROOT_COMMAND, (command,))
-        .expect("Root command transport")
+    ic_testkit::pic::update_candid_args(
+        pic,
+        root,
+        ic_platform::Principal::anonymous(),
+        protocol::CANIC_ROOT_COMMAND,
+        (command,),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("Root command transport")
 }
 
 fn root_status(
@@ -75,14 +80,18 @@ fn root_status(
     root: Principal,
     request: RootStatusRequestFragment,
 ) -> Result<RootStatusResponseFragment, Error> {
-    pic.query_candid(
+    ic_testkit::pic::query_candid_args(
+        pic,
         root,
+        ic_platform::Principal::anonymous(),
         match &request {
             RootStatusRequestFragment::Readiness => protocol::CANIC_OBSERVABILITY,
             RootStatusRequestFragment::Operation(_) => protocol::CANIC_ROOT_OPERATION_STATUS,
         },
         (request,),
+        canic::testing::CANDID_REPLY_LIMITS,
     )
+    .map(|(reply,)| reply)
     .expect("Root status transport")
 }
 
@@ -297,11 +306,12 @@ pub fn report_canister_diagnostics(
     diagnostic_sender: Principal,
     context: &str,
 ) {
-    let report = pic.collect_canister_diagnostics(CanisterDiagnosticsRequest::new(
+    let report = pic.collect_canister_diagnostics(CanisterDiagnosticsRequest {
         canister_id,
-        diagnostic_sender,
-        diagnostic_sender,
-    ));
+        status_sender: diagnostic_sender,
+        log_sender: diagnostic_sender,
+        log_limits: ic_testkit::pic::CanisterLogRenderLimits::default(),
+    });
     eprintln!("{context}: {report}");
 }
 
@@ -327,12 +337,17 @@ where
 {
     let requests = targets
         .into_iter()
-        .map(|(label, canister_id, diagnostic_sender)| {
-            LabeledCanisterDiagnosticsRequest::new(
-                label,
-                CanisterDiagnosticsRequest::new(canister_id, diagnostic_sender, diagnostic_sender),
-            )
-        })
+        .map(
+            |(label, canister_id, diagnostic_sender)| LabeledCanisterDiagnosticsRequest {
+                label: label.into(),
+                request: CanisterDiagnosticsRequest {
+                    canister_id,
+                    status_sender: diagnostic_sender,
+                    log_sender: diagnostic_sender,
+                    log_limits: ic_testkit::pic::CanisterLogRenderLimits::default(),
+                },
+            },
+        )
         .collect::<Vec<_>>();
     match pic.collect_canister_diagnostics_batch(&requests) {
         Ok(report) => eprintln!("{context}: {report}"),
@@ -494,16 +509,20 @@ pub(super) fn activate_managed_fleet(
     else {
         panic!("prepared root must retain exactly one Store child");
     };
-    let store_response: Result<StoreStatusResponseFragment, Error> = pic
-        .query_candid(
+    let store_response: Result<StoreStatusResponseFragment, Error> =
+        ic_testkit::pic::query_candid_args(
+            pic,
             store.principal,
+            ic_platform::Principal::anonymous(),
             protocol::CANIC_WASM_STORE_STATUS,
             (StoreStatusRequestFragment::Operation(
                 OperationStatusRequest {
                     operation_id: managed_test_store_install_id(),
                 },
             ),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
+        .map(|(reply,)| reply)
         .expect("Store activation status transport");
     let StoreStatusResponseFragment::Operation(StoreOperationStatusFragment::FleetActivation(
         store_status,
@@ -529,12 +548,15 @@ pub(super) fn activate_managed_fleet(
 pub fn wait_until_ready(pic: &PocketIc, canister_id: Principal, tick_limit: usize) {
     for _ in 0..tick_limit {
         if matches!(
-            pic.query_candid_as::<Result<RootStatusResponseFragment, Error>, _>(
+            ic_testkit::pic::query_candid_args::<(Result<RootStatusResponseFragment, Error>,), _>(
+                pic,
                 canister_id,
                 Principal::anonymous(),
                 protocol::CANIC_OBSERVABILITY,
                 (RootStatusRequestFragment::Readiness,),
-            ),
+                canic::testing::CANDID_REPLY_LIMITS
+            )
+            .map(|(reply,)| reply),
             Ok(Ok(RootStatusResponseFragment::Readiness(
                 CanicReadinessStatus {
                     status: ReadinessStatus::Ready,
@@ -579,7 +601,13 @@ pub fn install_standalone_canister(
             instance: pocket_ic,
             server: None,
         },
-        InstallSpec::new(wasm, local_init_args(), 0).label(label),
+        InstallSpec {
+            wasm,
+            init_bytes: local_init_args(),
+            cycles: 0,
+            install_sender: None,
+            label: Some(label),
+        },
     )
     .expect("install standalone canister");
     let canister_id = fixture.canister_id();
@@ -616,9 +644,13 @@ pub fn install_standalone_canister_on_pic(
 
     let wasm = standalone_canister_wasm(crate_name, profile);
     let canister_id = pic
-        .try_create_and_install(
-            InstallSpec::new(wasm, local_init_args(), 0).label(label.to_string()),
-        )
+        .try_create_and_install(InstallSpec {
+            wasm,
+            init_bytes: local_init_args(),
+            cycles: 0,
+            install_sender: None,
+            label: Some(label.to_string()),
+        })
         .expect("install test canister");
     pic.wait_for_ready(
         canister_id,
@@ -631,11 +663,16 @@ pub fn install_standalone_canister_on_pic(
 }
 
 fn fetch_ready(pic: &PocketIc, canister_id: Principal) -> Result<bool, CandidCallError> {
-    match pic.query_candid::<Result<CanisterStatusResponseFragment, Error>, _>(
+    match ic_testkit::pic::query_candid_args::<(Result<CanisterStatusResponseFragment, Error>,), _>(
+        pic,
         canister_id,
+        ic_platform::Principal::anonymous(),
         protocol::CANIC_OBSERVABILITY,
         (CanisterStatusRequestFragment::Readiness,),
-    ) {
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    {
         Ok(Ok(CanisterStatusResponseFragment::Readiness(readiness))) => {
             Ok(readiness.status == ReadinessStatus::Ready)
         }
@@ -645,11 +682,16 @@ fn fetch_ready(pic: &PocketIc, canister_id: Principal) -> Result<bool, CandidCal
 }
 
 fn fetch_root_ready(pic: &PocketIc, canister_id: Principal) -> Result<bool, CandidCallError> {
-    match pic.query_candid::<Result<RootStatusResponseFragment, Error>, _>(
+    match ic_testkit::pic::query_candid_args::<(Result<RootStatusResponseFragment, Error>,), _>(
+        pic,
         canister_id,
+        ic_platform::Principal::anonymous(),
         protocol::CANIC_OBSERVABILITY,
         (RootStatusRequestFragment::Readiness,),
-    ) {
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    {
         Ok(Ok(RootStatusResponseFragment::Readiness(readiness))) => {
             Ok(readiness.status == ReadinessStatus::Ready)
         }
@@ -893,8 +935,8 @@ fn workspace_root() -> PathBuf {
     feature = "pocketic-fixtures",
     any(not(test), feature = "governed-pocketic-tests")
 ))]
-pub(super) trait CoordinatorRead: candid::CandidType {
-    type Response: candid::CandidType + for<'de> serde::Deserialize<'de>;
+pub(super) trait CoordinatorRead: ic_platform::candid::contract::CandidType {
+    type Response: ic_platform::candid::contract::CandidType + for<'de> serde::Deserialize<'de>;
     const METHOD: &'static str;
 }
 #[cfg(all(

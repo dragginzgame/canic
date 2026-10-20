@@ -4,7 +4,6 @@
 //! Does not own: stable records, inter-canister calls, or Registry publication.
 //! Boundary: ops returns one exact current result or root call authority.
 
-use candid::Principal;
 use canic_contracts::dto::{
     component_provisioning::{
         FleetComponentProvisioningStatusResponse, RootComponentActivationRequest,
@@ -17,6 +16,7 @@ use canic_contracts::dto::{
         FleetRootFundingResponse,
     },
 };
+use ic_platform::Principal;
 
 /// Exact next effect derived from the Coordinator-owned rotation operation.
 

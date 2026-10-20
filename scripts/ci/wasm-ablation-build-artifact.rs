@@ -9,7 +9,7 @@ use canic_core::ids::ReleaseBuildId;
 use canic_host::canister_build::{
     ArtifactTransformKind, ArtifactTransformOutcome, CanisterArtifactBuildOutput,
     CanisterBuildProfile, WasmArtifactMetrics, WorkspaceBuildContext,
-    build_workspace_canister_artifact, copy_icp_wasm_output, print_workspace_build_context_once,
+    build_workspace_canister_artifact, copy_icp_wasm_output,
 };
 use canic_host::icp_config::resolve_icp_build_network_from_root;
 use serde::Serialize;
@@ -91,7 +91,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         refresh_canonical_infrastructure_did: false,
         release_build_id: None::<ReleaseBuildId>,
     };
-    print_workspace_build_context_once(&context)?;
+    eprintln!("{}", context.lines().join("\n"));
     let output = build_workspace_canister_artifact(&context)?;
     copy_icp_wasm_output(&canister_name, &output)?;
     write_transform_metrics(Path::new(&transform_metrics_path), &canister_name, &output)?;

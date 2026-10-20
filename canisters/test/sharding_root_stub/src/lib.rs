@@ -4,7 +4,6 @@
 //! Does not own: production Component Registry state, installation, or placement policy.
 //! Boundary: host settlement installs children and synchronizes their parent before replies.
 
-use candid::{CandidType, Deserialize, Nat, Principal};
 use canic::{
     Error,
     dto::capability::RootCapabilityResponseV1,
@@ -17,7 +16,12 @@ use canic::{
 use canic_contracts::dto::wire::projection::capability_rpc::{
     RootCommandFragment, RootCommandResponseFragment,
 };
-use ic_cdk::call::Call;
+use ic_platform::cdk::call::Call;
+use ic_platform::{
+    Principal,
+    candid::contract::{CandidType, Nat},
+};
+use serde::Deserialize;
 use std::cell::RefCell;
 
 const CREATE_CANISTER_CYCLES: u128 = 1_000_000_000_000;
@@ -28,6 +32,7 @@ thread_local! {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct FixtureChildAllocation {
     request_id: [u8; 32],
     parent: Principal,
@@ -39,12 +44,14 @@ struct FixtureChildAllocation {
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct StubCreateCanisterArgs {
     settings: Option<StubCanisterSettings>,
     sender_canister_version: Option<u64>,
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct StubCanisterSettings {
     controllers: Option<Vec<Principal>>,
     compute_allocation: Option<Nat>,
@@ -59,6 +66,7 @@ struct StubCanisterSettings {
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 enum StubLogVisibility {
     #[serde(rename = "controllers")]
     Controllers,
@@ -69,20 +77,22 @@ enum StubLogVisibility {
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct StubEnvironmentVariable {
     name: String,
     value: String,
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 struct StubCreateCanisterResult {
     canister_id: Principal,
 }
 
-#[ic_cdk::init]
+#[ic_platform::cdk::init]
 const fn init() {}
 
-#[ic_cdk::update]
+#[ic_platform::cdk::update]
 async fn canic_root_command(
     command: RootCommandFragment,
 ) -> Result<RootCommandResponseFragment, Error> {
@@ -94,12 +104,12 @@ async fn canic_root_command(
     Ok(RootCommandResponseFragment::RespondCapability(response))
 }
 
-#[ic_cdk::query]
+#[ic_platform::cdk::query]
 fn testing_component_child_allocations() -> Vec<FixtureChildAllocation> {
     ALLOCATIONS.with_borrow(Clone::clone)
 }
 
-#[ic_cdk::query]
+#[ic_platform::cdk::query]
 fn testing_component_child_is_settled(request_id: [u8; 32]) -> bool {
     ALLOCATIONS.with_borrow(|allocations| {
         allocations
@@ -108,7 +118,7 @@ fn testing_component_child_is_settled(request_id: [u8; 32]) -> bool {
     })
 }
 
-#[ic_cdk::update]
+#[ic_platform::cdk::update]
 fn testing_settle_component_child(request_id: [u8; 32]) -> Result<(), Error> {
     ALLOCATIONS.with_borrow_mut(|allocations| {
         let allocation = allocations
@@ -141,7 +151,7 @@ async fn allocate_child(
     request_id: [u8; 32],
     request: CreateCanisterRequest,
 ) -> Result<Principal, Error> {
-    let parent = ic_cdk::api::msg_caller();
+    let parent = ic_platform::cdk::api::msg_caller();
     if request_id == [0; 32]
         || request.metadata.map(|metadata| metadata.request_id) != Some(request_id)
         || !matches!(request.parent, CreateCanisterParent::ThisCanister)
@@ -188,7 +198,7 @@ async fn allocate_child(
 async fn await_settlement(request_id: [u8; 32]) -> Result<(), Error> {
     for _ in 0..MAX_SETTLEMENT_POLLS {
         let response = Call::bounded_wait(
-            ic_cdk::api::canister_self(),
+            ic_platform::cdk::api::canister_self(),
             "testing_component_child_is_settled",
         )
         .with_arg(request_id)
@@ -242,7 +252,7 @@ fn acknowledge(
 async fn create_canister() -> Result<Principal, Error> {
     let args = StubCreateCanisterArgs {
         settings: None,
-        sender_canister_version: Some(ic_cdk::api::canister_version()),
+        sender_canister_version: Some(ic_platform::cdk::api::canister_version()),
     };
 
     let response = Call::bounded_wait(Principal::management_canister(), "create_canister")

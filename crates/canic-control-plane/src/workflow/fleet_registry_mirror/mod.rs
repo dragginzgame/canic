@@ -464,7 +464,7 @@ async fn fetch_snapshot(
 }
 
 async fn acknowledge_snapshot(
-    coordinator: candid::Principal,
+    coordinator: ic_platform::Principal,
     version: canic_contracts::dto::fleet_registry::FleetRegistryVersion,
 ) -> Result<FleetSubnetRootSnapshotAcknowledgement, InternalError> {
     fleet_coordinator_client::acknowledge_root_snapshot(
@@ -535,7 +535,7 @@ fn validated_snapshot_root(
 
 fn validate_target(
     authority: &canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority,
-    root: candid::Principal,
+    root: ic_platform::Principal,
     request: &FleetSubnetRootRegistryMirrorActivationRequest,
     snapshot: &FleetRegistrySnapshotResponse,
 ) -> Result<FleetDirectorySnapshot, InternalError> {
@@ -634,7 +634,7 @@ fn classify_active_transition(
 
 fn validated_active_if_present(
     authority: &canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority,
-    root: candid::Principal,
+    root: ic_platform::Principal,
 ) -> Result<Option<RootFleetRegistryActiveView>, InternalError> {
     if FleetRegistryMirrorOps::current().active.is_none() {
         return Ok(None);
@@ -644,7 +644,7 @@ fn validated_active_if_present(
 
 fn validated_active(
     authority: &canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority,
-    root: candid::Principal,
+    root: ic_platform::Principal,
 ) -> Result<RootFleetRegistryActiveView, InternalError> {
     let mirror = FleetRegistryMirrorOps::validated_current(authority, root)?;
     if mirror.root_entry.status == FleetSubnetRootStatus::Draining {
@@ -654,7 +654,7 @@ fn validated_active(
 }
 
 fn active_response(
-    root: candid::Principal,
+    root: ic_platform::Principal,
     active: &RootFleetRegistryActiveView,
 ) -> FleetSubnetRootRegistryMirrorActivationResponse {
     FleetSubnetRootRegistryMirrorActivationResponse {
@@ -666,7 +666,7 @@ fn active_response(
 }
 
 fn response(
-    root: candid::Principal,
+    root: ic_platform::Principal,
     snapshot: &FleetRegistrySnapshotResponse,
     acknowledgement: FleetSubnetRootSnapshotAcknowledgement,
 ) -> Result<FleetSubnetRootRegistrySyncResponse, InternalError> {
@@ -762,7 +762,7 @@ mod tests {
         FleetDirectorySnapshot {
             provenance: FleetDirectoryProvenance {
                 registry,
-                source_fleet_subnet_root: candid::Principal::from_slice(&[4; 29]),
+                source_fleet_subnet_root: ic_platform::Principal::from_slice(&[4; 29]),
             },
             fleet_subnet_roots: Vec::new(),
             services: Vec::new(),
@@ -787,10 +787,10 @@ mod tests {
                     },
                     app: AppId::owned("test".to_owned()),
                 },
-                coordinator_subnet: SubnetId::from_principal(candid::Principal::from_slice(
+                coordinator_subnet: SubnetId::from_principal(ic_platform::Principal::from_slice(
                     &[2; 29],
                 )),
-                coordinator: candid::Principal::from_slice(&[3; 29]),
+                coordinator: ic_platform::Principal::from_slice(&[3; 29]),
                 recovery_controllers: Vec::new(),
             },
             epoch: 1,

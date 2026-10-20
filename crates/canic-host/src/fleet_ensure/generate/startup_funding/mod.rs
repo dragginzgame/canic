@@ -21,9 +21,9 @@ use crate::{
     },
     icp::{IcpCli, LocalReplicaTarget},
 };
-use candid::Principal;
 use canic_contracts::dto::pool::CanisterPoolAssetStatus;
 use canic_core::bootstrap::compiled::ConfigModel;
+use ic_platform::Principal;
 use std::{collections::BTreeMap, path::Path};
 
 /// Observe Root-funded Workloads and explicitly separate assets requiring a parent relay.

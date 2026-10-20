@@ -1,4 +1,3 @@
-use candid::{CandidType, Principal};
 use canic::{
     Error,
     dto::{
@@ -8,19 +7,25 @@ use canic::{
     },
     protocol,
 };
-use canic_contracts::dto::wire::projection::admission::RemoteRootStatusRequest as FleetAdmissionManagedStatusRequest;
-use canic_contracts::dto::wire::projection::fixture_baseline::ManagedAdmissionStatusResponseFragment as FleetAdmissionManagedStatusResponse;
-use canic_core::cdk::structures::{
-    VectorMemory,
-    cell::Cell,
-    memory::{MemoryId, MemoryManager},
+use canic_contracts::dto::wire::projection::{
+    admission::RemoteRootStatusRequest as FleetAdmissionManagedStatusRequest,
+    fixture_baseline::ManagedAdmissionStatusResponseFragment as FleetAdmissionManagedStatusResponse,
 };
+// This corruption fixture deliberately edits raw stored bytes outside runtime custody.
 use canic_testing_internal::pic::{
     ActiveComponentRegistryFixture, setup_active_component_registry,
     setup_fresh_active_component_registry, upgrade_args,
 };
-use ic_agent::{Identity, identity::Secp256k1Identity};
-use ic_testkit::pic::{CandidCallExt, CanisterInstallExt, RetryPolicy};
+use ic_platform::{
+    Principal,
+    agent::{Identity, Secp256k1Identity},
+    candid::contract::CandidType,
+};
+use ic_stable_structures::{
+    Cell, VectorMemory,
+    memory_manager::{MemoryId, MemoryManager},
+};
+use ic_testkit::pic::{CanisterInstallExt, RetryPolicy};
 use ic_testkit::pocket_ic::{PocketIc, common::rest::BlobCompression};
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
@@ -36,29 +41,18 @@ VwidXc26G4+/g7dUbMwbN4E3d3bpxHEP31M+2by6jY67MqFKKroR
 -----END PRIVATE KEY-----";
 
 #[derive(CandidType, Clone, Copy)]
+#[candid_path("ic_platform::candid::contract")]
 enum LocalAuthorizationDenialProbe {
     Anonymous,
     AuthorityUnavailable,
     CallerMismatch,
-    Disabled,
-    Expired,
-    InadmissibleSubject,
-    MissingScope,
-    MissingSession,
-    StaleAuthority,
 }
 
 impl LocalAuthorizationDenialProbe {
-    const ALL: [Self; 9] = [
+    const ALL: [Self; 3] = [
         Self::Anonymous,
         Self::CallerMismatch,
-        Self::Disabled,
         Self::AuthorityUnavailable,
-        Self::MissingSession,
-        Self::Expired,
-        Self::StaleAuthority,
-        Self::InadmissibleSubject,
-        Self::MissingScope,
     ];
 
     const fn label(self) -> &'static str {
@@ -66,12 +60,6 @@ impl LocalAuthorizationDenialProbe {
             Self::Anonymous => "anonymous",
             Self::AuthorityUnavailable => "authority_unavailable",
             Self::CallerMismatch => "caller_mismatch",
-            Self::Disabled => "disabled",
-            Self::Expired => "expired",
-            Self::InadmissibleSubject => "inadmissible_subject",
-            Self::MissingScope => "missing_scope",
-            Self::MissingSession => "missing_session",
-            Self::StaleAuthority => "stale_authority",
         }
     }
 }
@@ -92,11 +80,11 @@ fn retry_same_release_upgrade(
     sender: Principal,
 ) {
     let args = upgrade_args();
-    let policy = RetryPolicy::new(
-        std::num::NonZeroUsize::new(INSTALL_CODE_RETRY_LIMIT)
+    let policy = RetryPolicy {
+        max_attempts: std::num::NonZeroUsize::new(INSTALL_CODE_RETRY_LIMIT)
             .expect("non-zero install attempt limit"),
-        INSTALL_CODE_COOLDOWN,
-    );
+        cooldown: INSTALL_CODE_COOLDOWN,
+    };
     pic.retry_install_code(policy, || {
         pic.upgrade_canister(canister_id, wasm.clone(), args.clone(), Some(sender))
     })
@@ -200,23 +188,29 @@ fn fleet_admission_projection_is_durable_bounded_and_separate_from_application_s
 
 fn generic_application_subject_as(
     fixture: &canic_testing_internal::pic::ActiveComponentRegistryFixture,
-    canister_id: candid::Principal,
-    caller: candid::Principal,
-) -> Result<candid::Principal, Error> {
-    fixture
-        .pic()
-        .query_candid_as(canister_id, caller, "issuer_application_subject", ())
-        .expect("query Candid harness call")
+    canister_id: ic_platform::Principal,
+    caller: ic_platform::Principal,
+) -> Result<ic_platform::Principal, Error> {
+    ic_testkit::pic::query_candid_args(
+        fixture.pic(),
+        canister_id,
+        caller,
+        "issuer_application_subject",
+        (),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("query Candid harness call")
 }
 
 fn fleet_admission_status_as(
     fixture: &canic_testing_internal::pic::ActiveComponentRegistryFixture,
-    canister_id: candid::Principal,
-    caller: candid::Principal,
+    canister_id: ic_platform::Principal,
+    caller: ic_platform::Principal,
 ) -> Result<FleetAdmissionProjectionStatusResponse, Error> {
-    let response: Result<FleetAdmissionManagedStatusResponse, Error> = fixture
-        .pic()
-        .query_candid_as(
+    let response: Result<FleetAdmissionManagedStatusResponse, Error> =
+        ic_testkit::pic::query_candid_args(
+            fixture.pic(),
             canister_id,
             caller,
             protocol::CANIC_ADMISSION_STATUS,
@@ -224,7 +218,9 @@ fn fleet_admission_status_as(
                 offset: 0,
                 limit: u64::MAX,
             }),),
+            canic::testing::CANDID_REPLY_LIMITS,
         )
+        .map(|(reply,)| reply)
         .expect("query Candid harness call");
     response.map(|response| match response {
         FleetAdmissionManagedStatusResponse::Admission(response) => response,
@@ -233,13 +229,19 @@ fn fleet_admission_status_as(
 
 fn fleet_admission_probe_as(
     fixture: &canic_testing_internal::pic::ActiveComponentRegistryFixture,
-    canister_id: candid::Principal,
-    caller: candid::Principal,
+    canister_id: ic_platform::Principal,
+    caller: ic_platform::Principal,
 ) -> Result<(), Error> {
-    fixture
-        .pic()
-        .query_candid_as(canister_id, caller, "issuer_fleet_admission_probe", ())
-        .expect("query Candid harness call")
+    ic_testkit::pic::query_candid_args(
+        fixture.pic(),
+        canister_id,
+        caller,
+        "issuer_fleet_admission_probe",
+        (),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("query Candid harness call")
 }
 
 #[test]
@@ -247,15 +249,16 @@ fn closed_local_authorization_denial_partition_is_bounded() {
     let fixture = setup_snapshot_resettable_active_component_registry();
     let caller = native_agent_subject();
     let observations = LocalAuthorizationDenialProbe::ALL.map(|probe| {
-        let sample: Result<QueryPerfSample<String>, Error> = fixture
-            .pic()
-            .query_candid_as(
-                fixture.verifier.canister_id,
-                caller,
-                "issuer_application_denial_perf",
-                (probe,),
-            )
-            .expect("query Candid harness call");
+        let sample: Result<QueryPerfSample<String>, Error> = ic_testkit::pic::query_candid_args(
+            fixture.pic(),
+            fixture.verifier.canister_id,
+            caller,
+            "issuer_application_denial_perf",
+            (probe,),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)
+        .expect("query Candid harness call");
         let sample = sample.expect("denial performance probe must succeed");
         assert_eq!(sample.value, probe.label());
         assert!(
@@ -266,10 +269,10 @@ fn closed_local_authorization_denial_partition_is_bounded() {
         );
         (probe.label(), sample.local_instructions)
     });
-    eprintln!("0.105 B6 denial observations: {observations:?}");
+    eprintln!("closed caller-gate observations: {observations:?}");
 }
 
-fn native_agent_subject() -> candid::Principal {
+fn native_agent_subject() -> ic_platform::Principal {
     Secp256k1Identity::from_pem(TEST_IDENTITY_PEM.as_bytes())
         .expect("test PEM identity must parse")
         .sender()
@@ -282,7 +285,12 @@ fn allocated_memory_id(memory: &VectorMemory, key: &str) -> u8 {
     // Only inspect recovered bindings. Empty proposed inputs do not grant bootstrap authority.
     let declarations = ic_memory::SealedDeclarationSnapshot::new(Vec::new()).unwrap();
     let pool = ic_memory::MemoryAllocationPool::new(Vec::new(), Vec::new()).unwrap();
-    let report = runtime.doctor_report(&declarations, &pool, &ic_memory::GenericAllocationPolicy);
+    let report = ic_memory::testing::doctor_report(
+        &runtime,
+        &declarations,
+        &pool,
+        &ic_memory::GenericAllocationPolicy,
+    );
     report
         .ledger
         .expect("current committed allocation authority")
@@ -300,8 +308,7 @@ fn allocation_lookup_preserves_stable_bytes() {
     let memory = VectorMemory::default();
     let key = "fixture.lookup.v1";
     let declarations = ic_memory::SealedDeclarationSnapshot::new(vec![
-        ic_memory::MemoryRequest::new("fixture", key, ic_memory::SchemaMetadata::default())
-            .unwrap(),
+        ic_memory::MemoryRequest::new("fixture", key).unwrap(),
     ])
     .unwrap();
     let pool = ic_memory::MemoryAllocationPool::new(

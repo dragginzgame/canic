@@ -10,6 +10,7 @@ use canic_host::fleet_ensure::{
 use std::time::SystemTime;
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct UpdateControllers {
     canister_id: Principal,
     settings: Controllers,
@@ -17,6 +18,7 @@ struct UpdateControllers {
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct Controllers {
     controllers: Option<Vec<Principal>>,
 }
@@ -63,7 +65,7 @@ pub(super) fn retain_expired_intent(
         .update(&Principal::management_canister(), "update_settings")
         .with_effective_canister_id(source)
         .with_arg(
-            candid::encode_one(UpdateControllers {
+            ic_platform::candid::contract::encode_one(UpdateControllers {
                 canister_id: source,
                 settings: Controllers {
                     controllers: Some(plan.transitional_controllers.clone()),

@@ -25,12 +25,11 @@ use crate::{
     },
     icp::IcpCli,
 };
-use candid::Principal;
 use canic_contracts::dto::{
     fleet_registry::FleetRegistry,
     pool_import::{PoolImportIdentity, PoolImportSourceProgress},
 };
-
+use ic_platform::Principal;
 /// Production admission reader. Construction performs no management effect.
 pub struct CapacityImportLiveObserver {
     transport: CapacityImportTransport,
@@ -148,7 +147,7 @@ impl CapacityImportLiveObserver {
 
 /// Recheck frozen physical custody before Root effects, including after restart.
 pub(in crate::fleet_ensure::ops::capacity_import) async fn verify_infrastructure(
-    agent: &ic_agent::Agent,
+    agent: &ic_platform::agent::Agent,
     plan: &CapacityImportPlanRecord,
     observed_registry: &FleetRegistry,
 ) -> Result<(), CapacityImportJournalError> {

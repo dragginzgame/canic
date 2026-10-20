@@ -49,7 +49,7 @@ pub enum InstallActiveDelegationProofError {
     CertExpired,
     #[error("active delegation proof root proof invalid: {0}")]
     #[cfg(any(feature = "auth-chain-key-ecdsa", test))]
-    RootProofInvalid(ic_auth::token::TokenVerificationError),
+    RootProofInvalid(ic_auth::delegation::DelegationProofError),
     #[error("active delegation proof root key is not permitted on this network")]
     #[cfg(any(feature = "auth-chain-key-ecdsa", test))]
     RootPolicyRejected,
@@ -150,7 +150,7 @@ mod tests {
         },
     };
     use canic_contracts::ids::{BuildNetwork, CanisterRole};
-    use ic_auth::token::TokenVerificationError;
+    use ic_auth::delegation::DelegationProofError;
     use k256::ecdsa::{Signature, SigningKey, signature::hazmat::PrehashSigner};
 
     fn p(id: u8) -> Principal {
@@ -330,7 +330,7 @@ mod tests {
         assert_eq!(
             install_active_delegation_proof(input(proof, &verifier)),
             Err(InstallActiveDelegationProofError::RootProofInvalid(
-                TokenVerificationError::RootSignatureInvalid
+                DelegationProofError::RootSignatureInvalid
             ))
         );
     }
@@ -356,7 +356,7 @@ mod tests {
         assert_eq!(
             install_active_delegation_proof(input(proof(), &verifier)),
             Err(InstallActiveDelegationProofError::RootProofInvalid(
-                TokenVerificationError::StaleAuthority {
+                DelegationProofError::StaleAuthority {
                     field: "proof_epoch"
                 }
             ))
@@ -371,7 +371,7 @@ mod tests {
         assert_eq!(
             install_active_delegation_proof(input(proof(), &verifier)),
             Err(InstallActiveDelegationProofError::RootProofInvalid(
-                TokenVerificationError::BindingMismatch {
+                DelegationProofError::BindingMismatch {
                     field: "root_public_key"
                 }
             ))
@@ -398,7 +398,7 @@ mod tests {
         assert_eq!(
             install_active_delegation_proof(input(large, &verifier)),
             Err(InstallActiveDelegationProofError::RootProofInvalid(
-                TokenVerificationError::InputTooLarge
+                DelegationProofError::InputTooLarge
             ))
         );
         let mut deep = proof();
@@ -408,7 +408,7 @@ mod tests {
         assert_eq!(
             install_active_delegation_proof(input(deep, &verifier)),
             Err(InstallActiveDelegationProofError::RootProofInvalid(
-                TokenVerificationError::InputTooLarge
+                DelegationProofError::InputTooLarge
             ))
         );
     }

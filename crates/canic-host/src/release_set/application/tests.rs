@@ -12,7 +12,6 @@ use crate::{
     },
     release_set::{WASM_MAGIC, fixture::FixtureArtifactEntry},
 };
-use candid::Principal;
 use canic_contracts::{
     cycles::Cycles,
     dto::fixture_provisioning::{FixtureChunkDescriptor, FixtureDescriptor},
@@ -28,6 +27,7 @@ use canic_core::{
     cdk::utils::hash::hex_bytes,
 };
 use flate2::{Compression, GzBuilder};
+use ic_platform::Principal;
 use std::io::Write;
 
 const CONFIG: &str = r#"

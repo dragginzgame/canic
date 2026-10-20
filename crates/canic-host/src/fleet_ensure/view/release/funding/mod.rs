@@ -1,8 +1,8 @@
 //! Funding facts and assessments retain receipt meaning without granting reset authority.
 
 use crate::fleet_ensure::view::release::FleetReleaseFundingView;
-use candid::Principal;
 use canic_core::shared_support::icp_refill::{IcpRefillErrorCode, IcpRefillStatus};
+use ic_platform::Principal;
 
 /// An exact cycles receipt or an unrepresentable observation; overflow is never zero.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

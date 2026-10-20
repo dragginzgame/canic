@@ -6,11 +6,12 @@
 //! transport. Compatibility is checked against the canonical role contracts.
 
 use crate::dto::page::Page;
-use candid::{CandidType, Principal};
+use ic_platform::{Principal, candid::contract::CandidType};
 use serde::Deserialize;
 
 /// Bounded RootStatusRequestFragment wire projection for protected observability.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootStatusRequestFragment {
     ChildFunding(Principal),
     CycleBalance,
@@ -21,6 +22,7 @@ pub enum RootStatusRequestFragment {
 
 /// Bounded RootStatusResponseFragment wire projection for protected observability.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootStatusResponseFragment {
     ChildFunding(crate::dto::observability::ChildFundingUsage),
     CycleBalance(crate::dto::role::CycleBalanceStatusResponse),
@@ -31,12 +33,14 @@ pub enum RootStatusResponseFragment {
 
 /// Bounded StoreStatusRequestFragment wire projection for protected observability.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum StoreStatusRequestFragment {
     CycleHistory(crate::dto::page::PageRequest),
 }
 
 /// Bounded StoreStatusResponseFragment wire projection for protected observability.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum StoreStatusResponseFragment {
     CycleHistory(Page<crate::dto::cycles::CycleTrackerEntry>),
 }

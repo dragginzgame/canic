@@ -20,7 +20,6 @@ use crate::{
         fixture::{FixtureArtifactManifest, read_chunk},
     },
 };
-use candid::Principal;
 use canic_contracts::{
     dto::{
         fixture_provisioning::{FixtureChunkUpload, FixtureSourceStatus, FixtureStoreError},
@@ -30,6 +29,7 @@ use canic_contracts::{
     protocol,
 };
 use canic_control_plane::api::fixture_content::FixtureContentApi;
+use ic_platform::Principal;
 use std::{collections::BTreeSet, path::Path};
 
 pub(super) fn append_actions(

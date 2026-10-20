@@ -27,10 +27,10 @@ normal runtime dependency on `canic`.
 
 Shared runtime libraries must not depend on `canic`. Keep their domain logic
 framework-independent; role packages and IC adapters depend directly on
-upstream crates such as `candid`, `ic-cdk`, or `ic-memory` for generic IC types
-and APIs. Stable collections and traits are available through
-`ic_memory::ic_stable_structures`; Canic-managed storage uses
-`ic_memory::RuntimeMemory` handles. This keeps every role package's runtime
+upstream crates such as `ic-platform`, `ic-memory`, and `ic-storage` for generic
+IC types and APIs. Governed stable collections and traits are available through
+`ic_storage::adapter`; collections consume exclusive `ic_memory::RuntimeMemory`
+leases. This keeps every role package's runtime
 graph to one direct path to Canic.
 
 ## Feature Contract

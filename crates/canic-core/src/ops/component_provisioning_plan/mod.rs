@@ -30,7 +30,6 @@ use crate::{
     },
     ops::{OpsError, fleet_registry::FleetRegistryOps},
 };
-use candid::Principal;
 use canic_contracts::{
     cycles::Cycles,
     ids::{
@@ -39,6 +38,7 @@ use canic_contracts::{
         FleetSubnetRootBinding,
     },
 };
+use ic_platform::Principal;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;

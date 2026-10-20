@@ -1,4 +1,5 @@
 use super::*;
+use ic_backup::model::artifacts::ArtifactChecksumRecord;
 
 fn bind_upload_inventory(journal: &mut RestoreApplyJournal, sequence: usize) {
     journal.operations[sequence].snapshot_ids_before = Some(Vec::new());
@@ -262,11 +263,7 @@ fn apply_journal_upload_receipt_binds_artifact_checksum() {
         .mark_operation_completed_at(0, Some("unix:1".to_string()))
         .expect("mark upload completed");
     let mut receipt = completed_upload_receipt(&journal.operations[0], 1);
-    receipt
-        .artifact_checksum
-        .as_mut()
-        .expect("receipt checksum")
-        .hash = "f".repeat(64);
+    receipt.artifact_checksum = Some(ArtifactChecksumRecord::from_hash(&"f".repeat(64)).unwrap());
 
     let error = journal
         .record_operation_receipt(receipt)
@@ -284,22 +281,25 @@ fn apply_journal_upload_receipt_accepts_equivalent_checksum_case_without_rewriti
         for receipt_upper in [false, true] {
             let mut journal =
                 command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None);
-            if operation_upper {
-                journal.operations[0]
-                    .artifact_checksum
-                    .as_mut()
-                    .expect("operation checksum")
-                    .hash
-                    .make_ascii_uppercase();
-            }
+            journal.operations[0].artifact_checksum = Some(
+                ArtifactChecksumRecord::from_hash(&if operation_upper {
+                    HASH.to_ascii_uppercase()
+                } else {
+                    HASH.to_owned()
+                })
+                .unwrap(),
+            );
             let mut load = journal.operations[0].clone();
             load.sequence = 1;
             load.operation = RestoreApplyOperationKind::LoadSnapshot;
-            load.artifact_checksum.as_mut().expect("load checksum").hash = if receipt_upper {
-                HASH.to_ascii_lowercase()
-            } else {
-                HASH.to_ascii_uppercase()
-            };
+            load.artifact_checksum = Some(
+                ArtifactChecksumRecord::from_hash(&if receipt_upper {
+                    HASH.to_ascii_uppercase()
+                } else {
+                    HASH.to_owned()
+                })
+                .unwrap(),
+            );
             journal.operations.push(load);
             journal.operation_count = journal.operations.len();
             journal.operation_counts =
@@ -310,16 +310,14 @@ fn apply_journal_upload_receipt_accepts_equivalent_checksum_case_without_rewriti
                 .mark_operation_completed_at(0, Some("unix:1".to_string()))
                 .expect("mark upload completed");
             let mut receipt = completed_upload_receipt(&journal.operations[0], 1);
-            let hash = &mut receipt
-                .artifact_checksum
-                .as_mut()
-                .expect("receipt checksum")
-                .hash;
-            if receipt_upper {
-                hash.make_ascii_uppercase();
-            } else {
-                hash.make_ascii_lowercase();
-            }
+            receipt.artifact_checksum = Some(
+                ArtifactChecksumRecord::from_hash(&if receipt_upper {
+                    HASH.to_ascii_uppercase()
+                } else {
+                    HASH.to_owned()
+                })
+                .unwrap(),
+            );
             let operation_bytes =
                 serde_json::to_vec(&journal.operations).expect("serialize operations");
             let receipt_bytes = serde_json::to_vec(&receipt).expect("serialize receipt");
@@ -344,11 +342,8 @@ fn apply_journal_upload_receipt_accepts_equivalent_checksum_case_without_rewriti
                 receipt_bytes
             );
             let mut different_digest = journal.clone();
-            different_digest.operations[1]
-                .artifact_checksum
-                .as_mut()
-                .expect("load checksum")
-                .hash = "f".repeat(64);
+            different_digest.operations[1].artifact_checksum =
+                Some(ArtifactChecksumRecord::from_hash(&"f".repeat(64)).unwrap());
             assert!(
                 different_digest
                     .next_command_preview_with_config(&RestoreApplyCommandConfig::default())
@@ -371,15 +366,10 @@ fn apply_journal_upload_receipt_rejects_malformed_or_unsupported_checksums() {
         journal
             .mark_operation_completed_at(0, Some("unix:1".to_string()))
             .unwrap();
-        let mut receipt = completed_upload_receipt(&journal.operations[0], 1);
-        receipt.artifact_checksum = Some(ArtifactChecksum {
-            algorithm: algorithm.to_string(),
-            hash,
-        });
-        std::assert_matches!(
-            journal.record_operation_receipt(receipt),
-            Err(RestoreApplyJournalError::OperationReceiptMismatch { sequence: 0 })
-        );
+        let receipt = completed_upload_receipt(&journal.operations[0], 1);
+        let mut value = serde_json::to_value(receipt).unwrap();
+        value["artifact_checksum"] = serde_json::json!({"algorithm":algorithm,"hash":hash});
+        assert!(serde_json::from_value::<RestoreApplyOperationReceipt>(value).is_err());
         assert!(journal.operation_receipts.is_empty());
     }
 }
@@ -1278,19 +1268,10 @@ fn apply_journal_validation_rejects_missing_operation_fields() {
         }
     );
 
-    let mut upload = command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None);
-    upload.operations[0]
-        .artifact_checksum
-        .as_mut()
-        .expect("upload checksum")
-        .hash = "not-a-sha256".to_string();
-    let err = upload
-        .validate()
-        .expect_err("upload with malformed checksum should fail");
-    std::assert_matches!(
-        err,
-        RestoreApplyJournalError::ArtifactChecksum { sequence: 0, .. }
-    );
+    let upload = command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None);
+    let mut value = serde_json::to_value(upload).unwrap();
+    value["operations"][0]["artifact_checksum"]["hash"] = serde_json::json!("not-a-sha256");
+    assert!(serde_json::from_value::<RestoreApplyJournal>(value).is_err());
 
     let mut load = command_preview_journal(RestoreApplyOperationKind::LoadSnapshot, None);
     load.operations[0].snapshot_id = None;

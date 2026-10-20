@@ -5,10 +5,7 @@
 //! Boundary: ops converts complete model state to and from this memory-ID-61 record.
 
 use crate::{
-    cdk::{
-        bounded_cell::BoundedCell,
-        structures::{DefaultMemoryImpl, memory::RuntimeMemory},
-    },
+    cdk::structures::{BoundedCell, DefaultMemoryImpl},
     model::fleet_admission_projection::FleetAdmissionTargetTransitionPhaseModel,
     storage::prelude::*,
 };
@@ -17,7 +14,7 @@ use std::cell::RefCell;
 
 std::thread_local! {
     static FLEET_ADMISSION_PROJECTION: RefCell<
-        BoundedCell<Option<FleetAdmissionProjectionRecord>, RuntimeMemory<DefaultMemoryImpl>>,
+        BoundedCell<Option<FleetAdmissionProjectionRecord>, DefaultMemoryImpl>,
     > = RefCell::new(BoundedCell::init(crate::memory::open(crate::memory::keys::FLEET_ADMISSION_PROJECTION_V1), None));
 }
 
@@ -164,7 +161,7 @@ mod tests {
         );
     }
 
-    fn principal(index: usize) -> candid::Principal {
+    fn principal(index: usize) -> ic_platform::Principal {
         let mut bytes = [0_u8; 29];
         bytes[..8].copy_from_slice(
             &u64::try_from(index)
@@ -172,6 +169,6 @@ mod tests {
                 .to_be_bytes(),
         );
         bytes[8..].fill(u8::try_from(index % 251).expect("bounded fixture byte"));
-        candid::Principal::from_slice(&bytes)
+        ic_platform::Principal::from_slice(&bytes)
     }
 }

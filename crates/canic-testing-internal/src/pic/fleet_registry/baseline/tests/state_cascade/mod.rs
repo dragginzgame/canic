@@ -65,19 +65,21 @@ pub(super) fn live_state_cascade_preserves_partial_outcomes_and_retry() {
         (shard, root, canic::protocol::CANIC_COMMAND),
         (store, outsider, canic::protocol::CANIC_WASM_STORE_COMMAND),
     ] {
-        let response: Result<SnapshotResponse, Error> = pic
-            .update_candid_as(
-                target,
-                caller,
-                method,
-                (SnapshotCommand::SynchronizeState(StateSnapshotInput {
-                    fleet_state: Some(FleetStateInput {
-                        mode: FleetMode::Readonly,
-                        cycles_funding_enabled: false,
-                    }),
-                }),),
-            )
-            .expect("update Candid harness call");
+        let response: Result<SnapshotResponse, Error> = ic_testkit::pic::update_candid_args(
+            &(pic),
+            target,
+            caller,
+            method,
+            (SnapshotCommand::SynchronizeState(StateSnapshotInput {
+                fleet_state: Some(FleetStateInput {
+                    mode: FleetMode::Readonly,
+                    cycles_funding_enabled: false,
+                }),
+            }),),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)
+        .expect("update Candid harness call");
         assert_error(
             response,
             canic_contracts::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code(),
@@ -165,20 +167,23 @@ fn assert_mode_recovery(
             ),
             code,
         );
-        let store_response: Result<SnapshotResponse, Error> = pic
-            .update_candid_as(
-                store,
-                root,
-                canic::protocol::CANIC_WASM_STORE_COMMAND,
-                (StoreAdminCommand::RunGc(WasmStoreGcRequest {
-                    operation_id: [0x77; 32],
-                    target: WasmStoreGcTarget::Prepared,
-                }),),
-            )
-            .expect("update Candid harness call");
+        let store_response: Result<SnapshotResponse, Error> = ic_testkit::pic::update_candid_args(
+            pic,
+            store,
+            root,
+            canic::protocol::CANIC_WASM_STORE_COMMAND,
+            (StoreAdminCommand::RunGc(WasmStoreGcRequest {
+                operation_id: [0x77; 32],
+                target: WasmStoreGcTarget::Prepared,
+            }),),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)
+        .expect("update Candid harness call");
         assert_error(store_response, code);
-        let managed_response: Result<SnapshotResponse, Error> = pic
-            .update_candid_as(
+        let managed_response: Result<SnapshotResponse, Error> =
+            ic_testkit::pic::update_candid_args(
+                pic,
                 shard,
                 root,
                 canic::protocol::CANIC_COMMAND,
@@ -190,7 +195,9 @@ fn assert_mode_recovery(
                         projection_digest: [2; 32],
                     },
                 ),),
+                canic::testing::CANDID_REPLY_LIMITS,
             )
+            .map(|(reply,)| reply)
             .expect("update Candid harness call");
         assert_error(managed_response, code);
     }
@@ -251,12 +258,15 @@ fn command(
     caller: Principal,
     command: StateCommand,
 ) -> Result<StateResponse, Error> {
-    pic.update_candid_as(
+    ic_testkit::pic::update_candid_args(
+        pic,
         root,
         caller,
         canic::protocol::CANIC_ROOT_COMMAND,
         (command,),
+        canic::testing::CANDID_REPLY_LIMITS,
     )
+    .map(|(reply,)| reply)
     .expect("update Candid harness call")
 }
 
@@ -274,14 +284,16 @@ fn funding(pic: &PocketIc, root: Principal, enabled: bool) -> FleetStateCommandR
 }
 
 fn state(pic: &PocketIc, root: Principal) -> FleetStateResponse {
-    let response: Result<StateQueryResponse, Error> = pic
-        .query_candid_as(
-            root,
-            Principal::anonymous(),
-            canic::protocol::CANIC_ROOT_STATUS,
-            (StateQuery::FleetState,),
-        )
-        .expect("query Candid harness call");
+    let response: Result<StateQueryResponse, Error> = ic_testkit::pic::query_candid_args(
+        pic,
+        root,
+        Principal::anonymous(),
+        canic::protocol::CANIC_ROOT_STATUS,
+        (StateQuery::FleetState,),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .expect("query Candid harness call");
     let StateQueryResponse::FleetState(state) = response.unwrap();
     state
 }

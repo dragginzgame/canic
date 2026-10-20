@@ -46,14 +46,16 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn supplied_capacity_fences_
     assert!(initial.config.minimum_size > 0);
     root_command(&pic, root, RootCommandFragment::MaintainPool).unwrap();
     assert_eq!(root_pool_status(&pic, root).entries, initial.entries);
-    let unregistered: Result<StatusResponse, Error> = pic
-        .query_candid_as(
-            root,
-            operator,
-            canic::protocol::CANIC_ROOT_STATUS,
-            (StatusRequest::PoolImportContext,),
-        )
-        .unwrap();
+    let unregistered: Result<StatusResponse, Error> = ic_testkit::pic::query_candid_args(
+        &(pic),
+        root,
+        operator,
+        canic::protocol::CANIC_ROOT_STATUS,
+        (StatusRequest::PoolImportContext,),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap();
     assert!(matches!(unregistered, Err(error) if error == InternalError::unavailable().into()));
     install_fixture_coordinator(&pic, coordinator, build_test_coordinator_wasm(), &fixture);
     let (version, sync) = join_and_synchronize_root(&pic, coordinator, &fixture);

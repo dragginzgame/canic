@@ -19,11 +19,11 @@ use crate::{
         FleetFundingPolicyRotationValidationError, validate_fleet_funding_policy_rotation,
     },
 };
-use candid::Principal;
 use canic_contracts::ids::{
     FleetCoordinatorRootFundingPolicy, FleetFundingProfile, FleetSubnetRootFundingAuthority,
     FleetSubnetRootFundingPolicy, FleetSubnetRootIcpRefillPolicy,
 };
+use ic_platform::Principal;
 use sha2::{Digest, Sha256};
 
 const COORDINATOR_POLICY_DOMAIN: &[u8] = b"canic/coordinator-root-funding-policy/v1";

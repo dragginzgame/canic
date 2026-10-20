@@ -7,10 +7,10 @@
 pub(super) mod tests;
 
 use crate::fleet_ensure::dto::{FleetComponentProgress, FleetComponentProgressState as State};
-use candid::Principal;
 use canic_contracts::dto::component_provisioning::{
     FleetComponentProvisioningPlan, FleetComponentProvisioningStatusResponse,
 };
+use ic_platform::Principal;
 
 pub(super) fn project(
     plan: &FleetComponentProvisioningPlan,

@@ -12,16 +12,6 @@ pub enum CanisterBuildProfile {
 }
 
 impl CanisterBuildProfile {
-    // Return the cargo profile flags for one Canic canister build.
-    #[must_use]
-    pub(crate) const fn cargo_args(self) -> &'static [&'static str] {
-        match self {
-            Self::Debug => &[],
-            Self::Fast => &["--profile", "fast"],
-            Self::Release => &["--release"],
-        }
-    }
-
     // Return the target-profile directory name for one Canic canister build.
     #[must_use]
     pub const fn target_dir_name(self) -> &'static str {

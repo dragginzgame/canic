@@ -48,7 +48,7 @@ pub enum AuthValidationError {
     #[error("candid encode failed for {context}: {source}")]
     EncodeFailed {
         context: &'static str,
-        source: candid::Error,
+        source: ic_platform::candid::contract::Error,
     },
 
     #[error("attestation subnet was set but verifier subnet is unavailable")]

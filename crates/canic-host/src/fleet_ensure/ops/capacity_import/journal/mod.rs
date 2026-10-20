@@ -30,7 +30,7 @@ use crate::fleet_ensure::{
     },
     view::capacity_import::{CapacityImportDestinationView, CapacityImportSourceView},
 };
-use candid::Principal;
+use ic_platform::Principal;
 use thiserror::Error;
 
 pub use store::CapacityImportJournalStore;
@@ -98,6 +98,10 @@ pub enum CapacityImportJournalError {
     Integrity,
     #[error("capacity import request differs from the exact reviewed controller handoff")]
     RequestInvalid,
+    #[error("no capacity import review is retained for this fleet")]
+    ReviewMissing,
+    #[error("no host attempt counter is exhausted for this fleet")]
+    NoExhaustedAttempts,
     #[error("capacity import transport differs from the reviewed network or signer")]
     ReaderMismatch,
     #[error("Root rejected the capacity import request: {0}")]

@@ -52,7 +52,6 @@ use crate::{
     },
 };
 use admission::apply_admission_publication_to_registry;
-use candid::Principal;
 use canic_contracts::{
     dto::{
         component_provisioning::{
@@ -126,6 +125,7 @@ use component_provisioning_reconciliation::*;
 use component_provisioning_retry::*;
 use component_provisioning_root_progress::*;
 use component_provisioning_validation::*;
+use ic_platform::Principal;
 use registry_history::{
     canonical_registry_lifecycle_history, component_operation_source_registry,
     initial_active_registry, registry_snapshot_at_version, validate_registry_lifecycle_history,
@@ -221,7 +221,7 @@ impl FleetCoordinatorOps {
     /// Authorize a controller or exact Root participating in one durable operation.
     pub(crate) fn authorize_operation_caller(
         operation_id: [u8; 32],
-        caller: candid::Principal,
+        caller: ic_platform::Principal,
         caller_is_controller: bool,
     ) -> Result<(), InternalError> {
         if caller_is_controller {

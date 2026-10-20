@@ -5,13 +5,15 @@ use crate::fleet_ensure::{
     view::release::provisioning::{ReleaseProvisioningDisposition, ReleaseProvisioningOwner},
     workflow::release::assess_provisioning_evidence,
 };
-use candid::CandidType;
-use candid::types::{Field, Label, Type, TypeEnv, TypeInner};
 use canic_contracts::dto::{
     component_provisioning::{
         ProvisioningFailureStage, ProvisioningRetryCategory, RootComponentProvisioningFailure,
     },
     root::RootProvisioningReleaseEntry,
+};
+use ic_platform::candid::contract::{
+    CandidType, TypeEnv,
+    types::{Field, Label, Type, TypeInner},
 };
 
 pub(in crate::fleet_ensure::ops::release) fn fixture(
@@ -35,7 +37,10 @@ pub(in crate::fleet_ensure::ops::release) fn fixture(
 pub(in crate::fleet_ensure::ops::release) fn wire(
     page: RootProvisioningReleaseResponse,
 ) -> Vec<u8> {
-    candid::encode_one(Ok::<_, CanicError>(Response::ProvisioningRelease(page))).unwrap()
+    ic_platform::candid::contract::encode_one(Ok::<_, CanicError>(Response::ProvisioningRelease(
+        page,
+    )))
+    .unwrap()
 }
 
 fn decode_with_budget(
@@ -123,6 +128,7 @@ fn accepts_exact_record_allowance_but_refuses_a_promised_extra_page() {
 #[test]
 fn decoder_bounds_raw_bytes_total_bytes_and_skipped_work() {
     #[derive(CandidType)]
+    #[candid_path("ic_platform::candid::contract")]
     enum Extended {
         ProvisioningRelease { root: Principal, extra: Vec<()> },
     }
@@ -146,14 +152,16 @@ fn decoder_bounds_raw_bytes_total_bytes_and_skipped_work() {
             })
         ));
     }
-    let bytes = candid::encode_one(Ok::<_, CanicError>(Extended::ProvisioningRelease {
-        root,
-        extra: vec![(); RESPONSE_BYTES * 8 + 1],
-    }))
+    let bytes = ic_platform::candid::contract::encode_one(Ok::<_, CanicError>(
+        Extended::ProvisioningRelease {
+            root,
+            extra: vec![(); RESPONSE_BYTES * 8 + 1],
+        },
+    ))
     .unwrap();
     assert!(bytes.len() < RESPONSE_BYTES);
     assert!(
-        candid::decode_one::<Result<Response, CanicError>>(&bytes)
+        ic_platform::candid::decoder::decode_one::<Result<Response, CanicError>>(&bytes)
             .unwrap()
             .is_ok()
     );
@@ -178,7 +186,7 @@ fn empty_census_and_root_refusal_remain_distinct() {
     );
     let rejection =
         CanicError::from_registered(canic_contracts::diagnostics::codes::AUTHORITY_UNAVAILABLE);
-    let bytes = candid::encode_one(Err::<Response, _>(rejection)).unwrap();
+    let bytes = ic_platform::candid::contract::encode_one(Err::<Response, _>(rejection)).unwrap();
     assert!(matches!(decode_with_budget(root, &bytes),
         Err(ReleaseProvisioningError::Rejected { rejection: observed, .. }) if observed == rejection));
 }
@@ -187,7 +195,7 @@ fn empty_census_and_root_refusal_remain_distinct() {
 fn accepts_expanded_reply_type_tables_while_preserving_the_selected_page() {
     let root = Principal::from_slice(&[1]);
     let page = fixture(root);
-    let args = candid::IDLArgs::from_bytes(&wire(page.clone())).unwrap();
+    let args = ic_platform::candid_parser::IDLArgs::from_bytes(&wire(page.clone())).unwrap();
     let mut extra: Type = TypeInner::Null.into();
     // A full endpoint union carries types for its other variants too. The
     // production Root already has more than 128, even for one compact page.
@@ -206,10 +214,10 @@ fn accepts_expanded_reply_type_tables_while_preserving_the_selected_page() {
     let expanded = args
         .to_bytes_with_types(&TypeEnv::new(), &[TypeInner::Variant(fields).into()])
         .unwrap();
-    let mut too_small = candid::de::DecoderConfig::new();
+    let mut too_small = ic_platform::candid::decoder::DecoderConfig::new();
     too_small.set_max_type_len(128);
     assert!(
-        candid::utils::decode_one_with_config::<Result<Response, CanicError>>(
+        ic_platform::candid::decoder::decode_one_with_config::<Result<Response, CanicError>>(
             &expanded, &too_small
         )
         .is_err()

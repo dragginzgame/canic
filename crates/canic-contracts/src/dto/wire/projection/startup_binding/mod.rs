@@ -6,11 +6,12 @@
 //! transport. Compatibility is checked against the canonical role contracts.
 
 use crate::dto::root::RootOperationStatusResponse;
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded Response wire projection for startup binding.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum Response {
     Operation(Box<RootOperationStatusResponse>),
 }

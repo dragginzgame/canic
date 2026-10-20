@@ -41,8 +41,8 @@ pub use infrastructure::{
 };
 pub use paths::{
     ArtifactRootError, WorkspaceDiscoveryError, app_sources_root, artifact_root_path, config_path,
-    display_workspace_path, icp_root, load_root_package_version, load_workspace_package_version,
-    resolve_artifact_root, resolve_artifact_root_path, workspace_manifest_path, workspace_root,
+    display_workspace_path, icp_root, resolve_artifact_root, resolve_artifact_root_path,
+    workspace_manifest_path, workspace_root,
 };
 
 pub(super) const APP_SOURCES_ROOT_RELATIVE: &str = "apps";

@@ -9,30 +9,34 @@ use crate::dto::capability::{
     NonrootCyclesCapabilityEnvelopeV1, NonrootCyclesCapabilityResponseV1, RootCapabilityEnvelopeV1,
     RootCapabilityResponseV1,
 };
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded RootCommandFragment wire projection for capability rpc.
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootCommandFragment {
     RespondCapability(RootCapabilityEnvelopeV1),
 }
 
 /// Bounded RootCommandResponseFragment wire projection for capability rpc.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootCommandResponseFragment {
     RespondCapability(RootCapabilityResponseV1),
 }
 
 /// Bounded CanisterCommandFragment wire projection for capability rpc.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CanisterCommandFragment {
     RespondCapability(NonrootCyclesCapabilityEnvelopeV1),
 }
 
 /// Bounded CanisterCommandResponseFragment wire projection for capability rpc.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CanisterCommandResponseFragment {
     RespondCapability(NonrootCyclesCapabilityResponseV1),
 }

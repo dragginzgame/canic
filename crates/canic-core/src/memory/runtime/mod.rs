@@ -4,7 +4,7 @@
 //! Does not own: stable schema definitions, allocation policy, or lifecycle hooks.
 //! Boundary: macros and lifecycle call this before stable-memory-backed statics are used.
 
-use ic_memory::{MemoryRuntime, RuntimeDiagnosticError, ic_stable_structures::DefaultMemoryImpl};
+use ic_memory::{DefaultMemoryImpl, MemoryRuntime, RuntimeDiagnosticError};
 use std::cell::RefCell;
 
 #[cfg(any(test, debug_assertions))]

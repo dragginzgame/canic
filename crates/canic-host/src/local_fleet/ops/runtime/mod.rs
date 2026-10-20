@@ -10,8 +10,8 @@ use crate::{
         model::{LocalAllocationIntentRecord, LocalFleetConfig},
     },
 };
-use candid::{Nat, Principal};
 use canic_contracts::dto::wire::projection::local_authority::{Request, Response};
+use ic_platform::{Principal, candid::contract::Nat};
 use ic_testkit::{
     pic::{PocketIcManagedServer, PocketIcStartupConfig},
     pocket_ic::{
@@ -24,11 +24,13 @@ use std::{path::Path, time::Duration};
 /// Spawn one managed server whose drop waits for that exact child.
 
 pub fn server(config: &LocalFleetConfig) -> Result<PocketIcManagedServer, LocalFleetError> {
-    Ok(PocketIcStartupConfig::spawn(
-        &config.server_binary,
-        Duration::from_secs(u64::from(config.request_timeout_secs)),
-    )
-    .with_server_hard_ttl(Duration::from_secs(u64::from(config.server_lifetime_secs)))
+    Ok(PocketIcStartupConfig::Spawn {
+        server_binary: config.server_binary.clone(),
+        timeout: Duration::from_secs(u64::from(config.request_timeout_secs)),
+        server_hard_ttl: Some(Duration::from_secs(u64::from(config.server_lifetime_secs))),
+        server_idle_ttl: None,
+        server_output_files: None,
+    }
     .start_managed_server()?)
 }
 
@@ -63,10 +65,10 @@ pub fn instance(
         .with_auto_progress()
         .with_state_dir(directory.to_path_buf())
         .with_max_request_time_ms(Some(u64::from(config.request_timeout_secs) * 1000));
-    PocketIcStartupConfig::connect(
-        server.url(),
-        Duration::from_secs(u64::from(config.request_timeout_secs)),
-    )
+    PocketIcStartupConfig::Connect {
+        server_url: server.url().to_owned(),
+        timeout: Duration::from_secs(u64::from(config.request_timeout_secs)),
+    }
     .build_instance(builder)
     .map(|owned| owned.instance)
     .map_err(|source| {
@@ -94,7 +96,7 @@ pub fn create(
     pic: &PocketIc,
     allocation: &LocalAllocationIntentRecord,
     config: &LocalFleetConfig,
-) -> Result<candid::Principal, LocalFleetError> {
+) -> Result<ic_platform::Principal, LocalFleetError> {
     if let Some(id) = allocation.canister_id {
         if !guarded(|| pic.canister_exists(id))?
             || guarded(|| pic.get_subnet(id))? != Some(allocation.subnet_id)
@@ -122,13 +124,14 @@ pub fn create(
             }),
         }),
     };
-    let payload =
-        candid::encode_one(args).map_err(|error| LocalFleetError::Platform(error.to_string()))?;
+    let payload = ic_platform::candid::contract::encode_one(args)
+        .map_err(|error| LocalFleetError::Platform(error.to_string()))?;
     let bytes =
         guarded(|| pic.update_call(ledger, Principal::anonymous(), "create_canister", payload))?
             .map_err(|error| LocalFleetError::Platform(format!("{error:?}")))?;
     let result: Result<CreateCanisterSuccess, CreateCanisterError> =
-        candid::decode_one(&bytes).map_err(|error| LocalFleetError::Platform(error.to_string()))?;
+        ic_platform::candid::decoder::decode_one(&bytes)
+            .map_err(|error| LocalFleetError::Platform(error.to_string()))?;
     let id = match result {
         Ok(value) => value.canister_id,
         Err(CreateCanisterError::Duplicate {
@@ -161,9 +164,9 @@ pub fn guarded<T>(action: impl FnOnce() -> T) -> Result<T, LocalFleetError> {
 /// Set one new local canister's final controller set, reconciling a lost response by observation.
 pub fn controllers(
     pic: &PocketIc,
-    target: candid::Principal,
-    operator: candid::Principal,
-    expected: &[candid::Principal],
+    target: ic_platform::Principal,
+    operator: ic_platform::Principal,
+    expected: &[ic_platform::Principal],
 ) -> Result<(), LocalFleetError> {
     let mut observed = guarded(|| pic.get_controllers(target))?;
     observed.sort();
@@ -198,7 +201,7 @@ pub fn verify_root_authority(
     pic: &PocketIc,
     target: &crate::local_fleet::view::LocalRootInstallationView,
 ) -> Result<(), LocalFleetError> {
-    let request = candid::encode_one(Request::FleetAuthority)
+    let request = ic_platform::candid::contract::encode_one(Request::FleetAuthority)
         .map_err(|error| LocalFleetError::Platform(error.to_string()))?;
     let bytes = guarded(|| {
         pic.query_call(
@@ -209,9 +212,10 @@ pub fn verify_root_authority(
         )
     })?
     .map_err(|error| LocalFleetError::Platform(format!("{error:?}")))?;
-    let response =
-        candid::decode_one::<Result<Response, canic_contracts::dto::error::Error>>(&bytes)
-            .map_err(|error| LocalFleetError::Platform(error.to_string()))?;
+    let response = ic_platform::candid::decoder::decode_one::<
+        Result<Response, canic_contracts::dto::error::Error>,
+    >(&bytes)
+    .map_err(|error| LocalFleetError::Platform(error.to_string()))?;
     let Response::FleetAuthority(actual) = response.map_err(LocalFleetError::Root)?;
     if *actual != target.authority {
         return Err(LocalFleetError::Identity);

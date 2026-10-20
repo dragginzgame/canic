@@ -4,12 +4,12 @@
 //! Does not own: transport decoding, hashing, storage, orchestration, or endpoint decisions.
 //! Boundary: ops supplies exact layer-neutral policy shapes plus independently computed digests.
 
-use candid::Principal;
 use canic_contracts::ids::{
     FLEET_ADMISSION_INITIAL_GENERATION, FLEET_ADMISSION_SCHEMA_VERSION, FleetAdmissionRule,
     FleetAdmissionSelector, MAX_FLEET_ADMISSION_PRINCIPALS,
     MAX_FLEET_ADMISSION_RULE_PRINCIPAL_REFERENCES, MAX_FLEET_ADMISSION_RULES,
 };
+use ic_platform::Principal;
 use thiserror::Error as ThisError;
 
 /// Exact invariant rejected while admitting a template or installed policy.

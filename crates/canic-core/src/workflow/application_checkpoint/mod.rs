@@ -8,8 +8,8 @@ use crate::{
     domain::policy::pure::application_checkpoint, model::caller_authority::CallerAdmissionError,
     ops::caller_authority::CallerAuthorityOps,
 };
-use candid::Principal;
 use canic_contracts::ids::ApplicationCheckpointBinding;
+use ic_platform::Principal;
 
 pub fn authorize_root(
     requested: &ApplicationCheckpointBinding,

@@ -25,12 +25,13 @@ use crate::{
     },
     icp::IcpCli,
 };
-use candid::Principal;
 use canic_core::cdk::utils::hash::decode_hex;
+use ic_platform::Principal;
 use std::path::Path;
 
-pub use crate::fleet_ensure::ops::clean_reinstall::validate_publication_path;
-pub use crate::fleet_ensure::view::clean_reinstall::CleanReinstallReport;
+pub use crate::fleet_ensure::{
+    ops::clean_reinstall::validate_publication_path, view::clean_reinstall::CleanReinstallReport,
+};
 
 /// Cancel only the exact unpaid review; no canister, Ledger or artifact effect occurs.
 pub fn cancel_review(

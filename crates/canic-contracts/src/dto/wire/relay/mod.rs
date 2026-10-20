@@ -17,8 +17,9 @@ macro_rules! __canic_relay_wire_types {
         metrics_attributes = [$($metrics_attributes:tt)*],
     ) => {
         #[derive(
-            $crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize,
+            $crate::__reexports::ic_platform::candid::contract::CandidType, $crate::__reexports::serde::Deserialize,
         )]
+#[candid_path("ic_platform::candid::contract")]
         #[serde(crate = $serde_crate)]
         /// RelayedObservabilityResponse wire union selected from the role's compiled capabilities.
         pub enum RelayedObservabilityResponse {

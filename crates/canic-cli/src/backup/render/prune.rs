@@ -5,7 +5,7 @@
 //! Boundary: table formatting for prune summary and selected entries.
 
 use super::super::BackupPruneReport;
-use canic_host::table::{ColumnAlign, render_table};
+use ic_host_text::table::{self, Alignment, Options};
 
 pub(super) fn render_prune_report(report: &BackupPruneReport) -> String {
     let summary_rows = [[
@@ -30,23 +30,31 @@ pub(super) fn render_prune_report(report: &BackupPruneReport) -> String {
         .collect::<Vec<_>>();
 
     [
-        render_table(
+        table::render(
             &["MODE", "SCANNED", "SELECTED", "PRUNED"],
             &summary_rows,
-            &[ColumnAlign::Left; 4],
+            &[Alignment::Left; 4],
+            Options {
+                column_gap: 3,
+                header_separator: true,
+            },
         ),
         String::new(),
-        render_table(
+        table::render(
             &["#", "DIR", "BACKUP_ID", "STATUS", "ACTION", "DETAIL"],
             &entry_rows,
             &[
-                ColumnAlign::Right,
-                ColumnAlign::Left,
-                ColumnAlign::Left,
-                ColumnAlign::Left,
-                ColumnAlign::Left,
-                ColumnAlign::Left,
+                Alignment::Right,
+                Alignment::Left,
+                Alignment::Left,
+                Alignment::Left,
+                Alignment::Left,
+                Alignment::Left,
             ],
+            Options {
+                column_gap: 3,
+                header_separator: true,
+            },
         ),
     ]
     .join("\n")

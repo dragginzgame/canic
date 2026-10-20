@@ -12,7 +12,7 @@ mod replay;
 
 use crate::{
     InternalError,
-    cdk::{candid::Nat, types::Principal},
+    cdk::types::Principal,
     domain::{
         icp_refill::IcpRefillTrigger,
         policy::pure::icp_refill::{
@@ -36,6 +36,7 @@ use canic_contracts::{
     cycles::Cycles,
     ids::{BuildNetwork, FleetSubnetRootIcpRefillPolicy},
 };
+use ic_platform::candid::contract::Nat;
 use thiserror::Error as ThisError;
 
 const TX_WINDOW_NANOS: u64 = 24 * 60 * 60 * 1_000_000_000;

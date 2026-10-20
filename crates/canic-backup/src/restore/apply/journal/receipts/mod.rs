@@ -8,7 +8,7 @@ use super::{
     RestoreApplyJournal, RestoreApplyJournalError, RestoreApplyJournalOperation,
     RestoreApplyOperationKind, RestoreApplyRunnerCommand, validate_apply_journal_nonempty,
 };
-use crate::artifacts::ArtifactChecksum;
+use ic_backup::model::artifacts::ArtifactChecksumRecord;
 
 use serde::{Deserialize, Serialize};
 
@@ -45,7 +45,7 @@ pub struct RestoreApplyOperationReceipt {
     #[serde(deserialize_with = "crate::serialization::required_option")]
     pub artifact_path: Option<String>,
     #[serde(deserialize_with = "crate::serialization::required_option")]
-    pub artifact_checksum: Option<ArtifactChecksum>,
+    pub artifact_checksum: Option<ArtifactChecksumRecord>,
     #[serde(deserialize_with = "crate::serialization::required_option")]
     pub uploaded_snapshot_id: Option<String>,
 }
@@ -223,7 +223,11 @@ impl RestoreApplyOperationReceipt {
             .as_ref()
             .zip(operation.artifact_checksum.as_ref())
             .is_some_and(|(received, expected)| {
-                received.algorithm == expected.algorithm && received.verify(&expected.hash).is_ok()
+                received.algorithm() == expected.algorithm()
+                    && received
+                        .verify(expected.hash())
+                        .map_err(crate::artifacts::ArtifactChecksumError::from)
+                        .is_ok()
             });
         self.source_snapshot_id.as_deref() == snapshot_id.as_deref()
             && self.artifact_path.as_deref() == artifact_path.as_deref()

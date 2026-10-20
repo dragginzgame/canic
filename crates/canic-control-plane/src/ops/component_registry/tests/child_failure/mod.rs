@@ -125,7 +125,7 @@ fn initial_child_origin_excludes_dynamic_active_and_unrelated_failures() {
         InternalError::conflict(),
         InternalError::unavailable().with_provisioning_failure(
             ProvisioningFailureStage::StoreStatus,
-            candid::Principal::from_slice(&[94]),
+            ic_platform::Principal::from_slice(&[94]),
             [95; 32],
             ProvisioningRetryCategory::Backoff,
         ),
@@ -231,9 +231,9 @@ fn retained_child_failure_does_not_change_work_or_capacity() {
         response.platform_rejection.as_deref(),
         Some(detail.as_str())
     );
-    let encoded = candid::encode_one(&response).unwrap();
+    let encoded = ic_platform::candid::contract::encode_one(&response).unwrap();
     let decoded: canic_contracts::dto::component_registry::RootComponentChildAllocationFailure =
-        candid::decode_one(&encoded).unwrap();
+        ic_platform::candid::decoder::decode_one(&encoded).unwrap();
     assert_eq!(decoded, response);
     let record = retained.child_allocations[0].last_failure.clone().unwrap();
     let mut json = serde_json::to_value(&record).unwrap();

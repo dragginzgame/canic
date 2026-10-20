@@ -1,11 +1,11 @@
 //! Bounded HTTP query fixture: Root replies, Coordinator fails, every update is rejected.
 
-use candid::Principal;
 use canic_contracts::dto::{
     error::Error,
     pool_import::{PoolImportContext, PoolImportStatus},
     wire::projection::capacity_import::{StatusRequest, StatusResponse},
 };
+use ic_platform::Principal;
 use std::{
     io::{BufRead, BufReader, Read, Write},
     net::{TcpListener, TcpStream},
@@ -114,16 +114,19 @@ fn request(stream: &TcpStream) -> (String, Vec<u8>) {
 
 fn root_reply(body: &[u8], status: &PoolImportStatus, context: &PoolImportContext) -> Vec<u8> {
     let envelope: QueryEnvelope = ciborium::de::from_reader(body).unwrap();
-    let response = match candid::decode_one::<StatusRequest>(&envelope.content.arg).unwrap() {
-        StatusRequest::PoolImport(_) => StatusResponse::PoolImport(Box::new(status.clone())),
-        StatusRequest::PoolImportContext => {
-            StatusResponse::PoolImportContext(Box::new(context.clone()))
-        }
-    };
+    let response =
+        match ic_platform::candid::decoder::decode_one::<StatusRequest>(&envelope.content.arg)
+            .unwrap()
+        {
+            StatusRequest::PoolImport(_) => StatusResponse::PoolImport(Box::new(status.clone())),
+            StatusRequest::PoolImportContext => {
+                StatusResponse::PoolImportContext(Box::new(context.clone()))
+            }
+        };
     let response = Response {
         status: "replied",
         reply: Reply {
-            arg: candid::encode_one(Ok::<_, Error>(response)).unwrap(),
+            arg: ic_platform::candid::contract::encode_one(Ok::<_, Error>(response)).unwrap(),
         },
     };
     let mut bytes = Vec::new();

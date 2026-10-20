@@ -10,7 +10,7 @@ authentication policy, or platform effects.
 Use `dto::wire` for complete role contracts and `dto::wire::projection` for
 purpose-specific bounded transports. Each projection states why it limits the
 schema and is checked against canonical selector payloads. Nested reply unions
-check every retained label; `candid::Reserved` skips explicitly unused receipt
+check every retained label; `ic_platform::candid::contract::Reserved` skips explicitly unused receipt
 data. Unknown operation variants remain a transport failure for that caller.
 
 Production callers and framework fixtures reuse identical bounded shapes,

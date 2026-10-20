@@ -11,7 +11,7 @@ use crate::{
 
 use std::{collections::BTreeSet, str::FromStr};
 
-use candid::Principal;
+use ic_platform::Principal;
 
 pub(super) fn validate_mapping(mapping: &RestoreMapping) -> Result<(), RestorePlanError> {
     let mut sources = BTreeSet::new();

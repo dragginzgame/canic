@@ -5,7 +5,6 @@
 //! negotiation.
 
 use crate::dto::fleet_coordinator::CoordinatorRootRemovalOperationStatus;
-use candid::Principal;
 use canic_contracts::{
     dto::{
         error::Error,
@@ -24,6 +23,7 @@ use canic_contracts::{
     protocol,
 };
 use canic_core::control_plane_support::{error::InternalError, ops::ic::call::CallOps};
+use ic_platform::Principal;
 
 pub(super) async fn registry(coordinator: Principal) -> Result<FleetRegistry, InternalError> {
     let call = CallOps::unbounded_wait(coordinator, protocol::CANIC_COORDINATOR_REGISTRY)

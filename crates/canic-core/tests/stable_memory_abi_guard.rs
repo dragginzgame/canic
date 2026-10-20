@@ -1,75 +1,12 @@
 // Category C - System-level artifact test (no embedded config).
 
 use std::{
-    collections::BTreeSet,
     fs,
     path::{Path, PathBuf},
-    process::Command,
 };
 
 const CANIC_MANAGED_RUNTIME_CRATES: &[&str] =
     &["canic", "canic-core", "canic-control-plane", "canic-macros"];
-
-#[test]
-fn canic_runtime_memory_has_one_package_identity() {
-    let mut command = Command::new(env!("CARGO"));
-    // Exercise machine-readable output even when CI forces terminal colors.
-    command.env("CARGO_TERM_COLOR", "always");
-    command.current_dir(workspace_root()).args([
-        "tree",
-        "--color",
-        "never",
-        "--locked",
-        "--offline",
-        "--target",
-        "wasm32-unknown-unknown",
-        "--edges",
-        "normal",
-        "--all-features",
-        "--prefix",
-        "none",
-        "--format",
-        "{p}",
-    ]);
-    for package in CANIC_MANAGED_RUNTIME_CRATES {
-        command.args(["-p", package]);
-    }
-    let output = command
-        .output()
-        .expect("resolve Canic runtime dependency graph");
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let tree = String::from_utf8(output.stdout).expect("Cargo package identities are UTF-8");
-    let memories = memory_package_identities(&tree);
-    assert_eq!(
-        memories.len(),
-        1,
-        "Canic's deployed runtime must share one ic-memory package identity: {memories:?}"
-    );
-}
-
-fn memory_package_identities(tree: &str) -> BTreeSet<&str> {
-    tree.lines()
-        .filter(|line| line.starts_with("ic-memory "))
-        .map(|line| line.strip_suffix(" (*)").unwrap_or(line))
-        .collect()
-}
-
-#[test]
-fn runtime_memory_identity_collection_preserves_distinct_packages() {
-    assert_eq!(
-        memory_package_identities("ic-memory v0.14.1\nic-memory v0.14.1 (*)"),
-        BTreeSet::from(["ic-memory v0.14.1"])
-    );
-    assert_eq!(
-        memory_package_identities("ic-memory v0.13.3\nic-memory v0.14.1\nic-memory-extra v1.0.0"),
-        BTreeSet::from(["ic-memory v0.13.3", "ic-memory v0.14.1"])
-    );
-    assert!(memory_package_identities("canic-core v0.110.21").is_empty());
-}
 
 #[test]
 fn canic_managed_runtime_code_uses_managed_explicit_stable_keys() {

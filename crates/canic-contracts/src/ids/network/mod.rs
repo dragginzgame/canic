@@ -8,7 +8,7 @@ use crate::values::auth::{
     IC_ROOT_PUBLIC_KEY_RAW_LENGTH, ic_root_public_key_raw_from_der_or_raw,
     mainnet_ic_root_public_key_der,
 };
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 use sha2::{Digest, Sha256};
 use std::{fmt, str::FromStr};
@@ -71,13 +71,13 @@ impl fmt::Display for CanonicalNetworkId {
 }
 
 impl CandidType for CanonicalNetworkId {
-    fn _ty() -> candid::types::Type {
-        candid::types::TypeInner::Text.into()
+    fn _ty() -> ic_platform::candid::contract::types::Type {
+        ic_platform::candid::contract::types::TypeInner::Text.into()
     }
 
     fn idl_serialize<S>(&self, serializer: S) -> Result<(), S::Error>
     where
-        S: candid::types::Serializer,
+        S: ic_platform::candid::contract::types::Serializer,
     {
         serializer.serialize_text(&self.to_string())
     }

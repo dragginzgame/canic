@@ -127,11 +127,13 @@ fn report_projects_store_chunk_as_bounded_local_content_reference() {
     let mut without_chunks = report;
     without_chunks.plan.protocol_actions.clear();
     let mut expected =
-        to_value(&without_chunks).expect("encode ordinary report without Store chunks");
+        serde_json::to_value(&without_chunks).expect("encode ordinary report without Store chunks");
     expected.as_object_mut().unwrap().insert(
         "continuation_forecast".into(),
-        to_value(&crate::fleet_ensure::policy::continuation_forecast::forecast(&without_chunks))
-            .unwrap(),
+        serde_json::to_value(
+            crate::fleet_ensure::policy::continuation_forecast::forecast(&without_chunks),
+        )
+        .unwrap(),
     );
     assert_eq!(
         report_json_value(&without_chunks).expect("project report without Store chunks"),
@@ -152,7 +154,7 @@ fn current_funding_action_emits_explicit_cycle_bounds() {
         name: "funding".into(),
         principal: "target".into(),
     };
-    let document = to_value(&action).unwrap();
+    let document = serde_json::to_value(&action).unwrap();
     assert_eq!(document.get("pool_funding"), Some(&Value::Null));
     for field in [
         "expected_post_cycles",
@@ -203,5 +205,39 @@ fn fixture_upload_report_retains_identity_and_externalizes_payload() {
     assert_eq!(
         projection["action"]["expected"]["received_bytes"],
         bytes.len() as u64
+    );
+}
+
+#[test]
+fn nested_cycle_action_has_exact_hashable_decimal_bytes() {
+    let action = CurrentFleetProtocolAction::ObservePoolReadiness {
+        minimum_ready: 2,
+        readiness_floor: canic_contracts::cycles::Cycles::new(u128::MAX),
+    };
+    let expected = format!(
+        "{{\"kind\":\"observe_pool_readiness\",\"minimum_ready\":2,\"readiness_floor\":\"{}\"}}",
+        u128::MAX
+    );
+    assert_eq!(serde_json::to_vec(&action).unwrap(), expected.as_bytes());
+    assert_eq!(
+        serde_json::from_slice::<CurrentFleetProtocolAction>(expected.as_bytes()).unwrap(),
+        action
+    );
+}
+
+#[test]
+fn observed_cycle_projection_retains_zero_and_full_width_decimal_text() {
+    let mut plan = CanisterPlan {
+        name: "app".into(),
+        principal: None,
+        observed_cycles: 0,
+        disposition: crate::fleet_ensure::model::CanisterDisposition::Create,
+        actions: Vec::new(),
+    };
+    assert_eq!(canister_json_value(&plan).unwrap()["observed_cycles"], "0");
+    plan.observed_cycles = u128::MAX;
+    assert_eq!(
+        canister_json_value(&plan).unwrap()["observed_cycles"],
+        u128::MAX.to_string()
     );
 }

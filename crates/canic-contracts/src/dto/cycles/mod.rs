@@ -11,6 +11,7 @@ pub use crate::{
 //
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CycleTrackerEntry {
     pub timestamp_secs: u64,
     pub cycles: Cycles,
@@ -21,6 +22,7 @@ pub struct CycleTrackerEntry {
 //
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CycleTopupEvent {
     pub timestamp_secs: u64,
     pub sequence: u32,
@@ -33,6 +35,7 @@ pub struct CycleTopupEvent {
 
 /// Exact parent funding failure; its containing event supplies the failure time.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CycleTopupFailure {
     pub parent: Principal,
     pub operation_id: [u8; 32],
@@ -56,9 +59,10 @@ mod tests {
             parent_failure: None,
         };
 
-        let bytes = candid::encode_one(&event).expect("encode cycle top-up event");
+        let bytes =
+            ic_platform::candid::contract::encode_one(&event).expect("encode cycle top-up event");
         let decoded: CycleTopupEvent =
-            candid::decode_one(&bytes).expect("decode cycle top-up event");
+            ic_platform::candid::decoder::decode_one(&bytes).expect("decode cycle top-up event");
 
         let dto_status: CycleTopupEventStatus =
             crate::values::cycles::CycleTopupEventStatus::RequestOk;

@@ -166,7 +166,7 @@ impl PublicMetricsOps {
     #[must_use]
     pub fn history(request: PublicHistoryRequest) -> PublicHistorySnapshot {
         let mut snapshot = Self::project_history(request, &Self::enabled(), IcOps::now_nanos());
-        snapshot.canister_version = ic_cdk::api::canister_version();
+        snapshot.canister_version = ic_platform::cdk::api::canister_version();
         snapshot
     }
 

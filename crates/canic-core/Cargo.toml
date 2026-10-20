@@ -19,15 +19,15 @@ ignored = ["serde_bytes"]
 [features]
 default = []
 sharding = []
-auth-chain-key-ecdsa = ["ic-auth/token-verification"]
+auth-chain-key-ecdsa = ["ic-auth/chain-key-verification"]
 auth-chain-key-root-sign = ["auth-chain-key-ecdsa", "auth-root-delegation-state"]
 auth-delegated-token-issuer-state = []
-auth-root-canister-sig-create = ["ic-auth/canister-signature-preparation", "dep:ic-certification"]
+auth-root-canister-sig-create = ["ic-auth/canister-signature-preparation", "ic-platform/certification"]
 auth-root-canister-sig-verify = ["ic-auth/canister-signature-verification"]
 auth-issuer-canister-sig-create = [
     "auth-delegated-token-issuer-state",
     "ic-auth/canister-signature-preparation",
-    "dep:ic-certification",
+    "ic-platform/certification",
 ]
 auth-issuer-canister-sig-verify = ["ic-auth/canister-signature-verification"]
 auth-delegated-token-verify = ["auth-chain-key-ecdsa", "auth-issuer-canister-sig-verify"]
@@ -41,16 +41,15 @@ internal-test-fixtures = []
 
 [dependencies]
 async-trait = { workspace = true }
-candid = { workspace = true }
 canic-contracts.workspace = true
 ciborium = { workspace = true }
 ctor = { workspace = true }
 ic-auth = { workspace = true }
 ic-auth-protocol-types = { workspace = true }
-ic-cdk = { workspace = true }
-ic-certification = { workspace = true, optional = true }
 ic-memory = { workspace = true }
 ic-metrics.workspace = true
+ic-platform = { workspace = true, features = ["cdk", "candid", "management-canister-types"] }
+ic-storage.workspace = true
 ic-timers = { workspace = true }
 remain = { workspace = true }
 serde = { workspace = true }
@@ -59,20 +58,19 @@ sha2 = { workspace = true }
 thiserror = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-ic-secp256k1 = { workspace = true }
+ic-platform = { workspace = true, features = ["secp256k1"] }
 proc-macro2 = { workspace = true }
 quote = { workspace = true }
 serde_path_to_error = { workspace = true }
 toml = { workspace = true }
 
 [build-dependencies]
-candid = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
 ed25519-dalek = { workspace = true }
 futures = { workspace = true }
-ic-auth = { workspace = true, features = ["session-restore", "token-verification", "portable-signature-verification"] }
+ic-auth = { workspace = true, features = ["session-restore", "certified-proof-verification", "portable-signature-verification"] }
 ic-memory = { workspace = true, features = ["test-support"] }
 k256 = { workspace = true }
 syn = { workspace = true, features = ["full", "visit"] }

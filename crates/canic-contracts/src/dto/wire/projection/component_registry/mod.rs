@@ -13,18 +13,20 @@ use crate::{
     },
     ids::ManagedCanisterBinding,
 };
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded CanisterCommandFragment wire projection for component registry.
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CanisterCommandFragment {
     ConfigureRuntime(ComponentRuntimeDirectoryPreparationRequest),
 }
 
 /// Bounded CanisterStatusRequestFragment wire projection for component registry.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CanisterStatusRequestFragment {
     Binding,
     Operation(OperationStatusRequest),
@@ -33,6 +35,7 @@ pub enum CanisterStatusRequestFragment {
 
 /// Bounded CanisterStatusResponseFragment wire projection for component registry.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CanisterStatusResponseFragment {
     Binding(Box<ManagedCanisterBinding>),
     Operation(Box<CanisterOperationStatusFragment>),
@@ -41,6 +44,7 @@ pub enum CanisterStatusResponseFragment {
 
 /// Bounded CanisterOperationStatusFragment wire projection for component registry.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CanisterOperationStatusFragment {
     ConfigureRuntime(ComponentRuntimeOperationStatus),
 }

@@ -1,5 +1,5 @@
 use crate::{
-    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
+    cdk::structures::{DefaultMemoryImpl, StableCell as Cell},
     storage::prelude::*,
 };
 use std::cell::RefCell;
@@ -11,7 +11,7 @@ pub use crate::domain::state::FleetMode;
 //
 
 std::thread_local! {
-    static FLEET_STATE: RefCell<Cell<FleetStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
+    static FLEET_STATE: RefCell<Cell<FleetStateRecord, DefaultMemoryImpl>> =
         RefCell::new(Cell::init(
             crate::memory::open(crate::memory::keys::FLEET_STATE_V1),
             FleetStateRecord::default(),

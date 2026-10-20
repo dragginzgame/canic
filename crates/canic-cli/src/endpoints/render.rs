@@ -1,15 +1,13 @@
+use ic_host_text::table::{self, Alignment, Options};
 use std::fmt::Write;
 
-use canic_host::{
-    candid_endpoints::{
-        EndpointEntry, EndpointMode, EndpointType, IngressPayloadBasis, render_candid_method_name,
-    },
-    table::{ColumnAlign, render_table},
+use canic_host::candid_endpoints::{
+    EndpointEntry, EndpointMode, EndpointType, IngressPayloadBasis, render_candid_method_name,
 };
 
 pub(super) fn render_plain_endpoints(endpoints: &[EndpointEntry]) -> String {
     const HEADERS: [&str; 3] = ["FUNCTION", "MODE", "SIGNATURE"];
-    const ALIGNMENTS: [ColumnAlign; 3] = [ColumnAlign::Left; 3];
+    const ALIGNMENTS: [Alignment; 3] = [Alignment::Left; 3];
     let rows = endpoints
         .iter()
         .map(|endpoint| {
@@ -21,7 +19,15 @@ pub(super) fn render_plain_endpoints(endpoints: &[EndpointEntry]) -> String {
         })
         .collect::<Vec<_>>();
 
-    let mut table = render_table(&HEADERS, &rows, &ALIGNMENTS);
+    let mut table = table::render(
+        &HEADERS,
+        &rows,
+        &ALIGNMENTS,
+        Options {
+            column_gap: 3,
+            header_separator: true,
+        },
+    );
     for endpoint in endpoints.iter().filter(|endpoint| {
         !endpoint
             .modes

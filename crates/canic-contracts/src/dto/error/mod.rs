@@ -12,6 +12,7 @@ use std::{fmt, fmt::Display};
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct Error {
     code: u16,
 }

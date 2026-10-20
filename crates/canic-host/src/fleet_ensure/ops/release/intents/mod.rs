@@ -18,7 +18,6 @@ use crate::{
     },
     icp::IcpCli,
 };
-use candid::Principal;
 use canic_contracts::{
     dto::{
         error::Error as CanicError,
@@ -28,7 +27,7 @@ use canic_contracts::{
     },
     protocol,
 };
-use ic_agent::Agent;
+use ic_platform::{Principal, agent::Agent};
 use std::{collections::BTreeMap, time::Duration};
 use thiserror::Error;
 
@@ -104,8 +103,9 @@ pub(super) async fn collect_with_agent(
             let fail = |stage| ReleaseIntentsError::Observation { owner, stage };
             let mut pages = Pages::new(owner);
             loop {
-                let argument = candid::encode_one(Request::IntentRelease(pages.cursor))
-                    .map_err(|_| fail(ReleaseIntentsStage::Query))?;
+                let argument =
+                    ic_platform::candid::contract::encode_one(Request::IntentRelease(pages.cursor))
+                        .map_err(|_| fail(ReleaseIntentsStage::Query))?;
                 let bytes = tokio::time::timeout(
                     QUERY_DEADLINE,
                     agent.query(&owner, method).with_arg(argument).call(),
@@ -161,15 +161,15 @@ pub fn decode_response(
     *remaining = remaining
         .checked_sub(bytes.len())
         .ok_or_else(|| fail(ReleaseIntentsStage::Budget))?;
-    let mut config = candid::de::DecoderConfig::new();
-    config
-        .set_decoding_quota(RESPONSE_BYTES * 8)
-        .set_skipping_quota(RESPONSE_BYTES * 8)
-        .set_max_type_len(512)
-        .set_max_header_len(16 * 1024);
-    let response: Result<Response, CanicError> =
-        candid::utils::decode_one_with_config(bytes, &config)
-            .map_err(|_| fail(ReleaseIntentsStage::Decode))?;
+    let limits = ic_platform::candid::DecodeLimits {
+        reply_bytes: RESPONSE_BYTES,
+        decoding_quota: RESPONSE_BYTES * 8,
+        skipping_quota: RESPONSE_BYTES * 8,
+        type_entries: 512,
+        header_bytes: 16 * 1024,
+    };
+    let response: Result<Response, CanicError> = ic_platform::candid::decode_one(bytes, limits)
+        .map_err(|_| fail(ReleaseIntentsStage::Decode))?;
     let Response::IntentRelease(page) =
         response.map_err(|rejection| ReleaseIntentsError::Rejected { owner, rejection })?;
     Ok(page)

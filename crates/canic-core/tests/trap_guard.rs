@@ -31,7 +31,7 @@ fn trap_usage_is_confined_to_approved_platform_boundaries() {
 
     assert!(
         violations.is_empty(),
-        "ic_cdk::trap usage outside lifecycle and the approved IC ops facade: {violations:?}"
+        "ic_platform::cdk::api::trap usage outside lifecycle and the approved IC ops facade: {violations:?}"
     );
 }
 

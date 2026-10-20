@@ -1,7 +1,7 @@
 //! Certificate projection rejects incomplete controller, module and target evidence.
 
 use super::*;
-use ic_certification::{HashTree, fork, labeled, leaf, pruned};
+use ic_platform::certification::{HashTree, fork, labeled, leaf, pruned};
 
 fn certificate(
     principal: Principal,

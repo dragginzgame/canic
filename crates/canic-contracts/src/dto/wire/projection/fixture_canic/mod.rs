@@ -7,11 +7,12 @@ use crate::dto::{
     fleet_subnet_root::FleetSubnetWasmStoreAdoptionRequest, role::OperationStatusRequest,
     root::RootOperationStatusResponse, runtime::CanicReadinessStatus,
 };
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded transport selectors used by framework validation.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 #[expect(
     clippy::large_enum_variant,
     reason = "the test decoder mirrors the direct Root command wire without a parallel DTO"
@@ -24,6 +25,7 @@ pub enum RootCommandFragment {
 
 /// Bounded transport selectors used by framework validation.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootStatusRequestFragment {
     Operation(OperationStatusRequest),
     Readiness,
@@ -31,6 +33,7 @@ pub enum RootStatusRequestFragment {
 
 /// Bounded transport selectors used by framework validation.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[expect(
     clippy::large_enum_variant,
     reason = "the test decoder mirrors the direct Root status wire without a parallel DTO"
@@ -42,12 +45,14 @@ pub enum RootStatusResponseFragment {
 
 /// Bounded transport selectors used by framework validation.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CanisterStatusRequestFragment {
     Readiness,
 }
 
 /// Bounded transport selectors used by framework validation.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CanisterStatusResponseFragment {
     Readiness(CanicReadinessStatus),
 }

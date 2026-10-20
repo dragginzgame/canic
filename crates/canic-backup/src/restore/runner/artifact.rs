@@ -4,7 +4,7 @@
 //! Does not own: restore planning, journal transitions, or command execution.
 //! Boundary: execution receives only a no-follow descriptor-copied artifact path.
 
-use crate::{artifacts::ArtifactChecksum, persistence::resolve_backup_artifact_path};
+use crate::persistence::resolve_backup_artifact_path;
 
 use std::{
     fs,
@@ -112,12 +112,6 @@ fn stage_upload_artifact_at_barrier(
             field: "operations[].artifact_checksum",
         },
     )?;
-    expected
-        .validate()
-        .map_err(|source| RestoreRunnerError::ArtifactStageChecksum {
-            sequence: operation.sequence,
-            source,
-        })?;
 
     let backup_root = validate_backup_root(Path::new(backup_root))?;
     if resolve_backup_artifact_path(&backup_root, artifact_path).is_none() {
@@ -138,7 +132,7 @@ fn stage_upload_artifact_at_barrier(
         stage_root,
     };
 
-    let actual = ArtifactChecksum::stage_relative_path_no_follow(
+    let actual = crate::artifacts::stage_relative_path(
         &backup_root,
         Path::new(artifact_path),
         &staged.artifact_path,
@@ -148,7 +142,8 @@ fn stage_upload_artifact_at_barrier(
         source,
     })?;
     actual
-        .verify(&expected.hash)
+        .verify(expected.hash())
+        .map_err(crate::artifacts::ArtifactChecksumError::from)
         .map_err(|source| RestoreRunnerError::ArtifactStageChecksum {
             sequence: operation.sequence,
             source,

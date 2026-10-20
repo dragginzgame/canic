@@ -5,12 +5,13 @@
 //! Boundary: rejects inconsistent dry-run versions and projections before journal creation.
 
 use crate::{
-    artifacts::{ArtifactChecksum, ArtifactChecksumError},
+    artifacts::ArtifactChecksumError,
     restore::apply::{
         RestoreApplyArtifactCheck, RestoreApplyDryRun, RestoreApplyDryRunOperation,
         RestoreApplyOperationKind, RestoreApplyOperationKindCounts,
     },
 };
+use ic_backup::model::artifacts::ArtifactChecksumRecord;
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -325,11 +326,10 @@ fn artifact_check_matches_upload(
 ) -> bool {
     let checksum_matches = match &upload.artifact_checksum {
         Some(checksum) => {
-            checksum.algorithm == check.checksum_algorithm
-                && check
-                    .checksum_expected
-                    .as_deref()
-                    .is_some_and(|expected| checksum.hash.eq_ignore_ascii_case(expected))
+            checksum.algorithm() == check.checksum_algorithm
+                && check.checksum_expected.as_deref().is_some_and(|expected| {
+                    checksum.hash().to_owned().eq_ignore_ascii_case(expected)
+                })
         }
         None => check.checksum_expected.is_none(),
     };
@@ -352,15 +352,23 @@ fn validate_checksum_algorithm(
     field: &'static str,
     algorithm: &str,
 ) -> Result<(), RestoreApplyDryRunValidationError> {
-    ArtifactChecksum::validate_algorithm(algorithm)
-        .map_err(|source| RestoreApplyDryRunValidationError::ArtifactChecksum { field, source })
+    if algorithm == "sha256" {
+        Ok(())
+    } else {
+        Err(crate::artifacts::ArtifactChecksumError::from(
+            ic_backup::model::artifacts::ChecksumError::UnsupportedAlgorithm(algorithm.to_owned()),
+        ))
+    }
+    .map_err(|source| RestoreApplyDryRunValidationError::ArtifactChecksum { field, source })
 }
 
 fn validate_checksum_hash(
     field: &'static str,
     hash: &str,
 ) -> Result<(), RestoreApplyDryRunValidationError> {
-    ArtifactChecksum::validate_hash(hash)
+    ArtifactChecksumRecord::from_hash(hash)
+        .map(|_| ())
+        .map_err(crate::artifacts::ArtifactChecksumError::from)
         .map_err(|source| RestoreApplyDryRunValidationError::ArtifactChecksum { field, source })
 }
 

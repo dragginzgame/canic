@@ -12,7 +12,7 @@ The shared [package-adapter boundary](../../architecture/independent-package-ada
 also covers backup.
 
 The adapter selects published `ic-blob-storage` and uses the contracts package's
-shared endpoint declarations from 0.22.11. Canic supplies endpoint authentication,
+shared endpoint declarations from 0.35. Canic supplies endpoint authentication,
 bounded decoders, actual caller context and synchronous lifecycle participants. It registers
 its service memory grants before Canic bootstraps the sole memory runtime. Its
 managed lifecycle retains Fleet admission.
@@ -25,7 +25,7 @@ Fleet, lifecycle and memory tests. The upstream service suite owns blob authorit
 certificate replies, restoration, provider behavior and accounting; those results
 do not establish deployment qualification for an arbitrary wrapper.
 
-The root catalog requires published Blob Storage/contracts 0.22.11 and Memory 0.35.
+The root catalog requires published Blob Storage/contracts 0.35 and Memory 0.48.2.
 Timers and arithmetic-only Metrics follow the selected Canic runtime in the root
 and independent consumer lockfiles.
 Each complete managed artifact must share one Memory and Timers runtime.
@@ -34,7 +34,7 @@ See [Canic#444](https://github.com/dragginzgame/canic/issues/444) and the
 the shell does not establish live provider behavior. Upload capacity replies expose
 tenant logical, global physical and global billing-liability byte headroom
 separately; `remaining_bytes` is their minimum. Consumers must rebuild against
-Blob 0.22 contracts. This is a pre-1.0 hard cut with cross-release reinstall, while
+Blob 0.35 contracts. This is a pre-1.0 hard cut with cross-release reinstall, while
 same-release restoration and the upstream mutation fence remain required.
 
 ## Dependency version ownership
@@ -43,7 +43,7 @@ The service requirement has one source:
 [`Cargo.toml`](../../../Cargo.toml),
 under `[workspace.dependencies]`. Its package inherits that declaration with
 `ic-blob-storage.workspace = true`; passive wire contracts come directly from
-`ic-blob-storage-contracts` on the same 0.22 release line. The two consumer examples depend on the
+`ic-blob-storage-contracts` on the same 0.35 release line. The two consumer examples depend on the
 adapter and resolve those requirements through their own lockfiles.
 
 Locked builds select the exact service protocol and lifecycle composition with
@@ -145,7 +145,9 @@ Compose `canic_blob_service::metrics::sample()?` with application rows in the
 host's one `ApplicationMetricsSampler`. Register that callback after installation
 and restoration. This preserves both families rather than replacing either
 sampler; Canic retains the timer, limits and cache. Export blob endpoints in the
-same Candid scope as application endpoints, and avoid duplicate method names.
+owning canister alongside application endpoints, and avoid duplicate method names.
+Tenant methods use IC Wire, other Blob-owned methods use CBOR, and the external
+provider certificate retains Candid. Canic framework endpoints retain Candid.
 
 The complete [embedded example](../../../integrations/blob-service/embedded-consumer/src/lib.rs)
 has its own persistent counter, endpoints, combined installation input and metrics
@@ -174,12 +176,12 @@ in the consumer's workspace declarations. Its canister source is:
 canic_blob_service::canister!();
 ```
 
-The shell depends on `canic-blob-service`, `canic`, `candid` and `ic-cdk`.
+The shell depends on `canic-blob-service`, `canic` and `ic-platform`.
 The adapter inherits Canic's package version and registry requirement from the
-main workspace, with published Blob `0.22`. Cargo's package manifest
+main workspace, with published Blob `0.35`. Cargo's package manifest
 removes the development Canic path and excludes these private consumer fixtures.
 Canic and `canic-blob-service` are published together at 0.111.0, including the
-Memory 0.35 runtime. Consumers can select both from crates.io; the coherent
+selected Memory runtime. Consumers can select both from crates.io; the coherent
 family is tracked under [Canic #33](https://github.com/dragginzgame/canic/issues/33).
 A compilable package archive cannot substitute for exact managed runtime admission.
 Checked-in qualification uses the matching local facade. A disposable package
@@ -220,7 +222,8 @@ supply that identity. Use the emitted release manifest and its qualified artifac
 union for installation proof.
 
 Installation requires `canic_blob_service::dto::configuration::ServiceInstallationInput`
-as Candid bytes nested after Canic's protected init payload. Its configured
+as canonical CBOR bytes from `ic_blob_storage_contracts::wire::encode`, nested
+after Canic's protected Candid init payload. Its configured
 service Principal must equal the actual allocated canister ID; the adapter
 validates this before publishing the installed service. Construct these bytes
 after allocation, without rewriting that identity inside the adapter. The public
@@ -258,7 +261,7 @@ submitted operator, payer and limits. This is separate from the dedicated and
 embedded composition fixtures and from browser/provider or downstream application
 acceptance.
 
-The maintained adapter selects published Blob Storage 0.22 and Memory 0.35.
+The maintained adapter selects published Blob Storage 0.35 and Memory 0.48.2.
 Each complete managed Wasm graph must contain one Memory and Timers identity.
 Canic owns the runtime and lifecycle;
 the service participant restores synchronously before deferred work. These
@@ -274,8 +277,9 @@ provider-readiness verdict.
 
 The consuming App selects Fleet admission and public metrics in its own config.
 The library's normal dependency graph contains no App-specific compiled topology.
-The owning shell compiles its exact topology and emits endpoints into the same
-Candid declaration scope as Canic's framework endpoints.
+The owning shell compiles its exact topology. Raw Blob endpoints carry retained
+method declarations; the provider certificate joins Canic's Candid declaration
+scope. Artifact admission compares both declarations with callable Wasm exports.
 
 The source cut removes Canic's embedded blob runtime, feature flags, billing
 commands and passive Medic inspection. Use the service's own operator tools for

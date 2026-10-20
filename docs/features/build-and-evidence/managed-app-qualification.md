@@ -17,7 +17,7 @@ canic = { version = "=<same-version-as-application>", features = ["testing"] }
 The minimal fixture is:
 
 ```rust,no_run
-use candid::Principal;
+use ic_platform::Principal;
 use canic::testing::{ManagedAppQualificationInput, install_managed_app};
 
 let input = ManagedAppQualificationInput::new(
@@ -84,7 +84,7 @@ the selected Component Group deployment and derives every top-level
 `Component` and descendant `ComponentChild` authority internally.
 
 ```rust,no_run
-use candid::Principal;
+use ic_platform::Principal;
 use canic::testing::{
     ManagedComponentGroupQualificationInput, ManagedRoleQualificationArtifact,
     install_managed_component_group,

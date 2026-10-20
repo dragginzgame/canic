@@ -33,6 +33,19 @@ done
 printf '[workspace.package]\nversion = "0.1.7"\nversion = "0.1.8"\n' > "$manifest"
 if bash "$reader" "$manifest" > "$fixture/stdout" 2> "$fixture/stderr"; then exit 1; fi
 [[ ! -s "$fixture/stdout" ]] || exit 1
+# Structural TOML ambiguity belongs to the reader, not each release adapter.
+for invalid in missing-table missing-version duplicate-table; do
+    case "$invalid" in
+        missing-table) printf '[workspace]\n' > "$manifest" ;;
+        missing-version) printf '[workspace.package]\nedition = "2021"\n' > "$manifest" ;;
+        duplicate-table)
+            printf '[workspace.package]\nversion = "0.1.7"\n[workspace.package]\nversion = "0.1.7"\n' > "$manifest" ;;
+    esac
+    cp "$manifest" "$fixture/before.toml"
+    if bash "$reader" --stable "$manifest" > "$fixture/stdout" 2> "$fixture/stderr"; then exit 1; fi
+    [[ ! -s "$fixture/stdout" ]] || exit 1
+    cmp "$fixture/before.toml" "$manifest"
+done
 # Even plausible partial output from a failed parser is never projected.
 cat > "$fixture/failed-parser" <<'PARSER'
 #!/usr/bin/env bash

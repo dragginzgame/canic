@@ -9,12 +9,12 @@ use super::{
     load_chunk_bytes, protocol_actions, protocol_actions_mut, request_mut, retain_object,
 };
 use crate::fleet_ensure::model::{CurrentFleetProtocolAction, EnsureAction, FleetEnsurePlan};
-use candid::Principal;
 use canic_contracts::dto::{
     fixture_provisioning::{FixtureChunkUpload, FixtureSourceStatus},
     root_store::RootStoreFixture,
 };
 use canic_control_plane::api::fixture_content::FixtureContentApi;
+use ic_platform::Principal;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use std::collections::BTreeMap;

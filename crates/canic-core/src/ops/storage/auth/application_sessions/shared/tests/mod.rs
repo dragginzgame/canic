@@ -97,22 +97,20 @@ fn failure_after_staging_preserves_records_and_indexes() {
 }
 
 #[test]
-fn stored_projection_cannot_increase_shared_session_scopes() {
+fn corrupt_canonical_session_is_refused_without_installing_indexes() {
     let _lock = seams::lock();
     let _state = ApplicationSessionTestStateGuard::empty();
     let mut store = store();
     let (session, replay, login) = pair(false);
     store
-        .transaction(Some(&login), |tx| tx.stage(session.clone(), replay))
+        .transaction(Some(&login), |tx| tx.stage(session, replay))
         .unwrap();
-    let mut state = LocalApplicationAuthorizationState::export();
-    state.sessions[0].scopes.push("write".to_owned());
-    LocalApplicationAuthorizationState::import(state);
-    LocalApplicationAuthorizationStateOps::restore_application_session_state().unwrap();
-    assert_eq!(
-        store.transaction(None, |tx| tx.session(session.caller())),
-        Err(SessionError::InvalidPolicyOrRecord)
-    );
+    let mut corrupt = LocalApplicationAuthorizationState::export();
+    corrupt.sessions[0].shared_session.push(0);
+    LocalApplicationAuthorizationState::import(corrupt.clone());
+    assert!(LocalApplicationAuthorizationStateOps::restore_application_session_state().is_err());
+    assert_eq!(LocalApplicationAuthorizationState::export(), corrupt);
+    assert!(with_indexes(|_| ()).is_err());
 }
 
 #[test]
@@ -337,4 +335,248 @@ fn restoration_rejects_login_binding_mismatch_and_revoked_live_session() {
     assert!(build_indexes(&revoked).is_ok());
     assert!(build_indexes(&original).is_ok());
     assert_eq!(LocalApplicationAuthorizationState::export(), original);
+}
+
+#[test]
+fn shared_authorization_enforces_expiry_scope_generation_and_revocation() {
+    let _lock = seams::lock();
+    let _state = ApplicationSessionTestStateGuard::empty();
+    let mut store = store();
+    let (session, replay, login) = pair(false);
+    store
+        .transaction(Some(&login), |tx| tx.stage(session.clone(), replay))
+        .unwrap();
+    let mut ledger = restore_ledger();
+    assert_eq!(
+        fixture::authorize(&mut store, &mut ledger, NOW, 0, &["read".into()]),
+        Ok(session.clone())
+    );
+    assert_eq!(
+        fixture::authorize(&mut store, &mut ledger, NOW, 0, &["write".into()]),
+        Err(SessionError::ScopeRejected)
+    );
+    assert_eq!(
+        fixture::authorize(&mut store, &mut ledger, NOW, 1, &[]),
+        Err(SessionError::StaleAuthority)
+    );
+    let mut budget = SessionAdmissionBudget::new(32, 1, 0).unwrap();
+    assert!(matches!(
+        ic_auth::session::logout_session(
+            &mut store,
+            &mut ledger,
+            &mut budget,
+            session.caller(),
+            NOW
+        ),
+        LogoutResult::Revoked { .. }
+    ));
+    assert!(matches!(
+        fixture::authorize(&mut store, &mut ledger, NOW, 0, &[]),
+        Err(SessionError::Revocation(_))
+    ));
+}
+
+#[test]
+fn canonical_sessions_restore_and_cleanup_at_the_exclusive_deadline() {
+    let _lock = seams::lock();
+    let _state = ApplicationSessionTestStateGuard::empty();
+    let mut store = store();
+    let (session, replay, login) = pair(false);
+    store
+        .transaction(Some(&login), |tx| tx.stage(session.clone(), replay))
+        .unwrap();
+    let mut ledger = restore_ledger();
+    assert_eq!(
+        fixture::authorize(&mut store, &mut ledger, session.expires_at_ns(), 0, &[]),
+        Err(SessionError::MissingOrExpired)
+    );
+    assert_eq!(
+        LocalApplicationAuthorizationStateOps::application_session_cleanup_due_at_ns().unwrap(),
+        Some(NOW + 2_000_000_000)
+    );
+    assert_eq!(
+        LocalApplicationAuthorizationStateOps::cleanup_application_sessions(
+            session.expires_at_ns()
+        )
+        .unwrap()
+        .sessions_removed,
+        1
+    );
+    assert_eq!(
+        LocalApplicationAuthorizationState::export().logins.len(),
+        1,
+        "session expiry cannot erase the login reservation"
+    );
+}
+
+#[test]
+fn cleanup_preserves_replay_limits_and_rejects_corruption_before_writes() {
+    let _lock = seams::lock();
+    let _state = ApplicationSessionTestStateGuard::empty();
+    let mut data = LocalApplicationAuthorizationStateData::default();
+    for id in 0..129_u16 {
+        let mut fingerprint = [0; 32];
+        fingerprint[..2].copy_from_slice(&id.to_be_bytes());
+        data.replays.push(LocalApplicationReplayRecord {
+            proof_fingerprint: fingerprint,
+            transport_caller: browser(id),
+            authority_generation: 0,
+            remove_at_ns: NOW,
+        });
+    }
+    LocalApplicationAuthorizationState::import(data);
+    LocalApplicationAuthorizationStateOps::restore_application_session_state().unwrap();
+    assert_eq!(
+        LocalApplicationAuthorizationStateOps::cleanup_application_sessions(NOW)
+            .unwrap()
+            .replays_removed,
+        128
+    );
+    assert_eq!(
+        LocalApplicationAuthorizationState::export().replays.len(),
+        1
+    );
+    let mut data = LocalApplicationAuthorizationState::export();
+    data.sessions.push(LocalApplicationSessionRecord {
+        shared_session: vec![0],
+    });
+    LocalApplicationAuthorizationState::import(data.clone());
+    assert!(LocalApplicationAuthorizationStateOps::cleanup_application_sessions(NOW).is_err());
+    assert_eq!(LocalApplicationAuthorizationState::export(), data);
+    assert!(
+        LocalApplicationAuthorizationStateOps::application_session_cleanup_due_at_ns().is_err()
+    );
+}
+
+#[test]
+fn restoration_requires_unique_sessions_and_a_reservation_for_every_session() {
+    let _lock = seams::lock();
+    let _state = ApplicationSessionTestStateGuard::empty();
+    let mut store = store();
+    let (session, replay, login) = pair(false);
+    store
+        .transaction(Some(&login), |tx| tx.stage(session, replay))
+        .unwrap();
+    let original = LocalApplicationAuthorizationState::export();
+    let mut duplicated = original.clone();
+    duplicated.sessions.push(duplicated.sessions[0].clone());
+    assert!(matches!(
+        build_indexes(&duplicated),
+        Err(ApplicationSessionStateError::DuplicateCaller)
+    ));
+    let mut missing = original;
+    missing.logins.clear();
+    missing.login_totals = Default::default();
+    assert!(matches!(
+        build_indexes(&missing),
+        Err(ApplicationSessionStateError::InvalidLoginRecord)
+    ));
+}
+
+#[test]
+fn per_subject_capacity_is_refused_before_persistence() {
+    let _lock = seams::lock();
+    let _state = ApplicationSessionTestStateGuard::empty();
+    let mut store = store();
+    for device in 1..=MAX_ACTIVE_APPLICATION_SESSIONS_PER_SUBJECT {
+        let (session, replay, login) =
+            fixture::pair_for_browser(false, u16::try_from(device).unwrap());
+        store
+            .transaction(Some(&login), |tx| tx.stage(session, replay))
+            .unwrap();
+    }
+    let before = LocalApplicationAuthorizationState::export();
+    let (session, replay, login) = fixture::pair_for_browser(false, 129);
+    assert_eq!(
+        store.transaction(Some(&login), |tx| tx.stage(session, replay)),
+        Err(SessionError::Capacity)
+    );
+    assert_eq!(LocalApplicationAuthorizationState::export(), before);
+    invalidate_indexes();
+    assert_eq!(
+        LocalApplicationAuthorizationStateOps::restore_application_session_state()
+            .unwrap()
+            .sessions,
+        MAX_ACTIVE_APPLICATION_SESSIONS_PER_SUBJECT
+    );
+}
+
+#[test]
+fn maximum_admitted_state_reconstructs_within_stable_and_heap_bounds() {
+    let _lock = seams::lock();
+    let _state = ApplicationSessionTestStateGuard::empty();
+    let mut store = store();
+    for id in 1..=MAX_ACTIVE_APPLICATION_SESSIONS {
+        let device = u16::try_from(id).unwrap();
+        for second in [false, true] {
+            let (session, replay, login) =
+                fixture::pair_for_account(second, device, browser(device));
+            store
+                .transaction(Some(&login), |tx| tx.stage(session, replay))
+                .unwrap();
+        }
+    }
+    invalidate_indexes();
+    let stats = LocalApplicationAuthorizationStateOps::restore_application_session_state().unwrap();
+    assert_eq!(stats.sessions, MAX_ACTIVE_APPLICATION_SESSIONS);
+    assert_eq!(stats.replays, MAX_APPLICATION_REPLAY_RECORDS);
+    assert!(stats.stable_bytes <= MAX_APPLICATION_SESSION_STABLE_BYTES);
+    assert!(stats.estimated_index_bytes <= MAX_APPLICATION_SESSION_INDEX_BYTES);
+}
+
+#[test]
+fn replay_capacity_is_owned_by_each_transport_caller() {
+    let _lock = seams::lock();
+    let _state = ApplicationSessionTestStateGuard::empty();
+    let mut state = LocalApplicationAuthorizationStateData::default();
+    for id in 0..=MAX_APPLICATION_REPLAY_RECORDS_PER_CALLER {
+        let mut record = LocalApplicationReplayRecord {
+            proof_fingerprint: [0; 32],
+            transport_caller: browser(1),
+            authority_generation: 0,
+            remove_at_ns: NOW + 1,
+        };
+        record.proof_fingerprint[..8].copy_from_slice(&(id as u64).to_be_bytes());
+        state.replays.push(record);
+    }
+    assert!(matches!(
+        build_indexes(&state),
+        Err(ApplicationSessionStateError::ReplayCallerCapacity)
+    ));
+    state.replays.last_mut().unwrap().transport_caller = browser(2);
+    let (indexes, _) = build_indexes(&state).unwrap();
+    assert_eq!(
+        indexes.replay_count_by_caller.get(&browser(1)),
+        Some(&MAX_APPLICATION_REPLAY_RECORDS_PER_CALLER)
+    );
+    assert_eq!(indexes.replay_count_by_caller.get(&browser(2)), Some(&1));
+}
+
+#[test]
+fn restore_rejects_global_over_capacity_before_admitting_records() {
+    let _lock = seams::lock();
+    let _state = ApplicationSessionTestStateGuard::empty();
+    let (session, replay, _) = pair(false);
+    let mut data = LocalApplicationAuthorizationStateData {
+        sessions: vec![session_to_record(&session).unwrap(); MAX_ACTIVE_APPLICATION_SESSIONS + 1],
+        ..LocalApplicationAuthorizationStateData::default()
+    };
+    assert!(matches!(
+        build_indexes(&data),
+        Err(ApplicationSessionStateError::ActiveGlobalCapacity)
+    ));
+    data.sessions.clear();
+    data.replays = vec![
+        LocalApplicationReplayRecord {
+            proof_fingerprint: replay.fingerprint(),
+            transport_caller: replay.caller(),
+            authority_generation: replay.generation(),
+            remove_at_ns: replay.remove_at_ns()
+        };
+        MAX_APPLICATION_REPLAY_RECORDS + 1
+    ];
+    assert!(matches!(
+        build_indexes(&data),
+        Err(ApplicationSessionStateError::ReplayGlobalCapacity)
+    ));
 }

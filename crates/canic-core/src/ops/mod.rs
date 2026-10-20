@@ -47,8 +47,9 @@ use thiserror::Error as ThisError;
 ///
 
 pub mod prelude {
-    pub use crate::{cdk::candid::CandidType, cdk::types::Principal, log, log::Topic};
+    pub use crate::{cdk::types::Principal, log, log::Topic};
     pub use canic_contracts::{cycles::Cycles, ids::CanisterRole};
+    pub use ic_platform::candid::contract::CandidType;
 }
 
 ///

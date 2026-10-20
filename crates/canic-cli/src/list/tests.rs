@@ -1,5 +1,4 @@
 use super::*;
-use canic_host::table::{ColumnAlign, render_separator, render_table_row};
 use canic_host::{
     registry::RegistryEntry,
     release_set::{AppConfigDeclaration, AppConfigError},
@@ -17,22 +16,30 @@ const HASH: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789ab
 const HASH_PREFIX: &str = "01234567";
 const VARIANT_HASH: &str = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
 const VARIANT_HASH_PREFIX: &str = "abcdef01";
-const TEST_REGISTRY_ALIGNMENTS: [ColumnAlign; 7] = [
-    ColumnAlign::Left,
-    ColumnAlign::Left,
-    ColumnAlign::Left,
-    ColumnAlign::Left,
-    ColumnAlign::Left,
-    ColumnAlign::Right,
-    ColumnAlign::Right,
-];
-
 fn render_registry_table_row(row: &[impl AsRef<str>], widths: &[usize; 7]) -> String {
-    render_table_row(row, widths, &TEST_REGISTRY_ALIGNMENTS)
+    row.iter()
+        .zip(widths)
+        .enumerate()
+        .map(|(index, (value, width))| {
+            let value = value.as_ref();
+            let padding = " ".repeat(width.saturating_sub(value.chars().count()));
+            if index >= 5 {
+                format!("{padding}{value}")
+            } else {
+                format!("{value}{padding}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("   ")
+        .trim_end()
+        .to_owned()
 }
-
 fn render_registry_separator(widths: &[usize; 7]) -> String {
-    render_separator(widths)
+    widths
+        .iter()
+        .map(|width| "-".repeat(*width))
+        .collect::<Vec<_>>()
+        .join("   ")
 }
 
 // Ensure list options parse live registry queries.
@@ -266,7 +273,10 @@ fn module_hash_color_flags_same_role_differences() {
     };
     let tree = render_registry_tree(&registry, None, &columns).expect("render tree");
 
-    assert!(tree.contains(&format!("\x1b[38;5;179m{VARIANT_HASH_PREFIX}")));
+    assert!(
+        tree.lines()
+            .any(|line| line.starts_with("\x1b[38;5;179m") && line.contains(VARIANT_HASH_PREFIX))
+    );
     assert!(!tree.contains(&format!("\x1b[38;5;179m{HASH_PREFIX}")));
 }
 
@@ -547,4 +557,26 @@ fn module_hash_map() -> BTreeMap<String, String> {
         (MINIMAL.to_string(), HASH.to_string()),
         (WORKER.to_string(), HASH.to_string()),
     ])
+}
+
+#[test]
+fn config_cells_align_wide_unicode_and_escape_control_characters() {
+    let title = ListTitle {
+        source: ListTitleSource::App,
+        name: "test".into(),
+        environment: "local".into(),
+    };
+    let rows = vec![ConfigRoleRow {
+        role: "界界".into(),
+        kind: "app".into(),
+        capabilities: "read\nwrite".into(),
+        auto_create: "yes".into(),
+        topup: "-".into(),
+        metrics: "-".into(),
+        details: vec![],
+    }];
+    let output = render_config_output(&title, &rows, false);
+    assert!(output.lines().any(|line| line.starts_with("界界   app")));
+    assert_eq!(output.lines().count(), 5);
+    assert!(!output.contains("read\nwrite"));
 }

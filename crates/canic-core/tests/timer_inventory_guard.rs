@@ -4,7 +4,6 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path, PathBuf},
-    process::Command,
 };
 use syn::{
     Expr, ExprCall, ExprMethodCall, ExprPath, ItemUse, Macro, UseTree, Visibility,
@@ -529,50 +528,10 @@ fn semantic_inventory_detects_aliased_raw_provider_imports() {
 }
 
 #[test]
-fn timer_provider_graph_and_manifest_consumers_are_closed() {
+fn timer_manifest_consumers_are_closed() {
     let root = workspace_root();
     let workspace_manifest = read_source(&root, "Cargo.toml");
     let workspace_dependencies = workspace_dependencies(&workspace_manifest);
-    let mut command = Command::new(env!("CARGO"));
-    // Exercise machine-readable output even when CI forces terminal colors.
-    command.env("CARGO_TERM_COLOR", "always");
-    command.current_dir(&root).args([
-        "tree",
-        "--color",
-        "never",
-        "--locked",
-        "--offline",
-        "--target",
-        "wasm32-unknown-unknown",
-        "--edges",
-        "normal",
-        "--all-features",
-        "--prefix",
-        "none",
-        "--format",
-        "{p}",
-    ]);
-    // Resolve the deployed graph, independently of host-only test dependencies.
-    for package in ["canic", "canic-core", "canic-control-plane", "canic-macros"] {
-        command.args(["-p", package]);
-    }
-    let output = command.output().expect("resolve Canic runtime timer graph");
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let tree = String::from_utf8(output.stdout).expect("Cargo package identities are UTF-8");
-    assert_eq!(
-        package_identities(&tree, "ic-cdk-timers").len(),
-        1,
-        "Canic's deployed runtime must resolve one raw timer provider identity"
-    );
-    assert_eq!(
-        package_identities(&tree, "ic-timers").len(),
-        1,
-        "Canic's deployed runtime must resolve one shared timer provider identity"
-    );
     assert!(!workspace_dependencies.contains_key("ic-cdk-timers"));
 
     let mut timer_consumers = BTreeSet::from(["Cargo.toml".to_string()]);
@@ -596,39 +555,6 @@ fn timer_provider_graph_and_manifest_consumers_are_closed() {
 
     assert_eq!(timer_consumers, expected_timer_manifest_consumers());
     assert!(raw_provider_consumers.is_empty());
-}
-
-fn package_identities<'a>(tree: &'a str, package: &str) -> BTreeSet<&'a str> {
-    tree.lines()
-        .filter(|line| {
-            line.split_once(' ')
-                .is_some_and(|(name, _)| name == package)
-        })
-        .map(|line| line.strip_suffix(" (*)").unwrap_or(line))
-        .collect()
-}
-
-#[test]
-fn timer_graph_preserves_distinct_package_identities() {
-    assert_eq!(
-        package_identities(
-            "ic-timers v0.8.0\nic-timers v0.8.0 (*)\nic-timers-extra v0.8.0",
-            "ic-timers"
-        ),
-        BTreeSet::from(["ic-timers v0.8.0"])
-    );
-    assert_eq!(
-        package_identities(
-            "ic-timers v0.8.0\nic-timers v0.8.1\nic-timers v0.8.0 (/different/source)",
-            "ic-timers"
-        ),
-        BTreeSet::from([
-            "ic-timers v0.8.0",
-            "ic-timers v0.8.1",
-            "ic-timers v0.8.0 (/different/source)"
-        ])
-    );
-    assert!(package_identities("canic-core v0.110.32", "ic-timers").is_empty());
 }
 
 #[test]

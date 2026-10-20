@@ -1,6 +1,5 @@
 #![expect(clippy::unused_async)]
 
-use candid::{CandidType, Deserialize};
 use canic::{
     __internal::core::{api::log::LogQuery, log::Level},
     Error,
@@ -14,7 +13,9 @@ use canic::{
     },
     prelude::*,
 };
-use ic_cdk::api::time;
+use ic_platform::candid::contract::CandidType;
+use ic_platform::cdk::api::time;
+use serde::Deserialize;
 
 canic::start!();
 
@@ -29,8 +30,8 @@ async fn canic_upgrade() {}
 
 /// Prove browser-owned authenticated ingress through the current Fleet admission policy.
 #[canic_query(requires(caller::is_fleet_admitted()))]
-async fn audit_frontend_admission_probe() -> Result<candid::Principal, Error> {
-    Ok(ic_cdk::api::msg_caller())
+async fn audit_frontend_admission_probe() -> Result<ic_platform::Principal, Error> {
+    Ok(ic_platform::cdk::api::msg_caller())
 }
 
 #[canic_query(requires(env::build_local_only()))]
@@ -61,6 +62,7 @@ async fn audit_log_probe(
 macro_rules! generic_cohort_nominal {
     ($name:ident) => {
         #[derive(CandidType, Deserialize)]
+        #[candid_path("ic_platform::candid::contract")]
         struct $name {
             value: u64,
         }
@@ -106,6 +108,7 @@ type GenericCohortSlot5 = GenericCohortNominal5;
 type GenericCohortSlot5 = GenericCohortNominal1;
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 enum GenericPageCohortResponse {
     Slot1(Page<GenericCohortSlot1>),
     Slot2(Page<GenericCohortSlot2>),
@@ -146,8 +149,8 @@ fn audit_page_generic_cohort(slot: u8, value: u64) -> Result<GenericPageCohortRe
 /// Spend fixture cycles before reviewing a later release's recovery funding.
 #[canic_update(requires(env::build_local_only(), caller::is_controller()))]
 async fn audit_recovery_balance(retain: u128) -> Result<u128, Error> {
-    let excess = ic_cdk::api::canister_cycle_balance().saturating_sub(retain);
-    Ok(ic_cdk::api::cycles_burn(excess))
+    let excess = ic_platform::cdk::api::canister_cycle_balance().saturating_sub(retain);
+    Ok(ic_platform::cdk::api::cycles_burn(excess))
 }
 
 canic::finish!();

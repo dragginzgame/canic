@@ -14,7 +14,7 @@ use crate::{
         FleetBinding, FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
     },
 };
-use candid::{CandidType, Principal};
+use ic_platform::{Principal, candid::contract::CandidType};
 use serde::{Deserialize, Serialize};
 
 pub use crate::values::provisioning_failure::{
@@ -23,6 +23,7 @@ pub use crate::values::provisioning_failure::{
 
 /// Complete canonical provisioning authority retained before any root effect.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetComponentProvisioningPlan {
     pub fleet: FleetBinding,
@@ -35,6 +36,7 @@ pub struct FleetComponentProvisioningPlan {
 
 /// Controller-authenticated command that durably freezes one complete plan.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetComponentProvisioningPrepareRequest {
     pub operation_id: [u8; 32],
@@ -43,6 +45,7 @@ pub struct FleetComponentProvisioningPrepareRequest {
 
 /// Controller-authenticated command advancing one exact Coordinator provisioning step.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetComponentProvisioningAdvanceRequest {
     pub operation_id: [u8; 32],
@@ -60,6 +63,7 @@ pub struct FleetComponentProvisioningAdvanceRequest {
 
 /// Exact root-local cursor copied from passive Coordinator status before one advance.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetComponentProvisioningRootProgress {
     pub fleet_subnet_root: Principal,
@@ -72,6 +76,7 @@ pub struct FleetComponentProvisioningRootProgress {
 
 /// Exact root-local Directory cursor copied from passive Coordinator status.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetComponentPublicationRootProgress {
     pub fleet_subnet_root: Principal,
@@ -81,6 +86,7 @@ pub struct FleetComponentPublicationRootProgress {
 
 /// Exact affected-service synchronization cursor copied from passive Coordinator status.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetComponentSynchronizationRootProgress {
     pub fleet_subnet_root: Principal,
@@ -91,6 +97,7 @@ pub struct FleetComponentSynchronizationRootProgress {
 
 /// Exact root-local runtime-activation cursor copied from passive Coordinator status.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetComponentActivationRootProgress {
     pub fleet_subnet_root: Principal,
@@ -101,6 +108,7 @@ pub struct FleetComponentActivationRootProgress {
 
 /// Exact passive lookup key for one Coordinator-owned provisioning operation.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetComponentProvisioningStatusRequest {
     pub operation_id: [u8; 32],
@@ -109,6 +117,7 @@ pub struct FleetComponentProvisioningStatusRequest {
 
 /// Durable Coordinator progress exposed without returning the complete plan.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum FleetComponentProvisioningPhase {
     Planned,
     AcceptingRoots,
@@ -124,6 +133,7 @@ pub enum FleetComponentProvisioningPhase {
 
 /// Exact Coordinator step whose current Root call most recently failed.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum FleetComponentProvisioningRetryStage {
     RootAcceptance,
     RootProvisioning,
@@ -133,6 +143,7 @@ pub enum FleetComponentProvisioningRetryStage {
 
 /// Bounded typed diagnostic retained for the Root call that remains retryable.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetComponentProvisioningRootFailure {
     pub origin: Option<ProvisioningFailureOrigin>,
@@ -144,6 +155,7 @@ pub struct FleetComponentProvisioningRootFailure {
 
 /// Compact exact status for one Coordinator-owned provisioning operation.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetComponentProvisioningStatusResponse {
     pub operation_id: [u8; 32],
@@ -181,6 +193,7 @@ pub struct FleetComponentProvisioningStatusResponse {
 
 /// Fresh-install or monotonic scale-out scope covered by one plan.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub enum FleetComponentProvisioningOperation {
     FreshInstall,
@@ -193,6 +206,7 @@ pub enum FleetComponentProvisioningOperation {
 
 /// One selected root's complete canonical provisioning batch.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetSubnetRootProvisioningBatch {
     pub root: FleetSubnetRootBinding,
@@ -202,6 +216,7 @@ pub struct FleetSubnetRootProvisioningBatch {
 
 /// One materialized copy of a completely flattened Component Group.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ComponentGroupPlacementPlan {
     pub group_placement: ComponentGroupPlacementId,
@@ -211,6 +226,7 @@ pub struct ComponentGroupPlacementPlan {
 
 /// One exact top-level Component occurrence within a group placement.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ComponentGroupPlanEntry {
     pub member_path: ComponentGroupMemberPath,
@@ -223,6 +239,7 @@ pub struct ComponentGroupPlanEntry {
 
 /// Coordinator-authenticated command asking one root to retain its exact plan batch.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct RootComponentProvisioningAcceptanceRequest {
     pub fleet_registry: FleetRegistryVersion,
@@ -234,6 +251,7 @@ pub struct RootComponentProvisioningAcceptanceRequest {
 
 /// Read-only lookup key for one exact root provisioning operation.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct RootComponentProvisioningStatusRequest {
     pub operation_id: [u8; 32],
@@ -242,6 +260,7 @@ pub struct RootComponentProvisioningStatusRequest {
 
 /// Coordinator-authenticated command advancing one exact bounded provisioning step.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct RootComponentProvisioningAdvanceRequest {
     pub operation_id: [u8; 32],
@@ -254,6 +273,7 @@ pub struct RootComponentProvisioningAdvanceRequest {
 
 /// One exact member of a root-derived Component Group Directory.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ComponentGroupDirectoryMember {
     pub member_path: ComponentGroupMemberPath,
@@ -265,6 +285,7 @@ pub struct ComponentGroupDirectoryMember {
 
 /// Protected origin of one root-derived Component Group Directory.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ComponentGroupDirectoryProvenance {
     pub authority: crate::ids::FleetRegistryAuthority,
@@ -278,6 +299,7 @@ pub struct ComponentGroupDirectoryProvenance {
 
 /// Complete bounded sibling projection for one materialized Component Group placement.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ComponentGroupDirectory {
     pub provenance: ComponentGroupDirectoryProvenance,
@@ -286,6 +308,7 @@ pub struct ComponentGroupDirectory {
 
 /// Compact proof of one exact Component Directory delivered during publication.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ComponentDirectoryPublicationEvidence {
     pub component: crate::ids::ComponentInstanceId,
@@ -294,6 +317,7 @@ pub struct ComponentDirectoryPublicationEvidence {
 
 /// Compact proof of one exact Component Group Directory delivered during publication.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ComponentGroupDirectoryPublicationEvidence {
     pub group_placement: ComponentGroupPlacementId,
@@ -302,6 +326,7 @@ pub struct ComponentGroupDirectoryPublicationEvidence {
 
 /// Complete root-local evidence for one published provisioning batch.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct RootComponentPublicationEvidence {
     pub fleet_registry: FleetRegistryVersion,
@@ -312,6 +337,7 @@ pub struct RootComponentPublicationEvidence {
 
 /// Coordinator-authenticated command advancing one bounded root publication step.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct RootComponentPublicationRequest {
     pub operation_id: [u8; 32],
@@ -327,6 +353,7 @@ pub struct RootComponentPublicationRequest {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct RootComponentDirectorySynchronizationRequest {
     pub operation_id: [u8; 32],
@@ -343,6 +370,7 @@ pub struct RootComponentDirectorySynchronizationRequest {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct RootComponentDirectorySynchronizationResponse {
     pub operation_id: [u8; 32],
@@ -360,6 +388,7 @@ pub struct RootComponentDirectorySynchronizationResponse {
 
 /// Coordinator-authenticated command advancing one bounded root activation step.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct RootComponentActivationRequest {
     pub operation_id: [u8; 32],
@@ -370,6 +399,7 @@ pub struct RootComponentActivationRequest {
 
 /// Compact terminal evidence binding Component inventory and root runtime activation.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct RootComponentActivationEvidence {
     pub fleet_activation_operation_id: [u8; 32],
@@ -380,6 +410,7 @@ pub struct RootComponentActivationEvidence {
 
 /// One exact provisioned Component occurrence and its committed Registry identity.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct RootProvisionedGroupMember {
     pub member_operation_id: [u8; 32],
@@ -394,6 +425,7 @@ pub struct RootProvisionedGroupMember {
 
 /// Complete provisioned result for one exact group placement on this root.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct RootProvisionedGroupPlacement {
     pub group_placement: ComponentGroupPlacementId,
@@ -403,6 +435,7 @@ pub struct RootProvisionedGroupPlacement {
 
 /// Complete group-partitioned result of one root provisioning operation.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct RootComponentProvisioningResult {
     pub placements: Vec<RootProvisionedGroupPlacement>,
@@ -410,6 +443,7 @@ pub struct RootComponentProvisioningResult {
 
 /// Durable aggregate progress of one root provisioning batch.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootComponentProvisioningPhase {
     Accepted,
     Provisioned,
@@ -419,6 +453,7 @@ pub enum RootComponentProvisioningPhase {
 
 /// Durable progress or complete terminal result for one exact root provisioning operation.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct RootComponentProvisioningStatusResponse {
     pub last_failure: Option<RootComponentProvisioningFailure>,
@@ -451,6 +486,7 @@ pub struct RootComponentProvisioningStatusResponse {
 
 /// Protected origin carried through outer provisioning stages without public error expansion.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ProvisioningFailureOrigin {
     #[serde(deserialize_with = "crate::serialization::required_option")]
@@ -468,6 +504,7 @@ pub struct ProvisioningFailureOrigin {
 
 /// Latest protected originating failure and the existing scheduler's bounded retry state.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct RootComponentProvisioningFailure {
     #[serde(deserialize_with = "crate::serialization::required_option")]
@@ -484,6 +521,7 @@ pub struct RootComponentProvisioningFailure {
 
 /// Exact durable funding pause for one Root-owned autonomous pool creation.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct RootEstateFundingRequired {
     pub available: Cycles,

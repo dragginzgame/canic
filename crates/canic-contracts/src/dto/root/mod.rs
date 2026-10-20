@@ -34,12 +34,13 @@ use crate::{
     },
     ids::{FleetFundingProfile, FleetSubnetRootFundingPolicy, FleetSubnetRootIcpRefillPolicy},
 };
-use candid::{CandidType, Principal};
+use ic_platform::{Principal, candid::contract::CandidType};
 use serde::Deserialize;
 
 /// Root Component allocation detail projected through the operation lane.
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentOperationStatus {
     pub allocation: RootComponentAllocationResponse,
     pub complete: bool,
@@ -47,12 +48,14 @@ pub struct RootComponentOperationStatus {
 
 /// Root direct-child allocation detail projected through the operation lane.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentChildOperationStatus {
     pub allocation: RootComponentChildAllocationResponse,
 }
 
 /// Root Component removal detail projected through the operation lane.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentRemovalOperationStatus {
     pub draining: RootComponentDrainingResponse,
     pub deletion: Option<RootComponentDeletionResponse>,
@@ -60,6 +63,7 @@ pub struct RootComponentRemovalOperationStatus {
 
 /// Root-local removal progress across the existing durable high-level boundaries.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootRemovalOperationStatus {
     pub operation_id: [u8; 32],
     pub draining: FleetSubnetRootDrainingResponse,
@@ -75,6 +79,7 @@ pub struct RootRemovalOperationStatus {
 
 /// Latest Root-local ICP refill outcome with its durable manual/automatic owner.
 #[derive(CandidType, Clone, Debug, Deserialize, serde::Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootIcpRefillStatusResponse {
     pub trigger: IcpRefillTrigger,
     pub amount_e8s: u64,
@@ -87,6 +92,7 @@ pub struct RootIcpRefillStatusResponse {
 /// One exact retained ICP-refill effect and its source account for release review.
 /// Retry exhaustion is evidence, never a settlement receipt.
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootIcpRefillReleaseEvidence {
     pub transfer_uncertain: bool,
     pub record_id: u64,
@@ -114,6 +120,7 @@ pub struct RootIcpRefillReleaseEvidence {
 /// Controller-only funding census; does not seal producers or authorize reset.
 /// Pages include all retained refill outcomes and historical source accounts.
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootFundingReleaseResponse {
     pub fleet_subnet_root: Principal,
     pub policy_generation: u64,
@@ -129,6 +136,7 @@ pub struct RootFundingReleaseResponse {
 
 /// Controller-only Root operating-funding and emergency-refill projection.
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootFundingStatusResponse {
     pub fleet_subnet_root: Principal,
     pub lifecycle_status: crate::dto::fleet_registry::FleetSubnetRootStatus,
@@ -157,6 +165,7 @@ pub struct RootFundingStatusResponse {
 
 /// Root Registry synchronization plus its autonomously activated mirror.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootRegistrySynchronizationOperationStatus {
     pub synchronization: FleetSubnetRootRegistrySyncResponse,
     pub activation: Option<FleetSubnetRootRegistryMirrorActivationResponse>,
@@ -164,6 +173,7 @@ pub struct RootRegistrySynchronizationOperationStatus {
 
 /// Root-owned durable operation detail selected by one operation ID.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[expect(
     clippy::large_enum_variant,
     reason = "the accepted Candid union carries each existing status DTO directly"
@@ -184,6 +194,7 @@ pub enum RootOperationStatusResponse {
 
 /// Retained pool obligations, independent of admission for new import or maintenance work.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootPoolReleaseResponse {
     pub root: Principal,
     pub bootstrap: Option<RootPoolBootstrapReleaseEvidence>,
@@ -194,6 +205,7 @@ pub struct RootPoolReleaseResponse {
 
 /// Keep all supplied identities and the initialization hold until custody is accounted for.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootPoolBootstrapReleaseEvidence {
     pub review_sha256: [u8; 32],
     pub install_id: [u8; 32],
@@ -204,6 +216,7 @@ pub struct RootPoolBootstrapReleaseEvidence {
 
 /// Stable discovery cursor for the two Root provisioning journal owners.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootProvisioningReleaseKey {
     Provisioning([u8; 32]),
     DirectorySynchronization([u8; 32]),
@@ -211,6 +224,7 @@ pub enum RootProvisioningReleaseKey {
 
 /// Exact retained stage; completed history does not assert current release readiness.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootProvisioningReleasePhase {
     Accepted,
     Provisioned,
@@ -225,18 +239,20 @@ pub enum RootProvisioningReleasePhase {
 
 /// Compact discovery evidence; the existing operation remains the reconciliation owner.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootProvisioningReleaseEntry {
     pub key: RootProvisioningReleaseKey,
     pub plan_hash: [u8; 32],
     pub phase: RootProvisioningReleasePhase,
-    pub delivery_in_flight: Option<candid::Principal>,
+    pub delivery_in_flight: Option<ic_platform::Principal>,
     pub last_failure: Option<crate::dto::component_provisioning::RootComponentProvisioningFailure>,
 }
 
 /// One retained operation per page, with key-only lookahead and no new-work admission.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootProvisioningReleaseResponse {
-    pub root: candid::Principal,
+    pub root: ic_platform::Principal,
     pub active_provisioning: Option<[u8; 32]>,
     pub active_directory_synchronization: Option<[u8; 32]>,
     pub entry: Option<RootProvisioningReleaseEntry>,

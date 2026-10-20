@@ -15,7 +15,7 @@ use ic_auth::signature_store::{
 use ic_auth::signature_store::{MAX_PRUNE_BATCH, PreparedSignature, SignatureInputs};
 #[cfg(feature = "auth-root-canister-sig-create")]
 use ic_auth_protocol_types::IcCanisterSignatureProofV1;
-use ic_auth_protocol_types::Principal;
+use ic_platform::Principal;
 
 /// One /sig owner shared by Root and issuer, with host-owned sibling branches.
 struct SignatureHost {
@@ -43,8 +43,8 @@ impl SignatureHost {
         self.siblings
             .iter()
             .fold(self.store.root_hash(), |root, sibling| match sibling {
-                SignatureSibling::Left(hash) => ic_certification::fork_hash(hash, &root),
-                SignatureSibling::Right(hash) => ic_certification::fork_hash(&root, hash),
+                SignatureSibling::Left(hash) => ic_platform::certification::fork_hash(hash, &root),
+                SignatureSibling::Right(hash) => ic_platform::certification::fork_hash(&root, hash),
             })
     }
 }
@@ -58,7 +58,7 @@ fn with_host<T>(
 ) -> Result<T, InternalError> {
     HOST.with_borrow_mut(|host| {
         if host.is_none() {
-            *host = Some(SignatureHost::new(ic_cdk::api::canister_self())?);
+            *host = Some(SignatureHost::new(ic_platform::cdk::api::canister_self())?);
         }
         f(host.as_mut().expect("initialized signature host"))
     })
@@ -66,12 +66,12 @@ fn with_host<T>(
 }
 
 fn publish(host: &SignatureHost) {
-    ic_cdk::api::certified_data_set(host.root_hash());
+    ic_platform::cdk::api::certified_data_set(host.root_hash());
 }
 
 /// Reset volatile leaves synchronously before application lifecycle participation.
 pub fn reset() -> Result<(), InternalError> {
-    let host = SignatureHost::new(ic_cdk::api::canister_self())
+    let host = SignatureHost::new(ic_platform::cdk::api::canister_self())
         .map_err(|error| InternalError::from(map_error(error)))?;
     publish(&host);
     HOST.with_borrow_mut(|state| *state = Some(host));
@@ -88,7 +88,7 @@ pub(super) fn prepare(
     let deadline = now_ns
         .checked_add(retention_ns)
         .ok_or_else(|| InternalError::from(map_error(SignatureStoreError::DeadlineOverflow)))?;
-    let clock = ic_cdk::api::time();
+    let clock = ic_platform::cdk::api::time();
     if clock < now_ns {
         return Err(map_error(SignatureStoreError::ClockRegressed).into());
     }
@@ -112,12 +112,12 @@ pub(super) fn retrieve(
     signing_canister: Principal,
     now_ns: u64,
 ) -> Result<IcCanisterSignatureProofV1, InternalError> {
-    if signing_canister != ic_cdk::api::canister_self() {
+    if signing_canister != ic_platform::cdk::api::canister_self() {
         return Err(
             AuthSignatureError::ProofInvalid("signing canister differs from host".into()).into(),
         );
     }
-    let certificate = ic_cdk::api::data_certificate()
+    let certificate = ic_platform::cdk::api::data_certificate()
         .ok_or(AuthSignatureError::RootDataCertificateUnavailable)?;
     with_host(|host| {
         host.store
@@ -147,7 +147,7 @@ pub(super) fn map_error(error: SignatureStoreError) -> AuthSignatureError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ic_certification::{Certificate, labeled, leaf};
+    use ic_platform::certification::{Certificate, labeled, leaf};
 
     fn certificate(canister: Principal, root: [u8; 32]) -> Vec<u8> {
         let mut bytes = Vec::new();

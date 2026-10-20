@@ -3,14 +3,14 @@
 //! Responsibility: exact ICP Ledger and archive read wire projections.
 //! Boundary: decoding these passive values does not authenticate receipts.
 
-use candid::CandidType;
-use icrc_ledger_types::icrc3::archive::QueryArchiveFn;
+use ic_platform::{candid::contract::CandidType, icrc_ledger_types::QueryArchiveFn};
 use serde::Deserialize;
 use serde_bytes::ByteBuf;
 use thiserror::Error;
 
 /// Typed archive failures retained as unresolved evidence by the receipt reader.
 #[derive(CandidType, Debug, Deserialize, Error)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ArchiveReadError {
     #[error("requested ICP block precedes the archive range")]
     BadFirstBlockIndex {
@@ -29,12 +29,14 @@ pub enum ArchiveReadError {
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub(super) struct ReadArgs {
     pub start: u64,
     pub length: u64,
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub(super) struct EncodedBlocksReply {
     pub chain_length: u64,
     pub first_block_index: u64,
@@ -43,6 +45,7 @@ pub(super) struct EncodedBlocksReply {
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub(super) struct ArchivedRange {
     pub callback: QueryArchiveFn<ReadArgs, Result<Vec<ByteBuf>, ArchiveReadError>>,
     pub start: u64,

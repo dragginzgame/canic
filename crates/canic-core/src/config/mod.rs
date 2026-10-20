@@ -5,7 +5,6 @@
 //! Boundary: bootstrap installs validated config here before ops/workflow reads it.
 
 pub mod caller_authority;
-mod canonical;
 mod component_deployment_configuration;
 mod component_group;
 mod component_group_deployment;

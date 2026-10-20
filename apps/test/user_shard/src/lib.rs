@@ -3,8 +3,8 @@
 mod fixture_importer;
 mod reinstall_fixture;
 
-use candid::Principal;
 use canic::{Error, prelude::*};
+use ic_platform::Principal;
 use std::cell::RefCell;
 
 thread_local! {
@@ -28,7 +28,7 @@ async fn canic_upgrade() {}
 /// Prove direct Fleet-admitted ingress for managed child qualification.
 #[canic_query(requires(caller::is_fleet_admitted()))]
 async fn test_fleet_admission_probe() -> Result<Principal, Error> {
-    Ok(ic_cdk::api::msg_caller())
+    Ok(ic_platform::cdk::api::msg_caller())
 }
 
 /// Set deterministic fixture state for the disposable backup/restore journey.
@@ -78,8 +78,8 @@ async fn test_topup_collision(
 /// Put a disposable Shard below demand and reconcile its existing production timer.
 #[canic_update(requires(env::build_local_only(), caller::is_controller()))]
 async fn test_topup_demand(retain: u128) -> Result<(), Error> {
-    let excess = ic_cdk::api::canister_cycle_balance().saturating_sub(retain);
-    ic_cdk::api::cycles_burn(excess);
+    let excess = ic_platform::cdk::api::canister_cycle_balance().saturating_sub(retain);
+    ic_platform::cdk::api::cycles_burn(excess);
     canic::__internal::core::api::runtime::root_funding::RootFundingTimerApi::reconcile()
 }
 
@@ -88,16 +88,16 @@ async fn test_topup_demand(retain: u128) -> Result<(), Error> {
 async fn test_topup_exhaustion(
     retain: u128,
 ) -> Result<([u8; 32], Option<canic::dto::rpc::CyclesResponse>), Error> {
-    let excess = ic_cdk::api::canister_cycle_balance().saturating_sub(retain);
-    ic_cdk::api::cycles_burn(excess);
+    let excess = ic_platform::cdk::api::canister_cycle_balance().saturating_sub(retain);
+    ic_platform::cdk::api::cycles_burn(excess);
     canic::__internal::core::api::runtime::topup_fixture::request(1_000_000_000_000, false).await
 }
 
 /// Deplete a disposable Shard after retaining its terminal diagnostic.
 #[canic_update(requires(env::build_local_only(), caller::is_controller()))]
 async fn test_recovery_balance(retain: u128) -> Result<u128, Error> {
-    let excess = ic_cdk::api::canister_cycle_balance().saturating_sub(retain);
-    Ok(ic_cdk::api::cycles_burn(excess))
+    let excess = ic_platform::cdk::api::canister_cycle_balance().saturating_sub(retain);
+    Ok(ic_platform::cdk::api::cycles_burn(excess))
 }
 
 canic::finish!();

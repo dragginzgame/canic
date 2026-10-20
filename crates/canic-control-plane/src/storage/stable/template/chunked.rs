@@ -3,13 +3,11 @@ use crate::{
     storage::stable::template::key::{TemplateChunkKeyRecord, TemplateReleaseKeyRecord},
 };
 #[cfg(any(test, feature = "wasm-store-canister"))]
-use canic_core::cdk::structures::{Memory, Vec as StableVec};
+use canic_core::cdk::structures::{Memory, StableVec};
 use canic_core::{
     CANIC_WASM_CHUNK_BYTES,
     cdk::structures::{
-        DefaultMemoryImpl,
-        btreemap::BTreeMap as StableBtreeMap,
-        memory::RuntimeMemory,
+        DefaultMemoryImpl, StableBTreeMap as StableBtreeMap,
         storable::{Bound, Storable},
     },
     impl_storable_unbounded,
@@ -24,7 +22,7 @@ const _: () = assert!(CANIC_WASM_CHUNK_BYTES == TEMPLATE_CHUNK_PAYLOAD_MAX_BYTES
 
 std::thread_local! {
     static TEMPLATE_CHUNK_SETS: RefCell<
-        StableBtreeMap<TemplateReleaseKeyRecord, TemplateChunkSetRecord, RuntimeMemory<DefaultMemoryImpl>>
+        StableBtreeMap<TemplateReleaseKeyRecord, TemplateChunkSetRecord, DefaultMemoryImpl>
     > = RefCell::new(
         StableBtreeMap::init(canic_core::memory::open(crate::memory::keys::TEMPLATE_CHUNK_SETS_V1)),
     );
@@ -36,21 +34,16 @@ std::thread_local! {
 
 std::thread_local! {
     static TEMPLATE_CHUNK_REFS: RefCell<
-        StableBtreeMap<TemplateChunkKeyRecord, TemplateChunkRefRecord, RuntimeMemory<DefaultMemoryImpl>>
+        StableBtreeMap<TemplateChunkKeyRecord, TemplateChunkRefRecord, DefaultMemoryImpl>
     > = RefCell::new(
         StableBtreeMap::init(canic_core::memory::open(crate::memory::keys::TEMPLATE_CHUNK_REFS_V1)),
     );
 }
 
-std::thread_local! {
-    static TEMPLATE_CHUNK_PAYLOADS_MEMORY: RuntimeMemory<DefaultMemoryImpl> =
-        canic_core::memory::open(crate::memory::keys::TEMPLATE_CHUNK_PAYLOADS_V1);
-}
-
 #[cfg(any(test, feature = "wasm-store-canister"))]
 std::thread_local! {
-    static TEMPLATE_CHUNK_PAYLOADS: RefCell<TemplateChunkPayloadVec> =
-        RefCell::new(init_chunk_payloads());
+    static TEMPLATE_CHUNK_PAYLOADS: RefCell<Option<TemplateChunkPayloadVec>> =
+        RefCell::new(Some(init_chunk_payloads()));
 }
 
 std::thread_local! {
@@ -202,8 +195,7 @@ impl Storable for TemplateChunkPayloadRecord {
 }
 
 #[cfg(any(test, feature = "wasm-store-canister"))]
-type TemplateChunkPayloadVec =
-    StableVec<TemplateChunkPayloadRecord, RuntimeMemory<DefaultMemoryImpl>>;
+type TemplateChunkPayloadVec = StableVec<TemplateChunkPayloadRecord, DefaultMemoryImpl>;
 
 ///
 /// TemplateChunkRefEntryRecord
@@ -337,7 +329,7 @@ impl TemplateChunkSetStateStore {
 
     // Clear the chunk-set metadata store.
     pub fn clear() {
-        TEMPLATE_CHUNK_SETS.with_borrow_mut(StableBtreeMap::clear_new);
+        TEMPLATE_CHUNK_SETS.with_borrow_mut(StableBtreeMap::clear);
         TEMPLATE_CHUNK_SETS_OCCUPIED_BYTES.with_borrow_mut(|occupied| {
             *occupied = Some(0);
         });
@@ -375,11 +367,17 @@ impl TemplateChunkStore {
 
         let slot = if let Some(previous) = previous.as_ref() {
             TEMPLATE_CHUNK_PAYLOADS.with_borrow(|payloads| {
+                let payloads = payloads
+                    .as_ref()
+                    .expect("chunk payload vector is installed");
                 payloads.set(previous.slot, &payload_record);
             });
             previous.slot
         } else {
             TEMPLATE_CHUNK_PAYLOADS.with_borrow(|payloads| {
+                let payloads = payloads
+                    .as_ref()
+                    .expect("chunk payload vector is installed");
                 let slot = payloads.len();
                 payloads.push(&payload_record);
                 slot
@@ -411,6 +409,9 @@ impl TemplateChunkStore {
             map.get(&TemplateChunkKeyRecord(chunk_key.clone()))
                 .and_then(|chunk_ref| {
                     TEMPLATE_CHUNK_PAYLOADS.with_borrow(|payloads| {
+                        let payloads = payloads
+                            .as_ref()
+                            .expect("chunk payload vector is installed");
                         payloads
                             .get(chunk_ref.slot)
                             .map(|payload| TemplateChunkRecord {
@@ -426,7 +427,14 @@ impl TemplateChunkStore {
     #[must_use]
     pub fn count() -> usize {
         TEMPLATE_CHUNK_REFS.with_borrow(|map| {
-            TEMPLATE_CHUNK_PAYLOADS.with_borrow(|payloads| count_resolving_chunks(map, payloads))
+            TEMPLATE_CHUNK_PAYLOADS.with_borrow(|payloads| {
+                count_resolving_chunks(
+                    map,
+                    payloads
+                        .as_ref()
+                        .expect("chunk payload vector is installed"),
+                )
+            })
         })
     }
 
@@ -462,9 +470,13 @@ impl TemplateChunkStore {
     // Clear the chunk store.
     #[cfg(any(test, feature = "wasm-store-canister"))]
     pub fn clear() {
-        TEMPLATE_CHUNK_REFS.with_borrow_mut(StableBtreeMap::clear_new);
+        TEMPLATE_CHUNK_REFS.with_borrow_mut(StableBtreeMap::clear);
         TEMPLATE_CHUNK_PAYLOADS.with_borrow_mut(|payloads| {
-            *payloads = reset_chunk_payloads();
+            let reset = payloads
+                .take()
+                .expect("chunk payload vector is installed")
+                .reset();
+            *payloads = Some(reset);
         });
         TEMPLATE_CHUNKS_OCCUPIED_BYTES.with_borrow_mut(|occupied| {
             *occupied = Some(0);
@@ -485,6 +497,9 @@ impl TemplateChunkStore {
                     .map(|entry| {
                         let record = entry.value();
                         TEMPLATE_CHUNK_PAYLOADS.with_borrow(|payloads| {
+                            let payloads = payloads
+                                .as_ref()
+                                .expect("chunk payload vector is installed");
                             let payload = payloads
                                 .get(record.slot)
                                 .expect("chunk reference slot must resolve to a payload");
@@ -507,7 +522,7 @@ impl TemplateChunkStore {
     #[cfg(test)]
     fn import_refs(data: TemplateChunkRefsData) {
         TEMPLATE_CHUNK_REFS.with_borrow_mut(|map| {
-            map.clear_new();
+            map.clear();
             for entry in data.entries {
                 map.insert(TemplateChunkKeyRecord(entry.chunk_key), entry.record);
             }
@@ -519,6 +534,9 @@ impl TemplateChunkStore {
     fn export_payloads() -> TemplateChunkPayloadsData {
         TemplateChunkPayloadsData {
             entries: TEMPLATE_CHUNK_PAYLOADS.with_borrow(|payloads| {
+                let payloads = payloads
+                    .as_ref()
+                    .expect("chunk payload vector is installed");
                 (0..payloads.len())
                     .map(|slot| TemplateChunkPayloadEntryRecord {
                         slot,
@@ -534,7 +552,14 @@ impl TemplateChunkStore {
     #[cfg(test)]
     fn import_payloads(data: TemplateChunkPayloadsData) {
         TEMPLATE_CHUNK_PAYLOADS.with_borrow_mut(|payloads| {
-            *payloads = reset_chunk_payloads();
+            let reset = payloads
+                .take()
+                .expect("chunk payload vector is installed")
+                .reset();
+            *payloads = Some(reset);
+            let payloads = payloads
+                .as_ref()
+                .expect("chunk payload vector is installed");
             for entry in data.entries {
                 assert_eq!(
                     entry.slot,
@@ -570,12 +595,9 @@ fn chunk_set_entry_size(release: &TemplateReleaseKey, record: &TemplateChunkSetR
 
 #[cfg(any(test, feature = "wasm-store-canister"))]
 fn init_chunk_payloads() -> TemplateChunkPayloadVec {
-    TEMPLATE_CHUNK_PAYLOADS_MEMORY.with(|memory| StableVec::init(memory.clone()))
-}
-
-#[cfg(any(test, feature = "wasm-store-canister"))]
-fn reset_chunk_payloads() -> TemplateChunkPayloadVec {
-    TEMPLATE_CHUNK_PAYLOADS_MEMORY.with(|memory| StableVec::new(memory.clone()))
+    StableVec::init(canic_core::memory::open(
+        crate::memory::keys::TEMPLATE_CHUNK_PAYLOADS_V1,
+    ))
 }
 
 #[cfg(any(test, feature = "wasm-store-canister"))]
@@ -628,8 +650,24 @@ mod tests {
     fn chunk_count_uses_metadata_and_preserves_slot_resolution_after_reopen() {
         let refs_memory = VectorMemory::default();
         let payload_memory = ObservedPayloadMemory::default();
-        let mut refs = StableBtreeMap::init(refs_memory.clone());
-        let payloads = StableVec::init(payload_memory.clone());
+        let refs_runtime = ic_memory::testing::fixture_runtime(
+            refs_memory.clone(),
+            "test",
+            "test.",
+            &["test.rows.v1"],
+            ic_memory::MemoryManagerConfig::new(1).unwrap(),
+        )
+        .unwrap();
+        let mut refs = StableBtreeMap::init(refs_runtime.open_memory("test.rows.v1").unwrap());
+        let payload_runtime = ic_memory::testing::fixture_runtime(
+            payload_memory.clone(),
+            "test",
+            "test.",
+            &["test.rows.v1"],
+            ic_memory::MemoryManagerConfig::new(1).unwrap(),
+        )
+        .unwrap();
+        let payloads = StableVec::init(payload_runtime.open_memory("test.rows.v1").unwrap());
         assert_eq!(count_resolving_chunks(&refs, &payloads), 0);
 
         // Include an empty but valid payload: presence is determined by its slot.
@@ -664,9 +702,12 @@ mod tests {
         drop(refs);
         drop(payloads);
 
-        let refs =
-            StableBtreeMap::<TemplateChunkKeyRecord, TemplateChunkRefRecord, _>::init(refs_memory);
-        let payloads = StableVec::<TemplateChunkPayloadRecord, _>::init(payload_memory.clone());
+        let refs = StableBtreeMap::<TemplateChunkKeyRecord, TemplateChunkRefRecord, _>::init(
+            refs_runtime.open_memory("test.rows.v1").unwrap(),
+        );
+        let payloads = StableVec::<TemplateChunkPayloadRecord, _>::init(
+            payload_runtime.open_memory("test.rows.v1").unwrap(),
+        );
         let previous_count = refs
             .iter()
             .filter(|entry| payloads.get(entry.value().slot).is_some())
@@ -780,8 +821,12 @@ mod tests {
         );
         TemplateChunkStore::upsert(chunk_key.clone(), TemplateChunkRecord { bytes: vec![4, 5] });
 
-        let payload_slots =
-            TEMPLATE_CHUNK_PAYLOADS.with_borrow(canic_core::cdk::structures::StableVec::len);
+        let payload_slots = TEMPLATE_CHUNK_PAYLOADS.with_borrow(|payloads| {
+            payloads
+                .as_ref()
+                .expect("chunk payload vector is installed")
+                .len()
+        });
         assert_eq!(payload_slots, 1);
         assert_eq!(
             TemplateChunkStore::get(&chunk_key),

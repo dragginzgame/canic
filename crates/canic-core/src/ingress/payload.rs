@@ -86,18 +86,18 @@ pub fn inspect_update_message() {
 /// Return the method selected by the current ingress message.
 #[must_use]
 pub fn current_method_name() -> String {
-    ic_cdk::api::msg_method_name()
+    ic_platform::cdk::api::msg_method_name()
 }
 
 /// Return the current ingress payload for bounded role-specific decoding.
 #[must_use]
 pub fn current_payload_bytes() -> Vec<u8> {
-    ic_cdk::api::msg_arg_data()
+    ic_platform::cdk::api::msg_arg_data()
 }
 
 /// Accept the current ingress after its role-specific bound has passed.
 pub fn accept_current_message() {
-    ic_cdk::api::accept_message();
+    ic_platform::cdk::api::accept_message();
 }
 
 /// Return whether one encoded payload fits its selected variant's exact bound.

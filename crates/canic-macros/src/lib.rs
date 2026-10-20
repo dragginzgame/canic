@@ -43,3 +43,23 @@ pub fn canic_query(attr: TokenStream, item: TokenStream) -> TokenStream {
 pub fn canic_update(attr: TokenStream, item: TokenStream) -> TokenStream {
     expand_entry(EndpointKind::Update, attr, item)
 }
+
+/// Export a synchronous raw query with Canic startup, access and dispatch guards.
+///
+/// Requires explicit access and `payload(max_bytes = N)`; the fn() body owns
+/// bounded decoding and its reply. No Candid declaration or encoding is emitted.
+#[proc_macro_attribute]
+pub fn canic_raw_query(attr: TokenStream, item: TokenStream) -> TokenStream {
+    endpoint::expand_raw_entry(EndpointKind::Query, attr, item)
+}
+
+/// Export a raw update with Canic startup, access and dispatch guards.
+///
+/// Requires explicit access and `payload(max_bytes = N)`; the fn() body owns
+/// bounded decoding and its reply. Reply failure after mutation must trap.
+/// An async unit handler uses the shared executor and async measurement owner;
+/// admission completes before it is spawned. Effects across awaits retain IC semantics.
+#[proc_macro_attribute]
+pub fn canic_raw_update(attr: TokenStream, item: TokenStream) -> TokenStream {
+    endpoint::expand_raw_entry(EndpointKind::Update, attr, item)
+}

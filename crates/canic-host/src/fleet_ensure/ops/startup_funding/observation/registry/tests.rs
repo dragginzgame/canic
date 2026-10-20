@@ -269,7 +269,7 @@ esac
     let mut version = FleetRegistryOps::version(&registry.authority, &topology, &registry).unwrap();
     write(
         "snapshot.json",
-        candid::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
+        ic_platform::candid::contract::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
             CoordinatorRegistryResponse::Registry(registry),
         ))
         .unwrap(),
@@ -277,7 +277,7 @@ esac
     let write_head = |version| {
         write(
             "head.json",
-            candid::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
+            ic_platform::candid::contract::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
                 CoordinatorObservabilityResponse::RegistryVersion(version),
             ))
             .unwrap(),
@@ -289,7 +289,7 @@ esac
     let root = root_summary.fleet_subnet_root;
     write(
         "root.json",
-        candid::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
+        ic_platform::candid::contract::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
             RootResponse::Inventory(root_summary),
         ))
         .unwrap(),

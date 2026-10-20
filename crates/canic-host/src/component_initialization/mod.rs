@@ -4,13 +4,13 @@
 //! Does not own: application schemas, identity allocation, or network effects.
 //! Boundary: the consumer prepares inner Candid after observing the allocated target.
 
-use candid::Principal;
 use canic_contracts::dto::{
     component_registry::{
         MAX_COMPONENT_APPLICATION_INIT_BYTES, RootComponentInitializationRequest,
     },
     wire::projection::component_initialization::RootCommand,
 };
+use ic_platform::Principal;
 use thiserror::Error;
 
 /// Typed preparation refusal before any Root command is sent.
@@ -24,7 +24,7 @@ pub enum ComponentInitializationError {
     )]
     Bounds,
     #[error(transparent)]
-    Candid(#[from] candid::Error),
+    Candid(#[from] ic_platform::candid::contract::Error),
 }
 
 /// Encode the production `canic_root_command` input without interpreting application data.
@@ -42,7 +42,7 @@ pub fn encode_command(
     if bytes.is_empty() || bytes.len() > MAX_COMPONENT_APPLICATION_INIT_BYTES {
         return Err(ComponentInitializationError::Bounds);
     }
-    Ok(candid::encode_one(
+    Ok(ic_platform::candid::contract::encode_one(
         RootCommand::BindComponentInitialization(request),
     )?)
 }
@@ -68,7 +68,8 @@ mod tests {
     fn command_preserves_exact_target_and_application_bytes() {
         let request = request();
         let bytes = encode_command(&request).unwrap();
-        let RootCommand::BindComponentInitialization(decoded) = candid::decode_one(&bytes).unwrap()
+        let RootCommand::BindComponentInitialization(decoded) =
+            ic_platform::candid::decoder::decode_one(&bytes).unwrap()
         else {
             panic!("initialization command selector");
         };

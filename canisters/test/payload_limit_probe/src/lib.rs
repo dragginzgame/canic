@@ -1,8 +1,8 @@
 #![expect(clippy::unused_async)]
-use candid::{CandidType, Principal};
 use canic::access::{AccessCheck, AccessContext, AccessError};
 use canic::endpoint::ArgumentLimits;
 use canic::{Error, prelude::*};
+use ic_platform::{Principal, candid::contract::CandidType};
 use std::cell::Cell;
 
 const LIMITS: ArgumentLimits = ArgumentLimits {
@@ -43,23 +43,24 @@ canic::start_local!(
 );
 
 fn bounded_init() {
-    ic_cdk::api::debug_print("bounded participant init");
+    ic_platform::cdk::api::debug_print("bounded participant init");
     // Prove that participant witnesses survive a failed install, even though
     // reinstall clears the previous canister logs before entering init.
     let (args,): (Option<Vec<u8>>,) = LIFECYCLE_LIMITS
-        .decode(&ic_cdk::api::msg_arg_data())
+        .decode(&ic_platform::cdk::api::msg_arg_data())
         .expect("the framework already admitted this envelope");
     if args.as_deref() == Some(&[1]) {
-        ic_cdk::api::debug_print("bounded participant trap witness");
-        ic_cdk::trap("participant witness");
+        ic_platform::cdk::api::debug_print("bounded participant trap witness");
+        ic_platform::cdk::api::trap("participant witness");
     }
 }
 fn bounded_post_upgrade() {
-    ic_cdk::api::debug_print("bounded participant post_upgrade");
+    ic_platform::cdk::api::debug_print("bounded participant post_upgrade");
 }
 
 /// A plain protocol record, with no Result envelope on the wire.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct PlainReply {
     committed: u64,
     predicates: u64,
@@ -83,7 +84,7 @@ impl AccessCheck for Gate {
 }
 
 fn commit() -> PlainReply {
-    ic_cdk::api::debug_print("bounded handler dispatched");
+    ic_platform::cdk::api::debug_print("bounded handler dispatched");
     HANDLER_CALLS.set(HANDLER_CALLS.get() + 1);
     PlainReply {
         committed: HANDLER_CALLS.get(),
@@ -204,7 +205,7 @@ fn named_echo(payload: String) -> Result<usize, Error> {
 }
 
 /// Bare CDK updates still inherit the managed ingress inspector default.
-#[ic_cdk::update]
+#[ic_platform::cdk::update]
 fn bare_echo(payload: String) -> usize {
     payload.len()
 }

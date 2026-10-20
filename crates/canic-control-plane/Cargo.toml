@@ -21,10 +21,9 @@ wasm-store-canister = []
 
 [dependencies]
 async-trait = { workspace = true }
-candid = { workspace = true }
 canic-contracts.workspace = true
 canic-core = { workspace = true }
-ic-cdk = { workspace = true }
+ic-platform = { workspace = true, features = ["cdk", "candid"] }
 ic-timers = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -32,6 +31,7 @@ sha2 = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+ic-memory = { workspace = true, features = ["test-support"] }
 toml = { workspace = true }
 
 [lints]

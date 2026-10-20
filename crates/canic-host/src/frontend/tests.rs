@@ -1,8 +1,8 @@
 use super::{FrontendError, model::*, ops, policy};
 use crate::test_support::temp_dir;
-use candid::Principal;
 use canic_contracts::ids::{CanisterRole, CanonicalNetworkId};
 use ic_host_fs::durable::{PublicationMode, WriteOptions};
+use ic_platform::Principal;
 use std::fs;
 
 fn input() -> FrontendEnvironmentInput {
@@ -520,4 +520,47 @@ mod uploaded {
         assert_eq!(assets.reads, before);
         fs::remove_dir_all(root).unwrap();
     }
+}
+
+#[test]
+fn prepared_and_published_bundles_share_manifest_rejections() {
+    let root = temp_dir("frontend-shared-validation");
+    let bundle = prepared_bundle(&root);
+    let destination = root.join("browser");
+    ops::publish_bundle(&destination, &bundle).unwrap();
+    for case in 0..4 {
+        let mut manifest = bundle.manifest.clone();
+        match case {
+            0 => manifest.schema_version = 0,
+            1 => manifest.roles.clear(),
+            2 => manifest.roles[0].javascript.path = manifest.roles[0].candid.path.clone(),
+            3 => manifest.roles[0].candid.sha256 = "00".repeat(32),
+            _ => unreachable!(),
+        }
+        manifest.manifest_sha256 = ops::manifest_digest(&manifest).unwrap();
+        let invalid = super::view::FrontendBundleView {
+            manifest,
+            files: bundle.files.clone(),
+        };
+        assert!(ops::publish_bundle(&root.join(format!("invalid-{case}")), &invalid).is_err());
+        fs::write(
+            destination.join("canic-frontend.json"),
+            serde_json::to_vec(&invalid.manifest).unwrap(),
+        )
+        .unwrap();
+        let failure =
+            ops::verify_bundle(&destination, &invalid.manifest.manifest_sha256).unwrap_err();
+        assert!(matches!(
+            (case, failure),
+            (0, FrontendError::Schema)
+                | (1, FrontendError::Bound(_))
+                | (2 | 3, FrontendError::Integrity)
+        ));
+        assert!(
+            !root
+                .join(format!("invalid-{case}/canic-frontend.json"))
+                .exists()
+        );
+    }
+    fs::remove_dir_all(root).unwrap();
 }

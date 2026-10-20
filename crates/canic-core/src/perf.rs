@@ -57,7 +57,7 @@ thread_local! {
 pub fn perf_counter() -> u64 {
     #[cfg(target_arch = "wasm32")]
     {
-        ic_cdk::api::call_context_instruction_counter()
+        ic_platform::cdk::api::call_context_instruction_counter()
     }
 
     #[cfg(not(target_arch = "wasm32"))]

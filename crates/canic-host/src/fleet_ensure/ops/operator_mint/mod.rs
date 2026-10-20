@@ -14,7 +14,7 @@ use crate::fleet_ensure::model::operator_mint::{
     OperatorMintAuthority, OperatorMintIntentRecord, OperatorMintNotificationOutcomeRecord,
     OperatorMintTransferOutcomeRecord,
 };
-use candid::{Nat, Principal};
+use ic_platform::{Principal, candid::contract::Nat};
 use sha2_host::{Digest, Sha224, Sha256};
 use thiserror::Error;
 
@@ -31,7 +31,7 @@ const DEPOSIT_MEMO_DOMAIN: &[u8] = b"canic:operator-mint:deposit:v1\0";
 #[derive(Debug, Error)]
 pub enum OperatorMintWireError {
     #[error("operator mint Candid encoding or decoding failed")]
-    Candid(#[from] candid::Error),
+    Candid(#[from] ic_platform::candid::contract::Error),
 
     #[error("operator mint amount or timestamp is zero, or its debit overflows")]
     InvalidAmounts,
@@ -89,7 +89,7 @@ pub fn transfer_argument(
             timestamp_nanos: intent.created_at_time_ns,
         }),
     };
-    Ok(candid::encode_one(args)?)
+    Ok(ic_platform::candid::contract::encode_one(args)?)
 }
 
 /// Encode `notify_mint_cycles` for the exact authenticated ICP transfer block.
@@ -99,18 +99,20 @@ pub fn notification_argument(
     icp_block_index: u64,
 ) -> Result<Vec<u8>, OperatorMintWireError> {
     validate_intent(intent)?;
-    Ok(candid::encode_one(wire::NotifyMintArgs {
-        block_index: icp_block_index,
-        deposit_memo: Some(intent.deposit_memo.to_vec()),
-        to_subaccount: None,
-    })?)
+    Ok(ic_platform::candid::contract::encode_one(
+        wire::NotifyMintArgs {
+            block_index: icp_block_index,
+            deposit_memo: Some(intent.deposit_memo.to_vec()),
+            to_subaccount: None,
+        },
+    )?)
 }
 
 /// Decode an ICP reply without treating a duplicate or expiry as a new transfer.
 pub fn decode_transfer_reply(
     bytes: &[u8],
 ) -> Result<OperatorMintTransferOutcomeRecord, OperatorMintWireError> {
-    let result: Result<u64, wire::TransferError> = candid::decode_one(bytes)?;
+    let result: Result<u64, wire::TransferError> = ic_platform::candid::decoder::decode_one(bytes)?;
     Ok(match result {
         Ok(block_index) => OperatorMintTransferOutcomeRecord::Accepted { block_index },
         Err(wire::TransferError::TxDuplicate { duplicate_of }) => {
@@ -143,7 +145,8 @@ pub fn decode_transfer_reply(
 pub fn decode_notification_reply(
     bytes: &[u8],
 ) -> Result<OperatorMintNotificationOutcomeRecord, OperatorMintWireError> {
-    let result: Result<wire::NotifyMintOk, wire::NotifyMintError> = candid::decode_one(bytes)?;
+    let result: Result<wire::NotifyMintOk, wire::NotifyMintError> =
+        ic_platform::candid::decoder::decode_one(bytes)?;
     Ok(match result {
         Ok(minted) => OperatorMintNotificationOutcomeRecord::Minted {
             deposit_block_index: bounded_nat(minted.block_index)?,

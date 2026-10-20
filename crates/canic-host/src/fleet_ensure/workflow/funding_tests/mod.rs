@@ -270,7 +270,7 @@ fn mixed_root_creation_fees_reject_before_funding_and_preserve_evidence() {
     let mut fixture = Fixture::new();
     let mut second_root = fixture.desired.canisters[0].clone();
     second_root.name = "second-root".into();
-    second_root.subnet = candid::Principal::from_slice(&[77]).to_text();
+    second_root.subnet = ic_platform::Principal::from_slice(&[77]).to_text();
     fixture.desired.canisters.push(second_root);
     let mut second_domain = fixture.plan.conservation.estate_funding_domains[0].clone();
     second_domain.root = "second-root".into();
@@ -313,7 +313,7 @@ fn creation_fee_scope_includes_pending_roots_and_excludes_idle_roots() {
     let mut fixture = Fixture::new();
     let mut second_root = fixture.desired.canisters[0].clone();
     second_root.name = "second-root".into();
-    second_root.subnet = candid::Principal::from_slice(&[77]).to_text();
+    second_root.subnet = ic_platform::Principal::from_slice(&[77]).to_text();
     fixture.desired.canisters.push(second_root);
     let mut second_domain = fixture.plan.conservation.estate_funding_domains[0].clone();
     second_domain.root = "second-root".into();

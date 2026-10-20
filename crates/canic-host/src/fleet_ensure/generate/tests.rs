@@ -5044,7 +5044,7 @@ fn write_inspection_reserve_responses(
         let base = root.join(format!("reserve-{canister_id}"));
         fs::write(
             base.with_extension("bin"),
-            candid::encode_one(InspectionReserveRequest::InspectionReserve(
+            ic_platform::candid::contract::encode_one(InspectionReserveRequest::InspectionReserve(
                 canic_contracts::dto::canister::CanisterInspectionRequest { canister_id },
             ))
             .unwrap(),
@@ -5098,8 +5098,8 @@ fn canister_status_json(
     status.to_string()
 }
 
-fn candid_response_json<T: candid::CandidType>(value: &T) -> String {
-    let bytes = candid::encode_one(value).expect("encode fake ICP response");
+fn candid_response_json<T: ic_platform::candid::contract::CandidType>(value: &T) -> String {
+    let bytes = ic_platform::candid::contract::encode_one(value).expect("encode fake ICP response");
     serde_json::json!({ "response_bytes": hex_bytes(bytes) }).to_string()
 }
 

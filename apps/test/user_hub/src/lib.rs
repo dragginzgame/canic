@@ -4,9 +4,9 @@ mod caller_authority;
 mod fixture_importer;
 mod reinstall_fixture;
 
-use candid::Principal;
 use canic::api::canister::placement::ShardingApi;
 use canic::{Error, prelude::*};
+use ic_platform::Principal;
 use std::cell::RefCell;
 
 const POOL_NAME: &str = "user_shards";
@@ -59,7 +59,7 @@ async fn plan_create_account(pid: Principal) -> Result<String, Error> {
 /// Prove direct Fleet-admitted ingress for managed Component Group qualification.
 #[canic_query(requires(caller::is_fleet_admitted()))]
 async fn test_fleet_admission_probe() -> Result<Principal, Error> {
-    Ok(ic_cdk::api::msg_caller())
+    Ok(ic_platform::cdk::api::msg_caller())
 }
 
 /// Set deterministic fixture state for the disposable backup/restore journey.
@@ -91,8 +91,8 @@ async fn test_user_rows() -> Result<Vec<reinstall_fixture::UserRow>, Error> {
 /// Spend real fixture cycles before reviewing an underfunded reinstall.
 #[canic_update(requires(env::build_local_only(), caller::is_controller()))]
 async fn test_recovery_balance(retain: u128) -> Result<u128, Error> {
-    let excess = ic_cdk::api::canister_cycle_balance().saturating_sub(retain);
-    Ok(ic_cdk::api::cycles_burn(excess))
+    let excess = ic_platform::cdk::api::canister_cycle_balance().saturating_sub(retain);
+    Ok(ic_platform::cdk::api::cycles_burn(excess))
 }
 
 canic::finish!();

@@ -1,4 +1,4 @@
-use candid::{CandidType, Principal, encode_one};
+use ic_platform::{candid::contract::{CandidType, encode_one}, Principal};
 use serde::{Deserialize, Serialize};
 
 const MAX_FLEET_PRINCIPALS: usize = 256;

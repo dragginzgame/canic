@@ -5,11 +5,11 @@ use crate::metrics::{
     model::{MetricValue, MetricsKind, MetricsReport},
     parse::metric_page,
 };
-use candid::Principal;
 use canic_contracts::dto::{
     metrics::{MetricEntry as MetricEntryDto, MetricValue as MetricValueDto},
     page::Page,
 };
+use ic_platform::Principal;
 
 #[test]
 fn parses_metric_kind_selectors() {

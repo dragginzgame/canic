@@ -16,6 +16,9 @@ cp "$ROOT/scripts/ci/rewrite-local-lock-versions.pl" "$ROOT/scripts/ci/finalize-
     "$ROOT/scripts/ci/validate-release-inputs.pl" "$fixture/base/scripts/ci/"
 cp "$ROOT/scripts/release/rewrite-owned-lock.sh" "$fixture/base/scripts/release/"
 cp "$ROOT/scripts/release/adapter.sh" "$fixture/base/scripts/release/"
+bash "$ROOT/scripts/ci/prepare-script-fixture.sh" "$ROOT" "$fixture/base" \
+    scripts/ci/rewrite-local-lock-versions.pl scripts/ci/next-release-version.sh \
+    scripts/ci/read-cargo-workspace-version.sh
 cat > "$fixture/base/Cargo.toml" <<'TOML'
 [workspace]
 members = ["member"]

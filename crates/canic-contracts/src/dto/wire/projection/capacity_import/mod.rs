@@ -8,24 +8,27 @@
 use crate::dto::pool_import::{
     PoolImportCommand, PoolImportContext, PoolImportIdentity, PoolImportStatus,
 };
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded Command wire projection for capacity import.
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum Command {
     ImportPoolCapacity(PoolImportCommand),
 }
 
 /// Bounded Response wire projection for capacity import.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum Response {
     ImportPoolCapacity(PoolImportStatus),
 }
 
 /// Bounded StatusRequest wire projection for capacity import.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum StatusRequest {
     PoolImport(PoolImportIdentity),
     PoolImportContext,
@@ -33,6 +36,7 @@ pub enum StatusRequest {
 
 /// Bounded StatusResponse wire projection for capacity import.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum StatusResponse {
     PoolImport(Box<PoolImportStatus>),
     PoolImportContext(Box<PoolImportContext>),

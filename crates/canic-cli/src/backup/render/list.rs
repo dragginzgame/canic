@@ -6,7 +6,7 @@
 
 use super::super::BackupListEntry;
 use crate::support::path_stamp::backup_list_timestamp;
-use canic_host::table::{ColumnAlign, render_table};
+use ic_host_text::table::{self, Alignment, Options};
 
 pub(super) fn render_backup_list(entries: &[BackupListEntry]) -> String {
     let rows = entries
@@ -23,17 +23,21 @@ pub(super) fn render_backup_list(entries: &[BackupListEntry]) -> String {
             ]
         })
         .collect::<Vec<_>>();
-    render_table(
+    table::render(
         &["#", "DIR", "BACKUP_ID", "CREATED_AT", "MEMBERS", "STATUS"],
         &rows,
         &[
-            ColumnAlign::Right,
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-            ColumnAlign::Left,
+            Alignment::Right,
+            Alignment::Left,
+            Alignment::Left,
+            Alignment::Left,
+            Alignment::Left,
+            Alignment::Left,
         ],
+        Options {
+            column_gap: 3,
+            header_separator: true,
+        },
     )
 }
 

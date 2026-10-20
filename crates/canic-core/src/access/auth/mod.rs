@@ -10,15 +10,7 @@ mod identity;
 mod measurement;
 mod predicates;
 
-use crate::{
-    access::AccessError,
-    cdk::types::Principal,
-    domain::policy::pure::auth::application_authorization::{
-        LocalApplicationAuthorizationPolicyInput,
-        authorize_local_application as authorize_local_application_policy,
-    },
-    ops::ic::IcOps,
-};
+use crate::{access::AccessError, cdk::types::Principal, ops::ic::IcOps};
 use std::fmt;
 
 pub use crate::{
@@ -49,38 +41,22 @@ pub fn authorize_local_application(
     request: LocalApplicationAuthorizationRequest<'_>,
 ) -> LocalApplicationAuthorizationDecision {
     let actual_caller = IcOps::msg_caller();
-    let now_ns = IcOps::now_nanos();
-    if actual_caller == Principal::anonymous() || actual_caller != request.observed_transport_caller
-    {
-        return authorize_with_values(request, actual_caller, now_ns, false, None, None, false);
-    }
 
-    LocalApplicationAuthorizationDecision::Deny(
-        LocalApplicationAuthorizationDenial::AuthorityUnavailable,
-    )
+    authorize_with_values(request, actual_caller)
 }
 
 fn authorize_with_values(
     request: LocalApplicationAuthorizationRequest<'_>,
     actual_caller: Principal,
-    now_ns: u64,
-    capability_enabled: bool,
-    authority: Option<
-        &crate::model::auth::application_authorization::LocalApplicationAuthoritySnapshot,
-    >,
-    session: Option<&crate::model::auth::application_authorization::LocalApplicationSession>,
-    subject_admissible: bool,
 ) -> LocalApplicationAuthorizationDecision {
-    authorize_local_application_policy(LocalApplicationAuthorizationPolicyInput {
-        actual_caller,
-        observed_caller: request.observed_transport_caller,
-        now_ns,
-        capability_enabled,
-        authority,
-        session,
-        subject_admissible,
-        required_scope: request.required_scope,
-    })
+    let denial = if actual_caller == Principal::anonymous() {
+        LocalApplicationAuthorizationDenial::Anonymous
+    } else if actual_caller != request.observed_transport_caller {
+        LocalApplicationAuthorizationDenial::CallerMismatch
+    } else {
+        LocalApplicationAuthorizationDenial::AuthorityUnavailable
+    };
+    LocalApplicationAuthorizationDecision::Deny(denial)
 }
 
 ///
@@ -196,13 +172,7 @@ const fn dependency_unavailable(error: crate::InternalError) -> AccessError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        model::auth::application_authorization::{
-            ApplicationScope, CanonicalApplicationScopes, LocalApplicationAuthoritySnapshot,
-            LocalApplicationSession,
-        },
-        test::{seams, support::fleet_key},
-    };
+    use crate::test::seams;
     use canic_contracts::ids::CanisterRole;
 
     fn p(id: u8) -> Principal {
@@ -243,53 +213,26 @@ mod tests {
 
     #[test]
     fn synchronous_local_application_facade_values_preserve_closed_policy() {
-        let caller = p(7);
-        let fleet = fleet_key(3);
-        let role = CanisterRole::new("component");
-        let authority = LocalApplicationAuthoritySnapshot::new(fleet, role.clone(), 4);
-        let session = LocalApplicationSession::new(
-            caller,
-            caller,
-            p(8),
-            fleet,
-            role,
-            CanonicalApplicationScopes::for_session(vec![
-                ApplicationScope::parse("app:read").unwrap(),
-            ])
-            .unwrap(),
-            4,
-            10,
-            100,
-            [1; 32],
-            [2; 32],
-        )
-        .unwrap();
         let request = LocalApplicationAuthorizationRequest {
-            observed_transport_caller: caller,
+            observed_transport_caller: p(7),
             required_scope: ApplicationScopeRef::from_static("app:read"),
         };
-
-        assert_eq!(
-            authorize_with_values(
-                request,
-                caller,
-                20,
-                true,
-                Some(&authority),
-                Some(&session),
-                true,
+        for (caller, denial) in [
+            (
+                Principal::anonymous(),
+                LocalApplicationAuthorizationDenial::Anonymous,
             ),
-            LocalApplicationAuthorizationDecision::Allow(AuthorizedApplicationSubject {
-                subject: caller,
-                expires_at_ns: 100,
-            })
-        );
-        assert_eq!(
-            authorize_with_values(request, p(9), 20, false, None, None, false),
-            LocalApplicationAuthorizationDecision::Deny(
-                LocalApplicationAuthorizationDenial::CallerMismatch,
-            )
-        );
+            (p(9), LocalApplicationAuthorizationDenial::CallerMismatch),
+            (
+                p(7),
+                LocalApplicationAuthorizationDenial::AuthorityUnavailable,
+            ),
+        ] {
+            assert_eq!(
+                authorize_with_values(request, caller),
+                LocalApplicationAuthorizationDecision::Deny(denial)
+            );
+        }
     }
 
     #[test]

@@ -105,8 +105,6 @@ fn baseline_spec_for_roles_owned_env(
 
     RootBaselineSpec {
         progress_prefix: "root_setup",
-        root_wasm_path: root_wasm_path(&workspace_root),
-        root_release_artifacts_dir: root_release_artifacts_dir(&workspace_root),
         artifact_watch_paths: ROOT_WASM_WATCH_PATHS,
         release_roles,
         workspace_root,
@@ -120,14 +118,4 @@ fn baseline_spec_for_roles_owned_env(
         root_release_chunk_bytes: canic::CANIC_WASM_CHUNK_BYTES,
         package_version: env!("CARGO_PKG_VERSION"),
     }
-}
-
-fn root_wasm_path(workspace_root: &Path) -> PathBuf {
-    root_release_artifacts_dir(workspace_root)
-        .join("root")
-        .join("root.wasm.gz")
-}
-
-fn root_release_artifacts_dir(workspace_root: &Path) -> PathBuf {
-    workspace_root.join(".icp").join("local").join("canisters")
 }

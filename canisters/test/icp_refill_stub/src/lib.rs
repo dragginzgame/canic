@@ -4,8 +4,15 @@
 //! returns the canonical duplicate result on replay. The CMC retains one exact
 //! notification and performs one real management-canister cycles deposit.
 
-use candid::{CandidType, Deserialize, Nat, Principal};
-use ic_cdk::{api::msg_caller, call::Call, trap};
+use ic_platform::cdk::{
+    api::{msg_caller, trap},
+    call::Call,
+};
+use ic_platform::{
+    Principal,
+    candid::contract::{CandidType, Nat},
+};
+use serde::Deserialize;
 use std::cell::RefCell;
 
 const LEDGER_FEE_E8S: u64 = 10_000;
@@ -17,6 +24,7 @@ thread_local! {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 enum StubInit {
     Ledger {
         balance_e8s: u64,
@@ -41,12 +49,14 @@ enum StubState {
 }
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct Icrc1Account {
     owner: Principal,
     subaccount: Option<[u8; 32]>,
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct TransferArg {
     from_subaccount: Option<[u8; 32]>,
     to: Icrc1Account,
@@ -57,10 +67,12 @@ struct TransferArg {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(transparent)]
 struct Memo(Vec<u8>);
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 enum TransferError {
     BadFee { expected_fee: Nat },
     InsufficientFunds { balance: Nat },
@@ -75,12 +87,14 @@ struct TransferReceipt {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct NotifyTopUpArg {
     block_index: u64,
     canister_id: Principal,
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 enum NotifyTopUpError {
     Other {
         error_code: u64,
@@ -89,12 +103,14 @@ enum NotifyTopUpError {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 struct IcpXdrConversionRate {
     xdr_permyriad_per_icp: u64,
     timestamp_seconds: u64,
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 struct IcpXdrConversionRateResponse {
     data: IcpXdrConversionRate,
     hash_tree: Vec<u8>,
@@ -102,11 +118,12 @@ struct IcpXdrConversionRateResponse {
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct CanisterIdRecord {
     canister_id: Principal,
 }
 
-#[ic_cdk::init]
+#[ic_platform::cdk::init]
 fn init(args: StubInit) {
     let state = match args {
         StubInit::Ledger { balance_e8s } => StubState::Ledger {
@@ -125,19 +142,19 @@ fn init(args: StubInit) {
     STATE.with_borrow_mut(|stored| *stored = Some(state));
 }
 
-#[ic_cdk::update(name = "icrc1_fee")]
+#[ic_platform::cdk::update(name = "icrc1_fee")]
 fn icrc1_fee() -> Nat {
     require_ledger();
     Nat::from(LEDGER_FEE_E8S)
 }
 
-#[ic_cdk::update(name = "icrc1_decimals")]
+#[ic_platform::cdk::update(name = "icrc1_decimals")]
 fn icrc1_decimals() -> u8 {
     require_ledger();
     ICP_DECIMALS
 }
 
-#[ic_cdk::update(name = "icrc1_balance_of")]
+#[ic_platform::cdk::update(name = "icrc1_balance_of")]
 fn icrc1_balance_of(account: Icrc1Account) -> Nat {
     let _ = account;
     Nat::from(STATE.with_borrow(|stored| match stored.as_ref() {
@@ -146,7 +163,7 @@ fn icrc1_balance_of(account: Icrc1Account) -> Nat {
     }))
 }
 
-#[ic_cdk::update(name = "icrc1_transfer")]
+#[ic_platform::cdk::update(name = "icrc1_transfer")]
 fn icrc1_transfer(request: TransferArg) -> Result<Nat, TransferError> {
     STATE.with_borrow_mut(|stored| {
         let Some(StubState::Ledger {
@@ -196,7 +213,7 @@ fn icrc1_transfer(request: TransferArg) -> Result<Nat, TransferError> {
     })
 }
 
-#[ic_cdk::update(name = "get_icp_xdr_conversion_rate")]
+#[ic_platform::cdk::update(name = "get_icp_xdr_conversion_rate")]
 fn get_icp_xdr_conversion_rate() -> IcpXdrConversionRateResponse {
     let rate = STATE.with_borrow(|stored| match stored.as_ref() {
         Some(StubState::Cmc {
@@ -208,14 +225,14 @@ fn get_icp_xdr_conversion_rate() -> IcpXdrConversionRateResponse {
     IcpXdrConversionRateResponse {
         data: IcpXdrConversionRate {
             xdr_permyriad_per_icp: rate,
-            timestamp_seconds: ic_cdk::api::time() / 1_000_000_000,
+            timestamp_seconds: ic_platform::cdk::api::time() / 1_000_000_000,
         },
         hash_tree: Vec::new(),
         certificate: Vec::new(),
     }
 }
 
-#[ic_cdk::update(name = "notify_top_up")]
+#[ic_platform::cdk::update(name = "notify_top_up")]
 async fn notify_top_up(request: NotifyTopUpArg) -> Result<Nat, NotifyTopUpError> {
     let (cycles, replay) = STATE.with_borrow(|stored| match stored.as_ref() {
         Some(StubState::Cmc {
@@ -267,4 +284,4 @@ fn require_ledger() {
     });
 }
 
-ic_cdk::export_candid!();
+ic_platform::cdk::export_candid!();

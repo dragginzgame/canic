@@ -1,5 +1,4 @@
 use crate::{
-    cdk::candid::CandidType,
     dto::{
         capability::{
             NonrootCyclesCapabilityEnvelopeV1, NonrootCyclesCapabilityResponseV1,
@@ -14,6 +13,7 @@ use crate::{
     },
 };
 use canic_contracts::ids::CanisterRole;
+use ic_platform::candid::contract::CandidType;
 
 ///
 /// RpcApi

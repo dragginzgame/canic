@@ -1,8 +1,8 @@
 use super::{IcpJsonResponseError, decode_json_response, decode_json_result_response};
-use candid::Encode;
 use canic_contracts::{diagnostics::codes, dto::error::Error as CanicError};
 use canic_core::cdk::utils::hash::hex_bytes;
 use ic_host_tools::response::{JsonErrorKind, ResponseError};
+use ic_platform::candid::contract::Encode;
 
 #[test]
 fn decodes_plain_typed_response_bytes() {
@@ -112,7 +112,7 @@ fn envelope_errors_preserve_shared_categories_and_source() {
     );
 }
 
-fn response_json<T: candid::CandidType>(response: &T) -> String {
+fn response_json<T: ic_platform::candid::contract::CandidType>(response: &T) -> String {
     let bytes = Encode!(response).expect("encode response");
     serde_json::json!({
         "response_bytes": hex_bytes(bytes),

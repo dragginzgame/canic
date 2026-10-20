@@ -61,7 +61,7 @@ pub enum CyclesCommandError {
     PendingOperationLog(String),
 
     #[error("failed to decode ICP refill response Candid: {0}")]
-    IcpRefillResponseCandid(#[source] candid::Error),
+    IcpRefillResponseCandid(#[source] ic_platform::candid::contract::Error),
 
     #[error("failed to decode ICP refill response hex: {0}")]
     IcpRefillResponseHex(#[source] DecodeHexError),
@@ -79,7 +79,7 @@ pub enum CyclesCommandError {
     FundingAuthority(String),
 
     #[error("failed to decode funding status Candid: {0}")]
-    FundingResponseCandid(#[source] candid::Error),
+    FundingResponseCandid(#[source] ic_platform::candid::contract::Error),
 
     #[error("failed to decode funding status hex: {0}")]
     FundingResponseHex(#[source] DecodeHexError),

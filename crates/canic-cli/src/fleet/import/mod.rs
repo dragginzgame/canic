@@ -16,7 +16,6 @@ use crate::{
     fleet::{FleetCommandError, identity_arg, parse_digest, quote_review_argument},
     version_text,
 };
-use candid::Principal;
 use canic_contracts::cycles::Cycles;
 use canic_core::cdk::utils::hash::{decode_hex, hex_bytes};
 use canic_host::{
@@ -32,6 +31,7 @@ use canic_host::{
     icp_config::resolve_current_canic_icp_root,
 };
 use clap::{ArgAction, ArgMatches, Command};
+use ic_platform::Principal;
 use std::{ffi::OsString, path::PathBuf};
 
 pub(super) fn command() -> Command {

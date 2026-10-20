@@ -1,4 +1,3 @@
-use candid::Principal;
 use canic::{
     Error,
     dto::{
@@ -21,7 +20,8 @@ use canic_testing_internal::pic::{
     setup_active_component_registry,
 };
 use canic_tests::root::{self, RootSetupProfile, harness::setup_root};
-use ic_testkit::pic::{PocketIc, prelude::*};
+use ic_platform::Principal;
+use ic_testkit::pic::PocketIc;
 use serde::Serialize;
 use std::{
     collections::BTreeSet,

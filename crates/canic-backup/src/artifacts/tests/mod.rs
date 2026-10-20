@@ -1,24 +1,17 @@
 use super::*;
 use crate::test_support::temp_path;
+use ic_backup::model::artifacts::ArtifactChecksumRecord;
 use std::{fs, io::Read};
 
 const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
-#[test]
-fn artifact_path_segment_preserves_safe_characters_and_replaces_others() {
-    assert_eq!(
-        artifact_path_segment("abc-XYZ_123:canister"),
-        "abc-XYZ_123_canister"
-    );
-}
-
 // Ensure empty-byte checksums match the standard SHA-256 vector.
 #[test]
 fn byte_checksum_matches_sha256_vector() {
-    let checksum = ArtifactChecksum::from_bytes(&[]);
+    let checksum = ArtifactChecksumRecord::from_bytes(&[]);
 
-    assert_eq!(checksum.algorithm, "sha256");
-    assert_eq!(checksum.hash, EMPTY_SHA256);
+    assert_eq!(checksum.algorithm().to_owned(), "sha256");
+    assert_eq!(checksum.hash().to_owned(), EMPTY_SHA256);
 }
 
 // Ensure file checksums use the same implementation as byte checksums.
@@ -27,8 +20,8 @@ fn file_checksum_matches_byte_checksum() {
     let path = temp_path("canic-backup-checksum");
     fs::write(&path, b"canic backup artifact").expect("write temp artifact");
 
-    let from_file = ArtifactChecksum::from_file(&path).expect("checksum file");
-    let from_bytes = ArtifactChecksum::from_bytes(b"canic backup artifact");
+    let from_file = crate::artifacts::checksum_file(&path).expect("checksum file");
+    let from_bytes = ArtifactChecksumRecord::from_bytes(b"canic backup artifact");
 
     fs::remove_file(&path).expect("remove temp artifact");
     assert_eq!(from_file, from_bytes);
@@ -41,7 +34,7 @@ fn stream_checksum_projection_preserves_source_io_errors() {
     let mut unreadable = fs::OpenOptions::new().write(true).open(&path).unwrap();
     let expected_read = unreadable.read(&mut [0; 1]).unwrap_err().raw_os_error();
     let ArtifactChecksumError::Io(read_error) =
-        ArtifactChecksum::from_reader(&mut unreadable).unwrap_err()
+        crate::artifacts::checksum_reader(&mut unreadable).unwrap_err()
     else {
         panic!("expected source I/O error");
     };
@@ -64,86 +57,28 @@ fn directory_checksum_is_order_independent() {
     fs::write(second.join("nested/b.txt"), b"b").expect("write second b");
     fs::write(second.join("a.txt"), b"a").expect("write second a");
 
-    let first_checksum = ArtifactChecksum::from_directory(&first).expect("checksum first");
-    let second_checksum = ArtifactChecksum::from_directory(&second).expect("checksum second");
+    let first_checksum = crate::artifacts::checksum_directory(&first).expect("checksum first");
+    let second_checksum = crate::artifacts::checksum_directory(&second).expect("checksum second");
 
     fs::remove_dir_all(first).expect("remove first");
     fs::remove_dir_all(second).expect("remove second");
     assert_eq!(first_checksum, second_checksum);
     assert_eq!(
-        first_checksum.hash,
+        first_checksum.hash().to_owned(),
         "e4d330f138b8f1b3044e84b5dcbe4fd1cb7e043d0c20810c083d791b6de01266"
     );
 }
 
-// Ensure checksum verification reports mismatches.
 #[test]
-fn checksum_verify_rejects_mismatch() {
-    let mut checksum = ArtifactChecksum::from_bytes(b"actual");
-    checksum.hash.make_ascii_uppercase();
-    let expected_hash = EMPTY_SHA256.to_ascii_uppercase();
-
-    let err = checksum
-        .verify(&expected_hash)
-        .expect_err("different hash should fail");
-
-    std::assert_matches!(
-        err,
-        ArtifactChecksumError::ChecksumMismatch { expected, actual }
-            if expected == expected_hash && actual == checksum.hash
-    );
-}
-
-#[test]
-fn checksum_verification_accepts_equivalent_hex_case() {
-    let lower = ArtifactChecksum::from_bytes(&[]);
-    let upper = ArtifactChecksum {
-        algorithm: lower.algorithm.clone(),
-        hash: lower.hash.to_ascii_uppercase(),
-    };
-    lower.verify(&upper.hash).expect("uppercase expected hash");
-    upper.verify(&lower.hash).expect("uppercase observed hash");
-    std::assert_matches!(
-        lower.verify(
-            &ArtifactChecksum::from_bytes(b"different")
-                .hash
-                .to_ascii_uppercase()
-        ),
-        Err(ArtifactChecksumError::ChecksumMismatch { .. })
-    );
-    std::assert_matches!(
-        lower.verify("invalid"),
-        Err(ArtifactChecksumError::InvalidHash(_))
-    );
-}
-
-#[test]
-fn checksum_validation_retains_malformed_input_and_algorithm_precedence() {
-    for hash in [
-        String::new(),
-        "a".repeat(63),
-        "a".repeat(65),
-        "g".repeat(64),
-        "é".repeat(32),
-        format!(" {}", "a".repeat(63)),
+fn checksum_record_decode_validates_and_normalizes_manifest_fields() {
+    let valid = serde_json::json!({"algorithm":"sha256", "hash":EMPTY_SHA256.to_ascii_uppercase()});
+    let checksum: ArtifactChecksumRecord = serde_json::from_value(valid).unwrap();
+    assert_eq!(checksum.hash(), EMPTY_SHA256);
+    for value in [
+        serde_json::json!({"algorithm":"sha256", "hash":"invalid"}),
+        serde_json::json!({"algorithm":"unsupported", "hash":EMPTY_SHA256}),
     ] {
-        let mut checksum = ArtifactChecksum {
-            algorithm: "sha256".to_string(),
-            hash: hash.clone(),
-        };
-        std::assert_matches!(
-            checksum.validate(),
-            Err(ArtifactChecksumError::InvalidHash(actual)) if actual == hash
-        );
-        std::assert_matches!(
-            checksum.verify(EMPTY_SHA256),
-            Err(ArtifactChecksumError::InvalidHash(actual)) if actual == hash
-        );
-        checksum.algorithm = "unsupported".to_string();
-        std::assert_matches!(
-            checksum.verify(EMPTY_SHA256),
-            Err(ArtifactChecksumError::UnsupportedAlgorithm(actual)) if actual == "unsupported"
-        );
+        assert!(serde_json::from_value::<ArtifactChecksumRecord>(value).is_err());
     }
 }
 
@@ -158,9 +93,9 @@ fn filesystem_checksums_reject_symlinked_files_and_entries() {
     std::os::unix::fs::symlink(root.join("source"), root.join("tree/linked-entry"))
         .expect("create tree symlink");
 
-    let file_error = ArtifactChecksum::from_file(&root.join("linked-file"))
+    let file_error = crate::artifacts::checksum_file(&root.join("linked-file"))
         .expect_err("symlinked file must reject");
-    let tree_error = ArtifactChecksum::from_directory(&root.join("tree"))
+    let tree_error = crate::artifacts::checksum_directory(&root.join("tree"))
         .expect_err("symlinked directory entry must reject");
 
     std::assert_matches!(file_error, ArtifactChecksumError::Io(_));
@@ -182,14 +117,13 @@ fn private_staging_preserves_bytes_digest_modes_and_existing_output() {
     fs::write(root.join("source/nested/b.txt"), b"b").unwrap();
     let destination = root.join("staged tree");
     let checksum =
-        ArtifactChecksum::stage_relative_path_no_follow(&root, Path::new("source"), &destination)
-            .unwrap();
+        crate::artifacts::stage_relative_path(&root, Path::new("source"), &destination).unwrap();
     assert_eq!(
-        checksum.hash,
+        checksum.hash().to_owned(),
         "e4d330f138b8f1b3044e84b5dcbe4fd1cb7e043d0c20810c083d791b6de01266"
     );
     assert_eq!(
-        ArtifactChecksum::from_directory(&destination).unwrap(),
+        crate::artifacts::checksum_directory(&destination).unwrap(),
         checksum
     );
     assert_eq!(fs::read(destination.join("nested/b.txt")).unwrap(), b"b");
@@ -209,20 +143,15 @@ fn private_staging_preserves_bytes_digest_modes_and_existing_output() {
     );
 
     let file_destination = root.join("staged file");
-    let checksum = ArtifactChecksum::stage_relative_path_no_follow(
-        &root,
-        Path::new("source/a.txt"),
-        &file_destination,
-    )
-    .unwrap();
-    assert_eq!(checksum, ArtifactChecksum::from_bytes(b"a"));
+    let checksum =
+        crate::artifacts::stage_relative_path(&root, Path::new("source/a.txt"), &file_destination)
+            .unwrap();
+    assert_eq!(checksum, ArtifactChecksumRecord::from_bytes(b"a"));
     fs::write(root.join("source/a.txt"), b"changed").unwrap();
-    let ArtifactChecksumError::Io(error) = ArtifactChecksum::stage_relative_path_no_follow(
-        &root,
-        Path::new("source/a.txt"),
-        &file_destination,
-    )
-    .unwrap_err() else {
+    let ArtifactChecksumError::Io(error) =
+        crate::artifacts::stage_relative_path(&root, Path::new("source/a.txt"), &file_destination)
+            .unwrap_err()
+    else {
         panic!("expected create-new destination refusal");
     };
     assert_eq!(error.kind(), io::ErrorKind::AlreadyExists);
@@ -242,11 +171,8 @@ fn relative_artifacts_refuse_traversal_and_symlinked_parents_before_staging() {
     let source = root.join("source");
     let destination = root.join("destination");
     for relative in [Path::new("../outside/sentinel"), Path::new("link/sentinel")] {
-        assert!(ArtifactChecksum::from_relative_path_no_follow(&source, relative).is_err());
-        assert!(
-            ArtifactChecksum::stage_relative_path_no_follow(&source, relative, &destination)
-                .is_err()
-        );
+        assert!(crate::artifacts::checksum_relative_path(&source, relative).is_err());
+        assert!(crate::artifacts::stage_relative_path(&source, relative, &destination).is_err());
         assert!(!destination.exists());
         assert_eq!(
             fs::read(root.join("outside/sentinel")).unwrap(),
@@ -268,12 +194,8 @@ fn non_utf8_tree_names_retain_shared_typed_refusal() {
         .join(std::ffi::OsString::from_vec(vec![0xff]));
     fs::write(&invalid, b"source").unwrap();
     for result in [
-        ArtifactChecksum::from_directory(&root.join("source")),
-        ArtifactChecksum::stage_relative_path_no_follow(
-            &root,
-            Path::new("source"),
-            &root.join("staged"),
-        ),
+        crate::artifacts::checksum_directory(&root.join("source")),
+        crate::artifacts::stage_relative_path(&root, Path::new("source"), &root.join("staged")),
     ] {
         std::assert_matches!(
             result,

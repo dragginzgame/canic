@@ -16,7 +16,8 @@ use crate::dto::{
 };
 
 /// Bounded RoleStatusRequest selectors for timer authority validation.
-#[derive(candid::CandidType, Clone)]
+#[derive(ic_platform::candid::contract::CandidType, Clone)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RoleStatusRequest {
     CycleBalance,
     CycleHistory(PageRequest),
@@ -26,7 +27,8 @@ pub enum RoleStatusRequest {
 }
 
 /// Bounded RoleStatusResponse selectors for timer authority validation.
-#[derive(candid::CandidType, serde::Deserialize)]
+#[derive(ic_platform::candid::contract::CandidType, serde::Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RoleStatusResponse {
     CycleBalance(CycleBalanceStatusResponse),
     CycleHistory(Page<CycleTrackerEntry>),
@@ -36,7 +38,8 @@ pub enum RoleStatusResponse {
 }
 
 /// Bounded PublicStatusRequest selectors for timer authority validation.
-#[derive(candid::CandidType)]
+#[derive(ic_platform::candid::contract::CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum PublicStatusRequest {
     Health,
     Metrics(PublicMetricsRequest),
@@ -44,7 +47,8 @@ pub enum PublicStatusRequest {
 }
 
 /// Bounded PublicStatusResponse selectors for timer authority validation.
-#[derive(candid::CandidType, serde::Deserialize)]
+#[derive(ic_platform::candid::contract::CandidType, serde::Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum PublicStatusResponse {
     Health(PublicHealth),
     Metrics(PublicMetricsSnapshot),

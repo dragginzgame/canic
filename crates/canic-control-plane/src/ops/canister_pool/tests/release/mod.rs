@@ -53,9 +53,12 @@ fn release_observes_uncertain_and_blocked_creation_without_readmission() {
             )),
             CanisterPoolCreationProgressRecord::WaitingForFunding { .. } => unreachable!(),
         }
-        let bytes = candid::encode_one(&observed).unwrap();
+        let bytes = ic_platform::candid::contract::encode_one(&observed).unwrap();
         assert_eq!(
-            candid::decode_one::<crate::dto::root::RootPoolReleaseResponse>(&bytes).unwrap(),
+            ic_platform::candid::decoder::decode_one::<crate::dto::root::RootPoolReleaseResponse>(
+                &bytes
+            )
+            .unwrap(),
             observed
         );
         assert_eq!(CanisterPoolStore::state(), before);

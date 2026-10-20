@@ -4,9 +4,6 @@
 //! Does not own: IC runtime APIs, application policy, endpoint auth, or stable schema design.
 //! Boundary: shared implementation support for Canic-owned runtime crates.
 
-pub use candid;
-
-pub mod bounded_cell;
 pub mod serialize;
 pub mod structures;
 pub mod types;

@@ -13,12 +13,10 @@ mod layout;
 pub(crate) use command_custody::acquire_recorded_command;
 pub use error::PersistenceError;
 pub use ic_backup::ops::persistence::BackupLayoutGuard;
-pub(crate) use ic_backup::ops::persistence::commit_artifact_directory;
 pub use ic_backup::ops::persistence::{
     CommandLifetimeLock, CommandLifetimeLockError, CommandQuiescenceGuard,
 };
 pub use ic_backup::ops::persistence::{JournalLock, JournalLockError};
-pub(crate) use integrity::verify_durable_artifact;
 pub use integrity::{
     ArtifactIntegrityReport, BackupExecutionIntegrityReport, BackupIntegrityReport,
     resolve_backup_artifact_path,

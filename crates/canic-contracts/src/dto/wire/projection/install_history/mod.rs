@@ -6,18 +6,20 @@
 //! transport. Compatibility is checked against the canonical role contracts.
 
 use crate::dto::canister::{CanisterHistoryResponse, CanisterInspectionRequest};
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded Command wire projection for install history.
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum Command {
     InspectCanisterHistory(CanisterInspectionRequest),
 }
 
 /// Bounded Response wire projection for install history.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum Response {
     InspectCanisterHistory(CanisterHistoryResponse),
 }

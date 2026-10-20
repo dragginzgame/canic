@@ -3,13 +3,14 @@
 pub mod label;
 
 use crate::ids::{CanisterRole, ComponentSpecId, FleetServiceId};
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
 pub use label::*;
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum FleetServiceMemberPurpose {
     #[serde(rename = "authority")]
     Authority,
@@ -20,6 +21,7 @@ pub enum FleetServiceMemberPurpose {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ComponentDeploymentPurpose {
     Ordinary,
     FleetServiceMember {
@@ -29,6 +31,7 @@ pub enum ComponentDeploymentPurpose {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ComponentDeploymentSpawnGrantLimit {
     pub parent_role: CanisterRole,
@@ -37,6 +40,7 @@ pub struct ComponentDeploymentSpawnGrantLimit {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ComponentDeploymentLimits {
     pub maximum_descendants: u32,
@@ -45,6 +49,7 @@ pub struct ComponentDeploymentLimits {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ComponentProvisioningGrant {
     pub requester_component_spec: ComponentSpecId,
@@ -53,6 +58,7 @@ pub struct ComponentProvisioningGrant {
 }
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ComponentChildKind {
     #[serde(rename = "singleton")]
     Singleton,
@@ -68,6 +74,7 @@ pub enum ComponentChildKind {
 }
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetServicePlacementPolicy {
     pub maximum_members_per_root: u32,

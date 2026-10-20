@@ -17,7 +17,6 @@ use crate::{
         fleet_coordinator_client, fleet_registry_mirror, root_authority::validated_root_authority,
     },
 };
-use candid::Principal;
 use canic_contracts::dto::fleet_funding::{
     FleetFundingPolicyRotationRootActivateRequest, FleetFundingPolicyRotationRootPrepareRequest,
     FleetFundingPolicyRotationRootReceipt, FleetRootFundingAcceptanceReceipt,
@@ -30,6 +29,7 @@ use canic_core::{
     },
     shared_support::fleet_funding_policy::fleet_subnet_root_funding_policy_hash,
 };
+use ic_platform::Principal;
 
 /// Initialize the independent Root funding journal on fresh install.
 
@@ -209,12 +209,14 @@ pub fn accept(
         RootFundingAcceptanceDisposition::Fresh => {
             let accepted = IcOps::msg_cycles_accept(request.granted_cycles.to_u128());
             if accepted != request.granted_cycles.to_u128() {
-                ic_cdk::trap("Root funding acceptance did not accept the exact validated grant");
+                ic_platform::cdk::api::trap(
+                    "Root funding acceptance did not accept the exact validated grant",
+                );
             }
             Ok(
                 RootFundingOps::record_acceptance(&authority, &request, IcOps::now_nanos())
                     .unwrap_or_else(|error| {
-                        ic_cdk::trap(format!(
+                        ic_platform::cdk::api::trap(format!(
                             "Root funding receipt commitment failed after cycle acceptance: {error}"
                         ))
                     }),
