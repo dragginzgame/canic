@@ -1,5 +1,21 @@
 # Current handoff — 2026-10-20
 
+## Blob 0.39 dependency alignment — 2026-10-20
+
+The maintainer's root manifest/lock edits select published Blob/contracts 0.39.0.
+Its Memory 0.50, Storage 0.50 and Platform 0.5 requirements resolve the six prior
+adapter type errors. Targeted `canic-blob-service` Clippy passes with all targets,
+all features and warnings denied. Preserve those incoming root dependency edits.
+
+Aligned both independent Blob fixture catalogs and lockfiles with Platform 0.5;
+the embedded fixture also selects Memory/Storage 0.50. Both now select the root's
+Timers 0.29.7, eliminating Platform 0.4. Locked/offline native checks pass for both.
+Logs: `/tmp/canic-blob039-{clippy,consumer-native,embedded-native}.log`.
+Direct Wasm checking was refused by the managed-build guard; it is not Wasm
+qualification. Managed builds and installed dedicated/embedded recovery proofs
+remain outstanding. This dependency blocker is cleared, but complete release
+readiness is not yet established. No broad gate, release or publication ran.
+
 ## Aligned Host type cleanup — 2026-10-20
 
 Removed the redundant ledger-tip reconstruction after Query 0.66 aligned with

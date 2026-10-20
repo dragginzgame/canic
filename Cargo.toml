@@ -86,8 +86,8 @@ hmac = "0.13.0"
 ic-auth = { version = "0.12", default-features = false }
 ic-auth-protocol-types = "0.12"
 ic-backup = { version = "0.36", default-features = false }
-ic-blob-storage = "0.38"
-ic-blob-storage-contracts = "0.38"
+ic-blob-storage = "0.39"
+ic-blob-storage-contracts = "0.39"
 ic-build = { version = "0.62" }
 ic-host-artifacts = { version = "0.62", default-features = false }
 ic-host-fs = { version = "0.62", default-features = false }

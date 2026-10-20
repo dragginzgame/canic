@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Align the dedicated and embedded Blob fixture catalogs with Blob 0.39,
+  Platform 0.5 and Memory/Storage 0.50, removing split runtime type identities.
+
 - Adopt Shared Tooling 0.25.9 release-retry safeguards while retaining Clippy
   before expensive validation, packaging and publication work.
 
