@@ -713,7 +713,7 @@ impl IntentStoreOps {
         let mut entries = Vec::new();
 
         IntentStore::with_pending_entries(|pending| -> Result<(), IntentStoreOpsError> {
-            for entry in pending.iter() {
+            for entry in pending {
                 let record = entry.value();
                 if is_pending_entry_expired(*entry.key(), now, &record)? {
                     continue;

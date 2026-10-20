@@ -2,10 +2,10 @@
 
 ## Published Build adoption contribution
 
-This isolated contribution is based on PR #596 head `e47cd628d`, preserving its
+This isolated contribution includes PR #596 head `c378d48e1`, preserving its
 shared history and runtime Cargo facts work. Normal sibling checkouts and their
 pending changes are excluded. Own package versions remain 0.111.0; the existing
-0.112.0 changelog batch includes this adoption. No merge, version bump, release,
+0.112.0 changelog batch includes this adoption. No PR merge, version bump, release,
 publication, installed lifecycle operation or normal-checkout mutation is included.
 
 The root catalog now selects published Build 0.23, Host 0.31 and Backup 0.35.
@@ -39,11 +39,13 @@ the pre-existing unused admission-helper import warning. Nine build/grouping,
 cases pass. The explicit real-Wasm reproduction remains ignored. Grouped formatting,
 direct/inherited dependency policy and the maintained runtime graph check pass.
 
-The role-package group passes 34 cases and fails seven identically on this graph
-and the unchanged parent. Fresh fixture resolution selects both Memory 0.48 and
-0.49; the contracts closure assertion and a missing delegated-verifier fixture
-feature also fail. The initial run additionally encountered unavailable registry
-DNS; the comparison uses inherited offline mode. Do not weaken runtime admission
+The role-package group now passes 36 cases; five failures retain fresh fixture
+resolution of both Memory 0.48 and 0.49. The passive-contract check uses the actual
+package-selected Cargo tree, avoiding sibling workspace feature unification.
+The managed test role selects the verifier required by its existing configuration.
+Both corrected regressions pass on the parent and adoption graphs; the test role
+also passes actual Rust 1.91 native checking. The comparison uses inherited offline
+mode after an initial registry DNS failure. Do not weaken runtime admission
 or change storage graphs to make this adoption appear qualified. The existing
 [component handoff PR](https://github.com/dragginzgame/canic/pull/595) records the
 coordinated Memory/Storage/Blob selection prerequisite.
@@ -52,10 +54,14 @@ The parent PR's eight Binaryen controls, compiler-cache wrapper controls, actual
 three workflow binding blocks with substituted installer/compiler, Actionlint,
 strict Host Clippy and grouped formatting pass. Its cache installer binding,
 physical-path assertions and development-toolchain repair are separate from this
-adoption. Its latest hosted preflight, security and MSRV pass; workspace checks
-stop at existing Core/Contracts Clippy failures, before ordinary/managed tests.
-See the retained
-[parent handoff](https://github.com/dragginzgame/canic/blob/e47cd628d69b8cca8dbc1a4637670e74703ca300/docs/status/current.md).
+adoption. Its pinned-compiler Core/Contracts/CLI failures are repaired without
+lint suppressions. Session admission reads the existing subject index with its
+other indexes, retaining generation, replay, capacity and pre-write refusal.
+Parent all-target/all-feature Core/Contracts/CLI and Host test Clippy pass, as do
+18 session, 28 memory, 11 sharding, one pending-intent and one Candid round-trip
+case. Actual Rust 1.91 Core/Contracts checks pass natively and for Wasm. New-head
+hosted checks remain required. See the retained
+[parent handoff](https://github.com/dragginzgame/canic/blob/c378d48e1da2ac0930efde84000d017f085ba2b8/docs/status/current.md).
 
 Direct Cargo Wasm checking is refused by the existing authoritative-build guard;
 do not bypass it or claim installed acceptance. Exact-head hosted checks,
@@ -63,5 +69,6 @@ authoritative Canic builds and owning managed tests remain necessary. Consumer
 acceptance stays with [Canic #530](https://github.com/dragginzgame/canic/issues/530)
 and [Build #9](https://github.com/dragginzgame/ic-build/issues/9).
 
-Current evidence/before-images: `/tmp/ic-build-adoption-delivery.O20V1y/`.
+Current evidence/before-images: `/tmp/ic-build-patch1-fixes.LDF1Oa/`.
+Earlier adoption evidence: `/tmp/ic-build-adoption-delivery.O20V1y/`.
 Leave review and integration to the owner.

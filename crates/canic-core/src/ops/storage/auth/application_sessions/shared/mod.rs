@@ -176,13 +176,18 @@ fn commit_pair(
     if generation != LocalApplicationAuthorizationStateOps::application_authority_generation() {
         return Err(SessionError::StaleAuthority);
     }
-    let (session_index, replay_index, previous) = with_indexes(|indexes| {
+    let (session_index, replay_index, previous, retained_for_subject) = with_indexes(|indexes| {
         (
             indexes.session_by_caller.get(&canonical.caller()).copied(),
             indexes.replay_by_fingerprint.len(),
             indexes
                 .replay_by_fingerprint
                 .contains_key(&replay.proof_fingerprint),
+            indexes
+                .session_count_by_subject
+                .get(&canonical.subject())
+                .copied()
+                .unwrap_or(0),
         )
     })
     .map_err(|_| SessionError::StorageFailure)?;
@@ -198,14 +203,6 @@ fn commit_pair(
     {
         return Err(SessionError::Capacity);
     }
-    let retained_for_subject = with_indexes(|indexes| {
-        indexes
-            .session_count_by_subject
-            .get(&canonical.subject())
-            .copied()
-            .unwrap_or(0)
-    })
-    .map_err(|_| SessionError::StorageFailure)?;
     if session_index.is_none()
         && retained_for_subject >= MAX_ACTIVE_APPLICATION_SESSIONS_PER_SUBJECT
     {

@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   existing budgets and failure admission. Align Backup to its published Host 0.31
   boundary and explicitly enable the service parser required by artifact checks.
 
+- Select the configured delegated-token verifier for the managed test role.
+  Check passive contracts against their package-selected Cargo closure rather
+  than features unified across the workspace.
+
 - Bind the installed compiler-cache executable into CI and align the development
   toolchain with its prepared tools. Portable optimizer tests now check canonical
   executable identity through logical directory aliases.

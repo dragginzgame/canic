@@ -1636,6 +1636,7 @@ mod tests {
 
     #[test]
     fn component_registry_contracts_round_trip_through_candid() {
+        use ic_platform::candid::{contract::encode_one, decoder::decode_one};
         let request = RootComponentRegistryPreparationRequest {
             store_bootstrap: RootStoreBootstrapRequest {
                 operation_id: [8; 32],
@@ -1701,41 +1702,29 @@ mod tests {
             installation: None,
             ..allocation.clone()
         };
-        let request_bytes =
-            ic_platform::candid::contract::encode_one(&request).expect("encode request");
-        let response_bytes =
-            ic_platform::candid::contract::encode_one(&response).expect("encode response");
-        let allocation_bytes =
-            ic_platform::candid::contract::encode_one(&allocation).expect("encode allocation");
-        let created_bytes =
-            ic_platform::candid::contract::encode_one(&created).expect("encode created allocation");
+        let request_bytes = encode_one(&request).expect("encode request");
+        let response_bytes = encode_one(&response).expect("encode response");
+        let allocation_bytes = encode_one(&allocation).expect("encode allocation");
+        let created_bytes = encode_one(&created).expect("encode created allocation");
 
         assert_eq!(
-            ic_platform::candid::decoder::decode_one::<RootComponentRegistryPreparationRequest>(
-                &request_bytes
-            )
-            .expect("decode request"),
+            decode_one::<RootComponentRegistryPreparationRequest>(&request_bytes)
+                .expect("decode request"),
             request
         );
         assert_eq!(
-            ic_platform::candid::decoder::decode_one::<RootComponentRegistryStatusResponse>(
-                &response_bytes
-            )
-            .expect("decode response"),
+            decode_one::<RootComponentRegistryStatusResponse>(&response_bytes)
+                .expect("decode response"),
             response
         );
         assert_eq!(
-            ic_platform::candid::decoder::decode_one::<RootComponentAllocationResponse>(
-                &allocation_bytes
-            )
-            .expect("decode allocation"),
+            decode_one::<RootComponentAllocationResponse>(&allocation_bytes)
+                .expect("decode allocation"),
             allocation
         );
         assert_eq!(
-            ic_platform::candid::decoder::decode_one::<RootComponentAllocationResponse>(
-                &created_bytes
-            )
-            .expect("decode created allocation"),
+            decode_one::<RootComponentAllocationResponse>(&created_bytes)
+                .expect("decode created allocation"),
             created
         );
     }
