@@ -1,5 +1,16 @@
 # Current handoff — 2026-10-18
 
+## Preflight formatter preparation — 2026-10-20
+
+The last hosted #596 preflight failed because its formatter fixture invokes
+real cargo-sort after preparing only host tools. Preflight now explicitly
+prepares the pinned Rust tools, exports their selected directory to later
+steps and checks both the tool receipts and formatter prerequisites. Existing
+published dependency selections and the formatting contract stay unchanged.
+Pinned setup, offline tool admission, the formatter fixture and workflow lint
+pass locally. Exact-head hosted qualification remains outstanding; no full
+suite, version change or release is implied.
+
 ## Facts completion and CI preparation — 2026-10-20
 
 PR #596 retains its published Build 0.19/Host 0.27.6 graph and shared history.

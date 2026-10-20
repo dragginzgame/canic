@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Prepare and admit the pinned Cargo formatter tools before CI preflight;
+  publish their selected executable directory to subsequent steps so formatting
+  qualification works without contributor-installed Cargo subcommands.
+
 - Prepare all three locked Cargo graphs before offline CI admission; align the
   private consumer Timers locks with the existing root selection. Follow sourced
   shell helpers, retain formatter failure diagnostics and use development Rust

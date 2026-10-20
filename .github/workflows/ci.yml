@@ -37,8 +37,10 @@ jobs:
         run: |
           source tool-versions.env
           make install-host-tools
+          make install-rust-tools
           echo "$GITHUB_WORKSPACE/.tools/host/bin" >> "$GITHUB_PATH"
-          export PATH="$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
+          echo "$GITHUB_WORKSPACE/.tools/rust/common/bin" >> "$GITHUB_PATH"
+          export PATH="$GITHUB_WORKSPACE/.tools/rust/common/bin:$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
           cargo install cargo-edit --version "$CANIC_CARGO_EDIT_VERSION" --locked
           bash scripts/ci/testkit-server.sh >/dev/null
           ACTIONLINT_BIN="$(bash scripts/ci/install-pinned-ci-tool.sh actionlint)"
@@ -52,6 +54,7 @@ jobs:
           rg --pcre2-version
           "$ACTIONLINT_BIN" -version
           "$SHELLCHECK_BIN" --version
+          make rust-tools-check format-tools-check
       - name: Prepare locked dependency graphs
         shell: bash
         run: |
