@@ -34,7 +34,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   retaining ordinary native snapshot-inventory coverage.
 
 - Refresh the embedded allocation peer and its provenance for the current
-  dependency graph and Rust 1.99.1.
+  dependency graph, including Memory 0.50.1 and Host Text 0.62.1, on Rust 1.99.1.
 
 - Adapt Cargo discovery and build grouping to IC Build 0.23 command recipes,
   retaining Host-owned capture limits and successful, complete-output checks.

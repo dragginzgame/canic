@@ -1,5 +1,18 @@
 # Current handoff — 2026-10-20
 
+## Embedded allocation peer refresh — 2026-10-20
+
+Refreshed the checked-in peer Wasm and `scripts/dev/managed-root-fixture.json`
+through the owning locked/offline refresh example after dependency changes made
+its executable stale. The refresh reconfirmed identical bytes after publication;
+the separate locked/offline `verify_embedded_root` example now passes.
+Logs: `/tmp/canic-peer-refresh.log` and `/tmp/canic-peer-verify.log`.
+
+No runtime source or dependency selections changed. Changelogs reflect the new
+fixture evidence. This clears the reported test preflight failure; subsequent
+ordinary and PocketIC suites were not run, so complete release readiness remains
+unverified. No commit, release, push or publication ran.
+
 ## Blob 0.39 dependency alignment — 2026-10-20
 
 The maintainer's root manifest/lock edits select published Blob/contracts 0.39.0.
