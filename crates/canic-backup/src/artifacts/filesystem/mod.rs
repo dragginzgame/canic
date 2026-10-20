@@ -3,10 +3,7 @@
 //! Responsibility: hash and stage backup artifacts through retained no-follow descriptors.
 //! Does not own: traversal mechanics, checksum framing, retry or restore orchestration.
 //! Boundary: callers own stable source content and the private staging namespace.
-use super::{
-    ArtifactChecksumError, ArtifactChecksumRecord, ArtifactError, artifact_error,
-    directory_artifact_error,
-};
+use super::{ArtifactChecksumError, ArtifactChecksumRecord, ArtifactError, artifact_error};
 use ic_host_fs::read::{OpenEntryError, OpenedEntry, open_directory_no_follow, open_entry_beneath};
 use rustix::fs::FileType;
 use std::{
@@ -59,7 +56,7 @@ pub(super) fn relative(
                     .collect::<Result<Vec<_>, _>>()?,
             )
             .map(|digest| ArtifactChecksumRecord::from_digest(*digest.as_bytes()))
-            .map_err(|error| artifact_error(directory_artifact_error(error)))
+            .map_err(|error| artifact_error(ArtifactError::from(error)))
         }
     }
 }

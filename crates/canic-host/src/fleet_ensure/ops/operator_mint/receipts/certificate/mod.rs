@@ -30,10 +30,6 @@ pub(super) fn verify(
             bytes: limits.certificate_bytes,
         },
     )
-    .map(|tip| LedgerTip {
-        index: tip.index,
-        hash: tip.hash,
-    })
     .map_err(|error| match error {
         CertificateVerificationError::BudgetExceeded => Error::BudgetExceeded,
         CertificateVerificationError::WitnessMismatch

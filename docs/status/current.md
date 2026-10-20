@@ -1,5 +1,21 @@
 # Current handoff — 2026-10-20
 
+## Aligned Host type cleanup — 2026-10-20
+
+Removed the redundant ledger-tip reconstruction after Query 0.66 aligned with
+Host 0.62. Backup 0.36 now shares that Host graph too: use its canonical directory
+error conversion and delete Canic's duplicate helper, preserving typed error tests.
+The incoming Cargo.lock selection of Memory 0.50.1 is preserved byte-for-byte.
+
+Pass: targeted Host/Backup Clippy with all targets/features and warnings denied,
+10 artifact tests and 15 authenticated-ledger receipt tests, formatting and diff
+whitespace checks. Logs: `/tmp/canic-aligned-{host-clippy,backup-tests,receipts-tests}.log`.
+Registry lookup still reports Blob 0.38.0, whose published manifest requires
+Memory 0.49 / Storage 0.5 / Platform 0.4. The incompatible public runtime/principal
+types remain the release blocker tracked in [Blob #93](https://github.com/dragginzgame/ic-blob-storage/issues/93).
+Open 0.112 changelogs reflect direct shared-type use. The complete batch remains
+blocked; no full suite, release, push or publication ran in this cleanup.
+
 ## Shared Tooling 0.25.9 adoption — 2026-10-20
 
 Refreshed through the canonical exporter from published main `85aded191d85ac4a8c0e5deab207f6be18895862`

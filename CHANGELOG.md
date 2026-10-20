@@ -14,11 +14,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Reconcile root and Blob consumer lockfiles with the selected dependencies so
   locked release preparation uses the declared graphs.
 
-- Declare Platform's explicit Candid service-generation feature and preserve
-  authenticated ledger-tip evidence across Host dependency versions.
+- Declare Platform's explicit Candid service-generation feature.
 
-- Preserve backup artifact error categories across independently selected Host
-  and Backup dependency versions.
+- Use the aligned Query/Backup/Host evidence and artifact-error types directly,
+  removing redundant conversions while preserving error categories.
 
 - Select Metrics 0.15 with the updated Timers and Wire dependency resolutions.
 
