@@ -7,7 +7,7 @@
 use canic_contracts::ids::{
     FleetAdmissionPolicy, FleetAdmissionSelector, FleetCoordinatorBinding, SubnetId,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 /// Current product schema for the sole Coordinator admission authority.
 

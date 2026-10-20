@@ -61,20 +61,49 @@ enum Command {
     Status,
 }
 
+/// Operate one local Fleet foreground session.
+#[derive(clap::Parser)]
+struct Arguments {
+    #[command(subcommand)]
+    mode: Mode,
+}
+
+#[derive(clap::Subcommand)]
+enum Mode {
+    Reset {
+        workspace: PathBuf,
+        name: String,
+        session: String,
+    },
+    Run {
+        workspace: PathBuf,
+        config: PathBuf,
+        icp: String,
+    },
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
-    let args = std::env::args().skip(1).collect::<Vec<_>>();
-    match args.as_slice() {
-        [mode, root, config, icp] if mode == "run" => {
-            let root = Path::new(root).canonicalize()?;
+    match <Arguments as clap::Parser>::parse().mode {
+        Mode::Run {
+            workspace,
+            config,
+            icp,
+        } => {
+            let root = workspace.canonicalize()?;
             let config: LocalFleetConfig = serde_json::from_slice(
-                &ic_host_fs::read::read_file_no_follow(&root.join(config), 65_536).map_err(std::io::Error::from)?)?;
-            run(&root, &config, icp)
+                &ic_host_fs::read::read_file_no_follow(&root.join(config), 65_536)
+                    .map_err(std::io::Error::from)?,
+            )?;
+            run(&root, &config, &icp)
         }
-        [mode, root, name, session] if mode == "reset" => {
-            LocalFleetSession::reset(Path::new(root), name, session)?;
+        Mode::Reset {
+            workspace,
+            name,
+            session,
+        } => {
+            LocalFleetSession::reset(&workspace, &name, &session)?;
             emit(&serde_json::json!({"reset": "complete", "session": session}))
         }
-        _ => Err("usage: local_fleet run <workspace> <config.json> <icp-executable> | reset <workspace> <name> <session>".into()),
     }
 }
 

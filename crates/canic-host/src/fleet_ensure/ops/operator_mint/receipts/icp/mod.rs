@@ -21,9 +21,9 @@ use crate::fleet_ensure::{
     },
 };
 use ic_platform::{
-    Principal,
     agent::{Agent, AgentError, RequestId, SignedUpdate},
     certification::LookupResult,
+    principal::ExternalPrincipal as Principal,
 };
 use prost::Message;
 use serde_bytes::ByteBuf;

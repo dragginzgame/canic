@@ -26,7 +26,7 @@ use canic_contracts::{
     },
     protocol,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::path::Path;
 
 /// Query the exact allocation behind a current Workload; never guess a parent for other assets.

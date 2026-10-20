@@ -16,7 +16,7 @@ use canic_host::fleet_ensure::ops::release::{
     intents::{ReleaseIntentsError, entry_key},
     receipts::{ReleaseReceiptsError, decode_response},
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use ic_testkit::pic::PocketIc;
 
 /// Read the complete small fixture, proving replay, controller denial and unchanged balance.

@@ -51,7 +51,7 @@ use cases::GovernedTestCase;
     feature = "pocketic-fixtures",
     any(not(test), feature = "governed-pocketic-tests")
 ))]
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
 use std::{
     collections::BTreeSet,

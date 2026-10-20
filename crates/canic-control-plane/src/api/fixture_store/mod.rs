@@ -8,7 +8,7 @@ use canic_contracts::dto::{
         FixtureSourceStatus, FixtureStoreError,
     },
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 /// Typed Store API for immutable fixture publication and installation-bound delivery.
 

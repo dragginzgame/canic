@@ -1210,7 +1210,7 @@ impl ReceiptBackedIntentStore {
             state
                 .as_mut()
                 .expect("eligibility map is installed")
-                .clear()
+                .clear();
         });
         PLACEMENT_ACKNOWLEDGEMENT_INDEX.with_borrow_mut(StableBtreeMap::clear);
     }

@@ -38,7 +38,7 @@ use canic_contracts::{
 };
 use canic_control_plane::installation::FleetCoordinatorInitArgs;
 use canic_core::shared_support::fleet_admission_policy::bind_initial_fleet_admission_policy;
-use ic_platform::{Principal, candid::contract::encode_one};
+use ic_platform::{candid::contract::encode_one, principal::ExternalPrincipal as Principal};
 use sha2_host::{Digest, Sha256};
 use std::{
     collections::BTreeMap,

@@ -7,7 +7,7 @@ pub(in crate::fleet_ensure) fn funding_binding(
     spec: &ComponentSpec,
 ) -> crate::fleet_ensure::view::startup_funding::StartupChildFundingBinding {
     use canic_contracts::ids::*;
-    use ic_platform::Principal;
+    use ic_platform::principal::ExternalPrincipal as Principal;
     let principal = |byte| Principal::from_slice(&[byte]);
     crate::fleet_ensure::view::startup_funding::StartupChildFundingBinding {
         release_set: FleetSubnetRootReleaseSet {

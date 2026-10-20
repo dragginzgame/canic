@@ -62,7 +62,7 @@ fn query_posts_anonymous_cbor_and_decodes_a_chunked_reply() {
         stream.write_all(reply).unwrap();
         stream.write_all(b"\r\n0\r\n\r\n").unwrap();
     });
-    let canister = ic_platform::Principal::from_slice(&[1, 2, 3]);
+    let canister = ic_platform::principal::ExternalPrincipal::from_slice(&[1, 2, 3]);
     let arg = [0x44, 0x49, 0x44, 0x4c];
     assert_eq!(
         local_query_with_endpoint(&canister.to_text(), "canic_public_status", &arg, endpoint)
@@ -90,7 +90,11 @@ fn query_posts_anonymous_cbor_and_decodes_a_chunked_reply() {
     let content = field(&envelope, "content");
     assert_eq!(
         field(content, "sender"),
-        &ciborium::value::Value::Bytes(ic_platform::Principal::anonymous().as_slice().to_vec())
+        &ciborium::value::Value::Bytes(
+            ic_platform::principal::ExternalPrincipal::anonymous()
+                .as_slice()
+                .to_vec()
+        )
     );
     assert_eq!(
         field(content, "canister_id"),
@@ -119,7 +123,7 @@ fn query_preserves_replica_rejection_without_another_request() {
         stream.write_all(reply).unwrap();
     });
     let result = local_query_with_endpoint(
-        &ic_platform::Principal::from_slice(&[1, 2, 3]).to_text(),
+        &ic_platform::principal::ExternalPrincipal::from_slice(&[1, 2, 3]).to_text(),
         "canic_public_status",
         b"DIDL",
         endpoint,
@@ -145,7 +149,7 @@ fn query_http_refusal_does_not_retry_or_follow_redirects() {
     ] {
         let (endpoint, server) = serve(move |stream| stream.write_all(response).unwrap());
         let result = local_query_with_endpoint(
-            &ic_platform::Principal::from_slice(&[1, 2, 3]).to_text(),
+            &ic_platform::principal::ExternalPrincipal::from_slice(&[1, 2, 3]).to_text(),
             "canic_public_status",
             b"DIDL",
             endpoint,
@@ -170,7 +174,7 @@ fn malformed_query_reply_preserves_the_agent_codec_failure() {
             .unwrap();
     });
     let result = local_query_with_endpoint(
-        &ic_platform::Principal::from_slice(&[1, 2, 3]).to_text(),
+        &ic_platform::principal::ExternalPrincipal::from_slice(&[1, 2, 3]).to_text(),
         "canic_public_status",
         b"DIDL",
         endpoint,
@@ -191,7 +195,7 @@ fn query_deadline_retains_a_typed_timeout() {
         let _ = wait.recv_timeout(Duration::from_secs(5));
     });
     let result = local_query_with_timeout(
-        &ic_platform::Principal::from_slice(&[1, 2, 3]).to_text(),
+        &ic_platform::principal::ExternalPrincipal::from_slice(&[1, 2, 3]).to_text(),
         "canic_public_status",
         b"DIDL",
         &endpoint,

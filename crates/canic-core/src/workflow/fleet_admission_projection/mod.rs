@@ -92,7 +92,9 @@ impl FleetAdmissionProjectionWorkflow {
     }
 
     /// Read membership synchronously without mutation or remote lookup.
-    pub(crate) fn contains(principal: ic_platform::Principal) -> Result<bool, InternalError> {
+    pub(crate) fn contains(
+        principal: ic_platform::principal::ExternalPrincipal,
+    ) -> Result<bool, InternalError> {
         let expected = exact_managed_target()?;
         let state = FleetAdmissionProjectionOps::validated(&expected)?;
         if state.phase != FleetAdmissionProjectionPhaseModel::Open {
@@ -241,7 +243,9 @@ mod tests {
             crate::test::support::managed_component_binding(),
         );
         projection.principals = (0..=MAX_FLEET_ADMISSION_PROJECTION_PAGE)
-            .map(|index| ic_platform::Principal::from_slice(&index.to_be_bytes()))
+            .map(|index| {
+                ic_platform::principal::ExternalPrincipal::from_slice(&index.to_be_bytes())
+            })
             .collect();
         let state = FleetAdmissionProjectionState {
             schema_version: 1,

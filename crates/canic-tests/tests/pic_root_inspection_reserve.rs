@@ -12,11 +12,11 @@ use canic_contracts::dto::wire::projection::{
 };
 use canic_testing_internal::pic::{CanicWasmBuildProfile, install_audit_root_probe};
 use ic_platform::{
-    Principal,
     candid::{
         contract::{Nat, encode_one},
         decoder::decode_one,
     },
+    principal::ExternalPrincipal as Principal,
 };
 use ic_testkit::pic::{ErrorCode, PocketIc, RejectResponse};
 

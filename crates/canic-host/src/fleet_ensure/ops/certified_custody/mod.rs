@@ -10,9 +10,9 @@ use crate::fleet_ensure::view::certified_custody::CertifiedCanisterCustodyView;
 use canic_contracts::ids::SubnetId;
 use canic_core::cdk::utils::hash::hex_bytes;
 use ic_platform::{
-    Principal,
     agent::{Agent, AgentError},
     certification::{Certificate, Label, LookupResult},
+    principal::ExternalPrincipal as Principal,
 };
 use std::{collections::BTreeSet, time::Duration};
 use thiserror::Error;

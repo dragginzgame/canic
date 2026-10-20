@@ -19,8 +19,8 @@ use canic_contracts::dto::{
     },
 };
 use ic_platform::{
-    Principal,
     candid::{contract::encode_one, decoder::decode_one},
+    principal::ExternalPrincipal as Principal,
 };
 use ic_testkit::pic::PocketIc;
 

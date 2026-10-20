@@ -13,7 +13,7 @@ use canic_contracts::dto::{
 };
 use canic_core::cdk::utils::hash::hex_bytes as encode_hex;
 use canic_host::icp::{IcpJsonResponseError, decode_json_result_response};
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 pub(super) fn parse_issuer_principal(issuer: &str) -> Result<String, AuthCommandError> {
     Principal::from_text(issuer)

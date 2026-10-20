@@ -15,7 +15,7 @@ pub const MAX_PROVISIONING_REJECTION_BYTES: usize = 1024;
 #[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ProvisioningDependencyFailure {
-    pub target: ic_platform::Principal,
+    pub target: ic_platform::principal::ExternalPrincipal,
     pub method: String,
     pub step: String,
     #[serde(deserialize_with = "crate::serialization::required_option")]

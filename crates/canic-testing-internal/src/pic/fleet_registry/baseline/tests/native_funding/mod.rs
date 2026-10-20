@@ -259,7 +259,7 @@ pub(super) fn assert_issued_native_funding(input: &AutonomousFundingJourney<'_>)
     let requests: u64 = ic_testkit::pic::query_candid_args(
         input.pic,
         input.cycles_ledger,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "request_count",
         (),
         canic::testing::CANDID_REPLY_LIMITS,
@@ -278,7 +278,7 @@ pub(super) fn assert_issued_native_funding(input: &AutonomousFundingJourney<'_>)
     let replay_requests: u64 = ic_testkit::pic::query_candid_args(
         input.pic,
         input.cycles_ledger,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "request_count",
         (),
         canic::testing::CANDID_REPLY_LIMITS,
@@ -435,7 +435,7 @@ fn withdrawals(input: &AutonomousFundingJourney<'_>) -> u64 {
     ic_testkit::pic::query_candid_args(
         input.pic,
         input.cycles_ledger,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "withdrawal_count",
         (),
         canic::testing::CANDID_REPLY_LIMITS,

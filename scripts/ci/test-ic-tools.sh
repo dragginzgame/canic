@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared companions: scripts/ci/test-tool-evidence.sh scripts/ci/test-tool-store.sh
+# Shared companions: scripts/ci/test-tool-evidence.sh scripts/ci/test-tool-store.sh scripts/ci/prepare-script-fixture.sh
 set -euo pipefail
 
 ROOT="$0"
@@ -128,11 +128,8 @@ IC_TOOLS_TEST_CHANGE_STAGE=1 expect_failure install
 grep -F 'IC tool pins changed before staging' "$fixture/refusal.log" > /dev/null
 [[ ! -e "$fixture/downloads" && ! -e "$fixture/executions" && ! -e "$consumer/.tools/ic" ]] || exit 1
 snapshot="$fixture/snapshot"
-mkdir -p "$snapshot/scripts/dev" "$snapshot/scripts/ci" "$snapshot/ci"
-cp "$ROOT/scripts/dev/"{install-ic-tools.sh,tool-store.sh,host-platform.sh} "$snapshot/scripts/dev/"
-cp "$ROOT/scripts/ci/verify-file-checksum.sh" "$ROOT/scripts/ci/verify-evidence-checksums.sh" \
-    "$ROOT/scripts/ci/tool-catalog-records.pl" "$ROOT/scripts/ci/ic-tool-pins.awk" \
-    "$ROOT/scripts/ci/StableVersion.pm" "$snapshot/scripts/ci/"
+mkdir "$snapshot"
+bash "$ROOT/scripts/ci/prepare-script-fixture.sh" "$ROOT" "$snapshot" scripts/dev/install-ic-tools.sh
 cp "$pins" "$snapshot/ci/ic-tools.tsv"
 for host in Linux:x86_64 Darwin:x86_64 Darwin:arm64; do
     export IC_TOOLS_TEST_OS="${host%:*}" IC_TOOLS_TEST_ARCH="${host#*:}"

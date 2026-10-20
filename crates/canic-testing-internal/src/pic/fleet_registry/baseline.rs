@@ -11,7 +11,7 @@ use super::build::{
 use super::build::{
     build_pic, build_test_root_wasm, build_test_wasm_store_wasm, root_canister_config_path,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use ic_testkit::pic::PocketIc;
 use std::path::Path;
 
@@ -534,7 +534,7 @@ mod tests {
         ic_testkit::pic::query_candid_args(
             pic,
             root,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             match &request {
                 RootStatusRequestFragment::Operation(_) => {
                     canic::protocol::CANIC_ROOT_OPERATION_STATUS
@@ -764,7 +764,7 @@ mod tests {
             ic_testkit::pic::update_candid_args(
                 pic,
                 metadata.root,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 canic::protocol::CANIC_ROOT_COMMAND,
                 (relay_request(),),
                 canic::testing::CANDID_REPLY_LIMITS,
@@ -1037,7 +1037,7 @@ mod tests {
         >(
             pic,
             canister_id,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             canic::protocol::CANIC_PUBLIC_STATUS,
             (RoleOverviewStatusRequestFragment::Overview,),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -1067,7 +1067,7 @@ mod tests {
         ic_testkit::pic::update_candid_args(
             pic,
             coordinator,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             canic::protocol::CANIC_COORDINATOR_COMMAND,
             (command,),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -1084,7 +1084,7 @@ mod tests {
         ic_testkit::pic::query_candid_args(
             pic,
             coordinator,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             R::METHOD,
             (request,),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -3343,7 +3343,7 @@ exec icp "$@"
         let request_count: u64 = ic_testkit::pic::query_candid_args(
             &(pic),
             cycles_ledger,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "request_count",
             (),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -3500,7 +3500,7 @@ exec icp "$@"
             ic_testkit::pic::query_candid_args::<(Result<String, Error>,), _>(
                 pic,
                 hub,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 "test_recovery_generation",
                 (),
                 canic::testing::CANDID_REPLY_LIMITS
@@ -3512,7 +3512,7 @@ exec icp "$@"
             ic_testkit::pic::update_candid_args::<(Result<Principal, Error>,), _>(
                 pic,
                 hub,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 "create_account",
                 (Principal::anonymous(),),
                 canic::testing::CANDID_REPLY_LIMITS
@@ -3722,7 +3722,7 @@ exec icp "$@"
             let assigned: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
                 pic,
                 hub,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 "create_account",
                 (user,),
                 canic::testing::CANDID_REPLY_LIMITS,
@@ -3746,7 +3746,7 @@ exec icp "$@"
         let interrupted: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
             pic,
             hub,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "create_account",
             (user,),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -3765,7 +3765,7 @@ exec icp "$@"
             let result: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
                 pic,
                 hub,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 "create_account",
                 (user,),
                 canic::testing::CANDID_REPLY_LIMITS,
@@ -3836,7 +3836,7 @@ exec icp "$@"
         let replay: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
             pic,
             hub,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "create_account",
             (user,),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -4280,7 +4280,7 @@ exec icp "$@"
         let plan: Result<String, Error> = ic_testkit::pic::query_candid_args(
             pic,
             hub,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "plan_create_account",
             (user,),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -4294,7 +4294,7 @@ exec icp "$@"
         let result: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
             pic,
             hub,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "create_account",
             (user,),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -4814,7 +4814,7 @@ exec icp "$@"
             let assigned: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
                 &(pic),
                 *hub,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 "create_account",
                 (user,),
                 canic::testing::CANDID_REPLY_LIMITS,
@@ -5716,7 +5716,7 @@ exec icp "$@"
         let assigned: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
             &(pic),
             installed_component_binding(&hub).canister_id,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "create_account",
             (Principal::from_slice(&[0xe3; 29]),),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -9064,7 +9064,7 @@ esac
             let request_count: u64 = ic_testkit::pic::query_candid_args(
                 &(pic),
                 cycles_ledger,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 "request_count",
                 (),
                 canic::testing::CANDID_REPLY_LIMITS,
@@ -9167,7 +9167,7 @@ esac
                 let before: u64 = ic_testkit::pic::query_candid_args(
                     &(pic),
                     cycles_ledger,
-                    ic_platform::Principal::anonymous(),
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
                     "withdrawal_count",
                     (),
                     canic::testing::CANDID_REPLY_LIMITS,
@@ -9195,7 +9195,7 @@ esac
                 let withdrawals: u64 = ic_testkit::pic::query_candid_args(
                     &(pic),
                     cycles_ledger,
-                    ic_platform::Principal::anonymous(),
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
                     "withdrawal_count",
                     (),
                     canic::testing::CANDID_REPLY_LIMITS,
@@ -9291,7 +9291,7 @@ esac
             let withdrawals: u64 = ic_testkit::pic::query_candid_args(
                 &(pic),
                 cycles_ledger,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 "withdrawal_count",
                 (),
                 canic::testing::CANDID_REPLY_LIMITS,
@@ -9555,7 +9555,7 @@ esac
         let replay_withdrawals: u64 = ic_testkit::pic::query_candid_args(
             &(pic),
             cycles_ledger,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "withdrawal_count",
             (),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -10016,7 +10016,7 @@ esac
             ic_testkit::pic::query_candid_args::<(Result<Vec<ReinstallUserRow>, Error>,), _>(
                 input.pic,
                 id,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 "test_user_rows",
                 (),
                 canic::testing::CANDID_REPLY_LIMITS,
@@ -10037,7 +10037,7 @@ esac
                 let result: Result<(), Error> = ic_testkit::pic::update_candid_args(
                     input.pic,
                     id,
-                    ic_platform::Principal::anonymous(),
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
                     "test_set_user_row",
                     (key, value),
                     canic::testing::CANDID_REPLY_LIMITS,
@@ -10412,7 +10412,7 @@ exec '{}' "$@"
         let unknown: Result<JourneySubnetPayload, String> = ic_testkit::pic::query_candid_args(
             pic,
             registry,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "get_subnet_for_canister",
             (JourneySubnetRequest {
                 principal: Principal::from_slice(&[0x99; 29]),
@@ -10900,7 +10900,7 @@ exec '{}' "$@"
         let _: () = ic_testkit::pic::update_candid_args(
             input.pic,
             input.cycles_ledger,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "set_transfer_fee_override",
             (Some(Nat::from(MAINNET_REFILL_LEDGER_FEE * 2)),),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -10926,7 +10926,7 @@ exec '{}' "$@"
         let transfers: u64 = ic_testkit::pic::query_candid_args(
             input.pic,
             input.cycles_ledger,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "transfer_count",
             (),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -10945,7 +10945,7 @@ exec '{}' "$@"
         let _: () = ic_testkit::pic::update_candid_args(
             input.pic,
             input.cycles_ledger,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "set_transfer_fee_override",
             (None::<Nat>,),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -10975,7 +10975,7 @@ exec '{}' "$@"
         let transfers: u64 = ic_testkit::pic::query_candid_args(
             input.pic,
             input.cycles_ledger,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "transfer_count",
             (),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -11105,7 +11105,7 @@ exec '{}' "$@"
         let requests: u64 = ic_testkit::pic::query_candid_args(
             input.pic,
             input.cycles_ledger,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "request_count",
             (),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -11136,7 +11136,7 @@ exec '{}' "$@"
         let transfers: u64 = ic_testkit::pic::query_candid_args(
             input.pic,
             input.cycles_ledger,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "transfer_count",
             (),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -11146,7 +11146,7 @@ exec '{}' "$@"
         let replay_requests: u64 = ic_testkit::pic::query_candid_args(
             input.pic,
             input.cycles_ledger,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "request_count",
             (),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -11243,7 +11243,7 @@ exec '{}' "$@"
         let transfers: u64 = ic_testkit::pic::query_candid_args(
             input.pic,
             input.cycles_ledger,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "transfer_count",
             (),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -11299,7 +11299,7 @@ exec '{}' "$@"
             let withdrawals: u64 = ic_testkit::pic::query_candid_args(
                 input.pic,
                 input.cycles_ledger,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 "withdrawal_count",
                 (),
                 canic::testing::CANDID_REPLY_LIMITS,
@@ -11309,7 +11309,7 @@ exec '{}' "$@"
             let transfers: u64 = ic_testkit::pic::query_candid_args(
                 input.pic,
                 input.cycles_ledger,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 "transfer_count",
                 (),
                 canic::testing::CANDID_REPLY_LIMITS,
@@ -11319,7 +11319,7 @@ exec '{}' "$@"
             let creates: u64 = ic_testkit::pic::query_candid_args(
                 input.pic,
                 input.cycles_ledger,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 "request_count",
                 (),
                 canic::testing::CANDID_REPLY_LIMITS,
@@ -12295,7 +12295,7 @@ cycles = "80T"
                     ic_testkit::pic::query_candid_args(
                         pic,
                         step.target,
-                        ic_platform::Principal::anonymous(),
+                        ic_platform::principal::ExternalPrincipal::anonymous(),
                         canic::protocol::CANIC_ROOT_FIXTURE_STATUS,
                         (source.content_id,),
                         canic::testing::CANDID_REPLY_LIMITS,
@@ -13097,7 +13097,7 @@ cycles = "80T"
         let fee: Nat = ic_testkit::pic::query_candid_args(
             &(pic),
             ledger,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "icrc1_fee",
             (),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -13119,7 +13119,7 @@ cycles = "80T"
             ic_testkit::pic::update_candid_args(
                 &(pic),
                 ledger,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 "icrc1_transfer",
                 (&request,),
                 canic::testing::CANDID_REPLY_LIMITS,
@@ -13131,7 +13131,7 @@ cycles = "80T"
             ic_testkit::pic::update_candid_args(
                 &(pic),
                 ledger,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 "icrc1_transfer",
                 (&request,),
                 canic::testing::CANDID_REPLY_LIMITS,
@@ -13157,7 +13157,7 @@ cycles = "80T"
             ic_testkit::pic::update_candid_args(
                 &(pic),
                 cmc,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 "notify_top_up",
                 (&notify,),
                 canic::testing::CANDID_REPLY_LIMITS,
@@ -13173,7 +13173,7 @@ cycles = "80T"
             ic_testkit::pic::update_candid_args(
                 &(pic),
                 cmc,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 "notify_top_up",
                 (&notify,),
                 canic::testing::CANDID_REPLY_LIMITS,
@@ -13689,7 +13689,7 @@ cycles = "80T"
             ic_testkit::pic::update_candid_args(
                 pic,
                 ledger,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 "icrc1_transfer",
                 (QualificationIcrc1TransferArg {
                     from_subaccount: None,
@@ -13714,7 +13714,7 @@ cycles = "80T"
         ic_testkit::pic::query_candid_args(
             pic,
             ledger,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "icrc1_balance_of",
             (QualificationIcrc1Account {
                 owner,
@@ -14166,7 +14166,7 @@ cycles = "80T"
         let request_count: u64 = ic_testkit::pic::query_candid_args(
             &(fixture.pic),
             fixture.cycles_ledger,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "request_count",
             (),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -14177,7 +14177,7 @@ cycles = "80T"
         let requested_amounts: Vec<Nat> = ic_testkit::pic::query_candid_args(
             &(fixture.pic),
             fixture.cycles_ledger,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "requested_amounts",
             (),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -14207,7 +14207,7 @@ cycles = "80T"
         let replay_request_count: u64 = ic_testkit::pic::query_candid_args(
             &(fixture.pic),
             fixture.cycles_ledger,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "request_count",
             (),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -15715,7 +15715,7 @@ cycles = "80T"
         let transfers: u64 = ic_testkit::pic::query_candid_args(
             fixture.pic,
             cycles_ledger,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "transfer_count",
             (),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -15808,7 +15808,7 @@ cycles = "80T"
         let (): () = ic_testkit::pic::update_candid_args(
             pic,
             ledger,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "lose_next_transfer_reply",
             (),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -15846,7 +15846,7 @@ cycles = "80T"
         let transfers: u64 = ic_testkit::pic::query_candid_args(
             pic,
             ledger,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "transfer_count",
             (),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -16001,7 +16001,7 @@ cycles = "80T"
         let transfers: u64 = ic_testkit::pic::query_candid_args(
             pic,
             ledger,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "transfer_count",
             (),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -16076,7 +16076,7 @@ cycles = "80T"
         let (): () = ic_testkit::pic::update_candid_args(
             pic,
             ledger,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "lose_next_transfer_reply",
             (),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -16208,6 +16208,7 @@ cycles = "80T"
         root_wasm: Vec<u8>,
     ) -> ConfiguredRootAuthority {
         let config = AppConfigSnapshot::load(&spec.build_config_path).expect("Root profile config");
+        let topology = config.component_topology();
         let mut modules = BTreeMap::new();
         for role in spec.release_roles {
             let path = crate::pic::artifacts::retained_artifact_path(artifacts, role);
@@ -16216,7 +16217,7 @@ cycles = "80T"
                 .expect("decode retained Component artifact");
             modules.insert(CanisterRole::owned((*role).to_string()), raw);
         }
-        for component in &config.component_topology().component_specs {
+        for component in &topology.component_specs {
             for role in std::iter::once(&component.component_role)
                 .chain(component.children.iter().map(|child| &child.role))
             {
@@ -16287,12 +16288,7 @@ cycles = "80T"
             version,
             synchronization,
         );
-        for (index, component) in config
-            .component_topology()
-            .component_specs
-            .iter()
-            .enumerate()
-        {
+        for (index, component) in topology.component_specs.iter().enumerate() {
             let mut operation_id = [0xa3; 32];
             operation_id[..8].copy_from_slice(&u64::try_from(index).unwrap().to_be_bytes());
             provision_component_request(
@@ -16541,7 +16537,7 @@ cycles = "80T"
             ic_testkit::pic::query_candid_args(
                 pic,
                 fixture.root,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 canic::protocol::CANIC_OBSERVABILITY,
                 (CanisterObservabilityRequest::MemoryAllocations,),
                 canic::testing::CANDID_REPLY_LIMITS,
@@ -16597,7 +16593,7 @@ cycles = "80T"
                 ic_testkit::pic::update_candid_args(
                     pic,
                     fixture.root,
-                    ic_platform::Principal::anonymous(),
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
                     canic::protocol::CANIC_ROOT_COMMAND,
                     (relay_request(),),
                     canic::testing::CANDID_REPLY_LIMITS,

@@ -35,7 +35,7 @@ use crate::{
     },
 };
 use canic_contracts::ids::{ComponentGroupPlacementId, ComponentInstanceId, FleetServiceId};
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::{
     cmp::Ordering,
     collections::{BTreeMap, BTreeSet},

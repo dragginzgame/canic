@@ -10,8 +10,8 @@ use canic_testing_internal::pic::{
     standalone_canister_wasm,
 };
 use ic_platform::{
-    Principal,
     candid::contract::{CandidType, encode_args, encode_one},
+    principal::ExternalPrincipal as Principal,
 };
 use ic_testkit::pic::{
     CachedPocketIcBaseline, CachedPocketIcBaselinePool, CachedPocketIcBaselinePoolGuard,
@@ -36,7 +36,7 @@ fn counts(fixture: &CachedPocketIcBaseline<Principal>) -> PlainReply {
     ic_testkit::pic::query_candid_args(
         fixture.pocket_ic(),
         *fixture.metadata(),
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "dispatch_counts",
         (),
         REPLY_LIMITS,
@@ -50,7 +50,7 @@ fn denied_count(fixture: &CachedPocketIcBaseline<Principal>, method: &str) -> u6
         ic_testkit::pic::query_candid_args(
             fixture.pocket_ic(),
             *fixture.metadata(),
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "access_counts",
             (),
             REPLY_LIMITS,
@@ -121,7 +121,7 @@ fn guarded_plain_reply_and_result_reply_keep_denial_metrics_and_short_circuiting
     let accepted: Result<PlainReply, Error> = ic_testkit::pic::update_candid_args(
         fixture.pocket_ic(),
         *fixture.metadata(),
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "result_commit",
         (true,),
         REPLY_LIMITS,
@@ -139,7 +139,7 @@ fn guarded_plain_reply_and_result_reply_keep_denial_metrics_and_short_circuiting
     let denied: Result<PlainReply, Error> = ic_testkit::pic::update_candid_args(
         fixture.pocket_ic(),
         *fixture.metadata(),
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "result_commit",
         (false,),
         REPLY_LIMITS,
@@ -182,7 +182,7 @@ fn bounded_queries_and_inter_canister_updates_refuse_before_dispatch() {
     let accepted: Result<bool, Error> = ic_testkit::pic::update_candid_args(
         fixture.pocket_ic(),
         relay,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "relay_bounded",
         (
             *fixture.metadata(),
@@ -203,7 +203,7 @@ fn bounded_queries_and_inter_canister_updates_refuse_before_dispatch() {
         let accepted: Result<bool, Error> = ic_testkit::pic::update_candid_args(
             fixture.pocket_ic(),
             relay,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "relay_bounded",
             (*fixture.metadata(), method, bytes),
             REPLY_LIMITS,
@@ -238,7 +238,7 @@ fn bounded_queries_and_inter_canister_updates_refuse_before_dispatch() {
         let refused: Result<bool, Error> = ic_testkit::pic::update_candid_args(
             fixture.pocket_ic(),
             relay,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "relay_bounded",
             (*fixture.metadata(), method, bytes),
             REPLY_LIMITS,
@@ -421,7 +421,7 @@ fn raw_update_adapter_rejects_oversized_inter_canister_payload_before_decode() {
     let accepted: Result<usize, Error> = ic_testkit::pic::update_candid_args(
         target.pocket_ic(),
         relay,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "relay_explicit_echo",
         (*target.metadata(), exact_payload_len),
         REPLY_LIMITS,
@@ -436,7 +436,7 @@ fn raw_update_adapter_rejects_oversized_inter_canister_payload_before_decode() {
     let rejected: Result<usize, Error> = ic_testkit::pic::update_candid_args(
         target.pocket_ic(),
         relay,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "relay_explicit_echo",
         (*target.metadata(), exact_payload_len + 1),
         REPLY_LIMITS,
@@ -464,7 +464,7 @@ fn assert_echo_ok(fixture: &CachedPocketIcBaseline<Principal>, method: &str, len
     let response: Result<usize, Error> = ic_testkit::pic::update_candid_args(
         fixture.pocket_ic(),
         *fixture.metadata(),
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         method,
         (payload,),
         REPLY_LIMITS,
@@ -481,7 +481,7 @@ fn assert_rejected(fixture: &CachedPocketIcBaseline<Principal>, method: &str, le
     let err = ic_testkit::pic::update_candid_args::<(Result<usize, Error>,), _>(
         fixture.pocket_ic(),
         *fixture.metadata(),
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         method,
         (payload,),
         REPLY_LIMITS,
@@ -566,7 +566,7 @@ fn compiled_payload_contract_matches_actual_ingress_boundaries() {
             let result: usize = ic_testkit::pic::update_candid_args(
                 fixture.pocket_ic(),
                 *fixture.metadata(),
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 method,
                 (payload(length),),
                 REPLY_LIMITS,
@@ -596,7 +596,7 @@ fn assert_bounded_query_admission(fixture: &CachedPocketIcBaseline<Principal>) {
     let query: PlainReply = ic_testkit::pic::query_candid_args(
         fixture.pocket_ic(),
         *fixture.metadata(),
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "bounded_query",
         ("valid",),
         REPLY_LIMITS,

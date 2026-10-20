@@ -1385,7 +1385,7 @@ impl ComponentRegistryOps {
     /// Resolve a currently registered descendant's exact allocation for paid-effect admission.
     pub(crate) fn child_allocation_operation_id(
         component: ComponentInstanceId,
-        canister: ic_platform::Principal,
+        canister: ic_platform::principal::ExternalPrincipal,
     ) -> Result<Option<[u8; 32]>, InternalError> {
         let Some(child) = RootComponentRegistryStore::child(component, canister) else {
             return Ok(None);

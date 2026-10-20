@@ -4,7 +4,7 @@ mod fixture_importer;
 mod reinstall_fixture;
 
 use canic::{Error, prelude::*};
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::cell::RefCell;
 
 thread_local! {
@@ -28,7 +28,9 @@ async fn canic_upgrade() {}
 /// Prove direct Fleet-admitted ingress for managed child qualification.
 #[canic_query(requires(caller::is_fleet_admitted()))]
 async fn test_fleet_admission_probe() -> Result<Principal, Error> {
-    Ok(ic_platform::cdk::api::msg_caller())
+    Ok(ic_platform::principal::ExternalPrincipal::from(
+        ic_platform::cdk::api::msg_caller(),
+    ))
 }
 
 /// Set deterministic fixture state for the disposable backup/restore journey.

@@ -4,7 +4,7 @@
 //! Does not own: history proof, transition validation, persistence, or timer suspension.
 //! Boundary: controller endpoints accept and return these passive v1 shapes.
 
-use ic_platform::{Principal, candid::contract::CandidType};
+use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
 use serde::{Deserialize, Serialize};
 
 /// Controller-selected identity for one authority snapshot operation.

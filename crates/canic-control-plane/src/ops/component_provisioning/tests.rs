@@ -43,7 +43,7 @@ use canic_core::{
     control_plane_support::{config::ComponentTopology, model::replay::ReplayCostGuardSettlement},
     ids::IntentId,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::collections::{BTreeMap, BTreeSet};
 
 #[test]
@@ -1921,7 +1921,7 @@ fn provisioning_failure_rejects_unbounded_or_incomplete_dependency_without_mutat
     let mut incomplete = valid.clone();
     incomplete.rejection_code = None;
     let mut anonymous = valid;
-    anonymous.target = ic_platform::Principal::anonymous();
+    anonymous.target = ic_platform::principal::ExternalPrincipal::anonymous();
     for dependency in [oversized, incomplete, anonymous] {
         let result = RootComponentProvisioningOps::record_failure(
             accepted.operation_id,

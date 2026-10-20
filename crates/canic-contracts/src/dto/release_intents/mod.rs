@@ -4,7 +4,7 @@
 //! Does not own: authentication, settlement, cleanup or effect admission.
 //! Boundary: original local and receipt-backed identities remain distinct.
 
-use ic_platform::{Principal, candid::contract::CandidType};
+use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
 use serde::Deserialize;
 
 /// Canonical scan order: local accounting first, then receipt-backed reservations.

@@ -71,11 +71,13 @@ fn blob(value: Option<&Value>) -> Option<&[u8]> {
     }
 }
 
-pub(super) const fn evidence_error(error: ic_query::ledger_evidence::BlockEvidenceError) -> Error {
+pub(super) const fn evidence_error(
+    error: ic_host_tools::ledger_evidence::BlockEvidenceError,
+) -> Error {
     match error {
-        ic_query::ledger_evidence::BlockEvidenceError::BudgetExceeded => Error::BudgetExceeded,
-        ic_query::ledger_evidence::BlockEvidenceError::ChainMismatch => Error::ChainMismatch,
-        ic_query::ledger_evidence::BlockEvidenceError::UnsupportedValue => {
+        ic_host_tools::ledger_evidence::BlockEvidenceError::BudgetExceeded => Error::BudgetExceeded,
+        ic_host_tools::ledger_evidence::BlockEvidenceError::ChainMismatch => Error::ChainMismatch,
+        ic_host_tools::ledger_evidence::BlockEvidenceError::UnsupportedValue => {
             Error::UnsupportedBlockValue
         }
     }

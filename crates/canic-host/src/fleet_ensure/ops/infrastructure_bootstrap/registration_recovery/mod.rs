@@ -482,7 +482,7 @@ pub(in crate::fleet_ensure) fn verify_funding_target(
         .binding
         .controllers
         .iter()
-        .map(ic_platform::Principal::to_text)
+        .map(ic_platform::principal::ExternalPrincipal::to_text)
         .collect::<std::collections::BTreeSet<_>>();
     let actual_controllers = live
         .controllers

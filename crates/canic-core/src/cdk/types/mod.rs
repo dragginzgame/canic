@@ -10,6 +10,6 @@ pub(crate) use canic_contracts::cycles::*;
 pub use string::*;
 
 pub use ic_platform::{
-    Principal,
     candid::contract::{Int, Nat},
+    principal::ExternalPrincipal as Principal,
 };

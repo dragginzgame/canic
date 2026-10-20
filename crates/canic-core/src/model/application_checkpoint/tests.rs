@@ -263,7 +263,7 @@ fn invalid_identity_and_inconsistent_root_refuse_without_a_record() {
         Err(Error::InvalidIdentity)
     ));
     let mut invalid = binding(1);
-    invalid.authority.issuer.root = ic_platform::Principal::anonymous();
+    invalid.authority.issuer.root = ic_platform::principal::ExternalPrincipal::anonymous();
     assert!(matches!(
         Record::prepare(None, invalid),
         Err(Error::InvalidIdentity)

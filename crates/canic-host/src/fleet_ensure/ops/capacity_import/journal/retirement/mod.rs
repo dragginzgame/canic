@@ -21,7 +21,7 @@ use crate::fleet_ensure::{
     },
     view::capacity_import::CapacityImportSourceView,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::collections::BTreeSet;
 
 /// Distinct envelopes consume the same finite submission allowance as resubmissions.

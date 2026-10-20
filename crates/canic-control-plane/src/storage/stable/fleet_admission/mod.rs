@@ -13,7 +13,7 @@ use canic_core::{
     impl_storable_bounded,
     shared_support::fleet_admission_authority::MAX_FLEET_ADMISSION_AUTHORITY_RECORD_BYTES,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "fleet-coordinator-canister")]
 use std::cell::RefCell;

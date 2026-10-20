@@ -38,6 +38,43 @@ The [Cargo ownership rules](cargo-dependencies.md) define where declarations liv
   lockfiles, checksums and affected evidence together through an explicit review.
   Checker execution never upgrades, fetches, reformats or rewrites dependencies.
 
+## Maintaining upstream code
+
+- Importing runtime code transfers maintenance responsibility to its owning
+  repository. Review relevant upstream fixes, advisories and protocol changes
+  when changing that runtime; record the source revision, applicability and
+  validation in the PR. An unchanged dependency version does not establish that
+  no fix is needed. Keep unresolved work in the owner's GitHub issues.
+- Source fingerprints guard reviewed behavior; they must not freeze known bugs.
+  An intentional change preserves the original import identity, licenses and
+  notices, records the deviation, and adds behavioral regression evidence before
+  updating the expected fingerprint. A hash change alone is not qualification.
+  Qualify affected consumer graphs, package/type identities and runtime behavior;
+  callback, trap, cancellation and upgrade changes need the applicable combined
+  runtime tests. The owning repository selects those fixtures and commands.
+- **Preserve established upstream cryptographic implementations and vectors.**
+  Do not implement, replace or alter cryptographic primitives, public-key
+  derivation, signature verification, cryptographic key encoding or hash/domain
+  separation as a dependency cleanup. Such changes require qualified external
+  cryptographic expertise and an explicit owning review. Packaging, feature gates
+  and integration plumbing may be simplified while preserving cryptographic
+  bodies, behavior, bytes, identities, provenance and licenses.
+- Claims of build independence or recovery when upstream services disappear need
+  separate evidence. Retain exact source, all required locked dependency graphs
+  (including generated integration fixtures), dependency sources and licenses,
+  toolchains/targets and required executable tools with checksums in durable
+  storage. Exclude credentials, secret configuration and unrelated user caches.
+  Demonstrate recovery in isolation with fresh dependency/build caches and no
+  network resolution, exercising the claimed builds and runtime behavior using
+  restored tools. Source vendoring does not capture compilers or simulators;
+  an existing developer cache or remote simulator does not prove their recovery.
+  Keep procedures and supported-host qualification with the product owner; this
+  rule adds no automatic recovery drill to ordinary validation or every release.
+
+The [Platform runtime maintenance contract](https://github.com/dragginzgame/ic-platform/blob/6157686be6491953b5b885c78065b97f7c1bbcde/docs/migration.md#runtime-maintenance-and-recovery)
+is a scoped example. Its exact executor/System API pins and installed runtime
+suite remain Platform-owned; they are not fleet-wide dependency selections.
+
 ## Frontend and npm inputs
 
 - Keep a committed `package-lock.json` for each independent npm build root.
@@ -72,10 +109,11 @@ and [npm provenance](https://docs.npmjs.com/generating-provenance-statements/).
 
 ## Sibling paths and moving inputs
 
-- Paths inside the repository use that checkout's source identity. A dependency
-  outside it, including a symlink into a sibling checkout, needs a documented
-  development purpose and release qualification boundary. A `version` beside
-  `path` does not freeze the sibling's bytes.
+- Paths inside the repository use that checkout's source identity. An explicit
+  dependency path outside it needs a documented development purpose and release
+  qualification boundary. Follow the [no-symlink rule](../DRAGGINZGAME.md#repository-files-no-symlinks);
+  a sibling-path exception does not authorize a repository symlink into that
+  checkout. A `version` beside `path` does not freeze the sibling's bytes.
 - Release qualification must select and verify the external repository's exact
   commit and clean state, or use a content-addressed immutable artifact. Bind
   its lockfile and build inputs to the resulting evidence. Reuse that identity
@@ -131,8 +169,9 @@ The tracked regular `package.json` and `package-lock.json` must contain single
 JSON objects. Supported lock schemas are 2 and 3, with a root `packages[""]`
 entry. Root name/version (when declared) and direct dependency tables must agree.
 Direct Git dependencies require a full commit fragment; errors redact their
-selectors. Relative file-directory inputs are resolved physically, so symlink
-escapes also need the scoped sibling exception below. Absolute file inputs,
+selectors. Relative file-directory inputs are resolved physically, so redirected
+external inputs also need the scoped sibling exception below. Checker acceptance
+does not waive the baseline's no-symlink rule. Absolute file inputs,
 file archives, `link:`/`workspace:` selectors, and roots with `npm-shrinkwrap.json`
 are outside this bounded checker. It does not inspect workspace child manifests
 or the transitive lock graph. npm's own locked preparation and consumer tests

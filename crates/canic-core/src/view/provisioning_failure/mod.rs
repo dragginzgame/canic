@@ -5,7 +5,7 @@
 //! Boundary: the first failing owner supplies the target and operation identity.
 
 use crate::domain::provisioning_failure::{ProvisioningFailureStage, ProvisioningRetryCategory};
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 /// Bounded context attached to an internal failure without exposing it publicly.
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -125,7 +125,7 @@ fn initial_child_origin_excludes_dynamic_active_and_unrelated_failures() {
         InternalError::conflict(),
         InternalError::unavailable().with_provisioning_failure(
             ProvisioningFailureStage::StoreStatus,
-            ic_platform::Principal::from_slice(&[94]),
+            ic_platform::principal::ExternalPrincipal::from_slice(&[94]),
             [95; 32],
             ProvisioningRetryCategory::Backoff,
         ),

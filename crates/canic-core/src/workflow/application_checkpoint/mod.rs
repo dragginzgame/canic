@@ -9,7 +9,7 @@ use crate::{
     ops::caller_authority::CallerAuthorityOps,
 };
 use canic_contracts::ids::ApplicationCheckpointBinding;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 pub fn authorize_root(
     requested: &ApplicationCheckpointBinding,

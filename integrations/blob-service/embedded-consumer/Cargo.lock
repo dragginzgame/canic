@@ -94,7 +94,7 @@ dependencies = [
  "canic",
  "canic-blob-service",
  "ic-memory",
- "ic-platform 0.2.2",
+ "ic-platform",
  "ic-storage",
  "serde",
 ]
@@ -171,7 +171,7 @@ dependencies = [
  "canic-contracts",
  "canic-core",
  "canic-macros",
- "ic-platform 0.2.2",
+ "ic-platform",
  "serde",
  "toml",
 ]
@@ -184,7 +184,7 @@ dependencies = [
  "ic-blob-storage",
  "ic-blob-storage-contracts",
  "ic-memory",
- "ic-platform 0.2.2",
+ "ic-platform",
 ]
 
 [[package]]
@@ -193,7 +193,7 @@ version = "0.111.0"
 dependencies = [
  "ciborium",
  "ic-auth-protocol-types",
- "ic-platform 0.2.2",
+ "ic-platform",
  "remain",
  "serde",
  "serde_bytes",
@@ -213,7 +213,7 @@ dependencies = [
  "ic-auth-protocol-types",
  "ic-memory",
  "ic-metrics",
- "ic-platform 0.2.2",
+ "ic-platform",
  "ic-storage",
  "ic-timers",
  "proc-macro2",
@@ -577,12 +577,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 
 [[package]]
-name = "heck"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
-
-[[package]]
 name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -614,9 +608,9 @@ dependencies = [
 
 [[package]]
 name = "ic-auth"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "53a07f42704d19dc6d23f463a2431edeb6317df4e9fbf87e5d1caa9b152bdb4b"
+checksum = "1137351029ee262631ba3b47ba96767ef2f932a36eb4fddf900f1f12fe97a6ea"
 dependencies = [
  "ic-auth-protocol-types",
  "sha2 0.10.9",
@@ -625,24 +619,24 @@ dependencies = [
 
 [[package]]
 name = "ic-auth-protocol-types"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a985a2abff41bea32eadfb6003b412054cdca0a64af4de5fab5731fc3ff8dd94"
+checksum = "5d39c48baab19aa994177606d6bed7790c42576e5ebdb406128df8015d0e25e7"
 dependencies = [
- "ic-platform 0.1.17",
+ "ic-platform",
  "serde",
  "thiserror 2.0.21",
 ]
 
 [[package]]
 name = "ic-blob-storage"
-version = "0.37.0"
+version = "0.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bc5e721b55b5f2e96158961228e73a875af56850a1d99d2dac213731ce0147c"
+checksum = "65c82ee326d0496b53435f795b37d73986af422312af93bd19d1837fbbbcd482"
 dependencies = [
  "ic-blob-storage-contracts",
  "ic-memory",
- "ic-platform 0.2.2",
+ "ic-platform",
  "ic-storage",
  "serde",
  "thiserror 2.0.21",
@@ -650,11 +644,11 @@ dependencies = [
 
 [[package]]
 name = "ic-blob-storage-contracts"
-version = "0.37.0"
+version = "0.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "148793a4f178cbc5fff5ccbc512a8e90ad381b552acdb7a1fb5424d036d90bc8"
+checksum = "766972d1ffef5911245c4ad9fc2902414dd8fdf0904fcc5452480add8aba47f1"
 dependencies = [
- "ic-platform 0.2.2",
+ "ic-platform",
  "ic-wire",
  "percent-encoding",
  "serde",
@@ -672,17 +666,6 @@ dependencies = [
  "ic0",
  "slotmap",
  "smallvec",
-]
-
-[[package]]
-name = "ic-error-types"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbeeb3d91aa179d6496d7293becdacedfc413c825cac79fd54ea1906f003ee55"
-dependencies = [
- "serde",
- "strum",
- "strum_macros",
 ]
 
 [[package]]
@@ -716,24 +699,14 @@ checksum = "619a61412a445f385ff76d15683c064068eb510acc78196b0f87dbd920df6251"
 
 [[package]]
 name = "ic-platform"
-version = "0.1.17"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98b4d131913792a85fc9f134f40a436c7a3a36c39ebc3546200facbc4f6993d8"
-dependencies = [
- "ic-cdk-executor",
- "ic0",
- "ic_principal",
-]
-
-[[package]]
-name = "ic-platform"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b083e911eb9799daf15f501a883d50a76e709d300a51b25fb0c31cd0be0377bd"
+checksum = "b18d164492c33ea09395d97ef4f7858678af7565e457b35cafff59a6fc9869fd"
 dependencies = [
  "candid",
+ "crc32fast",
+ "data-encoding",
  "ic-cdk-executor",
- "ic-error-types",
  "ic-management-canister-types",
  "ic-platform-macros",
  "ic-secp256k1",
@@ -746,9 +719,9 @@ dependencies = [
 
 [[package]]
 name = "ic-platform-macros"
-version = "0.2.2"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32f4e533d81990b3c8b92ce161a12afe6d2e083cc3e3be466603c198a589b894"
+checksum = "e2e0f9df722c5c67459b6f37a03f2ded46d1b58f4946e98950e99571734a7e44"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -796,12 +769,12 @@ dependencies = [
 
 [[package]]
 name = "ic-timers"
-version = "0.29.1"
+version = "0.29.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88f055bf6a66c404d2ccbe9d06a84ba8efeaec7c4b7b89b54cf38d59de029b57"
+checksum = "60c19ab9a3529801ae2259882639a3031929239bb474f824374e5b774397da83"
 dependencies = [
  "ic-metrics",
- "ic-platform 0.1.17",
+ "ic-platform",
  "thiserror 2.0.21",
 ]
 
@@ -1126,12 +1099,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rustversion"
-version = "1.0.23"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
-
-[[package]]
 name = "sec1"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1321,28 +1288,6 @@ name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
-
-[[package]]
-name = "strum"
-version = "0.26.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fec0f0aef304996cf250b31b5a10dee7980c85da9d759361292b8bca5a18f06"
-dependencies = [
- "strum_macros",
-]
-
-[[package]]
-name = "strum_macros"
-version = "0.26.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c6bee85a5a24955dc440386795aa378cd9cf82acd5f764469152d2270e581be"
-dependencies = [
- "heck",
- "proc-macro2",
- "quote",
- "rustversion",
- "syn 2.0.119",
-]
 
 [[package]]
 name = "subtle"

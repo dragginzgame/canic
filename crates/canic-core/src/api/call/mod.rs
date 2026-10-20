@@ -11,8 +11,8 @@ use crate::{
     },
 };
 use ic_platform::{
-    Principal,
     candid::contract::{ArgumentDecoder, ArgumentEncoder, CandidType},
+    principal::ExternalPrincipal as Principal,
 };
 use serde::de::DeserializeOwned;
 use std::borrow::Cow;

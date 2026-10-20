@@ -15,7 +15,10 @@ use crate::{
 };
 use std::time::Duration;
 
-use ic_platform::{Principal, agent::Agent, candid::contract::Nat, icrc_ledger_types::Account};
+use ic_platform::{
+    agent::Agent, candid::contract::Nat, icrc_ledger_types::Account,
+    principal::ExternalPrincipal as Principal,
+};
 use thiserror::Error;
 
 const RESPONSE_BYTES: usize = 4096;

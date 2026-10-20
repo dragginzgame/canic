@@ -9,7 +9,7 @@ use ic_backup::model::artifacts::ArtifactChecksumRecord;
 
 use std::{collections::BTreeSet, str::FromStr};
 
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 pub(super) const fn validate_manifest_version(version: u16) -> Result<(), ManifestValidationError> {
     if version == SUPPORTED_MANIFEST_VERSION {

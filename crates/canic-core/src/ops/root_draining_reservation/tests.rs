@@ -9,7 +9,7 @@ use canic_contracts::ids::{
     FleetSubnetCanisterPoolConfig, FleetSubnetRootLimits, FleetSubnetRootReleaseSet,
     ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 #[test]
 fn reservation_hash_is_domain_separated_and_excludes_only_its_hash_field() {

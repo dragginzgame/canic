@@ -19,7 +19,7 @@ use crate::fleet_ensure::{
 };
 use canic_contracts::dto::fleet_registry::FleetRegistry;
 use canic_core::cdk::utils::hash::decode_hex;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use sha2_host::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 

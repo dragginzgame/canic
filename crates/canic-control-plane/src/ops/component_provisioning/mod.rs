@@ -75,7 +75,7 @@ use canic_core::control_plane_support::{
     },
 };
 use failure::{failure_response, failure_view};
-use ic_platform::{Principal, candid::contract::CandidType};
+use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 

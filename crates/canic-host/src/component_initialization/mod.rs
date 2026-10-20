@@ -10,7 +10,7 @@ use canic_contracts::dto::{
     },
     wire::projection::component_initialization::RootCommand,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use thiserror::Error;
 
 /// Typed preparation refusal before any Root command is sent.

@@ -35,7 +35,7 @@ pub(super) fn ledger() -> MemoryLoginRevocations {
 pub(super) fn browser(id: u16) -> Principal {
     let mut seed = [0; 32];
     seed[..2].copy_from_slice(&id.to_be_bytes());
-    browser_principal(&SigningKey::from_bytes(&seed).verifying_key().to_bytes())
+    browser_principal(&SigningKey::from_bytes(&seed).verifying_key().to_bytes()).into()
 }
 
 pub(super) fn pair(second: bool) -> (Session, Replay, LoginRevocationChange) {
@@ -61,8 +61,8 @@ pub(super) fn pair_for_account(
     let claims = PortableClaims {
         mechanism: PortableMechanism::Ed25519,
         audience: audience(),
-        issuer: Principal::from_slice(&[42]),
-        account_subject,
+        issuer: Principal::from_slice(&[42]).into(),
+        account_subject: account_subject.into(),
         key_binding_id: Sha256::digest(signer.verifying_key().to_bytes()).into(),
         browser_public_key: SigningKey::from_bytes(&browser_seed)
             .verifying_key()
@@ -84,7 +84,7 @@ pub(super) fn pair_for_account(
             mechanism: claims.mechanism,
             key_binding_id: claims.key_binding_id,
             grants: &claims.grants,
-            caller: browser(device),
+            caller: browser(device).into(),
             now_ns: NOW,
             authority_not_before_ns: 0,
             authority_expires_at_ns: NOW + 120_000_000_000,
@@ -166,11 +166,11 @@ pub(super) fn authorize(
     let context = SessionContext {
         authority: PortableClaimsContext {
             audience: &audience,
-            issuer: Principal::from_slice(&[42]),
+            issuer: Principal::from_slice(&[42]).into(),
             mechanism: PortableMechanism::Ed25519,
             key_binding_id: Sha256::digest(signer.verifying_key().to_bytes()).into(),
             grants: &grants,
-            caller: browser(1),
+            caller: browser(1).into(),
             now_ns,
             authority_not_before_ns: 0,
             authority_expires_at_ns: NOW + 120_000_000_000,

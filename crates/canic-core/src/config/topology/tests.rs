@@ -15,7 +15,7 @@ use canic_contracts::{
         FleetSubnetRootLimits, SubnetId,
     },
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 const CONFIG: &str = r#"
 [app]

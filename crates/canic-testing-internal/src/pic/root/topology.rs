@@ -2,7 +2,7 @@ use super::{
     InitializedRootTopology, RootBaselineMetadata, RootBaselineSpec, progress, progress_elapsed,
 };
 use crate::pic::{CanicPicExt, startup::try_start_pocket_ic};
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 use canic::{
     Error,
@@ -181,7 +181,7 @@ fn fetch_root_children(pic: &PocketIc, root_id: Principal) -> Vec<CanisterInfo> 
         let page: Result<RootStatusResponse, Error> = ic_testkit::pic::query_candid_args(
             pic,
             root_id,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             protocol::CANIC_PUBLIC_STATUS,
             (RootStatusRequest::Children(PageRequest {
                 limit: PAGE_LIMIT,
@@ -212,7 +212,7 @@ fn fetch_managed_store_pids(pic: &PocketIc, root_id: Principal) -> Vec<Principal
     let overview: Result<RootStatusResponse, canic::Error> = ic_testkit::pic::query_candid_args(
         pic,
         root_id,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         canic::protocol::CANIC_ROOT_STATUS,
         (RootStatusRequest::StoreOverview,),
         canic::testing::CANDID_REPLY_LIMITS,

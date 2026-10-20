@@ -5,7 +5,7 @@
 //! Boundary: declared IDs are bounded canonical names; generated IDs use lowercase hex.
 
 use crate::ids::FleetKey;
-use ic_platform::{Principal, candid::contract::CandidType};
+use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 use sha2::{Digest, Sha256};
 use std::{borrow::Borrow, fmt, str::FromStr};
@@ -392,7 +392,7 @@ mod tests {
             canonical_network_id: CanonicalNetworkId::ic_mainnet(),
             fleet_id: FleetId::from_generated_bytes([1; 32]),
         };
-        let root = ic_platform::Principal::from_slice(&[2; 29]);
+        let root = ic_platform::principal::ExternalPrincipal::from_slice(&[2; 29]);
         let first = ComponentInstanceId::from_root_allocation(fleet, 1, root, 1);
 
         assert_eq!(
@@ -408,7 +408,7 @@ mod tests {
             ComponentInstanceId::from_root_allocation(
                 fleet,
                 1,
-                ic_platform::Principal::from_slice(&[3; 29]),
+                ic_platform::principal::ExternalPrincipal::from_slice(&[3; 29]),
                 1,
             )
         );

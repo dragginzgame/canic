@@ -24,7 +24,7 @@ use canic_contracts::{
         FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
     },
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 #[test]
 fn parses_fleet_json_and_forwarded_global_options() {

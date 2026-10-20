@@ -24,7 +24,7 @@ use canic_contracts::dto::{
     role::OperationAcceptedResponse as RootCommandResponse,
     wire::projection::peer_allocation::RootCommand,
 };
-use ic_platform::{Principal, candid::contract::CandidType};
+use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
 use serde::Deserialize;
 
 const VERIFY_APPLICATION_SCOPE: canic::access::auth::ApplicationScopeRef<'static> =
@@ -130,7 +130,8 @@ async fn issuer_application_denial_perf(
 }
 
 fn application_subject() -> Result<Principal, Error> {
-    let caller = ic_platform::cdk::api::msg_caller();
+    let caller =
+        ic_platform::principal::ExternalPrincipal::from(ic_platform::cdk::api::msg_caller());
     match authorize_local_application(LocalApplicationAuthorizationRequest {
         observed_transport_caller: caller,
         required_scope: VERIFY_APPLICATION_SCOPE,

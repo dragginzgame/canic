@@ -362,7 +362,7 @@ fn index_session_records(
         }
         if indexes
             .session_by_caller
-            .insert(session.caller(), index)
+            .insert(session.caller().into(), index)
             .is_some()
         {
             return Err(ApplicationSessionStateError::DuplicateCaller);
@@ -372,7 +372,7 @@ fn index_session_records(
         }
         let count = indexes
             .session_count_by_subject
-            .entry(session.subject())
+            .entry(session.subject().into())
             .or_default();
         *count += 1;
         if *count > MAX_ACTIVE_APPLICATION_SESSIONS_PER_SUBJECT {
@@ -429,7 +429,7 @@ fn validate_overlapping_session_replay_bindings(
             .ok_or(ApplicationSessionStateError::InvalidReplayRecord)?;
         let session_authority = ApplicationSessionReplayAuthority {
             proof_fingerprint: session.fingerprint(),
-            transport_caller: session.caller(),
+            transport_caller: session.caller().into(),
             authority_generation: session.generation(),
         };
         let replay_authority = ApplicationSessionReplayAuthority {
@@ -541,7 +541,7 @@ fn authority_binding_to_record(
     }
 }
 
-fn replay_from_record(
+const fn replay_from_record(
     record: &LocalApplicationReplayRecord,
 ) -> Result<&LocalApplicationReplayRecord, ApplicationSessionStateError> {
     if record.remove_at_ns == 0 {

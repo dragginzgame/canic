@@ -176,7 +176,7 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn production_blob_initializ
         "blob_configuration",
         &pic.query_call(
             service,
-            input.configuration.operator,
+            input.configuration.operator.into(),
             "blob_configuration",
             wire::encode_request("blob_configuration", ()).unwrap(),
         )
@@ -324,9 +324,9 @@ fn installation(service: Principal) -> ServiceInstallationInput {
     let actor = |byte| Principal::from_slice(&[byte; 29]);
     ServiceInstallationInput {
         configuration: ServiceConfigurationInput {
-            service,
-            operator: actor(7),
-            payment_account: actor(8),
+            service: service.into(),
+            operator: actor(7).into(),
+            payment_account: actor(8).into(),
             namespace: 7,
             resources: ServiceResourceInput {
                 max_tenants: 1,
@@ -346,7 +346,7 @@ fn installation(service: Principal) -> ServiceInstallationInput {
                 max_tenant_active: 2,
             },
             billing: ServiceBillingInput {
-                cashier: actor(10),
+                cashier: actor(10).into(),
                 reserve: 100,
                 minimum_balance: 100,
                 target_balance: 200,
@@ -368,7 +368,7 @@ fn installation(service: Principal) -> ServiceInstallationInput {
             },
         },
         project: "canic-production-root-blob".into(),
-        completion_verifier: actor(11),
+        completion_verifier: actor(11).into(),
     }
 }
 

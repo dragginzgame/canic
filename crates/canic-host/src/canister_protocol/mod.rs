@@ -16,7 +16,7 @@ use crate::{
     protocol_binding::ResolvedProtocolBinding,
 };
 use canic_contracts::diagnostics::RegisteredDiagnosticCode;
-use ic_platform::{Principal, candid::contract::CandidType};
+use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
 use serde::de::DeserializeOwned;
 use std::io;
 use thiserror::Error as ThisError;

@@ -207,3 +207,22 @@ fn non_utf8_tree_names_retain_shared_typed_refusal() {
     assert_eq!(fs::read(invalid).unwrap(), b"source");
     fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn directory_declaration_errors_preserve_backup_categories() {
+    use ic_host_artifacts::artifact::tree::DirectoryChecksumError;
+    let path = std::path::PathBuf::from("entry");
+    assert!(matches!(
+        artifact_error(ArtifactError::from(DirectoryChecksumError::NonUtf8Path { path: path.clone() })),
+        ArtifactChecksumError::Artifact(ArtifactError::NonUtf8Path { path: observed }) if observed == path
+    ));
+    for error in [
+        DirectoryChecksumError::InvalidRelativePath { path: path.clone() },
+        DirectoryChecksumError::DuplicatePath { path },
+    ] {
+        let ArtifactChecksumError::Io(error) = artifact_error(ArtifactError::from(error)) else {
+            panic!("expected invalid-data IO error");
+        };
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+    }
+}

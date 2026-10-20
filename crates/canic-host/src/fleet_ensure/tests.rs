@@ -51,7 +51,7 @@ use canic_contracts::{
     },
 };
 use canic_core::cdk::utils::hash::sha256_hex;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::{
     collections::{BTreeMap, BTreeSet},
     env, fs,

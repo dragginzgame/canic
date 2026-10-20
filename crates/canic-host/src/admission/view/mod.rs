@@ -2,7 +2,7 @@
 //!
 //! Host owns authority and operations; command parsing and rendering belong to CLI.
 
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::Serialize;
 
 /// One Root's compact convergence report.

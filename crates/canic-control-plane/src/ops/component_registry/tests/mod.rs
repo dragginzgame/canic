@@ -340,7 +340,7 @@ fn allocation_reservation_is_exact_idempotent_and_charges_registry_capacity() {
         role: CanisterRole::new("project_hub"),
     };
     let origin = ComponentProvisioningOrigin::FleetAdministrator {
-        caller: ic_platform::Principal::from_slice(&[11; 29]),
+        caller: ic_platform::principal::ExternalPrincipal::from_slice(&[11; 29]),
     };
 
     let reserved =
@@ -389,7 +389,7 @@ fn allocation_reservation_is_exact_idempotent_and_charges_registry_capacity() {
             conflicting,
             [12; 32],
             ComponentProvisioningOrigin::FleetAdministrator {
-                caller: ic_platform::Principal::from_slice(&[11; 29]),
+                caller: ic_platform::principal::ExternalPrincipal::from_slice(&[11; 29]),
             },
             false,
         )
@@ -430,7 +430,7 @@ fn peer_allocation_counts_are_scoped_to_exact_requester_and_target() {
         role: CanisterRole::new("project_hub"),
         placement_subnet: root.placement_subnet,
         fleet_subnet_root: root.fleet_subnet_root,
-        canister_id: ic_platform::Principal::from_slice(&[21; 29]),
+        canister_id: ic_platform::principal::ExternalPrincipal::from_slice(&[21; 29]),
     };
     let origin = ComponentProvisioningOrigin::Component {
         requester: Box::new(requester.clone()),
@@ -466,7 +466,7 @@ fn peer_allocation_counts_are_scoped_to_exact_requester_and_target() {
         }
     );
     let other_requester = ComponentBinding {
-        canister_id: ic_platform::Principal::from_slice(&[25; 29]),
+        canister_id: ic_platform::principal::ExternalPrincipal::from_slice(&[25; 29]),
         ..requester
     };
     assert_eq!(
@@ -522,7 +522,7 @@ fn root_draining_is_durable_and_fences_only_new_top_level_allocations() {
         role: CanisterRole::new("project_hub"),
     };
     let origin = ComponentProvisioningOrigin::FleetAdministrator {
-        caller: ic_platform::Principal::from_slice(&[11; 29]),
+        caller: ic_platform::principal::ExternalPrincipal::from_slice(&[11; 29]),
     };
     let existing = ComponentRegistryOps::reserve_allocation(
         existing_decision.clone(),
@@ -702,7 +702,7 @@ fn empty_root_final_inventory_is_exact_durable_and_response_idempotent() {
     assert_ne!(plan.terminal_component_history_hash, [0; 32]);
     assert_durable_root_final_inventory_intent(&plan, &published_registry);
 
-    let store_pid = ic_platform::Principal::from_slice(&[13; 29]);
+    let store_pid = ic_platform::principal::ExternalPrincipal::from_slice(&[13; 29]);
     let store = RootStoreBootstrapResponse {
         fixtures: vec![],
         fleet_subnet_root: root.fleet_subnet_root,
@@ -3269,8 +3269,8 @@ fn incomplete_component_operation_does_not_block_an_unrelated_partition() {
     };
     let component_a = ComponentInstanceId::from_generated_bytes([10; 32]);
     let component_b = ComponentInstanceId::from_generated_bytes([11; 32]);
-    let parent_a = ic_platform::Principal::from_slice(&[18; 29]);
-    let parent_b = ic_platform::Principal::from_slice(&[19; 29]);
+    let parent_a = ic_platform::principal::ExternalPrincipal::from_slice(&[18; 29]);
+    let parent_b = ic_platform::principal::ExternalPrincipal::from_slice(&[19; 29]);
     let partition_a = active_component_partition(&root, release_set, component_a, parent_a);
     let partition_b = active_component_partition(&root, release_set, component_b, parent_b);
     let initial_encoded_bytes = partition_a
@@ -3346,7 +3346,7 @@ fn incomplete_component_operation_does_not_block_an_unrelated_partition() {
         },
     )
     .expect("record Component B creation intent");
-    let child_b = ic_platform::Principal::from_slice(&[58; 29]);
+    let child_b = ic_platform::principal::ExternalPrincipal::from_slice(&[58; 29]);
     let progressed_b = ComponentRegistryOps::mark_child_created(component_b, operation_b, child_b)
         .expect("Component B progresses independently");
     assert!(matches!(
@@ -3404,7 +3404,7 @@ fn child_reservation_is_parent_indexed_idempotent_and_capacity_bounded() {
     let root = root_binding();
     let root_canister = root.fleet_subnet_root;
     let component = ComponentInstanceId::from_generated_bytes([10; 32]);
-    let parent = ic_platform::Principal::from_slice(&[18; 29]);
+    let parent = ic_platform::principal::ExternalPrincipal::from_slice(&[18; 29]);
     let release_set = FleetSubnetRootReleaseSet {
         release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes([8; 32])),
         manifest_digest: ReleaseSetDigest::from_bytes([9; 32]),
@@ -3423,7 +3423,7 @@ fn child_reservation_is_parent_indexed_idempotent_and_capacity_bounded() {
         binding: binding.clone(),
         protocol_profile_digest: ProtocolProfileDigest::from_bytes([12; 32]),
         provisioning_origin: ComponentProvisioningOrigin::FleetAdministrator {
-            caller: ic_platform::Principal::from_slice(&[11; 29]),
+            caller: ic_platform::principal::ExternalPrincipal::from_slice(&[11; 29]),
         },
         release_set,
         status: ComponentLifecycleStatus::Active,
@@ -3432,7 +3432,7 @@ fn child_reservation_is_parent_indexed_idempotent_and_capacity_bounded() {
             &binding,
             ProtocolProfileDigest::from_bytes([12; 32]),
             &ComponentProvisioningOrigin::FleetAdministrator {
-                caller: ic_platform::Principal::from_slice(&[11; 29]),
+                caller: ic_platform::principal::ExternalPrincipal::from_slice(&[11; 29]),
             },
             release_set,
             ComponentLifecycleStatus::Active,
@@ -3606,7 +3606,7 @@ fn child_reservation_is_parent_indexed_idempotent_and_capacity_bounded() {
     );
 
     let plan = RootComponentCreationPlan {
-        wasm_store: ic_platform::Principal::from_slice(&[50; 29]),
+        wasm_store: ic_platform::principal::ExternalPrincipal::from_slice(&[50; 29]),
         payload_hash: [51; 32],
         payload_size_bytes: 4_096,
         initial_cycles: Cycles::new(5_000_000_000_000),
@@ -3661,7 +3661,7 @@ fn child_reservation_is_parent_indexed_idempotent_and_capacity_bounded() {
     ));
 
     restart_component_registry();
-    let canister = ic_platform::Principal::from_slice(&[54; 29]);
+    let canister = ic_platform::principal::ExternalPrincipal::from_slice(&[54; 29]);
     let created = ComponentRegistryOps::mark_child_created(component, [44; 32], canister)
         .expect("record created child");
     restart_component_registry();
@@ -3691,7 +3691,7 @@ fn child_reservation_is_parent_indexed_idempotent_and_capacity_bounded() {
         ComponentRegistryOps::mark_child_created(
             component,
             [44; 32],
-            ic_platform::Principal::from_slice(&[55; 29]),
+            ic_platform::principal::ExternalPrincipal::from_slice(&[55; 29]),
         )
         .is_err()
     );
@@ -4314,7 +4314,7 @@ fn creation_intent_reserves_terminal_bytes_and_created_retry_preserves_principal
         },
         [12; 32],
         ComponentProvisioningOrigin::FleetAdministrator {
-            caller: ic_platform::Principal::from_slice(&[11; 29]),
+            caller: ic_platform::principal::ExternalPrincipal::from_slice(&[11; 29]),
         },
         false,
     )
@@ -4323,11 +4323,11 @@ fn creation_intent_reserves_terminal_bytes_and_created_retry_preserves_principal
         .expect("Registry status")
         .encoded_bytes;
     let plan = RootComponentCreationPlan {
-        wasm_store: ic_platform::Principal::from_slice(&[13; 29]),
+        wasm_store: ic_platform::principal::ExternalPrincipal::from_slice(&[13; 29]),
         payload_hash: [14; 32],
         payload_size_bytes: 4_096,
         initial_cycles: Cycles::new(5_000_000_000_000),
-        controller: ic_platform::Principal::from_slice(&[15; 29]),
+        controller: ic_platform::principal::ExternalPrincipal::from_slice(&[15; 29]),
     };
 
     assert_creation_capacity_is_reserved_before_effect(&plan, reserved_bytes);
@@ -4360,7 +4360,7 @@ fn creation_intent_reserves_terminal_bytes_and_created_retry_preserves_principal
 
     let interrupted = RootComponentRegistryStore::export();
     RootComponentRegistryStore::import(interrupted);
-    let canister = ic_platform::Principal::from_slice(&[18; 29]);
+    let canister = ic_platform::principal::ExternalPrincipal::from_slice(&[18; 29]);
     let created = ComponentRegistryOps::mark_created([12; 32], canister).expect("record created");
     let repeated =
         ComponentRegistryOps::mark_created([12; 32], canister).expect("exact created retry");
@@ -4383,8 +4383,11 @@ fn creation_intent_reserves_terminal_bytes_and_created_retry_preserves_principal
         } if created_canister == canister
     ));
     assert!(
-        ComponentRegistryOps::mark_created([12; 32], ic_platform::Principal::from_slice(&[19; 29]),)
-            .is_err()
+        ComponentRegistryOps::mark_created(
+            [12; 32],
+            ic_platform::principal::ExternalPrincipal::from_slice(&[19; 29]),
+        )
+        .is_err()
     );
     assert_eq!(
         ComponentRegistryOps::current()
@@ -4669,7 +4672,7 @@ fn assert_initial_inventory_receipt() {
             },
             [44; 32],
             ComponentProvisioningOrigin::FleetAdministrator {
-                caller: ic_platform::Principal::from_slice(&[11; 29]),
+                caller: ic_platform::principal::ExternalPrincipal::from_slice(&[11; 29]),
             },
             false,
         )
@@ -4709,7 +4712,7 @@ fn assert_initial_inventory_receipt() {
         },
         [44; 32],
         ComponentProvisioningOrigin::FleetAdministrator {
-            caller: ic_platform::Principal::from_slice(&[11; 29]),
+            caller: ic_platform::principal::ExternalPrincipal::from_slice(&[11; 29]),
         },
         true,
     )
@@ -4826,7 +4829,7 @@ fn directory_refresh_is_exact_idempotent_and_conflict_closed() {
         manifest_digest: ReleaseSetDigest::from_bytes([9; 32]),
     };
     let component = ComponentInstanceId::from_generated_bytes([10; 32]);
-    let canister = ic_platform::Principal::from_slice(&[18; 29]);
+    let canister = ic_platform::principal::ExternalPrincipal::from_slice(&[18; 29]);
     RootComponentRegistryStore::import(active_single_component_registry_data(
         &root,
         release_set,
@@ -4910,7 +4913,7 @@ fn active_single_component_registry_data(
     root: &FleetSubnetRootBinding,
     release_set: FleetSubnetRootReleaseSet,
     component: ComponentInstanceId,
-    canister: ic_platform::Principal,
+    canister: ic_platform::principal::ExternalPrincipal,
 ) -> RootComponentRegistryData {
     let mut partition = active_component_partition(root, release_set, component, canister);
     let allocation = active_component_allocation(&partition);
@@ -4963,7 +4966,7 @@ fn prequiescence_draining_component_retains_committed_runtime_operation() {
         manifest_digest: ReleaseSetDigest::from_bytes([9; 32]),
     };
     let component = ComponentInstanceId::from_generated_bytes([97; 32]);
-    let canister = ic_platform::Principal::from_slice(&[98; 29]);
+    let canister = ic_platform::principal::ExternalPrincipal::from_slice(&[98; 29]);
     RootComponentRegistryStore::import(active_single_component_registry_data(
         &root,
         release_set,
@@ -5018,7 +5021,7 @@ fn import_empty_quiescent_component() -> (
         manifest_digest: ReleaseSetDigest::from_bytes([9; 32]),
     };
     let component = ComponentInstanceId::from_generated_bytes([97; 32]);
-    let canister = ic_platform::Principal::from_slice(&[98; 29]);
+    let canister = ic_platform::principal::ExternalPrincipal::from_slice(&[98; 29]);
     let data = active_single_component_registry_data(&root, release_set, component, canister);
     RootComponentRegistryStore::import(data);
     let fleet = fleet_directory(&root);
@@ -5228,7 +5231,7 @@ fn advance_install_to_verified(plan: &RootComponentInstallPlan, created_bytes: u
 fn prepared_created_allocation() -> (
     FleetSubnetRootBinding,
     RootComponentAllocationView,
-    ic_platform::Principal,
+    ic_platform::principal::ExternalPrincipal,
 ) {
     RootComponentRegistryStore::import(RootComponentRegistryData::default());
     let root = root_binding();
@@ -5261,7 +5264,7 @@ fn prepared_created_allocation() -> (
         },
         [12; 32],
         ComponentProvisioningOrigin::FleetAdministrator {
-            caller: ic_platform::Principal::from_slice(&[11; 29]),
+            caller: ic_platform::principal::ExternalPrincipal::from_slice(&[11; 29]),
         },
         false,
     )
@@ -5269,7 +5272,7 @@ fn prepared_created_allocation() -> (
     ComponentRegistryOps::begin_creation(
         [12; 32],
         RootComponentCreationPlan {
-            wasm_store: ic_platform::Principal::from_slice(&[13; 29]),
+            wasm_store: ic_platform::principal::ExternalPrincipal::from_slice(&[13; 29]),
             payload_hash: [14; 32],
             payload_size_bytes: 4_096,
             initial_cycles: Cycles::new(5_000_000_000_000),
@@ -5281,7 +5284,7 @@ fn prepared_created_allocation() -> (
         },
     )
     .expect("creation intent");
-    let canister = ic_platform::Principal::from_slice(&[18; 29]);
+    let canister = ic_platform::principal::ExternalPrincipal::from_slice(&[18; 29]);
     let created =
         ComponentRegistryOps::mark_created([12; 32], canister).expect("record created allocation");
     (root, created, canister)
@@ -5356,7 +5359,7 @@ fn allocation_reservation_fails_before_mutation_when_registry_capacity_is_exhaus
         },
         [12; 32],
         ComponentProvisioningOrigin::FleetAdministrator {
-            caller: ic_platform::Principal::from_slice(&[11; 29]),
+            caller: ic_platform::principal::ExternalPrincipal::from_slice(&[11; 29]),
         },
         false,
     )
@@ -5381,7 +5384,7 @@ struct ActiveComponentTreeFixture {
 
 fn import_active_component_tree() -> ActiveComponentTreeFixture {
     import_active_component_tree_with_origin(ComponentProvisioningOrigin::FleetAdministrator {
-        caller: ic_platform::Principal::from_slice(&[11; 29]),
+        caller: ic_platform::principal::ExternalPrincipal::from_slice(&[11; 29]),
     })
 }
 
@@ -5416,14 +5419,14 @@ fn import_active_component_tree_with_origin(
         manifest_digest: ReleaseSetDigest::from_bytes([9; 32]),
     };
     let component = ComponentInstanceId::from_generated_bytes([10; 32]);
-    let component_canister = ic_platform::Principal::from_slice(&[18; 29]);
+    let component_canister = ic_platform::principal::ExternalPrincipal::from_slice(&[18; 29]);
     let mut partition =
         active_component_partition(&root, release_set, component, component_canister);
     partition.provisioning_origin = provisioning_origin;
     let target = ComponentRegistryChildRecord {
         allocation_operation_id: [51; 32],
         component,
-        canister_id: ic_platform::Principal::from_slice(&[21; 29]),
+        canister_id: ic_platform::principal::ExternalPrincipal::from_slice(&[21; 29]),
         parent_canister_id: component_canister,
         role: CanisterRole::new("project_instance"),
         kind: ComponentChildKind::Instance,
@@ -5434,7 +5437,7 @@ fn import_active_component_tree_with_origin(
     let descendant = ComponentRegistryChildRecord {
         allocation_operation_id: [52; 32],
         component,
-        canister_id: ic_platform::Principal::from_slice(&[22; 29]),
+        canister_id: ic_platform::principal::ExternalPrincipal::from_slice(&[22; 29]),
         parent_canister_id: target.canister_id,
         role: CanisterRole::new("project_ledger"),
         kind: ComponentChildKind::Singleton,
@@ -5445,7 +5448,7 @@ fn import_active_component_tree_with_origin(
     let unrelated = ComponentRegistryChildRecord {
         allocation_operation_id: [53; 32],
         component,
-        canister_id: ic_platform::Principal::from_slice(&[23; 29]),
+        canister_id: ic_platform::principal::ExternalPrincipal::from_slice(&[23; 29]),
         parent_canister_id: component_canister,
         role: CanisterRole::new("project_instance"),
         kind: ComponentChildKind::Instance,
@@ -5456,7 +5459,7 @@ fn import_active_component_tree_with_origin(
     let alternate_descendant = ComponentRegistryChildRecord {
         allocation_operation_id: [54; 32],
         component,
-        canister_id: ic_platform::Principal::from_slice(&[24; 29]),
+        canister_id: ic_platform::principal::ExternalPrincipal::from_slice(&[24; 29]),
         parent_canister_id: target.canister_id,
         role: CanisterRole::new("project_machine"),
         kind: ComponentChildKind::Singleton,
@@ -5566,7 +5569,10 @@ fn import_active_component_tree_with_origin(
 
 fn import_deep_active_component_tree(
     depth: usize,
-) -> (ActiveComponentTreeFixture, ic_platform::Principal) {
+) -> (
+    ActiveComponentTreeFixture,
+    ic_platform::principal::ExternalPrincipal,
+) {
     assert!(depth > 0 && depth <= 100);
     let mut fixture = import_active_component_tree();
     let mut data = RootComponentRegistryStore::export();
@@ -5577,7 +5583,8 @@ fn import_deep_active_component_tree(
         let principal_byte = 100_u8
             .checked_add(u8::try_from(index).expect("bounded deep-tree index"))
             .expect("bounded deep-tree principal");
-        let canister_id = ic_platform::Principal::from_slice(&[principal_byte; 29]);
+        let canister_id =
+            ic_platform::principal::ExternalPrincipal::from_slice(&[principal_byte; 29]);
         let child = ComponentRegistryChildRecord {
             allocation_operation_id: [principal_byte; 32],
             component: fixture.component,
@@ -5671,7 +5678,7 @@ fn active_component_partition(
     root: &FleetSubnetRootBinding,
     release_set: FleetSubnetRootReleaseSet,
     component: ComponentInstanceId,
-    canister_id: ic_platform::Principal,
+    canister_id: ic_platform::principal::ExternalPrincipal,
 ) -> ComponentRegistryPartitionRecord {
     let binding = ComponentBinding {
         authority: root.authority.clone(),
@@ -5684,7 +5691,7 @@ fn active_component_partition(
         canister_id,
     };
     let provisioning_origin = ComponentProvisioningOrigin::FleetAdministrator {
-        caller: ic_platform::Principal::from_slice(&[11; 29]),
+        caller: ic_platform::principal::ExternalPrincipal::from_slice(&[11; 29]),
     };
     let descendant_content_hash = empty_component_descendant_content_hash(component);
     let mut partition = ComponentRegistryPartitionRecord {
@@ -5732,7 +5739,7 @@ fn active_component_allocation(
     partition: &ComponentRegistryPartitionRecord,
 ) -> RootComponentAllocationRecord {
     let creation = RootComponentCreationEffectRecord {
-        wasm_store: ic_platform::Principal::from_slice(&[13; 29]),
+        wasm_store: ic_platform::principal::ExternalPrincipal::from_slice(&[13; 29]),
         payload_hash: [14; 32],
         payload_size_bytes: 4_096,
         initial_cycles: Cycles::new(5_000_000_000_000),
@@ -5806,7 +5813,7 @@ fn child_allocation_decision(
 
 fn child_allocation_decision_for_parent(
     partition: &ComponentRegistryPartitionRecord,
-    parent_canister_id: ic_platform::Principal,
+    parent_canister_id: ic_platform::principal::ExternalPrincipal,
     parent_role: &CanisterRole,
     child_role: &'static str,
 ) -> ComponentChildAllocationDecision {
@@ -5838,7 +5845,7 @@ fn child_creation_plan(
     evidence_seed: u8,
 ) -> RootComponentCreationPlan {
     RootComponentCreationPlan {
-        wasm_store: ic_platform::Principal::from_slice(&[evidence_seed; 29]),
+        wasm_store: ic_platform::principal::ExternalPrincipal::from_slice(&[evidence_seed; 29]),
         payload_hash: [evidence_seed; 32],
         payload_size_bytes: 4_096,
         initial_cycles: Cycles::new(5_000_000_000_000),
@@ -5847,7 +5854,9 @@ fn child_creation_plan(
 }
 
 fn root_binding() -> FleetSubnetRootBinding {
-    let coordinator_subnet = SubnetId::from_principal(ic_platform::Principal::from_slice(&[2; 29]));
+    let coordinator_subnet = SubnetId::from_principal(
+        ic_platform::principal::ExternalPrincipal::from_slice(&[2; 29]),
+    );
     FleetSubnetRootBinding {
         authority: FleetRegistryAuthority {
             binding: FleetCoordinatorBinding {
@@ -5859,13 +5868,15 @@ fn root_binding() -> FleetSubnetRootBinding {
                     app: AppId::from("toko"),
                 },
                 coordinator_subnet,
-                coordinator: ic_platform::Principal::from_slice(&[3; 29]),
+                coordinator: ic_platform::principal::ExternalPrincipal::from_slice(&[3; 29]),
                 recovery_controllers: Vec::new(),
             },
             epoch: 1,
         },
-        placement_subnet: SubnetId::from_principal(ic_platform::Principal::from_slice(&[4; 29])),
-        fleet_subnet_root: ic_platform::Principal::from_slice(&[5; 29]),
+        placement_subnet: SubnetId::from_principal(
+            ic_platform::principal::ExternalPrincipal::from_slice(&[4; 29]),
+        ),
+        fleet_subnet_root: ic_platform::principal::ExternalPrincipal::from_slice(&[5; 29]),
         component_admissions: vec![ComponentSpecAdmission {
             component_spec: "projects".parse().expect("Component Spec"),
             spec_hash: [6; 32],

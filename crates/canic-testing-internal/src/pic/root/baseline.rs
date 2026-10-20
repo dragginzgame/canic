@@ -289,13 +289,16 @@ mod tests {
 
     #[test]
     fn root_baseline_snapshot_targets_are_unique_and_controller_exact() {
-        let root_id = ic_platform::Principal::from_slice(&[0x41; 29]);
-        let child_id = ic_platform::Principal::from_slice(&[0x42; 29]);
-        let store_id = ic_platform::Principal::from_slice(&[0x43; 29]);
+        let root_id = ic_platform::principal::ExternalPrincipal::from_slice(&[0x41; 29]);
+        let child_id = ic_platform::principal::ExternalPrincipal::from_slice(&[0x42; 29]);
+        let store_id = ic_platform::principal::ExternalPrincipal::from_slice(&[0x43; 29]);
         let metadata = RootBaselineMetadata {
             root_id,
-            coordinator_id: ic_platform::Principal::from_slice(&[0x44; 29]),
-            pool_assets: vec![ic_platform::Principal::from_slice(&[0x45; 29]), child_id],
+            coordinator_id: ic_platform::principal::ExternalPrincipal::from_slice(&[0x44; 29]),
+            pool_assets: vec![
+                ic_platform::principal::ExternalPrincipal::from_slice(&[0x45; 29]),
+                child_id,
+            ],
             component_canisters: HashMap::new(),
             snapshot_pids: vec![child_id, store_id],
             managed_store_pids: vec![store_id, root_id],

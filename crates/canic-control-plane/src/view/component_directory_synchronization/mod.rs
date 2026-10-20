@@ -11,7 +11,7 @@ use canic_contracts::{
     },
     ids::ComponentInstanceId,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 /// Existing active service member selected before Fleet Registry mirror advancement.
 

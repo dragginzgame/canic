@@ -23,7 +23,7 @@ use canic_contracts::{
     ids::{FleetSubnetWasmStoreAuthority, ManagedCanisterBinding},
 };
 use canic_core::ingress::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 /// Read the existing executable-template allocation counters for shared admission.
 pub fn template_bytes() -> u64 {

@@ -61,8 +61,8 @@ use canic_core::{
     },
 };
 use ic_platform::{
-    Principal,
     candid::contract::{encode_args, encode_one},
+    principal::ExternalPrincipal as Principal,
 };
 use ic_testkit::pic::{CandidCallError, CanisterInstallExt, PocketIc};
 use std::{fmt, time::Duration};

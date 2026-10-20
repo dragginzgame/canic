@@ -67,7 +67,7 @@ pub struct FleetComponentProgress {
     pub deployment: String,
     pub placement: u32,
     pub member_path: Vec<String>,
-    pub root: ic_platform::Principal,
+    pub root: ic_platform::principal::ExternalPrincipal,
     pub state: FleetComponentProgressState,
     /// This occurrence is at the owner's current sequential cursor, not proof of failure.
     pub current: bool,

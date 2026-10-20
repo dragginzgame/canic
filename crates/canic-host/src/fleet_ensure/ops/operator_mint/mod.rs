@@ -14,7 +14,7 @@ use crate::fleet_ensure::model::operator_mint::{
     OperatorMintAuthority, OperatorMintIntentRecord, OperatorMintNotificationOutcomeRecord,
     OperatorMintTransferOutcomeRecord,
 };
-use ic_platform::{Principal, candid::contract::Nat};
+use ic_platform::{candid::contract::Nat, principal::ExternalPrincipal as Principal};
 use sha2_host::{Digest, Sha224, Sha256};
 use thiserror::Error;
 

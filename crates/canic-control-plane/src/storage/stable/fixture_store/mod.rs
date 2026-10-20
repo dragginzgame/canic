@@ -7,7 +7,7 @@
 
 use canic_contracts::dto::fixture_provisioning::{FixtureDescriptor, FixtureGrant};
 use canic_core::cdk::structures::{DefaultMemoryImpl, StableBTreeMap as BTreeMap};
-use ic_platform::{Principal, candid::contract::CandidType};
+use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
 use serde::Deserialize;
 use std::cell::RefCell;
 

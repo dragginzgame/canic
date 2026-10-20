@@ -130,7 +130,7 @@ pub fn validate_fleet_admission_projection(
     if projection
         .principals
         .iter()
-        .any(|principal| principal == &ic_platform::Principal::anonymous())
+        .any(|principal| principal == &ic_platform::principal::ExternalPrincipal::anonymous())
     {
         return Err(FleetAdmissionProjectionValidationError::AnonymousPrincipal);
     }

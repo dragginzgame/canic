@@ -26,7 +26,7 @@ use crate::fleet_ensure::{
     policy::capacity_import::{CapacityImportPolicyError, funding},
     view::capacity_import::{CapacityImportFundingBaselineView, CapacityImportFundingSampleView},
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Reject unknown, duplicate and zero credits before reserving a management observation.

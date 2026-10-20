@@ -138,7 +138,7 @@ impl LocalApplicationAuthorizationState {
                 authority_binding: data.application_authority_binding.clone(),
                 logins: APPLICATION_LOGINS.with_borrow(|rows| {
                     let mut logins = Vec::new();
-                    for entry in rows.iter() {
+                    for entry in rows {
                         logins.push(entry.into_pair());
                     }
                     logins

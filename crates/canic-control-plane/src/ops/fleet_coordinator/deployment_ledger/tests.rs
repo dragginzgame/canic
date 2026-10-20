@@ -24,7 +24,7 @@ use canic_contracts::{
     },
 };
 use canic_core::bootstrap::parse_config_model;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 const CONFIG: &str = r#"
 [app]

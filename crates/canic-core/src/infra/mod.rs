@@ -75,7 +75,7 @@ mod tests {
         )));
         assert_eq!(error.public_code(), Some(codes::PLATFORM_UNAVAILABLE));
         assert_eq!(error.platform_rejection(), Some(expected.as_str()));
-        let target = ic_platform::Principal::from_slice(&[9]);
+        let target = ic_platform::principal::ExternalPrincipal::from_slice(&[9]);
         let error = error
             .with_dependency_failure(target, "canic_wasm_store_command", "inspect_template")
             .with_provisioning_failure(
@@ -85,7 +85,7 @@ mod tests {
                 crate::domain::provisioning_failure::ProvisioningRetryCategory::Backoff,
             )
             .with_dependency_failure(
-                ic_platform::Principal::from_slice(&[8]),
+                ic_platform::principal::ExternalPrincipal::from_slice(&[8]),
                 "outer_method",
                 "outer_step",
             );

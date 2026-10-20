@@ -52,8 +52,8 @@ pub fn validate_allocation(
             .map_err(|_| LocalFleetError::Configuration)?;
     }
     if input.application_subnet >= config.application_subnets
-        || input.controller == ic_platform::Principal::anonymous()
-        || input.controller == ic_platform::Principal::management_canister()
+        || input.controller == ic_platform::principal::ExternalPrincipal::anonymous()
+        || input.controller == ic_platform::principal::ExternalPrincipal::management_canister()
     {
         return Err(LocalFleetError::Configuration);
     }

@@ -30,7 +30,8 @@ pub(super) fn prepare_login(
     }
     let mut totals = LocalApplicationAuthorizationState::application_login_totals();
     let mut before_bytes = encoded_len(&totals).map_err(|_| SessionError::StorageFailure)?;
-    let previous = LocalApplicationAuthorizationState::application_login_record(change.caller());
+    let previous =
+        LocalApplicationAuthorizationState::application_login_record(change.caller().into());
     if let Some(previous) = previous {
         before_bytes +=
             encoded_len(&(change.caller(), &previous)).map_err(|_| SessionError::StorageFailure)?;

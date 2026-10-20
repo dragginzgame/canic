@@ -38,7 +38,7 @@ use canic_contracts::{
         FleetSubnetRootBinding,
     },
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;

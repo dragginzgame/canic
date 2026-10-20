@@ -7,7 +7,10 @@
 use super::{MgmtInfra, MgmtInfraError};
 use crate::infra::ic::{IcInfraError, call::Call};
 use canic_contracts::cycles::Cycles;
-use ic_platform::{Principal, candid::contract::Nat, management_canister_types::CanisterIdRecord};
+use ic_platform::{
+    candid::contract::Nat, management_canister_types::CanisterIdRecord,
+    principal::ExternalPrincipal as Principal,
+};
 
 impl MgmtInfra {
     /// Return the exact current-Subnet cost of one zero-cycle deposit call.

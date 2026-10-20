@@ -349,7 +349,7 @@ impl TemplateChunkedOps {
     pub async fn execute_local_store_gc() -> Result<WasmStoreGcExecutionStats, InternalError> {
         let manifests = TemplateManifestStateStore::export().entries;
         let chunk_sets = TemplateChunkSetStateStore::export().entries;
-        let stored_chunk_hashes = MgmtOps::stored_chunks(canister_self()).await?;
+        let stored_chunk_hashes = MgmtOps::stored_chunks(canister_self().into()).await?;
         let template_count =
             u32::try_from(projected_template_versions(&manifests, &chunk_sets).len())
                 .unwrap_or(u32::MAX);
@@ -366,7 +366,7 @@ impl TemplateChunkedOps {
             + TemplateChunkSetStateStore::occupied_bytes()
             + TemplateChunkStore::occupied_bytes();
 
-        MgmtOps::clear_chunk_store(canister_self()).await?;
+        MgmtOps::clear_chunk_store(canister_self().into()).await?;
         TemplateManifestStateStore::clear();
         TemplateChunkSetStateStore::clear();
         TemplateChunkStore::clear();

@@ -55,7 +55,7 @@ use canic_core::{
         fleet_admission_root::MAX_FLEET_ADMISSION_ROOT_PARTICIPANTS,
     },
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 pub(super) fn current_binding(
     current: &CurrentFleetResolution,

@@ -6,7 +6,7 @@
 #[cfg(test)]
 mod tests;
 
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 
 ///

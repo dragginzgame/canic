@@ -9,11 +9,15 @@ mkdir -p "$fixture/source/src" "$fixture/source/scripts/dev" \
     "$fixture/source/docs/changelog" "$fixture/bin" "$fixture/scripts/ci" "$fixture/scripts/release"
 cp "$root/scripts/ci/check-release-candidate.sh" "$root/scripts/ci/check-release-surface-content.sh" \
     "$root/scripts/ci/require-jq.sh" "$root/scripts/ci/check-release-tag.sh" \
-    "$root/scripts/ci/read-cargo-workspace-version.sh" "$root/scripts/ci/rewrite-local-lock-versions.pl" "$fixture/scripts/ci/"
+    "$root/scripts/ci/read-cargo-workspace-version.sh" "$fixture/scripts/ci/"
+cp "$root/scripts/release/render-owned-manifest.sh" "$fixture/scripts/release/"
 cp "$root/scripts/release/adapter.sh" "$root/scripts/release/rewrite-owned-lock.sh" "$fixture/scripts/release/"
 bash "$root/scripts/ci/prepare-script-fixture.sh" "$root" "$fixture" \
-    scripts/ci/rewrite-local-lock-versions.pl scripts/ci/next-release-version.sh \
+    scripts/dev/release-metadata-editor.sh scripts/ci/next-release-version.sh \
     scripts/ci/read-cargo-workspace-version.sh
+# Admit the real tool once; toy workspaces do not own independent tool stores.
+editor="$(bash "$root/scripts/dev/release-metadata-editor.sh" --check)"
+printf '#!/usr/bin/env bash\nprintf "%%s\\n" %q\n' "$editor" > "$fixture/scripts/dev/release-metadata-editor.sh"
 cat > "$fixture/source/Cargo.toml" <<'TOML'
 [workspace]
 resolver = "3"

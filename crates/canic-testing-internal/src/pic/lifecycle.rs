@@ -32,8 +32,8 @@ use canic_core::shared_support::fleet_admission_policy::{
 };
 use canic_host::release_set::AppConfigSnapshot;
 use ic_platform::{
-    Principal,
     candid::contract::{encode_args, encode_one},
+    principal::ExternalPrincipal as Principal,
 };
 use ic_testkit::{
     Fake,
@@ -750,7 +750,7 @@ mod tests {
             ic_testkit::pic::query_candid_args(
                 pic,
                 canister,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 "memory_allocations_probe",
                 (),
                 canic::testing::CANDID_REPLY_LIMITS,
@@ -868,7 +868,7 @@ mod tests {
             let entered: Vec<bool> = ic_testkit::pic::query_candid_args(
                 &(fixture.pic),
                 canister,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 "perf_context_entered",
                 (),
                 canic::testing::CANDID_REPLY_LIMITS,
@@ -879,7 +879,7 @@ mod tests {
             let completed: Vec<u8> = ic_testkit::pic::query_candid_args(
                 &(fixture.pic),
                 canister,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 "perf_context_completed",
                 (),
                 canic::testing::CANDID_REPLY_LIMITS,
@@ -917,7 +917,7 @@ mod tests {
                 let metrics: Vec<PerfProbeMetric> = ic_testkit::pic::query_candid_args(
                     &(fixture.pic),
                     canister,
-                    ic_platform::Principal::anonymous(),
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
                     "perf_context_metrics",
                     (),
                     canic::testing::CANDID_REPLY_LIMITS,
@@ -928,7 +928,7 @@ mod tests {
                 let completed: Vec<u8> = ic_testkit::pic::query_candid_args(
                     &(fixture.pic),
                     canister,
-                    ic_platform::Principal::anonymous(),
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
                     "perf_context_completed",
                     (),
                     canic::testing::CANDID_REPLY_LIMITS,
@@ -940,7 +940,7 @@ mod tests {
             let metrics: Vec<PerfProbeMetric> = ic_testkit::pic::query_candid_args(
                 &(fixture.pic),
                 canister,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 "perf_context_metrics",
                 (),
                 canic::testing::CANDID_REPLY_LIMITS,
@@ -968,7 +968,7 @@ mod tests {
         let first: Result<u64, Error> = ic_testkit::pic::update_candid_args(
             &(fixture.pic),
             canister,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "begin_timer_probe_intent",
             (211_u8, None::<u64>),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -1010,7 +1010,7 @@ mod tests {
             let duplicate: Result<u64, Error> = ic_testkit::pic::update_candid_args(
                 &(fixture.pic),
                 canister,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 "begin_timer_probe_intent",
                 (211_u8, None::<u64>),
                 canic::testing::CANDID_REPLY_LIMITS,
@@ -1026,7 +1026,7 @@ mod tests {
             let next: Result<u64, Error> = ic_testkit::pic::update_candid_args(
                 &(fixture.pic),
                 canister,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 "begin_timer_probe_intent",
                 (211_u8 + attempt, None::<u64>),
                 canic::testing::CANDID_REPLY_LIMITS,
@@ -2194,7 +2194,7 @@ mod tests {
         let result: Result<u32, Error> = ic_testkit::pic::query_candid_args(
             pic,
             canister,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "managed_guard_workflow_runs",
             (),
             canic::testing::CANDID_REPLY_LIMITS,

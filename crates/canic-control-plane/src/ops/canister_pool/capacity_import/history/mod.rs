@@ -2,7 +2,7 @@
 
 use crate::view::canister_pool::{PoolImportHistoryKind, PoolImportHistoryView};
 use canic_core::control_plane_support::error::InternalError;
-use ic_platform::{Principal, candid::contract::CandidType};
+use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
 use serde::Deserialize;
 
 #[derive(CandidType, Deserialize)]

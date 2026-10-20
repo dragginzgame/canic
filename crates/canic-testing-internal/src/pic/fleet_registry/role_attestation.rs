@@ -16,7 +16,7 @@ use canic::{
     ids::{CanisterRole, ComponentBinding},
     protocol::CANIC_ROOT_COMMAND,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use ic_testkit::pic::PocketIc;
 use std::time::Duration;
 

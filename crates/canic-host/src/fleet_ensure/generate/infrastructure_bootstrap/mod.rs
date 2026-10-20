@@ -62,7 +62,7 @@ pub(super) fn validate_seed(
 pub(in crate::fleet_ensure) fn seed_projection(
     desired: &DesiredFleet,
     original: &str,
-    created_coordinator: Option<ic_platform::Principal>,
+    created_coordinator: Option<ic_platform::principal::ExternalPrincipal>,
 ) -> Result<String, FleetGenerateError> {
     use canic_contracts::cycles::Cycles;
     let invalid = || {
@@ -117,8 +117,8 @@ pub(in crate::fleet_ensure) fn seed_projection(
         }
     }
     if let Some(created) = created_coordinator {
-        if created == ic_platform::Principal::anonymous()
-            || created == ic_platform::Principal::management_canister()
+        if created == ic_platform::principal::ExternalPrincipal::anonymous()
+            || created == ic_platform::principal::ExternalPrincipal::management_canister()
             || coordinator.is_some_and(|selected| selected != created.to_text())
         {
             return Err(invalid());

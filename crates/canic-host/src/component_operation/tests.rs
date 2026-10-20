@@ -16,7 +16,7 @@ use canic_contracts::{
         ReleaseSetDigest, SubnetId,
     },
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::{io, path::PathBuf};
 
 fn authority() -> ComponentAuthorityRecord {

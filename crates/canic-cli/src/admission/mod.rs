@@ -30,7 +30,7 @@ use canic_host::admission::{
 };
 use clap::{ArgGroup, Command as ClapCommand};
 use ic_host_fs::durable::{PublicationMode, WriteOptions, write_bytes};
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::{ffi::OsString, fs, path::PathBuf};
 use thiserror::Error as ThisError;
 

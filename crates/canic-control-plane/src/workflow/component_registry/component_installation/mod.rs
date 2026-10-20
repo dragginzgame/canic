@@ -74,7 +74,7 @@ fn claim_component_pool_asset(
     operation_id: [u8; 32],
     plan: RootComponentCreationPlan,
     claim: CanisterPoolClaimKey,
-    canister: ic_platform::Principal,
+    canister: ic_platform::principal::ExternalPrincipal,
 ) -> Result<RootComponentAllocationView, InternalError> {
     let permit = deployment::reserve_component_pool_claim_guard()?;
     let intent = ComponentRegistryOps::begin_creation(
@@ -106,7 +106,7 @@ fn claim_component_child_pool_asset(
     operation_id: [u8; 32],
     plan: RootComponentCreationPlan,
     claim: CanisterPoolClaimKey,
-    canister: ic_platform::Principal,
+    canister: ic_platform::principal::ExternalPrincipal,
 ) -> Result<RootComponentChildAllocationResponse, InternalError> {
     let permit = deployment::reserve_component_child_pool_claim_guard()?;
     let intent = ComponentRegistryOps::begin_child_creation(
@@ -188,7 +188,7 @@ fn reconcile_component_child_pool_claim(
 
 fn require_component_progress_canister(
     progress: &RootComponentAllocationProgressView,
-    expected: ic_platform::Principal,
+    expected: ic_platform::principal::ExternalPrincipal,
 ) -> Result<(), InternalError> {
     let actual = match progress {
         RootComponentAllocationProgressView::Created { canister, .. }
@@ -210,7 +210,7 @@ fn require_component_progress_canister(
 
 fn require_component_child_progress_canister(
     progress: &RootComponentChildAllocationProgressView,
-    expected: ic_platform::Principal,
+    expected: ic_platform::principal::ExternalPrincipal,
 ) -> Result<(), InternalError> {
     let actual = match progress {
         RootComponentChildAllocationProgressView::Created { canister, .. }
@@ -314,7 +314,7 @@ pub(super) struct ComponentInstallPlan {
     pub(super) payload: CanisterInitPayload,
     pub(super) deployment: ProtectedComponentDeployment,
     pub(super) fixture: Option<FixtureInstallation>,
-    pub(super) canister: ic_platform::Principal,
+    pub(super) canister: ic_platform::principal::ExternalPrincipal,
     pub(super) expected_status_module_hash: [u8; 32],
 }
 
@@ -326,7 +326,7 @@ pub(super) struct ComponentChildInstallPlan {
     pub(super) deployment: ProtectedComponentDeployment,
     pub(super) fixture: Option<FixtureInstallation>,
     pub(super) component_group: Option<ComponentGroupDirectory>,
-    pub(super) canister: ic_platform::Principal,
+    pub(super) canister: ic_platform::principal::ExternalPrincipal,
     pub(super) expected_status_module_hash: [u8; 32],
     pub(super) application_init_args: Option<Vec<u8>>,
 }
@@ -968,7 +968,7 @@ async fn verify_and_mark_installed(
 
 /// Recycled assets may remain stopped; the retained Installed phase owns startup retries.
 async fn start_installed_workload(
-    canister: ic_platform::Principal,
+    canister: ic_platform::principal::ExternalPrincipal,
     claim: &CanisterPoolClaimKey,
     expected_module: [u8; 32],
 ) -> Result<(), InternalError> {

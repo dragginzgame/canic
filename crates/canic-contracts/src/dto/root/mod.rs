@@ -34,7 +34,7 @@ use crate::{
     },
     ids::{FleetFundingProfile, FleetSubnetRootFundingPolicy, FleetSubnetRootIcpRefillPolicy},
 };
-use ic_platform::{Principal, candid::contract::CandidType};
+use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
 use serde::Deserialize;
 
 /// Root Component allocation detail projected through the operation lane.
@@ -244,7 +244,7 @@ pub struct RootProvisioningReleaseEntry {
     pub key: RootProvisioningReleaseKey,
     pub plan_hash: [u8; 32],
     pub phase: RootProvisioningReleasePhase,
-    pub delivery_in_flight: Option<ic_platform::Principal>,
+    pub delivery_in_flight: Option<ic_platform::principal::ExternalPrincipal>,
     pub last_failure: Option<crate::dto::component_provisioning::RootComponentProvisioningFailure>,
 }
 
@@ -252,7 +252,7 @@ pub struct RootProvisioningReleaseEntry {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 #[candid_path("ic_platform::candid::contract")]
 pub struct RootProvisioningReleaseResponse {
-    pub root: ic_platform::Principal,
+    pub root: ic_platform::principal::ExternalPrincipal,
     pub active_provisioning: Option<[u8; 32]>,
     pub active_directory_synchronization: Option<[u8; 32]>,
     pub entry: Option<RootProvisioningReleaseEntry>,

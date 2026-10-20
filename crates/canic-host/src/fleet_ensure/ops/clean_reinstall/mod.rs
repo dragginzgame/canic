@@ -25,7 +25,7 @@ use ic_host_fs::durable::{PublicationMode, WriteOptions, write_bytes};
 use ic_host_fs::read::read_optional_file_no_follow;
 
 use canic_core::cdk::utils::hash::hex_bytes;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use sha2_host::{Digest, Sha256};
 use std::{collections::BTreeSet, path::Path};
 

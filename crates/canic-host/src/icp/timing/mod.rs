@@ -7,7 +7,7 @@
 mod async_tests;
 
 use crate::icp::IcpCli;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::Serialize;
 use std::{
     cell::RefCell,

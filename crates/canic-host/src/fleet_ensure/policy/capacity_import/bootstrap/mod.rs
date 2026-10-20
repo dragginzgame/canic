@@ -6,7 +6,7 @@ use crate::fleet_ensure::model::{
     DesiredCanister, DesiredCanisterKind, DesiredFleet, DesiredFleetBootstrapRoot, DesiredPresence,
 };
 use canic_contracts::ids::MAX_FLEET_CAPACITY_IMPORT_SOURCES;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::collections::BTreeSet;
 use thiserror::Error;
 

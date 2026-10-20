@@ -29,7 +29,7 @@ use canic_core::{
     },
     shared_support::fleet_funding_policy::fleet_subnet_root_funding_policy_hash,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 /// Initialize the independent Root funding journal on fresh install.
 

@@ -36,7 +36,7 @@ use canic_contracts::{
 };
 use canic_core::cdk::utils::hash::wasm_hash;
 use canic_host::release_set::AppConfigSnapshot;
-use ic_platform::{Principal, candid::contract::encode_one};
+use ic_platform::{candid::contract::encode_one, principal::ExternalPrincipal as Principal};
 use ic_testkit::pic::{
     CandidCallError, CanisterDiagnosticsRequest, CanisterInstallExt, InstallSpec,
     LabeledCanisterDiagnosticsRequest, PocketIc, PocketIcBuilder, PocketIcDiagnosticsExt,
@@ -59,7 +59,7 @@ fn root_command(
     ic_testkit::pic::update_candid_args(
         pic,
         root,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         protocol::CANIC_ROOT_COMMAND,
         (command,),
         canic::testing::CANDID_REPLY_LIMITS,
@@ -76,7 +76,7 @@ fn root_status(
     ic_testkit::pic::query_candid_args(
         pic,
         root,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         match &request {
             RootStatusRequestFragment::Readiness => protocol::CANIC_OBSERVABILITY,
             RootStatusRequestFragment::Operation(_) => protocol::CANIC_ROOT_OPERATION_STATUS,
@@ -552,7 +552,7 @@ fn fetch_ready(pic: &PocketIc, canister_id: Principal) -> Result<bool, CandidCal
     match ic_testkit::pic::query_candid_args::<(Result<CanisterStatusResponseFragment, Error>,), _>(
         pic,
         canister_id,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         protocol::CANIC_OBSERVABILITY,
         (CanisterStatusRequestFragment::Readiness,),
         canic::testing::CANDID_REPLY_LIMITS,
@@ -571,7 +571,7 @@ fn fetch_root_ready(pic: &PocketIc, canister_id: Principal) -> Result<bool, Cand
     match ic_testkit::pic::query_candid_args::<(Result<RootStatusResponseFragment, Error>,), _>(
         pic,
         canister_id,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         protocol::CANIC_OBSERVABILITY,
         (RootStatusRequestFragment::Readiness,),
         canic::testing::CANDID_REPLY_LIMITS,

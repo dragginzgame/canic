@@ -31,7 +31,7 @@ use canic_host::{
     icp_config::resolve_current_canic_icp_root,
 };
 use clap::{ArgAction, ArgMatches, Command};
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::{ffi::OsString, path::PathBuf};
 
 pub(super) fn command() -> Command {

@@ -30,8 +30,11 @@ async fn canic_upgrade() {}
 
 /// Prove browser-owned authenticated ingress through the current Fleet admission policy.
 #[canic_query(requires(caller::is_fleet_admitted()))]
-async fn audit_frontend_admission_probe() -> Result<ic_platform::Principal, Error> {
-    Ok(ic_platform::cdk::api::msg_caller())
+async fn audit_frontend_admission_probe() -> Result<ic_platform::principal::ExternalPrincipal, Error>
+{
+    Ok(ic_platform::principal::ExternalPrincipal::from(
+        ic_platform::cdk::api::msg_caller(),
+    ))
 }
 
 #[canic_query(requires(env::build_local_only()))]

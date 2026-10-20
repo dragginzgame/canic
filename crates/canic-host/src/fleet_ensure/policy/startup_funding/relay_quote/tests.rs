@@ -6,7 +6,7 @@ use crate::fleet_ensure::{
     },
 };
 use canic_core::control_plane_support::config::ComponentDeploymentConfiguration;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 fn requests() -> Vec<StartupChildFundingBinding> {
     let config = ComponentDeploymentConfiguration::compile(&hub_config()).unwrap();

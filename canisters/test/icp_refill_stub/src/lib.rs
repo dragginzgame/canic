@@ -4,13 +4,15 @@
 //! returns the canonical duplicate result on replay. The CMC retains one exact
 //! notification and performs one real management-canister cycles deposit.
 
+mod codec;
+
 use ic_platform::cdk::{
     api::{msg_caller, trap},
     call::Call,
 };
 use ic_platform::{
-    Principal,
     candid::contract::{CandidType, Nat},
+    principal::ExternalPrincipal as Principal,
 };
 use serde::Deserialize;
 use std::cell::RefCell;
@@ -123,7 +125,7 @@ struct CanisterIdRecord {
     canister_id: Principal,
 }
 
-#[ic_platform::cdk::init]
+#[ic_platform::cdk::init(decode_with = "codec::decode_one")]
 fn init(args: StubInit) {
     let state = match args {
         StubInit::Ledger { balance_e8s } => StubState::Ledger {
@@ -142,19 +144,31 @@ fn init(args: StubInit) {
     STATE.with_borrow_mut(|stored| *stored = Some(state));
 }
 
-#[ic_platform::cdk::update(name = "icrc1_fee")]
+#[ic_platform::cdk::update(
+    name = "icrc1_fee",
+    decode_with = "codec::decode_args",
+    encode_with = "codec::encode_reply"
+)]
 fn icrc1_fee() -> Nat {
     require_ledger();
     Nat::from(LEDGER_FEE_E8S)
 }
 
-#[ic_platform::cdk::update(name = "icrc1_decimals")]
+#[ic_platform::cdk::update(
+    name = "icrc1_decimals",
+    decode_with = "codec::decode_args",
+    encode_with = "codec::encode_reply"
+)]
 fn icrc1_decimals() -> u8 {
     require_ledger();
     ICP_DECIMALS
 }
 
-#[ic_platform::cdk::update(name = "icrc1_balance_of")]
+#[ic_platform::cdk::update(
+    name = "icrc1_balance_of",
+    decode_with = "codec::decode_one",
+    encode_with = "codec::encode_reply"
+)]
 fn icrc1_balance_of(account: Icrc1Account) -> Nat {
     let _ = account;
     Nat::from(STATE.with_borrow(|stored| match stored.as_ref() {
@@ -163,7 +177,11 @@ fn icrc1_balance_of(account: Icrc1Account) -> Nat {
     }))
 }
 
-#[ic_platform::cdk::update(name = "icrc1_transfer")]
+#[ic_platform::cdk::update(
+    name = "icrc1_transfer",
+    decode_with = "codec::decode_one",
+    encode_with = "codec::encode_reply"
+)]
 fn icrc1_transfer(request: TransferArg) -> Result<Nat, TransferError> {
     STATE.with_borrow_mut(|stored| {
         let Some(StubState::Ledger {
@@ -174,7 +192,7 @@ fn icrc1_transfer(request: TransferArg) -> Result<Nat, TransferError> {
             trap("ICP refill stub is not the Ledger role");
         };
         if let Some(receipt) = transfer.as_ref() {
-            if receipt.caller == msg_caller() && receipt.request == request {
+            if receipt.caller == msg_caller().into() && receipt.request == request {
                 return Err(TransferError::Duplicate {
                     duplicate_of: Nat::from(BLOCK_INDEX),
                 });
@@ -206,14 +224,18 @@ fn icrc1_transfer(request: TransferArg) -> Result<Nat, TransferError> {
         }
         *balance_e8s -= debit_e8s;
         *transfer = Some(TransferReceipt {
-            caller: msg_caller(),
+            caller: msg_caller().into(),
             request,
         });
         Ok(Nat::from(BLOCK_INDEX))
     })
 }
 
-#[ic_platform::cdk::update(name = "get_icp_xdr_conversion_rate")]
+#[ic_platform::cdk::update(
+    name = "get_icp_xdr_conversion_rate",
+    decode_with = "codec::decode_args",
+    encode_with = "codec::encode_reply"
+)]
 fn get_icp_xdr_conversion_rate() -> IcpXdrConversionRateResponse {
     let rate = STATE.with_borrow(|stored| match stored.as_ref() {
         Some(StubState::Cmc {
@@ -232,7 +254,11 @@ fn get_icp_xdr_conversion_rate() -> IcpXdrConversionRateResponse {
     }
 }
 
-#[ic_platform::cdk::update(name = "notify_top_up")]
+#[ic_platform::cdk::update(
+    name = "notify_top_up",
+    decode_with = "codec::decode_one",
+    encode_with = "codec::encode_reply"
+)]
 async fn notify_top_up(request: NotifyTopUpArg) -> Result<Nat, NotifyTopUpError> {
     let (cycles, replay) = STATE.with_borrow(|stored| match stored.as_ref() {
         Some(StubState::Cmc {
@@ -258,11 +284,10 @@ async fn notify_top_up(request: NotifyTopUpArg) -> Result<Nat, NotifyTopUpError>
             error_message: "unknown Ledger block".to_string(),
         });
     }
-    let call = Call::unbounded_wait(Principal::management_canister(), "deposit_cycles").with_arg(
-        CanisterIdRecord {
+    let call = Call::unbounded_wait(Principal::management_canister().into(), "deposit_cycles")
+        .with_arg(CanisterIdRecord {
             canister_id: request.canister_id,
-        },
-    );
+        });
     if call.with_cycles(cycles).await.is_err() {
         return Err(NotifyTopUpError::Other {
             error_code: 3,
@@ -283,5 +308,3 @@ fn require_ledger() {
         }
     });
 }
-
-ic_platform::cdk::export_candid!();

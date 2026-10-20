@@ -27,7 +27,7 @@ use canic_core::{
     cdk::utils::hash::hex_bytes,
 };
 use flate2::{Compression, GzBuilder};
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::io::Write;
 
 const CONFIG: &str = r#"

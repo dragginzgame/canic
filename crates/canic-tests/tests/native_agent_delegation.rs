@@ -17,9 +17,9 @@ use canic_testing_internal::pic::{
     setup_fresh_active_component_registry, upgrade_args,
 };
 use ic_platform::{
-    Principal,
     agent::{Identity, Secp256k1Identity},
     candid::contract::CandidType,
+    principal::ExternalPrincipal as Principal,
 };
 use ic_stable_structures::{
     Cell, VectorMemory,
@@ -188,9 +188,9 @@ fn fleet_admission_projection_is_durable_bounded_and_separate_from_application_s
 
 fn generic_application_subject_as(
     fixture: &canic_testing_internal::pic::ActiveComponentRegistryFixture,
-    canister_id: ic_platform::Principal,
-    caller: ic_platform::Principal,
-) -> Result<ic_platform::Principal, Error> {
+    canister_id: ic_platform::principal::ExternalPrincipal,
+    caller: ic_platform::principal::ExternalPrincipal,
+) -> Result<ic_platform::principal::ExternalPrincipal, Error> {
     ic_testkit::pic::query_candid_args(
         fixture.pic(),
         canister_id,
@@ -205,8 +205,8 @@ fn generic_application_subject_as(
 
 fn fleet_admission_status_as(
     fixture: &canic_testing_internal::pic::ActiveComponentRegistryFixture,
-    canister_id: ic_platform::Principal,
-    caller: ic_platform::Principal,
+    canister_id: ic_platform::principal::ExternalPrincipal,
+    caller: ic_platform::principal::ExternalPrincipal,
 ) -> Result<FleetAdmissionProjectionStatusResponse, Error> {
     let response: Result<FleetAdmissionManagedStatusResponse, Error> =
         ic_testkit::pic::query_candid_args(
@@ -229,8 +229,8 @@ fn fleet_admission_status_as(
 
 fn fleet_admission_probe_as(
     fixture: &canic_testing_internal::pic::ActiveComponentRegistryFixture,
-    canister_id: ic_platform::Principal,
-    caller: ic_platform::Principal,
+    canister_id: ic_platform::principal::ExternalPrincipal,
+    caller: ic_platform::principal::ExternalPrincipal,
 ) -> Result<(), Error> {
     ic_testkit::pic::query_candid_args(
         fixture.pic(),
@@ -272,7 +272,7 @@ fn closed_local_authorization_denial_partition_is_bounded() {
     eprintln!("closed caller-gate observations: {observations:?}");
 }
 
-fn native_agent_subject() -> ic_platform::Principal {
+fn native_agent_subject() -> ic_platform::principal::ExternalPrincipal {
     Secp256k1Identity::from_pem(TEST_IDENTITY_PEM.as_bytes())
         .expect("test PEM identity must parse")
         .sender()

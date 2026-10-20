@@ -16,7 +16,7 @@ use canic_contracts::ids::{
     AppId, CanonicalNetworkId, FleetBinding, FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
     FleetSubnetWasmStoreActivationAuthority, FleetSubnetWasmStoreAuthority, ReleaseBuildId,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::collections::BTreeSet;
 use thiserror::Error as ThisError;
 

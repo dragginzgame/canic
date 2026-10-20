@@ -957,7 +957,7 @@ crate-type = ["cdylib"]
 [dependencies]
 # Add runtime Canic features here when canic.toml enables auth settings.
 canic = "{canic_version}"
-ic-platform = {{ version = "0.1.13", default-features = false, features = ["cdk"] }}
+ic-platform = {{ version = "0.4", default-features = false, features = ["cdk"] }}
 
 [build-dependencies]
 canic = "{canic_version}"
@@ -1011,7 +1011,7 @@ crate-type = ["cdylib"]
 [dependencies]
 # Add runtime Canic features here when canic.toml enables auth settings.
 canic = "{canic_version}"
-ic-platform = {{ version = "0.1.13", default-features = false, features = ["cdk"] }}
+ic-platform = {{ version = "0.4", default-features = false, features = ["cdk"] }}
 
 [build-dependencies]
 canic = "{canic_version}"

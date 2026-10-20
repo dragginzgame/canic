@@ -130,7 +130,7 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, previous_operation: &s
     let withdrawals: u64 = ic_testkit::pic::query_candid_args(
         input.pic,
         ledger,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "withdrawal_count",
         (),
         canic::testing::CANDID_REPLY_LIMITS,
@@ -166,7 +166,7 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, previous_operation: &s
                 ic_testkit::pic::query_candid_args::<(u64,), _>(
                     input.pic,
                     ledger,
-                    ic_platform::Principal::anonymous(),
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
                     "withdrawal_count",
                     (),
                     canic::testing::CANDID_REPLY_LIMITS
@@ -191,7 +191,7 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, previous_operation: &s
         ic_testkit::pic::query_candid_args::<(u64,), _>(
             input.pic,
             ledger,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "withdrawal_count",
             (),
             canic::testing::CANDID_REPLY_LIMITS

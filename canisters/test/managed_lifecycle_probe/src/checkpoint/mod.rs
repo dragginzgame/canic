@@ -1,6 +1,7 @@
 //! Application-owned durable freeze and counter used to qualify the checkpoint SDK.
 //! No Root sequencing, snapshot authority or production application policy lives here.
 
+use canic::__internal::core::cdk::structures::{DefaultMemoryImpl, StableCell as Cell};
 use canic::api::application_checkpoint::{
     ApplicationCheckpointPhase as Phase, ApplicationCheckpointRecord as Record,
     ApplicationCheckpointRootPredicate, ApplicationCheckpointTransition as Transition,
@@ -10,16 +11,12 @@ use canic::{
     dto::application_checkpoint::ApplicationCheckpointParticipantStatus,
     ids::ApplicationCheckpointBinding,
 };
-use ic_memory::{
-    RuntimeMemory,
-    ic_stable_structures::{Cell, DefaultMemoryImpl},
-};
 use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
 pub const KEY: &str = "managed_probe.checkpoint.v1";
-type Storage = Cell<Vec<u8>, RuntimeMemory<DefaultMemoryImpl>>;
+type Storage = Cell<Vec<u8>, DefaultMemoryImpl>;
 
 /// Business state and its freeze record are committed in one application-owned cell.
 #[derive(Default, Deserialize, Serialize)]

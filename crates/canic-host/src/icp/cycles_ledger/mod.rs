@@ -1,8 +1,8 @@
 //! Shared exact Cycles Ledger creation contracts for maintained host transports.
 
 use ic_platform::{
-    Principal,
     candid::contract::{CandidType, Nat},
+    principal::ExternalPrincipal as Principal,
 };
 use serde::Deserialize;
 

@@ -13,8 +13,8 @@ use crate::infra::ic::{
     call::{Call, CallBuilder, CallResult},
 };
 use ic_platform::{
-    Principal,
     management_canister_types::{CanisterIdRecord, CanisterInfoArgs},
+    principal::ExternalPrincipal as Principal,
 };
 
 impl MgmtInfra {

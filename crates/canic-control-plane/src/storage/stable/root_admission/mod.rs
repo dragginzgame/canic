@@ -374,7 +374,7 @@ mod tests {
         assert!(bytes.len() <= MAX_FLEET_ADMISSION_ROOT_RECORD_BYTES as usize);
     }
 
-    fn principal(index: usize) -> ic_platform::Principal {
+    fn principal(index: usize) -> ic_platform::principal::ExternalPrincipal {
         let mut bytes = [0_u8; 29];
         bytes[..8].copy_from_slice(
             &u64::try_from(index)
@@ -382,6 +382,6 @@ mod tests {
                 .to_be_bytes(),
         );
         bytes[8..].fill(u8::try_from(index % 251).expect("bounded fixture byte"));
-        ic_platform::Principal::from_slice(&bytes)
+        ic_platform::principal::ExternalPrincipal::from_slice(&bytes)
     }
 }

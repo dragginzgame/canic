@@ -39,7 +39,7 @@ pub(super) fn verify_canister_signature(
             public_key_der: input.proof.public_key_der.clone(),
         },
         &ic_auth::canister_signature::CanisterSignaturePolicy {
-            signing_canister: input.signing_canister,
+            signing_canister: input.signing_canister.into(),
             seed_hash: Sha256::digest(input.seed).into(),
             ic_root_public_key_raw: input.ic_root_public_key_raw,
             now_ns: input.now_ns,

@@ -77,7 +77,7 @@ use canic_core::{
 };
 use ic_host_artifacts::artifact::ArtifactError;
 use ic_host_fs::read::read_optional_file_no_follow;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     fs,

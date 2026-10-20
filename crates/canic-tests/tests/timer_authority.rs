@@ -20,7 +20,7 @@ use canic_contracts::dto::wire::projection::fixture_timer_authority::{
     PublicStatusRequest, PublicStatusResponse, RoleStatusRequest, RoleStatusResponse,
 };
 use canic_testing_internal::pic::{CanicPicExt, install_lifecycle_boundary_fixture, upgrade_args};
-use ic_platform::{Principal, candid::contract::CandidType};
+use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
 use ic_testkit::pic::{CanisterInstallExt, PocketIc, RetryPolicy};
 use serde::Deserialize;
 use std::time::Duration;
@@ -66,7 +66,7 @@ fn public_snapshots_preserve_observer_authority() -> Result<(), ic_testkit::pic:
     let scheduled: Result<(), Error> = ic_testkit::pic::update_candid_args(
         &(fixture.pic),
         published,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "schedule_cost_probe_watchdog",
         (),
         REPLY_LIMITS,
@@ -80,7 +80,7 @@ fn public_snapshots_preserve_observer_authority() -> Result<(), ic_testkit::pic:
     let sampled: Result<(), Error> = ic_testkit::pic::update_candid_args(
         &(fixture.pic),
         published,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "sample_public_metrics",
         (),
         REPLY_LIMITS,
@@ -180,7 +180,7 @@ fn assert_timer_registration_continuity(pic: &PocketIc, canister: Principal) {
         let sampled: Result<(), Error> = ic_testkit::pic::update_candid_args(
             pic,
             canister,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "sample_public_metrics",
             (),
             REPLY_LIMITS,
@@ -191,7 +191,7 @@ fn assert_timer_registration_continuity(pic: &PocketIc, canister: Principal) {
         let reply: Result<PublicStatusResponse, Error> = ic_testkit::pic::query_candid_args(
             pic,
             canister,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             protocol::CANIC_PUBLIC_STATUS,
             (PublicStatusRequest::Metrics(PublicMetricsRequest {
                 family: PublicMetricFamily::Performance,
@@ -218,7 +218,7 @@ fn assert_timer_registration_continuity(pic: &PocketIc, canister: Principal) {
         let reply: Result<(), Error> = ic_testkit::pic::update_candid_args(
             pic,
             canister,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             method,
             (unregister,),
             REPLY_LIMITS,
@@ -236,7 +236,7 @@ fn assert_timer_registration_continuity(pic: &PocketIc, canister: Principal) {
     let reply: Result<(), Error> = ic_testkit::pic::update_candid_args(
         pic,
         canister,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "schedule_cost_probe_watchdog",
         (),
         REPLY_LIMITS,
@@ -256,7 +256,7 @@ fn assert_timer_registration_continuity(pic: &PocketIc, canister: Principal) {
         let reply: Result<(), Error> = ic_testkit::pic::update_candid_args(
             pic,
             canister,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "schedule_cost_probe_watchdog",
             (),
             REPLY_LIMITS,
@@ -309,7 +309,7 @@ fn public_memory_sampling_retains_bounded_history_at_the_source_ceiling() {
         let response: Result<PublicSamplingProbe, Error> = ic_testkit::pic::update_candid_args(
             &(fixture.pic),
             canister,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "qualify_public_metrics_sampling",
             (if period == 0 { 4096_u16 } else { 0_u16 }, false),
             REPLY_LIMITS,
@@ -373,7 +373,7 @@ fn optional_sampling_is_bounded_and_rejected_performance_preserves_cycle_trackin
     let baseline: Result<PublicSamplingProbe, Error> = ic_testkit::pic::update_candid_args(
         &(fixture.pic),
         canister,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "qualify_public_metrics_sampling",
         (256_u16, false),
         REPLY_LIMITS,
@@ -386,7 +386,7 @@ fn optional_sampling_is_bounded_and_rejected_performance_preserves_cycle_trackin
     let full: Result<PublicSamplingProbe, Error> = ic_testkit::pic::update_candid_args(
         &(fixture.pic),
         canister,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "qualify_public_metrics_sampling",
         (4096_u16, false),
         REPLY_LIMITS,
@@ -407,7 +407,7 @@ fn optional_sampling_is_bounded_and_rejected_performance_preserves_cycle_trackin
     let rejected: Result<PublicSamplingProbe, Error> = ic_testkit::pic::update_candid_args(
         &(fixture.pic),
         canister,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "qualify_public_metrics_sampling",
         (0_u16, true),
         REPLY_LIMITS,
@@ -434,7 +434,7 @@ fn optional_sampling_is_bounded_and_rejected_performance_preserves_cycle_trackin
     let history: Result<RoleStatusResponse, Error> = ic_testkit::pic::query_candid_args(
         &(fixture.pic),
         canister,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         protocol::CANIC_OBSERVABILITY,
         (RoleStatusRequest::CycleHistory(PageRequest {
             limit: 100,
@@ -488,7 +488,7 @@ fn exact_cycles_and_runtime_metrics_require_controller() {
             let accepted: Result<RoleStatusResponse, Error> = ic_testkit::pic::query_candid_args(
                 &(fixture.pic),
                 canister_id,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 protocol::CANIC_OBSERVABILITY,
                 (request.clone(),),
                 REPLY_LIMITS,
@@ -738,7 +738,7 @@ fn timer_registration_capacity_and_invalid_identity_are_leak_free() {
     let invalid: Result<bool, Error> = ic_testkit::pic::update_candid_args(
         &(fixture.pic),
         canister_id,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "reject_invalid_timer_identity",
         (),
         REPLY_LIMITS,
@@ -755,7 +755,7 @@ fn timer_registration_capacity_and_invalid_identity_are_leak_free() {
     let fill: Result<(u64, bool), Error> = ic_testkit::pic::update_candid_args(
         &(fixture.pic),
         canister_id,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "fill_timer_registry",
         (),
         REPLY_LIMITS,
@@ -855,7 +855,7 @@ fn runtime_status(pic: &PocketIc, canister_id: Principal) -> CanicRuntimeStatus 
     let result: Result<RoleStatusResponse, canic::Error> = ic_testkit::pic::query_candid_args(
         pic,
         canister_id,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         protocol::CANIC_OBSERVABILITY,
         (RoleStatusRequest::Runtime,),
         REPLY_LIMITS,
@@ -889,7 +889,7 @@ fn begin_intent(
     ic_testkit::pic::update_candid_args(
         pic,
         canister_id,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "begin_timer_probe_intent",
         (resource_seed, ttl_secs),
         REPLY_LIMITS,
@@ -902,7 +902,7 @@ fn counts(pic: &PocketIc, canister_id: Principal) -> (u64, u64, u64) {
     let result: Result<(u64, u64, u64), canic::Error> = ic_testkit::pic::query_candid_args(
         pic,
         canister_id,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "timer_probe_counts",
         (),
         REPLY_LIMITS,
@@ -931,7 +931,7 @@ fn timer_metrics(pic: &PocketIc, canister_id: Principal) -> Vec<MetricEntry> {
     let response: Result<RoleStatusResponse, Error> = ic_testkit::pic::query_candid_args(
         pic,
         canister_id,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         protocol::CANIC_OBSERVABILITY,
         (RoleStatusRequest::Metrics(MetricsStatusRequest {
             kind: MetricsKind::Runtime,
@@ -1047,7 +1047,7 @@ fn public_history_samples_without_readers_and_resets_after_restoration() {
     ic_testkit::pic::update_candid_args::<(Result<(), Error>,), _>(
         &(fixture.pic),
         canister,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "suspend_public_sampler_fixture",
         (),
         REPLY_LIMITS,
@@ -1333,7 +1333,7 @@ fn public_history_costs_cover_sampling_and_independent_chart_queries() {
             let sampled: Result<u64, Error> = ic_testkit::pic::update_candid_args(
                 &(fixture.pic),
                 canister,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 "qualify_history_sampling_cost",
                 (rows,),
                 REPLY_LIMITS,
@@ -1379,7 +1379,7 @@ fn public_history_costs_cover_sampling_and_independent_chart_queries() {
             let sampled: Result<u64, Error> = ic_testkit::pic::update_candid_args(
                 &(fixture.pic),
                 sparse,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 "qualify_history_sampling_cost",
                 (rows,),
                 REPLY_LIMITS,
@@ -1441,7 +1441,7 @@ fn configure_public_sampler(pic: &PocketIc, canister: Principal, reject: bool) {
     ic_testkit::pic::update_candid_args::<(Result<(), Error>,), _>(
         pic,
         canister,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "configure_public_sampler",
         (reject,),
         REPLY_LIMITS,

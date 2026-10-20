@@ -67,7 +67,7 @@ impl LifecycleApi {
 
     /// Authenticate one Root admission phase before distribution state is read.
     pub fn authorize_root_admission_caller(
-        caller: ic_platform::Principal,
+        caller: ic_platform::principal::ExternalPrincipal,
     ) -> Result<(), canic_contracts::dto::error::Error> {
         crate::workflow::root_admission::authorize_coordinator(caller).map_err(Into::into)
     }
@@ -167,7 +167,7 @@ impl LifecycleApi {
     /// Resolve one indexed Root-owned durable operation for the consolidated status lane.
     pub fn root_operation_status(
         operation_id: [u8; 32],
-        caller: ic_platform::Principal,
+        caller: ic_platform::principal::ExternalPrincipal,
         caller_is_controller: bool,
     ) -> Result<RootOperationStatusResponse, canic_contracts::dto::error::Error> {
         crate::workflow::root_status::operation_status(operation_id, caller, caller_is_controller)
@@ -178,7 +178,7 @@ impl LifecycleApi {
     /// ambiguous lookup across unrelated durable operation owners.
     pub fn root_component_provisioning_status(
         operation_id: [u8; 32],
-        caller: ic_platform::Principal,
+        caller: ic_platform::principal::ExternalPrincipal,
         caller_is_controller: bool,
     ) -> Result<
         canic_contracts::dto::component_provisioning::RootComponentProvisioningStatusResponse,
@@ -196,7 +196,7 @@ impl LifecycleApi {
     /// lookup across unrelated durable operation owners.
     pub fn root_component_child_provisioning_status(
         operation_id: [u8; 32],
-        caller: ic_platform::Principal,
+        caller: ic_platform::principal::ExternalPrincipal,
         caller_is_controller: bool,
     ) -> Result<RootComponentChildAllocationResponse, canic_contracts::dto::error::Error> {
         crate::workflow::root_status::component_child_provisioning_status(
@@ -269,7 +269,7 @@ impl LifecycleApi {
 
     /// Authenticate one Root funding acceptance before protected workflow reads.
     pub fn authorize_root_funding_caller(
-        caller: ic_platform::Principal,
+        caller: ic_platform::principal::ExternalPrincipal,
     ) -> Result<(), canic_contracts::dto::error::Error> {
         crate::workflow::root_funding::authorize_coordinator(caller).map_err(Into::into)
     }
@@ -361,7 +361,7 @@ impl LifecycleApi {
     /// Authorize one peer-allocation command before endpoint workflow dispatch.
     pub fn authorize_peer_component_allocation_caller(
         request: &RootPeerComponentAllocationRequest,
-        caller: ic_platform::Principal,
+        caller: ic_platform::principal::ExternalPrincipal,
     ) -> Result<(), canic_contracts::dto::error::Error> {
         crate::workflow::component_registry::authorize_peer_allocation_caller(request, caller)
             .map_err(Into::into)
@@ -407,7 +407,7 @@ impl LifecycleApi {
     }
 
     pub fn authorize_fleet_subnet_root_removal_caller(
-        caller: ic_platform::Principal,
+        caller: ic_platform::principal::ExternalPrincipal,
         caller_is_controller: bool,
     ) -> Result<(), canic_contracts::dto::error::Error> {
         crate::workflow::fleet_subnet_root::authorize_root_removal_caller(
@@ -428,7 +428,7 @@ impl LifecycleApi {
     /// Authorize one direct-child command before endpoint workflow dispatch.
     pub fn authorize_component_child_caller(
         request: &RootComponentChildAllocationRequest,
-        caller: ic_platform::Principal,
+        caller: ic_platform::principal::ExternalPrincipal,
     ) -> Result<(), canic_contracts::dto::error::Error> {
         crate::workflow::component_registry::authorize_child_allocation_caller(request, caller)
             .map_err(Into::into)

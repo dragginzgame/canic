@@ -710,7 +710,7 @@ mod tests {
         FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority, FleetServiceId,
         SubnetId,
     };
-    use ic_platform::Principal;
+    use ic_platform::principal::ExternalPrincipal as Principal;
 
     #[test]
     fn directory_progression_accepts_exact_replay_and_skipped_revisions() {

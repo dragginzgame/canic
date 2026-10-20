@@ -47,7 +47,6 @@ use canic::{
     },
 };
 use ic_platform::{
-    Principal,
     candid::{
         contract::{
             TypeEnv, encode_one,
@@ -56,6 +55,7 @@ use ic_platform::{
         decoder::decode_one,
     },
     candid_parser::CandidSource,
+    principal::ExternalPrincipal as Principal,
 };
 use std::{
     collections::{BTreeSet, HashSet},

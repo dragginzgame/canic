@@ -31,7 +31,7 @@ use canic_contracts::{
     ids::{ComponentSpecId, FleetSubnetRootBinding},
     protocol,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use sha2_host::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 

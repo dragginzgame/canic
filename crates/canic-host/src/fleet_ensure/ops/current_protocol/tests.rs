@@ -919,7 +919,7 @@ fn assert_activation_source_review(
         **action = CurrentFleetProtocolAction::BootstrapStore {
             expected: canic_contracts::dto::root_store::RootStoreBootstrapResponse {
                 fleet_subnet_root: root.fleet_subnet_root,
-                wasm_store: ic_platform::Principal::anonymous(),
+                wasm_store: ic_platform::principal::ExternalPrincipal::anonymous(),
                 release_set: root.active_release_set,
                 catalog: Vec::new(),
                 fixtures: Vec::new(),

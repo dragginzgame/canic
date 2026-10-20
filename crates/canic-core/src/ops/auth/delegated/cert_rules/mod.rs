@@ -39,7 +39,7 @@ pub fn validate_cert_issuance_rules(
 ) -> Result<(), CertificateIssuanceValidationError> {
     validate_certificate_issuance(
         &protocol::cert(cert)?,
-        expected_root_pid,
+        expected_root_pid.into(),
         CertificateIssuanceLimits {
             max_cert_ttl_ns: limits.max_cert_ttl_ns,
             max_token_ttl_ns: limits.max_token_ttl_ns,

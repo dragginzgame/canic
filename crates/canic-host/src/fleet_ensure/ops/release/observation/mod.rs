@@ -19,7 +19,7 @@ use crate::{
     icp::{IcpCli, IcpManagementCallError, SNAPSHOT_RESPONSE_BYTES, read_snapshot_ids},
 };
 use canic_contracts::ids::{CanonicalNetworkId, SubnetId};
-use ic_platform::{Principal, agent::Agent};
+use ic_platform::{agent::Agent, principal::ExternalPrincipal as Principal};
 use sha2_host::{Digest, Sha256};
 use thiserror::Error;
 

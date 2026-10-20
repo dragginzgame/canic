@@ -7,7 +7,7 @@ use crate::{
 };
 use canic_contracts::ids::{CallerInstallation, CallerRootAuthority, CanisterRole};
 use canic_core::control_plane_support::error::InternalError;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 impl RootCallerOps {
     /// Project original operation authority without exposing mutable storage records.

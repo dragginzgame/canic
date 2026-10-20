@@ -10,7 +10,7 @@ use canic_contracts::ids::{
     FleetCoordinatorRootFundingPolicy, FleetFundingProfile, FleetSubnetRootFundingAuthority,
     FleetSubnetRootFundingPolicy, MAX_FLEET_ROOT_FUNDING_SLOTS, SubnetId,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use thiserror::Error as ThisError;
 
 const TRILLION_CYCLES: u128 = 1_000_000_000_000;

@@ -28,7 +28,7 @@ impl IcOps {
     /// Return the current canister principal.
     #[must_use]
     pub fn canister_self() -> Principal {
-        ic_platform::cdk::api::canister_self()
+        ic_platform::cdk::api::canister_self().into()
     }
 
     /// Return the exact sender version bound into management effect history.
@@ -58,7 +58,7 @@ impl IcOps {
     /// Return the current caller principal.
     #[must_use]
     pub fn msg_caller() -> Principal {
-        ic_platform::cdk::api::msg_caller()
+        ic_platform::cdk::api::msg_caller().into()
     }
 
     /// Return cycles attached to the current call that remain unaccepted.
@@ -76,7 +76,7 @@ impl IcOps {
     /// Return the physical Subnet currently executing this canister.
     #[must_use]
     pub fn subnet_self() -> Principal {
-        ic_platform::cdk::api::subnet_self()
+        ic_platform::cdk::api::subnet_self().into()
     }
 
     /// Return a metadata-hash caller principal on both IC and host targets.

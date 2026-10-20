@@ -14,9 +14,9 @@ use super::{
 use crate::infra::ic::{IcInfraError, call::Call};
 use ic_platform::cdk::api;
 use ic_platform::{
-    Principal,
     candid::contract::{ArgumentEncoder, encode_args},
     management_canister_types::{CanisterIdRecord, ChunkHash},
+    principal::ExternalPrincipal as Principal,
 };
 
 impl MgmtInfra {

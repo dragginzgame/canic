@@ -123,13 +123,13 @@ impl EnvOps {
 
     #[must_use]
     pub fn is_root() -> bool {
-        Env::get_root_pid().is_some_and(|pid| pid == canister_self())
+        Env::get_root_pid().is_some_and(|pid| pid == canister_self().into())
     }
 
     pub fn require_root() -> Result<(), InternalError> {
         let root_pid = Env::get_root_pid().ok_or(EnvOpsError::RootPidUnavailable)?;
 
-        if root_pid == canister_self() {
+        if root_pid == canister_self().into() {
             Ok(())
         } else {
             Err(EnvOpsError::NotRoot.into())
@@ -139,7 +139,7 @@ impl EnvOps {
     pub fn deny_root() -> Result<(), InternalError> {
         let root_pid = Env::get_root_pid().ok_or(EnvOpsError::RootPidUnavailable)?;
 
-        if root_pid == canister_self() {
+        if root_pid == canister_self().into() {
             Err(EnvOpsError::IsRoot.into())
         } else {
             Ok(())

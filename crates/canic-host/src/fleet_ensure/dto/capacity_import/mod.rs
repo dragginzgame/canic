@@ -1,6 +1,6 @@
 //! Explicit operator input for a current-Fleet capacity review.
 
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::Serialize;
 use std::path::PathBuf;
 

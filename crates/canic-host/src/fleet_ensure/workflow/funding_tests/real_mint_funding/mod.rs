@@ -20,8 +20,8 @@ use crate::{
 };
 use canic_core::cdk::utils::hash::{decode_hex, hex_bytes, sha256_hex};
 use ic_platform::{
-    Principal,
     candid::contract::{CandidType, Nat},
+    principal::ExternalPrincipal as Principal,
 };
 use ic_testkit::pocket_ic::{CanisterSettings, CreateCanisterParams, PocketIc};
 use serde::Deserialize;
@@ -242,7 +242,7 @@ fn governed_pocketic_mint_credit_resumes_original_native_withdrawal() {
     let fee: Nat = ic_testkit::pic::query_candid_args(
         &(pic),
         ledger,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "icrc1_fee",
         (),
         crate::test_support::CANDID_REPLY_LIMITS,

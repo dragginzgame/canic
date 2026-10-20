@@ -21,7 +21,7 @@ use crate::{
     ops::{runtime::release_receipts::project_intent, storage::intent::release},
     view::intent_release::{IntentReleaseCursor, IntentReleaseRow},
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 /// Observe one canonical row, without interpreting expiry or absent replay links as settlement.
 pub fn observe(

@@ -113,8 +113,8 @@ pub fn asset_capacity(
     if input.minimum_native_cycles == 0 {
         return Err(FrontendError::Bound("nonzero native cycle floor"));
     }
-    if input.canister_id == ic_platform::Principal::anonymous()
-        || input.canister_id == ic_platform::Principal::management_canister()
+    if input.canister_id == ic_platform::principal::ExternalPrincipal::anonymous()
+        || input.canister_id == ic_platform::principal::ExternalPrincipal::management_canister()
     {
         return Err(FrontendError::Principal);
     }

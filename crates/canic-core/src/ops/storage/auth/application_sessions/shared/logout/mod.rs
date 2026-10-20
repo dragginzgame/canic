@@ -62,17 +62,19 @@ pub(super) fn commit_logout(caller: Principal, login: PreparedLogin) -> Result<(
             indexes.session_by_caller.remove(&caller);
             let count = indexes
                 .session_count_by_subject
-                .get_mut(&session.subject())
+                .get_mut(&session.subject().into())
                 .expect("validated session subject count");
             *count -= 1;
             if *count == 0 {
-                indexes.session_count_by_subject.remove(&session.subject());
+                indexes
+                    .session_count_by_subject
+                    .remove(&session.subject().into());
             }
         }
         if let Some(moved) = moved_caller {
             indexes
                 .session_by_caller
-                .insert(moved, index.expect("validated swap index"));
+                .insert(moved.into(), index.expect("validated swap index"));
         }
         indexes.encoded_bytes = encoded_bytes;
         indexes.estimated_bytes = estimate_index_bytes(indexes);

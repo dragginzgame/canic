@@ -136,7 +136,7 @@ fn installed_package_build_deploy_recover_and_replay() {
     let requests: u64 = ic_testkit::pic::query_candid_args(
         &(pic),
         ledger,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "request_count",
         (),
         canic::testing::CANDID_REPLY_LIMITS,
@@ -154,7 +154,7 @@ fn installed_package_build_deploy_recover_and_replay() {
         ic_testkit::pic::query_candid_args::<(u64,), ()>(
             &(pic),
             ledger,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "request_count",
             (),
             canic::testing::CANDID_REPLY_LIMITS

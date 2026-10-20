@@ -1,23 +1,15 @@
 #!/usr/bin/env bash
-# Shared companions: scripts/ci/prepare-rustsec-db.sh
+# Shared companions: scripts/ci/prepare-rustsec-db.sh scripts/ci/fixture-lifecycle.sh
 set -euo pipefail
 root="$0"
 [[ "$root" == /* ]] || root="$PWD/$root"
 root="$(cd -P "${root%/*}/../.." && printf '%s/.' "$PWD")"
 root="${root%/.}"
-fixture="$(mktemp -d "${TMPDIR:-/tmp}/rustsec-db-test.XXXXXX")"
-# Local source selection uses physical paths, including macOS /var aliases.
-fixture="$(cd "$fixture" && pwd -P)"
+# shellcheck source=scripts/ci/fixture-lifecycle.sh
+source "$root/scripts/ci/fixture-lifecycle.sh"
+fixture="$(fixture_create "${TMPDIR:-/tmp}/rustsec-db-test.XXXXXX")"
 fixture_complete=false
-finish() {
-    local status=$?
-    # Bash 3.2 may report zero after nounset before assertions finish.
-    [[ "$fixture_complete" == true || "$status" != 0 ]] || status=1
-    if [[ "$status" == 0 ]]; then rm -rf "$fixture";
-    else echo "RustSec preparation fixtures retained: $fixture" >&2; fi
-    exit "$status"
-}
-trap finish EXIT
+trap 'fixture_finish "$?" "$fixture" "RustSec preparation fixtures retained"' EXIT
 checker="$root/scripts/ci/prepare-rustsec-db.sh"
 mkdir "$fixture/bin" "$fixture/local source"
 export RUSTSEC_FIXTURE="$fixture"

@@ -16,7 +16,7 @@ use ic_platform::cdk::api::{canister_self, is_controller as caller_is_controller
 /// Require that the caller controls the current canister.
 /// Allows controller-only maintenance calls.
 pub(super) fn is_controller(caller: Principal) -> Result<(), AccessError> {
-    if caller_is_controller(&caller) {
+    if caller_is_controller(&caller.into()) {
         Ok(())
     } else {
         Err(AccessError::ControllerRequired)
@@ -82,7 +82,7 @@ pub(super) fn is_root(caller: Principal) -> Result<(), AccessError> {
 
 /// Require that the caller is the currently executing canister.
 pub(super) fn is_same_canister(caller: Principal) -> Result<(), AccessError> {
-    if caller == canister_self() {
+    if caller == canister_self().into() {
         Ok(())
     } else {
         Err(AccessError::SelfRequired)

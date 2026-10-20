@@ -17,7 +17,7 @@ use crate::fleet_ensure::{
 };
 use canic_contracts::ids::SubnetId;
 use canic_core::cdk::utils::hash::hex_bytes;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::{collections::BTreeMap, fs::File};
 use thiserror::Error;
 

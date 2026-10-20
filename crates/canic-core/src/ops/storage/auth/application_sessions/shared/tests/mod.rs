@@ -207,7 +207,7 @@ fn unknown_logout_pool_is_bounded_without_erasing_admitted_logins() {
                 &mut store,
                 &mut ledger,
                 &mut budget,
-                browser(u16::try_from(id + 2).unwrap()),
+                browser(u16::try_from(id + 2).unwrap()).into(),
                 NOW
             ),
             LogoutResult::Revoked { .. }
@@ -215,7 +215,13 @@ fn unknown_logout_pool_is_bounded_without_erasing_admitted_logins() {
     }
     let before = LocalApplicationAuthorizationState::export();
     assert_eq!(
-        ic_auth::session::logout_session(&mut store, &mut ledger, &mut budget, browser(258), NOW),
+        ic_auth::session::logout_session(
+            &mut store,
+            &mut ledger,
+            &mut budget,
+            browser(258).into(),
+            NOW
+        ),
         LogoutResult::Unavailable(LogoutUnavailable::Capacity)
     );
     assert_eq!(LocalApplicationAuthorizationState::export(), before);
@@ -466,7 +472,8 @@ fn restoration_requires_unique_sessions_and_a_reservation_for_every_session() {
     ));
     let mut missing = original;
     missing.logins.clear();
-    missing.login_totals = Default::default();
+    missing.login_totals =
+        crate::storage::stable::auth::LocalApplicationLoginTotalsRecord::default();
     assert!(matches!(
         build_indexes(&missing),
         Err(ApplicationSessionStateError::InvalidLoginRecord)
@@ -569,7 +576,7 @@ fn restore_rejects_global_over_capacity_before_admitting_records() {
     data.replays = vec![
         LocalApplicationReplayRecord {
             proof_fingerprint: replay.fingerprint(),
-            transport_caller: replay.caller(),
+            transport_caller: replay.caller().into(),
             authority_generation: replay.generation(),
             remove_at_ns: replay.remove_at_ns()
         };

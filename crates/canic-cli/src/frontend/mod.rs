@@ -45,7 +45,7 @@ fn command() -> Command {
         .arg(flag_arg("json").long("json").global(true).help("Print structured JSON"))
         .subcommand_required(true)
         .subcommand(Command::new("capacity").about("Check external asset native cycles against an explicit upload floor")
-            .arg(value_arg("canister").required(true).value_parser(clap::value_parser!(ic_platform::Principal)))
+            .arg(value_arg("canister").required(true).value_parser(clap::value_parser!(ic_platform::principal::ExternalPrincipal)))
             .arg(value_arg("payload").long("payload").required(true))
             .arg(value_arg("minimum-native-cycles").long("minimum-native-cycles").required(true).value_parser(clap::value_parser!(u128)))
             .arg(value_arg("maximum-payload-bytes").long("maximum-payload-bytes").required(true).value_parser(clap::value_parser!(u64).range(1..)))
@@ -60,7 +60,7 @@ fn command() -> Command {
         .subcommand(Command::new("verify-uploaded").about("Read back uploaded handoff files from an asset canister")
             .arg(value_arg("directory").required(true))
             .arg(value_arg("sha256").long("sha256").required(true))
-            .arg(value_arg("canister").long("canister").required(true).value_parser(clap::value_parser!(ic_platform::Principal)))
+            .arg(value_arg("canister").long("canister").required(true).value_parser(clap::value_parser!(ic_platform::principal::ExternalPrincipal)))
             .arg(value_arg("prefix").long("prefix").required(true).help("Exact remote handoff directory, such as /canic"))
             .after_help("Example:\n  canic --environment ic frontend verify-uploaded browser/canic --sha256 <digest> --canister <principal> --prefix /canic"))
         .after_help("Examples:\n  canic frontend export demo --input frontend-local.json --out browser/canic\n  canic frontend verify browser/canic --sha256 <digest>\n  canic --environment ic frontend export demo --input frontend-ic.json --out browser/canic --json")
@@ -130,7 +130,7 @@ fn verify_uploaded(
         )
         .map_err(FrontendError::from)?,
         canister_id: *leaf
-            .get_one::<ic_platform::Principal>("canister")
+            .get_one::<ic_platform::principal::ExternalPrincipal>("canister")
             .expect("required Principal"),
         prefix: required_string(leaf, "prefix"),
     };
@@ -169,7 +169,7 @@ fn sync_variable(name: &str) -> Result<Option<String>, FrontendError> {
 
 fn validate_sync_context(
     environment: &str,
-    canister: ic_platform::Principal,
+    canister: ic_platform::principal::ExternalPrincipal,
     selected_environment: Option<&str>,
     selected_canister: Option<&str>,
 ) -> Result<(), FrontendError> {
@@ -177,8 +177,8 @@ fn validate_sync_context(
         return Err(FrontendError::Environment);
     }
     if let Some(selected) = selected_canister {
-        let selected =
-            ic_platform::Principal::from_text(selected).map_err(|_| FrontendError::Principal)?;
+        let selected = ic_platform::principal::ExternalPrincipal::from_text(selected)
+            .map_err(|_| FrontendError::Principal)?;
         if selected != canister {
             return Err(FrontendError::Principal);
         }
@@ -196,7 +196,7 @@ fn capacity(
         &FrontendAssetCapacityInput {
             environment: target.environment,
             canister_id: *leaf
-                .get_one::<ic_platform::Principal>("canister")
+                .get_one::<ic_platform::principal::ExternalPrincipal>("canister")
                 .expect("required Principal"),
             payload_directory: required_string(leaf, "payload").into(),
             minimum_native_cycles: *leaf
@@ -245,7 +245,7 @@ mod tests {
     use super::*;
     #[test]
     fn sync_context_rejects_another_environment_or_asset() {
-        let canister = ic_platform::Principal::from_slice(&[1]);
+        let canister = ic_platform::principal::ExternalPrincipal::from_slice(&[1]);
         validate_sync_context("proof", canister, Some("proof"), Some(&canister.to_text())).unwrap();
         validate_sync_context("proof", canister, None, None).unwrap();
         assert!(matches!(

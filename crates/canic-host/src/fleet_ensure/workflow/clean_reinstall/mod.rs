@@ -26,7 +26,7 @@ use crate::{
     icp::IcpCli,
 };
 use canic_core::cdk::utils::hash::decode_hex;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::path::Path;
 
 pub use crate::fleet_ensure::{

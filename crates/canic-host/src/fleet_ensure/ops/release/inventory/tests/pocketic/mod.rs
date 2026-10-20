@@ -20,7 +20,7 @@ use canic_contracts::{
     },
     ids::{CanonicalNetworkId, SubnetId},
 };
-use ic_platform::{Principal, agent::BasicIdentity};
+use ic_platform::{agent::BasicIdentity, principal::ExternalPrincipal as Principal};
 use ic_testkit::pocket_ic::{CanisterSettings, PocketIcBuilder};
 use sha2_host::{Digest, Sha256};
 use std::{fs, process::Command, time::SystemTime};

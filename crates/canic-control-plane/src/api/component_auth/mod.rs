@@ -72,7 +72,9 @@ impl RootComponentMembershipApi {
     /// Root application endpoints may use this to derive local topology authority for a
     /// transport caller. The caller-facing endpoint must independently authorize access to
     /// the lookup, and cross-root callers require the Fleet-service peer authority path.
-    pub fn active_member(subject: ic_platform::Principal) -> Result<ManagedCanisterBinding, Error> {
+    pub fn active_member(
+        subject: ic_platform::principal::ExternalPrincipal,
+    ) -> Result<ManagedCanisterBinding, Error> {
         crate::workflow::component_auth::active_component_member(subject)
     }
 }

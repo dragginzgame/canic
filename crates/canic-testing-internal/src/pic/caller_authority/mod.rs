@@ -13,7 +13,7 @@ use canic_contracts::dto::wire::projection::{
     caller_authority::{StatusRequest, StatusResponse},
     fixture_caller_authority::{Command, Response},
 };
-use ic_platform::{Principal, candid::contract::CandidType};
+use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
 use ic_testkit::pic::PocketIc;
 use std::time::Duration;
 

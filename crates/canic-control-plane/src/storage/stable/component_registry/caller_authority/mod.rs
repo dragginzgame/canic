@@ -10,7 +10,7 @@ use canic_contracts::ids::{
 use canic_core::control_plane_support::model::caller_authority::{
     CallerPublicationRecord, CallerReceiptPhase,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 
 ///

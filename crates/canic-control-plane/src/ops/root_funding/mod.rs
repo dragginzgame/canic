@@ -545,7 +545,7 @@ impl RootFundingOps {
 }
 
 fn refill_release_evidence(
-    root: ic_platform::Principal,
+    root: ic_platform::principal::ExternalPrincipal,
     operation: canic_core::control_plane_support::view::icp_refill::IcpRefillOperation,
 ) -> Result<RootIcpRefillReleaseEvidence, InternalError> {
     if operation.source_canister != root || operation.target_canister != root {
@@ -625,8 +625,9 @@ fn validate_record(
         return Err(InternalError::invariant());
     }
     if authority.registry.authority.binding.coordinator == authority.fleet_subnet_root
-        || authority.registry.authority.binding.coordinator == ic_platform::Principal::anonymous()
-        || authority.fleet_subnet_root == ic_platform::Principal::anonymous()
+        || authority.registry.authority.binding.coordinator
+            == ic_platform::principal::ExternalPrincipal::anonymous()
+        || authority.fleet_subnet_root == ic_platform::principal::ExternalPrincipal::anonymous()
     {
         return Err(InternalError::invariant());
     }

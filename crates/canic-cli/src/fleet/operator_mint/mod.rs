@@ -22,7 +22,7 @@ use canic_host::{
     },
     icp::IcpCli,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 pub(super) fn run(
     root: &Path,

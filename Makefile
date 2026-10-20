@@ -25,6 +25,8 @@ override SHARED_TOOLING_ROOT := $(CURDIR)
 CLOC_REPORT := $(CURDIR)/scripts/dev/report-cloc.sh
 LOCAL_TOOL_INSTALL_TARGETS += install-ic-tools install-candid-extractor install-testkit-server
 LOCAL_TOOL_CHECK_TARGETS += ic-tools-check candid-extractor-check testkit-server-check
+LOCAL_TOOL_INSTALL_TARGETS += install-release-metadata-editor
+LOCAL_TOOL_CHECK_TARGETS += release-metadata-editor-check
 FORMAT_WRITE_COMMAND = bash scripts/ci/run-canic-formatters.sh --write $(CANIC_BLOB_WORKSPACES)
 FORMAT_CHECK_COMMAND = bash scripts/ci/run-canic-formatters.sh --check $(CANIC_BLOB_WORKSPACES)
 include make/consumer.mk
@@ -32,6 +34,13 @@ include make/consumer.mk
 .PHONY: install-candid-extractor candid-extractor-check install-testkit-server testkit-server-check
 install-candid-extractor:
 	@bash scripts/dev/candid-extractor.sh
+
+.PHONY: install-release-metadata-editor release-metadata-editor-check
+install-release-metadata-editor:
+	@bash scripts/dev/release-metadata-editor.sh
+
+release-metadata-editor-check:
+	@bash scripts/dev/release-metadata-editor.sh --check
 
 candid-extractor-check:
 	@bash scripts/dev/candid-extractor.sh --check
@@ -370,7 +379,6 @@ release-integrity-contract-gate:
 	bash scripts/ci/test-release-tools.sh
 	bash scripts/ci/test-pinned-ci-tools.sh
 	bash scripts/ci/test-shared-release-adoption.sh
-	perl scripts/ci/test-local-lock-versions.pl
 	bash scripts/ci/test-format-tools.sh
 	bash scripts/ci/test-canic-formatters.sh
 	bash scripts/ci/test-cargo-metadata.sh
@@ -537,4 +545,6 @@ runtime-dependency-graph-gate:
 	@perl scripts/ci/check-cargo-graph.pl --consumer "$(CURDIR)" \
 		--package canic --package canic-core --package canic-control-plane --package canic-macros \
 		--target wasm32-unknown-unknown --all-features \
-		--require ic-memory=1 --require ic-timers=1 --forbid ic-cdk-timers
+		--require ic-memory=1 --require ic-timers=1 --forbid ic-cdk-timers \
+		--forbid canic-blob-service --forbid canic-cli --forbid canic-testing-internal \
+		--forbid criterion --forbid ic-testkit

@@ -49,7 +49,7 @@ use canic_core::{
         fleet_subnet_root_funding_policy_hash, validate_fleet_funding_policy_rotation_plan,
     },
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::collections::BTreeMap;
 
 impl FleetCoordinatorOps {

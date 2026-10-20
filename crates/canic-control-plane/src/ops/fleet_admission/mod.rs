@@ -64,7 +64,7 @@ pub struct FleetAdmissionOps;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum FleetAdmissionCoordinatorStep {
     PrepareRoot {
-        fleet_subnet_root: ic_platform::Principal,
+        fleet_subnet_root: ic_platform::principal::ExternalPrincipal,
         request: FleetAdmissionPrepareRootRequest,
     },
     PublishRegistry {
@@ -72,11 +72,11 @@ pub enum FleetAdmissionCoordinatorStep {
         successor: FleetAdmissionPolicy,
     },
     ActivateRoot {
-        fleet_subnet_root: ic_platform::Principal,
+        fleet_subnet_root: ic_platform::principal::ExternalPrincipal,
         request: FleetAdmissionActivateRootRequest,
     },
     OpenRoot {
-        fleet_subnet_root: ic_platform::Principal,
+        fleet_subnet_root: ic_platform::principal::ExternalPrincipal,
         request: FleetAdmissionOpenRootRequest,
     },
     Complete,
@@ -1076,7 +1076,7 @@ fn root_progress_receipts_match(
 
 fn registry_root_binding(
     registry: &FleetRegistry,
-    fleet_subnet_root: ic_platform::Principal,
+    fleet_subnet_root: ic_platform::principal::ExternalPrincipal,
 ) -> Result<FleetSubnetRootBinding, InternalError> {
     let mut matches = registry
         .fleet_subnet_roots
@@ -1144,7 +1144,7 @@ fn registry_accepts_admission_mutation(registry: &FleetRegistry) -> bool {
 fn selector_principals(
     policy: &FleetAdmissionPolicy,
     selector: &FleetAdmissionSelector,
-) -> Vec<ic_platform::Principal> {
+) -> Vec<ic_platform::principal::ExternalPrincipal> {
     if selector == &FleetAdmissionSelector::Fleet {
         return policy.fleet_principals.clone();
     }
@@ -2241,7 +2241,7 @@ mod tests {
         (fleet_admission_participant_catalog_digest(&catalogs), 1)
     }
 
-    fn principal(byte: u8) -> ic_platform::Principal {
-        ic_platform::Principal::from_slice(&[byte; 29])
+    fn principal(byte: u8) -> ic_platform::principal::ExternalPrincipal {
+        ic_platform::principal::ExternalPrincipal::from_slice(&[byte; 29])
     }
 }

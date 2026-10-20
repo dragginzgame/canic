@@ -3,7 +3,7 @@
 //! Exact immutable installation identities used by managed-caller publication.
 
 use crate::ids::{ComponentBinding, FleetRegistryAuthority, ManagedCanisterBinding};
-use ic_platform::{Principal, candid::contract::CandidType};
+use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
 use serde::{Deserialize, Serialize};
 
 /// Registered source or receiver identity for one physical installation.

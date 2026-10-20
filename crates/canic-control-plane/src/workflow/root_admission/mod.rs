@@ -41,7 +41,7 @@ use canic_core::{
         materialize_fleet_admission_projection,
     },
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::time::Duration;
 
 /// Authenticate one Root admission phase command against the exact installed Coordinator.

@@ -9,7 +9,7 @@ use canic_contracts::dto::{
     metrics::{MetricEntry as MetricEntryDto, MetricValue as MetricValueDto},
     page::Page,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 #[test]
 fn parses_metric_kind_selectors() {

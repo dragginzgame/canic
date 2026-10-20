@@ -46,7 +46,7 @@ use canic_contracts::{
 };
 use canic_core::cdk::utils::hash::hex_bytes;
 use ic_host_fs::read::read_file_no_follow;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use sha2_host::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 

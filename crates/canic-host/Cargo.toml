@@ -37,7 +37,7 @@ ic-host-artifacts = { workspace = true, features = ["gzip", "wasm"] }
 ic-host-fs = { workspace = true }
 ic-host-process = { workspace = true }
 ic-host-text = { workspace = true }
-ic-host-tools = { workspace = true, features = ["candid", "ic-interface"] }
+ic-host-tools = { workspace = true, features = ["candid", "ic-interface", "ledger-evidence"] }
 ic-platform = { workspace = true, features = ["agent", "candid", "certification", "candid-parser", "icrc-ledger-types"] }
 ic-query = { workspace = true, features = ["ledger-evidence-host"] }
 ic-testkit = { workspace = true, optional = true }
@@ -58,6 +58,7 @@ url = { workspace = true }
 rustix = { workspace = true }
 
 [dev-dependencies]
+clap = { workspace = true }
 flate2 = { workspace = true }
 ic-host-process = { workspace = true, features = ["test-support"] }
 ic-platform = { workspace = true, features = ["bls"] }

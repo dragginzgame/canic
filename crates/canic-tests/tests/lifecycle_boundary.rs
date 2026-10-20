@@ -18,8 +18,8 @@ use canic_testing_internal::pic::{
     lifecycle_participant_trap_wasm, managed_test_init_identity, upgrade_args,
 };
 use ic_platform::{
-    Principal,
     candid::{contract::encode_args, decoder::decode_args},
+    principal::ExternalPrincipal as Principal,
 };
 use ic_testkit::pic::{CanisterInstallExt, PocketIc, RetryPolicy};
 use std::{any::Any, time::Duration};
@@ -307,7 +307,7 @@ fn assert_prepared_and_not_ready(pic: &PocketIc, canister_id: Principal, root: P
     let readiness: Result<CanisterStatusResponse, Error> = ic_testkit::pic::query_candid_args(
         pic,
         canister_id,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         canic_contracts::protocol::CANIC_OBSERVABILITY,
         (CanisterStatusRequest::Readiness,),
         canic::testing::CANDID_REPLY_LIMITS,

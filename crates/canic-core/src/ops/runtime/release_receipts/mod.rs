@@ -26,7 +26,7 @@ use crate::{
         replay::ReplayReceiptEntryRecord,
     },
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 const MAXIMUM_IDENTITY_BYTES: usize = 1024;
 

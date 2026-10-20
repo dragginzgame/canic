@@ -71,7 +71,7 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
                 ));
             }
 
-            let caller = $crate::__internal::cdk::api::msg_caller();
+            let caller: $crate::__internal::core::cdk::types::Principal = $crate::__internal::cdk::api::msg_caller().into();
             if matches!(&command, CoordinatorCommand::AcknowledgeRootSnapshot(_)) {
                 $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::authorize_calling_root_snapshot()?;
             }

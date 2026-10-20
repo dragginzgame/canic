@@ -5,7 +5,7 @@ use canic_contracts::dto::{
     pool_import::{PoolImportContext, PoolImportStatus},
     wire::projection::capacity_import::{StatusRequest, StatusResponse},
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::{
     io::{BufRead, BufReader, Read, Write},
     net::{TcpListener, TcpStream},

@@ -1,8 +1,10 @@
 #![expect(clippy::unused_async)]
+mod codec;
+
 use canic::access::{AccessCheck, AccessContext, AccessError};
 use canic::endpoint::ArgumentLimits;
 use canic::{Error, prelude::*};
-use ic_platform::{Principal, candid::contract::CandidType};
+use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
 use std::cell::Cell;
 
 const LIMITS: ArgumentLimits = ArgumentLimits {
@@ -205,7 +207,7 @@ fn named_echo(payload: String) -> Result<usize, Error> {
 }
 
 /// Bare CDK updates still inherit the managed ingress inspector default.
-#[ic_platform::cdk::update]
+#[ic_platform::cdk::update(decode_with = "codec::decode_one", encode_with = "codec::encode_reply")]
 fn bare_echo(payload: String) -> usize {
     payload.len()
 }

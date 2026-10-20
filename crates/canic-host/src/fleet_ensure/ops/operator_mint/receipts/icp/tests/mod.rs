@@ -18,10 +18,10 @@ use crate::fleet_ensure::{
 };
 use ic_platform::bls::PrivateKey;
 use ic_platform::{
-    Principal,
     agent::{Agent, BasicIdentity, EnvelopeContent, RequestId, signed_update_inspect},
     candid::contract::CandidType,
     certification::{fork, labeled, leaf},
+    principal::ExternalPrincipal as Principal,
 };
 use prost::Message;
 use serde::Deserialize;

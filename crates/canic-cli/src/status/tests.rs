@@ -19,7 +19,7 @@ use canic_host::fleet_ensure::{
     ops::{EnsurePaths, read_journal, write_journal, write_plan, write_state},
     resolve_current_fleet,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::{collections::BTreeMap, fs};
 
 #[test]

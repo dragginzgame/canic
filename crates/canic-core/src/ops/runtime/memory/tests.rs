@@ -35,7 +35,7 @@ fn bootstrap_retains_declarations_and_opens_only_the_accessed_store() {
             .all(|entry| entry.virtual_extent.wasm_pages == 0)
     );
 
-    let parent = ic_platform::Principal::from_slice(&[73]);
+    let parent = ic_platform::principal::ExternalPrincipal::from_slice(&[73]);
     Env::import(EnvData {
         record: EnvRecord {
             parent_pid: Some(parent),

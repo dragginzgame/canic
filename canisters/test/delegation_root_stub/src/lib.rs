@@ -21,7 +21,7 @@ async fn root_now_secs() -> Result<u64, Error> {
 
 #[canic_update(requires(caller::is_controller()))]
 async fn test_provision_chain_key_delegation_proof_for_issuer(
-    issuer_pid: ic_platform::Principal,
+    issuer_pid: ic_platform::principal::ExternalPrincipal,
 ) -> Result<(), Error> {
     AuthApi::provision_chain_key_delegation_proof_for_issuer_root(issuer_pid).await
 }

@@ -16,7 +16,7 @@ use canic_contracts::dto::{
         FleetRootFundingResponse,
     },
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 /// Exact next effect derived from the Coordinator-owned rotation operation.
 

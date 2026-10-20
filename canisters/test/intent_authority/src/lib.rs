@@ -2,14 +2,15 @@
 //! Minimal authority canister for intent reservation tests.
 //!
 
+mod codec;
+
 use canic::api::intent::{
     BeginReceiptBackedIntentInput, BeginReceiptBackedIntentResult, IntentResourceKey, OperationId,
     PayloadBinding, ReceiptBackedIntent, ReceiptBackedIntentApi, ReceiptBackedIntentState,
     SettleReceiptBackedIntentInput, SettleReceiptBackedIntentResult, TerminalEvidence,
     TerminalEvidenceDecision,
 };
-use ic_platform::cdk::{query, update};
-use ic_platform::{Principal, candid::contract::CandidType};
+use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
 use serde::Deserialize;
 
 const RECEIPT_CAPACITY: u64 = 1;
@@ -108,7 +109,10 @@ fn post_upgrade() {
     ic_platform::cdk::println!("intent_authority: post_upgrade memory initialized");
 }
 
-#[update]
+#[ic_platform::cdk::update(
+    decode_with = "codec::decode_args",
+    encode_with = "codec::encode_reply"
+)]
 fn begin_receipt(
     operation_seed: u8,
     payload_seed: u8,
@@ -181,12 +185,15 @@ fn begin_receipt(
     Ok(ReceiptBeginView { status, intent })
 }
 
-#[query]
+#[ic_platform::cdk::query(decode_with = "codec::decode_one", encode_with = "codec::encode_reply")]
 fn load_receipt(operation_seed: u8) -> Result<Option<ReceiptIntentView>, String> {
     load_receipt_view(operation_id(operation_seed))
 }
 
-#[update]
+#[ic_platform::cdk::update(
+    decode_with = "codec::decode_args",
+    encode_with = "codec::encode_reply"
+)]
 fn settle_receipt(
     operation_seed: u8,
     payload_seed: u8,

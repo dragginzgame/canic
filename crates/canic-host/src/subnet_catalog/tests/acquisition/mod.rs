@@ -15,7 +15,6 @@ use ic_query::{
     nns::NnsSourceRequest,
     subnet_catalog::{
         SubnetCatalogSource, SubnetCatalogSourceFuture, load_subnet_catalog_detailed_with_source,
-        subnet_catalog_refresh_lock_path,
     },
 };
 use std::{
@@ -115,10 +114,6 @@ async fn timeout_drops_collection_preserves_cache_releases_lock_and_allows_exact
     );
     assert!(source.dropped.load(Ordering::SeqCst));
     assert_eq!(fs::read(&first.path).unwrap(), bytes);
-    assert!(
-        !subnet_catalog_refresh_lock_path(&request.cache.cache_root, &request.cache.network)
-            .exists()
-    );
     let events = events.into_inner().unwrap();
     assert!(matches!(
         events[0].stage,
@@ -257,9 +252,14 @@ fn agreement_polls_both_endpoints_and_timeout_cancels_both() {
         source.dropped.load(Ordering::SeqCst),
         MAINNET_CATALOG_ENDPOINTS.len()
     );
-    assert!(
-        !subnet_catalog_refresh_lock_path(&request.cache.cache_root, &request.cache.network)
-            .exists()
-    );
+    // Successful acquisition proves cancellation released the persistent coordination lock.
+    let recovered = acquisition::load(
+        &request,
+        &Source::new(Reply::Matching, 11),
+        None,
+        Duration::from_secs(2),
+    )
+    .unwrap();
+    assert_eq!(recovered.snapshot_authority().registry_version, 11);
     fs::remove_dir_all(root).unwrap();
 }

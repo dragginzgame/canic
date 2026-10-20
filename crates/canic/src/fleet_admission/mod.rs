@@ -4,7 +4,7 @@
 //! projection. It owns no storage, lifecycle work, timer, or remote lookup.
 
 use crate::access::AccessError;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 /// Return the observed transport caller when the exact local projection admits it.
 ///

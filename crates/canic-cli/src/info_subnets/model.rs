@@ -15,7 +15,7 @@ use canic_contracts::{
     },
     ids::SubnetId,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;

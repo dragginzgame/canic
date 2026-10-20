@@ -66,10 +66,11 @@ fn install_version_reader(root: &Path) {
         "scripts/ci/next-release-version.sh",
         "scripts/ci/finalize-release-changelog.awk",
         "scripts/release/rewrite-owned-lock.sh",
+        "scripts/release/render-owned-manifest.sh",
         "scripts/release/adapter.sh",
         "scripts/ci/read-cargo-workspace-version.sh",
-        "scripts/ci/rewrite-local-lock-versions.pl",
         "scripts/ci/require-jq.sh",
+        "scripts/ci/validate-release-inputs.pl",
     ] {
         write_file(
             root,
@@ -77,6 +78,35 @@ fn install_version_reader(root: &Path) {
             &fs::read_to_string(workspace_root().join(path)).unwrap(),
         );
     }
+    let status = Command::new("bash")
+        .arg(workspace_root().join("scripts/ci/prepare-script-fixture.sh"))
+        .arg(workspace_root())
+        .arg(root)
+        .args([
+            "scripts/ci/next-release-version.sh",
+            "scripts/ci/read-cargo-workspace-version.sh",
+            "scripts/ci/validate-release-inputs.pl",
+        ])
+        .status()
+        .expect("prepare release helper companions");
+    assert!(status.success());
+    let output = Command::new("bash")
+        .arg(workspace_root().join("scripts/dev/release-metadata-editor.sh"))
+        .arg("--check")
+        .output()
+        .expect("admit the release metadata editor");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let editor = String::from_utf8(output.stdout).unwrap();
+    let editor = editor.trim().replace('\'', "'\"'\"'");
+    write_executable(
+        root,
+        "scripts/dev/release-metadata-editor.sh",
+        &format!("#!/usr/bin/env bash\nprintf '%s\\n' '{editor}'\n"),
+    );
 }
 
 fn install_remote_state_guard(root: &Path) {

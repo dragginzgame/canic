@@ -1,7 +1,7 @@
 //! Certified physical canister identity observed at the current IC boundary.
 
 use canic_contracts::ids::SubnetId;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 ///
 /// CertifiedCanisterCustodyView

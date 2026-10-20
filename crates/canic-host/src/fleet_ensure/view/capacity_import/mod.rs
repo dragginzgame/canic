@@ -4,7 +4,7 @@ use crate::fleet_ensure::model::capacity_import::{
     CapacityImportAuthority, CapacityImportSourceBinding,
 };
 use canic_contracts::ids::SubnetId;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::collections::BTreeSet;
 
 /// Original successful observation and its retained owner, before an additional credit.

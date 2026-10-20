@@ -231,7 +231,9 @@ mod tests {
                 proposed_policy: crate::test_support::fleet_subnet_root_funding_authority()
                     .root_funding,
                 placement: FleetFundingPolicyRotationPlacementEvidence {
-                    subnet: SubnetId::from_principal(ic_platform::Principal::from_slice(&[94; 29])),
+                    subnet: SubnetId::from_principal(
+                        ic_platform::principal::ExternalPrincipal::from_slice(&[94; 29]),
+                    ),
                     node_count: u64::MAX,
                     cost_multiplier_numerator: u64::MAX,
                     cost_multiplier_denominator: u64::MAX,

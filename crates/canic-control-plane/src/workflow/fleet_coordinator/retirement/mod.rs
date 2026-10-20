@@ -21,7 +21,7 @@ use canic_core::{
     },
     replay_policy::CostClass,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 pub async fn retire(
     caller: Principal,

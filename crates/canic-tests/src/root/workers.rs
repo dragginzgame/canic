@@ -7,7 +7,7 @@ use canic_contracts::dto::wire::projection::current_inventory::{
     ChildrenStatusResponse as CanisterStatusResponse,
 };
 use canic_testing_internal::pic::{CanicPicExt, report_canister_diagnostics};
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use ic_testkit::pic::PocketIc;
 use std::time::Duration;
 
@@ -26,7 +26,7 @@ pub fn create_worker(
     let worker_pid: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
         pic,
         hub_pid,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "create_worker",
         (),
         canic::testing::CANDID_REPLY_LIMITS,
@@ -61,7 +61,7 @@ fn wait_for_worker_sync(
         let children: Result<CanisterStatusResponse, Error> = ic_testkit::pic::query_candid_args(
             pic,
             hub_pid,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             protocol::CANIC_PUBLIC_STATUS,
             (CanisterStatusRequest::Children(PageRequest {
                 limit: 100,

@@ -256,9 +256,9 @@ where
         dependency: Option<
             Box<canic_contracts::values::provisioning_failure::ProvisioningDependencyFailure>,
         >,
-        root: ic_platform::Principal,
+        root: ic_platform::principal::ExternalPrincipal,
         stage: canic_contracts::dto::component_provisioning::ProvisioningFailureStage,
-        target: ic_platform::Principal,
+        target: ic_platform::principal::ExternalPrincipal,
         operation_id: [u8; 32],
         diagnostic_code: u16,
         observations: u32,
@@ -4706,7 +4706,7 @@ pub(super) fn ordered_actions(plan: &FleetEnsurePlan) -> Vec<&EnsureAction> {
                                 == bootstrap
                                     .recovery_controllers
                                     .iter()
-                                    .map(ic_platform::Principal::to_text)
+                                    .map(ic_platform::principal::ExternalPrincipal::to_text)
                                     .collect::<Vec<_>>()
                         })
                         && configured.controller_canisters.len() == 1
@@ -5283,7 +5283,8 @@ mod tests {
             available: Cycles::new(40),
             attempt_count: 2,
             creation_amount: Cycles::new(45),
-            cycles_ledger: ic_platform::Principal::from_text("aaaaa-aa").expect("Ledger Principal"),
+            cycles_ledger: ic_platform::principal::ExternalPrincipal::from_text("aaaaa-aa")
+                .expect("Ledger Principal"),
             execution_margin: Cycles::new(5),
             last_attempt_at_ns: Some(10),
             ledger_fee: Cycles::new(5),
@@ -5292,8 +5293,10 @@ mod tests {
             readiness_floor: Cycles::new(35),
             required: Cycles::new(50),
             retry_at_ns: 20,
-            root: ic_platform::Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai")
-                .expect("Root Principal"),
+            root: ic_platform::principal::ExternalPrincipal::from_text(
+                "rrkah-fqaaa-aaaaa-aaaaq-cai",
+            )
+            .expect("Root Principal"),
             shortfall: Cycles::new(10),
         };
         let required =

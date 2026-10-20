@@ -8,6 +8,8 @@
     reason = "the IC probe retains invocation-owned instrumentation on one canister thread"
 )]
 
+mod codec;
+
 use canic::{
     __internal::core::{dispatch, perf},
     ids::{EndpointCall, EndpointCallKind, EndpointId},
@@ -68,18 +70,27 @@ async fn await_controlled_response(which: u8) {
         ic_platform::Principal::management_canister(),
         "http_request",
     )
-    .with_arg(args)
+    .take_raw_args(
+        ic_platform::candid::contract::encode_one(args)
+            .unwrap_or_else(|error| panic!("failed to encode args: {error}")),
+    )
     .with_cycles(cycles)
     .await
     .expect("controlled simulator HTTP reply");
 }
 
-#[ic_platform::cdk::query]
+#[ic_platform::cdk::query(
+    decode_with = "codec::decode_args",
+    encode_with = "codec::encode_reply"
+)]
 fn perf_context_entered() -> Vec<bool> {
     ENTERED.with_borrow(|entered| entered.to_vec())
 }
 
-#[ic_platform::cdk::query]
+#[ic_platform::cdk::query(
+    decode_with = "codec::decode_args",
+    encode_with = "codec::encode_reply"
+)]
 fn perf_context_completed() -> Vec<u8> {
     COMPLETED.with_borrow(Clone::clone)
 }
@@ -127,7 +138,10 @@ async fn perf_context_probe(which: u8) -> Result<PerfProbeObservation, canic::Er
     Ok(observed)
 }
 
-#[ic_platform::cdk::query]
+#[ic_platform::cdk::query(
+    decode_with = "codec::decode_args",
+    encode_with = "codec::encode_reply"
+)]
 fn perf_context_metrics() -> Vec<PerfProbeMetric> {
     perf::entries()
         .into_iter()

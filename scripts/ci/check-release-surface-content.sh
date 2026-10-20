@@ -47,7 +47,9 @@ while IFS= read -r path; do consumer_locks[${#consumer_locks[@]}]="$path"; done 
         cargo metadata --locked --offline --format-version 1 --manifest-path "${lock%/Cargo.lock}/Cargo.toml" > "$scratch/consumer-$index.json"
         cp -p "$lock" "$scratch/consumer-$index.lock"
     done
-    cargo set-version --workspace --offline "$version" >/dev/null
+    bash "$ROOT/scripts/release/render-owned-manifest.sh" "$scratch/expected/metadata.json" \
+        Cargo.toml "$previous" "$version" > "$scratch/expected/candidate.toml"
+    cat "$scratch/expected/candidate.toml" > Cargo.toml
     bash "$ROOT/scripts/release/rewrite-owned-lock.sh" "$scratch/expected/metadata.json" "$scratch/expected/source.lock" "$previous" "$version" > Cargo.lock
     for index in "${!consumer_locks[@]}"; do
         lock="${consumer_locks[$index]}"

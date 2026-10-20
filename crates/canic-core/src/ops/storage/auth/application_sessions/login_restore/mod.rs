@@ -24,14 +24,14 @@ pub(super) fn validate_login_records(
         .iter()
         .map(|record| {
             Session::decode(&record.shared_session)
-                .map(|session| (session.caller(), session))
+                .map(|session| (Principal::from(session.caller()), session))
                 .map_err(|_| invalid.clone())
         })
         .collect::<Result<BTreeMap<_, _>, _>>()?;
     let mut admitted = 0;
     for (caller, record) in &state.logins {
         let login = LoginRevocationChange::decode(&record.bytes).map_err(|_| invalid.clone())?;
-        if login.caller() != *caller || !callers.insert(*caller) {
+        if login.caller() != (*caller).into() || !callers.insert(*caller) {
             return Err(invalid);
         }
         if let Some(record) = sessions.get(caller) {

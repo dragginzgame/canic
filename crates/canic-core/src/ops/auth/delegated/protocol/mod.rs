@@ -55,8 +55,8 @@ pub(super) fn cert(
     cert: &auth::DelegationCert,
 ) -> Result<protocol::DelegationCert, CanonicalAuthError> {
     Ok(protocol::DelegationCert {
-        root_pid: cert.root_pid,
-        issuer_pid: cert.issuer_pid,
+        root_pid: cert.root_pid.into(),
+        issuer_pid: cert.issuer_pid.into(),
         issuer_proof_alg: issuer_algorithm(cert.issuer_proof_alg),
         issuer_proof_binding_hash: cert.issuer_proof_binding_hash,
         issuer_proof_binding: issuer_binding(cert.issuer_proof_binding),
@@ -73,8 +73,8 @@ pub(super) fn chain_key_cert(
     cert: &auth::ChainKeyDelegationCertV1,
 ) -> Result<protocol::ChainKeyDelegationCertV1, CanonicalAuthError> {
     Ok(protocol::ChainKeyDelegationCertV1 {
-        root_canister_id: cert.root_canister_id,
-        issuer_canister_id: cert.issuer_canister_id,
+        root_canister_id: cert.root_canister_id.into(),
+        issuer_canister_id: cert.issuer_canister_id.into(),
         proof_epoch: cert.proof_epoch,
         issuer_proof_algorithm: issuer_algorithm(cert.issuer_proof_algorithm),
         issuer_proof_binding_hash: cert.issuer_proof_binding_hash,
@@ -154,7 +154,7 @@ pub(in crate::ops::auth) fn header(
 ) -> protocol::ChainKeyBatchHeaderV1 {
     protocol::ChainKeyBatchHeaderV1 {
         schema_version: value.schema_version,
-        root_canister_id: value.root_canister_id,
+        root_canister_id: value.root_canister_id.into(),
         batch_id: value.batch_id,
         proof_epoch: value.proof_epoch,
         registry_epoch: value.registry_epoch,

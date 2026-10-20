@@ -13,7 +13,7 @@ use canic_contracts::ids::{
     ComponentGroupSpecId, ComponentInstanceId, ComponentSpecId, FleetBinding,
     FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority, SubnetId,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 const BASELINE: &str = r#"
 [app]

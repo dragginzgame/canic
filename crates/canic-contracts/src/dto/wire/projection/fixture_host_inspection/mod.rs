@@ -4,8 +4,8 @@
 //! complete management record; selector and retained field parity is checked here.
 
 use ic_platform::{
-    Principal,
     candid::contract::{CandidType, Nat},
+    principal::ExternalPrincipal as Principal,
 };
 
 #[derive(CandidType)]

@@ -55,7 +55,7 @@ macro_rules! __canic_blob_endpoint {
             context = context,
             contracts = ic_blob_storage_contracts,
             clock = ic_platform::cdk::api::time,
-            caller = ic_platform::cdk::api::msg_caller,
+            caller = caller,
             trap = ic_platform::cdk::api::trap,
         );
     };
@@ -79,10 +79,13 @@ macro_rules! mount {
                 lifecycle::REQUEST_LIMITS,
                 __private::Workflow as workflow,
             };
+            fn caller() -> ic_platform::Principal {
+                ic_platform::cdk::api::msg_caller()
+            }
             fn context() -> ic_blob_storage_contracts::upload::binding::UploadContext {
                 ic_blob_storage_contracts::upload::binding::UploadContext {
                     service: ic_platform::cdk::api::canister_self(),
-                    actor: ic_platform::cdk::api::msg_caller(),
+                    actor: caller(),
                 }
             }
             $crate::__canic_blob_endpoint!($);

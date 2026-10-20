@@ -55,7 +55,7 @@ impl CapacityImportObserver for Observer {
     fn prepare_source(
         &mut self,
         _: &CapacityImportPlanRecord,
-        _: ic_platform::Principal,
+        _: ic_platform::principal::ExternalPrincipal,
     ) -> impl Future<Output = Result<Self::Source, CapacityImportJournalError>> {
         ready(Err(CapacityImportJournalError::InventoryInvalid))
     }

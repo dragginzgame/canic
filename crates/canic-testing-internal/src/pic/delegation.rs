@@ -1,4 +1,4 @@
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 use canic::{Error, dto::auth::DelegatedRoleGrant, ids::CanisterRole};
 
@@ -18,7 +18,7 @@ pub fn create_user_shard(
     let created: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
         pic,
         user_hub_pid,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "create_account",
         (user_pid,),
         canic::testing::CANDID_REPLY_LIMITS,

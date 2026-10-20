@@ -28,7 +28,7 @@ use canic_core::control_plane_support::{
     error::InternalError,
     ops::component_provisioning_plan::MAX_FLEET_COMPONENT_PROVISIONING_PLAN_ENTRIES,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 /// Root-local operations over the durable scale-out Directory journal.
 pub struct RootComponentDirectorySynchronizationOps;

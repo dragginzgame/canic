@@ -9,12 +9,12 @@
 use std::{sync::Arc, time::Duration};
 
 use ic_platform::{
-    Principal,
     agent::{
         Agent, AgentBuilder, AgentError, BasicIdentity, Identity, Prime256v1Identity,
         Secp256k1Identity,
     },
     candid::contract::CandidType,
+    principal::ExternalPrincipal as Principal,
 };
 use serde::{Deserialize, de::DeserializeOwned};
 use thiserror::Error as ThisError;

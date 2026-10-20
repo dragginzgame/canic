@@ -576,7 +576,9 @@ fn validate_participants(
     Ok(())
 }
 
-const fn target_principal(target: &crate::ids::ManagedCanisterBinding) -> ic_platform::Principal {
+const fn target_principal(
+    target: &crate::ids::ManagedCanisterBinding,
+) -> ic_platform::principal::ExternalPrincipal {
     match target {
         crate::ids::ManagedCanisterBinding::Component(component) => component.canister_id,
         crate::ids::ManagedCanisterBinding::ComponentChild(child) => child.canister_id,

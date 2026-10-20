@@ -65,7 +65,7 @@ mod tests {
         SignedRoleAttestation,
     };
     use canic_contracts::ids::CanisterRole;
-    use ic_platform::{Principal, candid::contract::encode_args};
+    use ic_platform::{candid::contract::encode_args, principal::ExternalPrincipal as Principal};
 
     fn p(byte: u8) -> Principal {
         Principal::from_slice(&[byte; 29])

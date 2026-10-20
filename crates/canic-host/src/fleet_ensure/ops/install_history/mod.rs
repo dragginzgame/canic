@@ -16,7 +16,7 @@ use canic_contracts::dto::{
     canister::CanisterInspectionRequest,
     wire::projection::install_history::{Command, Response},
 };
-use ic_platform::{Principal, candid::contract::CandidType};
+use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
 use serde::Deserialize;
 use std::path::Path;
 

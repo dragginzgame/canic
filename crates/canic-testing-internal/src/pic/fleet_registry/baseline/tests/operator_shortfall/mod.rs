@@ -29,7 +29,7 @@ pub(super) fn assert_fresh_reinstall_rejection(
     let withdrawals: u64 = ic_testkit::pic::query_candid_args(
         input.pic,
         ledger,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "withdrawal_count",
         (),
         canic::testing::CANDID_REPLY_LIMITS,
@@ -72,7 +72,7 @@ pub(super) fn assert_fresh_reinstall_rejection(
         ic_testkit::pic::query_candid_args::<(u64,), _>(
             input.pic,
             ledger,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "withdrawal_count",
             (),
             canic::testing::CANDID_REPLY_LIMITS
@@ -97,7 +97,7 @@ fn move_fixture_balance(
     let _: () = ic_testkit::pic::update_candid_args(
         pic,
         ledger,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "set_transfer_fee_override",
         (Some(Nat::from(0_u8)),),
         canic::testing::CANDID_REPLY_LIMITS,
@@ -129,7 +129,7 @@ fn move_fixture_balance(
     let _: () = ic_testkit::pic::update_candid_args(
         pic,
         ledger,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "set_transfer_fee_override",
         (None::<Nat>,),
         canic::testing::CANDID_REPLY_LIMITS,

@@ -46,7 +46,6 @@ cat > "$fixture/bin/cargo" <<'SH'
 set -euo pipefail
 printf 'cargo %s offline=%s\n' "$*" "${CARGO_NET_OFFLINE:-unset}" >> "$PREFLIGHT_EVENTS"
 case "$*" in
-    'set-version --help') exit "${PREFLIGHT_TOOL_STATUS:-0}" ;;
     'fetch --locked')
         [[ "${PREFLIGHT_FETCH_STATUS:-0}" == 0 ]] || exit "$PREFLIGHT_FETCH_STATUS"
         if [[ "${CARGO_NET_OFFLINE:-false}" == true && ! -f "$PREFLIGHT_CACHE" ]]; then exit 71; fi
@@ -94,7 +93,7 @@ run_preflight() {
 # A cold cache is prepared without overriding an explicitly selected offline policy.
 CARGO_NET_OFFLINE=false run_preflight success
 [[ -f "$PREFLIGHT_CACHE" ]]
-printf 'draft patch\ncargo fetch --locked offline=false\nsetup\ntools-check\ncargo set-version --help offline=false\n' > expected
+printf 'draft patch\ncargo fetch --locked offline=false\nsetup\ntools-check\n' > expected
 cmp expected "$PREFLIGHT_EVENTS"
 CARGO_NET_OFFLINE=true run_preflight success
 rm -f "$PREFLIGHT_CACHE"
@@ -113,8 +112,6 @@ for allowed in CHANGELOG.md docs/changelog/1.2.md; do
 done
 PREFLIGHT_DRAFT_STATUS=23 run_preflight failure
 [[ "$(cat "$PREFLIGHT_EVENTS")" == 'draft patch' ]]
-PREFLIGHT_TOOL_STATUS=29 CARGO_NET_OFFLINE=false run_preflight failure
-[[ "$(tail -1 "$PREFLIGHT_EVENTS")" == 'cargo set-version --help offline=false' ]]
 PREFLIGHT_SETUP_STATUS=31 run_preflight failure
 [[ "$(tail -1 "$PREFLIGHT_EVENTS")" == setup ]]
 PREFLIGHT_CHECK_STATUS=32 run_preflight failure

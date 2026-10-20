@@ -1,5 +1,5 @@
 use crate::{cycles::Cycles, ids::*};
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 pub fn fleet_key(byte: u8) -> FleetKey {
     FleetKey {

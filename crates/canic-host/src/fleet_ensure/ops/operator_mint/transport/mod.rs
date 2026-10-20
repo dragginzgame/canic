@@ -22,10 +22,10 @@ use crate::{
     icp::{IcpCli, IcpManagementCallError},
 };
 use ic_platform::{
-    Principal,
     agent::{Agent, AgentError, RequestStatusResponse},
     candid::contract::{CandidType, Nat},
     icrc_ledger_types::{GetBlocksRequest, ICRC3DataCertificate},
+    principal::ExternalPrincipal as Principal,
 };
 use serde::{Deserialize, de::DeserializeOwned};
 use std::time::Duration;

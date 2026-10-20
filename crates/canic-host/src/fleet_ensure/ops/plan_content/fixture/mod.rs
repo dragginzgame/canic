@@ -14,7 +14,7 @@ use canic_contracts::dto::{
     root_store::RootStoreFixture,
 };
 use canic_control_plane::api::fixture_content::FixtureContentApi;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use std::collections::BTreeMap;

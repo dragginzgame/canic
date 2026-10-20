@@ -77,7 +77,7 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
                     .map_err(::canic::Error::from)?;
             }
 
-            let caller = $crate::__internal::cdk::api::msg_caller();
+            let caller: $crate::__internal::core::cdk::types::Principal = $crate::__internal::cdk::api::msg_caller().into();
             if matches!(
                 &command,
                 StoreCommand::ActivateFleet(_)
@@ -327,7 +327,7 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
         fn canic_wasm_store_fixture_chunk(
             request: ::canic::dto::fixture_provisioning::FixtureChunkRead,
         ) -> Result<Result<Vec<u8>, ::canic::dto::fixture_provisioning::FixtureStoreError>, ::canic::Error> {
-            let caller = $crate::__internal::cdk::api::msg_caller();
+            let caller: $crate::__internal::core::cdk::types::Principal = $crate::__internal::cdk::api::msg_caller().into();
             // Framework admission cannot express this request-bound grant. Authenticate
             // its exact caller and full revision here before delegating payload access.
             if let Err(error) = $crate::__internal::control_plane::api::fixture_store::FixtureStoreApi::authorize_read(caller, &request) {

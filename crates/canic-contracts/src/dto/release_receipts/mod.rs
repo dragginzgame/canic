@@ -4,7 +4,7 @@
 //! Does not own: authentication, replay decisions, accounting or settlement.
 //! Boundary: metadata preserves original identities without returning cached application replies.
 
-use ic_platform::{Principal, candid::contract::CandidType};
+use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
 use serde::Deserialize;
 
 /// Authentication class retained by the original operation, independent of the current observer.

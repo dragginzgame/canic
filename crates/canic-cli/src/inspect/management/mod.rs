@@ -15,7 +15,7 @@ use std::ffi::OsString;
 pub(super) fn command() -> Command {
     Command::new("management").bin_name("canic inspect management")
         .about("Read management status, visibility and cumulative query counters")
-        .arg(Arg::new("canister").required(true).value_name("principal").value_parser(clap::value_parser!(ic_platform::Principal)))
+        .arg(Arg::new("canister").required(true).value_name("principal").value_parser(clap::value_parser!(ic_platform::principal::ExternalPrincipal)))
         .arg(internal_environment_arg()).arg(internal_icp_arg())
         .arg(flag_arg("json").long("json").help("Print structured status"))
         .after_help("ICP performs a management status update, which may incur network charges. Visibility is reported without changing settings.\n\nExample:\n  canic --environment ic inspect management <principal> --json")
@@ -30,10 +30,10 @@ pub(super) fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), Inspec
         parse_matches(command(), args).map_err(|_| InspectCommandError::Usage(usage()))?;
     let target = IcpTargetOptions::parse(&matches);
     let canister = *matches
-        .get_one::<ic_platform::Principal>("canister")
+        .get_one::<ic_platform::principal::ExternalPrincipal>("canister")
         .expect("required Principal");
-    if canister == ic_platform::Principal::anonymous()
-        || canister == ic_platform::Principal::management_canister()
+    if canister == ic_platform::principal::ExternalPrincipal::anonymous()
+        || canister == ic_platform::principal::ExternalPrincipal::management_canister()
     {
         return Err(InspectCommandError::Target(
             "management inspection requires a concrete canister".into(),

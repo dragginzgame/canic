@@ -4,6 +4,8 @@
 //! Does not own: production Component Registry state, installation, or placement policy.
 //! Boundary: host settlement installs children and synchronizes their parent before replies.
 
+mod codec;
+
 use canic::{
     Error,
     dto::capability::RootCapabilityResponseV1,
@@ -18,8 +20,8 @@ use canic_contracts::dto::wire::projection::capability_rpc::{
 };
 use ic_platform::cdk::call::Call;
 use ic_platform::{
-    Principal,
-    candid::contract::{CandidType, Nat},
+    candid::contract::{CandidType, DecoderConfig, Nat, decode_args_with_config, encode_one},
+    principal::ExternalPrincipal as Principal,
 };
 use serde::Deserialize;
 use std::cell::RefCell;
@@ -92,7 +94,7 @@ struct StubCreateCanisterResult {
 #[ic_platform::cdk::init]
 const fn init() {}
 
-#[ic_platform::cdk::update]
+#[ic_platform::cdk::update(decode_with = "codec::decode_one", encode_with = "codec::encode_reply")]
 async fn canic_root_command(
     command: RootCommandFragment,
 ) -> Result<RootCommandResponseFragment, Error> {
@@ -104,12 +106,15 @@ async fn canic_root_command(
     Ok(RootCommandResponseFragment::RespondCapability(response))
 }
 
-#[ic_platform::cdk::query]
+#[ic_platform::cdk::query(
+    decode_with = "codec::decode_args",
+    encode_with = "codec::encode_reply"
+)]
 fn testing_component_child_allocations() -> Vec<FixtureChildAllocation> {
     ALLOCATIONS.with_borrow(Clone::clone)
 }
 
-#[ic_platform::cdk::query]
+#[ic_platform::cdk::query(decode_with = "codec::decode_one", encode_with = "codec::encode_reply")]
 fn testing_component_child_is_settled(request_id: [u8; 32]) -> bool {
     ALLOCATIONS.with_borrow(|allocations| {
         allocations
@@ -118,7 +123,7 @@ fn testing_component_child_is_settled(request_id: [u8; 32]) -> bool {
     })
 }
 
-#[ic_platform::cdk::update]
+#[ic_platform::cdk::update(decode_with = "codec::decode_one", encode_with = "codec::encode_reply")]
 fn testing_settle_component_child(request_id: [u8; 32]) -> Result<(), Error> {
     ALLOCATIONS.with_borrow_mut(|allocations| {
         let allocation = allocations
@@ -151,7 +156,8 @@ async fn allocate_child(
     request_id: [u8; 32],
     request: CreateCanisterRequest,
 ) -> Result<Principal, Error> {
-    let parent = ic_platform::cdk::api::msg_caller();
+    let parent =
+        ic_platform::principal::ExternalPrincipal::from(ic_platform::cdk::api::msg_caller());
     if request_id == [0; 32]
         || request.metadata.map(|metadata| metadata.request_id) != Some(request_id)
         || !matches!(request.parent, CreateCanisterParent::ThisCanister)
@@ -201,11 +207,12 @@ async fn await_settlement(request_id: [u8; 32]) -> Result<(), Error> {
             ic_platform::cdk::api::canister_self(),
             "testing_component_child_is_settled",
         )
-        .with_arg(request_id)
+        .take_raw_args(
+            encode_one(request_id).unwrap_or_else(|error| panic!("failed to encode args: {error}")),
+        )
         .await
         .map_err(|_| Error::from_registered(canic::diagnostics::codes::STATE_FAILED))?;
-        let settled: bool = response
-            .candid()
+        let (settled,): (bool,) = decode_args_with_config(response.as_ref(), &DecoderConfig::new())
             .map_err(|_| Error::from_registered(canic::diagnostics::codes::STATE_FAILED))?;
         if settled {
             return Ok(());
@@ -255,14 +262,16 @@ async fn create_canister() -> Result<Principal, Error> {
         sender_canister_version: Some(ic_platform::cdk::api::canister_version()),
     };
 
-    let response = Call::bounded_wait(Principal::management_canister(), "create_canister")
-        .with_arg(args)
+    let response = Call::bounded_wait(Principal::management_canister().into(), "create_canister")
+        .take_raw_args(
+            encode_one(args).unwrap_or_else(|error| panic!("failed to encode args: {error}")),
+        )
         .with_cycles(CREATE_CANISTER_CYCLES)
         .await
         .map_err(|_| Error::from_registered(canic::diagnostics::codes::STATE_FAILED))?;
-    let res: StubCreateCanisterResult = response
-        .candid()
-        .map_err(|_| Error::from_registered(canic::diagnostics::codes::STATE_FAILED))?;
+    let (res,): (StubCreateCanisterResult,) =
+        decode_args_with_config(response.as_ref(), &DecoderConfig::new())
+            .map_err(|_| Error::from_registered(canic::diagnostics::codes::STATE_FAILED))?;
 
     Ok(res.canister_id)
 }

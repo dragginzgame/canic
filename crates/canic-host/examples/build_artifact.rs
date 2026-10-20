@@ -8,64 +8,41 @@ use canic_host::{
 };
 use std::path::{Path, PathBuf};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut args = std::env::args().skip(1);
-    let (
-        Some(canister_name),
-        Some(profile),
-        Some(workspace_root),
-        Some(icp_root),
-        Some(config_path),
-    ) = (
-        args.next(),
-        args.next(),
-        args.next(),
-        args.next(),
-        args.next(),
-    )
-    else {
-        return Err(
-            "usage: cargo run -p canic-host --example build_artifact -- <canister-name> <debug|fast|release> <workspace-root> <icp-root> <config-path> [--environment <name>] [--refresh-canonical-did] [--release-build-id <id>]"
-                .into(),
-        );
-    };
-    let mut refresh_canonical_infrastructure_did = false;
-    let mut release_build_id = None;
-    let mut explicit_environment = None;
-    while let Some(argument) = args.next() {
-        match argument.as_str() {
-            "--environment" => {
-                if explicit_environment.is_some() {
-                    return Err("--environment may be supplied only once".into());
-                }
-                explicit_environment = Some(args.next().ok_or("--environment requires a name")?);
-            }
-            "--refresh-canonical-did"
-                if matches!(canister_name.as_str(), "fleet_coordinator" | "wasm_store") =>
-            {
-                refresh_canonical_infrastructure_did = true;
-            }
-            "--refresh-canonical-did" => {
-                return Err(
-                    "--refresh-canonical-did requires fleet_coordinator or wasm_store".into(),
-                );
-            }
-            "--release-build-id" => {
-                if release_build_id.is_some() {
-                    return Err("--release-build-id may be supplied only once".into());
-                }
-                let value = args
-                    .next()
-                    .ok_or("--release-build-id requires a canonical release-build ID")?;
-                release_build_id = Some(value.parse::<ReleaseBuildId>()?);
-            }
-            _ => return Err("unknown build_artifact argument".into()),
-        }
-    }
-    let profile = profile.parse::<CanisterBuildProfile>()?;
+/// Build one configured artifact using the selected workspace and environment.
+#[derive(clap::Parser)]
+struct Arguments {
+    canister_name: String,
+    profile: CanisterBuildProfile,
+    workspace_root: PathBuf,
+    icp_root: PathBuf,
+    config_path: String,
+    #[arg(long = "environment")]
+    explicit_environment: Option<String>,
+    #[arg(long = "refresh-canonical-did")]
+    refresh_canonical_infrastructure_did: bool,
+    #[arg(long)]
+    release_build_id: Option<ReleaseBuildId>,
+}
 
-    let workspace_root = PathBuf::from(workspace_root).canonicalize()?;
-    let icp_root = PathBuf::from(icp_root).canonicalize()?;
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let Arguments {
+        canister_name,
+        profile,
+        workspace_root,
+        icp_root,
+        config_path,
+        explicit_environment,
+        refresh_canonical_infrastructure_did,
+        release_build_id,
+    } = <Arguments as clap::Parser>::parse();
+    if refresh_canonical_infrastructure_did
+        && !matches!(canister_name.as_str(), "fleet_coordinator" | "wasm_store")
+    {
+        return Err("--refresh-canonical-did requires fleet_coordinator or wasm_store".into());
+    }
+
+    let workspace_root = workspace_root.canonicalize()?;
+    let icp_root = icp_root.canonicalize()?;
     let config_path = resolve_path(&workspace_root, &config_path).canonicalize()?;
     let environment = resolve_environment(
         explicit_environment.as_deref(),

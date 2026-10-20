@@ -62,7 +62,7 @@ impl canic_core::access::expr::AccessCheck for FleetCoordinatorRegistryCallerPre
         context: &canic_core::access::expr::AccessContext,
     ) -> Result<(), canic_core::access::AccessError> {
         let caller = context.transport_caller();
-        FleetCoordinatorWorkflow::authorize_registry_caller(caller, is_controller(&caller))
+        FleetCoordinatorWorkflow::authorize_registry_caller(caller, is_controller(&caller.into()))
             .map_err(canic_core::access::AccessError::Internal)
     }
 }
@@ -70,12 +70,14 @@ impl canic_core::access::expr::AccessCheck for FleetCoordinatorRegistryCallerPre
 impl FleetCoordinatorApi {
     /// Authorize an exact joining Root before command workflow dispatch.
     pub fn authorize_calling_root_snapshot() -> Result<(), Error> {
-        FleetCoordinatorWorkflow::authorize_root_snapshot_caller(msg_caller()).map_err(Into::into)
+        FleetCoordinatorWorkflow::authorize_root_snapshot_caller(msg_caller().into())
+            .map_err(Into::into)
     }
 
     /// Authorize the exact registered Root before any Coordinator treasury observation.
     pub fn authorize_calling_root_funding() -> Result<(), Error> {
-        FleetCoordinatorWorkflow::authorize_root_funding_caller(msg_caller()).map_err(Into::into)
+        FleetCoordinatorWorkflow::authorize_root_funding_caller(msg_caller().into())
+            .map_err(Into::into)
     }
 
     /// Restore memory invariants and synchronously commit fresh genesis during install.
@@ -85,26 +87,31 @@ impl FleetCoordinatorApi {
             ic_platform::cdk::api::trap(format!("memory bootstrap failed: {error}"))
         });
         EnvOps::initialize_fleet_coordinator_runtime();
-        canic_core::api::authority_restore::AuthorityRestoreApi::initialize(canister_self())
+        canic_core::api::authority_restore::AuthorityRestoreApi::initialize(canister_self().into())
             .unwrap_or_else(|error| {
                 ic_platform::cdk::api::trap(format!("authority restore fence init failed: {error}"))
             });
-        let caller = msg_caller();
-        FleetCoordinatorWorkflow::initialize(args, caller, is_controller(&caller), canister_self())
-            .unwrap_or_else(|error| {
-                ic_platform::cdk::api::trap(format!("Fleet Coordinator init failed: {error}"))
-            });
+        let caller = msg_caller().into();
+        FleetCoordinatorWorkflow::initialize(
+            args,
+            caller,
+            is_controller(&caller.into()),
+            canister_self().into(),
+        )
+        .unwrap_or_else(|error| {
+            ic_platform::cdk::api::trap(format!("Fleet Coordinator init failed: {error}"))
+        });
         canic_core::api::ready::ReadyApi::mark_ready();
     }
 
     pub fn operation_status(
         operation_id: [u8; 32],
     ) -> Result<CoordinatorOperationStatusResponse, Error> {
-        let caller = msg_caller();
+        let caller = msg_caller().into();
         FleetCoordinatorWorkflow::operation_status_for_caller(
             operation_id,
             caller,
-            is_controller(&caller),
+            is_controller(&caller.into()),
         )
         .map_err(Into::into)
     }
@@ -179,7 +186,7 @@ impl FleetCoordinatorApi {
                 .map(CoordinatorCommandResponse::ResumeAuthoritySnapshot)
             }
             CoordinatorCommand::Retire(request) => {
-                crate::workflow::fleet_coordinator::retirement::retire(msg_caller(), request)
+                crate::workflow::fleet_coordinator::retirement::retire(msg_caller().into(), request)
                     .await
                     .map(CoordinatorCommandResponse::Retire)
                     .map_err(Into::into)
@@ -226,7 +233,7 @@ impl FleetCoordinatorApi {
     pub async fn request_calling_root_funding(
         request: FleetRootFundingRequest,
     ) -> Result<FleetRootFundingResponse, Error> {
-        FleetCoordinatorWorkflow::request_root_funding(msg_caller(), request)
+        FleetCoordinatorWorkflow::request_root_funding(msg_caller().into(), request)
             .await
             .map_err(Into::into)
     }
@@ -252,15 +259,15 @@ impl FleetCoordinatorApi {
     }
 
     pub fn registry_for_calling_status() -> Result<FleetRegistry, Error> {
-        let caller = msg_caller();
-        FleetCoordinatorWorkflow::registry_for_caller(caller, is_controller(&caller))
+        let caller = msg_caller().into();
+        FleetCoordinatorWorkflow::registry_for_caller(caller, is_controller(&caller.into()))
             .map_err(Into::into)
     }
 
     pub fn acknowledge_calling_root_snapshot(
         request: FleetSubnetRootSnapshotAcknowledgementRequest,
     ) -> Result<FleetSubnetRootSnapshotAcknowledgement, Error> {
-        FleetCoordinatorWorkflow::acknowledge_root_snapshot(msg_caller(), request)
+        FleetCoordinatorWorkflow::acknowledge_root_snapshot(msg_caller().into(), request)
             .map_err(Into::into)
     }
 
@@ -304,10 +311,10 @@ impl FleetCoordinatorApi {
     pub fn root_draining_reservation_status(
         request: FleetSubnetRootDrainingReservationStatusRequest,
     ) -> Result<FleetSubnetRootDrainingReservationResponse, Error> {
-        let caller = msg_caller();
+        let caller = msg_caller().into();
         FleetCoordinatorWorkflow::root_draining_reservation_status(
             caller,
-            is_controller(&caller),
+            is_controller(&caller.into()),
             request,
         )
         .map_err(Into::into)
@@ -317,8 +324,8 @@ impl FleetCoordinatorApi {
         request: FleetSubnetRootDeletionExecutionRequest,
     ) -> Result<FleetSubnetRootDeletionExecutionResponse, Error> {
         FleetCoordinatorWorkflow::begin_root_deletion_execution(
-            msg_caller(),
-            canister_self(),
+            msg_caller().into(),
+            canister_self().into(),
             request,
         )
         .map_err(Into::into)
@@ -333,8 +340,12 @@ impl FleetCoordinatorApi {
     pub fn complete_root_deletion(
         request: FleetSubnetRootDeletionCompletionRequest,
     ) -> Result<FleetSubnetRootDeletionResponse, Error> {
-        FleetCoordinatorWorkflow::complete_root_deletion(msg_caller(), canister_self(), request)
-            .map_err(Into::into)
+        FleetCoordinatorWorkflow::complete_root_deletion(
+            msg_caller().into(),
+            canister_self().into(),
+            request,
+        )
+        .map_err(Into::into)
     }
 
     pub fn root_deletion_status(

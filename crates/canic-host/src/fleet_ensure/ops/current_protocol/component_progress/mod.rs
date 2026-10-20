@@ -10,7 +10,7 @@ use crate::fleet_ensure::dto::{FleetComponentProgress, FleetComponentProgressSta
 use canic_contracts::dto::component_provisioning::{
     FleetComponentProvisioningPlan, FleetComponentProvisioningStatusResponse,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 pub(super) fn project(
     plan: &FleetComponentProvisioningPlan,

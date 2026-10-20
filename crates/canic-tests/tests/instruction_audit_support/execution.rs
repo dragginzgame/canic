@@ -241,7 +241,7 @@ fn execute_scenario(
             let response: Result<u128, Error> = ic_testkit::pic::update_candid_args(
                 &(setup.pic),
                 target_pid,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 "request_cycles_from_parent",
                 (999u128,),
                 canic::testing::CANDID_REPLY_LIMITS,
@@ -261,7 +261,7 @@ fn execute_scenario(
             let created: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
                 &(setup.pic),
                 target_pid,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 "create_account",
                 (Principal::from_slice(&[51; 29]),),
                 canic::testing::CANDID_REPLY_LIMITS,
@@ -274,7 +274,7 @@ fn execute_scenario(
             let created: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
                 &(setup.pic),
                 target_pid,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 "create_worker",
                 (),
                 canic::testing::CANDID_REPLY_LIMITS,
@@ -291,7 +291,7 @@ fn provision_delegation_proof(pic: &PocketIc, root: Principal, issuer_pid: Princ
     let provisioned: Result<(), Error> = ic_testkit::pic::update_candid_args(
         pic,
         root,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "test_provision_chain_key_delegation_proof_for_issuer",
         (issuer_pid,),
         canic::testing::CANDID_REPLY_LIMITS,
@@ -310,7 +310,7 @@ fn configure_delegation_issuer(
     let registered: Result<RootCommandResponse, Error> = ic_testkit::pic::update_candid_args(
         pic,
         root,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         protocol::CANIC_ROOT_COMMAND,
         (RootCommand::ConfigureIssuer(RootIssuerConfigureRequest {
             issuer_pid,
@@ -360,7 +360,7 @@ fn perf_entries(pic: &PocketIc, canister_id: Principal) -> Vec<MetricEntry> {
     let response: Result<RoleStatusResponse, Error> = ic_testkit::pic::query_candid_args(
         pic,
         canister_id,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         protocol::CANIC_OBSERVABILITY,
         (RoleStatusRequest::Metrics(MetricsStatusRequest {
             kind: MetricsKind::Runtime,

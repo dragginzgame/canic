@@ -34,7 +34,7 @@ use canic_contracts::{
     protocol,
 };
 use canic_core::role_contract::RoleCapabilityKey;
-use ic_platform::{Principal, candid::contract::CandidType};
+use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
 use std::path::Path;
 
 /// Independent role observations; implementations must not retry or substitute another role.

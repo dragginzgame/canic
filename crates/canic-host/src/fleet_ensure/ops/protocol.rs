@@ -426,7 +426,7 @@ pub(super) fn write_argument_file(bytes: &[u8]) -> Result<PathBuf, ProtocolEffec
 mod tests {
     use super::{encode_call, render, write_init_arguments};
     use canic_core::cdk::utils::hash::sha256_hex;
-    use ic_platform::Principal;
+    use ic_platform::principal::ExternalPrincipal as Principal;
     use std::{collections::BTreeMap, fs};
 
     #[test]

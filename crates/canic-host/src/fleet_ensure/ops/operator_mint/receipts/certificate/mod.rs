@@ -6,18 +6,21 @@
 use crate::fleet_ensure::ops::operator_mint::receipts::{
     DepositVerificationError as Error, ReceiptVerificationLimits,
 };
-use ic_platform::{Principal, agent::Agent, icrc_ledger_types::ICRC3DataCertificate};
+use ic_platform::{
+    agent::Agent, icrc_ledger_types::ICRC3DataCertificate,
+    principal::ExternalPrincipal as Principal,
+};
 use ic_query::certificate::{self, CertificateEvidenceLimits};
 
+use ic_host_tools::ledger_evidence::LedgerTip;
 pub use ic_query::certificate::CertificateVerificationError;
-use ic_query::certificate::CertifiedLedgerTip;
 
 pub(super) fn verify(
     agent: &Agent,
     ledger: Principal,
     evidence: &ICRC3DataCertificate,
     limits: ReceiptVerificationLimits,
-) -> Result<CertifiedLedgerTip, Error> {
+) -> Result<LedgerTip, Error> {
     certificate::authenticate_ledger_tip(
         agent,
         ledger,

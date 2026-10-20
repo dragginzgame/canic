@@ -7061,7 +7061,7 @@ fn provisioning_wait_does_not_block_coordinator_publication() {
     let failure = RootComponentProvisioningFailure {
         dependency: Some(
             canic_contracts::values::provisioning_failure::ProvisioningDependencyFailure {
-                target: ic_platform::Principal::from_slice(&[8]),
+                target: ic_platform::principal::ExternalPrincipal::from_slice(&[8]),
                 method: canic_contracts::protocol::CANIC_WASM_STORE_COMMAND.into(),
                 step: "inspect_template".into(),
                 rejection_code: Some(5),
@@ -7069,7 +7069,7 @@ fn provisioning_wait_does_not_block_coordinator_publication() {
             },
         ),
         stage: ProvisioningFailureStage::StoreStatus,
-        target: ic_platform::Principal::from_slice(&[8]),
+        target: ic_platform::principal::ExternalPrincipal::from_slice(&[8]),
         operation_id: [9; 32],
         diagnostic_code: 61,
         retry_category: ProvisioningRetryCategory::Backoff,

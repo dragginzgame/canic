@@ -31,7 +31,7 @@ fn control_plane_facade_reexports_template_manifest_enums() {
 
 #[test]
 fn control_plane_facade_exposes_root_membership_and_custom_access_contracts() {
-    let _: fn(ic_platform::Principal) -> Result<ManagedCanisterBinding, Error> =
+    let _: fn(ic_platform::principal::ExternalPrincipal) -> Result<ManagedCanisterBinding, Error> =
         RootComponentMembershipApi::active_member;
     let _: fn(RootMembershipRequest) -> Result<RootMembershipResponse, Error> =
         RootComponentMembershipApi::lookup;

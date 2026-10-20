@@ -5,7 +5,7 @@
 //! Counters use the fixture's existing application storage; publication remains Root-owned.
 
 use canic::{Error, access::caller_authority, prelude::*};
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::cell::Cell;
 
 const EFFECT_ROW: u64 = 999;

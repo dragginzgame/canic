@@ -24,7 +24,7 @@ use canic_contracts::{
     },
     protocol,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 /// One Root update whose local checks and read-only authority preflight succeeded.
 /// Workflow persists its submission allowance before consuming this one-use value.

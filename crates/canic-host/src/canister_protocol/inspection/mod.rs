@@ -19,8 +19,8 @@ use canic_contracts::{
 };
 use ic_platform::candid::contract::types::FuncMode;
 use ic_platform::{
-    Principal,
     candid::contract::{CandidType, types::TypeInner},
+    principal::ExternalPrincipal as Principal,
 };
 use std::{fs, path::Path};
 

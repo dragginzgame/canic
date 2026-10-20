@@ -157,7 +157,11 @@ fn scaffold_app_writes_application_files_with_canonical_root() {
     assert!(app_manifest.contains("role = \"app\""));
     assert!(app_manifest.contains("Add runtime Canic features here"));
     assert!(app_manifest.contains("canic = \""));
-    assert!(app_manifest.contains("ic-platform"));
+    let manifest: toml::Value = toml::from_str(&app_manifest).expect("valid app manifest");
+    assert_eq!(
+        manifest["dependencies"]["ic-platform"]["version"].as_str(),
+        Some("0.4")
+    );
     assert!(!app_manifest.contains("workspace = true"));
     assert!(app_lib.contains("canic::start!();"));
     assert!(app_lib.contains("canic::finish!();"));
@@ -223,6 +227,11 @@ fn scaffold_canister_writes_declared_only_role_files() {
     assert!(manifest.contains("role = \"store\""));
     assert!(manifest.contains("crate-type = [\"cdylib\"]"));
     assert!(manifest.contains("Add runtime Canic features here"));
+    let parsed_manifest: toml::Value = toml::from_str(&manifest).expect("valid role manifest");
+    assert_eq!(
+        parsed_manifest["dependencies"]["ic-platform"]["version"].as_str(),
+        Some("0.4")
+    );
     assert!(build_rs.contains("canic::build!(\"../canic.toml\")"));
     assert!(lib.contains("canic::start!();"));
     assert!(lib.contains("pub async fn canic_install(_: Option<Vec<u8>>) {}"));

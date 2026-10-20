@@ -268,7 +268,7 @@ fn verify_membership(
             .controllers
             .iter()
             .map(|id| {
-                ic_platform::Principal::from_text(id)
+                ic_platform::principal::ExternalPrincipal::from_text(id)
                     .map_err(|_| InfrastructureBootstrapError::Integrity)
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -278,7 +278,7 @@ fn verify_membership(
                 .get(name)
                 .ok_or(InfrastructureBootstrapError::Integrity)?;
             controllers.push(
-                ic_platform::Principal::from_text(id)
+                ic_platform::principal::ExternalPrincipal::from_text(id)
                     .map_err(|_| InfrastructureBootstrapError::Integrity)?,
             );
         }

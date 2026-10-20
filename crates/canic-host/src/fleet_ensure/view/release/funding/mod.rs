@@ -2,7 +2,7 @@
 
 use crate::fleet_ensure::view::release::FleetReleaseFundingView;
 use canic_core::shared_support::icp_refill::{IcpRefillErrorCode, IcpRefillStatus};
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 /// An exact cycles receipt or an unrepresentable observation; overflow is never zero.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

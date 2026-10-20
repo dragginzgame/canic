@@ -19,7 +19,7 @@ use crate::{
     },
     view::fleet_activation::FleetActivationView,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 /// Reject substituted descriptors and assignments from another installation or release.
 pub fn validate(record: &FleetActivationView) -> Result<(), FleetActivationOpsError> {

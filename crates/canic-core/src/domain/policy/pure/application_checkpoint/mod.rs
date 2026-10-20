@@ -9,7 +9,7 @@ mod tests;
 
 use crate::model::caller_authority::CallerAdmissionError;
 use canic_contracts::ids::{ApplicationCheckpointBinding, CallerReceiverAuthority};
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 /// Root recovery authority is independent from ordinary application admission.
 pub fn require_root(

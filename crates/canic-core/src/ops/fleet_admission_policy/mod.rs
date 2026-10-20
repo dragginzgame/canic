@@ -42,7 +42,7 @@ use canic_contracts::ids::{
     FleetAdmissionSelector, FleetAdmissionTarget, FleetBinding, FleetCoordinatorBinding,
     ManagedCanisterBinding, SubnetId,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use sha2::{Digest, Sha256};
 
 const TEMPLATE_DIGEST_DOMAIN: &[u8] = b"canic/fleet-admission-template/v1";

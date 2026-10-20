@@ -1,6 +1,6 @@
 //! Explicit local resource budgets and current persistent ownership records.
 
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 

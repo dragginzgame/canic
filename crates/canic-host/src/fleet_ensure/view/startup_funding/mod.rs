@@ -9,7 +9,7 @@ use canic_contracts::ids::{
     ComponentTopologyDigest, CyclesFundingBudget, FleetRegistryAuthority,
     FleetSubnetRootFundingAuthority, FleetSubnetRootLimits, FleetSubnetRootReleaseSet, SubnetId,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::collections::BTreeMap;
 
 /// Retained observation status and recomputed diagnostic demand; neither approves funding.
@@ -211,8 +211,8 @@ pub struct StartupRecursiveChildDemand {
 pub struct StartupChildFundingBinding {
     pub release_set: FleetSubnetRootReleaseSet,
     pub component: ComponentBinding,
-    pub canister_id: ic_platform::Principal,
-    pub parent: ic_platform::Principal,
+    pub canister_id: ic_platform::principal::ExternalPrincipal,
+    pub parent: ic_platform::principal::ExternalPrincipal,
     pub parent_role: Option<CanisterRole>,
     pub role: CanisterRole,
 }

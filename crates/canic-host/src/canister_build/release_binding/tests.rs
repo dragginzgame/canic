@@ -213,7 +213,7 @@ fn assert_runtime_identity(
     let reply = pic
         .query_call(
             canister,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "binding",
             ic_platform::candid::contract::encode_args(()).unwrap(),
         )
@@ -252,7 +252,7 @@ fn assert_runtime_identity(
     let reply = pic
         .query_call(
             canister,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "binding",
             ic_platform::candid::contract::encode_args(()).unwrap(),
         )

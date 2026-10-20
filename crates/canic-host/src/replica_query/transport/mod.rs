@@ -10,8 +10,8 @@ use crate::icp_config::{
     configured_local_gateway_port_from_root,
 };
 use ic_platform::{
-    Principal,
     agent::{Agent, AgentError, TransportError},
+    principal::ExternalPrincipal as Principal,
 };
 use reqwest::{Method, Url, blocking::Client, redirect::Policy};
 use std::{error::Error, io, path::Path, sync::Arc, time::Duration};

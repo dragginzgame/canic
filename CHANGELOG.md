@@ -8,18 +8,32 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Clear Core lint failures while preserving auth session admission ordering; adapt
+  Auth 0.11 principal identities at existing DTO/storage boundaries. Use Clap in
+  the four maintainer utilities, preserving their operations and selected inputs.
+  Materialize 151 historical evidence symlinks with identical resolved bytes.
+  Use Host Tools' ledger-evidence types with Query 0.65 certificate authentication.
+  Match the test canister's auth features to its declared verifier capability.
+  Enforce explicit tooling exclusions in the framework Wasm graph check.
+
+- Give the funding, Cycles Ledger and ICP refill probes explicit Candid codecs
+  for Platform endpoints, retaining their installation and RPC formats.
+
 - Route authority-recovery traps through the existing IC operations boundary,
   fixing the layering check while preserving atomic rollback.
 
 - Select Rust 1.99.1 for development and matching CI checks, retaining existing
   package MSRVs.
 
-- Adapt Blob 0.37 installation and service calls to method-bound Wire frames,
+- Adapt Blob 0.38 installation and service calls to method-bound Wire frames,
   including dedicated/embedded consumers and qualification callers. Preserve
   external provider Candid. Generate explicit Candid codecs for ordinary Canic
   endpoints and retain synchronous lifecycle decoding through the shared adapter;
   update Hub/Shard fixture stores to governed storage adapters. Require Storage
   0.5.7 so independent consumer locks cannot retain incompatible Memory types.
+  Use Blob’s owned Platform principals at service boundaries, retaining external
+  principals at existing Canic and PocketIC boundaries. Align both consumer locks
+  on Blob 0.38, Platform 0.4.1 and Timers 0.29.5.
 
 - Align mint receipt authentication with IC Query 0.64 and IC Host’s bounded
   certificate codec. Remove the obsolete certificate-depth setting and redundant
@@ -31,11 +45,24 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   input limit, strict structural refusals and scalar-name interpretation; reserve
   the `<<` mapping key even when quoted.
 
-- Select Platform 0.2.1 directly across the framework and Blob consumer catalogs;
+- Select published Platform 0.4.1 across the framework and Blob consumer catalogs.
+  Retain existing Candid principal identities through its explicit external type,
+  with conversions at CDK boundaries. Protocols and storage formats stay unchanged;
   remove the unused CDK `export_candid` re-export while retaining the canonical
   Candid service generator and existing protocol formats.
+  Generated application manifests select 0.4. Testkit 0.59 uses the same Platform
+  decoder-limit type, removing the `ic-testkit-platform` alias without changing
+  any of the five decoder budgets.
 
-- Select published IC Host 0.30 for direct host dependencies, keeping optional
+- Adapt raw Platform calls to explicit Candid encoding/decoding while preserving
+  the existing response decoder configuration, cycle payments and transport
+  failures. Keep malformed responses as typed codec errors. Preserve Backup's
+  artifact error categories through Backup 0.35’s current Host conversion, removing
+  the temporary local conversion helper.
+  Qualify catalog cancellation by successful retry with Query’s persistent lock
+  files rather than requiring coordination-file deletion.
+
+- Select published IC Host 0.31.1 for direct host dependencies, keeping optional
   filesystem capability and temporary-file backends disabled where unused.
 
 - Remove the unused Root-fixture activation driver and redundant prepared-Root
@@ -152,11 +179,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Delegate Cargo communication and typed artifact selection to IC Build; remove
   the local JSON selector and heartbeat thread while retaining Canic export policy.
 
-- **Shared Tooling:** adopt 0.24.0, label dependency roles, preserve grouped
+- **Shared Tooling:** adopt 0.25.4, label dependency roles, preserve grouped
   manifest ordering through formatting and release checks, and explicitly own
-  Candid extractor setup. Deployment role exclusions remain manually inspected.
+  Candid extractor setup. Use the pinned IC Build editor for manifest and lock
+  candidates instead of Cargo Edit and the removed Perl renderer. Deployment
+  role exclusions remain manually inspected.
 
-- **Platform boundary:** adopt published IC Platform 0.1.10 for Principal, contract
+- **Platform boundary:** use IC Platform for principal identities, contract
   types/encoding, bounded decoding, certification, native Agent APIs, management
   HTTP/ledger types, raw argument APIs and generated executor contexts.
   Route default decoders and structural subtyping through Platform; remove six
@@ -318,7 +347,7 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
   resume inputs ([#516 — Expose failed provisioning dependencies](https://github.com/dragginzgame/canic/issues/516)).
 - **Funding replies:** decode the Registry response once, preserving typed remote
   rejection ([#436 — Fix Registry reply decoding in cycles funding](https://github.com/dragginzgame/canic/issues/436)).
-- **Contributor tools:** adopt Shared Tooling 0.15.0, Host 0.24 and Testkit 0.50;
+- **Contributor tools:** adopt shared tool preparation and Host/Testkit tooling;
   repair CI/dev installer callers after shared wrapper retirement
   ([#563 — Converge CI and maintainer setup](https://github.com/dragginzgame/canic/issues/563)).
 

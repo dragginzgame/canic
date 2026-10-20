@@ -29,7 +29,7 @@ use canic_contracts::{
     },
     protocol,
 };
-use ic_platform::{Principal, agent::Agent};
+use ic_platform::{agent::Agent, principal::ExternalPrincipal as Principal};
 use std::{collections::BTreeMap, time::Duration};
 use thiserror::Error;
 

@@ -106,7 +106,7 @@ impl InternalError {
     #[must_use]
     pub fn with_dependency_failure(
         mut self,
-        target: ic_platform::Principal,
+        target: ic_platform::principal::ExternalPrincipal,
         method: &'static str,
         step: &'static str,
     ) -> Self {
@@ -140,7 +140,7 @@ impl InternalError {
     pub fn with_provisioning_failure(
         mut self,
         stage: crate::domain::provisioning_failure::ProvisioningFailureStage,
-        target: ic_platform::Principal,
+        target: ic_platform::principal::ExternalPrincipal,
         operation_id: [u8; 32],
         retry_category: crate::domain::provisioning_failure::ProvisioningRetryCategory,
     ) -> Self {

@@ -11,7 +11,7 @@ use crate::{
     },
 };
 use canic_contracts::dto::wire::projection::local_authority::{Request, Response};
-use ic_platform::{Principal, candid::contract::Nat};
+use ic_platform::{candid::contract::Nat, principal::ExternalPrincipal as Principal};
 use ic_testkit::{
     pic::{PocketIcManagedServer, PocketIcStartupConfig},
     pocket_ic::{
@@ -96,7 +96,7 @@ pub fn create(
     pic: &PocketIc,
     allocation: &LocalAllocationIntentRecord,
     config: &LocalFleetConfig,
-) -> Result<ic_platform::Principal, LocalFleetError> {
+) -> Result<ic_platform::principal::ExternalPrincipal, LocalFleetError> {
     if let Some(id) = allocation.canister_id {
         if !guarded(|| pic.canister_exists(id))?
             || guarded(|| pic.get_subnet(id))? != Some(allocation.subnet_id)
@@ -164,9 +164,9 @@ pub fn guarded<T>(action: impl FnOnce() -> T) -> Result<T, LocalFleetError> {
 /// Set one new local canister's final controller set, reconciling a lost response by observation.
 pub fn controllers(
     pic: &PocketIc,
-    target: ic_platform::Principal,
-    operator: ic_platform::Principal,
-    expected: &[ic_platform::Principal],
+    target: ic_platform::principal::ExternalPrincipal,
+    operator: ic_platform::principal::ExternalPrincipal,
+    expected: &[ic_platform::principal::ExternalPrincipal],
 ) -> Result<(), LocalFleetError> {
     let mut observed = guarded(|| pic.get_controllers(target))?;
     observed.sort();

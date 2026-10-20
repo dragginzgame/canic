@@ -26,7 +26,7 @@ use std::{
 use ic_host_artifacts::artifact::ArtifactError;
 use ic_host_fs::durable::{self, PublicationMode, WriteOptions};
 use ic_host_fs::read::hash_file_no_follow;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use ic_testkit::pocket_ic::{PocketIc, common::rest::Topology};
 
 const MAX_BINARY_BYTES: u64 = 512 * 1024 * 1024;

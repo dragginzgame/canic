@@ -8,9 +8,9 @@ mod tests;
 
 use crate::icp::{IcpCli, IcpManagementCallError};
 use ic_platform::{
-    Principal,
     agent::{Agent, AgentError, TransportError},
     candid::contract::CandidType,
+    principal::ExternalPrincipal as Principal,
 };
 use serde::de::DeserializeOwned;
 use std::{future::Future, sync::Arc, time::Duration};

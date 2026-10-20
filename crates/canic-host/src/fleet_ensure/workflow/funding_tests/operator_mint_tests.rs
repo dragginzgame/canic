@@ -22,9 +22,9 @@ use crate::{
 };
 use canic_core::cdk::utils::hash::decode_hex;
 use ic_platform::{
-    Principal,
     agent::{Agent, BasicIdentity},
     candid::contract::{CandidType, Nat},
+    principal::ExternalPrincipal as Principal,
 };
 use ic_testkit::{
     pic::PocketIcBuilder,
@@ -486,7 +486,7 @@ pub(super) fn funded_operator() -> (ic_testkit::pocket_ic::PocketIc, OperatorMin
         ic_testkit::pic::update_candid_args(
             &(pic),
             ledger,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "icrc1_transfer",
             (MintTestTransfer {
                 from_subaccount: None,

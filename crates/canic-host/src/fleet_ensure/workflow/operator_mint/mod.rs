@@ -58,8 +58,8 @@ pub fn fresh_quote_available(paths: &EnsurePaths) -> Result<bool, EnsureWorkflow
 pub fn quote_fresh(
     paths: &EnsurePaths,
     transport: &crate::fleet_ensure::ops::operator_mint::transport::OperatorMintTransport,
-    icp_ledger: ic_platform::Principal,
-    cmc: ic_platform::Principal,
+    icp_ledger: ic_platform::principal::ExternalPrincipal,
+    cmc: ic_platform::principal::ExternalPrincipal,
 ) -> Result<
     crate::fleet_ensure::view::operator_mint::FreshOperatorFundingQuote,
     execution::OperatorMintExecutionError,
@@ -90,7 +90,7 @@ pub fn quote_fresh(
     if transport.operator()?.to_text() != desired.operator {
         return Err(EnsureWorkflowError::OperatorMintReviewConflict.into());
     }
-    let ledger = ic_platform::Principal::from_text(&desired.cycles_ledger)
+    let ledger = ic_platform::principal::ExternalPrincipal::from_text(&desired.cycles_ledger)
         .map_err(|_| EnsureWorkflowError::PlanIntegrity)?;
     let available = transport.operator_balance(ledger)?;
     let rate = transport.quote_blocking(icp_ledger, cmc, ledger)?;

@@ -4,7 +4,7 @@
 use canic_contracts::dto::fixture_provisioning::FixtureTargetBinding;
 #[cfg(feature = "wasm-store-canister")]
 use canic_contracts::ids::ComponentBinding;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 /// Existing Component authority and the exact Component or child caller.
 

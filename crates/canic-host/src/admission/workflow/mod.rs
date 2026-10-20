@@ -36,7 +36,7 @@ use canic_contracts::{
     ids::{FleetAdmissionPolicy, FleetAdmissionSelector},
 };
 use canic_core::cdk::utils::hash::hex_bytes;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::collections::BTreeMap;
 
 /// Observe Coordinator and Root convergence against the same current Fleet authority.

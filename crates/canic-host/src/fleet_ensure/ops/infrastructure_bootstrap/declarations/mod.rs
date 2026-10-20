@@ -18,7 +18,7 @@ use crate::fleet_ensure::{
 };
 use canic_contracts::ids::SubnetId;
 use canic_core::cdk::utils::hash::decode_hex;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 

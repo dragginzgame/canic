@@ -1,22 +1,16 @@
 #!/usr/bin/env bash
-# Shared companions: scripts/ci/read-cargo-workspace-version.sh scripts/ci/check-dependency-pins.sh
+# Shared companions: scripts/ci/read-cargo-workspace-version.sh scripts/ci/check-dependency-pins.sh scripts/ci/fixture-lifecycle.sh
 set -euo pipefail
 
 ROOT="${BASH_SOURCE[0]}"
 [[ "$ROOT" == /* ]] || ROOT="$PWD/$ROOT"
 ROOT="$(cd -P "${ROOT%/*}/../.." && printf '%s/.' "$PWD")"
 ROOT="${ROOT%/.}"
-fixture="$(mktemp -d "${TMPDIR:-/tmp}/cargo-metadata-test.XXXXXX")"
+# shellcheck source=scripts/ci/fixture-lifecycle.sh
+source "$ROOT/scripts/ci/fixture-lifecycle.sh"
+fixture="$(fixture_create "${TMPDIR:-/tmp}/cargo-metadata-test.XXXXXX")"
 fixture_complete=false
-finish() {
-    local status=$?
-    # Bash 3.2 may report zero after nounset before assertions finish.
-    [[ "$fixture_complete" == true || "$status" != 0 ]] || status=1
-    if [[ "$status" == 0 ]]; then rm -rf "$fixture"
-    else echo "Cargo metadata fixtures retained: $fixture" >&2; fi
-    exit "$status"
-}
-trap finish EXIT
+trap 'fixture_finish "$?" "$fixture" "Cargo metadata fixtures retained"' EXIT
 reader="$ROOT/scripts/ci/read-cargo-workspace-version.sh"
 manifest="$fixture/Cargo.toml"
 for version in 0.1.7 1.0.0-rc.1+build.23; do

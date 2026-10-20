@@ -31,7 +31,7 @@ use canic_contracts::{
 use canic_core::control_plane_support::{
     config::ComponentTopology, ops::fleet_registry::FleetRegistryOps,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::path::Path;
 
 /// Require the selected Root's active mirror to match the independently read Coordinator head.

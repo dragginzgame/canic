@@ -125,7 +125,7 @@ impl CallerRowStore {
         let start = after.map_or_else(
             || {
                 Included(CallerRowKey::source(
-                    ic_platform::Principal::management_canister(),
+                    ic_platform::principal::ExternalPrincipal::management_canister(),
                 ))
             },
             Excluded,

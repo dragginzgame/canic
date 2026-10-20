@@ -4,8 +4,8 @@ use canic_testing_internal::pic::{
     CanicWasmBuildProfile, InternalTestWasms, build_internal_test_wasm_canisters, start_pocket_ic,
 };
 use ic_platform::{
-    Principal,
     candid::contract::{CandidType, encode_one},
+    principal::ExternalPrincipal as Principal,
 };
 use ic_testkit::pic::{InstallSpec, PocketIc, PocketIcBuilder, prelude::*};
 use serde::Deserialize;
@@ -317,7 +317,7 @@ fn emergency_refill_recovery_floor_covers_transfer_and_notify_response_loss() {
     let transfer_loss: Result<EmergencyRefillOperation, _> = ic_testkit::pic::update_candid_args(
         &(pic),
         root,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "root_funding_probe_emergency_refill_transfer_then_trap",
         (),
         canic::testing::CANDID_REPLY_LIMITS,
@@ -330,7 +330,7 @@ fn emergency_refill_recovery_floor_covers_transfer_and_notify_response_loss() {
     let notify_loss: Result<EmergencyRefillOperation, _> = ic_testkit::pic::update_candid_args(
         &(pic),
         root,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "root_funding_probe_emergency_refill_notify_then_trap",
         (),
         canic::testing::CANDID_REPLY_LIMITS,
@@ -346,7 +346,7 @@ fn emergency_refill_recovery_floor_covers_transfer_and_notify_response_loss() {
     let completed: EmergencyRefillOperation = ic_testkit::pic::update_candid_args(
         &(pic),
         root,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "root_funding_probe_emergency_refill",
         (),
         canic::testing::CANDID_REPLY_LIMITS,
@@ -444,7 +444,7 @@ fn attached_cycles_recover_across_intent_call_and_receipt_boundaries() {
     let trapped: Result<IssueResult, _> = ic_testkit::pic::update_candid_args(
         &(pic),
         coordinator,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "root_funding_probe_issue_then_trap",
         (),
         canic::testing::CANDID_REPLY_LIMITS,
@@ -597,7 +597,7 @@ fn prepare(pic: &PocketIc, coordinator: Principal, root: Principal) -> GrantInte
     ic_testkit::pic::update_candid_args(
         pic,
         coordinator,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "root_funding_probe_prepare",
         (root, OPERATION_ID, GRANT_CYCLES),
         canic::testing::CANDID_REPLY_LIMITS,
@@ -610,7 +610,7 @@ fn issue(pic: &PocketIc, coordinator: Principal) -> IssueResult {
     ic_testkit::pic::update_candid_args(
         pic,
         coordinator,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "root_funding_probe_issue",
         (),
         canic::testing::CANDID_REPLY_LIMITS,
@@ -623,7 +623,7 @@ fn issue_root_accept_then_trap(pic: &PocketIc, coordinator: Principal) -> IssueR
     ic_testkit::pic::update_candid_args(
         pic,
         coordinator,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "root_funding_probe_issue_root_accept_then_trap",
         (),
         canic::testing::CANDID_REPLY_LIMITS,
@@ -636,7 +636,7 @@ fn request_from_root(pic: &PocketIc, root: Principal) -> RootRequestObservation 
     ic_testkit::pic::update_candid_args(
         pic,
         root,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "root_funding_probe_request",
         (),
         canic::testing::CANDID_REPLY_LIMITS,
@@ -649,7 +649,7 @@ fn intent(pic: &PocketIc, coordinator: Principal) -> Option<GrantIntent> {
     ic_testkit::pic::query_candid_args(
         pic,
         coordinator,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "root_funding_probe_intent",
         (),
         canic::testing::CANDID_REPLY_LIMITS,
@@ -662,7 +662,7 @@ fn receipt(pic: &PocketIc, root: Principal) -> Option<GrantReceipt> {
     ic_testkit::pic::query_candid_args(
         pic,
         root,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "root_funding_probe_receipt",
         (),
         canic::testing::CANDID_REPLY_LIMITS,
@@ -675,7 +675,7 @@ fn acceptance_observation(pic: &PocketIc, root: Principal) -> Option<AcceptanceO
     ic_testkit::pic::query_candid_args(
         pic,
         root,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "root_funding_probe_acceptance_observation",
         (),
         canic::testing::CANDID_REPLY_LIMITS,
@@ -688,7 +688,7 @@ fn emergency_operation(pic: &PocketIc, root: Principal) -> Option<EmergencyRefil
     ic_testkit::pic::query_candid_args(
         pic,
         root,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "root_funding_probe_emergency_operation",
         (),
         canic::testing::CANDID_REPLY_LIMITS,

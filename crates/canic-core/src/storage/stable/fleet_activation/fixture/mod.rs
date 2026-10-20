@@ -5,7 +5,7 @@
 //! Boundary: ops converts and validates the complete assignment before persistence.
 
 use canic_contracts::ids::{ManagedCanisterBinding, ReleaseBuildId};
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 
 /// Protected source authority for one exact managed installation.

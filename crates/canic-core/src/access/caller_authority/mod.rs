@@ -31,7 +31,7 @@ pub fn revalidate(ticket: &CallerAdmissionTicket) -> Result<(), AccessError> {
 
 /// Select a permitted proxy destination; separately authenticate the incoming application subject.
 pub fn select_target(
-    target: ic_platform::Principal,
+    target: ic_platform::principal::ExternalPrincipal,
     permission: &str,
 ) -> Result<CallerTargetTicket, AccessError> {
     ConfigOps::with_caller_policy(|policy| {

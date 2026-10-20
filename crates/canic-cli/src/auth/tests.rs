@@ -16,7 +16,7 @@ use canic_contracts::{
 use canic_core::cdk::utils::hash::hex_bytes;
 use canic_host::icp::IcpJsonResponseError;
 use ic_platform::candid::contract::Encode;
-use ic_platform::{Principal, candid::contract::CandidType};
+use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
 use std::{cell::RefCell, collections::VecDeque};
 
 fn fleet() -> FleetKey {

@@ -1211,14 +1211,16 @@ const fn map_transition_error(error: FleetAdmissionRootTransitionError) -> Inter
     }
 }
 
-const fn target_principal(target: &ManagedCanisterBinding) -> ic_platform::Principal {
+const fn target_principal(
+    target: &ManagedCanisterBinding,
+) -> ic_platform::principal::ExternalPrincipal {
     match target {
         ManagedCanisterBinding::Component(component) => component.canister_id,
         ManagedCanisterBinding::ComponentChild(child) => child.canister_id,
     }
 }
 
-const fn target_root(target: &ManagedCanisterBinding) -> ic_platform::Principal {
+const fn target_root(target: &ManagedCanisterBinding) -> ic_platform::principal::ExternalPrincipal {
     match target {
         ManagedCanisterBinding::Component(component) => component.fleet_subnet_root,
         ManagedCanisterBinding::ComponentChild(child) => child.component.fleet_subnet_root,

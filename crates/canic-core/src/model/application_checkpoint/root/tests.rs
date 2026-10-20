@@ -16,7 +16,7 @@ fn authorities() -> Vec<CallerReceiverAuthority> {
     let ManagedCanisterBinding::Component(component) = &mut second.receiver.binding else {
         panic!("component fixture required");
     };
-    component.canister_id = ic_platform::Principal::from_slice(&[8]);
+    component.canister_id = ic_platform::principal::ExternalPrincipal::from_slice(&[8]);
     vec![first, second]
 }
 

@@ -3,14 +3,14 @@ use super::*;
 #[test]
 fn target_selection_requires_unique_role_or_exact_principal() {
     let first = RegistryEntry {
-        pid: ic_platform::Principal::from_slice(&[1]).to_text(),
+        pid: ic_platform::principal::ExternalPrincipal::from_slice(&[1]).to_text(),
         role: Some("worker-pool".into()),
         parent_pid: None,
         module_hash: None,
         protocol_binding: None,
     };
     let mut second = first.clone();
-    second.pid = ic_platform::Principal::from_slice(&[2]).to_text();
+    second.pid = ic_platform::principal::ExternalPrincipal::from_slice(&[2]).to_text();
     let entries = vec![first, second];
     assert_eq!(
         select_entry(&entries[..1], "worker-pool").unwrap(),

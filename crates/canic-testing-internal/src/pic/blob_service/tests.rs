@@ -38,7 +38,7 @@ use canic_blob_service::dto::{
         exposure::UploadExposureFailure,
     },
 };
-use ic_platform::{Principal, candid::contract::CandidType};
+use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
 
 const NAMESPACE: u128 = 7;
 
@@ -56,9 +56,9 @@ const fn principal(byte: u8) -> Principal {
 fn installation(service: Principal) -> ServiceInstallationInput {
     ServiceInstallationInput {
         configuration: ServiceConfigurationInput {
-            service,
-            operator: principal(7),
-            payment_account: principal(8),
+            service: service.into(),
+            operator: principal(7).into(),
+            payment_account: principal(8).into(),
             namespace: NAMESPACE,
             resources: ServiceResourceInput {
                 max_tenants: 2,
@@ -78,7 +78,7 @@ fn installation(service: Principal) -> ServiceInstallationInput {
                 max_tenant_active: 2,
             },
             billing: ServiceBillingInput {
-                cashier: principal(10),
+                cashier: principal(10).into(),
                 reserve: 100,
                 minimum_balance: 100,
                 target_balance: 200,
@@ -100,7 +100,7 @@ fn installation(service: Principal) -> ServiceInstallationInput {
             },
         },
         project: "canic-managed-blob".into(),
-        completion_verifier: principal(11),
+        completion_verifier: principal(11).into(),
     }
 }
 
@@ -269,9 +269,9 @@ fn qualify(embedded: bool) {
     assert_eq!(denied, Err(HostFailure::Denied));
 
     let scope = TenantScope {
-        service,
+        service: service.into(),
         namespace: NAMESPACE,
-        tenant,
+        tenant: tenant.into(),
     };
     let capacity = || {
         let result: Result<UploadCapacityResponse, UploadCapacityFailure> = decode_blob(
@@ -306,7 +306,7 @@ fn qualify(embedded: bool) {
         .expect("stranger mutation transport");
     assert_eq!(denied, Err(TenantFailure::Denied));
     let wrong = TenantScope {
-        service: principal(12),
+        service: principal(12).into(),
         ..scope
     };
     let invalid: Result<TenantEnrollmentResponse, TenantFailure> =
@@ -395,8 +395,8 @@ fn qualify(embedded: bool) {
         .enumerate()
         .map(|(index, uploader)| UploadAdmissionRequest {
             upload: ReferenceUpload {
-                service,
-                tenant,
+                service: service.into(),
+                tenant: tenant.into(),
                 namespace: NAMESPACE,
                 upload: index as u128 + 1,
                 object: index as u128 + 1,
@@ -405,7 +405,7 @@ fn qualify(embedded: bool) {
                 root: [u8::try_from(index).expect("fixture object index fits u8") + 1; 32],
                 bytes: 1,
             },
-            uploader,
+            uploader: uploader.into(),
             expires_at_ns,
         })
         .collect::<Vec<_>>();
@@ -414,7 +414,7 @@ fn qualify(embedded: bool) {
             "blob_admit_upload",
             &pic.update_call(
                 service,
-                permission.uploader,
+                permission.uploader.into(),
                 "blob_admit_upload",
                 contracts::wire::encode_request("blob_admit_upload", *permission).unwrap(),
             )
@@ -439,7 +439,7 @@ fn qualify(embedded: bool) {
         let root = ProviderRootHash::try_from(permission.upload.root.as_slice())
             .expect("exact provider root bytes")
             .to_string();
-        for actor in [permission.uploader, stranger] {
+        for actor in [permission.uploader.into(), stranger] {
             let assessment: Result<UploadCertificateAssessmentResponse, UploadExposureFailure> =
                 decode_blob(
                     "blob_upload_certificate_assessment",
@@ -456,7 +456,7 @@ fn qualify(embedded: bool) {
                     .expect("Blob transport"),
                 )
                 .expect("certificate assessment transport");
-            let expected = if actor == permission.uploader {
+            let expected = if actor == permission.uploader.into() {
                 UploadExposureFailure::Unprepared
             } else {
                 UploadExposureFailure::Permission(UploadAdmissionFailure::Denied)
@@ -483,7 +483,7 @@ fn qualify(embedded: bool) {
         let count: u64 = ic_testkit::pic::update_candid_args(
             pic,
             service,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "application_increment",
             (),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -539,7 +539,7 @@ fn qualify(embedded: bool) {
         let count: u64 = ic_testkit::pic::query_candid_args(
             pic,
             service,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "application_count",
             (),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -590,7 +590,7 @@ fn refuse_invalid_configuration(
     let unmodeled = UnmodeledInstallationInput {
         configuration: installation(service).configuration,
         project: installation(service).project,
-        completion_verifier: installation(service).completion_verifier,
+        completion_verifier: installation(service).completion_verifier.into(),
         unmodeled: Principal::anonymous(),
     };
     let unknown_field = if embedded {
@@ -656,7 +656,7 @@ fn refuse_invalid_configuration(
             let count: u64 = ic_testkit::pic::query_candid_args(
                 pic,
                 service,
-                ic_platform::Principal::anonymous(),
+                ic_platform::principal::ExternalPrincipal::anonymous(),
                 "application_count",
                 (),
                 canic::testing::CANDID_REPLY_LIMITS,

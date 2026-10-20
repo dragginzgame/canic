@@ -47,35 +47,28 @@ struct WasmArtifactMetricsV1 {
     defined_functions: u32,
 }
 
+/// Build one measurement artifact from its exact product workspace.
+#[derive(clap::Parser)]
+struct Arguments {
+    canister_name: String,
+    profile: CanisterBuildProfile,
+    workspace_root: PathBuf,
+    icp_root: PathBuf,
+    config_path: String,
+    transform_metrics_path: PathBuf,
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut args = std::env::args().skip(1);
-    let (
-        Some(canister_name),
-        Some(profile),
-        Some(workspace_root),
-        Some(icp_root),
-        Some(config_path),
-        Some(transform_metrics_path),
-    ) = (
-        args.next(),
-        args.next(),
-        args.next(),
-        args.next(),
-        args.next(),
-        args.next(),
-    )
-    else {
-        return Err(
-            "usage: wasm-ablation-build-artifact <canister-name> <debug|fast|release> <workspace-root> <icp-root> <config-path> <transform-metrics-path>"
-                .into(),
-        );
-    };
-    if args.next().is_some() {
-        return Err("unexpected wasm-ablation-build-artifact argument".into());
-    }
-    let profile = profile.parse::<CanisterBuildProfile>()?;
-    let workspace_root = PathBuf::from(workspace_root).canonicalize()?;
-    let icp_root = PathBuf::from(icp_root).canonicalize()?;
+    let Arguments {
+        canister_name,
+        profile,
+        workspace_root,
+        icp_root,
+        config_path,
+        transform_metrics_path,
+    } = <Arguments as clap::Parser>::parse();
+    let workspace_root = workspace_root.canonicalize()?;
+    let icp_root = icp_root.canonicalize()?;
     let config_path = resolve_path(&workspace_root, &config_path).canonicalize()?;
     let environment = std::env::var("ICP_ENVIRONMENT").unwrap_or_else(|_| "local".to_string());
     let build_network = resolve_icp_build_network_from_root(&icp_root, &environment)?;

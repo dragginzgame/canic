@@ -78,7 +78,7 @@ pub(super) fn access_stage(plan: &AccessPlan, call: &syn::Ident) -> TokenStream2
             quote! {
                 let #caller = ::canic::__internal::cdk::api::msg_caller();
                 let #ctx = ::canic::__internal::core::access::expr::AccessContext {
-                    caller: #caller,
+                    caller: #caller.into(),
                     call: #call,
                 };
                 let #expr_ident = #expr;

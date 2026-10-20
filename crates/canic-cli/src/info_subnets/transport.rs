@@ -26,7 +26,7 @@ use canic_host::{
     fleet_ensure::resolve_current_fleet, icp::IcpCli, icp_config::resolve_current_canic_icp_root,
     query_canister_with_arg, registry::RegistryEntry,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 pub(super) fn load_report(
     options: &InfoSubnetsOptions,

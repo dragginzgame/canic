@@ -10,8 +10,8 @@ use crate::{
 };
 use canic_contracts::cycles::Cycles;
 use ic_platform::{
-    Principal,
     candid::contract::{CandidType, Nat},
+    principal::ExternalPrincipal as Principal,
 };
 use serde::{Deserialize, Serialize};
 use std::fmt;

@@ -3,7 +3,7 @@ use canic_contracts::ids::{
     AppId, CanonicalNetworkId, ComponentInstanceId, FleetBinding, FleetCoordinatorBinding, FleetId,
     FleetKey, FleetRegistryAuthority, SubnetId,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 fn principal(byte: u8) -> Principal {
     Principal::from_slice(&[byte; 29])

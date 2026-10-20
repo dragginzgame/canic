@@ -57,7 +57,7 @@ impl FleetRegistryMirrorOps {
 
     pub(crate) fn validated_current(
         authority: &FleetSubnetRootAuthority,
-        root: ic_platform::Principal,
+        root: ic_platform::principal::ExternalPrincipal,
     ) -> Result<ValidatedRootFleetRegistryMirrorView, InternalError> {
         if authority.binding.fleet_subnet_root != root {
             return Err(InternalError::invalid_input());
@@ -165,7 +165,7 @@ impl FleetRegistryMirrorOps {
 
 fn validated_root_entry(
     authority: &FleetSubnetRootAuthority,
-    root: ic_platform::Principal,
+    root: ic_platform::principal::ExternalPrincipal,
     entries: &[FleetSubnetRootEntry],
 ) -> Result<FleetSubnetRootEntry, InternalError> {
     let root_entry = entries

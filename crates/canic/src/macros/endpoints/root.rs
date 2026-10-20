@@ -92,7 +92,7 @@ macro_rules! canic_emit_root_command_endpoint {
                     $crate::__internal::contracts::diagnostics::codes::REQUEST_CAPACITY,
                 ));
             }
-            let caller = $crate::__internal::cdk::api::msg_caller();
+            let caller: $crate::__internal::core::cdk::types::Principal = $crate::__internal::cdk::api::msg_caller().into();
             let controller_command = matches!(
                 &command,
                 RootCommand::AdoptStore(_)
@@ -140,7 +140,7 @@ macro_rules! canic_emit_root_command_endpoint {
             if matches!(&command, RootCommand::RemoveRoot(_)) {
                 $crate::__internal::control_plane::api::lifecycle::LifecycleApi::authorize_fleet_subnet_root_removal_caller(
                     caller,
-                    $crate::__internal::cdk::api::is_controller(&caller),
+                    $crate::__internal::cdk::api::is_controller(&caller.into()),
                 )?;
             }
 
@@ -847,7 +847,7 @@ macro_rules! canic_emit_root_status_endpoint {
         fn canic_root_operation_status(
             request: RootOperationStatusRequest,
         ) -> Result<RootOperationStatusResponse, ::canic::Error> {
-            let caller = $crate::__internal::cdk::api::msg_caller();
+            let caller: $crate::__internal::core::cdk::types::Principal = $crate::__internal::cdk::api::msg_caller().into();
             $crate::__internal::core::control_plane_support::workflow::runtime::fleet_activation::FleetActivationWorkflow::require_root_status_variant_allowed(true)?;
 
             match request {
@@ -855,7 +855,7 @@ macro_rules! canic_emit_root_status_endpoint {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::root_component_child_provisioning_status(
                         request.operation_id,
                         caller,
-                        $crate::__internal::cdk::api::is_controller(&caller),
+                        $crate::__internal::cdk::api::is_controller(&caller.into()),
                     )
                     .map(RootOperationStatusResponse::ComponentChildProvisioning)
                 }
@@ -863,7 +863,7 @@ macro_rules! canic_emit_root_status_endpoint {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::root_component_provisioning_status(
                         request.operation_id,
                         caller,
-                        $crate::__internal::cdk::api::is_controller(&caller),
+                        $crate::__internal::cdk::api::is_controller(&caller.into()),
                     )
                     .map(RootOperationStatusResponse::ComponentProvisioning)
                 }
@@ -871,7 +871,7 @@ macro_rules! canic_emit_root_status_endpoint {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::root_operation_status(
                         request.operation_id,
                         caller,
-                        $crate::__internal::cdk::api::is_controller(&caller),
+                        $crate::__internal::cdk::api::is_controller(&caller.into()),
                     )
                     .map(RootOperationStatusResponse::Operation)
                 }

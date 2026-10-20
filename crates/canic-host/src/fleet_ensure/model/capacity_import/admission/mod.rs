@@ -1,7 +1,7 @@
 //! Retained infrastructure provenance and explicit operator disposition evidence.
 
 use canic_contracts::ids::SubnetId;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 
 /// Exact installed infrastructure custody verified before a capacity operation.

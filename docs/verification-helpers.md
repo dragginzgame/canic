@@ -7,6 +7,26 @@ policy. They require Perl core modules or Bash 3.2+, as noted below, and run on
 Linux and macOS. The portable regression suite includes offline fixtures;
 native CI qualifies each supported host separately.
 
+## Repository symlink admission
+
+```sh
+perl scripts/ci/check-no-symlinks.pl --consumer /path/to/checkout
+```
+
+The offline reader checks the selected checkout's actual Git index modes and
+tracked/nonignored working paths, including every parent below the checkout
+root. Indexed links refuse even if their working replacement is regular;
+dangling links and directory links refuse without following their targets.
+Tracked deletions are allowed. Failed Git/filesystem observations never pass.
+Inventory uses NUL delimiters and disables optional Git index writes; inherited
+Git directory/index overrides cannot select another source.
+
+Shared's `make check-no-symlinks` runs in its CI and release gate. Consumers may
+adopt the script as a snapshot entrypoint and select it in their existing gates.
+Ignored tool stores and isolated negative-test scratch are outside the inventory;
+this is not admission of arbitrary ignored files or generated package contents.
+Those remain subject to the baseline rule and their artifact checks.
+
 ## Fixture diagnostic replay
 
 `fixture_replay_logs FILE...` in `scripts/ci/fixture-lifecycle.sh` writes existing
@@ -20,7 +40,7 @@ No files are removed or collected into a separate artifact.
 ## Cargo dependency-order fixtures
 
 ```bash
-perl scripts/ci/prepare-cargo-formatting-fixture.pl Cargo.toml workspace.dependencies candid ic-build > unsorted.toml
+perl scripts/ci/prepare-cargo-formatting-fixture.pl Cargo.toml workspace.dependencies ic-build ic-wire > unsorted.toml
 ```
 
 The helper accepts a caller-owned valid Cargo manifest and swaps exactly two
@@ -119,9 +139,10 @@ it never installs or downloads tools. Invalid selections refuse before dispatch.
 
 The common failure action defaults to full retention. Set
 upstream store configuration consistently with setup. If store admission fails,
-the selector still emits safe local references and bundles without following
-their targets, and returns nonzero. The action archives those selections plus
-local logs/builds and the selection diagnostic/status, sets
+the selector returns nonzero; its partial output is diagnostic data, not authority
+to select physical payloads. The action uses `collect-tool-evidence.sh` to retain
+local references without following them, local logs/builds and the selection
+diagnostic/status, sets
 `collection-complete=false`, uploads that partial evidence, then fails its final
 completeness step. A rejected store never authorizes traversal or repair, and
 partial evidence is not reported as complete retention. Set
@@ -134,8 +155,10 @@ of a successful hosted transport. The selector owns the full physical
 `.tools/rust` tree plus its admitted shared generations and original build/log
 evidence, independently of host/IC compaction. Custom callers must not also add
 the same local tree to the archive. Links are archived without following targets.
-Consumers adopt the selector only from a
-reviewed committed snapshot, rather than recreating its classifier locally.
+Consumers adopt the selector only from a reviewed committed snapshot, rather
+than recreating its classifier locally. For collection, prefer the existing
+[orchestrator](#tool-evidence-collection-orchestration) over a local selector/read/
+archive loop; keep product log selection and upload policy in the consumer.
 
 ## Runner disk capacity
 
@@ -224,6 +247,25 @@ Keep root-package targets available when reading an exported manifest, since
 Cargo also checks package structure. The reader never chooses a Git commit,
 updates a version or lockfile, or finalizes release notes. Consumers own selection
 of working versus committed sources and their release/preparation transactions.
+
+## Saved Cargo source context
+
+```bash
+bash scripts/ci/read-cargo-source-context.sh /path/to/repo COMMIT manifest.json crates/library apps/cli
+```
+
+The caller supplies admitted root-manifest JSON and explicit relative member
+directories. The helper reads package names from that exact local commit and
+returns the saved `source_root`, `manifest` and `members` context accepted by the
+Cargo metadata renderers. Current member files are never read. Missing members,
+invalid paths, duplicate package identities, ambiguous parser streams and failed
+Git/TOML readers refuse without a partial context. Git, jq and prepared Mike Farah
+yq are required; no Cargo invocation, fetch, installation, editing or Git mutation occurs.
+
+Consumers retain root-manifest authentication, member/package eligibility,
+version policy and independent graph admission. This input preparation does not
+implement a TOML editor and survives the planned editor replacement in
+[#273 — Adopt released IC Build Cargo editor and retire Perl renderers](https://github.com/dragginzgame/shared-tooling/issues/273).
 
 ## CI binary installers
 
@@ -352,6 +394,38 @@ remain consumer-owned.
 Shared Tooling's `make check-doc-links` selects root, audit, rule and guide
 Markdown files and runs in CI and the release gate. Consumers choose their own
 roster; snapshot-relative links must exist in the adopted file set.
+
+## Release receipts
+
+Source `scripts/ci/release-receipts.sh` from the release adapter's checkout.
+`release_receipt_identity` writes the selected source, previous/target versions,
+date, remote and branch plus all push URLs for that remote. The caller supplies
+the corresponding `RELEASE_*` inputs; the helper neither selects nor validates
+release policy. `release_receipt_payload COMMIT PATH...` writes Git blob identities
+for the selected committed paths, or hashes the current files when COMMIT is empty.
+Callers retain the ordered file inventory and independent source/file admission.
+
+`release_receipt_write RECEIPT GENERATOR [ARG...]` generates into a private
+adjacent temporary file and replaces the receipt only after successful generation.
+`release_receipt_check RECEIPT GENERATOR [ARG...]` compares regenerated bytes
+exactly, including trailing newlines. Missing or symlinked receipts refuse;
+failed generation cannot replace the prior receipt. Both helpers report failure
+without choosing retries or authorizing release effects.
+
+`release_receipt_archive TEMPLATE FILE...` preserves previous attempts before
+replacement, admitting the whole set before copying. Absent entries are allowed;
+links, non-regular entries and duplicate basenames refuse. Failed copies retain
+the active evidence and any partial archive. See
+[metadata preparation and evidence custody](releases.md#reusing-metadata-preparation-and-evidence-custody)
+for selected-file preparation, restoration and the callback contract.
+
+The caller must hold exclusive custody of the selected source and trusted state
+directory throughout these operations. Atomic receipt replacement does not supply
+a lock, authenticate the state directory, make multiple files transactional or
+provide crash recovery. Keep actual adapter, interruption and delivery tests at
+the consumer. Select the helper through canonical snapshot export; generic
+identity, byte, symlink and failed-generation cases live in
+`scripts/ci/test-release-receipts.sh` at the Shared owner.
 
 ## Standard release command adoption
 
@@ -578,28 +652,15 @@ must retain policy/order checks and prove audit cannot run after preparation fai
 
 ## Local Cargo.lock versions
 
-```sh
-perl scripts/ci/rewrite-local-lock-versions.pl Cargo.lock 0.1.0 0.1.1 my-crate helper-crate > candidate.lock
-```
+Use the explicitly prepared IC Build release editor for manifest and local lock
+versions. Its lock renderer changes only selected unsourced package versions and
+exact unqualified local references. Shared Tooling retains originals and runs
+locked/offline Cargo graph validation before completing preparation.
 
-The Perl/core-only transformer reads a regular Cargo-generated LF lockfile in
-format 3 or 4 and emits a complete candidate on stdout. Supply canonical stable
-versions and the exact local package roster selected by the consumer's Cargo
-metadata. Each selected package must appear exactly once without a `source`
-field and have the previous version. Missing, duplicate or mismatched identities
-fail without emitting a partial candidate. The input file is never written.
-
-Only selected local versions and their exact unqualified dependency references
-change. Registry/Git identities, source-qualified references, checksums, unrelated
-versions, whitespace and comments stay unchanged. This is a narrow transformation
-of Cargo's generated layout, not a general TOML parser or resolver. The caller
-must check exit status before replacing its lockfile, retain failed candidates,
-and run Cargo's locked offline validation against the prepared manifests.
-Selecting independent lockfiles, discovering packages, metadata writes and
-release recovery remain consumer responsibilities. Do not redirect output onto
-the input file, invoke dependency resolution online, or use this to repair an
-already inconsistent graph. The upstream fixture includes independent real-Cargo
-locked/offline validation with local-only dependencies.
+See [Cargo candidate rendering](releases.md#cargo-release-candidate-rendering) for
+the required executable and byte-allowance selections. Candidate bytes are never
+redirected onto their inputs. Tool preparation, package selection and release
+authorization remain consumer-owned.
 
 ## Formatter prerequisites
 
@@ -643,6 +704,13 @@ to this contract can include previously skipped formats such as `.mjs` and
 `.vue`; review exclusions before adopting it. Unknown file types remain untouched.
 
 ## Consumer formatting-hook adoption
+
+On failure, the checker replays its existing baseline and per-checkout hook logs
+to stderr before reporting the retained fixture directory. Diagnostic replay is
+best effort and preserves the original failure status; successful checks remove
+their scratch directory. Consumers need no outer fixture for log replay or custody.
+Nested formatter logs stay inside that fixture, including expected rejection
+logs; inherited `RUNNER_TEMP` evidence remains untouched.
 
 ```sh
 bash scripts/ci/check-formatting-hooks.sh "$PWD" crates/example/src/lib.rs \
@@ -807,6 +875,15 @@ is never used to admit physical payloads. Instead, local Rust evidence and
 host/IC references are retained without following redirected roots or links.
 Diagnostics remain in the partial archive; completeness is not inferred from
 successful archiving. Stdout contains the created archive path only.
+
+Callers still admit their own selected paths. If a parent such as `target` or
+`.tools` is a symlink, select the parent link itself instead of its children,
+retain a diagnostic and report incomplete collection. This keeps independent
+logs eligible for archiving without traversing the redirected parent. The
+orchestrator does not repair an invalid caller selection or infer product paths.
+Keep consumer tests for these selections, original failures, completeness and
+upload/download bindings; Shared owns the generic selector/archiver regression
+matrix.
 
 ## Formatter evidence selection
 
@@ -1054,7 +1131,12 @@ copies explicit reviewed roots and their transitive line-two `Shared companions`
 declarations, preserving file modes. It shares the declaration reader with the
 snapshot exporter; inspected payloads are never executed. Cycles are deduplicated.
 The complete closure and destination parents are admitted before any copying;
-unsafe paths, symlink traversal, missing inputs and overlapping roots refuse.
+unsafe paths, symlink traversal and missing inputs refuse. The fixture must not
+contain the source root. Scratch beneath the source is permitted, but the entire
+copy plan refuses before effects if an output would overwrite any selected input,
+including a hard-linked input reached through a different output path. Distinct
+planned outputs must not share a hard link: copying either would change the
+other's bytes. Both cases refuse before any selected file is copied.
 Existing regular fixture files may be replaced. Callers own an idle disposable
 destination and stable reviewed source; copying does not protect against
 concurrent mutation. The helper neither creates a snapshot nor proves supplier
@@ -1065,4 +1147,4 @@ Focused coverage is `bash scripts/ci/test-script-fixture.sh`.
 
 Use [the graph checker](cargo-graph-checks.md) to enforce consumer-selected
 transitive exclusions and rendered package identity counts. Direct ownership
-checks and product feature\/lifecycle policies remain separate.
+checks and product feature/lifecycle policies remain separate.

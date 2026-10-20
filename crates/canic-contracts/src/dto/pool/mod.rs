@@ -4,7 +4,7 @@ use crate::{
     cycles::Cycles,
     ids::{ComponentInstanceId, FleetSubnetCanisterPoolConfig},
 };
-use ic_platform::{Principal, candid::contract::CandidType};
+use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
 use serde::{Deserialize, Serialize};
 
 /// Identifies the durable Component allocation that has claimed one empty Canister.

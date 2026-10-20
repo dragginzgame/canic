@@ -1,21 +1,15 @@
 #!/usr/bin/env bash
-# Shared companions: scripts/ci/check-crates-io-version.sh
+# Shared companions: scripts/ci/check-crates-io-version.sh scripts/ci/fixture-lifecycle.sh
 set -euo pipefail
 root="$0"
 [[ "$root" == /* ]] || root="$PWD/$root"
 root="$(cd -P "${root%/*}/../.." && printf '%s/.' "$PWD")"
 root="${root%/.}"
-fixture="$(mktemp -d "${TMPDIR:-/tmp}/registry-observation.XXXXXX")"
+# shellcheck source=scripts/ci/fixture-lifecycle.sh
+source "$root/scripts/ci/fixture-lifecycle.sh"
+fixture="$(fixture_create "${TMPDIR:-/tmp}/registry-observation.XXXXXX")"
 fixture_complete=false
-finish() {
-    local status=$?
-    # Bash 3.2 may report zero after nounset before assertions finish.
-    [[ "$fixture_complete" == true || "$status" != 0 ]] || status=1
-    if [[ "$status" == 0 ]]; then rm -rf "$fixture";
-    else echo "Registry observation fixtures retained: $fixture" >&2; fi
-    exit "$status"
-}
-trap finish EXIT
+trap 'fixture_finish "$?" "$fixture" "Registry observation fixtures retained"' EXIT
 mkdir "$fixture/bin"
 export REGISTRY_FIXTURE="$fixture"
 cat > "$fixture/bin/curl" <<'STUB'

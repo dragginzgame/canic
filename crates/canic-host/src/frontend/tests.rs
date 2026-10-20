@@ -2,7 +2,7 @@ use super::{FrontendError, model::*, ops, policy};
 use crate::test_support::temp_dir;
 use canic_contracts::ids::{CanisterRole, CanonicalNetworkId};
 use ic_host_fs::durable::{PublicationMode, WriteOptions};
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::fs;
 
 fn input() -> FrontendEnvironmentInput {

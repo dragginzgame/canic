@@ -65,8 +65,10 @@ impl SessionStore for ApplicationSessionStore {
                 let login = prepare_login(self, change)?;
                 commit_pair(session, replay, tx.generation, login)?;
             }
-            (None, Some(caller), Some(change)) if change.revoked() && change.caller() == caller => {
-                if let Some(session) = tx.session(caller)? {
+            (None, Some(caller), Some(change))
+                if change.revoked() && change.caller() == caller.into() =>
+            {
+                if let Some(session) = tx.session(caller.into())? {
                     session.check_login_change(change)?;
                 }
                 let login = prepare_login(self, change)?;
@@ -90,7 +92,8 @@ impl SessionTransaction for Transaction {
             max_encoded_bytes: MAX_APPLICATION_SESSION_STABLE_BYTES,
         }
     }
-    fn session(&self, caller: Principal) -> Result<Option<Session>, SessionError> {
+    fn session(&self, caller: ic_platform::Principal) -> Result<Option<Session>, SessionError> {
+        let caller: Principal = caller.into();
         let index = with_indexes(|indexes| indexes.session_by_caller.get(&caller).copied())
             .map_err(|_| SessionError::StorageFailure)?;
         index
@@ -98,7 +101,7 @@ impl SessionTransaction for Transaction {
                 let record = LocalApplicationAuthorizationState::application_session_record(index)
                     .ok_or(SessionError::StorageFailure)?;
                 let session = Session::decode(&record.shared_session)?;
-                if session.caller() != caller {
+                if session.caller() != caller.into() {
                     return Err(SessionError::InvalidPolicyOrRecord);
                 }
                 Ok(session)
@@ -109,7 +112,8 @@ impl SessionTransaction for Transaction {
         with_indexes(|indexes| indexes.replay_by_fingerprint.contains_key(&fingerprint))
             .map_err(|_| SessionError::StorageFailure)
     }
-    fn occupancy(&self, caller: Principal) -> Result<SessionOccupancy, SessionError> {
+    fn occupancy(&self, caller: ic_platform::Principal) -> Result<SessionOccupancy, SessionError> {
+        let caller: Principal = caller.into();
         LocalApplicationAuthorizationStateOps::application_session_occupancy(caller)
             .map(|counts| SessionOccupancy {
                 sessions: counts.active_global,
@@ -121,12 +125,12 @@ impl SessionTransaction for Transaction {
     fn stage(&mut self, session: Session, replay: Replay) -> Result<(), SessionError> {
         let session_binding = PairAuthority {
             generation: session.generation(),
-            caller: session.caller(),
+            caller: session.caller().into(),
             fingerprint: session.fingerprint(),
         };
         let replay_binding = PairAuthority {
             generation: replay.generation(),
-            caller: replay.caller(),
+            caller: replay.caller().into(),
             fingerprint: replay.fingerprint(),
         };
         if self.staged.is_some()
@@ -148,7 +152,7 @@ impl SessionTransaction for Transaction {
         }
         let replay = LocalApplicationReplayRecord {
             proof_fingerprint: replay.fingerprint(),
-            transport_caller: session.caller(),
+            transport_caller: session.caller().into(),
             authority_generation: replay.generation(),
             remove_at_ns: replay.remove_at_ns(),
         };
@@ -156,7 +160,8 @@ impl SessionTransaction for Transaction {
         Ok(())
     }
 
-    fn remove(&mut self, caller: Principal) -> Result<(), SessionError> {
+    fn remove(&mut self, caller: ic_platform::Principal) -> Result<(), SessionError> {
+        let caller: Principal = caller.into();
         if self.staged.is_some() || self.removed.is_some() {
             return Err(SessionError::InvalidPolicyOrRecord);
         }
@@ -178,7 +183,10 @@ fn commit_pair(
     }
     let (session_index, replay_index, previous) = with_indexes(|indexes| {
         (
-            indexes.session_by_caller.get(&canonical.caller()).copied(),
+            indexes
+                .session_by_caller
+                .get(&canonical.caller().into())
+                .copied(),
             indexes.replay_by_fingerprint.len(),
             indexes
                 .replay_by_fingerprint
@@ -189,9 +197,10 @@ fn commit_pair(
     if previous {
         return Err(SessionError::ReplayConflict);
     }
-    let counts =
-        LocalApplicationAuthorizationStateOps::application_session_occupancy(canonical.caller())
-            .map_err(|_| SessionError::StorageFailure)?;
+    let counts = LocalApplicationAuthorizationStateOps::application_session_occupancy(
+        canonical.caller().into(),
+    )
+    .map_err(|_| SessionError::StorageFailure)?;
     if (session_index.is_none() && counts.active_global >= MAX_ACTIVE_APPLICATION_SESSIONS)
         || counts.replay_global >= MAX_APPLICATION_REPLAY_RECORDS
         || counts.replay_for_caller >= MAX_APPLICATION_REPLAY_RECORDS_PER_CALLER
@@ -201,7 +210,7 @@ fn commit_pair(
     let retained_for_subject = with_indexes(|indexes| {
         indexes
             .session_count_by_subject
-            .get(&canonical.subject())
+            .get(&canonical.subject().into())
             .copied()
             .unwrap_or(0)
     })
@@ -211,14 +220,7 @@ fn commit_pair(
     {
         return Err(SessionError::Capacity);
     }
-    let previous_bytes = match session_index {
-        Some(index) => encoded_len(
-            &LocalApplicationAuthorizationState::application_session_record(index)
-                .ok_or(SessionError::StorageFailure)?,
-        )
-        .map_err(|_| SessionError::StorageFailure)?,
-        None => 0,
-    };
+    let previous_bytes = previous_session_bytes(session_index)?;
     let added_bytes = encoded_len(&session).map_err(|_| SessionError::StorageFailure)?
         + encoded_len(&replay).map_err(|_| SessionError::StorageFailure)?
         + login.after_bytes;
@@ -227,7 +229,7 @@ fn commit_pair(
             + usize::from(
                 !indexes
                     .session_count_by_subject
-                    .contains_key(&canonical.subject()),
+                    .contains_key(&canonical.subject().into()),
             );
         let replay_callers = indexes.replay_count_by_caller.len()
             + usize::from(
@@ -258,7 +260,7 @@ fn commit_pair(
     let session_index = session_index.unwrap_or(counts.active_global);
     // All codec, capacity and generation checks precede either stable write.
     LocalApplicationAuthorizationState::commit_shared_session_pair(
-        canonical.caller(),
+        canonical.caller().into(),
         session_index,
         session,
         replay_index,
@@ -277,6 +279,18 @@ fn commit_pair(
     Ok(())
 }
 
+// Read the replaced session's footprint before admitting either stable write.
+fn previous_session_bytes(session_index: Option<usize>) -> Result<usize, SessionError> {
+    match session_index {
+        Some(index) => encoded_len(
+            &LocalApplicationAuthorizationState::application_session_record(index)
+                .ok_or(SessionError::StorageFailure)?,
+        )
+        .map_err(|_| SessionError::StorageFailure),
+        None => Ok(0),
+    }
+}
+
 // The stable pair is committed; updating its derived indexes is infallible.
 fn update_committed_indexes(
     canonical: &Session,
@@ -292,12 +306,12 @@ fn update_committed_indexes(
         indexes.estimated_bytes = index_bytes;
         let replaced = indexes
             .session_by_caller
-            .insert(canonical.caller(), session_index)
+            .insert(canonical.caller().into(), session_index)
             .is_some();
         if !replaced {
             *indexes
                 .session_count_by_subject
-                .entry(canonical.subject())
+                .entry(canonical.subject().into())
                 .or_default() += 1;
         }
         indexes

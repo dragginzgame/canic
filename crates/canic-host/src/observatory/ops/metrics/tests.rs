@@ -41,7 +41,8 @@ fn grants_keep_precision_source_time_and_saturation_without_inventing_consumptio
         ],
     );
     reply.state = PublicSnapshotState::Stale;
-    reply.metrics.entries[1].canister_id = Some(ic_platform::Principal::anonymous());
+    reply.metrics.entries[1].canister_id =
+        Some(ic_platform::principal::ExternalPrincipal::anonymous());
     let view = samples(reply, family).unwrap();
     assert_eq!(view.state, MetricSampleState::Stale);
     assert_eq!(view.rows.len(), 3);

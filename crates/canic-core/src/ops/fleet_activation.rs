@@ -283,7 +283,7 @@ fn encode_optional(value: Option<Value>) -> Value {
     value.unwrap_or(Value::Null)
 }
 
-fn principal(value: ic_platform::Principal) -> Value {
+fn principal(value: ic_platform::principal::ExternalPrincipal) -> Value {
     byte_string(value.as_slice())
 }
 
@@ -409,7 +409,7 @@ mod tests {
     #[test]
     fn evidence_sets_reject_noncanonical_order_and_duplicates() {
         let entry = |principal_byte| FleetCascadeManifestEntry {
-            principal: ic_platform::Principal::from_slice(&[principal_byte]),
+            principal: ic_platform::principal::ExternalPrincipal::from_slice(&[principal_byte]),
             state_snapshot_hash: [9; 32],
             topology_snapshot_hash: [10; 32],
         };
@@ -421,7 +421,7 @@ mod tests {
     #[test]
     fn activation_manifests_reject_entry_counts_over_the_frozen_bounds() {
         let cascade_entry = FleetCascadeManifestEntry {
-            principal: ic_platform::Principal::from_slice(&[1]),
+            principal: ic_platform::principal::ExternalPrincipal::from_slice(&[1]),
             state_snapshot_hash: [9; 32],
             topology_snapshot_hash: [10; 32],
         };
@@ -434,8 +434,8 @@ mod tests {
         );
 
         let credential_entry = FleetCredentialManifestEntry {
-            root_issuer: ic_platform::Principal::from_slice(&[1]),
-            subject_canister: ic_platform::Principal::from_slice(&[2]),
+            root_issuer: ic_platform::principal::ExternalPrincipal::from_slice(&[1]),
+            subject_canister: ic_platform::principal::ExternalPrincipal::from_slice(&[2]),
             not_before_ns: 1,
             expires_at_ns: 2,
             key_identity_hash: [3; 32],

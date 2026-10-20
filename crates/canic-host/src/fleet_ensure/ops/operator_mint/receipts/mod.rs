@@ -21,7 +21,7 @@ use thiserror::Error;
 
 pub use certificate::CertificateVerificationError;
 
-pub use ic_query::ledger_evidence::LedgerBlock;
+pub use ic_host_tools::ledger_evidence::LedgerBlock;
 
 /// Ops-owned work bounds selected by the receipt reader before consuming evidence.
 /// The transport must separately bound response bytes before Candid decoding.
@@ -156,9 +156,9 @@ pub fn verify_cycles_deposit(
     if network_identity_sha256(&root_key) != intent.authority.network_identity_sha256 {
         return Err(DepositVerificationError::NetworkMismatch);
     }
-    let admitted = ic_query::ledger_evidence::BoundedLedgerBlocks::admit(
+    let admitted = ic_host_tools::ledger_evidence::BoundedLedgerBlocks::admit(
         chain,
-        ic_query::ledger_evidence::BlockEvidenceLimits {
+        ic_host_tools::ledger_evidence::BlockEvidenceLimits {
             blocks: limits.blocks,
             nodes: limits.value_nodes,
             bytes: limits.value_bytes,

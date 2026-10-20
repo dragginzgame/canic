@@ -1,7 +1,7 @@
 #![expect(clippy::unused_async)]
 
 use canic::{Error, prelude::*};
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::cell::Cell;
 
 thread_local! {
@@ -37,7 +37,9 @@ fn test_startup_calls() -> Result<u32, Error> {
 /// Prove direct Fleet-admitted ingress for an index-created managed child.
 #[canic_query(requires(caller::is_fleet_admitted()))]
 async fn test_fleet_admission_probe() -> Result<Principal, Error> {
-    Ok(ic_platform::cdk::api::msg_caller())
+    Ok(ic_platform::principal::ExternalPrincipal::from(
+        ic_platform::cdk::api::msg_caller(),
+    ))
 }
 
 canic::finish!();

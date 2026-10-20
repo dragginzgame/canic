@@ -23,7 +23,7 @@ pub(super) fn set_refusal(
     let (): () = ic_testkit::pic::update_candid_args(
         pic,
         ledger,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "set_creation_retry_refusal",
         (refusal,),
         canic::testing::CANDID_REPLY_LIMITS,
@@ -103,7 +103,7 @@ pub(super) fn uncertain_creation_retains_custody_across_retry_refusals() {
         let amounts: Vec<Nat> = ic_testkit::pic::query_candid_args(
             &(fixture.pic),
             fixture.cycles_ledger,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "requested_amounts",
             (),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -122,7 +122,7 @@ pub(super) fn uncertain_creation_retains_custody_across_retry_refusals() {
     let requests: u64 = ic_testkit::pic::query_candid_args(
         &(fixture.pic),
         fixture.cycles_ledger,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "request_count",
         (),
         canic::testing::CANDID_REPLY_LIMITS,

@@ -19,8 +19,8 @@ use crate::{
     },
 };
 use ic_platform::{
-    Principal,
     candid::contract::{CandidType, Reserved},
+    principal::ExternalPrincipal as Principal,
 };
 use serde::{Deserialize, Serialize};
 

@@ -43,7 +43,7 @@ use canic_core::control_plane_support::model::fleet_funding_policy::{
     FleetFundingPolicyValidationError, validate_coordinator_root_funding_policy,
     validate_fleet_root_funding_capacity, validate_fleet_subnet_root_funding_authority,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use sha2_host::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;

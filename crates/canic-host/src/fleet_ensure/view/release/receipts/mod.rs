@@ -1,7 +1,7 @@
 //! Passive replay assessment facts and results; original evidence remains separately retained.
 
 use crate::fleet_ensure::view::release::FleetReleaseReceiptsView;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::collections::BTreeMap;
 
 /// Host-owned projection of the source's recorded phase, without DTO or storage coupling.

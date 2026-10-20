@@ -142,7 +142,7 @@ pub struct CoordinatorFundingWindowStatusResponse {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 #[candid_path("ic_platform::candid::contract")]
 pub struct CoordinatorRootFundingStatusResponse {
-    pub fleet_subnet_root: ic_platform::Principal,
+    pub fleet_subnet_root: ic_platform::principal::ExternalPrincipal,
     pub lifecycle_status: crate::dto::fleet_registry::FleetSubnetRootStatus,
     pub policy_hash: [u8; 32],
     pub policy: FleetSubnetRootFundingPolicy,
@@ -160,7 +160,7 @@ pub struct CoordinatorRootFundingStatusResponse {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 #[candid_path("ic_platform::candid::contract")]
 pub struct CoordinatorFundingStatusResponse {
-    pub coordinator: ic_platform::Principal,
+    pub coordinator: ic_platform::principal::ExternalPrincipal,
     pub current_cycles: Cycles,
     pub policy_generation: u64,
     pub funding_enabled: bool,

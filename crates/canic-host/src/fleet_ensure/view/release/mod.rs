@@ -18,7 +18,7 @@ use canic_contracts::dto::{
     fleet_coordinator::CoordinatorFundingStatusResponse,
     root::{RootFundingReleaseResponse, RootPoolReleaseResponse, RootProvisioningReleaseResponse},
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Original shared replay pages from every selected Root and Coordinator; not settlement proof.

@@ -20,7 +20,9 @@ use canic_contracts::{
     },
     protocol,
 };
-use ic_platform::{Principal, agent::Agent, candid::contract::CandidType};
+use ic_platform::{
+    agent::Agent, candid::contract::CandidType, principal::ExternalPrincipal as Principal,
+};
 use serde::Deserialize;
 use std::{collections::BTreeSet, time::Duration};
 

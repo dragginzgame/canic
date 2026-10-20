@@ -31,7 +31,7 @@ use canic_contracts::ids::{
     AppId, ComponentSpecAdmission, ComponentSpecId, FleetAdmissionPolicy, FleetAdmissionSelector,
     FleetRegistryAuthority, FleetSubnetRootLimits, ReleaseBuildId,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use sha2::{Digest, Sha256};
 use std::cmp::Ordering;
 use thiserror::Error as ThisError;

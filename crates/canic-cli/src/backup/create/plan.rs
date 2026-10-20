@@ -11,7 +11,7 @@ use canic_backup::{
     topology::{TopologyHasher, TopologyRecord},
 };
 use canic_host::registry::RegistryEntry as HostRegistryEntry;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::path::PathBuf;
 
 pub(super) fn backup_registry_entries(entries: &[HostRegistryEntry]) -> Vec<BackupRegistryEntry> {

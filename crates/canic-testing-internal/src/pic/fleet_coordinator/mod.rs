@@ -51,7 +51,7 @@ mod tests {
             fleet_registry::FleetRegistryOps,
         },
     };
-    use ic_platform::{Principal, candid::contract::encode_one};
+    use ic_platform::{candid::contract::encode_one, principal::ExternalPrincipal as Principal};
     use ic_testkit::pic::{
         CanisterSnapshotTarget, PocketIc, PocketIcBuilder, PocketIcSnapshotExt,
         SnapshotRestoreFunding,
@@ -67,7 +67,7 @@ mod tests {
         ic_testkit::pic::update_candid_args(
             pic,
             coordinator,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             protocol::CANIC_COORDINATOR_COMMAND,
             (command,),
             canic::testing::CANDID_REPLY_LIMITS,
@@ -102,7 +102,7 @@ mod tests {
         ic_testkit::pic::query_candid_args(
             pic,
             coordinator,
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             R::METHOD,
             (request,),
             canic::testing::CANDID_REPLY_LIMITS,

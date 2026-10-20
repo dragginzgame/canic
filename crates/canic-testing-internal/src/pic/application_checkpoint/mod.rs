@@ -9,7 +9,7 @@ use canic_contracts::{
     },
     ids::{ApplicationCheckpointBinding as Binding, ApplicationCheckpointPhase as Phase},
 };
-use ic_platform::{Principal, candid::contract::CandidType};
+use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
 use ic_testkit::pic::{
     CanisterInstallExt, CanisterSnapshotTarget, PocketIc, PocketIcSnapshotExt,
     SnapshotRestoreFunding,
@@ -180,7 +180,7 @@ fn view(pic: &PocketIc, target: Principal) -> CheckpointView {
     ic_testkit::pic::query_candid_args::<(Result<CheckpointView, Error>,), _>(
         pic,
         target,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "checkpoint_view",
         (),
         canic::testing::CANDID_REPLY_LIMITS,
@@ -194,7 +194,7 @@ fn increment(pic: &PocketIc, target: Principal) -> Result<u64, Error> {
     ic_testkit::pic::update_candid_args(
         pic,
         target,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "checkpoint_increment",
         (),
         canic::testing::CANDID_REPLY_LIMITS,

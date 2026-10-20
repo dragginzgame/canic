@@ -7,7 +7,7 @@ use super::require_root;
 use crate::model::{
     application_checkpoint::tests::binding, caller_authority::CallerAdmissionError as Error,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 #[test]
 fn exact_installed_root_is_admitted() {

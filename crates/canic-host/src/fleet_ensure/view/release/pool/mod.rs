@@ -1,7 +1,7 @@
 //! Pool-owner facts and remaining work, independent of wire contracts and release authority.
 
 use crate::fleet_ensure::view::release::FleetReleasePoolView;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::collections::BTreeSet;
 
 /// Recorded import phase; terminal history does not establish current custody.

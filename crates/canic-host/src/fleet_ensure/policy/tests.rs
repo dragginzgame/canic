@@ -24,7 +24,7 @@ use canic_contracts::{
 use canic_core::control_plane_support::config::{
     ComponentLimits, ComponentSpawnGrant, ComponentSpec,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::collections::BTreeMap;
 
 #[test]

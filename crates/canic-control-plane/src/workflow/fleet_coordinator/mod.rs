@@ -85,7 +85,7 @@ use canic_core::{
     log,
     log::Topic,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::time::Duration;
 
 ///

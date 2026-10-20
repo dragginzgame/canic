@@ -11,8 +11,8 @@ use crate::infra::ic::{
 };
 use canic_contracts::ids::BuildNetwork;
 use ic_platform::{
-    Principal,
     candid::contract::{CandidType, Nat},
+    principal::ExternalPrincipal as Principal,
 };
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;

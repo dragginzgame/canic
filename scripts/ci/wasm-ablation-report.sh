@@ -533,6 +533,7 @@ publish = false
 [dependencies]
 canic-core = { path = "../product/crates/canic-core" }
 canic-host = { path = "../product/crates/canic-host" }
+clap = { version = "4.6.1", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 

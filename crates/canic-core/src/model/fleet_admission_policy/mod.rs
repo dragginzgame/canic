@@ -9,7 +9,7 @@ use canic_contracts::ids::{
     FleetAdmissionSelector, MAX_FLEET_ADMISSION_PRINCIPALS,
     MAX_FLEET_ADMISSION_RULE_PRINCIPAL_REFERENCES, MAX_FLEET_ADMISSION_RULES,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use thiserror::Error as ThisError;
 
 /// Exact invariant rejected while admitting a template or installed policy.

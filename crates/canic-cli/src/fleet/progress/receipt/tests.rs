@@ -286,12 +286,14 @@ fn retry_deadline_changes_are_retained_without_claiming_remote_advancement() {
                             failed_at_ns: 123,
                             retry_at_ns,
                             stage: ProvisioningFailureStage::ComponentMembership,
-                            target: ic_platform::Principal::from_slice(&[8]),
+                            target: ic_platform::principal::ExternalPrincipal::from_slice(&[8]),
                             operation_id: [9; 32],
                             diagnostic_code: 137,
                             retry_category: ProvisioningRetryCategory::Backoff,
                         }),
-                        fleet_subnet_root: ic_platform::Principal::from_slice(&[7]),
+                        fleet_subnet_root: ic_platform::principal::ExternalPrincipal::from_slice(
+                            &[7],
+                        ),
                         stage: FleetComponentProvisioningRetryStage::RuntimeActivation,
                         diagnostic_code: 137,
                         failed_at_ns: 124,
@@ -316,8 +318,8 @@ fn protected_request_receipts_preserve_child_subject_parent_and_incomplete_pairs
     use canic_host::icp::{IcpRequestKind, IcpRequestTiming};
     let (root, mut receipt, path) = fixture();
     receipt.observation(&observation(None));
-    let endpoint = ic_platform::Principal::from_slice(&[1]);
-    let child = ic_platform::Principal::from_slice(&[2]);
+    let endpoint = ic_platform::principal::ExternalPrincipal::from_slice(&[1]);
+    let child = ic_platform::principal::ExternalPrincipal::from_slice(&[2]);
     let mut request = IcpRequestTiming {
         request_id: 10,
         parent_request_id: None,
@@ -363,7 +365,7 @@ fn request(succeeded: Option<bool>) -> canic_host::icp::IcpRequestTiming {
         request_id: 10,
         parent_request_id: None,
         kind: canic_host::icp::IcpRequestKind::Status,
-        target: Some(ic_platform::Principal::from_slice(&[1]).to_text()),
+        target: Some(ic_platform::principal::ExternalPrincipal::from_slice(&[1]).to_text()),
         subject: None,
         method: None,
         elapsed_micros: 0,
@@ -376,7 +378,7 @@ fn request(succeeded: Option<bool>) -> canic_host::icp::IcpRequestTiming {
 fn direct_import_transport_pairs_retain_subject_and_cancelled_status_read() {
     use canic_host::icp::IcpRequestKind;
     let (root, mut receipt, path) = fixture();
-    let child = ic_platform::Principal::from_slice(&[2]);
+    let child = ic_platform::principal::ExternalPrincipal::from_slice(&[2]);
     let mut update = request(None);
     update.kind = IcpRequestKind::AgentUpdate;
     update.subject = Some(child);

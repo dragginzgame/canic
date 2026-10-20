@@ -32,7 +32,7 @@ use canic_core::control_plane_support::{
         root_draining_reservation::FleetSubnetRootDrainingReservationOps,
     },
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 struct GroupedRootLifecycleReferences {
     operation_journal: bool,

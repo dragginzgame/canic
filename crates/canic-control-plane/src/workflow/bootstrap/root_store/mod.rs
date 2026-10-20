@@ -311,7 +311,7 @@ fn expected_artifact_manifests(
 }
 
 fn exact_adopted_store(
-    expected_pid: ic_platform::Principal,
+    expected_pid: ic_platform::principal::ExternalPrincipal,
 ) -> Result<crate::view::state::WasmStoreView, InternalError> {
     let stores = RootWasmStoreStateOps::wasm_stores();
     let [store] = stores.as_slice() else {

@@ -13,7 +13,7 @@ use crate::{
 use canic_contracts::dto::wire::projection::observability_relay::{
     CanisterCommandFragment, CanisterCommandResponseFragment,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 /// Discover canonical accounting without requiring replay links or cleanup indexes.
 

@@ -69,7 +69,7 @@ fn select_entry<'a>(
     entries: &'a [RegistryEntry],
     target: &str,
 ) -> Result<&'a RegistryEntry, InstalledCandidError> {
-    let principal = ic_platform::Principal::from_text(target).ok();
+    let principal = ic_platform::principal::ExternalPrincipal::from_text(target).ok();
     let mut matches = entries.iter().filter(|entry| match principal {
         Some(principal) => entry.pid == principal.to_text(),
         None => entry.role.as_deref() == Some(target),

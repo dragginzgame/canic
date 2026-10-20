@@ -17,7 +17,6 @@ case "${1:-}" in
         cargo fetch --locked
         make --no-print-directory install-tools
         make --no-print-directory tools-check
-        cargo set-version --help >/dev/null
         ;;
     consumer-locks)
         printf '%s\n' integrations/blob-service/consumer/Cargo.lock \

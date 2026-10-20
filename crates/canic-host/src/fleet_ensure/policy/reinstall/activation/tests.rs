@@ -127,7 +127,8 @@ fn assert_other_root_cannot_cover_reinstall(
         .unwrap()
         .clone();
     other.name = "other-funded-root".into();
-    other.principal = Some(ic_platform::Principal::from_slice(&[98; 29]).to_text());
+    other.principal =
+        Some(ic_platform::principal::ExternalPrincipal::from_slice(&[98; 29]).to_text());
     other.canic_init = Some(crate::fleet_ensure::model::DesiredCanisterInit::Root {
         root: other.name.clone(),
     });
@@ -147,7 +148,8 @@ fn assert_other_root_cannot_cover_reinstall(
         .unwrap()
         .clone();
     store.name = "other-store".into();
-    store.principal = Some(ic_platform::Principal::from_slice(&[99; 29]).to_text());
+    store.principal =
+        Some(ic_platform::principal::ExternalPrincipal::from_slice(&[99; 29]).to_text());
     store.parent = Some(other.name.clone());
     for controller in &mut store.controller_canisters {
         if controller == root {
@@ -221,7 +223,8 @@ pub(in crate::fleet_ensure) fn assert_activation_reset_reviews(
         .unwrap()
         .clone();
     additional.name = "extra-retained-pool".into();
-    additional.principal = Some(ic_platform::Principal::from_slice(&[97; 29]).to_text());
+    additional.principal =
+        Some(ic_platform::principal::ExternalPrincipal::from_slice(&[97; 29]).to_text());
     let root = &mut desired.bootstrap.as_mut().unwrap().roots[0];
     root.canister_pool_imports.push(additional.name.clone());
     root.limits.canister_pool.maximum_size = 3;

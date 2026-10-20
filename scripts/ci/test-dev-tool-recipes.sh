@@ -43,6 +43,9 @@ case "$name:$*" in
     'bash:scripts/dev/candid-extractor.sh' | 'bash:scripts/dev/candid-extractor.sh --check')
         exit "${FAIL_EXTRACTOR:-0}"
         ;;
+    'bash:scripts/dev/release-metadata-editor.sh' | 'bash:scripts/dev/release-metadata-editor.sh --check')
+        exit "${FAIL_RELEASE_EDITOR:-0}"
+        ;;
     'bash:'*'/scripts/dev/install-host-tools.sh '*) exit "${FAIL_HOST_TOOLS:-0}" ;;
     'bash:'*'/scripts/dev/install-ic-tools.sh '*' --preflight') exit "${FAIL_PREFLIGHT:-0}" ;;
     'bash:'*'/scripts/dev/install-rust-tools.sh '*' --preflight') exit "${FAIL_PREFLIGHT:-0}" ;;
@@ -116,6 +119,7 @@ for target in install-tools tools-check; do
         printf '%s\t%s\n' "$fixture/bin/bash" "scripts/dev/candid-extractor.sh$suffix"
         printf '%s\t%s\n' "$fixture/bin/bash" "scripts/ci/testkit-server.sh$suffix"
         printf '%s\t%s\n' "$fixture/.tools/rust/fixture-testkit/installed/bin/testkit-runner" "$action"
+        printf '%s\t%s\n' "$fixture/bin/bash" "scripts/dev/release-metadata-editor.sh$suffix"
     } > "$fixture/aggregate-expected"
     cmp "$fixture/aggregate-expected" "$EVENTS"
     if FAIL_HOST_TOOLS=17 run_recipe -j8 "$target"; then
@@ -134,6 +138,9 @@ for target in install-tools tools-check; do
     [[ "$(wc -l < "$EVENTS")" == $((expected_prefix + 4)) ]] || exit 1
     if FAIL_TESTKIT=17 run_recipe -j8 "$target"; then
         echo 'aggregate accepted failed product admission' >&2; exit 1
+    fi
+    if FAIL_RELEASE_EDITOR=17 run_recipe -j8 "$target"; then
+        echo 'aggregate accepted failed release-editor admission' >&2; exit 1
     fi
 done
 if FAIL_PREFLIGHT=17 run_recipe -j8 install-tools; then

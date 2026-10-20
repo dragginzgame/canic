@@ -7,7 +7,7 @@ use crate::component_operation::{
 use canic_contracts::ids::{
     CanisterRole, ComponentSpecId, FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 ///
 /// AuthorityBinding
@@ -124,8 +124,9 @@ pub fn validate_progress(
         }
     }
     if let Some(binding) = &observed.binding {
-        if binding.canister_id == ic_platform::Principal::anonymous()
-            || binding.canister_id == ic_platform::Principal::management_canister()
+        if binding.canister_id == ic_platform::principal::ExternalPrincipal::anonymous()
+            || binding.canister_id
+                == ic_platform::principal::ExternalPrincipal::management_canister()
         {
             return Err(ComponentOperationError::Progress);
         }

@@ -9,7 +9,7 @@ use canic_contracts::ids::{
     ComponentBinding, ComponentChildBinding, ComponentSpecAdmission, ComponentTopologyDigest,
     FleetSubnetRootBinding, FleetSubnetRootLimits,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 impl ComponentTopology {
     /// Validate one root binding and return its exact canonical topology projection.

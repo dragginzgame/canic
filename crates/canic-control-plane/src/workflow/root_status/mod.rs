@@ -26,7 +26,7 @@ use canic_core::control_plane_support::{
     error::InternalError, ops::icp_refill::IcpRefillStoreOps,
     workflow::runtime::fleet_activation::FleetActivationWorkflow,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 #[derive(Clone, Copy)]
 enum RootOperationObserver {

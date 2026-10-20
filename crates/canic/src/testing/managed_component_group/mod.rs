@@ -79,8 +79,8 @@ use canic_core::{
     },
 };
 use ic_platform::{
-    Principal,
     candid::contract::{CandidType, encode_args, encode_one},
+    principal::ExternalPrincipal as Principal,
 };
 use ic_testkit::{
     pic::{CandidCallError, CanisterInstallExt, PocketIc},
@@ -432,7 +432,7 @@ impl ManagedComponentGroupFixture {
         let allocations: Vec<FixtureChildAllocation> = ic_testkit::pic::query_candid_args(
             &self.pic,
             self.root(),
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "testing_component_child_allocations",
             (),
             crate::testing::CANDID_REPLY_LIMITS,
@@ -595,7 +595,7 @@ impl ManagedComponentGroupFixture {
         let settled: Result<(), Error> = ic_testkit::pic::update_candid_args(
             &self.pic,
             self.root(),
-            ic_platform::Principal::anonymous(),
+            ic_platform::principal::ExternalPrincipal::anonymous(),
             "testing_settle_component_child",
             (request_id,),
             crate::testing::CANDID_REPLY_LIMITS,
@@ -1418,7 +1418,7 @@ fn overview(
     let response: Result<ManagedStatusResponse, Error> = ic_testkit::pic::query_candid_args(
         pic,
         target,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         CANIC_PUBLIC_STATUS,
         (ManagedStatusRequest::Overview,),
         crate::testing::CANDID_REPLY_LIMITS,

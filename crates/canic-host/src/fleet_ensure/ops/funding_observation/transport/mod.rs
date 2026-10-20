@@ -40,7 +40,7 @@ use canic_contracts::{
     protocol,
 };
 use canic_core::cdk::utils::hash::hex_bytes;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::collections::BTreeSet;
 
 impl FundingObservationPlatform for IcpEnsurePlatform {

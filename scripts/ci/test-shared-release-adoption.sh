@@ -12,13 +12,17 @@ for name in bump-version require-jq read-workspace-version read-cargo-workspace-
     next-release-version check-release-draft-ready sync-release-surface-version; do
     cp "$ROOT/scripts/ci/$name.sh" "$fixture/base/scripts/ci/"
 done
-cp "$ROOT/scripts/ci/rewrite-local-lock-versions.pl" "$ROOT/scripts/ci/finalize-release-changelog.awk" \
+cp "$ROOT/scripts/ci/finalize-release-changelog.awk" \
     "$ROOT/scripts/ci/validate-release-inputs.pl" "$fixture/base/scripts/ci/"
+cp "$ROOT/scripts/release/render-owned-manifest.sh" "$fixture/base/scripts/release/"
 cp "$ROOT/scripts/release/rewrite-owned-lock.sh" "$fixture/base/scripts/release/"
 cp "$ROOT/scripts/release/adapter.sh" "$fixture/base/scripts/release/"
 bash "$ROOT/scripts/ci/prepare-script-fixture.sh" "$ROOT" "$fixture/base" \
-    scripts/ci/rewrite-local-lock-versions.pl scripts/ci/next-release-version.sh \
+    scripts/dev/release-metadata-editor.sh scripts/ci/next-release-version.sh \
     scripts/ci/read-cargo-workspace-version.sh
+# Admit the real tool once; toy workspaces do not own independent tool stores.
+editor="$(bash "$ROOT/scripts/dev/release-metadata-editor.sh" --check)"
+printf '#!/usr/bin/env bash\nprintf "%%s\\n" %q\n' "$editor" > "$fixture/base/scripts/dev/release-metadata-editor.sh"
 cat > "$fixture/base/Cargo.toml" <<'TOML'
 [workspace]
 members = ["member"]
@@ -76,7 +80,7 @@ for mode in absent replace rollback rollback-absent partial-output; do
     if [[ "$mode" == rollback || "$mode" == rollback-absent ]]; then
         printf '#!/usr/bin/env bash\nexit 23\n' > "$RELEASE_TEST_ROOT/scripts/ci/sync-release-surface-version.sh"
     elif [[ "$mode" == partial-output ]]; then
-        printf '#!/usr/bin/env perl\nprint "partial candidate"; exit 19;\n' > "$RELEASE_TEST_ROOT/scripts/ci/rewrite-local-lock-versions.pl"
+        printf '#!/usr/bin/env bash\nprintf "partial candidate"; exit 19\n' > "$RELEASE_TEST_ROOT/scripts/release/rewrite-owned-lock.sh"
     fi
     status=0
     (cd "$RELEASE_TEST_ROOT"; bash scripts/ci/bump-version.sh patch) > "$fixture/$mode.log" 2>&1 || status=$?

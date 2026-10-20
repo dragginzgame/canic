@@ -332,7 +332,9 @@ async fn sample_public_metrics() -> Result<(), canic::Error> {
     canic::api::public_status::PublicStatusApi::record_application_metrics(vec![
         canic::dto::public_status::PublicMetric {
             name: "assigned_items".to_string(),
-            canister_id: Some(ic_platform::cdk::api::canister_self()),
+            canister_id: Some(ic_platform::principal::ExternalPrincipal::from(
+                ic_platform::cdk::api::canister_self(),
+            )),
             value: 7,
             unit: "assignments".to_string(),
             observed_at_ns: ic_platform::cdk::api::time(),
@@ -406,7 +408,9 @@ fn sample_application_counters() -> Result<Vec<canic::dto::public_status::Public
     }
     Ok(vec![canic::dto::public_status::PublicMetric {
         name: "timer_completions".into(),
-        canister_id: Some(ic_platform::cdk::api::canister_self()),
+        canister_id: Some(ic_platform::principal::ExternalPrincipal::from(
+            ic_platform::cdk::api::canister_self(),
+        )),
         value: TIMER_INTERVAL_EXECUTIONS.get().into(),
         unit: "count".into(),
         observed_at_ns: ic_platform::cdk::api::time(),

@@ -1,7 +1,7 @@
 //! Root-specific cached baseline and topology helpers for internal test suites.
 
 use canic::ids::{BuildNetwork, CanisterRole};
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use ic_testkit::pic::PocketIc;
 use std::{collections::HashMap, path::PathBuf, time::Instant};
 

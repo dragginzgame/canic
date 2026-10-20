@@ -3,7 +3,7 @@
 
 use canic::ids::CanisterRole;
 use canic_testing_internal::pic::{RootBaselineRecipe, RootBaselineSpec};
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use ic_testkit::pic::{CachedPocketIcBaselinePool, CachedPocketIcBaselinePoolGuard, PocketIc};
 use std::{
     collections::HashMap,

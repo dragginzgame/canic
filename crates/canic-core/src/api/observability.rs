@@ -11,7 +11,7 @@ use crate::{
     },
     workflow::runtime::observability,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 /// Public façade for the controller-authenticated Root observability relay.
 pub struct ObservabilityApi;

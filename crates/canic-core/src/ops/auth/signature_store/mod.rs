@@ -15,7 +15,7 @@ use ic_auth::signature_store::{
 use ic_auth::signature_store::{MAX_PRUNE_BATCH, PreparedSignature, SignatureInputs};
 #[cfg(feature = "auth-root-canister-sig-create")]
 use ic_auth_protocol_types::IcCanisterSignatureProofV1;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 /// One /sig owner shared by Root and issuer, with host-owned sibling branches.
 struct SignatureHost {
@@ -27,7 +27,7 @@ impl SignatureHost {
     fn new(signing_canister: Principal) -> Result<Self, SignatureStoreError> {
         Ok(Self {
             store: SignatureStore::new(
-                signing_canister,
+                signing_canister.into(),
                 SignatureLimits {
                     max_signatures: MAX_SIGNATURES,
                     max_message_bytes: 32,
@@ -58,7 +58,9 @@ fn with_host<T>(
 ) -> Result<T, InternalError> {
     HOST.with_borrow_mut(|host| {
         if host.is_none() {
-            *host = Some(SignatureHost::new(ic_platform::cdk::api::canister_self())?);
+            *host = Some(SignatureHost::new(
+                ic_platform::cdk::api::canister_self().into(),
+            )?);
         }
         f(host.as_mut().expect("initialized signature host"))
     })
@@ -71,7 +73,7 @@ fn publish(host: &SignatureHost) {
 
 /// Reset volatile leaves synchronously before application lifecycle participation.
 pub fn reset() -> Result<(), InternalError> {
-    let host = SignatureHost::new(ic_platform::cdk::api::canister_self())
+    let host = SignatureHost::new(ic_platform::cdk::api::canister_self().into())
         .map_err(|error| InternalError::from(map_error(error)))?;
     publish(&host);
     HOST.with_borrow_mut(|state| *state = Some(host));
@@ -112,7 +114,7 @@ pub(super) fn retrieve(
     signing_canister: Principal,
     now_ns: u64,
 ) -> Result<IcCanisterSignatureProofV1, InternalError> {
-    if signing_canister != ic_platform::cdk::api::canister_self() {
+    if signing_canister != ic_platform::cdk::api::canister_self().into() {
         return Err(
             AuthSignatureError::ProofInvalid("signing canister differs from host".into()).into(),
         );

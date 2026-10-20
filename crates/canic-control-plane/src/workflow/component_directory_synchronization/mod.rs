@@ -37,7 +37,7 @@ use canic_core::control_plane_support::{
     },
     workflow::runtime::fleet_activation::FleetActivationWorkflow,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 /// Advance one exact affected-root Directory synchronization step.
 

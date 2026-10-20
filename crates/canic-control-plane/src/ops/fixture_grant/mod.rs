@@ -25,7 +25,7 @@ use canic_contracts::{
     ids::{FleetRegistryAuthority, ManagedCanisterBinding, ReleaseBuildId, SubnetId},
 };
 use canic_core::control_plane_support::error::InternalError;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 /// Exact Root identity shared by the selected Store and immutable target binding.
 

@@ -5,7 +5,7 @@ use canic_contracts::ids::{
     CanisterRole, ComponentBinding, ComponentInstanceId, ComponentSpecId, FleetSubnetRootBinding,
     FleetSubnetRootReleaseSet,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 
 /// Exact reviewed local, installation and placement authority.

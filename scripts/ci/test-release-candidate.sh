@@ -55,15 +55,18 @@ for consumer in consumer embedded-consumer; do
 done
 cp -R "$fixture/base" "$fixture/candidate"
 mkdir -p "$fixture/candidate/scripts/ci" "$fixture/candidate/scripts/release"
+cp "$ROOT/scripts/release/render-owned-manifest.sh" "$fixture/candidate/scripts/release/"
 cp "$ROOT/scripts/release/rewrite-owned-lock.sh" "$fixture/candidate/scripts/release/"
 cp "$ROOT/scripts/release/adapter.sh" "$fixture/candidate/scripts/release/"
 for script in check-release-candidate check-release-surface-content read-workspace-version read-cargo-workspace-version require-jq; do
     cp "$ROOT/scripts/ci/$script.sh" "$fixture/candidate/scripts/ci/"
 done
-cp "$ROOT/scripts/ci/rewrite-local-lock-versions.pl" "$fixture/candidate/scripts/ci/"
 bash "$ROOT/scripts/ci/prepare-script-fixture.sh" "$ROOT" "$fixture/candidate" \
-    scripts/ci/rewrite-local-lock-versions.pl scripts/ci/next-release-version.sh \
+    scripts/dev/release-metadata-editor.sh scripts/ci/next-release-version.sh \
     scripts/ci/read-cargo-workspace-version.sh
+# Admit the real tool once; toy workspaces do not own independent tool stores.
+editor="$(bash "$ROOT/scripts/dev/release-metadata-editor.sh" --check)"
+printf '#!/usr/bin/env bash\nprintf "%%s\\n" %q\n' "$editor" > "$fixture/candidate/scripts/dev/release-metadata-editor.sh"
 cat >"$fixture/bin/git" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail

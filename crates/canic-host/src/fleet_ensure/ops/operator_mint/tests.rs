@@ -8,7 +8,7 @@ use crate::fleet_ensure::model::operator_mint::{
     OperatorMintAuthority, OperatorMintIntentRecord,
     OperatorMintNotificationOutcomeRecord as Notify, OperatorMintTransferOutcomeRecord as Transfer,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 // ICP Ledger transfer and CMC notification contracts reviewed for RF2; the
 // literal contracts are independent of the Rust derives under test.

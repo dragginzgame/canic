@@ -149,7 +149,7 @@ impl Eq for IcpCli {}
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "type", content = "value")]
 pub enum IcpCanisterVisibility {
-    AllowedViewers(Vec<ic_platform::Principal>),
+    AllowedViewers(Vec<ic_platform::principal::ExternalPrincipal>),
     Controllers,
     Public,
 }

@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::fleet_ensure::view::release::pool::{ReleasePoolCreationFacts, ReleasePoolImportFacts};
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::collections::BTreeSet;
 
 fn facts() -> ReleasePoolFacts {

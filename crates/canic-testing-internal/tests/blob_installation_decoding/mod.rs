@@ -10,7 +10,7 @@ use canic_blob_service::{
     },
     lifecycle::CONFIGURATION_LIMITS,
 };
-use ic_platform::{Principal, candid::contract::CandidType};
+use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
 
 #[derive(CandidType, Debug, serde::Deserialize, PartialEq)]
 #[candid_path("ic_platform::candid::contract")]
@@ -39,9 +39,9 @@ fn installation() -> ServiceInstallationInput {
     let principal = |byte| Principal::from_slice(&[byte; 29]);
     ServiceInstallationInput {
         configuration: ServiceConfigurationInput {
-            service: principal(1),
-            operator: principal(7),
-            payment_account: principal(8),
+            service: principal(1).into(),
+            operator: principal(7).into(),
+            payment_account: principal(8).into(),
             namespace: 7,
             resources: ServiceResourceInput {
                 max_tenants: 2,
@@ -61,7 +61,7 @@ fn installation() -> ServiceInstallationInput {
                 max_tenant_active: 2,
             },
             billing: ServiceBillingInput {
-                cashier: principal(10),
+                cashier: principal(10).into(),
                 reserve: 100,
                 minimum_balance: 100,
                 target_balance: 200,
@@ -83,7 +83,7 @@ fn installation() -> ServiceInstallationInput {
             },
         },
         project: "decoder-test".into(),
-        completion_verifier: principal(11),
+        completion_verifier: principal(11).into(),
     }
 }
 
@@ -91,7 +91,7 @@ fn unmodeled(input: &ServiceInstallationInput) -> UnmodeledInstallationInput {
     UnmodeledInstallationInput {
         configuration: input.configuration,
         project: input.project.clone(),
-        completion_verifier: input.completion_verifier,
+        completion_verifier: input.completion_verifier.into(),
         unmodeled: Principal::anonymous(),
     }
 }

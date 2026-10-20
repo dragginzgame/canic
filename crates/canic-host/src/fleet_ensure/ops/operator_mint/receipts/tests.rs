@@ -14,10 +14,10 @@ use crate::fleet_ensure::{
 };
 use ic_platform::bls::PrivateKey;
 use ic_platform::{
-    Principal,
     agent::Agent,
     certification::{Certificate, Delegation, HashTree, fork, labeled, leaf},
     icrc_ledger_types::{ICRC3DataCertificate, Value},
+    principal::ExternalPrincipal as Principal,
 };
 
 struct Fixture {

@@ -236,13 +236,16 @@ fn qualify_store(env: &TypeEnv, actor: &Type) {
     );
 }
 
+/// Qualify a selected role's generated Candid declaration.
+#[derive(clap::Parser)]
+struct Arguments {
+    #[arg(value_parser = ["fleet_coordinator", "local", "managed", "root", "wasm_store"])]
+    role: String,
+    path: std::path::PathBuf,
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut args = std::env::args().skip(1);
-    let role = args.next().ok_or("requires role and generated .did path")?;
-    let path = args.next().ok_or("requires generated .did path")?;
-    if args.next().is_some() {
-        return Err("expected exactly role and generated .did path".into());
-    }
+    let Arguments { role, path } = <Arguments as clap::Parser>::parse();
     let program = fs::read_to_string(path)?.parse::<ic_platform::candid_parser::IDLProg>()?;
     let mut env = TypeEnv::new();
     let actor =

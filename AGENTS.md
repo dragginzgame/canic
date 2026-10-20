@@ -89,7 +89,17 @@ as explicitly approved by the maintainer for this adoption
 These exceptions preserve existing paths and dependency boundaries; they do not
 authorize additional independent workspaces, package renames or dependency changes.
 
+## Scoped 0.112 codec exception
+
+The maintainer selected shipping 0.112 without the Candid-to-Wire migration.
+For this release batch, existing Canic Candid contracts may remain on Platform's
+explicit Candid codecs and external principal identity. Preserve their wire
+formats, bounds and semantics; existing Wire protocols remain on Wire.
+This exception to Shared Tooling's application-encoding rule does not authorize
+new Candid protocols or extend to a later release batch.
+
 ## Pre-1.0 Hard Cuts
+
 - Prefer deleting obsolete contracts and correcting current-state defects over
   preserving accidental behavior. A refusal must protect a concrete property
   such as custody, bounded spending or an uncertain paid effect. Historical

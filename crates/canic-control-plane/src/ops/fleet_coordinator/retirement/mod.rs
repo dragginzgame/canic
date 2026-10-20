@@ -15,7 +15,7 @@ use canic_contracts::dto::fleet_registry::{
 use canic_core::control_plane_support::{
     error::InternalError, ops::fleet_registry::FleetRegistryOps,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 impl FleetCoordinatorOps {
     pub(crate) fn retirement_preflight(

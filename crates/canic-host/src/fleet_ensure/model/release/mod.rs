@@ -5,7 +5,7 @@
 
 use crate::fleet_ensure::model::capacity_import::CapacityImportSourceBinding;
 use canic_contracts::ids::FleetBinding;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 

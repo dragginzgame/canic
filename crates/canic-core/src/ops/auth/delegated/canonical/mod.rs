@@ -109,7 +109,7 @@ pub fn issuer_proof_binding_hash(
     issuer_proof_binding: IssuerProofBinding,
 ) -> Result<[u8; 32], CanonicalAuthError> {
     Ok(ic_auth::canonical::issuer_proof_binding_hash(
-        issuer_pid,
+        issuer_pid.into(),
         protocol::issuer_algorithm(issuer_proof_alg),
         protocol::issuer_binding(issuer_proof_binding),
     )?)

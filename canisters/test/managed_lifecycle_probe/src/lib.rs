@@ -11,7 +11,7 @@ use std::cell::Cell;
 #[derive(CandidType, Clone, Debug, Eq, PartialEq)]
 #[candid_path("ic_platform::candid::contract")]
 struct ManagedGuardReceipt {
-    caller: ic_platform::Principal,
+    caller: ic_platform::principal::ExternalPrincipal,
     workflow_runs: u32,
 }
 
@@ -37,8 +37,10 @@ async fn canic_install(_: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
 
 #[canic_query(public)]
-fn managed_guard_public_probe() -> Result<ic_platform::Principal, Error> {
-    Ok(ic_platform::cdk::api::msg_caller())
+fn managed_guard_public_probe() -> Result<ic_platform::principal::ExternalPrincipal, Error> {
+    Ok(ic_platform::principal::ExternalPrincipal::from(
+        ic_platform::cdk::api::msg_caller(),
+    ))
 }
 
 #[canic_update(public)]
@@ -56,9 +58,9 @@ fn managed_guard_admission_probe() -> Result<ManagedGuardReceipt, Error> {
 }
 
 #[canic_update(public)]
-fn managed_guard_owned_probe() -> Result<ic_platform::Principal, Error> {
+fn managed_guard_owned_probe() -> Result<ic_platform::principal::ExternalPrincipal, Error> {
     let caller = canic::fleet_admission::require_caller()?;
-    let application_owner = ic_platform::Principal::from_slice(&[17; 29]);
+    let application_owner = ic_platform::principal::ExternalPrincipal::from_slice(&[17; 29]);
     if caller != application_owner {
         return Err(Error::from_registered(
             canic::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
@@ -73,8 +75,11 @@ fn managed_guard_workflow_runs() -> Result<u32, Error> {
 }
 
 #[canic_query(requires(caller::is_fleet_admitted()))]
-fn canic_fleet_admission_parity_probe() -> Result<ic_platform::Principal, Error> {
-    Ok(ic_platform::cdk::api::msg_caller())
+fn canic_fleet_admission_parity_probe() -> Result<ic_platform::principal::ExternalPrincipal, Error>
+{
+    Ok(ic_platform::principal::ExternalPrincipal::from(
+        ic_platform::cdk::api::msg_caller(),
+    ))
 }
 
 /// Exact application init bytes retained by the synchronous lifecycle owner.

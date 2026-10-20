@@ -31,4 +31,5 @@ if [[ $# == 5 ]]; then
 fi
 packages=()
 while IFS= read -r name; do packages[${#packages[@]}]="$name"; done <<< "$names"
-exec perl "$ROOT/scripts/ci/rewrite-local-lock-versions.pl" "$2" "$3" "$4" "${packages[@]}"
+editor="$(bash "$ROOT/scripts/dev/release-metadata-editor.sh" --check)"
+exec "$editor" --max-input-bytes 8388608 lock "$2" "$3" "$4" "${packages[@]}"

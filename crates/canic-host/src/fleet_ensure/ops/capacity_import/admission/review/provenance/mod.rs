@@ -20,7 +20,7 @@ use crate::{
         load_persisted_current_release_set_manifest,
     },
 };
-use ic_platform::{Principal, agent::Agent};
+use ic_platform::{agent::Agent, principal::ExternalPrincipal as Principal};
 pub(super) async fn inspect(
     paths: &EnsurePaths,
     desired: &DesiredFleet,

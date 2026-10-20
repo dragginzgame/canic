@@ -15,7 +15,7 @@ use crate::fleet_ensure::{
     ops::capacity_import::{CapacityImportReviewError, verify_review},
     view::capacity_import::{CapacityImportDocumentView, CapacityImportInventoryView},
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use sha2_host::{Digest, Sha256};
 use thiserror::Error;
 

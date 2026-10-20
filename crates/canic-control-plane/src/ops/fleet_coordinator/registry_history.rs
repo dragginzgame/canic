@@ -20,7 +20,7 @@ use super::{
     },
 };
 use canic_contracts::ids::{ComponentTopologyDigest, FleetSubnetRootReleaseSet, SubnetId};
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 pub(super) fn validate_registry_lifecycle_history(
     current: &FleetCoordinatorRegistryRecord,

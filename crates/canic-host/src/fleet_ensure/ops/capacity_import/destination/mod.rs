@@ -20,7 +20,7 @@ use canic_contracts::{
     },
 };
 use canic_control_plane::api::canister_pool::CanisterPoolApi;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use thiserror::Error;
 
 /// A missing or changed infrastructure prerequisite never authorizes implicit setup.

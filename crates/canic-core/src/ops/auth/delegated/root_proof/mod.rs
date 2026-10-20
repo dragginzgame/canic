@@ -52,7 +52,7 @@ pub(in crate::ops::auth) fn project_root_policy(
     policy: &crate::dto::auth::RootKeyPolicyV1,
 ) -> ic_auth::delegation::RootKeyPolicy {
     ic_auth::delegation::RootKeyPolicy {
-        root_canister_id: policy.root_canister_id,
+        root_canister_id: policy.root_canister_id.into(),
         algorithm: super::protocol::algorithm(policy.algorithm),
         key_id: super::protocol::key_id(&policy.key_id),
         derivation_path_hash: policy.derivation_path_hash,
@@ -86,7 +86,7 @@ pub(in crate::ops::auth) fn verify_root_delegation_proof(
     let verified = ic_auth::delegation::verify_delegation_proof(
         &proof,
         &ic_auth::delegation::DelegationProofVerificationContext {
-            expected_issuer: input.expected_issuer,
+            expected_issuer: input.expected_issuer.into(),
             root_key: &root_key,
             now_ns: input.now_ns,
             limits: ic_auth::delegation::DelegationProofVerificationLimits {

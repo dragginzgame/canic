@@ -13,7 +13,7 @@ use crate::fleet_ensure::{
     },
     ops::{EnsurePaths, operation_selection},
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::path::Path;
 
 /// Current source and seed selection; no build or historical executable input is needed.

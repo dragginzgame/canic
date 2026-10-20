@@ -5,7 +5,7 @@
 //! Boundary: internal view used between storage ops and ICP refill workflows.
 
 use crate::domain::icp_refill::{IcpRefillErrorCode, IcpRefillStatus, IcpRefillTrigger};
-use ic_platform::{Principal, candid::contract::Nat};
+use ic_platform::{candid::contract::Nat, principal::ExternalPrincipal as Principal};
 
 ///
 /// IcpRefillOperation

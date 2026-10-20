@@ -10,7 +10,7 @@ use canic_contracts::{
     ids::FleetSubnetRootReleaseSet,
 };
 use canic_core::cdk::utils::hash::sha256_hex;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 

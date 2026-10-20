@@ -27,7 +27,9 @@ use canic_contracts::{
     protocol,
 };
 use canic_core::shared_support::fleet_funding_policy::fleet_subnet_root_funding_policy_hash;
-use ic_platform::{Principal, agent::Agent, candid::contract::CandidType};
+use ic_platform::{
+    agent::Agent, candid::contract::CandidType, principal::ExternalPrincipal as Principal,
+};
 use serde::Deserialize;
 use std::{collections::BTreeSet, time::Duration};
 use thiserror::Error;

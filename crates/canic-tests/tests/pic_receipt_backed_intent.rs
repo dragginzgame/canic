@@ -4,8 +4,8 @@ use canic_testing_internal::pic::{
     CanicWasmBuildProfile, InternalTestWasms, build_internal_test_wasm_canisters, start_pocket_ic,
 };
 use ic_platform::{
-    Principal,
     candid::contract::{CandidType, encode_one},
+    principal::ExternalPrincipal as Principal,
 };
 use ic_testkit::pic::{InstallSpec, PocketIc, PocketIcBuilder, RetryPolicy, prelude::*};
 use serde::Deserialize;
@@ -558,7 +558,7 @@ fn begin_receipt(
     ic_testkit::pic::update_candid_args::<(Result<ReceiptBeginView, String>,), _>(
         pic,
         authority_id,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "begin_receipt",
         (
             operation_seed,
@@ -588,7 +588,7 @@ fn settle_receipt(
     ic_testkit::pic::update_candid_args::<(Result<ReceiptSettlementView, String>,), _>(
         pic,
         authority_id,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "settle_receipt",
         (
             operation_seed,
@@ -612,7 +612,7 @@ fn load_receipt(
     ic_testkit::pic::query_candid_args::<(Result<Option<ReceiptIntentView>, String>,), _>(
         pic,
         authority_id,
-        ic_platform::Principal::anonymous(),
+        ic_platform::principal::ExternalPrincipal::anonymous(),
         "load_receipt",
         (operation_seed,),
         canic::testing::CANDID_REPLY_LIMITS,

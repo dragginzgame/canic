@@ -24,7 +24,7 @@ use canic_core::shared_support::fleet_admission_policy::{
 use canic_core::shared_support::fleet_funding_policy::{
     fleet_root_funding_operation_id, fleet_subnet_root_funding_policy_hash,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 #[cfg(feature = "fleet-coordinator-canister")]
 pub fn coordinator_root_funding_policy() -> FleetCoordinatorRootFundingPolicy {

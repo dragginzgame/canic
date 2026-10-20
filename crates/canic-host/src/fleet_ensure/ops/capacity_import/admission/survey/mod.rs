@@ -20,7 +20,7 @@ use ic_host_fs::{
     durable::{PublicationMode, WriteOptions, write_bytes},
     read::read_optional_file_no_follow,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::PathBuf,

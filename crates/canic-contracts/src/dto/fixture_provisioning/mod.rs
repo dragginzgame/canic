@@ -1,7 +1,7 @@
 //! Passive fixture content, Store publication and exact target grant contracts.
 
 use crate::ids::{ManagedCanisterBinding, ReleaseBuildId};
-use ic_platform::{Principal, candid::contract::CandidType};
+use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
 use serde::{Deserialize, Serialize};
 
 /// One independently decodable opaque chunk selected by an application descriptor.

@@ -18,7 +18,7 @@ use canic_core::{
     control_plane_support::ops::fleet_registry::FleetRegistryOps,
     shared_support::fleet_admission_policy::bind_initial_fleet_admission_policy,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::{collections::BTreeMap, path::Path};
 
 /// Expand only the protocol selected by the reviewed fresh installation inputs.

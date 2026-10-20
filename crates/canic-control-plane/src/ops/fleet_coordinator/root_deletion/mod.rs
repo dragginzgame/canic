@@ -19,7 +19,7 @@ use canic_contracts::dto::{
     fleet_subnet_root::FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
 };
 use canic_core::control_plane_support::error::InternalError;
-use ic_platform::{Principal, candid::contract::CandidType};
+use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 

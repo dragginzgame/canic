@@ -33,8 +33,8 @@ use canic_host::{
     protocol_binding::ResolvedProtocolBinding,
 };
 use clap::{Arg, Command as ClapCommand};
-use ic_platform::Principal;
-use ic_platform::PrincipalError;
+use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_platform::principal::ExternalPrincipalError as PrincipalError;
 use serde::Serialize;
 use std::{ffi::OsString, path::PathBuf};
 use thiserror::Error as ThisError;

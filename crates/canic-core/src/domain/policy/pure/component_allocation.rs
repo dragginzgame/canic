@@ -443,9 +443,11 @@ mod tests {
     fn peer_provisioning_accepts_an_exact_remote_root_in_the_same_fleet() {
         let (topology, target_root, mut requester, target) = peer_fixture();
         let mut requester_root = target_root.clone();
-        requester_root.placement_subnet =
-            SubnetId::from_principal(ic_platform::Principal::from_slice(&[17; 29]));
-        requester_root.fleet_subnet_root = ic_platform::Principal::from_slice(&[18; 29]);
+        requester_root.placement_subnet = SubnetId::from_principal(
+            ic_platform::principal::ExternalPrincipal::from_slice(&[17; 29]),
+        );
+        requester_root.fleet_subnet_root =
+            ic_platform::principal::ExternalPrincipal::from_slice(&[18; 29]);
         requester.component = ComponentInstanceId::from_root_allocation(
             requester_root.authority.binding.fleet.fleet,
             requester_root.authority.epoch,
@@ -539,17 +541,17 @@ mod tests {
                         app: AppId::from("toko"),
                     },
                     coordinator_subnet: SubnetId::from_principal(
-                        ic_platform::Principal::from_slice(&[2; 29]),
+                        ic_platform::principal::ExternalPrincipal::from_slice(&[2; 29]),
                     ),
-                    coordinator: ic_platform::Principal::from_slice(&[3; 29]),
+                    coordinator: ic_platform::principal::ExternalPrincipal::from_slice(&[3; 29]),
                     recovery_controllers: Vec::new(),
                 },
                 epoch: 1,
             },
-            placement_subnet: SubnetId::from_principal(ic_platform::Principal::from_slice(
-                &[4; 29],
-            )),
-            fleet_subnet_root: ic_platform::Principal::from_slice(&[5; 29]),
+            placement_subnet: SubnetId::from_principal(
+                ic_platform::principal::ExternalPrincipal::from_slice(&[4; 29]),
+            ),
+            fleet_subnet_root: ic_platform::principal::ExternalPrincipal::from_slice(&[5; 29]),
             component_admissions: admissions,
             component_topology_digest: projected.digest().expect("root topology digest"),
             limits: FleetSubnetRootLimits {
@@ -626,17 +628,17 @@ mod tests {
                         app: AppId::from("toko"),
                     },
                     coordinator_subnet: SubnetId::from_principal(
-                        ic_platform::Principal::from_slice(&[12; 29]),
+                        ic_platform::principal::ExternalPrincipal::from_slice(&[12; 29]),
                     ),
-                    coordinator: ic_platform::Principal::from_slice(&[13; 29]),
+                    coordinator: ic_platform::principal::ExternalPrincipal::from_slice(&[13; 29]),
                     recovery_controllers: Vec::new(),
                 },
                 epoch: 1,
             },
-            placement_subnet: SubnetId::from_principal(ic_platform::Principal::from_slice(
-                &[14; 29],
-            )),
-            fleet_subnet_root: ic_platform::Principal::from_slice(&[15; 29]),
+            placement_subnet: SubnetId::from_principal(
+                ic_platform::principal::ExternalPrincipal::from_slice(&[14; 29]),
+            ),
+            fleet_subnet_root: ic_platform::principal::ExternalPrincipal::from_slice(&[15; 29]),
             component_admissions: admissions,
             component_topology_digest: projected.digest().expect("peer root topology digest"),
             limits: FleetSubnetRootLimits {
@@ -671,7 +673,7 @@ mod tests {
             role: requester_compiled.component_role.clone(),
             placement_subnet: root.placement_subnet,
             fleet_subnet_root: root.fleet_subnet_root,
-            canister_id: ic_platform::Principal::from_slice(&[16; 29]),
+            canister_id: ic_platform::principal::ExternalPrincipal::from_slice(&[16; 29]),
         };
         (topology, root, requester, target_spec)
     }

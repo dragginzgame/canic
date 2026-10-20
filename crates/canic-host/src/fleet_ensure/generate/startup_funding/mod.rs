@@ -23,7 +23,7 @@ use crate::{
 };
 use canic_contracts::dto::pool::CanisterPoolAssetStatus;
 use canic_core::bootstrap::compiled::ConfigModel;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::{collections::BTreeMap, path::Path};
 
 /// Observe Root-funded Workloads and explicitly separate assets requiring a parent relay.

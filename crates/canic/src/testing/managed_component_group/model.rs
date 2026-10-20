@@ -5,7 +5,7 @@
 //! Boundary: callers provide role Wasms; Canic derives every protected identity from config.
 
 use crate::ids::{CanisterRole, ComponentGroupMemberPath, ComponentSpecId};
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 use super::DEFAULT_INSTALL_CYCLES;
 

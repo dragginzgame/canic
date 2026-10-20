@@ -319,7 +319,9 @@ fn visibility_accepts_additive_fields_without_changing_its_authority() {
     for visibility in [
         IcpCanisterVisibility::Controllers,
         IcpCanisterVisibility::Public,
-        IcpCanisterVisibility::AllowedViewers(vec![::ic_platform::Principal::anonymous()]),
+        IcpCanisterVisibility::AllowedViewers(vec![
+            ::ic_platform::principal::ExternalPrincipal::anonymous(),
+        ]),
     ] {
         let mut output = serde_json::to_value(&visibility).unwrap();
         output["description"] = serde_json::json!("upstream metadata");
@@ -471,7 +473,7 @@ fn current_visibility_and_query_statistics_preserve_viewers_without_controller_a
     assert_eq!(
         settings.status_visibility,
         Some(IcpCanisterVisibility::AllowedViewers(vec![
-            ::ic_platform::Principal::anonymous()
+            ::ic_platform::principal::ExternalPrincipal::anonymous()
         ]))
     );
     assert_eq!(

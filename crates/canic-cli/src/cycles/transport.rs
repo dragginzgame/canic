@@ -807,7 +807,7 @@ mod tests {
     fn cycle_response_failure_preserves_typed_cause_until_projection() {
         let error = CycleObservationError::Observability(FleetObservabilityError::Protocol(
             CanisterProtocolError::Response {
-                canister: ic_platform::Principal::management_canister(),
+                canister: ic_platform::principal::ExternalPrincipal::management_canister(),
                 method: canic_contracts::protocol::CANIC_ROOT_COMMAND,
                 source: canic_host::icp::decode_json_result_response::<u64>("{}").unwrap_err(),
             },

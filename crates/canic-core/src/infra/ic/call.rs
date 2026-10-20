@@ -6,9 +6,9 @@
 
 use crate::{cdk::types::Principal, infra::ic::IcInfraError};
 use ic_platform::candid::contract::{
-    ArgumentDecoder, ArgumentEncoder, CandidType, encode_args, encode_one,
+    ArgumentDecoder, ArgumentEncoder, CandidType, DecoderConfig, decode_args_with_config,
+    encode_args, encode_one,
 };
-use ic_platform::cdk::call::Response;
 use serde::de::DeserializeOwned;
 use std::borrow::Cow;
 
@@ -121,10 +121,10 @@ impl CallBuilder<'_> {
     pub async fn execute(self) -> Result<CallResult, IcInfraError> {
         let mut call = match self.wait {
             WaitMode::Bounded => {
-                ic_platform::cdk::call::Call::bounded_wait(self.canister_id, &self.method)
+                ic_platform::cdk::call::Call::bounded_wait(self.canister_id.into(), &self.method)
             }
             WaitMode::Unbounded => {
-                ic_platform::cdk::call::Call::unbounded_wait(self.canister_id, &self.method)
+                ic_platform::cdk::call::Call::unbounded_wait(self.canister_id.into(), &self.method)
             }
         };
 
@@ -133,7 +133,9 @@ impl CallBuilder<'_> {
 
         let response = call.await.map_err(IcInfraError::from)?;
 
-        Ok(CallResult { inner: response })
+        Ok(CallResult {
+            inner: response.into_bytes(),
+        })
     }
 }
 
@@ -145,14 +147,14 @@ impl CallBuilder<'_> {
 ///
 
 pub struct CallResult {
-    inner: Response,
+    inner: Vec<u8>,
 }
 
 impl CallResult {
     /// Preserve the upstream wire response for a caller-owned projection.
     #[must_use]
     pub fn into_bytes(self) -> Vec<u8> {
-        self.inner.into_bytes()
+        self.inner
     }
 
     /// Decode the response as a single Candid value.
@@ -160,7 +162,7 @@ impl CallResult {
     where
         R: CandidType + DeserializeOwned,
     {
-        self.inner.candid().map_err(IcInfraError::from)
+        self.candid_tuple::<(R,)>().map(|(value,)| value)
     }
 
     /// Decode the response as a Candid tuple.
@@ -168,7 +170,8 @@ impl CallResult {
     where
         R: for<'de> ArgumentDecoder<'de>,
     {
-        self.inner.candid_tuple().map_err(IcInfraError::from)
+        decode_args_with_config(self.inner.as_ref(), &DecoderConfig::new())
+            .map_err(IcInfraError::CandidDecode)
     }
 }
 
@@ -184,7 +187,7 @@ enum WaitMode {
 
 #[cfg(test)]
 mod tests {
-    use super::{Call, EMPTY_ARGS, Principal, encode_args};
+    use super::{Call, CallResult, EMPTY_ARGS, IcInfraError, Principal, encode_args};
 
     #[test]
     fn empty_args_match_candid_encoding() {
@@ -197,5 +200,35 @@ mod tests {
         let raw = vec![1_u8, 2, 3, 4];
         let builder = Call::bounded_wait(Principal::anonymous(), "noop").with_raw_args(raw.clone());
         assert_eq!(builder.args.as_ref(), raw.as_slice());
+    }
+    #[test]
+    fn response_decoding_preserves_single_tuple_and_skipped_arguments() {
+        let response = CallResult {
+            inner: encode_args((42_u64, "extra")).unwrap(),
+        };
+        assert_eq!(response.candid::<u64>().unwrap(), 42);
+        assert_eq!(
+            response.candid_tuple::<(u64, String)>().unwrap(),
+            (42, "extra".into())
+        );
+        let empty = CallResult {
+            inner: EMPTY_ARGS.to_vec(),
+        };
+        empty.candid_tuple::<()>().unwrap();
+        assert!(matches!(
+            empty.candid::<u64>(),
+            Err(IcInfraError::CandidDecode(_))
+        ));
+    }
+
+    #[test]
+    fn invalid_response_is_a_typed_codec_failure() {
+        let response = CallResult {
+            inner: b"invalid".to_vec(),
+        };
+        assert!(matches!(
+            response.candid::<u64>(),
+            Err(IcInfraError::CandidDecode(_))
+        ));
     }
 }

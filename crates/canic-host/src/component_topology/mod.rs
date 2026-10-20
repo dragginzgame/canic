@@ -12,7 +12,7 @@ use canic_contracts::ids::{
     SubnetId,
 };
 use canic_core::bootstrap::compiled::{ComponentTopology, ConfigModel};
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::collections::BTreeSet;
 use thiserror::Error as ThisError;
 

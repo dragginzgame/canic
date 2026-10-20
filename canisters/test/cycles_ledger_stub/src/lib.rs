@@ -1,9 +1,11 @@
 //! Exact Cycles Ledger and NNS routing boundaries for Root pool-refill PocketIC tests.
 
+mod codec;
+
 use ic_platform::cdk::call::Call;
 use ic_platform::{
-    Principal,
     candid::contract::{CandidType, Nat},
+    principal::ExternalPrincipal as Principal,
 };
 use serde::Deserialize;
 use std::{cell::RefCell, collections::BTreeMap};
@@ -229,7 +231,7 @@ thread_local! {
     static STATE: RefCell<Option<State>> = const { RefCell::new(None) };
 }
 
-#[ic_platform::cdk::init]
+#[ic_platform::cdk::init(decode_with = "codec::decode_one")]
 fn init(args: InitArgs) {
     assert!(
         args.canister_ids.len() <= MAX_LANES,
@@ -284,7 +286,7 @@ fn init(args: InitArgs) {
     });
 }
 
-#[ic_platform::cdk::query]
+#[ic_platform::cdk::query(decode_with = "codec::decode_one", encode_with = "codec::encode_reply")]
 fn icrc1_balance_of(account: Account) -> Nat {
     if account.subaccount.is_some() {
         return Nat::from(0_u8);
@@ -302,7 +304,10 @@ fn icrc1_balance_of(account: Account) -> Nat {
     })
 }
 
-#[ic_platform::cdk::query]
+#[ic_platform::cdk::query(
+    decode_with = "codec::decode_args",
+    encode_with = "codec::encode_reply"
+)]
 fn icrc1_fee() -> Nat {
     STATE.with_borrow(|state| {
         Nat::from(
@@ -315,7 +320,7 @@ fn icrc1_fee() -> Nat {
 }
 
 // Models a fee change between the host's final fee query and its transfer.
-#[ic_platform::cdk::update]
+#[ic_platform::cdk::update(decode_with = "codec::decode_one", encode_with = "codec::encode_unit")]
 fn set_transfer_fee_override(fee: Option<Nat>) {
     STATE.with_borrow_mut(|state| {
         state
@@ -327,7 +332,7 @@ fn set_transfer_fee_override(fee: Option<Nat>) {
 }
 
 // Reject after committing one exact transfer to exercise uncertain-response reconciliation.
-#[ic_platform::cdk::update]
+#[ic_platform::cdk::update(decode_with = "codec::decode_args", encode_with = "codec::encode_unit")]
 fn lose_next_transfer_reply() {
     STATE.with_borrow_mut(|state| {
         state
@@ -337,7 +342,7 @@ fn lose_next_transfer_reply() {
     });
 }
 
-#[ic_platform::cdk::update(manual_reply = true)]
+#[ic_platform::cdk::update(manual_reply = true, decode_with = "codec::decode_one")]
 fn icrc1_transfer(args: TransferArgs) -> Result<Nat, TransferError> {
     let result = transfer(args);
     let lose_reply = STATE.with_borrow_mut(|state| {
@@ -357,7 +362,8 @@ fn icrc1_transfer(args: TransferArgs) -> Result<Nat, TransferError> {
 }
 
 fn transfer(args: TransferArgs) -> Result<Nat, TransferError> {
-    let caller = ic_platform::cdk::api::msg_caller();
+    let caller =
+        ic_platform::principal::ExternalPrincipal::from(ic_platform::cdk::api::msg_caller());
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("Cycles Ledger stub is initialized");
         if let Some(existing) = state
@@ -429,9 +435,10 @@ fn transfer(args: TransferArgs) -> Result<Nat, TransferError> {
     })
 }
 
-#[ic_platform::cdk::update]
+#[ic_platform::cdk::update(decode_with = "codec::decode_one", encode_with = "codec::encode_reply")]
 async fn withdraw(args: WithdrawArgs) -> Result<Nat, WithdrawError> {
-    let caller = ic_platform::cdk::api::msg_caller();
+    let caller =
+        ic_platform::principal::ExternalPrincipal::from(ic_platform::cdk::api::msg_caller());
     let receiver = args.to;
     if args.from_subaccount.is_some() {
         return Err(WithdrawError::InvalidReceiver { receiver });
@@ -481,11 +488,14 @@ async fn withdraw(args: WithdrawArgs) -> Result<Nat, WithdrawError> {
         });
         Ok((amount, block_index))
     })?;
-    Call::bounded_wait(Principal::management_canister(), "deposit_cycles")
+    Call::bounded_wait(Principal::management_canister().into(), "deposit_cycles")
         .with_cycles(amount)
-        .with_arg(CanisterIdRecord {
-            canister_id: receiver,
-        })
+        .take_raw_args(
+            ic_platform::candid::contract::encode_one(CanisterIdRecord {
+                canister_id: receiver,
+            })
+            .unwrap_or_else(|error| panic!("failed to encode args: {error}")),
+        )
         .await
         .map_err(|error| WithdrawError::GenericError {
             error_code: Nat::from(4_u8),
@@ -494,7 +504,10 @@ async fn withdraw(args: WithdrawArgs) -> Result<Nat, WithdrawError> {
     Ok(Nat::from(block_index))
 }
 
-#[ic_platform::cdk::query]
+#[ic_platform::cdk::query(
+    decode_with = "codec::decode_args",
+    encode_with = "codec::encode_reply"
+)]
 fn withdrawal_count() -> u64 {
     STATE.with_borrow(|state| {
         u64::try_from(
@@ -508,7 +521,7 @@ fn withdrawal_count() -> u64 {
     })
 }
 
-#[ic_platform::cdk::update]
+#[ic_platform::cdk::update(decode_with = "codec::decode_one", encode_with = "codec::encode_unit")]
 fn set_creation_retry_refusal(refusal: Option<CreationRetryRefusal>) {
     assert!(ic_platform::cdk::api::is_controller(
         &ic_platform::cdk::api::msg_caller()
@@ -521,12 +534,13 @@ fn set_creation_retry_refusal(refusal: Option<CreationRetryRefusal>) {
     });
 }
 
-#[ic_platform::cdk::update]
+#[ic_platform::cdk::update(decode_with = "codec::decode_one", encode_with = "codec::encode_reply")]
 fn create_canister(args: CreateCanisterArgs) -> Result<CreateCanisterSuccess, CreateCanisterError> {
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("Cycles Ledger stub is initialized");
         state.request_count = state.request_count.saturating_add(1);
-        let caller = ic_platform::cdk::api::msg_caller();
+        let caller =
+            ic_platform::principal::ExternalPrincipal::from(ic_platform::cdk::api::msg_caller());
         if let Some(index) = state
             .requests
             .iter()
@@ -554,7 +568,13 @@ fn create_canister(args: CreateCanisterArgs) -> Result<CreateCanisterSuccess, Cr
         if !request_has_exact_authority(&args, &expected_controllers, state.expected_subnet) {
             return Err(generic_error("creation authority mismatch"));
         }
-        if let Some(available) = state.balances.get_mut(&ic_platform::cdk::api::msg_caller()) {
+        if let Some(available) =
+            state
+                .balances
+                .get_mut(&ic_platform::principal::ExternalPrincipal::from(
+                    ic_platform::cdk::api::msg_caller(),
+                ))
+        {
             let amount = u128::try_from(args.amount.0.clone())
                 .map_err(|_| generic_error("creation amount exceeds u128"))?;
             let debit = amount
@@ -583,7 +603,7 @@ fn create_canister(args: CreateCanisterArgs) -> Result<CreateCanisterSuccess, Cr
 
 // The fixture installs a separate instance at the canonical NNS Registry
 // identity. Unknown Principals never inherit the known fixture route.
-#[ic_platform::cdk::query]
+#[ic_platform::cdk::query(decode_with = "codec::decode_one", encode_with = "codec::encode_reply")]
 fn get_subnet_for_canister(
     request: GetSubnetForCanisterRequest,
 ) -> Result<GetSubnetForCanisterPayload, String> {
@@ -598,7 +618,10 @@ fn get_subnet_for_canister(
     })
 }
 
-#[ic_platform::cdk::query]
+#[ic_platform::cdk::query(
+    decode_with = "codec::decode_args",
+    encode_with = "codec::encode_reply"
+)]
 fn transfer_count() -> u64 {
     STATE.with_borrow(|state| {
         u64::try_from(
@@ -612,7 +635,10 @@ fn transfer_count() -> u64 {
     })
 }
 
-#[ic_platform::cdk::query]
+#[ic_platform::cdk::query(
+    decode_with = "codec::decode_args",
+    encode_with = "codec::encode_reply"
+)]
 fn request_count() -> u64 {
     STATE.with_borrow(|state| {
         state
@@ -622,7 +648,10 @@ fn request_count() -> u64 {
     })
 }
 
-#[ic_platform::cdk::query]
+#[ic_platform::cdk::query(
+    decode_with = "codec::decode_args",
+    encode_with = "codec::encode_reply"
+)]
 fn requested_amounts() -> Vec<Nat> {
     STATE.with_borrow(|state| {
         state

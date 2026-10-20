@@ -7,7 +7,7 @@
 use super::{BackupPlan, BackupPlanError, BackupScopeKind, BackupTarget, build_backup_phases};
 use ic_backup::model::artifacts::ArtifactChecksumRecord;
 
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::{
     collections::{BTreeMap, BTreeSet},
     str::FromStr,

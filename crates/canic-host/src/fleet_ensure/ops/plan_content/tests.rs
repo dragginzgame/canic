@@ -93,7 +93,7 @@ fn fixture_projection(paths: &EnsurePaths) -> Value {
         content_id,
         descriptor,
     };
-    let store = ic_platform::Principal::from_slice(&[7]);
+    let store = ic_platform::principal::ExternalPrincipal::from_slice(&[7]);
     retain_object(paths, &wasm_hash(&bytes), &bytes).unwrap();
     let prepare = CurrentFleetProtocolAction::PrepareStoreFixture {
         maximum_attempts: 1,
@@ -124,7 +124,7 @@ fn fixture_projection(paths: &EnsurePaths) -> Value {
         },
     };
     serde_json::json!({"protocol_actions": [
-        {"kind":"fleet_protocol", "principal":ic_platform::Principal::from_slice(&[8]).to_text(), "action":prepare},
+        {"kind":"fleet_protocol", "principal":ic_platform::principal::ExternalPrincipal::from_slice(&[8]).to_text(), "action":prepare},
         {"kind":"fleet_protocol", "principal":store.to_text(), "action":publish},
     ]})
 }
@@ -145,7 +145,7 @@ fn fixture_content_round_trips_without_inline_payloads_and_rejects_substitution(
     let mut cases = Vec::new();
     let mut wrong = compact.clone();
     wrong["protocol_actions"][1]["principal"] =
-        Value::String(ic_platform::Principal::anonymous().to_text());
+        Value::String(ic_platform::principal::ExternalPrincipal::anonymous().to_text());
     cases.push(wrong);
     let mut wrong = compact.clone();
     wrong["protocol_actions"][0]["action"]["request"]["role"] = Value::String("other".into());

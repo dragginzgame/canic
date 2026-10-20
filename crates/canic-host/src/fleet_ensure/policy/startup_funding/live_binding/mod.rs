@@ -18,7 +18,7 @@ use canic_contracts::ids::{
     CanisterRole, FleetBinding, FleetCoordinatorBinding, FleetKey, ReleaseBuildId, SubnetId,
 };
 use canic_core::control_plane_support::config::ComponentTopology;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::collections::{BTreeMap, BTreeSet};
 
 #[cfg(test)]

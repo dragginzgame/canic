@@ -23,7 +23,7 @@ async fn resolve_item(
 async fn test_create_startup_child(
     operation_id: [u8; 32],
     rounds: u32,
-) -> Result<ic_platform::Principal, Error> {
+) -> Result<ic_platform::principal::ExternalPrincipal, Error> {
     canic::api::rpc::RpcApi::create_canister_request(
         operation_id,
         &"index_child".into(),

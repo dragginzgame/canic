@@ -9,7 +9,7 @@ use canic_core::control_plane_support::{
     error::InternalError, ops::ic::IcOps,
     workflow::runtime::fleet_activation::FleetActivationWorkflow,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 pub(super) fn validated_root_authority()
 -> Result<(FleetSubnetRootAuthority, Principal), InternalError> {

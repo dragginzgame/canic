@@ -9,7 +9,7 @@ use crate::{
     dto::fleet_registry::FleetRegistryVersion,
     ids::{FleetCoordinatorRootFundingPolicy, FleetSubnetRootFundingPolicy, SubnetId},
 };
-use ic_platform::{Principal, candid::contract::CandidType};
+use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
 use serde::{Deserialize, Serialize};
 
 /// Frozen ingress envelope used by both sides of the funding command exchange.
@@ -205,8 +205,8 @@ pub struct FleetRootFundingAcceptanceRequest {
 #[candid_path("ic_platform::candid::contract")]
 pub struct FleetRootFundingAcceptanceReceipt {
     pub request: FleetRootFundingAcceptanceRequest,
-    pub fleet_subnet_root: ic_platform::Principal,
-    pub coordinator: ic_platform::Principal,
+    pub fleet_subnet_root: ic_platform::principal::ExternalPrincipal,
+    pub coordinator: ic_platform::principal::ExternalPrincipal,
     pub accepted_at_ns: u64,
 }
 
@@ -253,8 +253,8 @@ mod tests {
         FleetCoordinatorRootFundingPolicy, FleetFundingProfile, FleetId, FleetKey,
         FleetRegistryAuthority, FleetSubnetRootFundingPolicy, SubnetId,
     };
-    use ic_platform::Principal;
     use ic_platform::candid::contract::{Decode, Encode};
+    use ic_platform::principal::ExternalPrincipal as Principal;
 
     #[test]
     fn exact_funding_commands_roundtrip_below_the_frozen_ingress_envelope() {

@@ -23,7 +23,7 @@ use crate::{
     view::caller_authority::CallerAdmissionView,
 };
 use canic_contracts::ids::{CallerReceiverAuthority, ComponentInstanceId};
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use mapper::publication_from_dto;
 use sha2::{Digest, Sha256};
 

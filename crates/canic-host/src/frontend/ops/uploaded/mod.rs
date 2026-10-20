@@ -14,8 +14,8 @@ use crate::{
 use canic_core::cdk::utils::hash::sha256_hex;
 use ic_host_fs::read::read_file_no_follow;
 use ic_platform::{
-    Principal,
     candid::contract::{CandidType, Nat},
+    principal::ExternalPrincipal as Principal,
 };
 use serde::Deserialize;
 use std::time::{Duration, Instant};

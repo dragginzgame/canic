@@ -11,10 +11,10 @@ use crate::fleet_ensure::ops::operator_mint::receipts::{
     test_support::{cbor, der_key, sign, signing_key},
 };
 use ic_platform::{
-    Principal,
     agent::signed_update_inspect,
     certification::{Certificate, Delegation, fork, labeled, leaf},
     icrc_ledger_types::QueryArchiveFn,
+    principal::ExternalPrincipal as Principal,
 };
 use serde_bytes::ByteBuf;
 use sha2_host::{Digest, Sha256};

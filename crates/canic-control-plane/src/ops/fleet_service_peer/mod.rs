@@ -37,7 +37,7 @@ impl FleetServicePeerOps {
         target_root: &FleetSubnetRootBinding,
         topology: &ComponentTopology,
         mirror: &ValidatedRootFleetRegistryMirrorView,
-        caller: ic_platform::Principal,
+        caller: ic_platform::principal::ExternalPrincipal,
         expected_service: &FleetServiceId,
     ) -> Result<FleetServicePeerRequesterView, InternalError> {
         if mirror.root_entry.status != FleetSubnetRootStatus::Active {
@@ -119,7 +119,7 @@ impl FleetServicePeerOps {
             component.spec_hash == spec.spec_hash,
             component.role == spec.component_role,
             component.component.as_bytes() != &[0; 32],
-            component.canister_id != ic_platform::Principal::anonymous(),
+            component.canister_id != ic_platform::principal::ExternalPrincipal::anonymous(),
         ]
         .into_iter()
         .all(|valid| valid);
@@ -143,7 +143,7 @@ impl FleetServicePeerOps {
 
 fn exact_registry_service_caller(
     services: &[FleetServiceBinding],
-    caller: ic_platform::Principal,
+    caller: ic_platform::principal::ExternalPrincipal,
 ) -> Result<(&FleetServiceBinding, &FleetServiceComponentBinding), InternalError> {
     let mut candidates = services.iter().flat_map(|service| {
         service
@@ -163,7 +163,7 @@ fn exact_registry_service_caller(
 
 fn exact_service_member_root(
     roots: &[FleetSubnetRootEntry],
-    expected_root: ic_platform::Principal,
+    expected_root: ic_platform::principal::ExternalPrincipal,
 ) -> Result<&FleetSubnetRootEntry, InternalError> {
     let mut candidates = roots
         .iter()
@@ -304,7 +304,7 @@ mod tests {
     #[test]
     fn forwarded_caller_wrong_service_and_local_owner_reject() {
         let fixture = peer_fixture();
-        let forwarded = ic_platform::Principal::from_slice(&[40; 29]);
+        let forwarded = ic_platform::principal::ExternalPrincipal::from_slice(&[40; 29]);
         assert!(resolve(&fixture, forwarded, &fixture.service).is_err());
 
         let wrong_service = "users".parse().expect("Fleet service ID");
@@ -336,7 +336,7 @@ mod tests {
 
     fn resolve(
         fixture: &Fixture,
-        caller: ic_platform::Principal,
+        caller: ic_platform::principal::ExternalPrincipal,
         service: &FleetServiceId,
     ) -> Result<FleetServicePeerRequesterView, InternalError> {
         FleetServicePeerOps::resolve(
@@ -354,7 +354,7 @@ mod tests {
         requester_root: FleetSubnetRootBinding,
         mirror: ValidatedRootFleetRegistryMirrorView,
         service: FleetServiceId,
-        caller: ic_platform::Principal,
+        caller: ic_platform::principal::ExternalPrincipal,
         requester: FleetServiceComponentRequester,
     }
 
@@ -411,10 +411,10 @@ mod tests {
         let limits = root_limits();
         let target_root = FleetSubnetRootBinding {
             authority: authority.clone(),
-            placement_subnet: SubnetId::from_principal(ic_platform::Principal::from_slice(
-                &[20; 29],
-            )),
-            fleet_subnet_root: ic_platform::Principal::from_slice(&[21; 29]),
+            placement_subnet: SubnetId::from_principal(
+                ic_platform::principal::ExternalPrincipal::from_slice(&[20; 29]),
+            ),
+            fleet_subnet_root: ic_platform::principal::ExternalPrincipal::from_slice(&[21; 29]),
             component_admissions: admissions.clone(),
             component_topology_digest: topology_digest,
             funding: crate::test_support::fleet_subnet_root_funding_authority(),
@@ -422,10 +422,10 @@ mod tests {
         };
         let requester_root = FleetSubnetRootBinding {
             authority: authority.clone(),
-            placement_subnet: SubnetId::from_principal(ic_platform::Principal::from_slice(
-                &[22; 29],
-            )),
-            fleet_subnet_root: ic_platform::Principal::from_slice(&[23; 29]),
+            placement_subnet: SubnetId::from_principal(
+                ic_platform::principal::ExternalPrincipal::from_slice(&[22; 29]),
+            ),
+            fleet_subnet_root: ic_platform::principal::ExternalPrincipal::from_slice(&[23; 29]),
             component_admissions: admissions,
             component_topology_digest: topology_digest,
             funding: crate::test_support::fleet_subnet_root_funding_authority(),
@@ -448,7 +448,7 @@ mod tests {
 
     struct ServiceFixture {
         service: FleetServiceId,
-        caller: ic_platform::Principal,
+        caller: ic_platform::principal::ExternalPrincipal,
         registry: FleetServiceBinding,
         directory: FleetDirectoryService,
         requester: FleetServiceComponentRequester,
@@ -460,7 +460,7 @@ mod tests {
         requester_root: &FleetSubnetRootBinding,
     ) -> ServiceFixture {
         let service: FleetServiceId = "projects".parse().expect("Fleet service ID");
-        let caller = ic_platform::Principal::from_slice(&[26; 29]);
+        let caller = ic_platform::principal::ExternalPrincipal::from_slice(&[26; 29]);
         let component = ComponentInstanceId::from_root_allocation(
             authority.binding.fleet.fleet,
             authority.epoch,
@@ -603,10 +603,10 @@ mod tests {
                     },
                     app: AppId::from("toko"),
                 },
-                coordinator_subnet: SubnetId::from_principal(ic_platform::Principal::from_slice(
-                    &[4; 29],
-                )),
-                coordinator: ic_platform::Principal::from_slice(&[5; 29]),
+                coordinator_subnet: SubnetId::from_principal(
+                    ic_platform::principal::ExternalPrincipal::from_slice(&[4; 29]),
+                ),
+                coordinator: ic_platform::principal::ExternalPrincipal::from_slice(&[5; 29]),
                 recovery_controllers: Vec::new(),
             },
             epoch: 1,

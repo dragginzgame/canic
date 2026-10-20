@@ -32,8 +32,8 @@ use canic_contracts::{
     ids::CanisterRole,
     protocol,
 };
-use ic_platform::Principal;
-use ic_platform::PrincipalError;
+use ic_platform::principal::ExternalPrincipal as Principal;
+use ic_platform::principal::ExternalPrincipalError as PrincipalError;
 use std::{collections::BTreeSet, path::Path};
 use thiserror::Error as ThisError;
 

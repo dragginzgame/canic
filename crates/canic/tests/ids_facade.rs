@@ -16,8 +16,8 @@ use canic::{
     },
 };
 use ic_platform::{
-    Principal,
     candid::{contract::encode_one, decoder::decode_one},
+    principal::ExternalPrincipal as Principal,
 };
 
 #[test]

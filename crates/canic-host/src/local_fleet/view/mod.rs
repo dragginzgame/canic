@@ -1,6 +1,6 @@
 //! Developer discovery and resource observations; these are explicitly local simulation facts.
 
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::Serialize;
 
 /// One local role target and its exact simulator subnet.

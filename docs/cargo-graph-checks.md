@@ -8,8 +8,12 @@ from dependency-role comments.
 ```sh
 perl scripts/ci/check-cargo-graph.pl --consumer . --package production-package \
   --target wasm32-unknown-unknown --all-features \
-  --forbid candid_parser --forbid pocket-ic --require ic-cdk-executor=1
+  --forbid candid_parser --forbid pocket-ic --require ic-wire=1
 ```
+
+This example selects a Wire application root. Choose exclusions and counts for
+the actual product under the [encoding policy](https://github.com/dragginzgame/shared-tooling/blob/main/DRAGGINZGAME.md#ic-application-encoding);
+required Candid interoperability is not a blanket graph violation.
 
 Pass one or more explicit `--package NAME` selections and one `--target TRIPLE`
 (or `all` for a deliberate cross-target union). Match the actual build's default

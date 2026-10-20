@@ -43,8 +43,8 @@ use canic_core::{
     shared_support::fleet_admission_policy::bind_initial_fleet_admission_policy,
 };
 use ic_platform::{
-    Principal,
     candid::contract::{CandidType, Nat},
+    principal::ExternalPrincipal as Principal,
 };
 use sha2_host::{Digest, Sha256};
 use std::{

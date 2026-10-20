@@ -15,7 +15,6 @@ pub mod release_build;
 
 use ic_platform::candid::contract::Error as CandidError;
 use ic_platform::cdk::call::CallFailed;
-use ic_platform::cdk::call::{CandidDecodeFailed, Error as CdkCallError};
 use thiserror::Error as ThisError;
 
 ///
@@ -50,20 +49,7 @@ pub enum IcInfraError {
     Candid(#[from] CandidError),
 
     #[error(transparent)]
-    CandidDecode(#[from] CandidDecodeFailed),
-}
-
-impl From<CdkCallError> for IcInfraError {
-    fn from(err: CdkCallError) -> Self {
-        match err {
-            CdkCallError::CandidDecodeFailed(err) => err.into(),
-            CdkCallError::InsufficientLiquidCycleBalance(err) => {
-                CallFailed::InsufficientLiquidCycleBalance(err).into()
-            }
-            CdkCallError::CallPerformFailed(err) => CallFailed::CallPerformFailed(err).into(),
-            CdkCallError::CallRejected(err) => CallFailed::CallRejected(err).into(),
-        }
-    }
+    CandidDecode(CandidError),
 }
 
 impl IcInfraError {

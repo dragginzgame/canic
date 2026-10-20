@@ -12,8 +12,8 @@ use super::{
     },
 };
 use crate::infra::ic::{IcInfraError, call::Call};
-use ic_platform::Principal;
 use ic_platform::cdk::api;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 impl MgmtInfra {
     /// Fetch the caller-derived ECDSA public key for one root signing policy.

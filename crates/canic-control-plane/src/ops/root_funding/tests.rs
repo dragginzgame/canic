@@ -21,7 +21,7 @@ use canic_contracts::{
 
 #[test]
 fn release_census_binds_both_refill_participants_and_preserves_refund_evidence() {
-    let root = ic_platform::Principal::from_slice(&[1]);
+    let root = ic_platform::principal::ExternalPrincipal::from_slice(&[1]);
     let operation = canic_core::control_plane_support::view::icp_refill::IcpRefillOperation {
         transfer_uncertain: false,
         id: 1,
@@ -31,9 +31,9 @@ fn release_census_binds_both_refill_participants_and_preserves_refund_evidence()
         source_canister: root,
         source_subaccount: Some([4; 32]),
         target_canister: root,
-        ledger_canister_id: ic_platform::Principal::from_slice(&[5]),
-        cmc_canister_id: ic_platform::Principal::from_slice(&[6]),
-        cmc_to_account_owner: ic_platform::Principal::from_slice(&[6]),
+        ledger_canister_id: ic_platform::principal::ExternalPrincipal::from_slice(&[5]),
+        cmc_canister_id: ic_platform::principal::ExternalPrincipal::from_slice(&[6]),
+        cmc_to_account_owner: ic_platform::principal::ExternalPrincipal::from_slice(&[6]),
         cmc_to_account_subaccount: Some([7; 32]),
         amount_e8s: 100,
         fee_e8s: 10,
@@ -56,9 +56,9 @@ fn release_census_binds_both_refill_participants_and_preserves_refund_evidence()
     assert_eq!(evidence.refund_block_index, Some(11));
     assert_eq!(evidence.response.ledger_block_index, Some(10));
     let mut wrong_source = operation.clone();
-    wrong_source.source_canister = ic_platform::Principal::from_slice(&[12]);
+    wrong_source.source_canister = ic_platform::principal::ExternalPrincipal::from_slice(&[12]);
     let mut wrong_target = operation;
-    wrong_target.target_canister = ic_platform::Principal::from_slice(&[12]);
+    wrong_target.target_canister = ic_platform::principal::ExternalPrincipal::from_slice(&[12]);
     for wrong in [wrong_source, wrong_target] {
         assert_eq!(
             refill_release_evidence(root, wrong)
@@ -491,7 +491,7 @@ fn authority() -> RootFundingAuthorityView {
     let request = crate::test_support::root_funding_request_fixture(1);
     RootFundingAuthorityView {
         registry: request.expected_registry,
-        fleet_subnet_root: ic_platform::Principal::from_slice(&[71; 29]),
+        fleet_subnet_root: ic_platform::principal::ExternalPrincipal::from_slice(&[71; 29]),
         status: FleetSubnetRootStatus::Active,
         funding_eligible: true,
         funding: crate::test_support::fleet_subnet_root_funding_authority(),
@@ -518,7 +518,9 @@ fn rotation_prepare_request(
             },
             proposed_policy: authority.funding.root_funding.clone(),
             placement: FleetFundingPolicyRotationPlacementEvidence {
-                subnet: SubnetId::from_principal(ic_platform::Principal::from_slice(&[83; 29])),
+                subnet: SubnetId::from_principal(
+                    ic_platform::principal::ExternalPrincipal::from_slice(&[83; 29]),
+                ),
                 node_count: 13,
                 cost_multiplier_numerator: 1,
                 cost_multiplier_denominator: 1,

@@ -1,4 +1,158 @@
-# Current handoff — 2026-10-18
+# Current handoff — 2026-10-20
+
+## Blob 0.38 deployment qualification — 2026-10-20
+
+Retained the maintainer's published Blob/contracts 0.38.0 and Platform 0.4.1
+root selection. Aligned both independent Blob consumer locks on those versions
+and Timers 0.29.5; each now resolves only Platform 0.4.1. Fixed the adapter's
+expanded endpoint and installation macros to use Blob's owned Platform
+principals. Updated managed and native decoding fixtures at their existing
+external-principal boundaries. No protocol, storage or memory migration.
+The Root fixture reuses its topology projection, clearing a function-length lint.
+
+Prepared the governed Testkit 0.59 runner. The native ICP on the global PATH is
+1.6.0; qualification explicitly selected the prepared repository ICP 1.7.0 with
+`CANIC_TEST_ICP_BIN=/home/adam/projects/canic/.tools/ic/bin/icp`.
+
+Pass: dedicated and embedded managed Blob PocketIC installation/permission/recovery
+cases, including retained embedded application state; runtime observer-authority
+PocketIC case; both native Blob installation decoding/limit cases; adapter and
+internal-test Clippy; Rust 1.91 adapter Wasm cross-compilation; all three workspace
+dependency-boundary checks; framework and both consumer Wasm normal/build graph
+checks; scoped formatting, whitespace and unchanged-lock checks. Managed consumer
+Wasms were built with the development toolchain, separately from the adapter's
+MSRV library check. Logs: `/tmp/canic-blob38-*.log`.
+
+The selected consumer graph checks require one Platform, executor, Memory and
+Timers provider and exclude the checked tooling packages. General automatic
+artifact-bound enforcement of dependency-role labels remains missing. The earlier
+missing Testkit runner and old transitive Platform blockers are resolved. Historical
+ablation evidence/tooling debts below remain outside release qualification.
+
+This Blob slice and the open 0.112 changelogs are ready for review. The complete
+pending release batch is not signed off for publication: the governed release
+preflight rejects the checkout's uncommitted non-release work. Preserve that work;
+commit authority remains with the maintainer. External release/publication versus
+a named Fleet/environment is awaiting clarification. No live installed-IC,
+native macOS or broad release qualification was run, and no Git publication,
+version change or deployment was performed. An unrun broad suite alone is not a
+new blocker; the pending source/target decisions are concrete prerequisites.
+
+## Platform 0.4 / Testkit 0.59 cleanup — 2026-10-20
+
+Retained published Platform 0.4.0 and Testkit 0.59.0. Removed the
+`ic-testkit-platform` catalog/member alias and routed both reply-limit constants
+through Platform 0.4 without changing any of their five budgets. Both independent
+Blob locks now select Auth 0.11. Principal conversions preserve Canic's existing
+DTO/storage identities; no wire, storage or memory migration was introduced.
+Removed Backup's temporary error converter in favor of Backup 0.35's upstream
+Host conversion. The maintainer advanced Query from 0.64 to 0.65 during this pass;
+its ledger-evidence consumers now use Host Tools directly, while Query still
+authenticates certificates and Canic retains spending authority.
+
+Fixed Core's default/all-feature lint failures and matched `canister_test`'s
+features to its configured delegated verifier. Three Host examples and the
+historical ablation helper now use Clap; the helper's generated manifest includes
+Clap. Materialized 151 historical evidence symlinks and verified identical resolved
+bytes. Shared Tooling remains the previously adopted 0.25.4 snapshot.
+
+The framework Wasm normal/build graph gate now explicitly excludes Testkit and
+its catalog's tooling-only package identities. Raw stable structures remains a
+fixture-only direct dependency, but its catalog identity is production because
+IC Storage uses it transitively. General automatic admission from catalog labels
+for every deployment target/feature selection and artifact is still missing;
+the explicit framework graph check does not establish that broader claim.
+
+Pass: Core all-target/all-feature and Host-example Clippy; 43 focused tests
+(18 Auth sessions, 10 Backup artifacts, 15 ledger evidence); Host examples and
+governed internal native test compilation; Rust 1.91 Core all-feature Wasm cross-compilation;
+managed Wasm builds of `canister_test`, `intent_authority` and `runtime_probe`;
+three workspace dependency-boundary checks; framework graph exclusions; scoped
+Rust/manifest formatting, ShellCheck and whitespace checks. Logs:
+`/tmp/canic-04-cleanup-*.log`. Earlier adoption logs are under
+`/tmp/canic-platform04-*`; they precede the final Query selection.
+
+Runtime qualification remains incomplete: the selected PocketIC case built all
+three Wasms, then refused the absent governed server URL. The prepared Testkit
+0.59 server runner is missing (`bash scripts/ci/testkit-server.sh --check`).
+The historical ablation regression also lacks `wasm-validate`; its separate
+manifest check finds a pre-existing missing baseline/sequence mismatch. Its
+helper intentionally targets frozen product APIs, so a current-tree helper
+compile is not historical qualification. No compatibility shim was added.
+Blob 0.37 still brings Platform 0.2.2 transitively; no direct Testkit alias remains.
+
+The cleanup and changelog are ready for review, not a whole-0.112 deployment
+sign-off. No installed-IC, native macOS or broad release qualification was run.
+No staging, commits, pushes, version changes, publication or deployment.
+
+## Platform 0.3 and Shared Tooling 0.25.3 adoption — 2026-10-20
+
+Verified Platform 0.3.0 in the official registry index and retained the maintainer's
+root selection. Updated both Blob consumer catalogs/locks and application/role
+scaffolds. Existing protocols and stored principal values use Platform's
+`principal::ExternalPrincipal`, the same original registry type; CDK boundaries
+convert explicitly to/from Platform's new owned principal. Generated authentication
+and Blob endpoints participate. Existing Candid/Wire contracts, memory IDs and
+storage encodings remain unchanged. AGENTS records the accepted 0.112 Wire deferral.
+
+Bare funding, ledger, refill, sharding, intent, payload and performance fixture
+endpoints now supply explicit Candid codecs. Removed the unused ICP stub Candid
+export. Two lifecycle fixture imports use the existing storage facade; its cell
+delegates to the same underlying cell and allocation, without a data migration.
+
+Shared snapshot: 0.25.3 at `c55c1065c0061455dab7f0e2be8ddd04fdeb9910`, verified
+against remote HEAD and exported canonically (131 payload files). Manifest and
+lock candidate rendering now use the published IC Build 0.22.0 editor; normal
+tool setup prepares it and release checks select it offline. Removed retired
+Perl renderer/test references and the product release path's `cargo set-version`
+requirement. Canic retains rollback, receipts, exact ownership and source checks.
+A real manifest candidate was rendered only into `/tmp`; repository version
+remains 0.111.0. No staging, commits, pushes or release execution.
+
+Testkit 0.57 still exposes Platform 0.2's `DecodeLimits`. Retain
+`ic-testkit-platform` only behind native `canic/testing` and in Host dev dependencies,
+with all five budgets unchanged. The governed internal and runtime test consumers
+now compile. Wasm-filtered resolution with testing enabled excludes Testkit and
+this alias. Remove the retained dependency after
+[Testkit #133](https://github.com/dragginzgame/ic-testkit/issues/133#issuecomment-6286884282)
+aligns the public API. No upstream decoder or Testkit transport was copied.
+
+Pass: production CLI/control plane; eleven direct-CDK fixture consumers; both
+independent Blob consumers; governed internal and runtime test compilation;
+Rust 1.91 Wasm Blob/funding/ledger/refill fixtures and all Core/control-plane features; strict
+fixture Clippy; 88 focused Rust tests (macros, funding codec, endpoint codec,
+scaffolds and release guards); release rendering/rollback/saved-source/preflight
+fixtures; tool recipe admission/failure cases; snapshot/governance, dependency
+boundaries in all three workspaces, layering and dependency-risk checks.
+Logs: `/tmp/canic-platform-*.log`, `/tmp/canic-adoption-*.log`,
+`/tmp/canic-shared-adapter-test.log`.
+
+Remaining adoption gaps: 151 existing historical audit symlinks conflict with
+Shared's new maintained-file rule; four maintained Rust utilities still parse
+arguments manually (`wasm-ablation-build-artifact.rs`, Host's `build_artifact`,
+`check_wire_contracts` and `local_fleet` examples). Preserved these for a scoped
+cleanup. Dependency-role deployment exclusions still lack a general automated
+gate; the concrete Testkit exclusion above was checked separately. Transitive
+Candid and Platform 0.2 remain through published upstream crates; independent
+consumer locks also retain older upstream selections. One executor 2.0.0 is
+selected in the checked Canic Wasm normal/build graph.
+
+This adoption is ready for review, not a whole-0.112 closeout or full baseline
+compliance claim. Earlier PocketIC evidence below predates this graph. No new
+PocketIC, installed-IC, native macOS or broad workspace qualification was run.
+
+## Funding probe explicit codecs — 2026-10-20
+
+All 20 Root funding probe RPC endpoints and its initializer now provide explicit
+Platform codec hooks. They retain Candid argument/reply shapes and the existing
+10,000 skipping quota for decoded arguments. Controller/role checks, attached
+cycles, callback logic and intentional traps are unchanged.
+
+Pass: focused native codec regression, package Clippy including tests with warnings
+denied, Wasm cross-compilation check, scoped formatting and diff whitespace checks.
+No PocketIC or installed-IC rerun; no broad validation. This fixes the reported
+probe compile blocker, not a complete 0.112 release closeout. Changelog surfaces
+are updated. A concurrent unrelated Cargo.lock change was preserved.
 
 ## Authority-recovery layering fix — 2026-10-20
 

@@ -29,7 +29,7 @@ use crate::{
 };
 use canic_contracts::ids::CanonicalNetworkId;
 use canic_core::cdk::utils::hash::hex_bytes;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use sha2_host::{Digest, Sha256};
 use std::collections::BTreeMap;
 

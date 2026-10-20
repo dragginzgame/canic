@@ -7,7 +7,7 @@
 //! Boundary: ops and DTO modules re-export these values to preserve public API
 //! paths while conversion from foreign infra payloads remains explicit.
 
-use ic_platform::{Principal, candid::contract::CandidType};
+use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
 use serde::Deserialize;
 
 ///

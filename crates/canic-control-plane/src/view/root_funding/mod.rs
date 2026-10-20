@@ -11,7 +11,7 @@ use canic_contracts::{
     },
     ids::FleetSubnetRootFundingAuthority,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 /// Minimal protected and Registry-derived authority for one Root funding operation.
 

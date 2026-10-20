@@ -4,7 +4,7 @@
 
 use crate::frontend::{FrontendError, model::FrontendEnvironmentInput};
 use canic_contracts::ids::CanonicalNetworkId;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::collections::BTreeSet;
 use url::Url;
 

@@ -5,9 +5,9 @@
 //! Boundary: management infra leaves encode and decode these raw payloads.
 
 use ic_platform::{
-    Principal,
     candid::contract::{CandidType, Nat},
     management_canister_types::ChunkHash,
+    principal::ExternalPrincipal as Principal,
 };
 //
 // InfraCanisterSettings

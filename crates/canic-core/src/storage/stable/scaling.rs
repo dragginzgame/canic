@@ -6,7 +6,7 @@ use crate::{
     impl_storable_bounded,
 };
 use canic_contracts::ids::CanisterRole;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 

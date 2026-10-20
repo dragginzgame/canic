@@ -87,7 +87,7 @@ pub(super) fn roles(
         if role.canister_id.len() > 128 {
             return Err(CostComparisonFailure::InvalidSnapshot);
         }
-        let pid = ic_platform::Principal::from_text(&role.canister_id)
+        let pid = ic_platform::principal::ExternalPrincipal::from_text(&role.canister_id)
             .map_err(|_| CostComparisonFailure::InvalidSnapshot)?;
         if pid.to_text() != role.canister_id
             || roles.insert(role.canister_id.as_str(), role).is_some()

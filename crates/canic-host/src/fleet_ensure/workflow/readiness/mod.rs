@@ -23,7 +23,7 @@ use crate::{
     network::{NetworkIdentityError, resolve_canonical_network_id_from_root},
 };
 use canic_contracts::ids::CanonicalNetworkId;
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::path::Path;
 use thiserror::Error;
 

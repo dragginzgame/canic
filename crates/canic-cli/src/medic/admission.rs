@@ -139,7 +139,7 @@ fn classify_report(report: &AdmissionStatusReport) -> MedicCheck {
 mod tests {
     use super::*;
     use canic_host::admission::view::AdmissionRootReport;
-    use ic_platform::Principal;
+    use ic_platform::principal::ExternalPrincipal as Principal;
 
     fn report() -> AdmissionStatusReport {
         AdmissionStatusReport {

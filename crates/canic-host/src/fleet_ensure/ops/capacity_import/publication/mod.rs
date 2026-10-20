@@ -295,7 +295,7 @@ pub fn reserve_submission(
 /// Bound paid source or Root management observations without resetting budgets on restart.
 pub fn reserve_inspection(
     journal: &CapacityImportJournalRecord,
-    canister: ic_platform::Principal,
+    canister: ic_platform::principal::ExternalPrincipal,
 ) -> Result<CapacityImportJournalRecord, CapacityImportJournalError> {
     validate(journal)?;
     let known = journal

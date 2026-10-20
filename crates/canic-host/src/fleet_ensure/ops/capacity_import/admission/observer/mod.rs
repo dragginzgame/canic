@@ -29,7 +29,7 @@ use canic_contracts::dto::{
     fleet_registry::FleetRegistry,
     pool_import::{PoolImportIdentity, PoolImportSourceProgress},
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 /// Production admission reader. Construction performs no management effect.
 pub struct CapacityImportLiveObserver {
     transport: CapacityImportTransport,

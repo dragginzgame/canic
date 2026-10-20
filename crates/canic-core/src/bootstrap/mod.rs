@@ -94,7 +94,7 @@ pub mod compiled {
         ids::ComponentGroupMemberId, ids::ComponentGroupMemberPath, ids::ComponentGroupSpecId,
         ids::ComponentSpecId, ids::CyclesFundingBudget, ids::FleetServiceId,
     };
-    pub use ic_platform::Principal;
+    pub use ic_platform::principal::ExternalPrincipal as Principal;
 }
 
 /// init_compiled_config

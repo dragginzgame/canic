@@ -27,9 +27,9 @@ use crate::{
 };
 use canic_core::cdk::utils::hash::{decode_hex, hex_bytes};
 use ic_platform::{
-    Principal,
     agent::{Agent, EnvelopeContent, RequestStatusResponse},
     candid::contract::CandidType,
+    principal::ExternalPrincipal as Principal,
 };
 use serde::Deserialize;
 use serde_bytes::ByteBuf;

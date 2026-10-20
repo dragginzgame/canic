@@ -110,7 +110,7 @@ macro_rules! __canic_fixture_reply_support {
             // The finite round cap prevents a hung qualification.
             for _ in 0..256 {
                 $crate::prelude::Call::unbounded_wait(
-                    $crate::__internal::ic_platform::Principal::management_canister(), "raw_rand",
+                    $crate::__internal::ic_platform::principal::ExternalPrincipal::management_canister(), "raw_rand",
                 ).with_args(()).expect("fixture round arguments")
                     .execute_candid::<Vec<u8>>().await.expect("fixture consensus round");
                 if __CANIC_FIXTURE_REPLY_BARRIER.with_borrow(|barrier| barrier.released) {

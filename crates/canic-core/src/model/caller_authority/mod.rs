@@ -7,7 +7,7 @@
 use canic_contracts::ids::{
     CallerComponentInstallation, CallerInstallation, CallerReceiverAuthority, ComponentInstanceId,
 };
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

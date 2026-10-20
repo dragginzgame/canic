@@ -15,7 +15,7 @@ use crate::fleet_ensure::{
 use ic_host_fs::durable::{PublicationMode, WriteOptions, write_bytes};
 use ic_host_fs::read::{read_file_no_follow, read_optional_file_no_follow};
 
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::{collections::BTreeSet, path::Path};
 
 const MAX_BYTES: usize = 8 * 1024 * 1024;

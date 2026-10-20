@@ -18,11 +18,6 @@ if [[ -z "${CANIC_RELEASE_VALIDATED_HEAD:-}" ]]; then
   exit 1
 fi
 
-if ! cargo set-version --help >/dev/null 2>&1; then
-  echo "❌ cargo set-version not available. Install cargo-edit or upgrade Rust." >&2
-  exit 1
-fi
-
 require_jq
 ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT_DIR"
@@ -124,8 +119,10 @@ trap 'rollback_release_surfaces $?' ERR
 trap 'rollback_release_surfaces 130' INT
 trap 'rollback_release_surfaces 143' TERM
 
-# Bump
-cargo set-version --workspace --offline "$PLANNED" >/dev/null
+# Render before installing the candidate; the transaction owns rollback.
+bash scripts/release/render-owned-manifest.sh "$TRANSACTION_DIR/metadata.json" \
+  Cargo.toml "$PREV" "$PLANNED" > "$TRANSACTION_DIR/candidate.toml"
+cat "$TRANSACTION_DIR/candidate.toml" > Cargo.toml
 
 # New version.
 NEW="$(bash "$VERSION_READER")"

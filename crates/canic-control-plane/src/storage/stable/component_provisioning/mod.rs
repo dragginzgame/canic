@@ -168,7 +168,7 @@ pub struct RootComponentProvisioningFailureRecord {
     pub dependency:
         Option<canic_contracts::values::provisioning_failure::ProvisioningDependencyFailure>,
     pub stage: canic_contracts::dto::component_provisioning::ProvisioningFailureStage,
-    pub target: ic_platform::Principal,
+    pub target: ic_platform::principal::ExternalPrincipal,
     pub operation_id: [u8; 32],
     pub diagnostic_code: u16,
     pub retry_category: canic_contracts::dto::component_provisioning::ProvisioningRetryCategory,
@@ -191,7 +191,7 @@ pub struct RootComponentDirectorySynchronizationRecord {
     pub plan_hash: [u8; 32],
     pub source_fleet_registry: FleetRegistryVersion,
     pub published_fleet_registry: FleetRegistryVersion,
-    pub fleet_subnet_root: ic_platform::Principal,
+    pub fleet_subnet_root: ic_platform::principal::ExternalPrincipal,
     pub fleet_directory_content_hash: [u8; 32],
     pub targets: Vec<RootComponentDirectorySynchronizationTargetRecord>,
     pub state: RootComponentDirectorySynchronizationStateRecord,
@@ -201,7 +201,7 @@ pub struct RootComponentDirectorySynchronizationRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentDirectorySynchronizationTargetRecord {
     pub component: ComponentInstanceId,
-    pub canister_id: ic_platform::Principal,
+    pub canister_id: ic_platform::principal::ExternalPrincipal,
     pub allocation_operation_id: [u8; 32],
     pub source_registry: ComponentRegistryHead,
 }
@@ -229,7 +229,7 @@ pub enum RootComponentDirectorySynchronizationStateRecord {
 pub struct RootComponentDirectorySynchronizationIntentRecord {
     pub component_index: u32,
     pub component: ComponentInstanceId,
-    pub canister_id: ic_platform::Principal,
+    pub canister_id: ic_platform::principal::ExternalPrincipal,
     pub allocation_operation_id: [u8; 32],
     pub previous_registry: ComponentRegistryHead,
     pub registry: ComponentRegistryHead,
@@ -313,7 +313,7 @@ pub enum RootComponentProvisioningStateRecordPhase {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentPublicationIntentRecord {
     pub component_index: u32,
-    pub canister_id: ic_platform::Principal,
+    pub canister_id: ic_platform::principal::ExternalPrincipal,
     pub directory_authority_hash: [u8; 32],
     pub started_at_ns: u64,
 }

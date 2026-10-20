@@ -13,7 +13,7 @@ use std::{
     str::FromStr,
 };
 
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use thiserror::Error as ThisError;
 
 const SUPPORTED_JOURNAL_VERSION: u16 = 1;

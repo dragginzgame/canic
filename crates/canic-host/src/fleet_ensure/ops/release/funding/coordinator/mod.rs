@@ -10,7 +10,7 @@ use canic_contracts::{
     protocol,
 };
 use canic_core::shared_support::fleet_funding_policy::fleet_subnet_root_funding_policy_hash;
-use ic_platform::{Principal, agent::Agent};
+use ic_platform::{agent::Agent, principal::ExternalPrincipal as Principal};
 use std::collections::BTreeSet;
 
 pub(super) async fn collect(

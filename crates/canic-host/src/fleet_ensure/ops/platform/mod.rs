@@ -67,8 +67,8 @@ use canic_contracts::{
 };
 use canic_core::cdk::utils::hash::hex_bytes;
 use ic_platform::{
-    Principal,
     candid::contract::{CandidType, Nat},
+    principal::ExternalPrincipal as Principal,
 };
 use serde::Deserialize;
 use std::{

@@ -10,7 +10,7 @@ use crate::{
 use canic_contracts::ids::CanonicalNetworkId;
 use canic_core::cdk::utils::hash::sha256_hex;
 use ic_host_fs::durable::{self, PublicationMode, WriteOptions};
-use ic_platform::Principal;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,

@@ -685,7 +685,7 @@ pub enum CurrentFleetProtocolAction {
         maximum_attempts: u32,
         request: canic_contracts::dto::root_store::RootStoreFixturePrepareRequest,
         source: canic_contracts::dto::root_store::RootStoreFixture,
-        store: ic_platform::Principal,
+        store: ic_platform::principal::ExternalPrincipal,
     },
     PublishStoreFixtureChunk {
         /// Total paid calls admitted by this exact reviewed action.

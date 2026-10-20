@@ -23,9 +23,9 @@ use canic_contracts::{
     protocol,
 };
 use ic_platform::{
-    Principal,
     agent::Agent,
     candid::contract::{CandidType, Nat},
+    principal::ExternalPrincipal as Principal,
 };
 use serde::Deserialize;
 use std::time::Duration;

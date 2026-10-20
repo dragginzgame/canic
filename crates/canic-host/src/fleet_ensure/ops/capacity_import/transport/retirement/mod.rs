@@ -13,7 +13,10 @@ use crate::fleet_ensure::{
     },
     policy::capacity_import::expired_absence_proves_retirement,
 };
-use ic_platform::{Principal, agent::RequestStatusResponse, certification::Certificate};
+use ic_platform::{
+    agent::RequestStatusResponse, certification::Certificate,
+    principal::ExternalPrincipal as Principal,
+};
 use sha2_host::{Digest, Sha256};
 
 /// Authenticated outcome of the exact issued controller request.
