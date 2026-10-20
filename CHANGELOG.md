@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Adopt published Build 0.23 and Host 0.31 for the unified build engine. Canic's
+  Host executes metadata, tree, workspace and fixture inventory commands with
+  existing budgets and failure admission. Align Backup to its published Host 0.31
+  boundary and explicitly enable the service parser required by artifact checks.
+
 - Select the configured delegated-token verifier for the managed test role.
   Check passive contracts against their package-selected Cargo closure rather
   than features unified across the workspace.
@@ -41,7 +46,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   constructors now require the actual runtime facts; failed Cargo exits retain
   their original diagnostics without claiming successful facts.
 
-- Route all Host canister Cargo builds through IC Build 0.19's typed invocation
+- Route all Host canister Cargo builds through IC Build's typed invocation
   and observed execution, retaining explicit features, profiles, compiler wrappers,
   declaration environments and primary compiler failures. Share the invocation
   builder with infrastructure roles and remove the raw profile-argument helper.

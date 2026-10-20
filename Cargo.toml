@@ -86,15 +86,15 @@ getrandom = "0.4"
 hmac = "0.13.0"
 ic-auth = { version = "0.10", default-features = false }
 ic-auth-protocol-types = "0.10"
-ic-backup = { version = "0.31", default-features = false }
+ic-backup = { version = "0.35", default-features = false }
 ic-blob-storage = "0.35"
 ic-blob-storage-contracts = "0.35"
-ic-build = { version = "0.19" }
-ic-host-artifacts = { version = "0.27", default-features = false }
-ic-host-fs = { version = "0.27", default-features = false }
-ic-host-process = { version = "0.27", default-features = false }
-ic-host-text = "0.27"
-ic-host-tools = "0.27"
+ic-build = { version = "0.23" }
+ic-host-artifacts = { version = "0.31", default-features = false }
+ic-host-fs = { version = "0.31", default-features = false }
+ic-host-process = { version = "0.31", default-features = false }
+ic-host-text = "0.31"
+ic-host-tools = "0.31"
 ic-memory = "0.48"
 ic-metrics = "0.14"
 ic-platform = { version = "0.1.13", default-features = false }
