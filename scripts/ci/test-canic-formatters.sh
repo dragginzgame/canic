@@ -2,8 +2,11 @@
 set -euo pipefail
 unset MAKEFLAGS MFLAGS MAKEOVERRIDES GNUMAKEFLAGS MAKEFILES
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
-fixture="$(mktemp -d "${TMPDIR:-/tmp}/canic-formatters.XXXXXX")"
-trap 'if [[ $? == 0 ]]; then rm -rf -- "$fixture"; else printf "Formatter fixture retained: %s\n" "$fixture" >&2; fi' EXIT
+# shellcheck source=scripts/ci/fixture-lifecycle.sh
+source "$ROOT/scripts/ci/fixture-lifecycle.sh"
+fixture="$(fixture_create "${TMPDIR:-/tmp}/canic-formatters.XXXXXX")"
+fixture_complete=false
+trap 'status=$?; if [[ "$status" != 0 || "$fixture_complete" != true ]]; then fixture_replay_logs "$fixture/output" "$fixture/grouped.log"; fi; fixture_finish "$status" "$fixture" "Formatter fixture retained"' EXIT
 mkdir -p "$fixture/make" "$fixture/ci" "$fixture/scripts/ci" "$fixture/.tools/rust/common/bin"
 cp "$ROOT/Makefile" "$ROOT/tool-versions.env" "$fixture/"
 cp "$ROOT/make/tools.mk" "$ROOT/make/execution.mk" "$ROOT/make/release.mk" "$ROOT/make/consumer.mk" "$ROOT/make/rust-format.mk" "$fixture/make/"
@@ -76,3 +79,4 @@ cp "$fixture/unsorted" "$fixture/grouped/Cargo.toml"
 if cargo sort --workspace --grouped --check "$fixture/grouped" >> "$fixture/grouped.log" 2>&1; then exit 1; fi
 cmp "$fixture/unsorted" "$fixture/grouped/Cargo.toml"
 echo 'Canic formatter roots, check-only mode, failure logs and Make admission passed'
+fixture_complete=true

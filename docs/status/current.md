@@ -1,5 +1,33 @@
 # Current handoff — 2026-10-18
 
+## Facts completion and CI preparation — 2026-10-20
+
+PR #596 retains its published Build 0.19/Host 0.27.6 graph and shared history.
+Embedded allocation-peer evidence now uses retained CargoBuildFacts identities,
+with UTF-8 refusal and the evidence schema preserved. Fresh tool probes are gone.
+The maintainer's narrow authority-recovery fix from `8c2dda483` is carried with
+its author; its wider unpublished parent and normal funding-probe edits are not.
+
+CI prepares root and both private dependency graphs with locked fetches before
+offline admission. The private locks only advance Timers 0.28.0 to the root's
+existing 0.29.0 selection; no other package identity changes. ShellCheck follows
+sourced helpers; formatter failure cleanup uses the existing shared lifecycle
+and replays its retained output, so another hosted failure exposes its cause.
+Development CI selects Rust 1.99.1; consumer MSRV stays 1.91.
+
+Focused Linux evidence: 26 provenance cases and four embedded-evidence cases pass
+(one explicit real-Wasm reproduction remains ignored). Strict Host Clippy and
+actual Rust 1.91 Host/CLI/Internal production library checks pass. All three
+locked fetches preserve lock bytes; direct boundaries, inherited pins and the
+runtime dependency graph gate pass. Layering, source-following ShellCheck,
+Actionlint, formatting and the formatter fixture pass, including an empty Cargo
+home. A forced formatter error retains its logs and the original Make exit status.
+The earlier hosted formatter failure is not reproduced locally; exact-head CI
+must confirm the preparation/compiler repair and report any surviving cause.
+Full suites, native macOS and installed/managed IC acceptance remain separate.
+No version bump, merge, release or normal-checkout mutation is included.
+Evidence: `/tmp/ic-build-followthrough.epj0I5/`.
+
 ## Authority-recovery layering fix — 2026-10-20
 
 Carry the maintainer's narrow committed repair from `8c2dda483` with its author

@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Prepare all three locked Cargo graphs before offline CI admission; align the
+  private consumer Timers locks with the existing root selection. Follow sourced
+  shell helpers, retain formatter failure diagnostics and use development Rust
+  1.99.1 while keeping the consumer MSRV unchanged.
+- Build embedded allocation-peer tool evidence from its retained Cargo facts,
+  removing independent post-build probes and preserving the evidence schema.
+
 - Keep authority-recovery timer and intent failures on the existing IcOps trap
   boundary, preserving fail-closed rollback and diagnostic messages.
 

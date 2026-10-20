@@ -2,7 +2,7 @@ name: CI
 
 env:
   CANIC_MSRV: 1.91.0
-  CANIC_INTERNAL_TOOLCHAIN: 1.99.0
+  CANIC_INTERNAL_TOOLCHAIN: 1.99.1
   CARGO_INCREMENTAL: 0
 
 permissions:
@@ -52,6 +52,14 @@ jobs:
           rg --pcre2-version
           "$ACTIONLINT_BIN" -version
           "$SHELLCHECK_BIN" --version
+      - name: Prepare locked dependency graphs
+        shell: bash
+        run: |
+          for manifest in Cargo.toml \
+            integrations/blob-service/consumer/Cargo.toml \
+            integrations/blob-service/embedded-consumer/Cargo.toml; do
+            cargo fetch --locked --manifest-path "$manifest"
+          done
       - name: Run preflight validation with complete feedback
         shell: bash
         run: make ci-preflight
