@@ -71,8 +71,16 @@ impl PocketIcBaselineRecipe for RootBaselineRecipe {
 
     fn reset_non_snapshot_state(
         &self,
-        _baseline: &CachedPocketIcBaseline<Self::Metadata>,
+        baseline: &CachedPocketIcBaseline<Self::Metadata>,
     ) -> Result<ResetReceipt, Self::Error> {
+        let metadata = baseline.metadata();
+        crate::pic::fleet_registry::reset_pool_assets(
+            baseline.pocket_ic(),
+            metadata.root_id,
+            &metadata.pool_assets,
+            &metadata.snapshot_pids,
+        )
+        .map_err(RootBaselineRecipeError::Invariant)?;
         Ok(ResetReceipt {
             policies: ResetPolicies {
                 pocket_ic_time: Some(TimeResetPolicy::PreserveCurrent),
@@ -196,6 +204,14 @@ pub fn restore_root_cached_baseline(
             minimum_cycles: crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,
         })
         .expect("restore cached root snapshots");
+    let metadata = baseline.metadata();
+    crate::pic::fleet_registry::reset_pool_assets(
+        baseline.pocket_ic(),
+        metadata.root_id,
+        &metadata.pool_assets,
+        &metadata.snapshot_pids,
+    )
+    .expect("restore Root pool custody");
     progress_elapsed(spec, "restored cached root snapshots", restore_started_at);
 
     progress(spec, "waiting for restored root bootstrap");
@@ -247,7 +263,7 @@ fn capture_cached_root_baseline(
 }
 
 fn root_baseline_snapshot_targets(metadata: &RootBaselineMetadata) -> Vec<CanisterSnapshotTarget> {
-    let mut senders = BTreeMap::from([(metadata.root_id, None)]);
+    let mut senders = BTreeMap::from([(metadata.root_id, None), (metadata.coordinator_id, None)]);
     for canister_id in metadata
         .snapshot_pids
         .iter()
@@ -278,6 +294,8 @@ mod tests {
         let store_id = ic_platform::Principal::from_slice(&[0x43; 29]);
         let metadata = RootBaselineMetadata {
             root_id,
+            coordinator_id: ic_platform::Principal::from_slice(&[0x44; 29]),
+            pool_assets: vec![ic_platform::Principal::from_slice(&[0x45; 29]), child_id],
             component_canisters: HashMap::new(),
             snapshot_pids: vec![child_id, store_id],
             managed_store_pids: vec![store_id, root_id],
@@ -285,12 +303,19 @@ mod tests {
 
         let targets = root_baseline_snapshot_targets(&metadata);
 
-        assert_eq!(targets.len(), 3);
+        assert_eq!(targets.len(), 4);
         assert_eq!(targets[0].canister_id, root_id);
         assert_eq!(targets[0].sender, None);
         assert_eq!(targets[1].canister_id, child_id);
         assert_eq!(targets[1].sender, Some(root_id));
         assert_eq!(targets[2].canister_id, store_id);
         assert_eq!(targets[2].sender, Some(root_id));
+        assert_eq!(targets[3].canister_id, metadata.coordinator_id);
+        assert_eq!(targets[3].sender, None);
+        assert!(
+            !targets
+                .iter()
+                .any(|target| target.canister_id == metadata.pool_assets[0])
+        );
     }
 }

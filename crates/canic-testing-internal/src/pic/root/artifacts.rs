@@ -7,17 +7,7 @@ use crate::pic::{
     },
     progress as test_progress,
 };
-use canic::{Error, ids::CanisterRole, protocol};
-use canic_contracts::{
-    dto::template::{
-        StoreCommand, StoreCommandResponse, TemplateChunkInput, TemplateChunkSetPrepareInput,
-        TemplateManifestInput,
-    },
-    ids::{
-        TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion, WasmStoreBinding,
-    },
-};
-use canic_core::cdk::utils::hash::wasm_hash;
+use canic::ids::CanisterRole;
 use canic_host::{
     release_set::AppConfigSnapshot,
     role_contract::{
@@ -29,8 +19,6 @@ use ic_build::artifacts::{
     ArtifactCacheOutcome, ArtifactCachePreparation, ArtifactCacheRecord, ArtifactCacheSpec,
     WasmBuildSpec, prepare_artifact_cache, resolve_cargo_build_inputs,
 };
-use ic_platform::Principal;
-use ic_testkit::pic::PocketIc;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs, io,
@@ -120,89 +108,6 @@ Use a compressed `.wasm.gz` artifact and/or build canister wasm with `RUSTFLAGS=
     }
 }
 
-// Stage the configured ordinary release set directly into the fresh Store before Root adoption.
-pub(super) fn stage_managed_release_set(
-    spec: &RootBaselineSpec<'_>,
-    artifacts: &ArtifactCacheRecord,
-    pic: &PocketIc,
-    store: Principal,
-    installation_controller: Principal,
-) {
-    let now_secs = root_time_secs(pic, store);
-    let version = TemplateVersion::owned(spec.package_version.to_string());
-    let roles = configured_release_roles(spec);
-    let total = roles.len();
-
-    for (index, role) in roles.into_iter().enumerate() {
-        let role_name = role.as_str().to_string();
-        progress(
-            spec,
-            &format!("staging release {}/{}: {role_name}", index + 1, total),
-        );
-        let wasm_module = load_release_wasm_gz(artifacts, &role_name);
-        let template_id = TemplateId::owned(format!("embedded:{role}"));
-        let payload_hash = wasm_hash(&wasm_module);
-        let payload_size_bytes = wasm_module.len() as u64;
-        let chunks = wasm_module
-            .chunks(spec.root_release_chunk_bytes)
-            .map(<[u8]>::to_vec)
-            .collect::<Vec<_>>();
-
-        let manifest = TemplateManifestInput {
-            template_id: template_id.clone(),
-            role: role.clone(),
-            version: version.clone(),
-            payload_hash: payload_hash.clone(),
-            payload_size_bytes,
-            store_binding: WasmStoreBinding::new("bootstrap"),
-            chunking_mode: TemplateChunkingMode::Chunked,
-            manifest_state: TemplateManifestState::Approved,
-            approved_at: Some(now_secs),
-            created_at: now_secs,
-        };
-        stage_manifest(pic, store, installation_controller, manifest);
-
-        let prepare = TemplateChunkSetPrepareInput {
-            manifest: None,
-            template_id: template_id.clone(),
-            version: version.clone(),
-            payload_hash: payload_hash.clone(),
-            payload_size_bytes,
-            chunk_hashes: chunks.iter().map(|chunk| wasm_hash(chunk)).collect(),
-        };
-        prepare_chunk_set(pic, store, installation_controller, prepare);
-
-        for (chunk_index, bytes) in chunks.into_iter().enumerate() {
-            publish_chunk(
-                pic,
-                store,
-                installation_controller,
-                TemplateChunkInput {
-                    preparation: None,
-                    template_id: template_id.clone(),
-                    version: version.clone(),
-                    chunk_index: u32::try_from(chunk_index)
-                        .expect("release chunk index must fit into nat32"),
-                    bytes,
-                },
-            );
-        }
-    }
-}
-
-// Load one built `.wasm.gz` artifact for a configured release role.
-fn load_release_wasm_gz(artifacts: &ArtifactCacheRecord, role_name: &str) -> Vec<u8> {
-    let artifact_path = retained_artifact_path(artifacts, role_name);
-    let bytes = fs::read(artifact_path)
-        .unwrap_or_else(|err| panic!("read {} failed: {err}", artifact_path.display()));
-    assert!(
-        !bytes.is_empty(),
-        "release artifact must not be empty: {}",
-        artifact_path.display()
-    );
-    bytes
-}
-
 fn root_release_artifact_cache_spec(
     spec: &RootBaselineSpec<'_>,
     build_env: &[(&str, &str)],
@@ -289,17 +194,17 @@ fn root_release_cargo_build_spec(
         &spec.workspace_root,
         &spec.workspace_root.join("target/icp-build"),
         &packages,
-        std::env::vars_os(),
+        crate::workspace::wasm_build_environment(),
     )
     .with_cargo_selection(spec.build_profile.cargo_selection())
-    .with_environment(std::env::vars_os().chain((environment.iter().copied()).map(
-        |(key, value)| {
+    .with_environment(crate::workspace::wasm_build_environment().chain(
+        (environment.iter().copied()).map(|(key, value)| {
             (
                 std::ffi::OsString::from(key),
                 std::ffi::OsString::from(value),
             )
-        },
-    )))
+        }),
+    ))
 }
 
 fn root_release_artifact_outputs(
@@ -364,76 +269,4 @@ fn configured_release_roles(spec: &RootBaselineSpec<'_>) -> Vec<CanisterRole> {
         .copied()
         .map(|role| CanisterRole::owned(role.to_string()))
         .collect()
-}
-
-// Stage one manifest through the exact pre-adoption Store authority.
-fn stage_manifest(
-    pic: &PocketIc,
-    store: Principal,
-    installation_controller: Principal,
-    manifest: TemplateManifestInput,
-) {
-    let result: Result<StoreCommandResponse, Error> = ic_testkit::pic::update_candid_args(
-        pic,
-        store,
-        installation_controller,
-        protocol::CANIC_WASM_STORE_COMMAND,
-        (StoreCommand::StageManifest(manifest),),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .expect("Store manifest transport");
-    let StoreCommandResponse::StageManifest = result.expect("stage release manifest application")
-    else {
-        panic!("Store returned a differently correlated manifest response");
-    };
-}
-
-// Prepare one staged chunk set through the exact pre-adoption Store authority.
-fn prepare_chunk_set(
-    pic: &PocketIc,
-    store: Principal,
-    installation_controller: Principal,
-    prepare: TemplateChunkSetPrepareInput,
-) {
-    let result: Result<StoreCommandResponse, Error> = ic_testkit::pic::update_candid_args(
-        pic,
-        store,
-        installation_controller,
-        protocol::CANIC_WASM_STORE_COMMAND,
-        (StoreCommand::PrepareChunkSet(prepare),),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .expect("Store prepare transport");
-    let StoreCommandResponse::PrepareChunkSet(_) =
-        result.expect("prepare release chunk set application")
-    else {
-        panic!("Store returned a differently correlated prepare response");
-    };
-}
-
-// Publish one staged release chunk through the admitted Store byte lane.
-fn publish_chunk(
-    pic: &PocketIc,
-    store: Principal,
-    installation_controller: Principal,
-    chunk: TemplateChunkInput,
-) {
-    let result: Result<(), Error> = ic_testkit::pic::update_candid_args(
-        pic,
-        store,
-        installation_controller,
-        protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
-        (chunk,),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .expect("Store chunk transport");
-    result.expect("publish release chunk application");
-}
-
-// Read the current PocketIC wall clock in whole seconds.
-fn root_time_secs(pic: &PocketIc, _root_id: Principal) -> u64 {
-    pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000
 }

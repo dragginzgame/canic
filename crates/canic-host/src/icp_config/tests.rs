@@ -580,3 +580,34 @@ fn optional_config_preserves_utf8_and_followed_symlink_policy() {
     }
     fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn local_projection_rejects_ambiguous_yaml_in_ignored_fields() {
+    for source in [
+        "canisters: [{name: root, <<: {name: other}}]",
+        "canisters: [{name: root, '<<': {name: other}}]",
+        "canisters: [{name: root, extra: !custom payload}]",
+        "canisters: [{name: root, extra: {key: a, key: b}}]",
+        "canisters: [{name: root, extra: {nested: {<<: {key: value}}}}]",
+        "canisters: [{name: root, extra: {!custom key: value}}]",
+        "canisters: []\n---\ncanisters: []",
+        "canisters: [{name: 123}]",
+        "canisters: [{name: true}]",
+    ] {
+        assert!(matches!(
+            IcpManifest::parse(source),
+            Err(IcpManifestError::Yaml(_))
+        ));
+    }
+}
+
+#[test]
+fn local_projection_preserves_quoted_names_and_ordinary_aliases() {
+    let manifest = IcpManifest::parse(
+        "canisters: [{name: '123', extra: &value {key: data}}, {name: 'true', extra: *value}]",
+    )
+    .unwrap();
+    assert!(manifest.has_canister("123"));
+    assert!(manifest.has_canister("true"));
+    assert!(IcpManifest::parse("").unwrap().has_environment("local"));
+}

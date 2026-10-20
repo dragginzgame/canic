@@ -8,14 +8,14 @@ macro_rules! __canic_blob_endpoint {
         // A lexical emitter registers the provider contract before Candid export.
         // An imported macro alias can defer those registrations past the export.
         macro_rules! decode {
-            (tenant_inspection, $d bytes:expr) => { ic_blob_storage_contracts::wire::tenant::decode_inspection_request($d bytes).expect("tenant inspection") };
-            (tenant_update, $d bytes:expr) => { ic_blob_storage_contracts::wire::tenant::decode_update_request($d bytes).expect("tenant update") };
-            ($d category:ident, $d bytes:expr) => { ic_blob_storage_contracts::wire::decode($d bytes, bound!($d category)).expect("Blob CBOR request") };
+            (tenant_inspection, $d method:expr, $d bytes:expr) => { ic_blob_storage_contracts::wire::tenant::decode_inspection_request($d bytes).expect("tenant inspection") };
+            (tenant_update, $d method:expr, $d bytes:expr) => { ic_blob_storage_contracts::wire::tenant::decode_update_request($d bytes).expect("tenant update") };
+            ($d category:ident, $d method:expr, $d bytes:expr) => { ic_blob_storage_contracts::wire::decode_request($d method, $d bytes, bound!($d category)).expect("Blob Wire request") };
         }
         macro_rules! encode {
-            (tenant_inspection, $d value:expr) => { ic_blob_storage_contracts::wire::tenant::inspection_response($d value).expect("tenant inspection reply") };
-            (tenant_update, $d value:expr) => { ic_blob_storage_contracts::wire::tenant::update_response($d value).expect("tenant update reply") };
-            ($d category:ident, $d value:expr) => { ic_blob_storage_contracts::wire::encode($d value).expect("Blob CBOR reply") };
+            (tenant_inspection, $d method:expr, $d value:expr) => { ic_blob_storage_contracts::wire::tenant::inspection_response($d value).expect("tenant inspection reply") };
+            (tenant_update, $d method:expr, $d value:expr) => { ic_blob_storage_contracts::wire::tenant::update_response($d value).expect("tenant update reply") };
+            ($d category:ident, $d method:expr, $d value:expr) => { ic_blob_storage_contracts::wire::encode_response($d method, $d value).expect("Blob Wire reply") };
         }
         macro_rules! bound {
             (tenant_inspection) => { ic_blob_storage_contracts::wire::tenant::MAX_REQUEST_BYTES };
@@ -24,24 +24,24 @@ macro_rules! __canic_blob_endpoint {
             (request) => { 4096 };
         }
         macro_rules! arguments {
-            ($d category:ident;) => { let _: () = decode!($d category, &$crate::__private::transport::arguments(bound!($d category))); };
-            ($d category:ident; $d arg:ident : $d ty:ty) => { let $d arg: $d ty = decode!($d category, &$crate::__private::transport::arguments(bound!($d category))); };
+            ($d category:ident, $d method:expr;) => { let _: () = decode!($d category, $d method, &$crate::__private::transport::arguments(bound!($d category))); };
+            ($d category:ident, $d method:expr; $d arg:ident : $d ty:ty) => { let $d arg: $d ty = decode!($d category, $d method, &$crate::__private::transport::arguments(bound!($d category))); };
         }
         macro_rules! endpoint {
             (query, $d category:ident, fn $d name:ident($d($d arg:ident : $d ty:ty),* $d(,)?) -> $d reply:ty $d body:block) => {
                 #[canic::canic_raw_query(public, payload(max_bytes = bound!($d category)))]
                 fn $d name() {
-                    arguments!($d category; $d($d arg : $d ty),*);
+                    arguments!($d category, stringify!($d name); $d($d arg : $d ty),*);
                     let response: $d reply = (|| $d body)();
-                    ic_platform::cdk::api::msg_reply(encode!($d category, response));
+                    ic_platform::cdk::api::msg_reply(encode!($d category, stringify!($d name), response));
                 }
             };
             (update, $d category:ident, async fn $d name:ident($d($d arg:ident : $d ty:ty),* $d(,)?) -> $d reply:ty $d body:block) => {
                 #[canic::canic_raw_update(public, payload(max_bytes = bound!($d category)))]
                 async fn $d name() {
-                    arguments!($d category; $d($d arg : $d ty),*);
+                    arguments!($d category, stringify!($d name); $d($d arg : $d ty),*);
                     let response: $d reply = (async move $d body).await;
-                    ic_platform::cdk::api::msg_reply(encode!($d category, response));
+                    ic_platform::cdk::api::msg_reply(encode!($d category, stringify!($d name), response));
                 }
             };
             (certificate, request, $d wire_name:literal, $d($d item:tt)*) => {

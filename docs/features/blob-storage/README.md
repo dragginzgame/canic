@@ -146,7 +146,7 @@ host's one `ApplicationMetricsSampler`. Register that callback after installatio
 and restoration. This preserves both families rather than replacing either
 sampler; Canic retains the timer, limits and cache. Export blob endpoints in the
 owning canister alongside application endpoints, and avoid duplicate method names.
-Tenant methods use IC Wire, other Blob-owned methods use CBOR, and the external
+Blob-owned methods use method-bound IC Wire frames, and the external
 provider certificate retains Candid. Canic framework endpoints retain Candid.
 
 The complete [embedded example](../../../integrations/blob-service/embedded-consumer/src/lib.rs)
@@ -222,7 +222,7 @@ supply that identity. Use the emitted release manifest and its qualified artifac
 union for installation proof.
 
 Installation requires `canic_blob_service::dto::configuration::ServiceInstallationInput`
-as canonical CBOR bytes from `ic_blob_storage_contracts::wire::encode`, nested
+as a Wire request from `ic_blob_storage_contracts::wire::encode_request("blob_install", input)`, nested
 after Canic's protected Candid init payload. Its configured
 service Principal must equal the actual allocated canister ID; the adapter
 validates this before publishing the installed service. Construct these bytes

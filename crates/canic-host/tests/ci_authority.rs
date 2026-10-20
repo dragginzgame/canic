@@ -14,7 +14,7 @@ fn action_is_pinned(action: &str) -> bool {
 }
 
 fn inspect(source: &str) -> Result<Value, Vec<String>> {
-    let workflow: Value = serde_saphyr::from_str(source).unwrap();
+    let workflow: Value = serde_yaml_ng::from_str(source).unwrap();
     let mut failures = Vec::new();
     if workflow.get("permissions").is_none_or(Value::is_null) {
         failures.push("permissions".into());

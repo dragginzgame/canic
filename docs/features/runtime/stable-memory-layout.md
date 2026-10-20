@@ -255,18 +255,23 @@ existing lifecycle error boundary still maps bootstrap failures to its error cod
 A rejected attempt cannot commit the candidate allocation set.
 
 Consumer admission must account for its own historical namespaces and outstanding
-recovery obligations. Release transitions remain reinstall-only. Canic's own
-fixed IDs and bucket size are unchanged, and artifacts without a callback retain
-the base policy identity.
+recovery obligations. Release transitions remain reinstall-only. Application
+allocations are identified by stable key; the committed ledger owns each key's
+manager ID. Declaration order can affect IDs in a fresh installation, so inspect
+`MemoryAllocations` for the selected canister rather than assuming a fixed ID.
+Artifacts without a callback retain the base policy identity.
 
 ## Representation and consolidation
 
-- IDs 33 (activation), 59 (restore fence), 61 (admission projection), and 64
-  (Coordinator admission) each use their own optional bounded cell. Empty state
-  remains explicit. The cell checks the complete encoding before writing;
-  declared record limits remain enforced. Independent authority records stay
-  separate.
-- ID 27 retains a multi-record provisioning map. Its B-tree allocator uses small
+- Activation (`canic.core.fleet.activation.v1`), the restore fence
+  (`canic.core.authority_restore.fence.v1`), admission projection
+  (`canic.core.fleet_admission.projection.v1`) and Coordinator admission
+  (`canic.control_plane.fleet_admission.v1`) each use their own optional bounded
+  cell. Empty state remains explicit. The cell checks the complete encoding
+  before writing; declared record limits remain enforced. Independent authority
+  records stay separate.
+- `canic.control_plane.root.component_provisioning.operations.v1` retains the
+  multi-record provisioning map. Its B-tree allocator uses small
   overflow pages, while its encoder and decoder enforce the existing 8,650,000
   byte record ceiling. The large logical record limit no longer sizes every
   B-tree node for the worst case.

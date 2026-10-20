@@ -61,17 +61,17 @@ pub(super) fn with_canonical_root_cargo_inputs(
         &evidence.cargo_workspace_root,
         target_dir,
         &[evidence.role_package_name.as_str()],
-        std::env::vars_os(),
+        crate::workspace::wasm_build_environment(),
     )
     .with_cargo_selection(profile.cargo_selection())
-    .with_environment(std::env::vars_os().chain((environment.iter().copied()).map(
-        |(key, value)| {
+    .with_environment(crate::workspace::wasm_build_environment().chain(
+        (environment.iter().copied()).map(|(key, value)| {
             (
                 std::ffi::OsString::from(key),
                 std::ffi::OsString::from(value),
             )
-        },
-    )));
+        }),
+    ));
     let inputs = resolve_cargo_build_inputs(&build).expect("canonical Root cache Cargo inputs");
     cache.with_cargo_build_inputs("canonical-root-cargo", &build, &inputs)
 }
@@ -275,21 +275,21 @@ fn canonical_fleet_coordinator_cache_spec(
         workspace_root,
         target_dir,
         &["canic", "canic-host"],
-        std::env::vars_os(),
+        crate::workspace::wasm_build_environment(),
     )
     .with_cargo_selection(ic_build::cargo::selection::CargoSelection {
         profile: Some("fast".into()),
         locked: true,
         ..Default::default()
     })
-    .with_environment(
-        std::env::vars_os().chain((environment).into_iter().map(|(key, value)| {
+    .with_environment(crate::workspace::wasm_build_environment().chain(
+        (environment).into_iter().map(|(key, value)| {
             (
                 std::ffi::OsString::from(key),
                 std::ffi::OsString::from(value),
             )
-        })),
-    );
+        }),
+    ));
     let cargo_inputs = resolve_cargo_build_inputs(&cargo_build)
         .expect("resolve canonical Fleet Coordinator Cargo inputs");
     let config_relative = config_path
@@ -481,12 +481,14 @@ pub(super) fn build_internal_test_wasm_canisters_with_features(
                     workspace_root,
                     target_dir,
                     &[*package],
-                    std::env::vars_os().chain((build_env.iter().copied()).map(|(key, value)| {
-                        (
-                            std::ffi::OsString::from(key),
-                            std::ffi::OsString::from(value),
-                        )
-                    })),
+                    crate::workspace::wasm_build_environment().chain(
+                        (build_env.iter().copied()).map(|(key, value)| {
+                            (
+                                std::ffi::OsString::from(key),
+                                std::ffi::OsString::from(value),
+                            )
+                        }),
+                    ),
                 )
                 .with_cargo_selection(selection.clone())
                 .with_additional_inputs(additional_inputs.iter().cloned())
@@ -1070,7 +1072,7 @@ mod tests {
             &root,
             &root.join("target/exact"),
             &["retention_fixture"],
-            std::env::vars_os(),
+            crate::workspace::wasm_build_environment(),
         )
         .with_shared_incremental_target(&target);
         // Sparse files exercise the actual logical-byte accounting without

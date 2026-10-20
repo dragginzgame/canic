@@ -83,7 +83,8 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn production_blob_initializ
         operation_id: member_operation,
         initialization: ComponentApplicationInitialization {
             target_canister: service,
-            arguments: wire::encode(&input).expect("encode canonical Blob installation"),
+            arguments: wire::encode_request("blob_install", &input)
+                .expect("encode canonical Blob installation"),
         },
     };
     let before = allocation(&pic, fixture.root_id, member_operation);
@@ -153,7 +154,7 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn production_blob_initializ
     let mut conflicting = request.clone();
     let mut changed = input.clone();
     changed.project = "different-blob-project".into();
-    conflicting.initialization.arguments = wire::encode(changed).unwrap();
+    conflicting.initialization.arguments = wire::encode_request("blob_install", changed).unwrap();
     let refused: Result<RootCommandResponseFragment, Error> = ic_testkit::pic::update_candid_args(
         &(pic),
         fixture.root_id,
@@ -171,12 +172,13 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn production_blob_initializ
     await_root_provisioning(&pic, fixture.root_id, operation, |status| {
         status.root_runtime_active
     });
-    let installed: Result<HostConfigurationView, HostFailure> = wire::decode(
+    let installed: Result<HostConfigurationView, HostFailure> = wire::decode_response(
+        "blob_configuration",
         &pic.query_call(
             service,
             input.configuration.operator,
             "blob_configuration",
-            wire::encode(()).unwrap(),
+            wire::encode_request("blob_configuration", ()).unwrap(),
         )
         .unwrap(),
         canic::testing::CANDID_REPLY_LIMITS.reply_bytes,

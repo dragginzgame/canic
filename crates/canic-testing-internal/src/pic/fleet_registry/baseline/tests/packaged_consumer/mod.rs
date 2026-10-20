@@ -5,7 +5,7 @@
 use super::*;
 use canic_core::cdk::utils::hash::sha256_hex;
 use canic_host::fleet_ensure::model::DesiredCanisterKind;
-use std::{collections::BTreeSet, io::Read, process::Output};
+use std::{collections::BTreeSet, process::Output};
 
 struct Consumer {
     root: PathBuf,
@@ -412,11 +412,7 @@ fn verify_installed_artifacts(
             .unwrap();
         let bytes = std::fs::read(consumer.root.join(canister.wasm.as_ref().unwrap())).unwrap();
         let raw = if bytes.starts_with(&[0x1f, 0x8b]) {
-            let mut raw = Vec::new();
-            flate2::read::GzDecoder::new(bytes.as_slice())
-                .read_to_end(&mut raw)
-                .unwrap();
-            raw
+            ic_host_artifacts::artifact::decode_gzip(&bytes, bytes.len(), usize::MAX).unwrap()
         } else {
             bytes
         };

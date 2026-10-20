@@ -40,14 +40,6 @@ pub(crate) fn expand(attr: TokenStream, item: TokenStream) -> syn::Result<TokenS
             "duplicate lifecycle decoder",
         ));
     }
-    if decode.is_none() {
-        let attribute = if matches!(kind, EntryKind::Init) {
-            quote!(#[::canic::__internal::cdk::init])
-        } else {
-            quote!(#[::canic::__internal::cdk::post_upgrade])
-        };
-        return Ok(quote!(#attribute #function));
-    }
     if function.sig.asyncness.is_some() || !matches!(function.sig.output, syn::ReturnType::Default)
     {
         return Err(syn::Error::new_spanned(

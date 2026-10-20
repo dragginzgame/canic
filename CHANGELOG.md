@@ -8,6 +8,71 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Select Rust 1.99.1 for development and matching CI checks, retaining existing
+  package MSRVs.
+
+- Adapt Blob 0.37 installation and service calls to method-bound Wire frames,
+  including dedicated/embedded consumers and qualification callers. Preserve
+  external provider Candid. Generate explicit Candid codecs for ordinary Canic
+  endpoints and retain synchronous lifecycle decoding through the shared adapter;
+  update Hub/Shard fixture stores to governed storage adapters. Require Storage
+  0.5.7 so independent consumer locks cannot retain incompatible Memory types.
+
+- Align mint receipt authentication with IC Query 0.64 and IC Host’s bounded
+  certificate codec. Remove the obsolete certificate-depth setting and redundant
+  authentication forwarding function; retain certificate byte budgets and
+  independent ledger-value depth limits.
+
+- Align host-side ICP and CI YAML parsing with IC Host Tools' `serde_yaml_ng`,
+  removing `serde-saphyr` and its parser dependencies. Preserve the 1 MiB ICP
+  input limit, strict structural refusals and scalar-name interpretation; reserve
+  the `<<` mapping key even when quoted.
+
+- Select Platform 0.2.1 directly across the framework and Blob consumer catalogs;
+  remove the unused CDK `export_candid` re-export while retaining the canonical
+  Candid service generator and existing protocol formats.
+
+- Select published IC Host 0.30 for direct host dependencies, keeping optional
+  filesystem capability and temporary-file backends disabled where unused.
+
+- Remove the unused Root-fixture activation driver and redundant prepared-Root
+  fields after consolidation onto managed Fleet bootstrap. Fixture build inputs
+  leave target-directory selection to IC Build’s typed specification, including
+  embedded-peer verification, bootstrap Store and release-artifact preparation.
+
+- Route managed Fleet/Root fixture gzip encoding and decoding through Host
+  Artifacts, removing internal test support’s direct compression-backend dependency.
+  Retained gzip artifacts must contain exactly one complete member.
+
+- Remove five unused integration-test dependency declarations; shared test support
+  remains the owner of Control Plane feature selection. Enable Host Tools’ explicit
+  Candid feature required by artifact-service validation.
+
+- Adopt Platform 0.1.17 and route ECDSA signing fixtures through its native/Wasm
+  crypto boundary. Remove direct K256 declarations and forbid their reintroduction
+  across the framework and both Blob consumer workspaces; ECDSA stays dev-only.
+
+- Identify runtime memory stores by stable key in the guides; obtain physical
+  manager IDs from the selected canister's allocation report rather than stale
+  fixed-ID examples ([#566](https://github.com/dragginzgame/canic/issues/566)).
+
+- Use consistent IEC sizes in chunk-upload logs: a full chunk reports `1.00 MiB`.
+  Upload bytes and management-call behavior are unchanged
+  ([#606](https://github.com/dragginzgame/canic/pull/606)).
+- Timer guides inherit the workspace provider and inspect the selected locked
+  Wasm graph, avoiding stale examples that introduce a second timer runtime
+  ([#605](https://github.com/dragginzgame/canic/pull/605)).
+
+- Route configured Root test baselines through the managed Fleet bootstrap helpers,
+  including release-set publication, Coordinator synchronization and Component
+  provisioning. Remove the ordinary-template staging path. Restore Coordinator
+  snapshots and reset unused pool custody alongside Root and its installed children.
+
+- Route auth-fixture Ed25519 signing through Platform 0.1.16’s dev-only feature.
+  Remove the direct Dalek dependency and separate Dalek 3 selection; use Platform’s
+  original Dalek 2.2 signing types without changing credential construction or
+  verification policy. Enforce the direct Dalek boundary in all three workspaces.
+
 - Route all Host canister Cargo builds through IC Build 0.19's typed invocation
   and observed execution, retaining explicit features, profiles, compiler wrappers,
   declaration environments and primary compiler failures. Share the invocation
@@ -22,7 +87,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   values fit Canic's existing u64 reports exactly. Refuse incomplete runtime/public
   process reports and omit unrepresentable unified metric rows instead of clipping.
 
-- Use Blob's shared service workflow and canonical Wire/CBOR codecs, including
+- Use Blob's shared service workflow and canonical method-bound Wire codecs, including
   bounded nested installation bytes. Remove the duplicate adapter dispatch,
   account and gateway flows. Keep the provider certificate and Canic framework
   protocol on Candid. Raw endpoints retain Canic admission, payload limits and

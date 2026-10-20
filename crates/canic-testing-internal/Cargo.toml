@@ -30,8 +30,8 @@ canic-control-plane = { workspace = true, features = [
 canic-core = { workspace = true }
 canic-host = { workspace = true }
 ciborium = { workspace = true }
-flate2 = { workspace = true }
 ic-build.workspace = true
+ic-host-artifacts = { workspace = true, features = ["gzip"] }
 ic-host-fs = { workspace = true }
 ic-host-process.workspace = true
 ic-platform = { workspace = true, features = ["candid", "candid-parser"] }

@@ -151,7 +151,7 @@ mod tests {
     };
     use canic_contracts::ids::{BuildNetwork, CanisterRole};
     use ic_auth::delegation::DelegationProofError;
-    use k256::ecdsa::{Signature, SigningKey, signature::hazmat::PrehashSigner};
+    use ic_platform::ecdsa::{PrehashSigner, Signature, SigningKey};
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])

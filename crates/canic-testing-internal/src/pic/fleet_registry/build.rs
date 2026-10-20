@@ -363,7 +363,7 @@ fn build_bootstrap_wasm_store(workspace_root: &Path, config_path: &Path) -> Vec<
         workspace_root,
         &target_dir,
         &["canic", "canic-host"],
-        std::env::vars_os().chain(
+        crate::workspace::wasm_build_environment().chain(
             ([
                 ("CARGO_INCREMENTAL", "0"),
                 ("ICP_ENVIRONMENT", "local"),

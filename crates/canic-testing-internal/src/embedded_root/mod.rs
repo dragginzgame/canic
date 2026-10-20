@@ -101,7 +101,7 @@ fn build_spec(workspace: &Path, source: &Path) -> io::Result<WasmBuildSpec> {
         source,
         &workspace.join("target/embedded-root/cache"),
         &[PACKAGE],
-        std::env::vars_os(),
+        crate::workspace::wasm_build_environment(),
     )
     .with_shared_incremental_target(workspace.join("target/embedded-root/cargo"))
     .with_additional_inputs(["crates/canic-testing-internal/src/embedded_root"])
@@ -112,7 +112,7 @@ fn build_spec(workspace: &Path, source: &Path) -> io::Result<WasmBuildSpec> {
         ..Default::default()
     })
     .with_environment(
-        std::env::vars_os().chain(
+        crate::workspace::wasm_build_environment().chain(
             ([
                 ("CARGO_INCREMENTAL", "0".to_owned()),
                 ("ICP_ENVIRONMENT", "local".to_owned()),

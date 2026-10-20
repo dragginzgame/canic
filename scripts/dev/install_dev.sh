@@ -6,7 +6,7 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # shellcheck source=/dev/null
 source "$ROOT_DIR/tool-versions.env"
 CANIC_CLI_VERSION="${CANIC_CLI_VERSION:-0.111.0}"
-CANIC_RUST_TOOLCHAIN="${CANIC_RUST_TOOLCHAIN:-1.99.0}"
+CANIC_RUST_TOOLCHAIN="${CANIC_RUST_TOOLCHAIN:-1.99.1}"
 CANIC_DEV_TOOLS=(
     "cargo-watch@$CANIC_CARGO_WATCH_VERSION"
     "cargo-edit@$CANIC_CARGO_EDIT_VERSION"

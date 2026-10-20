@@ -96,7 +96,8 @@ the same recovery guarantee. Current Canic jobs are classified as follows:
 One retained `canic/async_job_recovery/watchdog` is pre-armed before it
 dispatches fallible work and advances every 30 seconds independently of the
 worker continuation. The four recovery-critical owners share a private bounded
-stable record at core memory ID 60. Every owner retains a checked attempt
+stable record keyed by `canic.core.async_job_recovery.v1`. Its manager ID comes
+from the committed allocation ledger. Every owner retains a checked attempt
 generation and optional active lease; only automatic cycle top-up retains a
 generated operation generation and pending exact retry. The record contains no
 timer command, provider deadline, schedule-owner flag, provider retry streak or

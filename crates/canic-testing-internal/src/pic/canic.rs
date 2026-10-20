@@ -7,9 +7,6 @@ use super::{
 use canic::{
     Error,
     dto::{
-        fleet_activation::{
-            FleetActivationPhase, FleetActivationResumeRequest, FleetActivationStatusResponse,
-        },
         fleet_subnet_root::{
             FleetSubnetRootAuthority, FleetSubnetRootInitArgs, FleetSubnetWasmStoreAdoptionRequest,
             FleetSubnetWasmStoreInitArgs,
@@ -26,14 +23,10 @@ use canic::{
     protocol,
 };
 use canic_contracts::dto::{
-    fleet_coordinator::CoordinatorOperationReadRequest as StoreStatusRequestFragment,
     role::OperationAcceptedResponse as RootCommandResponseFragment,
-    wire::projection::{
-        fixture_canic::{
-            CanisterStatusRequestFragment, CanisterStatusResponseFragment, RootCommandFragment,
-            RootStatusRequestFragment, RootStatusResponseFragment,
-        },
-        store_activation::{StoreOperationStatusFragment, StoreStatusResponseFragment},
+    wire::projection::fixture_canic::{
+        CanisterStatusRequestFragment, CanisterStatusResponseFragment, RootCommandFragment,
+        RootStatusRequestFragment, RootStatusResponseFragment,
     },
 };
 use canic_contracts::{
@@ -114,8 +107,6 @@ pub(super) struct ManagedRootInstallInput<'a> {
 
 pub(super) struct PreparedManagedRoot {
     pub root_id: Principal,
-    pub wasm_store: Principal,
-    pub installation_controller: Principal,
     pub root_args: FleetSubnetRootInitArgs,
 }
 
@@ -162,12 +153,7 @@ pub(super) fn create_and_install_pre_adoption_root(
         })?,
         None,
     );
-    Ok(PreparedManagedRoot {
-        root_id,
-        wasm_store,
-        installation_controller,
-        root_args,
-    })
+    Ok(PreparedManagedRoot { root_id, root_args })
 }
 
 ///
@@ -437,106 +423,6 @@ fn root_store_adoption_operation_id(install_operation_id: [u8; 32]) -> [u8; 32] 
         operation_id[31] = 1;
     }
     operation_id
-}
-
-/// Drive one prepared managed Fleet through the exact controller activation protocol.
-///
-/// # Panics
-///
-/// Panics when preparation or activation transport fails, the root rejects
-/// either operation, or the resulting phase is not the exact expected phase.
-pub(super) fn activate_managed_fleet(
-    pic: &PocketIc,
-    root_id: Principal,
-) -> FleetActivationStatusResponse {
-    let RootCommandResponseFragment::OperationAccepted(receipt) =
-        root_command(pic, root_id, RootCommandFragment::PrepareFleetActivation).unwrap_or_else(
-            |error| {
-                report_canister_diagnostics(
-                    pic,
-                    root_id,
-                    Principal::anonymous(),
-                    "Fleet activation preparation application",
-                );
-                panic!("Fleet activation preparation application: {error:?}");
-            },
-        );
-    let RootStatusResponseFragment::Operation(RootOperationStatusResponse::FleetActivation(
-        prepared,
-    )) = root_status(
-        pic,
-        root_id,
-        RootStatusRequestFragment::Operation(OperationStatusRequest {
-            operation_id: receipt.operation_id,
-        }),
-    )
-    .expect("Fleet activation preparation status")
-    else {
-        panic!("Root returned a differently correlated operation status");
-    };
-    assert_eq!(prepared.phase, FleetActivationPhase::Prepared);
-    let credential = prepared
-        .credential
-        .expect("prepared root must expose its credential generation");
-
-    let RootCommandResponseFragment::OperationAccepted(resumed) = root_command(
-        pic,
-        root_id,
-        RootCommandFragment::ResumeFleetActivation(FleetActivationResumeRequest {
-            operation_id: prepared.identity.operation_id,
-            credential,
-        }),
-    )
-    .expect("Fleet activation resume application");
-    let RootStatusResponseFragment::Operation(RootOperationStatusResponse::FleetActivation(
-        activated,
-    )) = root_status(
-        pic,
-        root_id,
-        RootStatusRequestFragment::Operation(OperationStatusRequest {
-            operation_id: resumed.operation_id,
-        }),
-    )
-    .expect("Fleet activation resume status")
-    else {
-        panic!("Root returned a differently correlated operation status");
-    };
-    assert_eq!(activated.phase, FleetActivationPhase::Active);
-    let [store] = prepared
-        .cascade_manifest
-        .as_deref()
-        .expect("prepared root must expose its Store cascade manifest")
-    else {
-        panic!("prepared root must retain exactly one Store child");
-    };
-    let store_response: Result<StoreStatusResponseFragment, Error> =
-        ic_testkit::pic::query_candid_args(
-            pic,
-            store.principal,
-            ic_platform::Principal::anonymous(),
-            protocol::CANIC_WASM_STORE_STATUS,
-            (StoreStatusRequestFragment::Operation(
-                OperationStatusRequest {
-                    operation_id: managed_test_store_install_id(),
-                },
-            ),),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .map(|(reply,)| reply)
-        .expect("Store activation status transport");
-    let StoreStatusResponseFragment::Operation(StoreOperationStatusFragment::FleetActivation(
-        store_status,
-    )) = store_response.expect("Store activation status");
-    assert_ne!(
-        store_status.identity.operation_id,
-        activated.identity.operation_id
-    );
-    assert_eq!(
-        store_status.identity.operation_id,
-        managed_test_store_install_id()
-    );
-    assert_eq!(store_status.phase, FleetActivationPhase::Active);
-    activated
 }
 
 /// Wait until one Root reports `canic_root_status(Readiness)`.

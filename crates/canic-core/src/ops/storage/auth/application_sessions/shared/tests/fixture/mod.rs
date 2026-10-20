@@ -1,7 +1,6 @@
 //! Issue current portable sessions through IC Auth's real Ed25519 verifier.
 
 use super::*;
-use ed25519_dalek::{Signer, SigningKey};
 use ic_auth::{
     admission_budget::SessionAdmissionBudget,
     portable::{
@@ -16,6 +15,7 @@ use ic_auth_protocol_types::{
     AudienceId, AuthRole, CanonicalId, DelegatedRoleGrant, PortableClaims, PortableMechanism,
     PortableProof,
 };
+use ic_platform::ed25519::{Signer, SigningKey};
 use sha2::{Digest, Sha256};
 
 pub(super) const NOW: u64 = 10_000_000_000;

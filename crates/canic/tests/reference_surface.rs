@@ -124,8 +124,7 @@ fn hidden_macro_cdk_exports_compile() {
     };
     use canic::__internal::cdk::raw::{msg_arg_data_copy as _, msg_arg_data_size as _};
     use canic::__internal::cdk::{
-        export_candid as _, futures as _, init as _, inspect_message as _, post_upgrade as _,
-        query as _,
+        futures as _, init as _, inspect_message as _, post_upgrade as _, query as _,
     };
     use canic::__internal::cdk::{trap as _, update as _};
 }

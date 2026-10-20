@@ -165,7 +165,6 @@ fn unsigned(value: u128) -> Vec<u8> {
 const fn limits() -> IcpReadLimits {
     IcpReadLimits {
         certificate_bytes: 16_384,
-        certificate_depth: 32,
         reply_bytes: 8_192,
         decoding_quota: 100_000,
         skipping_quota: 8_192,
@@ -284,6 +283,13 @@ fn changed_network_signer_and_certificate_signature_reject() {
 fn certificate_and_reply_decoding_are_explicitly_bounded() {
     let fixture = Fixture::new();
     let certificate = fixture.evidence(&fixture.reply());
+    // Self-described CBOR tags consume the upstream codec's recursion budget.
+    let mut nested_certificate = [0xd9, 0xd9, 0xf7].repeat(128);
+    nested_certificate.extend_from_slice(&certificate);
+    assert!(matches!(
+        verify_read(&fixture.agent, &fixture.read, &nested_certificate, limits(),),
+        Err(Error::Certificate(CertificateVerificationError::Decode(_)))
+    ));
     assert!(matches!(
         verify_read(
             &fixture.agent,

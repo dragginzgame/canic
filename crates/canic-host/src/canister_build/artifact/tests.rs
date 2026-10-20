@@ -30,7 +30,7 @@ fn generated_infrastructure_inputs_are_stable_before_compilation() {
         &package,
         &directory.join("target"),
         &["fixture-consumer"],
-        std::env::vars_os(),
+        std::env::vars_os().filter(|(key, _)| key != "CARGO_TARGET_DIR"),
     )
     .with_cargo_selection(ic_build::cargo::selection::CargoSelection {
         profile: Some("release".into()),

@@ -57,8 +57,12 @@ fn install() {
         .expect("bounded application configuration");
     app::install(input.initial_count);
     let blob: ServiceInstallationInput =
-        canic_blob_service::__private::ic_blob_storage_contracts::wire::decode(&input.blob, 16_384)
-            .expect("bounded Blob installation");
+        canic_blob_service::__private::ic_blob_storage_contracts::wire::decode_request(
+            "blob_install",
+            &input.blob,
+            16_384,
+        )
+        .expect("bounded Blob installation");
     lifecycle::install(&blob);
     register_metrics();
 }

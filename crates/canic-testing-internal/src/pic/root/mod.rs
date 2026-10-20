@@ -14,7 +14,6 @@ mod artifacts;
 mod baseline;
 mod topology;
 
-use artifacts::stage_managed_release_set;
 pub use artifacts::{ensure_root_release_artifacts_built, load_root_wasm};
 pub use baseline::{
     RootBaselineRecipe, RootBaselineRecipeError, build_root_cached_baseline,
@@ -39,8 +38,6 @@ pub struct RootBaselineSpec<'a> {
     pub bootstrap_tick_limit: usize,
     pub root_setup_max_attempts: usize,
     pub pocket_ic_wasm_chunk_store_limit_bytes: usize,
-    pub root_release_chunk_bytes: usize,
-    pub package_version: &'a str,
 }
 
 ///
@@ -50,6 +47,8 @@ pub struct RootBaselineSpec<'a> {
 #[derive(Clone)]
 pub struct RootBaselineMetadata {
     pub root_id: Principal,
+    pub coordinator_id: Principal,
+    pub pool_assets: Vec<Principal>,
     pub component_canisters: HashMap<CanisterRole, Principal>,
     pub snapshot_pids: Vec<Principal>,
     pub managed_store_pids: Vec<Principal>,

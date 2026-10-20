@@ -97,26 +97,55 @@ fn unmodeled(input: &ServiceInstallationInput) -> UnmodeledInstallationInput {
 }
 
 #[test]
-fn dedicated_configuration_is_exact_and_bounded_cbor() {
+fn dedicated_configuration_is_exact_and_bounded_wire() {
     let input = installation();
-    let current = wire::encode(&input).unwrap();
+    let current = wire::encode_request("blob_install", &input).unwrap();
     assert_eq!(
-        wire::decode::<ServiceInstallationInput>(&current, CONFIGURATION_LIMITS.max_bytes),
+        wire::decode_request::<ServiceInstallationInput>(
+            "blob_install",
+            &current,
+            CONFIGURATION_LIMITS.max_bytes
+        ),
         Ok(input.clone())
     );
-    let field = wire::encode(unmodeled(&input)).unwrap();
+    for wrong_frame in [
+        wire::encode_request("blob_post_upgrade", &input).unwrap(),
+        wire::encode_response("blob_install", &input).unwrap(),
+    ] {
+        assert_eq!(
+            wire::decode_request::<ServiceInstallationInput>(
+                "blob_install",
+                &wrong_frame,
+                CONFIGURATION_LIMITS.max_bytes
+            ),
+            Err(wire::Error::Identity)
+        );
+    }
+    let field = wire::encode_request("blob_install", unmodeled(&input)).unwrap();
     assert_eq!(
-        wire::decode::<ServiceInstallationInput>(&field, CONFIGURATION_LIMITS.max_bytes),
-        Err(wire::Error::Invalid)
+        wire::decode_request::<ServiceInstallationInput>(
+            "blob_install",
+            &field,
+            CONFIGURATION_LIMITS.max_bytes
+        ),
+        Err(wire::Error::Trailing)
     );
     let mut extra = current.clone();
     extra.push(0xf6);
     assert_eq!(
-        wire::decode::<ServiceInstallationInput>(&extra, CONFIGURATION_LIMITS.max_bytes),
+        wire::decode_request::<ServiceInstallationInput>(
+            "blob_install",
+            &extra,
+            CONFIGURATION_LIMITS.max_bytes
+        ),
         Err(wire::Error::Trailing)
     );
     assert_eq!(
-        wire::decode::<ServiceInstallationInput>(&current, current.len() - 1),
+        wire::decode_request::<ServiceInstallationInput>(
+            "blob_install",
+            &current,
+            current.len() - 1
+        ),
         Err(wire::Error::Limit)
     );
 }
@@ -126,13 +155,17 @@ fn embedded_configuration_bounds_its_own_envelope_and_nested_blob_bytes() {
     let blob = installation();
     let input = EmbeddedInput {
         initial_count: 41,
-        blob: wire::encode(&blob).unwrap(),
+        blob: wire::encode_request("blob_install", &blob).unwrap(),
     };
     let current = ic_platform::candid::contract::encode_one(&input).unwrap();
     let (decoded,): (EmbeddedInput,) = CONFIGURATION_LIMITS.decode(&current).unwrap();
     assert_eq!(decoded, input);
     assert_eq!(
-        wire::decode::<ServiceInstallationInput>(&decoded.blob, CONFIGURATION_LIMITS.max_bytes),
+        wire::decode_request::<ServiceInstallationInput>(
+            "blob_install",
+            &decoded.blob,
+            CONFIGURATION_LIMITS.max_bytes
+        ),
         Ok(blob.clone())
     );
     let field = ic_platform::candid::contract::encode_one(UnmodeledEmbeddedInput {
@@ -150,12 +183,16 @@ fn embedded_configuration_bounds_its_own_envelope_and_nested_blob_bytes() {
     }
     let nested = ic_platform::candid::contract::encode_one(EmbeddedInput {
         initial_count: 41,
-        blob: wire::encode(unmodeled(&blob)).unwrap(),
+        blob: wire::encode_request("blob_install", unmodeled(&blob)).unwrap(),
     })
     .unwrap();
     let (decoded,): (EmbeddedInput,) = CONFIGURATION_LIMITS.decode(&nested).unwrap();
     assert_eq!(
-        wire::decode::<ServiceInstallationInput>(&decoded.blob, CONFIGURATION_LIMITS.max_bytes),
-        Err(wire::Error::Invalid)
+        wire::decode_request::<ServiceInstallationInput>(
+            "blob_install",
+            &decoded.blob,
+            CONFIGURATION_LIMITS.max_bytes
+        ),
+        Err(wire::Error::Trailing)
     );
 }

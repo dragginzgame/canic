@@ -312,14 +312,12 @@ mod tests {
     use canic_host::release_set::AppConfigSnapshot;
     #[cfg(test)]
     use canic_host::release_set::{ApplicationArtifactEntry, ApplicationArtifactUnion};
-    use flate2::{Compression, write::GzEncoder};
     #[cfg(test)]
     use release_artifacts::*;
     use std::{
         collections::BTreeMap,
         error::Error as StdError,
         fmt,
-        io::Write,
         num::NonZeroUsize,
         sync::OnceLock,
         time::{Duration, Instant},
@@ -16195,6 +16193,125 @@ cycles = "80T"
         })
     }
 
+    /// Physical authority retained with a configured Root baseline.
+    pub(in crate::pic) struct ConfiguredRootAuthority {
+        pub root: Principal,
+        pub coordinator: Principal,
+        pub pool_assets: Vec<Principal>,
+    }
+
+    /// Install a configured Root through the same managed Fleet bootstrap owner.
+    pub(in crate::pic) fn install_configured_root(
+        pic: &PocketIc,
+        spec: &crate::pic::root::RootBaselineSpec<'_>,
+        artifacts: &ic_build::artifacts::ArtifactCacheRecord,
+        root_wasm: Vec<u8>,
+    ) -> ConfiguredRootAuthority {
+        let config = AppConfigSnapshot::load(&spec.build_config_path).expect("Root profile config");
+        let mut modules = BTreeMap::new();
+        for role in spec.release_roles {
+            let path = crate::pic::artifacts::retained_artifact_path(artifacts, role);
+            let bytes = std::fs::read(path).expect("read retained Component artifact");
+            let raw = ic_host_artifacts::artifact::decode_gzip(&bytes, bytes.len(), usize::MAX)
+                .expect("decode retained Component artifact");
+            modules.insert(CanisterRole::owned((*role).to_string()), raw);
+        }
+        for component in &config.component_topology().component_specs {
+            for role in std::iter::once(&component.component_role)
+                .chain(component.children.iter().map(|child| &child.role))
+            {
+                assert!(
+                    modules.contains_key(role),
+                    "Root profile lacks artifact for {role}"
+                );
+            }
+        }
+        let release_id = spec
+            .build_extra_env
+            .iter()
+            .find(|(key, _)| key == crate::pic::artifacts::INTERNAL_TEST_RELEASE_BUILD_ID.0)
+            .map_or(
+                crate::pic::artifacts::INTERNAL_TEST_RELEASE_BUILD_ID.1,
+                |(_, value)| value,
+            )
+            .parse()
+            .expect("qualified Root release identity");
+        let mut store = build_root_store_fixture_with_config_for_release(
+            &spec.build_config_path,
+            &modules,
+            release_id,
+        );
+        store.wasm = Some(
+            std::fs::read(crate::pic::artifacts::retained_artifact_path(
+                artifacts,
+                "wasm_store",
+            ))
+            .expect("read retained Store artifact"),
+        );
+        let coordinator = pic.create_canister();
+        pic.add_cycles(coordinator, COORDINATOR_INSTALL_CYCLES);
+        let fixture = install_bootstrapped_root_with_config_and_pool_setup(
+            pic,
+            root_wasm,
+            coordinator,
+            store,
+            BootstrappedRootPlacement {
+                canister_pool_maximum_size: None,
+                canister_pool_minimum_size: None,
+                canister_pool_cycles: None,
+                coordinator_subnet: None,
+                existing_root: None,
+                existing_wasm_store: None,
+                root_subnet: None,
+                component_admission_limits: None,
+                fleet_id: None,
+                funding: None,
+                coordinator_root_funding: None,
+            },
+            &spec.build_config_path,
+            create_prepaid_pool_assets,
+        );
+        reset_prepaid_pool_assets(pic, fixture.root_id);
+        install_fixture_coordinator_with_config(
+            pic,
+            coordinator,
+            build_test_coordinator_wasm(),
+            &fixture,
+            &spec.build_config_path,
+        );
+        let (version, synchronization) = join_and_synchronize_root(pic, coordinator, &fixture);
+        activate_registry_and_prepare_component_registry(
+            pic,
+            coordinator,
+            &fixture,
+            version,
+            synchronization,
+        );
+        for (index, component) in config
+            .component_topology()
+            .component_specs
+            .iter()
+            .enumerate()
+        {
+            let mut operation_id = [0xa3; 32];
+            operation_id[..8].copy_from_slice(&u64::try_from(index).unwrap().to_be_bytes());
+            provision_component_request(
+                pic,
+                fixture.root_id,
+                RootComponentAllocationRequest {
+                    operation_id,
+                    component_spec: component.component_spec.clone(),
+                },
+            );
+        }
+        activate_root(pic, fixture.root_id);
+        ConfiguredRootAuthority {
+            root: fixture.root_id,
+            coordinator,
+            pool_assets: fixture.init_args.canister_pool_imports,
+        }
+    }
+
     fn setup_active_component_registry_fresh() -> ActiveComponentRegistryFixture {
         setup_active_component_registry_with_pic(build_pic)
     }
@@ -16353,44 +16470,43 @@ cycles = "80T"
         let metadata = baseline.metadata();
         let workload_canisters = [metadata.issuer.canister_id, metadata.verifier.canister_id];
 
-        for canister_id in metadata
-            .pool_assets
+        reset_pool_assets(
+            pic,
+            metadata.root,
+            &metadata.pool_assets,
+            &workload_canisters,
+        )
+        .map_err(ActiveComponentRegistryBaselineError::Invariant)
+    }
+
+    /// Restore blank pool custody outside snapshots without touching installed workloads.
+    pub(in crate::pic) fn reset_pool_assets(
+        pic: &PocketIc,
+        root: Principal,
+        pool_assets: &[Principal],
+        workload_canisters: &[Principal],
+    ) -> Result<(), String> {
+        for canister_id in pool_assets
             .iter()
             .copied()
             .filter(|canister_id| !workload_canisters.contains(canister_id))
         {
             if !pic.canister_exists(canister_id) {
-                return Err(ActiveComponentRegistryBaselineError::Invariant(format!(
-                    "pooled asset {canister_id} no longer exists"
-                )));
+                return Err(format!("pooled asset {canister_id} no longer exists"));
             }
             let status = pic
-                .canister_status(canister_id, Some(metadata.root))
-                .map_err(|error| {
-                    ActiveComponentRegistryBaselineError::Invariant(format!(
-                        "inspect pooled asset {canister_id}: {error:?}"
-                    ))
-                })?;
+                .canister_status(canister_id, Some(root))
+                .map_err(|error| format!("inspect pooled asset {canister_id}: {error:?}"))?;
             if status.module_hash.is_some() {
-                pic.uninstall_canister(canister_id, Some(metadata.root))
-                    .map_err(|error| {
-                        ActiveComponentRegistryBaselineError::Invariant(format!(
-                            "uninstall pooled asset {canister_id}: {error:?}"
-                        ))
-                    })?;
+                pic.uninstall_canister(canister_id, Some(root))
+                    .map_err(|error| format!("uninstall pooled asset {canister_id}: {error:?}"))?;
             }
-            pic.set_controllers(canister_id, Some(metadata.root), vec![metadata.root])
+            pic.set_controllers(canister_id, Some(root), vec![root])
                 .map_err(|error| {
-                    ActiveComponentRegistryBaselineError::Invariant(format!(
-                        "restore pooled asset {canister_id} controller: {error:?}"
-                    ))
+                    format!("restore pooled asset {canister_id} controller: {error:?}")
                 })?;
-            pic.start_canister(canister_id, Some(metadata.root))
-                .map_err(|error| {
-                    ActiveComponentRegistryBaselineError::Invariant(format!(
-                        "start pooled asset {canister_id}: {error:?}"
-                    ))
-                })?;
+            pic.start_canister(canister_id, Some(root))
+                .map_err(|error| format!("start pooled asset {canister_id}: {error:?}"))?;
             let cycles = pic.cycle_balance(canister_id);
             if cycles < PREPAID_POOL_ASSET_CYCLES {
                 pic.add_cycles(canister_id, PREPAID_POOL_ASSET_CYCLES - cycles);
@@ -18108,9 +18224,10 @@ cycles = "80T"
     }
 
     fn gzip(bytes: &[u8]) -> Vec<u8> {
-        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-        encoder.write_all(bytes).expect("gzip fixture Wasm");
-        encoder.finish().expect("finish fixture Wasm gzip")
+        let mut encoded = Vec::new();
+        ic_host_artifacts::artifact::encode_gzip(bytes, &mut encoded, 6, u64::MAX)
+            .expect("gzip fixture Wasm");
+        encoded
     }
 
     fn stage_chunked_payload(
@@ -18447,3 +18564,5 @@ pub use tests::{
     ActiveComponentRegistryFixture, setup_active_component_registry,
     setup_fresh_active_component_registry,
 };
+
+pub(in crate::pic) use tests::{install_configured_root, reset_pool_assets};

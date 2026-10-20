@@ -6,9 +6,7 @@
 use crate::fleet_ensure::ops::operator_mint::receipts::{
     DepositVerificationError as Error, ReceiptVerificationLimits,
 };
-use ic_platform::{
-    Principal, agent::Agent, certification::Certificate, icrc_ledger_types::ICRC3DataCertificate,
-};
+use ic_platform::{Principal, agent::Agent, icrc_ledger_types::ICRC3DataCertificate};
 use ic_query::certificate::{self, CertificateEvidenceLimits};
 
 pub use ic_query::certificate::CertificateVerificationError;
@@ -27,7 +25,6 @@ pub(super) fn verify(
         &evidence.hash_tree,
         CertificateEvidenceLimits {
             bytes: limits.certificate_bytes,
-            depth: limits.depth,
         },
     )
     .map_err(|error| match error {
@@ -36,14 +33,4 @@ pub(super) fn verify(
         | CertificateVerificationError::LedgerTipMalformed => Error::WitnessMismatch,
         other => Error::Certificate(other),
     })
-}
-
-pub(super) fn authenticate(
-    agent: &Agent,
-    canister: Principal,
-    bytes: &[u8],
-    maximum_bytes: usize,
-    depth: u8,
-) -> Result<Certificate, CertificateVerificationError> {
-    certificate::authenticate(agent, canister, bytes, maximum_bytes, depth)
 }

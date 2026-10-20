@@ -13,7 +13,7 @@ license = "MIT"
 canic = { path = "../../../crates/canic", default-features = false }
 canic-blob-service = { path = ".." }
 # Tests and tooling only
-ic-platform = { version = "0.1.13", default-features = false }
+ic-platform = { version = "0.2.1", default-features = false }
 
 [package]
 name = "blob-service-consumer"

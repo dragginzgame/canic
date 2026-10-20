@@ -11,8 +11,7 @@ use canic_host::{
     release_set::AppConfigSnapshot,
     role_contract::{PackageValidationMode, RolePackageValidation, validate_declared_role_package},
 };
-use flate2::{Compression, write::GzEncoder};
-use std::{io::Write, path::Path, process::Command};
+use std::{path::Path, process::Command};
 
 pub fn uses_audit_root(config: &Path) -> bool {
     config.ends_with("canisters/audit/root_probe/native-child-recovery.toml")
@@ -172,7 +171,8 @@ fn finalize_audit_root(output: &CanisterArtifactBuildOutput, runtime: &Path, can
 }
 
 fn gzip(bytes: &[u8]) -> Vec<u8> {
-    let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-    encoder.write_all(bytes).expect("gzip fixture Wasm");
-    encoder.finish().expect("finish fixture Wasm gzip")
+    let mut encoded = Vec::new();
+    ic_host_artifacts::artifact::encode_gzip(bytes, &mut encoded, 6, u64::MAX)
+        .expect("gzip fixture Wasm");
+    encoded
 }

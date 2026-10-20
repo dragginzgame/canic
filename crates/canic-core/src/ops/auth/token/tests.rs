@@ -9,8 +9,8 @@ use crate::{
         root_proof::RootDelegationProofError,
     },
 };
-use k256::ecdsa::{
-    Signature as K256TestSignature, SigningKey as K256SigningKey, signature::hazmat::PrehashSigner,
+use ic_platform::ecdsa::{
+    PrehashSigner, Signature as K256TestSignature, SigningKey as K256SigningKey,
 };
 use std::fmt::Write as _;
 

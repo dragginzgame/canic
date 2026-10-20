@@ -4,6 +4,9 @@ use std::path::{Path, PathBuf};
 
 const ROOT_TOPOLOGY_RELEASE_ROLES: &[&str] = &[
     "app",
+    "index_child",
+    "index_hub",
+    "test",
     "scale_hub",
     "scale_replica",
     "user_hub",
@@ -115,7 +118,5 @@ fn baseline_spec_for_roles_owned_env(
         bootstrap_tick_limit: BOOTSTRAP_TICK_LIMIT,
         root_setup_max_attempts: ROOT_SETUP_MAX_ATTEMPTS,
         pocket_ic_wasm_chunk_store_limit_bytes: 100 * 1024 * 1024,
-        root_release_chunk_bytes: canic::CANIC_WASM_CHUNK_BYTES,
-        package_version: env!("CARGO_PKG_VERSION"),
     }
 }

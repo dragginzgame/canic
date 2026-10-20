@@ -1,11 +1,7 @@
 use super::{
     InitializedRootTopology, RootBaselineMetadata, RootBaselineSpec, progress, progress_elapsed,
 };
-use crate::pic::{
-    CanicPicExt,
-    canic::{adopt_sibling_wasm_store, create_and_install_pre_adoption_root},
-    startup::try_start_pocket_ic,
-};
+use crate::pic::{CanicPicExt, startup::try_start_pocket_ic};
 use ic_platform::Principal;
 
 use canic::{
@@ -16,13 +12,13 @@ use canic::{
 };
 
 use ic_testkit::pic::{PocketIc, PocketIcBuilder, PocketIcStartupError};
-use std::{collections::HashMap, fs, time::Instant};
+use std::{collections::HashMap, time::Instant};
 
 use canic_contracts::dto::wire::projection::fixture_root_topology::RootStatusRequest;
 
 use canic_contracts::dto::wire::projection::fixture_root_topology::RootStatusResponse;
 
-/// Install root, stage one ordinary release profile, resume bootstrap, and fetch root children.
+/// Install the configured managed Fleet and fetch its ready Root children.
 ///
 /// # Panics
 ///
@@ -35,11 +31,6 @@ pub fn setup_root_topology(
     artifacts: &ic_build::artifacts::ArtifactCacheRecord,
     root_wasm: Vec<u8>,
 ) -> InitializedRootTopology {
-    let wasm_store_wasm = fs::read(crate::pic::artifacts::retained_artifact_path(
-        artifacts,
-        "wasm_store",
-    ))
-    .expect("read sibling Wasm Store artifact");
     for attempt in 1..=spec.root_setup_max_attempts {
         progress(
             spec,
@@ -69,35 +60,12 @@ pub fn setup_root_topology(
             }
         };
 
-        progress(spec, "installing root canister");
-        let root_install_started_at = Instant::now();
-        let prepared = create_and_install_pre_adoption_root(
-            &pic,
-            root_wasm,
-            wasm_store_wasm,
-            &spec.build_config_path,
-        )
-        .expect("install root canister");
-        let root_id = prepared.root_id;
-        progress_elapsed(spec, "root canister installed", root_install_started_at);
-
-        progress(spec, "staging managed release set");
-        let stage_started_at = Instant::now();
-        super::stage_managed_release_set(
-            spec,
-            artifacts,
-            &pic,
-            prepared.wasm_store,
-            prepared.installation_controller,
-        );
-        progress_elapsed(spec, "staged managed release set", stage_started_at);
-
-        adopt_sibling_wasm_store(&pic, root_id, &prepared.root_args);
-
-        progress(spec, "activating managed Fleet");
-        let resume_started_at = Instant::now();
-        crate::pic::canic::activate_managed_fleet(&pic, root_id);
-        progress_elapsed(spec, "activated managed Fleet", resume_started_at);
+        progress(spec, "installing configured managed Fleet");
+        let install_started_at = Instant::now();
+        let authority =
+            crate::pic::fleet_registry::install_configured_root(&pic, spec, artifacts, root_wasm);
+        let root_id = authority.root;
+        progress_elapsed(spec, "managed Fleet activated", install_started_at);
 
         progress(spec, "waiting for root bootstrap");
         let root_wait_started_at = Instant::now();
@@ -134,6 +102,8 @@ pub fn setup_root_topology(
             pic,
             metadata: RootBaselineMetadata {
                 root_id,
+                coordinator_id: authority.coordinator,
+                pool_assets: authority.pool_assets,
                 component_canisters,
                 snapshot_pids,
                 managed_store_pids,

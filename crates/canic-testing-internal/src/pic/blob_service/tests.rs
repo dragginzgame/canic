@@ -9,8 +9,15 @@ use super::artifacts::{self, Composition};
 
 use canic_blob_service::__private::ic_blob_storage_contracts as contracts;
 
-fn decode_blob<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> Result<T, contracts::wire::Error> {
-    contracts::wire::decode(bytes, canic::testing::CANDID_REPLY_LIMITS.reply_bytes)
+fn decode_blob<T: serde::Serialize + serde::de::DeserializeOwned>(
+    method: &str,
+    bytes: &[u8],
+) -> Result<T, contracts::wire::Error> {
+    contracts::wire::decode_response(
+        method,
+        bytes,
+        canic::testing::CANDID_REPLY_LIMITS.reply_bytes,
+    )
 }
 use canic::testing::{
     ManagedApplicationInit, ManagedComponentGroupQualificationInput,
@@ -98,7 +105,8 @@ fn installation(service: Principal) -> ServiceInstallationInput {
 }
 
 fn dedicated_init(service: Principal) -> Vec<u8> {
-    contracts::wire::encode(installation(service)).expect("encode dedicated installation")
+    contracts::wire::encode_request("blob_install", installation(service))
+        .expect("encode dedicated installation")
 }
 
 fn embedded_init(service: Principal) -> Vec<u8> {
@@ -210,11 +218,12 @@ fn qualify(embedded: bool) {
     let resume = || {
         let result: Result<(), canic_blob_service::dto::recovery::CurrentInstanceRecoveryFailure> =
             decode_blob(
+                "blob_resume_current_instance",
                 &pic.update_call(
                     service,
                     operator,
                     "blob_resume_current_instance",
-                    contracts::wire::encode(()).unwrap(),
+                    contracts::wire::encode_request("blob_resume_current_instance", ()).unwrap(),
                 )
                 .expect("Blob transport"),
             )
@@ -224,11 +233,12 @@ fn qualify(embedded: bool) {
     resume();
     let configuration = || {
         let result: Result<HostConfigurationView, HostFailure> = decode_blob(
+            "blob_configuration",
             &pic.query_call(
                 service,
                 operator,
                 "blob_configuration",
-                contracts::wire::encode(()).unwrap(),
+                contracts::wire::encode_request("blob_configuration", ()).unwrap(),
             )
             .expect("Blob transport"),
         )
@@ -246,11 +256,12 @@ fn qualify(embedded: bool) {
     resume();
     assert_eq!(configuration(), installed);
     let denied: Result<HostConfigurationView, HostFailure> = decode_blob(
+        "blob_configuration",
         &pic.query_call(
             service,
             stranger,
             "blob_configuration",
-            contracts::wire::encode(()).unwrap(),
+            contracts::wire::encode_request("blob_configuration", ()).unwrap(),
         )
         .expect("Blob transport"),
     )
@@ -264,11 +275,12 @@ fn qualify(embedded: bool) {
     };
     let capacity = || {
         let result: Result<UploadCapacityResponse, UploadCapacityFailure> = decode_blob(
+            "blob_upload_capacity",
             &pic.query_call(
                 service,
                 tenant,
                 "blob_upload_capacity",
-                contracts::wire::encode(scope).unwrap(),
+                contracts::wire::encode_request("blob_upload_capacity", scope).unwrap(),
             )
             .expect("Blob transport"),
         )
@@ -360,11 +372,12 @@ fn qualify(embedded: bool) {
     assert_eq!(initial_capacity.remaining_bytes, 10_000);
     assert!(!initial_capacity.fenced);
     let denied: Result<UploadCapacityResponse, UploadCapacityFailure> = decode_blob(
+        "blob_upload_capacity",
         &pic.query_call(
             service,
             stranger,
             "blob_upload_capacity",
-            contracts::wire::encode(scope).unwrap(),
+            contracts::wire::encode_request("blob_upload_capacity", scope).unwrap(),
         )
         .expect("Blob transport"),
     )
@@ -398,22 +411,24 @@ fn qualify(embedded: bool) {
         .collect::<Vec<_>>();
     for permission in &permissions {
         let denied: Result<UploadAdmissionMutation, UploadAdmissionFailure> = decode_blob(
+            "blob_admit_upload",
             &pic.update_call(
                 service,
                 permission.uploader,
                 "blob_admit_upload",
-                contracts::wire::encode(*permission).unwrap(),
+                contracts::wire::encode_request("blob_admit_upload", *permission).unwrap(),
             )
             .expect("Blob transport"),
         )
         .expect("uploader cannot grant tenant authority");
         assert_eq!(denied, Err(UploadAdmissionFailure::Denied));
         let granted: Result<UploadAdmissionMutation, UploadAdmissionFailure> = decode_blob(
+            "blob_admit_upload",
             &pic.update_call(
                 service,
                 tenant,
                 "blob_admit_upload",
-                contracts::wire::encode(*permission).unwrap(),
+                contracts::wire::encode_request("blob_admit_upload", *permission).unwrap(),
             )
             .expect("Blob transport"),
         )
@@ -427,15 +442,19 @@ fn qualify(embedded: bool) {
         for actor in [permission.uploader, stranger] {
             let assessment: Result<UploadCertificateAssessmentResponse, UploadExposureFailure> =
                 decode_blob(
+                    "blob_upload_certificate_assessment",
                     &pic.query_call(
                         service,
                         actor,
                         "blob_upload_certificate_assessment",
-                        contracts::wire::encode(root.clone()).unwrap(),
+                        contracts::wire::encode_request(
+                            "blob_upload_certificate_assessment",
+                            root.clone(),
+                        )
+                        .unwrap(),
                     )
                     .expect("Blob transport"),
                 )
-                .map(|(reply,)| reply)
                 .expect("certificate assessment transport");
             let expected = if actor == permission.uploader {
                 UploadExposureFailure::Unprepared
@@ -502,11 +521,12 @@ fn qualify(embedded: bool) {
     assert_eq!(restored.unwrap().enrollment, enrolled.enrollment);
     for permission in permissions {
         let replayed: Result<UploadAdmissionMutation, UploadAdmissionFailure> = decode_blob(
+            "blob_admit_upload",
             &pic.update_call(
                 service,
                 tenant,
                 "blob_admit_upload",
-                contracts::wire::encode(permission).unwrap(),
+                contracts::wire::encode_request("blob_admit_upload", permission).unwrap(),
             )
             .expect("Blob transport"),
         )
@@ -576,11 +596,11 @@ fn refuse_invalid_configuration(
     let unknown_field = if embedded {
         ic_platform::candid::contract::encode_one(UnmodeledEmbeddedInput {
             initial_count: 41,
-            blob: contracts::wire::encode(unmodeled).unwrap(),
+            blob: contracts::wire::encode_request("blob_install", unmodeled).unwrap(),
         })
         .unwrap()
     } else {
-        contracts::wire::encode(unmodeled).unwrap()
+        contracts::wire::encode_request("blob_install", unmodeled).unwrap()
     };
     let extra_argument = if embedded {
         ic_platform::candid::contract::encode_args((
@@ -613,11 +633,12 @@ fn refuse_invalid_configuration(
         );
         assert_eq!(pic.get_stable_memory(service), stable);
         let current: Result<HostConfigurationView, HostFailure> = decode_blob(
+            "blob_configuration",
             &pic.query_call(
                 service,
                 principal(7),
                 "blob_configuration",
-                contracts::wire::encode(()).unwrap(),
+                contracts::wire::encode_request("blob_configuration", ()).unwrap(),
             )
             .expect("Blob transport"),
         )

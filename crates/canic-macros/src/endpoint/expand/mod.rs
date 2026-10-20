@@ -51,15 +51,20 @@ pub(super) fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) 
     let cdk_attr = if uses_raw_adapter {
         quote!()
     } else {
-        cdk_attr(kind, &args.forwarded)
+        cdk_attr(kind, &args.forwarded, &orig_name)
     };
-    let candid_attr = uses_raw_adapter.then(|| {
+    let candid_attr = Some({
         let method_name = args
             .export_name
             .clone()
             .unwrap_or_else(|| syn::LitStr::new(&orig_name.to_string(), orig_name.span()));
         entry_kind(kind, args.query_mode).candid_attribute(&method_name)
     });
+    let codecs = if uses_raw_adapter {
+        quote!()
+    } else {
+        candid_codecs(&orig_sig)
+    };
     let payload_registration = payload_registration(kind, &args, &orig_name);
 
     let wrapper_sig = wrapper_signature(&orig_sig, impl_async, args.reject_access);
@@ -106,6 +111,7 @@ pub(super) fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) 
 
     quote! {
         #payload_registration
+        #codecs
 
         #(#attrs)*
         #[expect(clippy::missing_const_for_fn, clippy::unnecessary_wraps)]
@@ -420,21 +426,67 @@ fn extract_args(sig: &syn::Signature) -> syn::Result<Vec<TokenStream2>> {
     Ok(out)
 }
 
-fn cdk_attr(kind: EndpointKind, forwarded: &[TokenStream2]) -> TokenStream2 {
+// Ordinary Canic endpoints retain their Candid contract through explicit Platform codecs.
+fn candid_codecs(signature: &Signature) -> TokenStream2 {
+    let decode = format_ident!("__canic_decode_{}", signature.ident);
+    let encode = format_ident!("__canic_encode_{}", signature.ident);
+    let types: Vec<_> = signature
+        .inputs
+        .iter()
+        .filter_map(|arg| match arg {
+            syn::FnArg::Typed(arg) => Some(&arg.ty),
+            syn::FnArg::Receiver(_) => None,
+        })
+        .collect();
+    let (decoded_type, decoded_value) = if types.len() == 1 {
+        let ty = types[0];
+        (quote!(#ty), quote!(decoded.0))
+    } else {
+        (quote!((#(#types,)*)), quote!(decoded))
+    };
+    let (parameter, encoding) = match &signature.output {
+        syn::ReturnType::Default => (
+            quote!(),
+            quote!(::canic::__internal::ic_platform::candid::contract::encode_args(())),
+        ),
+        syn::ReturnType::Type(_, ty) => match &**ty {
+            syn::Type::Tuple(tuple) if tuple.elems.is_empty() => (
+                quote!(),
+                quote!(::canic::__internal::ic_platform::candid::contract::encode_args(())),
+            ),
+            syn::Type::Tuple(_) => (
+                quote!(value: #ty),
+                quote!(::canic::__internal::ic_platform::candid::contract::encode_args(value)),
+            ),
+            _ => (
+                quote!(value: #ty),
+                quote!(::canic::__internal::ic_platform::candid::contract::encode_one(value)),
+            ),
+        },
+    };
+    quote! {
+        fn #decode(bytes: Vec<u8>) -> #decoded_type {
+            let mut config = ::canic::__internal::ic_platform::candid::decoder::DecoderConfig::new();
+            config.set_skipping_quota(10_000);
+            let decoded: (#(#types,)*) = ::canic::__internal::ic_platform::candid::decoder::decode_args_with_config(&bytes, &config)
+                .unwrap_or_else(|error| ::canic::__internal::cdk::trap(error.to_string()));
+            #decoded_value
+        }
+        fn #encode(#parameter) -> Vec<u8> {
+            #encoding.unwrap_or_else(|error| ::canic::__internal::cdk::trap(format!("failed to encode response: {error}")))
+        }
+    }
+}
+
+fn cdk_attr(kind: EndpointKind, forwarded: &[TokenStream2], name: &syn::Ident) -> TokenStream2 {
+    let decode = syn::LitStr::new(&format!("__canic_decode_{name}"), name.span());
+    let encode = syn::LitStr::new(&format!("__canic_encode_{name}"), name.span());
     match kind {
         EndpointKind::Query => {
-            if forwarded.is_empty() {
-                quote!(#[::canic::__internal::cdk::query])
-            } else {
-                quote!(#[::canic::__internal::cdk::query(#(#forwarded),*)])
-            }
+            quote!(#[::canic::__internal::cdk::query(decode_with = #decode, encode_with = #encode, #(#forwarded),*)])
         }
         EndpointKind::Update => {
-            if forwarded.is_empty() {
-                quote!(#[::canic::__internal::cdk::update])
-            } else {
-                quote!(#[::canic::__internal::cdk::update(#(#forwarded),*)])
-            }
+            quote!(#[::canic::__internal::cdk::update(decode_with = #decode, encode_with = #encode, #(#forwarded),*)])
         }
     }
 }

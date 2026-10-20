@@ -108,7 +108,7 @@ mod tests {
     };
     use canic_contracts::ids::{BuildNetwork, CanisterRole};
     use ic_auth::delegation::DelegationProofError;
-    use k256::ecdsa::{SigningKey, signature::hazmat::PrehashSigner};
+    use ic_platform::ecdsa::{PrehashSigner, SigningKey};
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -210,7 +210,7 @@ mod tests {
             key_version: policy.key_version,
         };
 
-        let signature: k256::ecdsa::Signature = SigningKey::from_slice(&[7; 32])
+        let signature: ic_platform::ecdsa::Signature = SigningKey::from_slice(&[7; 32])
             .unwrap()
             .sign_prehash(&chain_key_batch_header_hash(&header).unwrap())
             .unwrap();

@@ -23,7 +23,7 @@ use crate::{
 };
 use canic_contracts::ids::BuildNetwork;
 #[cfg(test)]
-use k256::ecdsa::Signature as K256EcdsaSignature;
+use ic_platform::ecdsa::Signature as K256EcdsaSignature;
 use std::{future::Future, pin::Pin};
 use thiserror::Error;
 
@@ -352,9 +352,8 @@ mod tests {
     use crate::config::schema::DelegatedTokenConfig;
     use crate::dto::auth::ChainKeyBatchHeaderV1;
     use futures::executor::block_on;
-    use k256::ecdsa::{
-        Signature as K256TestSignature, SigningKey as K256SigningKey,
-        signature::hazmat::PrehashSigner,
+    use ic_platform::ecdsa::{
+        PrehashSigner, Signature as K256TestSignature, SigningKey as K256SigningKey,
     };
 
     fn p(id: u8) -> Principal {

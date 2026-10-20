@@ -35,7 +35,8 @@ pub struct ReceiptVerificationLimits {
     pub value_nodes: usize,
     /// Aggregate scalar and map-key bytes before hashing values.
     pub value_bytes: usize,
-    /// Maximum nesting for generic values and the outer CBOR evidence.
+    /// Maximum nesting for generic ledger values.
+    /// Certificate CBOR uses the IC Agent codec's built-in recursion limit.
     pub depth: u8,
 }
 

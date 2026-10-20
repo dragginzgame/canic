@@ -13,7 +13,7 @@ use crate::fleet_ensure::{
     ops::operator_mint::{
         MINT_MEMO, OperatorMintWireError, account_identifier, principal_subaccount,
         receipts::{
-            CertificateVerificationError, certificate,
+            CertificateVerificationError,
             icp::wire::{EncodedBlocksReply, ReadArgs},
             network_identity_sha256,
         },
@@ -37,8 +37,6 @@ pub use wire::ArchiveReadError;
 pub struct IcpReadLimits {
     /// Maximum outer certificate bytes before CBOR decoding.
     pub certificate_bytes: usize,
-    /// Maximum CBOR nesting during certificate decoding.
-    pub certificate_depth: u8,
     /// Maximum certified reply bytes before Candid or protobuf decoding.
     pub reply_bytes: usize,
     /// Work quota passed to the Candid decoder.
@@ -245,12 +243,11 @@ pub fn verify_read(
     limits: IcpReadLimits,
 ) -> Result<IcpReadOutcome, IcpReadError> {
     verify_reader(agent, &read.intent)?;
-    let certificate = certificate::authenticate(
+    let certificate = ic_query::certificate::authenticate(
         agent,
         read.request.canister_id,
         certificate_bytes,
         limits.certificate_bytes,
-        limits.certificate_depth,
     )?;
     verify_reader(agent, &read.intent)?;
     let path = [

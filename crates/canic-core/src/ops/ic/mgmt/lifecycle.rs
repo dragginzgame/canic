@@ -56,12 +56,11 @@ impl MgmtOps {
                 error.with_dependency_failure(canister_pid, "upload_chunk", "upload_chunk")
             })?;
 
-        #[expect(clippy::cast_precision_loss)]
-        let bytes_kb = chunk_len as f64 / 1_000.0;
+        let size = crate::format::byte_size(chunk_len as u64);
         log!(
             Topic::CanisterLifecycle,
             Ok,
-            "upload_chunk: {canister_pid} ({bytes_kb} KB)"
+            "upload_chunk: {canister_pid} ({size})"
         );
 
         Ok(hash)

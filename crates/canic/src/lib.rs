@@ -58,9 +58,7 @@ pub mod __internal {
     pub mod cdk {
         pub use ic_platform::Principal;
         pub use ic_platform::cdk::api::trap;
-        pub use ic_platform::cdk::{
-            export_candid, futures, init, inspect_message, post_upgrade, query, update,
-        };
+        pub use ic_platform::cdk::{futures, init, inspect_message, post_upgrade, query, update};
 
         pub mod api {
             pub use ic_platform::cdk::api::{canister_cycle_balance, canister_version};

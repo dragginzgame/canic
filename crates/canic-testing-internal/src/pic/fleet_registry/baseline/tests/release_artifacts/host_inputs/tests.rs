@@ -174,7 +174,7 @@ fn excluded_test_edits_still_abort_an_in_flight_cache_transaction() {
         &host,
         &root.join("target"),
         &["native-producer"],
-        std::env::vars_os(),
+        crate::workspace::wasm_build_environment(),
     )
     .with_cargo_selection(ic_build::cargo::selection::CargoSelection {
         profile: Some("release".into()),

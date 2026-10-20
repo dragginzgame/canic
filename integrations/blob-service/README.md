@@ -54,8 +54,8 @@ application's sole Canic lifecycle. See the
 [composition guide](https://github.com/dragginzgame/canic/blob/main/docs/features/blob-storage/README.md).
 
 Construct `dto::configuration::ServiceInstallationInput` for the actual allocated
-service Principal and encode it with `ic_blob_storage_contracts::wire::encode`.
-The dedicated nested payload is CBOR; an embedded application owns its outer
+service Principal and encode it with `ic_blob_storage_contracts::wire::encode_request("blob_install", input)`.
+The dedicated nested payload is a method-bound Wire frame; an embedded application owns its outer
 envelope and carries the same Blob bytes. Bind the exact encoded bytes through Canic's production Root
 initializer before installation; retries retain those bytes and the member
 operation. A dependency change does not supply controller or provider authority.

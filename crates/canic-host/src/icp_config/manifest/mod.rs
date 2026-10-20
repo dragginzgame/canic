@@ -20,7 +20,7 @@ pub enum IcpManifestError {
     TooLarge,
 
     #[error("invalid ICP YAML: {0}")]
-    Yaml(#[source] Box<serde_saphyr::Error>),
+    Yaml(#[source] Box<serde_yaml_ng::Error>),
 
     #[error("Canic's local ICP inspection does not resolve project dependencies")]
     Dependencies,
@@ -119,12 +119,9 @@ impl IcpManifest {
         if source.len() > 1024 * 1024 {
             return Err(IcpManifestError::TooLarge);
         }
-        let mut options = serde_saphyr::Options::default();
-        options.merge_keys = serde_saphyr::MergeKeyPolicy::Error;
-        options.reject_unsupported_tags = true;
-        options.strict_booleans = true;
-        options.with_snippet = false;
-        let raw = serde_saphyr::from_str_with_options::<Option<RawManifest>>(source, options)
+        let document =
+            parse_yaml_document(source).map_err(|error| IcpManifestError::Yaml(Box::new(error)))?;
+        let raw = serde_yaml_ng::from_value::<Option<RawManifest>>(document)
             .map_err(|error| IcpManifestError::Yaml(Box::new(error)))?
             .unwrap_or_default();
         if !raw.dependencies.is_empty() {
@@ -250,4 +247,38 @@ fn named_items<T>(
         }
     }
     Ok(result)
+}
+
+// Inspect the entire document before schema projection: ignored ICP fields must
+// not hide duplicate keys, merge keys or unsupported tags. The same parsed value
+// supplies the typed projection; untagged manifest entries retain strict field types.
+// Reserve the << key even when quoted: the parsed tree does not retain scalar style.
+fn parse_yaml_document(source: &str) -> Result<serde_yaml_ng::Value, serde_yaml_ng::Error> {
+    use serde::de::Error as _;
+    use serde_yaml_ng::Value;
+
+    // Value deserialization rejects duplicate mapping keys, including ignored fields.
+    let document: Value = serde_yaml_ng::from_str(source)?;
+    let mut pending = vec![&document];
+    while let Some(value) = pending.pop() {
+        match value {
+            Value::Tagged(_) => {
+                return Err(serde_yaml_ng::Error::custom("unsupported ICP YAML tag"));
+            }
+            Value::Mapping(mapping) => {
+                for (key, value) in mapping {
+                    if key.as_str() == Some("<<") {
+                        return Err(serde_yaml_ng::Error::custom(
+                            "ICP YAML merge keys are unsupported",
+                        ));
+                    }
+                    pending.push(key);
+                    pending.push(value);
+                }
+            }
+            Value::Sequence(sequence) => pending.extend(sequence),
+            Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
+        }
+    }
+    Ok(document)
 }

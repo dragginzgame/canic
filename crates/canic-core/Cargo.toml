@@ -68,11 +68,10 @@ toml = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
-ed25519-dalek = { workspace = true }
 futures = { workspace = true }
 ic-auth = { workspace = true, features = ["session-restore", "certified-proof-verification", "portable-signature-verification"] }
 ic-memory = { workspace = true, features = ["test-support"] }
-k256 = { workspace = true }
+ic-platform = { workspace = true, features = ["ecdsa", "ed25519"] }
 syn = { workspace = true, features = ["full", "visit"] }
 
 [[bench]]

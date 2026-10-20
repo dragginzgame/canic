@@ -21,8 +21,8 @@ use crate::{
 };
 use canic_contracts::ids::{BuildNetwork, CanisterRole};
 use futures::executor::block_on;
-use k256::ecdsa::{
-    Signature as K256TestSignature, SigningKey as K256SigningKey, signature::hazmat::PrehashSigner,
+use ic_platform::ecdsa::{
+    PrehashSigner, Signature as K256TestSignature, SigningKey as K256SigningKey,
 };
 
 fn p(id: u8) -> Principal {

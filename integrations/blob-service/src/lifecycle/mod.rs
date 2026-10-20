@@ -56,7 +56,8 @@ pub fn install_from_args() {
     let (_, application): (canic::dto::abi::v1::CanisterInitPayload, Option<Vec<u8>>) =
         ENVELOPE_LIMITS.read().expect("admitted lifecycle envelope");
     let input: ServiceInstallationInput =
-        crate::__private::ic_blob_storage_contracts::wire::decode(
+        crate::__private::ic_blob_storage_contracts::wire::decode_request(
+            "blob_install",
             application
                 .as_deref()
                 .expect("service installation arguments"),

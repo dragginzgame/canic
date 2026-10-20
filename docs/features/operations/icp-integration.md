@@ -24,8 +24,16 @@ YAML forms of its own configuration. The contributor rule lives in
 [AGENTS.md](../../../AGENTS.md#configuration-formats).
 
 The shared `toml` dependency handles Canic configuration and Cargo documents.
-`canic-host` uses `serde-saphyr` with only deserialization enabled for ICP
-inspection. Neither parser belongs in a canister's Wasm dependency graph.
+`canic-host` uses `serde_yaml_ng`, matching IC Host Tools, for ICP inspection
+and CI workflow checks. Host FS owns the bounded file read. Local manifest
+inspection rejects duplicate keys, merge keys and unsupported tags across the
+whole document before projecting Canic's membership and network requirements.
+The `<<` mapping key is reserved even when quoted; literal uses of that key are
+rejected as well. The typed projection consumes the validated document without
+parsing it again.
+Host Tools' `icp-project` API consumes resolved `icp project show` output; it does
+not replace these raw-manifest checks or resolve includes and recipes here.
+Neither TOML nor YAML parsing belongs in a canister's Wasm dependency graph.
 Host build scripts parse configuration into generated typed runtime data; Root
 also embeds compact TOML source for configuration reporting. That source is
 text, not a runtime TOML parser. Host build-script and procedural-macro

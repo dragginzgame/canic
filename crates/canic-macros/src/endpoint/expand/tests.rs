@@ -120,7 +120,7 @@ fn composite_query_expansion_forwards_cdk_attr_and_call_kind() {
     let expanded = expand(EndpointKind::Query, args, func).to_string();
     let compact = expanded.split_whitespace().collect::<String>();
 
-    assert!(compact.contains("query(composite=true)"));
+    assert!(compact.contains("composite=true)"));
     assert!(compact.contains("::canic::__internal::cdk::query"));
     assert!(compact.contains("EndpointCallKind::QueryComposite"));
 }

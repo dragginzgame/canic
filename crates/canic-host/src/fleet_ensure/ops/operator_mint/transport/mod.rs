@@ -56,7 +56,6 @@ const DEPOSIT_LIMITS: ReceiptVerificationLimits = ReceiptVerificationLimits {
 };
 const ICP_LIMITS: IcpReadLimits = IcpReadLimits {
     certificate_bytes: RESPONSE_BYTES,
-    certificate_depth: 32,
     reply_bytes: 1024 * 1024,
     decoding_quota: 2_000_000,
     skipping_quota: 100_000,

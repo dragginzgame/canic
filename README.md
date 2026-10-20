@@ -28,7 +28,7 @@
 [![Docs.rs](https://docs.rs/canic/badge.svg)](https://docs.rs/canic)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![MSRV](https://img.shields.io/badge/MSRV-1.91.0-blue.svg)](Cargo.toml)
-[![Internal Rust](https://img.shields.io/badge/internal%20rust-1.99.0-orange.svg)](rust-toolchain.toml)
+[![Internal Rust](https://img.shields.io/badge/internal%20rust-1.99.1-orange.svg)](rust-toolchain.toml)
 
 Canic is an application framework and orchestration system for Rust applications
 on the Internet Computer (IC).

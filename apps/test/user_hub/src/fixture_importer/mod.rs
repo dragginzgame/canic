@@ -4,15 +4,12 @@
 //! Does not own: provisioning, grants, Canic readiness or production application schemas.
 //! Boundary: one application cell owns imported bytes and the durable completion checkpoint.
 
+use canic::__internal::core::cdk::structures::{DefaultMemoryImpl, StableCell as Cell};
 use canic::{
     api::fixture_provisioning::{FixtureImporter, FixtureProvisioningApi},
     dto::fixture_provisioning::{
         FixtureAssignment, FixtureImportError, FixtureImportProgress, FixtureImportReceipt,
     },
-};
-use ic_memory::{
-    RuntimeMemory,
-    ic_stable_structures::{Cell, DefaultMemoryImpl},
 };
 use std::cell::RefCell;
 
@@ -30,7 +27,7 @@ struct ImportRecord {
 }
 
 thread_local! {
-    static IMPORT: RefCell<Cell<Vec<u8>, RuntimeMemory<DefaultMemoryImpl>>> = RefCell::new(Cell::init(
+    static IMPORT: RefCell<Cell<Vec<u8>, DefaultMemoryImpl>> = RefCell::new(Cell::init(
         canic::memory::open(MEMORY_KEY),
         Vec::new(),
     ));
@@ -142,9 +139,23 @@ fn require_controller() -> Result<(), String> {
 }
 
 /// Release the test-only database hold without importing rows or writing a receipt.
-#[ic_platform::cdk::update(guard = "require_controller")]
+#[ic_platform::cdk::update(
+    guard = "require_controller",
+    decode_with = "decode_release",
+    encode_with = "encode_release"
+)]
+#[ic_platform::candid::contract::candid_method(update)]
 fn test_release_fixture() {
     let mut record = load();
     record.held = false;
     persist(&record);
+}
+
+fn decode_release(bytes: Vec<u8>) {
+    ic_platform::candid::decoder::decode_args::<()>(&bytes)
+        .unwrap_or_else(|error| ic_platform::cdk::api::trap(error.to_string()));
+}
+
+fn encode_release() -> Vec<u8> {
+    ic_platform::candid::contract::encode_args(()).expect("encode fixture release reply")
 }

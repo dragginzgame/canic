@@ -30,6 +30,7 @@ fn test_progress(phase: &str) {
 pub struct RootSetup {
     pub pic: RootPocketIc,
     pub root_id: Principal,
+    pub coordinator_id: Principal,
     pub component_canisters: HashMap<CanisterRole, Principal>,
     _serial_guard: MutexGuard<'static, ()>,
 }
@@ -67,6 +68,7 @@ pub fn setup_root(profile: RootSetupProfile) -> RootSetup {
     RootSetup {
         pic: RootPocketIc { baseline },
         root_id: metadata.root_id,
+        coordinator_id: metadata.coordinator_id,
         component_canisters: metadata.component_canisters,
         _serial_guard: serial_guard,
     }
