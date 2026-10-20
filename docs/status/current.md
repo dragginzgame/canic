@@ -1,5 +1,22 @@
 # Current handoff — 2026-10-20
 
+## Shared Tooling 0.25.9 adoption — 2026-10-20
+
+Refreshed through the canonical exporter from published main `85aded191d85ac4a8c0e5deab207f6be18895862`
+using a clean isolated source checkout; preserved the sibling's unpublished edits.
+All 132 snapshot files verify. The changed release runner refuses another version
+increment from committed preparation until exact annotated-tag and destination
+branch evidence confirms delivery. Tool/dependency selections are unchanged.
+
+Canic already runs Clippy immediately after tool admission. Executing its actual
+Make recipes with recording stubs under `make -j4` proved both success order and
+that Clippy failure prevents invariant/check/feature/test stages. Publication and
+fast-patch refusal fixtures, isolated release-runner tests, focused ShellCheck
+and whitespace checks pass. Logs: `/tmp/canic-shared0259-*.log` and
+`/tmp/canic-shared0259-order/`. No full Clippy/build/PocketIC suite or real release,
+publication or push ran. Open 0.112 changelogs are updated; overall release
+readiness still depends on the Blob runtime alignment recorded below.
+
 ## Lockfile preparation repair — 2026-10-20
 
 Commit `3b0710189` changed Backup ^0.35 to ^0.36 and Query ^0.65 to ^0.66

@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Adopt Shared Tooling 0.25.9 release-retry safeguards while retaining Clippy
+  before expensive validation, packaging and publication work.
+
 - Reconcile root and Blob consumer lockfiles with the selected dependencies so
   locked release preparation uses the declared graphs.
 
