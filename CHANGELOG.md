@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Select Metrics 0.15 with the updated Timers and Wire dependency resolutions.
+
 - Publish cache-test executable scripts through Host's isolated writer to avoid
   intermittent Linux text-file-busy failures during parallel tests.
 
