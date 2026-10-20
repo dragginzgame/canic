@@ -85,7 +85,7 @@ getrandom = "0.4"
 hmac = "0.13.0"
 ic-auth = { version = "0.12", default-features = false }
 ic-auth-protocol-types = "0.12"
-ic-backup = { version = "0.35", default-features = false }
+ic-backup = { version = "0.36", default-features = false }
 ic-blob-storage = "0.38"
 ic-blob-storage-contracts = "0.38"
 ic-build = { version = "0.62" }
@@ -97,7 +97,7 @@ ic-host-tools = "0.62"
 ic-memory = "0.50"
 ic-metrics = "0.15"
 ic-platform = { version = "0.5", default-features = false }
-ic-query = { version = "0.65", default-features = false, features = [
+ic-query = { version = "0.66", default-features = false, features = [
     "subnet-catalog-host",
 ] }
 # Direct use is limited to corruption fixtures; IC Storage also uses it in production.
