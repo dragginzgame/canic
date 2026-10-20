@@ -1,5 +1,34 @@
 # Current handoff — 2026-10-20
 
+## Full workspace Clippy — 2026-10-20
+
+Maintainer explicitly requested the full Clippy target. `RUSTC_WRAPPER='' make
+clippy` now passes for the maintained workspace with all targets/features and
+`-D warnings`. Fixed the redundant reference-memory clone and adapted Host
+metadata/tree capture, build grouping and internal fixture discovery to Build
+0.23 command recipes. Host retains existing budgets, successful/complete-output
+admission, environment selection and error mapping; Build still owns rendering
+and evidence decoding. No dependencies or lint allowances changed in this pass.
+
+Pass: full Clippy, scoped rustfmt/whitespace, and the Host isolated-role Cargo
+resolver regression. The regression's first run failed on sandbox registry DNS;
+rerunning with `CARGO_NET_OFFLINE=true` passed using cached dependencies.
+Logs: `/tmp/canic-full-clippy-pass3.log` and
+`/tmp/canic-full-clippy-host-test-offline.log`. Earlier failed passes are retained.
+Open 0.112 notes cover the Build integration. Existing contract-test and handoff
+edits were preserved. The Clippy blocker is cleared; complete release validation
+and deployment readiness are not established by this run. No Git/release effects.
+
+## Component registry test lint — 2026-10-20
+
+Shortened repeated Candid paths through a scoped import in the component registry
+round-trip test, preserving all four assertions and clearing `too_many_lines`.
+Pass: `canic-contracts` all-target/all-feature Clippy, the exact round-trip test,
+scoped rustfmt and whitespace checks. Logs: `/tmp/canic-contract-roundtrip-*.log`.
+No production change or lint suppression; routine test cleanup does not add a
+changelog entry. This blocker is fixed; whole-batch release readiness remains
+unqualified by these focused checks. No Git or release operations performed.
+
 ## Explicit fixture call codecs — 2026-10-20
 
 Fixed all reported fixture errors from the latest check/Clippy log:

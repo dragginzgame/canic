@@ -1,6 +1,6 @@
 //! Canic supplies build environment and target policy to IC Build's Cargo grouping.
 use crate::{canister_build::WorkspaceBuildContext, cargo_command};
-use ic_host_process::tool::{OutputLimit, OutputLimits};
+use ic_host_process::tool::{OutputLimit, OutputLimits, capture_command};
 use std::path::Path;
 
 pub(super) fn compatible_package_groups(
@@ -18,15 +18,20 @@ pub(super) fn compatible_package_groups(
             locked: true,
             ..Default::default()
         },
-        OutputLimits {
-            stdout: OutputLimit::Terminate(usize::MAX),
-            stderr: OutputLimit::Terminate(usize::MAX),
-            timeout: None,
-        },
-        || {
+        |spec| {
             let mut command = cargo_command();
             context.apply_to_command(&mut command);
-            command
+            let output = capture_command(
+                &mut spec.command(command)?,
+                OutputLimits {
+                    stdout: OutputLimit::Terminate(usize::MAX),
+                    stderr: OutputLimit::Terminate(usize::MAX),
+                    timeout: None,
+                },
+            )?
+            .require_success()?
+            .require_complete()?;
+            Ok(String::from_utf8(output.stdout)?)
         },
     )
 }

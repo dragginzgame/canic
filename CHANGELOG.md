@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Adapt Cargo discovery and build grouping to IC Build 0.23 command recipes,
+  retaining Host-owned capture limits and successful, complete-output checks.
+
 - Give funding/refill fixture calls and the Root audit endpoint explicit Candid
   codecs for Platform's raw transport, preserving their existing protocols.
 

@@ -2,9 +2,9 @@
 //!
 //! Normalize only the workspace's own version; external dependency requirements stay intact.
 
-use ic_build::cargo::observation::{CargoMetadataSpec, observe_metadata, schema::Metadata};
+use ic_build::cargo::observation::{CargoMetadataSpec, decode_metadata, schema::Metadata};
 use ic_build::cargo::selection::CargoFeatureSelection;
-use ic_host_process::tool::{OutputLimit, OutputLimits};
+use ic_host_process::tool::{CompletedExecution, OutputLimit, OutputLimits, capture_command};
 use std::{
     collections::BTreeMap,
     fs, io,
@@ -110,23 +110,26 @@ pub(super) fn normalize(root: &Path) -> io::Result<()> {
 
 // Cargo owns package identity and metadata decoding; the fixture owns its budget.
 fn workspace_inventory(root: &Path) -> io::Result<Metadata> {
-    observe_metadata(
-        &CargoMetadataSpec {
-            manifest_path: &root.join("Cargo.toml"),
-            include_dependencies: false,
-            filter_platform: None,
-            locked: true,
-            offline: true,
-            features: &CargoFeatureSelection::default(),
-        },
+    let spec = CargoMetadataSpec {
+        manifest_path: &root.join("Cargo.toml"),
+        include_dependencies: false,
+        filter_platform: None,
+        locked: true,
+        offline: true,
+        features: &CargoFeatureSelection::default(),
+    };
+    let output = capture_command(
+        &mut spec.command(Command::new("cargo"))?,
         OutputLimits {
             stdout: OutputLimit::Terminate(16 * 1024 * 1024),
             stderr: OutputLimit::Terminate(1024 * 1024),
             timeout: None,
         },
-        Command::new("cargo"),
     )
-    .map_err(|error| io::Error::other(error.to_string()))
+    .and_then(CompletedExecution::require_success)
+    .and_then(CompletedExecution::require_complete)
+    .map_err(|error| io::Error::other(error.to_string()))?;
+    decode_metadata(&output.stdout).map_err(|error| io::Error::other(error.to_string()))
 }
 
 // Rewrite local identities directly: Cargo update may select newer external

@@ -651,7 +651,7 @@ mod tests {
         let refs_memory = VectorMemory::default();
         let payload_memory = ObservedPayloadMemory::default();
         let refs_runtime = ic_memory::testing::fixture_runtime(
-            refs_memory.clone(),
+            refs_memory,
             "test",
             "test.",
             &["test.rows.v1"],
