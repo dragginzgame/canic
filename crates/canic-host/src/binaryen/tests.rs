@@ -88,12 +88,13 @@ fn same_version_executable_with_wrong_digest_is_rejected_before_execution() {
     let error = admit_binaryen_executable(&executable, &"0".repeat(64), None)
         .expect_err("wrong executable digest must reject");
     let message = error.to_string();
+    let expected_path = executable.canonicalize().unwrap();
 
     assert!(matches!(
         error,
-        BinaryenToolError::ExecutableHashMismatch { path, .. } if path == executable
+        BinaryenToolError::ExecutableHashMismatch { path, .. } if path == expected_path
     ));
-    assert!(message.contains(executable.to_string_lossy().as_ref()));
+    assert!(message.contains(expected_path.to_string_lossy().as_ref()));
     assert!(message.contains(BINARYEN_REPAIR_COMMAND));
     assert!(!root.join("execution-marker").exists());
     fs::remove_dir_all(root).expect("remove test root");
@@ -114,10 +115,33 @@ fn admitted_executable_records_exact_path_version_and_digest() {
     let admitted =
         admit_binaryen_executable(&executable, &digest, None).expect("admit exact executable");
 
-    assert_eq!(admitted.path(), executable);
+    assert_eq!(admitted.path(), executable.canonicalize().unwrap());
     assert_eq!(admitted.version_identity(), BINARYEN_VERSION_IDENTITY);
     assert_eq!(admitted.sha256(), digest);
     fs::remove_dir_all(root).expect("remove test root");
+}
+
+#[cfg(unix)]
+#[test]
+fn executable_admission_preserves_physical_identity_through_a_directory_alias() {
+    let root = temp_root("directory-alias");
+    fs::create_dir_all(root.join("physical")).unwrap();
+    std::os::unix::fs::symlink("physical", root.join("logical")).unwrap();
+    let executable = root.join("logical/wasm-opt");
+    write_executable(
+        &executable,
+        &crate::test_support::tool_script("#!/bin/sh\nprintf '@BINARYEN_IDENTITY@\\n'\n"),
+    );
+    let physical = root.join("physical/wasm-opt").canonicalize().unwrap();
+    std::assert_matches!(
+        admit_binaryen_executable(&executable, &"0".repeat(64), None),
+        Err(BinaryenToolError::ExecutableHashMismatch { path, .. }) if path == physical
+    );
+    let digest = sha256_file(&executable).unwrap();
+    let admitted = admit_binaryen_executable(&executable, &digest, None).unwrap();
+    assert_eq!(admitted.path(), physical);
+    assert_eq!(admitted.sha256(), digest);
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[cfg(unix)]

@@ -42,12 +42,23 @@ already-selected IC Storage 0.5.4 dependency. Only those root lock edges change;
 all selected package identities remain unchanged. The Canic-owned hook fixture
 passes --consumer explicitly; shared installer/hook bytes are unchanged.
 
-The pending Build 0.23 observer API port is a separate held contribution. Do not
-mix unpublished requirements, source overrides or its Host alignment into this PR.
+The next hosted run passes preflight, security and MSRV, then exposes a missing
+cache-executable binding and macOS logical/physical path assertions. CI now binds
+the installer's admitted executable into CANIC_SCCACHE_BIN in each cache-enabled
+job. The repository development pin matches the existing 1.99.1 workflow/tool
+selection. Shared wrappers and strict tool admission remain unchanged. Optimizer
+fixtures assert physical identity; an explicit directory-symlink regression also
+covers that contract on Linux.
+
+The Build 0.23 observer API port is separate. Keep its published adoption and
+remaining Host alignment out of this CI/facts contribution.
 
 ## Validation and remaining qualification
 
-Current focused Linux checks pass: real hook fixture, source-following ShellCheck,
+Current focused Linux checks pass: eight Binaryen controls, compiler-cache wrapper
+controls, actual workflow cache-binding blocks with substituted installer/compiler,
+Actionlint, strict Host library/test Clippy and real hook fixture. Prior focused
+source-following ShellCheck,
 grouped formatting, dependency inheritance/pins, strict Clippy and actual Rust
 1.91 native library checks for Hub, Shard and the managed lifecycle probe.
 Direct Cargo Wasm checking is refused by the existing authoritative-build guard;

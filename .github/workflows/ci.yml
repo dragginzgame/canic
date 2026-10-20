@@ -240,8 +240,9 @@ jobs:
       - name: Install compiler cache
         shell: bash
         run: |
-          bash scripts/ci/install-pinned-ci-tool.sh sccache
+          cache_binary="$(bash scripts/ci/install-pinned-ci-tool.sh sccache)"
           {
+            echo "CANIC_SCCACHE_BIN=$cache_binary"
             echo "SCCACHE_DIR=$RUNNER_TEMP/canic-sccache"
             echo "SCCACHE_CACHE_SIZE=2G"
             echo "RUSTC_WRAPPER=$GITHUB_WORKSPACE/scripts/ci/run-canic-sccache.sh"
@@ -306,8 +307,9 @@ jobs:
       - name: Install compiler cache
         shell: bash
         run: |
-          bash scripts/ci/install-pinned-ci-tool.sh sccache
+          cache_binary="$(bash scripts/ci/install-pinned-ci-tool.sh sccache)"
           {
+            echo "CANIC_SCCACHE_BIN=$cache_binary"
             echo "SCCACHE_DIR=$RUNNER_TEMP/canic-sccache"
             echo "SCCACHE_CACHE_SIZE=2G"
             echo "RUSTC_WRAPPER=$GITHUB_WORKSPACE/scripts/ci/run-canic-sccache.sh"
@@ -374,8 +376,9 @@ jobs:
       - name: Install compiler cache
         shell: bash
         run: |
-          bash scripts/ci/install-pinned-ci-tool.sh sccache
+          cache_binary="$(bash scripts/ci/install-pinned-ci-tool.sh sccache)"
           {
+            echo "CANIC_SCCACHE_BIN=$cache_binary"
             echo "SCCACHE_DIR=$RUNNER_TEMP/canic-sccache"
             echo "SCCACHE_CACHE_SIZE=2G"
             echo "RUSTC_WRAPPER=$GITHUB_WORKSPACE/scripts/ci/run-canic-sccache.sh"

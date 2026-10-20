@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Bind the installed compiler-cache executable into CI and align the development
+  toolchain with its prepared tools. Portable optimizer tests now check canonical
+  executable identity through logical directory aliases.
+
 - Use the governed IC Storage cell/map adapters in disposable lifecycle and
   fixture-import applications, consuming existing IC Memory leases. Follow the
   current explicit-consumer hook installer contract in hook qualification.
