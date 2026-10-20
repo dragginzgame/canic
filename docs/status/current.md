@@ -1,5 +1,13 @@
 # Current handoff — 2026-10-18
 
+## Authority-recovery layering fix — 2026-10-20
+
+Carry the maintainer's narrow committed repair from `8c2dda483` with its author
+attribution, without importing its wider unpublished parent. Both direct
+Platform trap calls in workflow/runtime/authority_restore use existing IcOps::trap
+with identical messages and rollback semantics. Keep the layering guard unchanged.
+The normal checkout and its pending funding-probe work remain untouched.
+
 ## Captured runtime facts handoff — 2026-10-19
 
 PR #596 now follows committed main `4caeec25d`, which already owns the unified

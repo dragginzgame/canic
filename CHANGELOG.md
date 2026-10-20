@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Keep authority-recovery timer and intent failures on the existing IcOps trap
+  boundary, preserving fail-closed rollback and diagnostic messages.
+
 - Carry IC Build's observed runtime Cargo facts through configured and infrastructure
   artifacts into build provenance and internal fixture callers. Record the executed
   target, profile, features, tool identities and selected Rust flags; remove
