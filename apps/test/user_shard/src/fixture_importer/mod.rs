@@ -10,10 +10,8 @@ use canic::{
         FixtureAssignment, FixtureImportError, FixtureImportProgress, FixtureImportReceipt,
     },
 };
-use ic_memory::{
-    RuntimeMemory,
-    ic_stable_structures::{Cell, DefaultMemoryImpl},
-};
+use ic_memory::DefaultMemoryImpl;
+use ic_storage::adapter::StableCell;
 use std::cell::RefCell;
 
 pub const MEMORY_KEY: &str = "test.fixture_import.v1";
@@ -29,7 +27,7 @@ struct ImportRecord {
 }
 
 thread_local! {
-    static IMPORT: RefCell<Cell<Vec<u8>, RuntimeMemory<DefaultMemoryImpl>>> = RefCell::new(Cell::init(
+    static IMPORT: RefCell<StableCell<Vec<u8>, DefaultMemoryImpl>> = RefCell::new(StableCell::init(
         canic::memory::open(MEMORY_KEY),
         Vec::new(),
     ));
