@@ -41,8 +41,6 @@ revision	6eb8c41785c5156aef62f082702bd54e8ce04606
 # entrypoint	scripts/ci/dependency-pins.jq
 # entrypoint	scripts/ci/check-release-tag.sh
 # entrypoint	scripts/dev/install-git-hooks.sh
-# entrypoint	scripts/ci/test-ic-tools.sh
-# entrypoint	scripts/ci/test-host-tools.sh
 # entrypoint	docs/verification-helpers.md
 # entrypoint	docs/tag-maintenance.md
 # entrypoint	scripts/ci/install-ci-tool.sh
@@ -156,8 +154,6 @@ file	de68acd7ba25355c73fa3e9a32cbde5525debf081862c1f1a52eccb4a66c48de	x	scripts/
 file	3d56ca1b0c5952b9534ece61b6754ca39e6ec1980d929f09de3dbd967a0c4977	-	scripts/ci/dependency-pins.jq
 file	d7b179f9ceaec6e11c690c975b61f91bedc80526415f71571615064db14f0c9c	x	scripts/ci/check-release-tag.sh
 file	9976e6cd4e60bfa86298f4b4209f5ffde0651105feef208a9c5ea9c90a432f2d	x	scripts/dev/install-git-hooks.sh
-file	fbdef65a1235e371bc9551222571807ffe9674647e662209bae40b6b98d96972	x	scripts/ci/test-ic-tools.sh
-file	ac69576589b5ae27e539571749600a4ef119a2786cb15902916306f52e1d975b	x	scripts/ci/test-host-tools.sh
 file	8dc3fe99bdc0f25c9b40ac8f353bf0fe34940c08f50b4ab35c175f5702bdf683	-	docs/verification-helpers.md
 file	1063002468575e2f821cfec71524bde06a64634bf30455d64d2d9fed872969d6	-	docs/tag-maintenance.md
 file	b4e4296caa76b65b15a66d13f42a1981dfebef1cf26e63434274348f6b7f6b20	x	scripts/ci/install-ci-tool.sh
