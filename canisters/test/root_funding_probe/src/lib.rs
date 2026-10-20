@@ -13,7 +13,10 @@ use ic_platform::cdk::{
     call::Call,
 };
 use ic_platform::{
-    candid::contract::{CandidType, encode_one},
+    candid::{
+        contract::{CandidType, encode_one},
+        decoder::decode_one,
+    },
     principal::ExternalPrincipal as Principal,
 };
 use serde::Deserialize;
@@ -304,11 +307,10 @@ async fn request() -> RootRequestObservation {
     );
     let balance_before_request = canister_cycle_balance();
     let result = match Call::bounded_wait(coordinator.into(), COORDINATOR_HANDLE_REQUEST_METHOD)
-        .with_arg(request)
+        .take_raw_args(encode_one(request).unwrap_or_else(|error| trap(error.to_string())))
         .await
     {
-        Ok(response) => response
-            .candid::<IssueResult>()
+        Ok(response) => decode_one::<IssueResult>(&response.into_bytes())
             .unwrap_or(IssueResult::RootBindingConflict),
         Err(_) => IssueResult::CallFailed,
     };
@@ -445,11 +447,13 @@ async fn advance_emergency_refill(trap_point: EmergencyTrapPoint) -> EmergencyRe
     if matches!(operation.phase, EmergencyRefillPhase::Prepared) {
         let (ledger, _) = require_emergency_root_role();
         let response = Call::bounded_wait(ledger.into(), LEDGER_TRANSFER_METHOD)
-            .with_arg(operation.transfer.clone())
+            .take_raw_args(
+                encode_one(operation.transfer.clone())
+                    .unwrap_or_else(|error| trap(error.to_string())),
+            )
             .await
             .unwrap_or_else(|_| trap("ledger transfer call failed"));
-        let transfer = response
-            .candid::<LedgerTransferResult>()
+        let transfer = decode_one::<LedgerTransferResult>(&response.into_bytes())
             .unwrap_or_else(|_| trap("decode ledger transfer response"));
         if matches!(trap_point, EmergencyTrapPoint::TransferCallback) {
             trap("intentional trap after ledger transfer response");
@@ -474,11 +478,10 @@ async fn advance_emergency_refill(trap_point: EmergencyTrapPoint) -> EmergencyRe
         canister_id: Principal::from(canister_self()),
     };
     let response = Call::bounded_wait(cmc.into(), CMC_NOTIFY_METHOD)
-        .with_arg(notify)
+        .take_raw_args(encode_one(notify).unwrap_or_else(|error| trap(error.to_string())))
         .await
         .unwrap_or_else(|_| trap("CMC notify call failed"));
-    let cycles_sent = response
-        .candid::<u128>()
+    let cycles_sent = decode_one::<u128>(&response.into_bytes())
         .unwrap_or_else(|_| trap("decode CMC notify response"));
     if matches!(trap_point, EmergencyTrapPoint::NotifyCallback) {
         trap("intentional trap after CMC notify response");
@@ -497,30 +500,27 @@ async fn prepare_emergency_refill() -> EmergencyRefillOperation {
     }
     let (ledger, cmc) = require_emergency_root_role();
     let fee_response = Call::bounded_wait(ledger.into(), LEDGER_FEE_METHOD)
-        .with_arg(())
+        .take_raw_args(encode_one(()).unwrap_or_else(|error| trap(error.to_string())))
         .await
         .unwrap_or_else(|_| trap("ledger fee call failed"));
-    let fee_e8s = fee_response
-        .candid::<u64>()
-        .unwrap_or_else(|_| trap("decode ledger fee"));
+    let fee_e8s =
+        decode_one::<u64>(&fee_response.into_bytes()).unwrap_or_else(|_| trap("decode ledger fee"));
     let decimals_response = Call::bounded_wait(ledger.into(), LEDGER_DECIMALS_METHOD)
-        .with_arg(())
+        .take_raw_args(encode_one(()).unwrap_or_else(|error| trap(error.to_string())))
         .await
         .unwrap_or_else(|_| trap("ledger decimals call failed"));
-    if decimals_response
-        .candid::<u8>()
+    if decode_one::<u8>(&decimals_response.into_bytes())
         .unwrap_or_else(|_| trap("decode ledger decimals"))
         != 8
     {
         trap("unexpected ledger decimals");
     }
     let rate_response = Call::bounded_wait(cmc.into(), CMC_RATE_METHOD)
-        .with_arg(())
+        .take_raw_args(encode_one(()).unwrap_or_else(|error| trap(error.to_string())))
         .await
         .unwrap_or_else(|_| trap("CMC rate call failed"));
-    let _rate = rate_response
-        .candid::<u64>()
-        .unwrap_or_else(|_| trap("decode CMC rate"));
+    let _rate =
+        decode_one::<u64>(&rate_response.into_bytes()).unwrap_or_else(|_| trap("decode CMC rate"));
 
     let transfer = EmergencyTransferRequest {
         operation_id: [0x81; 32],
@@ -716,13 +716,15 @@ async fn issue_prepared(root_method: &str) -> IssueResult {
     }
 
     let Ok(response) = Call::bounded_wait(intent.root.into(), root_method)
-        .with_arg(intent.request.clone())
+        .take_raw_args(
+            encode_one(intent.request.clone()).unwrap_or_else(|error| trap(error.to_string())),
+        )
         .with_cycles(intent.request.amount)
         .await
     else {
         return IssueResult::CallFailed;
     };
-    let Ok(root_result) = response.candid::<RootAcceptResult>() else {
+    let Ok(root_result) = decode_one::<RootAcceptResult>(&response.into_bytes()) else {
         return IssueResult::RootBindingConflict;
     };
     let RootAcceptResult::Accepted {

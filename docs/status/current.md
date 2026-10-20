@@ -1,5 +1,27 @@
 # Current handoff — 2026-10-20
 
+## Explicit fixture call codecs — 2026-10-20
+
+Fixed all reported fixture errors from the latest check/Clippy log:
+`root_funding_probe` and `icp_refill_stub` now encode their single Candid
+arguments before Platform raw calls; funding responses use the same upstream
+`decode_one` behavior as the removed response convenience method. Unit arguments,
+wait modes, attached cycles and callback error branches remain unchanged.
+The Root audit balance endpoint now supplies scalar Candid hooks, retaining
+its local-controller guard and skipping quota of 10,000.
+
+Pass: all-target/all-feature Clippy for all three affected packages, the funding
+codec regression, scoped formatting/whitespace checks and standalone funding/refill
+Wasm checks. Direct Root audit Wasm checking correctly refused the unmanaged
+build path; its managed artifact and PocketIC effects were not rerun.
+Logs: `/tmp/canic-probe-codec-*.log`. Native checks preceded the maintainer's
+concurrent Build 0.23.0/Backup 0.35.1 update; standalone Wasm checks followed it.
+Those manifest/lock edits are preserved and outside this fix's attribution.
+
+The reported compile errors are fixed and open 0.112 notes updated. This slice
+is ready for review, not whole-batch publication sign-off. No broad validation,
+Git publication, version change or deployment was performed.
+
 ## Crypto-closure gate correction — 2026-10-20
 
 The latest invariant failure required standalone `ic-canister-sig-creation` and

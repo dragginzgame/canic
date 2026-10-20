@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Give funding/refill fixture calls and the Root audit endpoint explicit Candid
+  codecs for Platform's raw transport, preserving their existing protocols.
+
 - Align the Wasm crypto gate with Platform-owned canister-signature code while
   retaining exact signature package sets and duplicate-provider checks.
 

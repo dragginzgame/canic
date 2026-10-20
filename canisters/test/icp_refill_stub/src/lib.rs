@@ -285,9 +285,9 @@ async fn notify_top_up(request: NotifyTopUpArg) -> Result<Nat, NotifyTopUpError>
         });
     }
     let call = Call::unbounded_wait(Principal::management_canister().into(), "deposit_cycles")
-        .with_arg(CanisterIdRecord {
+        .take_raw_args(codec::encode_reply(CanisterIdRecord {
             canister_id: request.canister_id,
-        });
+        }));
     if call.with_cycles(cycles).await.is_err() {
         return Err(NotifyTopUpError::Other {
             error_code: 3,
