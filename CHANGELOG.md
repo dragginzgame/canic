@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Pass each disposable repository explicitly to the shared hook installer in
+  Canic’s formatter fixture, exercising installation, repeat setup, physical path
+  aliases and refusal to replace existing hooks under the maintained interface.
+
 - Keep generic Host/IC installer regression matrices in Shared Tooling while
   retaining Canic setup, tool admission and release integration checks.
 - Prepare formatter tools and locked graphs before preflight; follow shell
