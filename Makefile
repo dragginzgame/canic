@@ -380,6 +380,7 @@ release-integrity-contract-gate:
 	bash scripts/ci/test-format-tools.sh
 	bash scripts/ci/test-canic-formatters.sh
 	bash scripts/ci/test-cargo-metadata.sh
+	bash scripts/ci/test-dependency-adoption.sh
 	bash scripts/ci/test-file-digests.sh
 	bash scripts/ci/test-rustsec-db.sh
 	bash scripts/ci/test-release-commit-view.sh

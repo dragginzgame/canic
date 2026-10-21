@@ -194,3 +194,33 @@ Preferred format:
 - [Review contributor and CI policy](docs/governance/ci-deployment.md)
 - [Browse all documentation](docs/README.md)
 - [Back to the main README](README.md)
+
+## After dependency updates
+
+Before release validation, finish the authorized dependency updates and fetch the
+selected packages. With no other Canic build or validation using `target/`, run:
+
+```sh
+bash scripts/dev/check-dependency-adoption.sh canic-host canic-backup canic-blob-service
+```
+
+Select the affected root packages explicitly, including downstream owners whose
+public types changed. The command requires at least one package; it does not
+infer coverage from Git diffs. It checks locked/offline resolution and the shared
+dependency-boundary policy in the root and both independent Blob workspaces,
+then diagnoses duplicate Memory, Platform or Storage identities in each Blob
+normal-Wasm graph. A conflict prints the graph and its dependency tree.
+
+Next it runs warnings-denied Clippy for all targets/features of selected packages
+and both Blob fixtures, then the existing embedded-peer verifier. Any failure
+stops subsequent stages. All-features lint does not replace isolated feature
+checks required by the changed contract. Host build/dev graphs are not subject
+to the Blob singleton check; other deployed roles retain their managed-build
+runtime checks. Add meaningful focused tests for behavior changes separately.
+
+This command never updates locks or refreshes artifacts. A stale embedded peer
+requires the explicit refresh command printed by its verifier, then rechecking.
+The ordinary test runner already verifies that peer before its suites. This is
+an opt-in development check, not full workspace validation, managed Wasm or
+installed-IC qualification, or native macOS evidence. Shared generic ownership
+is tracked in [Shared Tooling #295](https://github.com/dragginzgame/shared-tooling/issues/295).

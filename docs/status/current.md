@@ -1,5 +1,25 @@
 # Current handoff — 2026-10-20
 
+## Focused dependency adoption admission — 2026-10-21
+
+Added `bash scripts/dev/check-dependency-adoption.sh PACKAGE...`: locked/offline
+resolution and existing boundary checks across all three workspaces, normal-Wasm
+Blob Memory/Platform/Storage singleton diagnostics, explicit affected-package and
+fixture Clippy, then read-only embedded-peer verification. No implicit updates or
+artifact refresh; no new release pipeline. Usage and limitations are in TESTING.md.
+Command-recording regression tests join the existing tooling gate.
+
+Pass: failure/ordering fixtures, ShellCheck, whitespace, and the real command with
+`canic-blob-service` selected (including both independent fixture lint checks).
+Its first real run detected stale embedded Wasm after the incoming Platform 0.5.1
+lock selection. Explicitly refreshed the artifact/provenance and reran successfully.
+The incoming Cargo.lock edit is preserved. Evidence: `/tmp/canic-adoption-check.log`,
+`/tmp/canic-adoption-refresh.log`, `/tmp/canic-adoption-recheck.log`.
+Shared reusable ownership request: [Shared Tooling #295](https://github.com/dragginzgame/shared-tooling/issues/295).
+No broad suite, managed installation proof, native macOS qualification, commit or
+release ran. This check is ready to use; complete release readiness remains subject
+to the owning release validation, including installed behavior beyond this check.
+
 ## Embedded allocation peer refresh — 2026-10-20
 
 Refreshed the checked-in peer Wasm and `scripts/dev/managed-root-fixture.json`

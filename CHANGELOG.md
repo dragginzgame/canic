@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Add an opt-in dependency-adoption check across the root and both Blob fixtures,
+  rejecting stale locks and split runtime identities before scoped Clippy and
+  read-only embedded-peer qualification.
+
 - Align the dedicated and embedded Blob fixture catalogs with Blob 0.39,
   Platform 0.5 and Memory/Storage 0.50, removing split runtime type identities.
 
