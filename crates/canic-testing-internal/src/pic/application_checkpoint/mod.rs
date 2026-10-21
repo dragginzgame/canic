@@ -4,7 +4,6 @@
 
 pub(super) mod unit;
 
-use candid::{CandidType, Principal};
 use canic::{Error, dto::application_checkpoint::ApplicationCheckpointParticipantStatus};
 use canic_contracts::{
     dto::{
@@ -16,6 +15,7 @@ use canic_contracts::{
 use canic_core::shared_support::application_checkpoint_root::{
     RootCheckpointPhase, RootCheckpointRecord,
 };
+use ic_platform::{Principal, candid::contract::CandidType};
 use ic_testkit::pic::{
     CanisterInstallExt, CanisterSnapshotTarget, PocketIc, PocketIcSnapshotExt,
     SnapshotRestoreFunding,
@@ -24,6 +24,7 @@ use serde::Deserialize;
 
 /// Fixture-owned business and hook evidence returned by the participant.
 #[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct CheckpointView {
     retained: Option<ApplicationCheckpointParticipantStatus>,
     counter: u64,
@@ -213,7 +214,7 @@ fn authority(
     target: Principal,
     root: Principal,
 ) -> canic_contracts::ids::CallerReceiverAuthority {
-    let response: Result<StatusResponse, Error> = ::ic_testkit::pic::query_candid_args(
+    let response: Result<StatusResponse, Error> = ic_testkit::pic::query_candid_args(
         pic,
         target,
         root,
@@ -221,7 +222,7 @@ fn authority(
         (StatusRequest::CallerAuthority(OperationStatusRequest {
             operation_id: [0; 32],
         }),),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .unwrap();
@@ -238,13 +239,13 @@ fn retained(record: &RootCheckpointRecord) -> RootCheckpointRecord {
 }
 
 fn view(pic: &PocketIc, target: Principal) -> CheckpointView {
-    ::ic_testkit::pic::query_candid_args::<(Result<CheckpointView, Error>,), _>(
+    ic_testkit::pic::query_candid_args::<(Result<CheckpointView, Error>,), _>(
         pic,
         target,
-        candid::Principal::anonymous(),
+        Principal::anonymous(),
         "checkpoint_view",
         (),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .unwrap()
@@ -252,13 +253,13 @@ fn view(pic: &PocketIc, target: Principal) -> CheckpointView {
 }
 
 fn increment(pic: &PocketIc, target: Principal) -> Result<u64, Error> {
-    ::ic_testkit::pic::update_candid_args(
+    ic_testkit::pic::update_candid_args(
         pic,
         target,
-        candid::Principal::anonymous(),
+        Principal::anonymous(),
         "checkpoint_increment",
         (),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .unwrap()
@@ -271,13 +272,13 @@ fn transition(
     binding: &Binding,
     phase: Phase,
 ) -> Result<Phase, Error> {
-    ::ic_testkit::pic::update_candid_args(
+    ic_testkit::pic::update_candid_args(
         pic,
         target,
         root,
         "checkpoint_transition",
         (binding, phase),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .unwrap()
@@ -301,13 +302,13 @@ fn restore(
     captured: &Binding,
     fresh: &Binding,
 ) -> Result<Phase, Error> {
-    ::ic_testkit::pic::update_candid_args(
+    ic_testkit::pic::update_candid_args(
         pic,
         target,
         root,
         "checkpoint_restore",
         (captured, fresh),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .unwrap()

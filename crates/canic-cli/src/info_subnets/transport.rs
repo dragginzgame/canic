@@ -12,7 +12,6 @@ use crate::{
     },
     support::candid::registry_entry_candid_path,
 };
-use candid::Principal;
 use canic_contracts::{
     dto::{
         fleet_subnet_root::FleetSubnetRootCanisterSummary,
@@ -27,6 +26,7 @@ use canic_host::{
     fleet_ensure::resolve_current_fleet, icp::IcpCli, icp_config::resolve_current_canic_icp_root,
     query_canister_with_arg, registry::RegistryEntry,
 };
+use ic_platform::Principal;
 
 pub(super) fn load_report(
     options: &InfoSubnetsOptions,

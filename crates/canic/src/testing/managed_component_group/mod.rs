@@ -50,31 +50,43 @@ use crate::{
     },
     testing::build_pocketic,
 };
-use candid::{CandidType, Deserialize, Principal, encode_args, encode_one};
-use canic_contracts::cycles::Cycles;
-use canic_contracts::dto::wire::projection::component_registry::CanisterOperationStatusFragment as ManagedOperationStatusResponse;
-use canic_contracts::dto::wire::projection::fixture_managed_app::ManagedCommand;
-use canic_contracts::dto::wire::projection::fixture_managed_component_group::ManagedCommandResponse;
-use canic_contracts::dto::wire::projection::fixture_managed_component_group::ManagedStatusRequest;
-use canic_contracts::dto::wire::projection::fixture_managed_component_group::ManagedStatusResponse;
-use canic_contracts::ids::FleetAdmissionPolicy;
-use canic_contracts::ids::FleetFundingProfile;
-use canic_contracts::ids::FleetSubnetRootFundingAuthority;
-use canic_contracts::ids::FleetSubnetRootFundingPolicy;
-use canic_contracts::ids::ReleaseBuildId;
-use canic_core::bootstrap::compiled::ComponentGroupDeploymentSpec;
-use canic_core::bootstrap::compiled::ComponentTopology;
-use canic_core::bootstrap::compiled::ConfigModel;
-use canic_core::bootstrap::compiled::FlattenedComponentGroupDeploymentMember;
-use canic_core::bootstrap::parse_config_model;
-use canic_core::cdk::utils::hash::sha256_bytes;
-use canic_core::role_contract::ProtocolProfileDigest;
-use canic_core::shared_support::fleet_admission_policy::compile_fleet_admission_projection;
-use canic_core::shared_support::fleet_admission_policy::compile_installed_fleet_admission_policy;
+use canic_contracts::{
+    cycles::Cycles,
+    dto::wire::projection::{
+        component_registry::CanisterOperationStatusFragment as ManagedOperationStatusResponse,
+        fixture_managed_app::ManagedCommand,
+        fixture_managed_component_group::{
+            ManagedCommandResponse, ManagedStatusRequest, ManagedStatusResponse,
+        },
+    },
+    ids::{
+        FleetAdmissionPolicy, FleetFundingProfile, FleetSubnetRootFundingAuthority,
+        FleetSubnetRootFundingPolicy, ReleaseBuildId,
+    },
+};
+use canic_core::{
+    bootstrap::{
+        compiled::{
+            ComponentGroupDeploymentSpec, ComponentTopology, ConfigModel,
+            FlattenedComponentGroupDeploymentMember,
+        },
+        parse_config_model,
+    },
+    cdk::utils::hash::sha256_bytes,
+    role_contract::ProtocolProfileDigest,
+    shared_support::fleet_admission_policy::{
+        compile_fleet_admission_projection, compile_installed_fleet_admission_policy,
+    },
+};
+use ic_platform::{
+    Principal,
+    candid::contract::{CandidType, encode_args, encode_one},
+};
 use ic_testkit::{
     pic::{CandidCallError, CanisterInstallExt, PocketIc},
     pocket_ic::common::rest::RawMessageId,
 };
+use serde::Deserialize;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
@@ -244,7 +256,7 @@ impl ManagedComponentGroupFixture {
         target: Principal,
     ) -> Result<FleetAdmissionProjectionStatusResponse, ManagedComponentGroupQualificationError>
     {
-        let response: Result<ManagedStatusResponse, Error> = ::ic_testkit::pic::query_candid_args(
+        let response: Result<ManagedStatusResponse, Error> = ic_testkit::pic::query_candid_args(
             &self.pic,
             target,
             self.root(),
@@ -297,16 +309,15 @@ impl ManagedComponentGroupFixture {
             expected_policy_digest: current.policy_digest,
             successor,
         };
-        let response: Result<ManagedCommandResponse, Error> =
-            ::ic_testkit::pic::update_candid_args(
-                &self.pic,
-                target,
-                self.root(),
-                CANIC_COMMAND,
-                (ManagedCommand::PrepareFleetAdmission(Box::new(request)),),
-                crate::testing::CANDID_REPLY_LIMITS,
-            )
-            .map(|(reply,)| reply)?;
+        let response: Result<ManagedCommandResponse, Error> = ic_testkit::pic::update_candid_args(
+            &self.pic,
+            target,
+            self.root(),
+            CANIC_COMMAND,
+            (ManagedCommand::PrepareFleetAdmission(Box::new(request)),),
+            crate::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)?;
         let response = response.map_err(ManagedComponentGroupQualificationError::Canic)?;
         let ManagedCommandResponse::PrepareFleetAdmission(receipt) = response else {
             return Err(ManagedComponentGroupQualificationError::UnexpectedResponse(
@@ -321,7 +332,7 @@ impl ManagedComponentGroupFixture {
         &self,
         target: Principal,
     ) -> Result<ManagedCanisterBinding, ManagedComponentGroupQualificationError> {
-        let response: Result<ManagedStatusResponse, Error> = ::ic_testkit::pic::query_candid_args(
+        let response: Result<ManagedStatusResponse, Error> = ic_testkit::pic::query_candid_args(
             &self.pic,
             target,
             self.root(),
@@ -345,7 +356,7 @@ impl ManagedComponentGroupFixture {
         target: Principal,
     ) -> Result<ComponentRuntimeOperationStatus, ManagedComponentGroupQualificationError> {
         let node = self.node(target)?;
-        let response: Result<ManagedStatusResponse, Error> = ::ic_testkit::pic::query_candid_args(
+        let response: Result<ManagedStatusResponse, Error> = ic_testkit::pic::query_candid_args(
             &self.pic,
             target,
             self.root(),
@@ -371,7 +382,7 @@ impl ManagedComponentGroupFixture {
         &self,
         target: Principal,
     ) -> Result<CanicRuntimeStatus, ManagedComponentGroupQualificationError> {
-        let response: Result<ManagedStatusResponse, Error> = ::ic_testkit::pic::query_candid_args(
+        let response: Result<ManagedStatusResponse, Error> = ic_testkit::pic::query_candid_args(
             &self.pic,
             target,
             self.root(),
@@ -418,10 +429,10 @@ impl ManagedComponentGroupFixture {
     fn install_unsettled_allocations(
         &mut self,
     ) -> Result<usize, ManagedComponentGroupQualificationError> {
-        let allocations: Vec<FixtureChildAllocation> = ::ic_testkit::pic::query_candid_args(
+        let allocations: Vec<FixtureChildAllocation> = ic_testkit::pic::query_candid_args(
             &self.pic,
             self.root(),
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "testing_component_child_allocations",
             (),
             crate::testing::CANDID_REPLY_LIMITS,
@@ -581,10 +592,10 @@ impl ManagedComponentGroupFixture {
         &self,
         request_id: [u8; 32],
     ) -> Result<(), ManagedComponentGroupQualificationError> {
-        let settled: Result<(), Error> = ::ic_testkit::pic::update_candid_args(
+        let settled: Result<(), Error> = ic_testkit::pic::update_candid_args(
             &self.pic,
             self.root(),
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "testing_settle_component_child",
             (request_id,),
             crate::testing::CANDID_REPLY_LIMITS,
@@ -1154,6 +1165,7 @@ struct NodeState {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct FixtureChildAllocation {
     request_id: [u8; 32],
     parent: Principal,
@@ -1374,7 +1386,7 @@ fn configure_runtime(
     target: Principal,
     directory: &ComponentRuntimeDirectoryPreparationRequest,
 ) -> Result<OperationReceipt, ManagedComponentGroupQualificationError> {
-    let response: Result<ManagedCommandResponse, Error> = ::ic_testkit::pic::update_candid_args(
+    let response: Result<ManagedCommandResponse, Error> = ic_testkit::pic::update_candid_args(
         pic,
         target,
         root,
@@ -1403,10 +1415,10 @@ fn overview(
     pic: &PocketIc,
     target: Principal,
 ) -> Result<RoleOverviewResponse, ManagedComponentGroupQualificationError> {
-    let response: Result<ManagedStatusResponse, Error> = ::ic_testkit::pic::query_candid_args(
+    let response: Result<ManagedStatusResponse, Error> = ic_testkit::pic::query_candid_args(
         pic,
         target,
-        candid::Principal::anonymous(),
+        ic_platform::Principal::anonymous(),
         CANIC_PUBLIC_STATUS,
         (ManagedStatusRequest::Overview,),
         crate::testing::CANDID_REPLY_LIMITS,

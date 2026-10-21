@@ -4,20 +4,19 @@
 //! Does not own: fixture construction, Component lifecycle, or proof implementation.
 //! Boundary: consumes an active Registry-issued Component binding from the Fleet journey.
 
-use candid::Principal;
-use canic::dto::auth::RoleAttestationGetRequest;
-use canic::dto::auth::RoleAttestationRequest;
-use canic::dto::auth::SignedRoleAttestation;
-use canic::dto::error::Error;
-use canic::dto::metrics::MetricEntry;
-use canic::dto::metrics::MetricValue;
-use canic::dto::metrics::MetricsKind;
-use canic::dto::page::PageRequest;
-use canic::dto::role::MetricsStatusRequest;
-use canic::dto::rpc::RootRequestMetadata;
-use canic::ids::CanisterRole;
-use canic::ids::ComponentBinding;
-use canic::protocol::CANIC_ROOT_COMMAND;
+use canic::{
+    dto::{
+        auth::{RoleAttestationGetRequest, RoleAttestationRequest, SignedRoleAttestation},
+        error::Error,
+        metrics::{MetricEntry, MetricValue, MetricsKind},
+        page::PageRequest,
+        role::MetricsStatusRequest,
+        rpc::RootRequestMetadata,
+    },
+    ids::{CanisterRole, ComponentBinding},
+    protocol::CANIC_ROOT_COMMAND,
+};
+use ic_platform::Principal;
 use ic_testkit::pic::PocketIc;
 use std::time::Duration;
 
@@ -212,13 +211,13 @@ fn assert_role_prepare_forbidden(
     request: RoleAttestationRequest,
     expected_code: canic_contracts::diagnostics::DiagnosticCode,
 ) {
-    let response: Result<RootCommandResponse, Error> = ::ic_testkit::pic::update_candid_args(
+    let response: Result<RootCommandResponse, Error> = ic_testkit::pic::update_candid_args(
         pic,
         root,
         caller,
         CANIC_ROOT_COMMAND,
         (RootCommand::PrepareRoleAttestation(request),),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .expect("role attestation rejection transport");
@@ -252,19 +251,19 @@ fn issue_requested_role_attestation(
     issuer: &ComponentBinding,
     request: RoleAttestationRequest,
 ) -> SignedRoleAttestation {
-    let prepared: Result<RootCommandResponse, Error> = ::ic_testkit::pic::update_candid_args(
+    let prepared: Result<RootCommandResponse, Error> = ic_testkit::pic::update_candid_args(
         pic,
         root,
         issuer.canister_id,
         CANIC_ROOT_COMMAND,
         (RootCommand::PrepareRoleAttestation(request),),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .expect("role attestation prepare transport");
     let RootCommandResponse::PrepareRoleAttestation(prepared) =
         prepared.expect("role attestation prepare");
-    let signed: Result<RootStatusResponse, Error> = ::ic_testkit::pic::query_candid_args(
+    let signed: Result<RootStatusResponse, Error> = ic_testkit::pic::query_candid_args(
         pic,
         root,
         issuer.canister_id,
@@ -274,7 +273,7 @@ fn issue_requested_role_attestation(
                 payload_hash: prepared.payload_hash,
             },
         ),),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .expect("role attestation retrieval transport");
@@ -289,13 +288,13 @@ fn require_attested_local_subnet(
     caller: Principal,
     attestation: SignedRoleAttestation,
 ) -> Result<(), Error> {
-    ::ic_testkit::pic::update_candid_args(
+    ic_testkit::pic::update_candid_args(
         pic,
         verifier,
         caller,
         "issuer_require_attested_local_subnet",
         (attestation,),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .expect("attested local-Subnet access transport")
@@ -308,13 +307,13 @@ fn verify_role_attestation(
     attestation: SignedRoleAttestation,
     minimum_epoch: u64,
 ) -> Result<(), Error> {
-    ::ic_testkit::pic::update_candid_args(
+    ic_testkit::pic::update_candid_args(
         pic,
         verifier,
         caller,
         "issuer_verify_role_attestation",
         (attestation, minimum_epoch),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .expect("role attestation verification transport")
@@ -324,13 +323,13 @@ fn assert_issuer_guard_metrics(pic: &PocketIc, root: Principal, issuer: Principa
     let denial_labels = ["access", "issuer_guard_is_root", "auth", "caller_is_root"];
     let before_denial =
         metric_count_for_labels(pic, root, issuer, MetricsKind::Security, &denial_labels);
-    let denied: Result<(), Error> = ::ic_testkit::pic::update_candid_args(
+    let denied: Result<(), Error> = ic_testkit::pic::update_candid_args(
         pic,
         issuer,
         Principal::anonymous(),
         "issuer_guard_is_root",
         (),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .expect("issuer root-guard denial transport");
@@ -346,13 +345,13 @@ fn assert_issuer_guard_metrics(pic: &PocketIc, root: Principal, issuer: Principa
     let success_labels = ["perf", "endpoint", "update", "issuer_guard_is_root"];
     let before_success =
         metric_count_for_labels(pic, root, issuer, MetricsKind::Runtime, &success_labels);
-    let allowed: Result<(), Error> = ::ic_testkit::pic::update_candid_args(
+    let allowed: Result<(), Error> = ic_testkit::pic::update_candid_args(
         pic,
         issuer,
         root,
         "issuer_guard_is_root",
         (),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .expect("issuer root-guard success transport");
@@ -393,7 +392,7 @@ fn query_metric_entries(
     canister: Principal,
     kind: MetricsKind,
 ) -> Vec<MetricEntry> {
-    let response: Result<ManagedStatusResponse, Error> = ::ic_testkit::pic::query_candid_args(
+    let response: Result<ManagedStatusResponse, Error> = ic_testkit::pic::query_candid_args(
         pic,
         canister,
         caller,
@@ -405,7 +404,7 @@ fn query_metric_entries(
                 offset: 0,
             },
         }),),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .expect("controller-authenticated metrics query transport");

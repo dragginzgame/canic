@@ -16,8 +16,8 @@ use crate::{
     },
     view::icp_refill::{IcpRefillOperation, IcpRefillReleasePage},
 };
-use candid::{Nat, Principal};
 use canic_contracts::cycles::Cycles;
+use ic_platform::{Principal, candid::contract::Nat};
 use std::{cell::RefCell, collections::BTreeMap};
 use thiserror::Error as ThisError;
 

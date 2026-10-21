@@ -25,11 +25,11 @@ use crate::{
     },
     icp::{IcpCli, IcpRequestKind},
 };
-use candid::{CandidType, Principal};
 use canic_core::cdk::utils::hash::{decode_hex, hex_bytes};
-use ic_agent::{
-    Agent,
-    agent::{EnvelopeContent, RequestStatusResponse},
+use ic_platform::{
+    Principal,
+    agent::{Agent, EnvelopeContent, RequestStatusResponse},
+    candid::contract::CandidType,
 };
 use serde::Deserialize;
 use serde_bytes::ByteBuf;
@@ -44,6 +44,7 @@ const MAXIMUM_RESPONSE_BYTES: usize = 256 * 1024;
 const CALL_TIMEOUT: Duration = Duration::from_secs(45);
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct UpdateControllers {
     canister_id: Principal,
     settings: ControllerSettings,
@@ -51,6 +52,7 @@ struct UpdateControllers {
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct ControllerSettings {
     controllers: Option<Vec<Principal>>,
 }
@@ -216,7 +218,7 @@ impl CapacityImportTransport {
                     let (status, certificate) = tokio::time::timeout(
                         CALL_TIMEOUT,
                         self.agent.request_status_raw(
-                            &ic_agent::RequestId::new(&request.request_id),
+                            &ic_platform::agent::RequestId::new(&request.request_id),
                             canister_id,
                         ),
                     )
@@ -283,7 +285,7 @@ fn argument(
     {
         return Err(CapacityImportJournalError::RequestInvalid);
     }
-    candid::encode_one(UpdateControllers {
+    ic_platform::candid::contract::encode_one(UpdateControllers {
         canister_id,
         settings: ControllerSettings {
             controllers: Some(plan.transitional_controllers.clone()),
@@ -324,7 +326,7 @@ pub(super) fn validate_request(
     else {
         return Err(CapacityImportJournalError::RequestInvalid);
     };
-    let request_id = ic_agent::to_request_id(&content)
+    let request_id = ic_platform::agent::to_request_id(&content)
         .map_err(|_| CapacityImportJournalError::RequestInvalid)?;
     let expected = (
         request.ingress_expiry,
@@ -357,7 +359,8 @@ fn completed(
         return Err(CapacityImportJournalError::Unresolved);
     };
     if reply.arg
-        != candid::encode_args(()).map_err(|_| CapacityImportJournalError::RequestInvalid)?
+        != ic_platform::candid::contract::encode_args(())
+            .map_err(|_| CapacityImportJournalError::RequestInvalid)?
     {
         return Err(CapacityImportJournalError::Unresolved);
     }

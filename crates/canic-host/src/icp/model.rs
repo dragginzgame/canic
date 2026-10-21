@@ -35,8 +35,6 @@ pub struct IcpRawOutput {
 #[derive(Clone, Debug)]
 pub struct IcpCli {
     pub(super) timing: std::sync::Arc<super::timing::Timing>,
-    pub(super) identity_lookup_millis: std::sync::Arc<std::sync::atomic::AtomicU64>,
-    pub(super) identity_lookups: std::sync::Arc<std::sync::atomic::AtomicU64>,
     pub(super) remote_calls: std::sync::Arc<std::sync::atomic::AtomicU64>,
     pub(super) executable: String,
     pub(super) environment: Option<String>,
@@ -151,7 +149,7 @@ impl Eq for IcpCli {}
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "type", content = "value")]
 pub enum IcpCanisterVisibility {
-    AllowedViewers(Vec<candid::Principal>),
+    AllowedViewers(Vec<ic_platform::Principal>),
     Controllers,
     Public,
 }

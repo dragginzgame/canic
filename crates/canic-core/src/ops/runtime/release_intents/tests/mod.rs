@@ -104,10 +104,10 @@ fn canonical_census_keeps_orphan_pending_terminal_and_expired_rows_without_index
                 assert_eq!(record.revision, 7);
             }
         }
-        let bytes = candid::encode_one(&page).unwrap();
+        let bytes = ic_platform::candid::contract::encode_one(&page).unwrap();
         assert!(bytes.len() < 4096);
         assert_eq!(
-            candid::decode_one::<IntentReleaseResponse>(&bytes).unwrap(),
+            ic_platform::candid::decoder::decode_one::<IntentReleaseResponse>(&bytes).unwrap(),
             page
         );
         assert_eq!(

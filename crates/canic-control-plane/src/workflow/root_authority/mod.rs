@@ -4,12 +4,12 @@
 //! Does not own: activation mutation, Registry validation, or endpoint authorization.
 //! Boundary: root workflows use this owner before consuming protected root state.
 
-use candid::Principal;
 use canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority;
 use canic_core::control_plane_support::{
     error::InternalError, ops::ic::IcOps,
     workflow::runtime::fleet_activation::FleetActivationWorkflow,
 };
+use ic_platform::Principal;
 
 pub(super) fn validated_root_authority()
 -> Result<(FleetSubnetRootAuthority, Principal), InternalError> {

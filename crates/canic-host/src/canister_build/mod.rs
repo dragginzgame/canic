@@ -5,16 +5,16 @@ mod candid;
 mod candid_cache;
 pub(crate) mod compiled;
 mod context;
+mod infrastructure;
 mod metrics;
 mod model;
 mod output_roots;
-mod process;
 pub mod release_binding;
 mod reuse;
 
 pub(crate) use reuse::retain_cargo_include_exports;
 
-pub use crate::{artifact_io::validate_wasm_candid_endpoints, build_profile::CanisterBuildProfile};
+pub use crate::{artifact_io::validate_wasm_endpoints, build_profile::CanisterBuildProfile};
 pub use artifact::{
     CanisterArtifactBuilder, build_workspace_canister_artifact,
     build_workspace_canister_artifact_with_options, build_workspace_configured_canister_artifacts,
@@ -22,9 +22,7 @@ pub use artifact::{
 };
 pub use cache::canister_build_target_root;
 pub use candid::extract_candid_bytes;
-pub use context::{
-    WorkspaceBuildContext, print_workspace_build_context_once, workspace_build_context_once,
-};
+pub use context::WorkspaceBuildContext;
 pub use metrics::read_wasm_artifact_metrics;
 pub use model::{
     AppCanisterArtifactBuildOutput, ArtifactTransformKind, ArtifactTransformOutcome,
@@ -35,8 +33,6 @@ pub use model::{
 
 #[cfg(test)]
 use candid::remove_stale_icp_candid_sidecars;
-#[cfg(test)]
-use process::parse_parent_process_id;
 
 #[cfg(test)]
 mod tests;

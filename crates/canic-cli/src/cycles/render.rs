@@ -6,10 +6,8 @@ use crate::{
     },
     output,
 };
-use canic_host::{
-    format::{compact_duration, cycles_tc},
-    table::{ColumnAlign, render_table},
-};
+use canic_host::format::{compact_duration, cycles_tc};
+use ic_host_text::table::{self, Alignment, Options};
 
 pub(super) fn write_cycles_report(
     options: &CyclesOptions,
@@ -49,7 +47,7 @@ fn render_default_cycles_table(report: &CyclesReport) -> String {
         .iter()
         .map(default_cycle_report_row)
         .collect::<Vec<_>>();
-    render_table(
+    table::render(
         &[
             "ROLE",
             "CANISTER_ID",
@@ -61,14 +59,18 @@ fn render_default_cycles_table(report: &CyclesReport) -> String {
         ],
         &rows,
         &[
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-            ColumnAlign::Right,
-            ColumnAlign::Right,
-            ColumnAlign::Right,
-            ColumnAlign::Right,
+            Alignment::Left,
+            Alignment::Left,
+            Alignment::Left,
+            Alignment::Right,
+            Alignment::Right,
+            Alignment::Right,
+            Alignment::Right,
         ],
+        Options {
+            column_gap: 3,
+            header_separator: true,
+        },
     )
 }
 
@@ -93,7 +95,7 @@ fn render_verbose_cycles_table(report: &CyclesReport) -> String {
         .iter()
         .map(verbose_cycle_report_row)
         .collect::<Vec<_>>();
-    render_table(
+    table::render(
         &[
             "ROLE",
             "CANISTER_ID",
@@ -108,17 +110,21 @@ fn render_verbose_cycles_table(report: &CyclesReport) -> String {
         ],
         &rows,
         &[
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-            ColumnAlign::Right,
-            ColumnAlign::Right,
-            ColumnAlign::Right,
-            ColumnAlign::Right,
-            ColumnAlign::Left,
-            ColumnAlign::Left,
-            ColumnAlign::Right,
+            Alignment::Left,
+            Alignment::Left,
+            Alignment::Left,
+            Alignment::Right,
+            Alignment::Right,
+            Alignment::Right,
+            Alignment::Right,
+            Alignment::Left,
+            Alignment::Left,
+            Alignment::Right,
         ],
+        Options {
+            column_gap: 3,
+            header_separator: true,
+        },
     )
 }
 

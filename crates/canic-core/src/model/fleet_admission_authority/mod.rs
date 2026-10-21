@@ -4,10 +4,10 @@
 //! Does not own: transport DTOs, hashing, stable encoding, caller authorization, or distribution.
 //! Boundary: pure policy returns complete replacement state; ops validates hashes and persists it.
 
-use candid::Principal;
 use canic_contracts::ids::{
     FleetAdmissionPolicy, FleetAdmissionSelector, FleetCoordinatorBinding, SubnetId,
 };
+use ic_platform::Principal;
 
 /// Current product schema for the sole Coordinator admission authority.
 

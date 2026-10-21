@@ -13,7 +13,6 @@ use crate::{
     view::component_registry::ComponentDirectoryPageSelection,
     workflow::root_authority::validated_root_authority,
 };
-use candid::Principal;
 use canic_contracts::{
     dto::{
         component_registry::ComponentLifecycleStatus,
@@ -42,6 +41,7 @@ use canic_core::{
         materialize_fleet_admission_projection,
     },
 };
+use ic_platform::Principal;
 use std::time::Duration;
 
 /// Authenticate one Root admission phase command against the exact installed Coordinator.
@@ -411,7 +411,8 @@ mod tests {
             },
         ));
 
-        let bytes = candid::encode_one(command).expect("production target command Candid");
+        let bytes = ic_platform::candid::contract::encode_one(command)
+            .expect("production target command Candid");
         eprintln!(
             "maximum production target prepare command bytes: {}",
             bytes.len()

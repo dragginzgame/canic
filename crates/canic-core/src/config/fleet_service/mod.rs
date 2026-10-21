@@ -14,11 +14,11 @@ use crate::config::{
     FleetServiceMemberPurpose,
     schema::{ConfigModel, FleetServicePlacementPolicyConfig, FleetServiceTargetConfig},
 };
-use candid::CandidType;
 use canic_contracts::ids::{
     CanisterRole, ComponentGroupDeploymentId, ComponentGroupMemberPath, ComponentSpecId,
     FleetServiceId,
 };
+use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use thiserror::Error as ThisError;
@@ -30,6 +30,7 @@ pub const MAX_FLEET_SERVICE_TARGETS: usize = 4_096;
 
 /// Canonical Fleet-service targets in raw service-ID order.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetServiceTopology {
     pub targets: Vec<FleetServiceTarget>,
@@ -149,6 +150,7 @@ impl FleetServiceTopology {
 
 /// One canonical logical Fleet-service target.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct FleetServiceTarget {
     pub service: FleetServiceId,
@@ -160,6 +162,7 @@ pub struct FleetServiceTarget {
 
 /// Mode-specific target contract before concrete service members exist.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum FleetServiceTargetMode {
     AuthorityReplica {
         authority_deployment: ComponentGroupDeploymentId,

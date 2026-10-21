@@ -92,7 +92,14 @@ impl AuthOps {
                 root_pid,
                 now_ns,
             )
-            .map(RoleAttestationRootProof::IcCanisterSignatureV1)
+            .map(|proof| {
+                RoleAttestationRootProof::IcCanisterSignatureV1(
+                    crate::dto::auth::IcCanisterSignatureProofV1 {
+                        signature_cbor: proof.signature_cbor,
+                        public_key_der: proof.public_key_der,
+                    },
+                )
+            })
         }
         #[cfg(not(feature = "auth-root-canister-sig-create"))]
         {

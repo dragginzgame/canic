@@ -110,9 +110,9 @@ fn child_usage_does_not_assume_missing_evidence_or_other_children_are_unused() {
     assert_eq!(observed.pending_operations, 1);
     assert_eq!(observed.reserved_cycles, None);
     assert_eq!(snapshot(p(1), p(4), 10).unwrap().pending_operations, 0);
-    let bytes = candid::encode_one(&observed).unwrap();
+    let bytes = ic_platform::candid::contract::encode_one(&observed).unwrap();
     assert_eq!(
-        candid::decode_one::<ChildFundingUsage>(&bytes).unwrap(),
+        ic_platform::candid::decoder::decode_one::<ChildFundingUsage>(&bytes).unwrap(),
         observed
     );
 }

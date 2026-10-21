@@ -6,13 +6,13 @@ use super::*;
 use ic_testkit::pocket_ic::common::rest::RawMessageId;
 
 fn probe(pic: &PocketIc, hub: Principal, caller: Principal) -> Result<Principal, Error> {
-    ::ic_testkit::pic::update_candid_args(
+    ic_testkit::pic::update_candid_args(
         pic,
         hub,
         caller,
         "test_caller_probe",
         (),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .expect("caller probe transport")
@@ -30,35 +30,35 @@ pub(super) fn qualify_live_projection(
     ));
     assert_eq!(probe(pic, hub, hub), denied);
     assert_eq!(probe(pic, hub, Principal::anonymous()), denied);
-    let target: Result<Principal, Error> = ::ic_testkit::pic::update_candid_args(
+    let target: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
         pic,
         hub,
         root,
         "test_caller_target",
         (shard,),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .unwrap();
     assert_eq!(target, Ok(shard));
-    let invalid: Result<Principal, Error> = ::ic_testkit::pic::update_candid_args(
+    let invalid: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
         pic,
         hub,
         root,
         "test_caller_target",
         (hub,),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .unwrap();
     assert_eq!(invalid, denied);
-    let unauthorized_proxy: Result<Principal, Error> = ::ic_testkit::pic::update_candid_args(
+    let unauthorized_proxy: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
         pic,
         hub,
         shard,
         "test_caller_target",
         (shard,),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .unwrap();
@@ -89,13 +89,13 @@ pub(super) fn hold_effect(
     shard: Principal,
 ) -> (RawMessageId, u64) {
     assert_eq!(probe(pic, hub, shard), Ok(shard));
-    ::ic_testkit::pic::update_candid_args::<(Result<(), Error>,), _>(
+    ic_testkit::pic::update_candid_args::<(Result<(), Error>,), _>(
         pic,
         hub,
         root,
         "test_caller_hold",
         (true,),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .unwrap()
@@ -106,7 +106,7 @@ pub(super) fn hold_effect(
             hub,
             shard,
             "test_caller_effect",
-            candid::encode_args(()).unwrap(),
+            ic_platform::candid::contract::encode_args(()).unwrap(),
         )
         .unwrap();
     for _ in 0..24 {
@@ -125,18 +125,19 @@ pub(super) fn assert_effect_fenced(
     shard: Principal,
     held: (RawMessageId, u64),
 ) {
-    ::ic_testkit::pic::update_candid_args::<(Result<(), Error>,), _>(
+    ic_testkit::pic::update_candid_args::<(Result<(), Error>,), _>(
         pic,
         hub,
         root,
         "test_caller_hold",
         (false,),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .unwrap()
     .unwrap();
-    let result: Result<u64, Error> = candid::decode_one(&pic.await_call(held.0).unwrap()).unwrap();
+    let result: Result<u64, Error> =
+        ic_platform::candid::decoder::decode_one(&pic.await_call(held.0).unwrap()).unwrap();
     assert_eq!(
         result,
         Err(Error::from_registered(
@@ -153,13 +154,13 @@ pub(super) fn assert_effect_fenced(
 }
 
 fn effects(pic: &PocketIc, root: Principal, hub: Principal) -> (bool, u64) {
-    ::ic_testkit::pic::query_candid_args::<(Result<(bool, u64), Error>,), _>(
+    ic_testkit::pic::query_candid_args::<(Result<(bool, u64), Error>,), _>(
         pic,
         hub,
         root,
         "test_caller_effect_status",
         (),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .unwrap()
@@ -196,13 +197,13 @@ pub(super) fn hold_during_pending_denial(
     .unwrap();
     root_membership::assert_child_discovery(pic, root, &binding.component, binding);
     pic.start_canister(hub, Some(root)).unwrap();
-    let competing: Result<Principal, Error> = ::ic_testkit::pic::update_candid_args(
+    let competing: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
         pic,
         hub,
         root,
         "test_create_fixture_child",
         ([0xd9_u8; 32],),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .unwrap();

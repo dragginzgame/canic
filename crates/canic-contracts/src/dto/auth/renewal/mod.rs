@@ -12,6 +12,7 @@ use super::{DelegatedRoleGrant, DelegationAudience, DelegationProof};
 use crate::dto::prelude::*;
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootDelegationProofBatchProof {
     pub issuer_pid: Principal,
     pub cert_hash: [u8; 32],
@@ -23,6 +24,7 @@ pub struct RootDelegationProofBatchProof {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootIssuerConfigureRequest {
     pub issuer_pid: Principal,
     pub enabled: bool,
@@ -37,6 +39,7 @@ pub struct RootIssuerConfigureRequest {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootIssuerPolicyView {
     pub issuer_pid: Principal,
     pub enabled: bool,
@@ -51,6 +54,7 @@ pub struct RootIssuerPolicyView {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootIssuerConfigureResponse {
     pub issuer: RootIssuerPolicyView,
     pub template: RootIssuerRenewalTemplateView,
@@ -61,6 +65,7 @@ pub struct RootIssuerConfigureResponse {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootIssuerRenewalTemplateView {
     pub issuer_pid: Principal,
     pub enabled: bool,
@@ -74,6 +79,7 @@ pub struct RootIssuerRenewalTemplateView {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootIssuerRenewalStatusRequest {
     pub issuer_pid: Principal,
 }
@@ -83,6 +89,7 @@ pub struct RootIssuerRenewalStatusRequest {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootIssuerRenewalBatchStatus {
     Prepared,
     Signing,
@@ -97,6 +104,7 @@ pub enum RootIssuerRenewalBatchStatus {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootIssuerRenewalBatchView {
     pub batch_id: [u8; 32],
     pub status: RootIssuerRenewalBatchStatus,
@@ -114,6 +122,7 @@ pub struct RootIssuerRenewalBatchView {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootIssuerRenewalStateView {
     pub issuer_pid: Principal,
     pub template_fingerprint: [u8; 32],
@@ -129,6 +138,7 @@ pub struct RootIssuerRenewalStateView {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootIssuerRenewalStatusResponse {
     pub template: Option<RootIssuerRenewalTemplateView>,
     pub state: Option<RootIssuerRenewalStateView>,

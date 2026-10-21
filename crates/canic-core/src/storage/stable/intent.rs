@@ -10,8 +10,8 @@
 
 use crate::{
     cdk::structures::{
-        DefaultMemoryImpl, Memory, Storable, btreemap::BTreeMap as StableBtreeMap, cell::Cell,
-        memory::RuntimeMemory, storable::Bound,
+        DefaultMemoryImpl, StableBTreeMap as StableBtreeMap, StableCell as Cell, Storable,
+        storable::Bound,
     },
     ids::{IntentId, IntentResourceKey},
     model::{
@@ -29,16 +29,15 @@ const APPLICATION_RECEIPT_ELIGIBILITY_MIN_NODE_ENTRIES: u64 = 5;
 const APPLICATION_RECEIPT_ELIGIBILITY_CHUNK_BYTES: u64 = 2_378;
 const APPLICATION_RECEIPT_ELIGIBILITY_FIXED_BYTES: u64 = 116;
 
-type StableIntentMemory = RuntimeMemory<DefaultMemoryImpl>;
 type ApplicationReceiptEligibilityMap = StableBtreeMap<
     ApplicationReceiptEligibilityKeyRecord,
     ApplicationReceiptEligibilityRecord,
-    StableIntentMemory,
+    DefaultMemoryImpl,
 >;
-type ApplicationReceiptEligibilityState = (ApplicationReceiptEligibilityMap, StableIntentMemory);
+type ApplicationReceiptEligibilityState = Option<ApplicationReceiptEligibilityMap>;
 
 std::thread_local! {
-    static INTENT_META: RefCell<Cell<IntentStoreMetaRecord, RuntimeMemory<DefaultMemoryImpl>>> =
+    static INTENT_META: RefCell<Cell<IntentStoreMetaRecord, DefaultMemoryImpl>> =
         RefCell::new(Cell::init(
             crate::memory::open(crate::memory::keys::INTENT_META_V1),
             IntentStoreMetaRecord::default(),
@@ -48,8 +47,8 @@ std::thread_local! {
 std::thread_local! {
     static APPLICATION_RECEIPT_ELIGIBILITY: RefCell<ApplicationReceiptEligibilityState> = {
         let memory = crate::memory::open(crate::memory::keys::APPLICATION_RECEIPT_ELIGIBILITY_V1);
-        let map = StableBtreeMap::init(memory.clone());
-        RefCell::new((map, memory))
+        let map = StableBtreeMap::init(memory);
+        RefCell::new(Some(map))
     };
 }
 
@@ -58,14 +57,14 @@ std::thread_local! {
         StableBtreeMap<
             OperationId,
             ReceiptBackedIntentRecord,
-            RuntimeMemory<DefaultMemoryImpl>,
+            DefaultMemoryImpl,
         >
     > = RefCell::new(StableBtreeMap::init(crate::memory::open(crate::memory::keys::INTENT_RECEIPT_BACKED_RECORDS_V1)));
 }
 
 std::thread_local! {
     static INTENT_EXPIRY_INDEX: RefCell<
-        StableBtreeMap<IntentExpiryKeyRecord, IntentExpiryEntryRecord, RuntimeMemory<DefaultMemoryImpl>>
+        StableBtreeMap<IntentExpiryKeyRecord, IntentExpiryEntryRecord, DefaultMemoryImpl>
     > = RefCell::new(
         StableBtreeMap::init(crate::memory::open(crate::memory::keys::INTENT_EXPIRY_INDEX_V1)),
     );
@@ -76,14 +75,14 @@ std::thread_local! {
         StableBtreeMap<
             OperationId,
             PlacementAcknowledgementEntryRecord,
-            RuntimeMemory<DefaultMemoryImpl>,
+            DefaultMemoryImpl,
         >
     > = RefCell::new(StableBtreeMap::init(crate::memory::open(crate::memory::keys::PLACEMENT_ACKNOWLEDGEMENT_INDEX_V1)));
 }
 
 std::thread_local! {
     static INTENT_RECORDS: RefCell<
-        StableBtreeMap<IntentId, IntentRecord, RuntimeMemory<DefaultMemoryImpl>>
+        StableBtreeMap<IntentId, IntentRecord, DefaultMemoryImpl>
     > = RefCell::new(
         StableBtreeMap::init(crate::memory::open(crate::memory::keys::INTENT_RECORDS_V1)),
     );
@@ -91,7 +90,7 @@ std::thread_local! {
 
 std::thread_local! {
     static INTENT_TOTALS: RefCell<
-        StableBtreeMap<IntentResourceKey, IntentResourceTotalsRecord, RuntimeMemory<DefaultMemoryImpl>>
+        StableBtreeMap<IntentResourceKey, IntentResourceTotalsRecord, DefaultMemoryImpl>
     > = RefCell::new(
         StableBtreeMap::init(crate::memory::open(crate::memory::keys::INTENT_TOTALS_V1)),
     );
@@ -99,7 +98,7 @@ std::thread_local! {
 
 std::thread_local! {
     static INTENT_PENDING: RefCell<
-        StableBtreeMap<IntentId, IntentPendingEntryRecord, RuntimeMemory<DefaultMemoryImpl>>
+        StableBtreeMap<IntentId, IntentPendingEntryRecord, DefaultMemoryImpl>
     > = RefCell::new(
         StableBtreeMap::init(crate::memory::open(crate::memory::keys::INTENT_PENDING_V1)),
     );
@@ -683,7 +682,7 @@ impl IntentStore {
 
     /// Read canonical local accounting independently of derived pending/expiry indexes.
     pub(crate) fn with_records<R>(
-        f: impl FnOnce(&StableBtreeMap<IntentId, IntentRecord, RuntimeMemory<DefaultMemoryImpl>>) -> R,
+        f: impl FnOnce(&StableBtreeMap<IntentId, IntentRecord, DefaultMemoryImpl>) -> R,
     ) -> R {
         INTENT_RECORDS.with_borrow(|map| f(map))
     }
@@ -751,9 +750,7 @@ impl IntentStore {
     }
 
     pub(crate) fn with_pending_entries<R>(
-        f: impl FnOnce(
-            &StableBtreeMap<IntentId, IntentPendingEntryRecord, RuntimeMemory<DefaultMemoryImpl>>,
-        ) -> R,
+        f: impl FnOnce(&StableBtreeMap<IntentId, IntentPendingEntryRecord, DefaultMemoryImpl>) -> R,
     ) -> R {
         INTENT_PENDING.with_borrow(|map| f(map))
     }
@@ -779,16 +776,12 @@ impl IntentStore {
     }
 
     pub(crate) fn clear_expiry_index() {
-        INTENT_EXPIRY_INDEX.with_borrow_mut(StableBtreeMap::clear_new);
+        INTENT_EXPIRY_INDEX.with_borrow_mut(StableBtreeMap::clear);
     }
 
     pub(crate) fn with_expiry_entries<R>(
         f: impl FnOnce(
-            &StableBtreeMap<
-                IntentExpiryKeyRecord,
-                IntentExpiryEntryRecord,
-                RuntimeMemory<DefaultMemoryImpl>,
-            >,
+            &StableBtreeMap<IntentExpiryKeyRecord, IntentExpiryEntryRecord, DefaultMemoryImpl>,
         ) -> R,
     ) -> R {
         INTENT_EXPIRY_INDEX.with_borrow(|map| f(map))
@@ -835,13 +828,7 @@ impl ReceiptBackedIntentStore {
     }
 
     pub(crate) fn with_records<R>(
-        f: impl FnOnce(
-            &StableBtreeMap<
-                OperationId,
-                ReceiptBackedIntentRecord,
-                RuntimeMemory<DefaultMemoryImpl>,
-            >,
-        ) -> R,
+        f: impl FnOnce(&StableBtreeMap<OperationId, ReceiptBackedIntentRecord, DefaultMemoryImpl>) -> R,
     ) -> R {
         RECEIPT_BACKED_INTENT_RECORDS.with_borrow(|records| f(records))
     }
@@ -875,12 +862,11 @@ impl ReceiptBackedIntentStore {
         let required_pages = application_eligibility_required_pages(record_count)
             .ok_or(ic_memory::RuntimeGrowError::ArithmeticOverflow)?;
 
-        APPLICATION_RECEIPT_ELIGIBILITY.with_borrow(|state| {
-            let current_pages = state.1.size();
-            if current_pages >= required_pages {
-                return Ok(());
-            }
-            state.1.grow(required_pages - current_pages).map(|_| ())
+        APPLICATION_RECEIPT_ELIGIBILITY.with_borrow_mut(|state| {
+            let map = state.take().expect("eligibility map is installed");
+            let (map, result) = map.reserve_pages(required_pages);
+            *state = Some(map);
+            result
         })
     }
 
@@ -888,20 +874,35 @@ impl ReceiptBackedIntentStore {
     pub(crate) fn get_application_eligibility(
         key: ApplicationReceiptEligibilityKeyRecord,
     ) -> Option<ApplicationReceiptEligibilityRecord> {
-        APPLICATION_RECEIPT_ELIGIBILITY.with_borrow(|state| state.0.get(&key))
+        APPLICATION_RECEIPT_ELIGIBILITY.with_borrow(|state| {
+            state
+                .as_ref()
+                .expect("eligibility map is installed")
+                .get(&key)
+        })
     }
 
     pub(crate) fn insert_application_eligibility(
         key: ApplicationReceiptEligibilityKeyRecord,
         record: ApplicationReceiptEligibilityRecord,
     ) -> Option<ApplicationReceiptEligibilityRecord> {
-        APPLICATION_RECEIPT_ELIGIBILITY.with_borrow_mut(|state| state.0.insert(key, record))
+        APPLICATION_RECEIPT_ELIGIBILITY.with_borrow_mut(|state| {
+            state
+                .as_mut()
+                .expect("eligibility map is installed")
+                .insert(key, record)
+        })
     }
 
     pub(crate) fn remove_application_eligibility(
         key: ApplicationReceiptEligibilityKeyRecord,
     ) -> Option<ApplicationReceiptEligibilityRecord> {
-        APPLICATION_RECEIPT_ELIGIBILITY.with_borrow_mut(|state| state.0.remove(&key))
+        APPLICATION_RECEIPT_ELIGIBILITY.with_borrow_mut(|state| {
+            state
+                .as_mut()
+                .expect("eligibility map is installed")
+                .remove(&key)
+        })
     }
 
     pub(crate) fn with_application_eligibility<R>(
@@ -909,11 +910,12 @@ impl ReceiptBackedIntentStore {
             &StableBtreeMap<
                 ApplicationReceiptEligibilityKeyRecord,
                 ApplicationReceiptEligibilityRecord,
-                RuntimeMemory<DefaultMemoryImpl>,
+                DefaultMemoryImpl,
             >,
         ) -> R,
     ) -> R {
-        APPLICATION_RECEIPT_ELIGIBILITY.with_borrow(|state| f(&state.0))
+        APPLICATION_RECEIPT_ELIGIBILITY
+            .with_borrow(|state| f(state.as_ref().expect("eligibility map is installed")))
     }
 
     #[must_use]
@@ -923,7 +925,8 @@ impl ReceiptBackedIntentStore {
     )> {
         APPLICATION_RECEIPT_ELIGIBILITY.with_borrow(|state| {
             state
-                .0
+                .as_ref()
+                .expect("eligibility map is installed")
                 .iter()
                 .next()
                 .map(|entry| (*entry.key(), entry.value()))
@@ -932,7 +935,12 @@ impl ReceiptBackedIntentStore {
 
     #[must_use]
     pub(crate) fn application_eligibility_reserved_pages() -> u64 {
-        APPLICATION_RECEIPT_ELIGIBILITY.with_borrow(|state| state.1.size())
+        APPLICATION_RECEIPT_ELIGIBILITY.with_borrow_mut(|state| {
+            let map = state.take().expect("eligibility map is installed");
+            let (map, pages) = map.allocated_pages();
+            *state = Some(map);
+            pages
+        })
     }
 
     #[must_use]
@@ -956,16 +964,12 @@ impl ReceiptBackedIntentStore {
     }
 
     pub(crate) fn clear_placement_acknowledgement_index() {
-        PLACEMENT_ACKNOWLEDGEMENT_INDEX.with_borrow_mut(StableBtreeMap::clear_new);
+        PLACEMENT_ACKNOWLEDGEMENT_INDEX.with_borrow_mut(StableBtreeMap::clear);
     }
 
     pub(crate) fn with_placement_acknowledgements<R>(
         f: impl FnOnce(
-            &StableBtreeMap<
-                OperationId,
-                PlacementAcknowledgementEntryRecord,
-                RuntimeMemory<DefaultMemoryImpl>,
-            >,
+            &StableBtreeMap<OperationId, PlacementAcknowledgementEntryRecord, DefaultMemoryImpl>,
         ) -> R,
     ) -> R {
         PLACEMENT_ACKNOWLEDGEMENT_INDEX.with_borrow(|index| f(index))
@@ -1021,7 +1025,7 @@ impl IntentStore {
 
     pub(crate) fn import_records(data: IntentRecordsData) {
         INTENT_RECORDS.with_borrow_mut(|map| {
-            map.clear_new();
+            map.clear();
             for entry in data.entries {
                 map.insert(entry.intent_id, entry.record);
             }
@@ -1044,7 +1048,7 @@ impl IntentStore {
 
     pub(crate) fn import_totals(data: IntentTotalsData) {
         INTENT_TOTALS.with_borrow_mut(|map| {
-            map.clear_new();
+            map.clear();
             for entry in data.entries {
                 map.insert(entry.resource_key, entry.record);
             }
@@ -1067,7 +1071,7 @@ impl IntentStore {
 
     fn import_pending(data: IntentPendingData) {
         INTENT_PENDING.with_borrow_mut(|map| {
-            map.clear_new();
+            map.clear();
             for entry in data.entries {
                 map.insert(entry.intent_id, entry.record);
             }
@@ -1090,7 +1094,7 @@ impl IntentStore {
 
     fn import_expiry_index(data: IntentExpiryIndexData) {
         INTENT_EXPIRY_INDEX.with_borrow_mut(|map| {
-            map.clear_new();
+            map.clear();
             for entry in data.entries {
                 map.insert(entry.key, entry.record);
             }
@@ -1098,10 +1102,10 @@ impl IntentStore {
     }
 
     pub(crate) fn reset_for_tests() {
-        INTENT_RECORDS.with_borrow_mut(StableBtreeMap::clear_new);
-        INTENT_TOTALS.with_borrow_mut(StableBtreeMap::clear_new);
-        INTENT_PENDING.with_borrow_mut(StableBtreeMap::clear_new);
-        INTENT_EXPIRY_INDEX.with_borrow_mut(StableBtreeMap::clear_new);
+        INTENT_RECORDS.with_borrow_mut(StableBtreeMap::clear);
+        INTENT_TOTALS.with_borrow_mut(StableBtreeMap::clear);
+        INTENT_PENDING.with_borrow_mut(StableBtreeMap::clear);
+        INTENT_EXPIRY_INDEX.with_borrow_mut(StableBtreeMap::clear);
         INTENT_META.with_borrow_mut(|cell| cell.set(IntentStoreMetaRecord::default()));
         ReceiptBackedIntentStore::reset_for_tests();
     }
@@ -1131,7 +1135,7 @@ impl ReceiptBackedIntentStore {
             .filter(|entry| entry.record.application_retention.is_some())
             .count() as u64;
         RECEIPT_BACKED_INTENT_RECORDS.with_borrow_mut(|records| {
-            records.clear_new();
+            records.clear();
             for entry in data.entries {
                 records.insert(entry.operation_id, entry.record);
             }
@@ -1146,7 +1150,8 @@ impl ReceiptBackedIntentStore {
         ApplicationReceiptEligibilityData {
             entries: APPLICATION_RECEIPT_ELIGIBILITY.with_borrow(|state| {
                 state
-                    .0
+                    .as_ref()
+                    .expect("eligibility map is installed")
                     .iter()
                     .map(|entry| ApplicationReceiptEligibilityEntryRecord {
                         key: *entry.key(),
@@ -1159,9 +1164,15 @@ impl ReceiptBackedIntentStore {
 
     pub(crate) fn import_application_eligibility(data: ApplicationReceiptEligibilityData) {
         APPLICATION_RECEIPT_ELIGIBILITY.with_borrow_mut(|state| {
-            state.0.clear_new();
+            state
+                .as_mut()
+                .expect("eligibility map is installed")
+                .clear();
             for entry in data.entries {
-                state.0.insert(entry.key, entry.record);
+                state
+                    .as_mut()
+                    .expect("eligibility map is installed")
+                    .insert(entry.key, entry.record);
             }
         });
     }
@@ -1183,7 +1194,7 @@ impl ReceiptBackedIntentStore {
 
     pub(crate) fn import_placement_acknowledgement_index(data: PlacementAcknowledgementIndexData) {
         PLACEMENT_ACKNOWLEDGEMENT_INDEX.with_borrow_mut(|index| {
-            index.clear_new();
+            index.clear();
             for entry in data.entries {
                 index.insert(entry.operation_id, entry.record);
             }
@@ -1191,12 +1202,17 @@ impl ReceiptBackedIntentStore {
     }
 
     pub(crate) fn reset_for_tests() {
-        RECEIPT_BACKED_INTENT_RECORDS.with_borrow_mut(StableBtreeMap::clear_new);
+        RECEIPT_BACKED_INTENT_RECORDS.with_borrow_mut(StableBtreeMap::clear);
         let mut meta = IntentStore::meta();
         meta.application_receipt_count = 0;
         IntentStore::set_meta(meta);
-        APPLICATION_RECEIPT_ELIGIBILITY.with_borrow_mut(|state| state.0.clear_new());
-        PLACEMENT_ACKNOWLEDGEMENT_INDEX.with_borrow_mut(StableBtreeMap::clear_new);
+        APPLICATION_RECEIPT_ELIGIBILITY.with_borrow_mut(|state| {
+            state
+                .as_mut()
+                .expect("eligibility map is installed")
+                .clear()
+        });
+        PLACEMENT_ACKNOWLEDGEMENT_INDEX.with_borrow_mut(StableBtreeMap::clear);
     }
 }
 

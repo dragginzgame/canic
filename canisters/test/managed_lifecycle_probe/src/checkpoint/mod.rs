@@ -1,23 +1,22 @@
 //! Application-owned durable freeze and counter used to qualify the checkpoint SDK.
 //! No Root sequencing, snapshot authority or production application policy lives here.
 
-use candid::CandidType;
+use canic::__internal::core::cdk::structures::{DefaultMemoryImpl, StableCell as Cell};
 use canic::api::application_checkpoint::{
     ApplicationCheckpointPhase as Phase, ApplicationCheckpointRecord as Record,
     ApplicationCheckpointRootPredicate, ApplicationCheckpointTransition as Transition,
 };
-use canic::dto::application_checkpoint::ApplicationCheckpointParticipantStatus;
-use canic::ids::ApplicationCheckpointBinding;
 use canic::{Error, prelude::*};
-use ic_memory::{
-    RuntimeMemory,
-    ic_stable_structures::{Cell, DefaultMemoryImpl},
+use canic::{
+    dto::application_checkpoint::ApplicationCheckpointParticipantStatus,
+    ids::ApplicationCheckpointBinding,
 };
+use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
 pub const KEY: &str = "managed_probe.checkpoint.v1";
-type Storage = Cell<Vec<u8>, RuntimeMemory<DefaultMemoryImpl>>;
+type Storage = Cell<Vec<u8>, DefaultMemoryImpl>;
 
 /// Business state and its freeze record are committed in one application-owned cell.
 #[derive(Default, Deserialize, Serialize)]
@@ -30,6 +29,7 @@ struct BusinessRecord {
 
 /// Read-only evidence of business admission and exactly-once completed hooks.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct CheckpointView {
     retained: Option<ApplicationCheckpointParticipantStatus>,
     counter: u64,

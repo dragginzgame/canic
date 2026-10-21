@@ -5,6 +5,56 @@ CI and release behavior must not depend on a sibling checkout, a moving Git
 branch, or network availability. Consumers vendor a reviewed file set and
 record its exact Shared Tooling source revision.
 
+## Dependency-role adoption in 0.24.0
+
+Completing adoption includes the consumer-owned changes below; copying a new
+snapshot alone does not classify dependencies or install a deployment gate.
+Select a released, reviewed source revision and refresh through the canonical
+exporter. Include `rules/cargo-dependencies.md` and `rules/git-hooks.md` in the
+governance selection. If the consumer uses selected-source manifest ordering,
+also select `scripts/ci/cargo-release-metadata.sh` and its derived companions.
+No step depends on a local draft, sibling working tree or `/tmp` proposal.
+
+1. Identify the actual production packages and supported target/feature
+   combinations from the consumer's build and deployment entrypoints. Review
+   member normal, build, development and target-specific dependency tables.
+   Apply the [canonical role labels](../rules/cargo-dependencies.md#dependency-roles-and-deployment-checks):
+   `Production dependencies` and `Tests and tooling only`. Entries shared by
+   production and tests belong in production; the catalog remains one owner.
+   Use `Production packages` and `Tests and tooling packages` for member notes.
+2. Inline comments can retain the default global ordering. For blank-separated
+   groups, configure both formatting commands before including the shared Make
+   files (retain any additional consumer formatting steps):
+
+   ```makefile
+   FORMAT_WRITE_COMMAND = bash -ec '"$$1" sort --workspace --grouped; "$$1" fmt --all' -- "$(FORMAT_CARGO)"
+   FORMAT_CHECK_COMMAND = bash -ec '"$$1" sort --workspace --grouped --check; "$$1" fmt --all -- --check' -- "$(FORMAT_CARGO)"
+   include make/consumer.mk
+   ```
+
+   Use the same grouped policy in independent/nested-workspace formatters and
+   all existing release adapter calls. Change `--manifest-order` to
+   `--manifest-order-grouped` in current, commit-preparation and committed-source
+   checks together. Both remain non-mutating; hooks continue to use `make fmt`.
+3. Verify snapshot integrity and run the consumer's focused formatting/hook and
+   release-adapter qualification. Show that a formatter rerun preserves groups,
+   that check mode rejects unsorted entries within a group, and that a committed
+   release check reads its selected source. Preserve dependency selections,
+   lockfiles, release versions and unrelated work during adoption.
+4. Review the production graph with the actual build target/features before
+   deployment. Reuse the consumer's existing dependency-policy check to enforce
+   any test-only exclusions, including transitive paths. If that enforcement is
+   missing, record the remaining consumer work explicitly: Shared's sorter and
+   metadata helper do not enforce role annotations. A passing snapshot or format
+   check must not be reported as automated deployment admission.
+
+Report baseline/snapshot adoption, formatting activation and deployment
+enforcement separately. To request the complete change, say: "Adopt Shared
+Tooling 0.24.0, including dependency-role annotations and matching formatting and
+release checks; qualify the deployment dependency boundary and report any
+remaining enforcement gaps." Registry publication remains a separate fact;
+neither role labels nor cached build success establishes it.
+
 ## Consolidating existing snapshots
 
 Use the explicit `--takeover-snapshot ROOT MANIFEST` option on
@@ -23,6 +73,8 @@ Review the preview, then repeat without `--preview`. Without an explicit complet
 `--entrypoint` set, existing and transferred entrypoints are unioned. Every
 transferred record is proved against its recorded source commit, hash and mode;
 edited, forged, staged, aliased or unavailable inputs refuse before publication.
+The recorded revision must itself be a commit object. Tree or annotated-tag
+object IDs and failed Git type observations cannot establish that identity.
 The root must match the actual prior layout; it is never inferred from the
 manifest's directory. The source remote must match the destination owner.
 
@@ -357,10 +409,14 @@ does. Do not import Shared Tooling's release metadata adapter or root Makefile
 to satisfy it; without a local metadata-test adapter, run this integration check
 upstream and retain focused local validation-runner checks.
 
-The release runner requires `scripts/ci/next-release-version.sh`. The runner,
+The release runner requires `scripts/ci/validate-release-inputs.pl` and its
+`StableVersion.pm` companion for admission and exact increment calculation. The runner,
 validation logger and formatting hook also require
 `scripts/ci/check-make-execution.sh`. The exporter derives these companions when
 adding or refreshing those entrypoints; review the additions in the preview.
+The public `next-release-version.sh X.Y.Z patch|minor|major` command delegates to
+that same calculation, retaining exit 2 for invalid inputs. Existing direct callers
+can keep their command and select it as an export root.
 
 PR release delivery additionally requires `scripts/ci/release-pr.sh` beside
 `run-release.sh`, the updated `docs/releases.md` and explicit
@@ -371,9 +427,19 @@ or the complete portable suite. Direct delivery remains the default; refreshing
 the runner alone does not adopt PR delivery. See the
 [PR release contract](releases.md#pr-delivery).
 
+The catalog reader now derives `scripts/ci/StableVersion.pm` for canonical version
+grammar. Refresh its complete declared closure, including manually copied fixture
+payloads; IC callers carry that module too.
+
 The IC installer shares matrix admission through `scripts/ci/ic-tool-pins.awk`.
 Selecting `scripts/dev/install-ic-tools.sh` derives that companion automatically;
-pin catalogs and product callers remain consumer-owned. Adopting 0.2.0 also
+pin catalogs and product callers remain consumer-owned. The AWK backend now always
+emits complete validated records; replace direct version-only or validation-only
+uses with `tool-catalog-records.pl ic CATALOG [TOOL]` and explicitly discard stdout
+when only admission is needed. Its former `tool` and `records` output selectors
+are retired. Changelog preflight now derives `validate-release-inputs.pl` and its
+companions and shares the runner's u64 version and Gregorian date admission.
+Adopting 0.2.0 also
 requires the [PocketIC ownership handoff](ic-tools.md#pocketic-ownership-handoff):
 remove retired helper selections and update consumer pins and callers together.
 
@@ -561,9 +627,9 @@ Select fixtures according to their documented effects and local authority rather
 than editing vendored tests or invoking an unauthorized broader suite.
 Pinning adoption also requires the checker and its jq module, prepared Git/jq/yq
 tools (and Cargo for Rust workspaces), a CI/release invocation, and consumer-owned
-qualification for locked builds and external inputs. Consumers may also vendor
-`scripts/ci/install-ci-tool.sh` (selecting `yq`) and the checksum
-helper; choose and record their own reviewed version and platform digests.
+qualification for locked builds and external inputs. Prepare YQ through the
+common host bundle with `make install-host-tools` and `make host-tools-check`;
+its reviewed version and platform digests live in the selected tool catalog.
 Resolve existing exceptions under the
 [pinning policy](../rules/dependency-pinning.md) before claiming adoption.
 
@@ -667,9 +733,13 @@ selections arrive with the reviewed snapshot rather than another copied recipe.
 Existing checkouts need an explicit snapshot refresh and installation to receive
 new files and executables; they never execute a mutable sibling checkout.
 
-For the required shared Cargo-installed set, include the three
-`SHARED_TOOLING_CARGO_SORT_VERSION`, `SHARED_TOOLING_CARGO_SORT_DERIVES_VERSION`
-and `SHARED_TOOLING_CANDID_EXTRACTOR_VERSION` pins in the selected versions file.
+For the required shared Cargo-installed set, include
+`SHARED_TOOLING_CARGO_SORT_VERSION` and `SHARED_TOOLING_CARGO_SORT_DERIVES_VERSION`
+in the selected versions file. Candid extraction callers own an explicit selected
+Cargo-tool pin, install/check target and executable PATH; qualify those before
+adopting this snapshot. The common set no longer selects the extractor.
+Canic's [explicit setup contribution](https://github.com/dragginzgame/canic/pull/597)
+must be integrated before that consumer adopts the narrower common set.
 The aggregates always include Rust tools, even in non-Rust repositories;
 prepare a declared Rust/Cargo toolchain first as described in
 [Rust setup](local-setup.md#rust-development-tools). Retire duplicate
@@ -737,7 +807,7 @@ The current contract has no parser-only host mode or optional ripgrep/cloc flags
 Remove `--with-ripgrep`/`--with-cloc` from direct callers, including custom CI and
 evidence checks. Retain historical documents as historical evidence.
 
-Every aggregate now includes the three Cargo tools after host and IC setup,
+Every aggregate includes the common Cargo formatter tools after host setup,
 including in non-Rust repositories. Remove redundant Rust aggregate prerequisites.
 Move additional product setup/check prerequisites into `LOCAL_TOOL_INSTALL_TARGETS`
 and `LOCAL_TOOL_CHECK_TARGETS` in matching order, as shown in
@@ -790,7 +860,10 @@ set `SHARED_TOOLING_RUST := 0`. Existing focused module includes remain supporte
 do not include them again alongside `consumer.mk`.
 
 Export every parsed include in isolated Make/hook fixtures, including the extra
-inputs to `check-release-commands.sh`. Keep `make/execution.mk` and its probe so
+roots passed to `check-release-commands.sh`. That checker now copies their complete
+declared closure through `prepare-script-fixture.sh` before replacing the runner;
+refresh partial selections to include that closure and the preparer's companions.
+Keep `make/execution.mk` and its probe so
 unsupported Make modes cannot turn failures into success. The complete
 `test-git-hooks.sh` fixture exercises `make/consumer.mk`; the exporter includes
 that declared dependency automatically. `test-make-consumer.sh` tests common routing
@@ -803,13 +876,16 @@ recipes only after testing their actual callers and hook, following the
 Rust toolchain. Shared Tooling itself selects `CLOC_REPORT` and `CLOC_ROOT` before
 the include to summarize sibling workspaces; consumers normally use the defaults.
 Installing the raw cloc executable alone does not add these Make commands.
-The optional `make cloc-tooling` scans sibling CI and tooling, including non-Rust repositories;
-`CLOC_PARENT` selects its parent directory. It needs Git, cloc and core Perl
-modules, with no Cargo dependency or consumer command execution. Run it from
-Shared Tooling by default. A consumer that intentionally needs its own command
-can explicitly select `scripts/dev/cloc-tooling.pl`; existing selections continue
-to work. Without that file the target explains where to run or adopt the report,
-and never invokes another checkout implicitly.
+In Shared Tooling, `make cloc-tooling` scans sibling CI and tooling, including
+non-Rust repositories; `CLOC_PARENT` selects its parent directory. It needs Git,
+cloc and core Perl modules, with no Cargo dependency or consumer command execution.
+As of 0.16.0, the common consumer include no longer exports this fleet command or
+its `CLOC_PARENT` input. Move Make/CI/help callers to the central command before
+refreshing, and refresh `test-tool-commands.sh` too if it is selected. Consumers
+that deliberately select `scripts/dev/cloc-tooling.pl` can
+invoke `perl scripts/dev/cloc-tooling.pl PARENT` directly from their reviewed
+snapshot. The reporter and its snapshot contract remain available; no command
+implicitly invokes another checkout.
 
 The report includes each recorded `version@revision` and complete declared-file
 integrity, with separate identities for multiple bundles. Missing versions remain
@@ -833,15 +909,15 @@ and tested in Shared Tooling.
 Review pins against existing qualified versions before activation. A local
 exception uses its own explicitly selected matrix outside the snapshot; remove
 superseded pin ownership rather than maintaining two independent selections.
-Update local setup/CI callers to use `.tools/host/bin` and `.tools/ic/bin`, plus
-`.tools/rust/common/bin` when adopting the Cargo-installed set; CI
+Update local setup/CI callers to use `.tools/host/bin` and
+`.tools/rust/common/bin`, plus `.tools/ic/bin` for explicitly selected IC tools; CI
 must invoke the same Make installation/check targets and put these paths on its
 own PATH after explicit setup. Document the shell export for direct interactive commands;
 installation and Make exports do not change the user's terminal PATH. Remove
 separate package-manager jq/yq/ripgrep/cloc selections and preserve one owner
 for each tool pin.
-The existing single-yq installer remains available to consumers that need only
-that standalone parser; it accepts caller-owned pins rather than defining them.
+YQ belongs to the common host bundle; the standalone CI installer no longer
+accepts `yq`.
 Document the [system bootstrap prerequisites](local-setup.md#bootstrap-prerequisites)
 and retain product-specific
 alignment checks. Retire duplicated installer bodies once callers have moved;
@@ -886,10 +962,11 @@ deleting duplicated code. Keep product-specific checks and publication policy
 local. Adoption must wait for a reviewed committed source revision; local
 upstream tests do not establish that consumers have refreshed their snapshots.
 
-Exact registry metadata uses the existing `check-crates-io-version.sh` selection
-with `--metadata NEW-DIRECTORY`; no additional shared script is required. Prepare
-jq and curl 8.4.0+ for that mode. Retain each attempt's directory and handle all
-three statuses before removing local transport/parsing. The consumer still owns
+Registry observation accepts `check-crates-io-version.sh CRATE VERSION` for
+HTTP-status-only presence checks. Reconciliation callers select `--metadata
+NEW-DIRECTORY CRATE VERSION`, prepare jq and curl 8.4.0+, and retain each attempt's
+directory. Both contracts require handling all three statuses before removing
+local transport/parsing. The consumer still owns
 payload verification, yanked-version acceptance and publication reconciliation.
 
 File-digest generation uses the checksum verifier's additive `--print` interface,
@@ -904,10 +981,20 @@ bound to the recorded commit.
 ## CI installer command in 0.11.0
 
 Replace `install-actionlint.sh`, `install-gitleaks.sh`, `install-shellcheck.sh`,
-`install-sccache.sh` and `install-yq.sh` calls with `install-ci-tool.sh TOOL`, where
-TOOL is respectively `actionlint`, `gitleaks`, `shellcheck`, `sccache` or `yq`.
+and `install-sccache.sh` calls with `install-ci-tool.sh TOOL`, where
+TOOL is respectively `actionlint`, `gitleaks`, `shellcheck` or `sccache`.
 Keep existing `--version`, `--sha256` and `--install-dir` arguments and local pins.
 There are no forwarding aliases in 0.11.
+
+The former `install-yq.sh` and `install-ci-tool.sh yq` routes are retired. Use
+`make install-host-tools` and offline `make host-tools-check`, with yq selected by
+the reviewed host catalog. Retire the standalone installer call and its duplicate
+pin only after callers use `.tools/host/bin/yq`; retain explicit qualified host
+catalog exceptions through `HOST_TOOL_VERSIONS`.
+
+As of 0.16.0, every invocation must include `--install-dir`; an environment-only
+destination or the former home-directory default is no longer accepted. Update
+callers before refreshing the command and its selected installer fixture.
 
 Before refresh, replace each recorded wrapper entrypoint with
 `scripts/ci/install-ci-tool.sh` in the reviewed selection. Pass the complete new
@@ -917,3 +1004,27 @@ snapshot-owned wrappers; preserve modified or consumer-owned files for review.
 Refresh `test-installers.sh` too if selected, then qualify the same installer
 failure cases and each declared native host. No storage layout or tool upgrade
 is part of this command change.
+
+
+## Cargo dependency boundaries
+
+Adopt `scripts/ci/check-cargo-dependency-boundaries.sh` as a snapshot entrypoint
+and run it with `--consumer /absolute/repository/path`. The checker uses locked,
+offline Cargo metadata; prepare the selected toolchain and lockfile first. It
+requires Perl with JSON::PP. Policy lives in `ci/cargo-dependency-boundaries.json`:
+
+```json
+[
+  {"dependency": "ic-stable-structures", "allowed_packages": ["ic-storage"]}
+]
+```
+
+Each rule restricts a canonical dependency package name to the listed workspace
+packages. An empty allowed list bans that dependency everywhere in the workspace.
+Renames do not bypass the rule. Normal, build, development and target-specific
+direct dependencies are included. Transitive dependencies are not restricted.
+Malformed rules, repeated dependency rules or allowed packages, and unknown
+fields fail closed before Cargo runs. The selected consumer must be the workspace
+root with a regular `Cargo.toml`; failed or incomplete Cargo output and mismatched
+workspace identity refuse before any success report. This opt-in policy is
+separate from version pinning; consumers choose their own ownership rules.

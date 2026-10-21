@@ -10,10 +10,10 @@ use crate::{
     ops::{ic::IcOps, rpc::RpcOps},
     protocol,
 };
-use candid::Principal;
 use canic_contracts::dto::wire::projection::observability_relay::{
     CanisterCommandFragment, CanisterCommandResponseFragment,
 };
+use ic_platform::Principal;
 
 /// Discover canonical accounting without requiring replay links or cleanup indexes.
 

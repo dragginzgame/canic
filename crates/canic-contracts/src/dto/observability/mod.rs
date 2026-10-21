@@ -16,6 +16,7 @@ use crate::dto::{
 /// Exact sensitive runtime observation selected by an authenticated controller path.
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CanisterObservabilityRequest {
     ChildFunding(Principal),
     CycleBalance,
@@ -27,6 +28,7 @@ pub enum CanisterObservabilityRequest {
 
 /// Exact sensitive runtime observation returned to an authenticated controller path.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CanisterObservabilityResponse {
     ChildFunding(ChildFundingUsage),
     CycleBalance(CycleBalanceStatusResponse),
@@ -39,6 +41,7 @@ pub enum CanisterObservabilityResponse {
 /// Parent-local ledger and unresolved transfer evidence for one exact child.
 /// Accounted cycles can include an in-flight grant; missing reservation evidence is unknown.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ChildFundingUsage {
     pub parent: Principal,
     pub child: Principal,
@@ -51,6 +54,7 @@ pub struct ChildFundingUsage {
 
 /// Root-routed request for one Root-controlled canister's sensitive observations.
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetCanisterObservabilityRequest {
     pub canister_id: Principal,
     pub request: CanisterObservabilityRequest,
@@ -70,9 +74,10 @@ mod tests {
             }),
         };
 
-        let bytes = candid::encode_one(&request).expect("encode observability request");
+        let bytes = ic_platform::candid::contract::encode_one(&request)
+            .expect("encode observability request");
         let decoded: FleetCanisterObservabilityRequest =
-            candid::decode_one(&bytes).expect("decode observability request");
+            ic_platform::candid::decoder::decode_one(&bytes).expect("decode observability request");
 
         assert_eq!(decoded.canister_id, request.canister_id);
         let CanisterObservabilityRequest::CycleHistory(page) = decoded.request else {

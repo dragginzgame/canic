@@ -67,7 +67,7 @@ mod tests {
                 failed_at_ns: 123,
                 retry_at_ns,
                 stage: ProvisioningFailureStage::ComponentMembership,
-                target: candid::Principal::from_slice(&[8]),
+                target: ic_platform::Principal::from_slice(&[8]),
                 operation_id: [9; 32],
                 diagnostic_code: 137,
                 retry_category: ProvisioningRetryCategory::Backoff,
@@ -109,7 +109,7 @@ mod tests {
         use crate::values::provisioning_failure::ProvisioningDependencyFailure;
         for (code, detail) in [(None, None), (Some(5), Some("stopped".into()))] {
             let dependency = ProvisioningDependencyFailure {
-                target: candid::Principal::from_slice(&[8]),
+                target: ic_platform::Principal::from_slice(&[8]),
                 method: crate::protocol::CANIC_WASM_STORE_COMMAND.into(),
                 step: "inspect_template".into(),
                 rejection_code: code,

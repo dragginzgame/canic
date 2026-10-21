@@ -37,29 +37,39 @@ use crate::{
     icp_config::resolve_icp_build_network_from_root,
     subnet_catalog::load_cached_mainnet_subnet_catalog,
 };
-use candid::{CandidType, Nat, Principal};
-use canic_contracts::cycles::Cycles;
-use canic_contracts::dto::canister::CanisterInspectionRequest;
-use canic_contracts::dto::pool::CanisterPoolAsset;
-use canic_contracts::dto::pool::CanisterPoolAssetOrigin;
-use canic_contracts::dto::pool::CanisterPoolAssetStatus;
-use canic_contracts::dto::pool::CanisterPoolCreationFailure;
-use canic_contracts::dto::pool::CanisterPoolCreationProgress;
-use canic_contracts::dto::pool::CanisterPoolHandoff;
-use canic_contracts::dto::pool::CanisterPoolResponse;
-use canic_contracts::dto::pool::CanisterPoolStatusRequest;
-use canic_contracts::dto::wire::projection::capacity_inventory::RootRequest as RootPoolStatusRequest;
-use canic_contracts::dto::wire::projection::capacity_inventory::RootResponse as RootPoolStatusResponse;
-use canic_contracts::dto::wire::projection::capacity_management::RootRequest as RootInspectionCommand;
 #[cfg(test)]
 use canic_contracts::dto::wire::projection::inspection_reserve::{
     InspectionReserveRequest, InspectionReserveResponse,
 };
-use canic_contracts::dto::wire::projection::pool_observation::ManagedCanisterStatusRequest;
-use canic_contracts::dto::wire::projection::pool_observation::ManagedCanisterStatusResponse;
-use canic_contracts::ids::BuildNetwork;
-use canic_contracts::protocol as canic_protocol;
+use canic_contracts::{
+    cycles::Cycles,
+    dto::{
+        canister::CanisterInspectionRequest,
+        pool::{
+            CanisterPoolAsset, CanisterPoolAssetOrigin, CanisterPoolAssetStatus,
+            CanisterPoolCreationFailure, CanisterPoolCreationProgress, CanisterPoolHandoff,
+            CanisterPoolResponse, CanisterPoolStatusRequest,
+        },
+        wire::projection::{
+            capacity_inventory::{
+                RootRequest as RootPoolStatusRequest, RootResponse as RootPoolStatusResponse,
+            },
+            capacity_management::RootRequest as RootInspectionCommand,
+        },
+    },
+};
+use canic_contracts::{
+    dto::wire::projection::pool_observation::{
+        ManagedCanisterStatusRequest, ManagedCanisterStatusResponse,
+    },
+    ids::BuildNetwork,
+    protocol as canic_protocol,
+};
 use canic_core::cdk::utils::hash::hex_bytes;
+use ic_platform::{
+    Principal,
+    candid::contract::{CandidType, Nat},
+};
 use serde::Deserialize;
 use std::{
     cell::{Cell, RefCell},
@@ -71,17 +81,20 @@ use std::{
 use thiserror::Error as ThisError;
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct ManagementCanisterStatusRequest {
     canister_id: Principal,
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct CyclesLedgerAccount {
     owner: Principal,
     subaccount: Option<[u8; 32]>,
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct CyclesLedgerTransferArgs {
     amount: Nat,
     created_at_time: Option<u64>,
@@ -92,6 +105,7 @@ struct CyclesLedgerTransferArgs {
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 enum CyclesLedgerTransferError {
     BadBurn { min_burn_amount: Nat },
     BadFee { expected_fee: Nat },
@@ -104,17 +118,20 @@ enum CyclesLedgerTransferError {
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 struct ManagementCanisterStatusResponse {
     version: u64,
     module_hash: Option<Vec<u8>>,
 }
 
 #[derive(CandidType, Clone, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 struct ManagementCanisterObservationSettings {
     controllers: Vec<Principal>,
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 enum ManagementCanisterRuntimeStatus {
     #[serde(rename = "running")]
     Running,
@@ -125,6 +142,7 @@ enum ManagementCanisterRuntimeStatus {
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 struct ManagementCanisterObservationResponse {
     status: ManagementCanisterRuntimeStatus,
     settings: ManagementCanisterObservationSettings,
@@ -158,6 +176,7 @@ fn is_unallocated_fresh_root(
 /// Exact input expected by a configured cycle-safe retirement endpoint.
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct DrainRequest {
     operation_id: String,
     destination: Principal,
@@ -165,6 +184,7 @@ struct DrainRequest {
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 enum DrainResponse {
     Accepted { transferred_cycles: Nat },
     Replayed { transferred_cycles: Nat },
@@ -503,6 +523,7 @@ const fn estate_pool_lifecycle(
 
 /// Protected management evidence shared by Root-owned observation and pool funding.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 enum RootInspectionResponse {
     InspectCanister(RootInspectionStatus),
     InspectionReserveRequired(canic_contracts::dto::canister::CanisterInspectionReserveResponse),
@@ -524,6 +545,7 @@ impl RootInspectionResponse {
 }
 
 #[derive(CandidType, Clone, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 // Retain only controller/module/balance facts; discard unrelated management metrics.
 // The owning test checks each projected reply payload against RootCommandResponse.
 struct RootInspectionStatus {
@@ -556,6 +578,7 @@ struct CreateCanisterAuthority<'a> {
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct WithdrawArgs {
     amount: Nat,
     created_at_time: Option<u64>,
@@ -564,6 +587,7 @@ struct WithdrawArgs {
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 enum WithdrawError {
     BadFee {
         expected_fee: Nat,
@@ -594,6 +618,7 @@ enum WithdrawError {
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 enum RejectionCode {
     CanisterError,
     CanisterReject,
@@ -5830,8 +5855,8 @@ echo effect >> effects
 
     #[test]
     fn root_inspection_projection_matches_canonical_payloads() {
-        use candid::types::internal::TypeContainer;
-        use candid::types::{TypeInner, subtype};
+        use ic_platform::candid::contract::types::TypeInner;
+        use ic_platform::candid::contract::types::internal::TypeContainer;
         let mut types = TypeContainer::new();
         let sent = types.add::<canic_contracts::dto::wire::root_command::RootCommandResponse>();
         let received = types.add::<RootInspectionResponse>();
@@ -5847,7 +5872,7 @@ echo effect >> effects
                 .iter()
                 .find(|candidate| candidate.id == field.id)
                 .unwrap();
-            subtype::subtype(
+            ic_platform::candid::contract::types::subtype::subtype(
                 &mut std::collections::HashSet::new(),
                 &types.env,
                 &source.ty,
@@ -5856,14 +5881,14 @@ echo effect >> effects
             .unwrap();
         }
         let target = Principal::from_slice(&[7; 29]);
-        let bytes = candid::encode_one(RootInspectionCommand::InspectCanister(
-            CanisterInspectionRequest {
+        let bytes = ic_platform::candid::contract::encode_one(
+            RootInspectionCommand::InspectCanister(CanisterInspectionRequest {
                 canister_id: target,
-            },
-        ))
+            }),
+        )
         .unwrap();
         let command: canic_contracts::dto::wire::root_command::RootCommand =
-            candid::decode_one(&bytes).unwrap();
+            ic_platform::candid::decoder::decode_one(&bytes).unwrap();
         let canic_contracts::dto::wire::root_command::RootCommand::InspectCanister(request) =
             command
         else {
@@ -5983,10 +6008,11 @@ echo effect >> effects
             available_liquid_cycles: 50,
             required_liquid_cycles: 100,
         };
-        let bytes = candid::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
-            RootInspectionResponse::InspectionReserveRequired(evidence.clone()),
-        ))
-        .unwrap();
+        let bytes =
+            ic_platform::candid::contract::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
+                RootInspectionResponse::InspectionReserveRequired(evidence.clone()),
+            ))
+            .unwrap();
         std::fs::write(
             path.join("inspection.json"),
             serde_json::json!({"response_bytes": hex_bytes(bytes)}).to_string(),
@@ -6108,7 +6134,7 @@ echo effect >> effects
             std::fs::write(
                 fixture.root.join("balance.json"),
                 serde_json::json!({
-                    "response_bytes": hex_bytes(candid::encode_one(Nat::from(available)).unwrap()),
+                    "response_bytes": hex_bytes(ic_platform::candid::contract::encode_one(Nat::from(available)).unwrap()),
                 })
                 .to_string(),
             )
@@ -6758,11 +6784,11 @@ if"#,
             let base = path.join(format!("reserve-{caller}-{target}"));
             std::fs::write(
                 base.with_extension("bin"),
-                candid::encode_one(InspectionReserveRequest::InspectionReserve(
-                    CanisterInspectionRequest {
+                ic_platform::candid::contract::encode_one(
+                    InspectionReserveRequest::InspectionReserve(CanisterInspectionRequest {
                         canister_id: target,
-                    },
-                ))
+                    }),
+                )
                 .unwrap(),
             )
             .unwrap();
@@ -6780,7 +6806,7 @@ if"#,
             std::fs::write(
                 base.with_extension("json"),
                 serde_json::json!({
-                    "response_bytes": hex_bytes(candid::encode_one(response).unwrap()),
+                    "response_bytes": hex_bytes(ic_platform::candid::contract::encode_one(response).unwrap()),
                 })
                 .to_string(),
             )
@@ -6801,7 +6827,7 @@ if"#,
             std::fs::write(
                 path.join("inspection.json"),
                 serde_json::json!({
-                    "response_bytes": hex_bytes(candid::encode_one(response).unwrap()),
+                    "response_bytes": hex_bytes(ic_platform::candid::contract::encode_one(response).unwrap()),
                 })
                 .to_string(),
             )
@@ -6950,7 +6976,7 @@ if"#,
             std::fs::write(
                 path.join("pool.json"),
                 serde_json::json!({
-                    "response_bytes": hex_bytes(candid::encode_one(response).unwrap()),
+                    "response_bytes": hex_bytes(ic_platform::candid::contract::encode_one(response).unwrap()),
                 })
                 .to_string(),
             )
@@ -6974,7 +7000,7 @@ if"#,
             std::fs::write(
                 path.join("inspection.json"),
                 serde_json::json!({
-                    "response_bytes": hex_bytes(candid::encode_one(response).unwrap()),
+                    "response_bytes": hex_bytes(ic_platform::candid::contract::encode_one(response).unwrap()),
                 })
                 .to_string(),
             )
@@ -7106,7 +7132,7 @@ if"#,
                 });
                 std::fs::write(
                     path.join(format!("request-{}.bin", configured.name)),
-                    candid::encode_one(request).unwrap(),
+                    ic_platform::candid::contract::encode_one(request).unwrap(),
                 )
                 .unwrap();
             }
@@ -8482,9 +8508,10 @@ printf 'finish\n' >> events
         reason = "one measured transport fixture keeps equivalent retained inventories and call accounting together"
     )]
     fn configured_observation_benchmark_retains_snapshot_call_bound() {
-        use std::fs;
-        use std::sync::Arc;
-        use std::sync::Mutex;
+        use std::{
+            fs,
+            sync::{Arc, Mutex},
+        };
         for pool_count in [0_u32, 8, 24, 96] {
             let mut fixture = ProtocolOwnersFixture::new();
             let root_pid = Principal::from_slice(&[2]);
@@ -8554,7 +8581,7 @@ printf 'finish\n' >> events
             let response = Ok::<_, canic_contracts::dto::error::Error>(
                 RootPoolStatusResponse::Pool(Box::new(page)),
             );
-            fs::write(fixture.root.join("pool.json"), serde_json::json!({"response_bytes": hex_bytes(candid::encode_one(response).unwrap())}).to_string()).unwrap();
+            fs::write(fixture.root.join("pool.json"), serde_json::json!({"response_bytes": hex_bytes(ic_platform::candid::contract::encode_one(response).unwrap())}).to_string()).unwrap();
             let executable = fixture.root.join("icp");
             fs::write(&executable, crate::test_support::tool_script(&format!(
                 "#!/bin/sh\nif [ \"$1\" = '--version' ]; then echo 'icp @ICP_VERSION@'; exit 0; fi\nwhile [ \"$#\" -gt 0 ] && [ \"$1\" != canister ]; do shift; done\nshift\nsleep 0.05\ncase \"$1\" in\nstatus) shift; cat '{}'/\"$1\".json;;\ncall) cat '{}'/pool.json;;\n*) exit 1;;\nesac\n",
@@ -9387,6 +9414,7 @@ esac
     #[test]
     fn versionless_icp_status_uses_exact_typed_management_version() {
         #[derive(CandidType)]
+        #[candid_path("ic_platform::candid::contract")]
         struct CanonicalManagementCanisterStatusFixture {
             version: u64,
             module_hash: Option<Vec<u8>>,
@@ -9403,11 +9431,12 @@ esac
             r#"{{"id":"{canister}","name":"coordinator","status":"Running","settings":{{"controllers":["rdmx6-jaaaa-aaaaa-aaadq-cai"]}},"module_hash":"0x{}","memory_size":"1","cycles":"1000000000000","query_stats":{{"num_calls_total":"0","num_instructions_total":"0","request_payload_bytes_total":"0","response_payload_bytes_total":"0"}}}}"#,
             "11".repeat(32),
         );
-        let response_bytes = candid::encode_one(CanonicalManagementCanisterStatusFixture {
-            version: 42,
-            module_hash: Some(vec![0x22; 32]),
-        })
-        .expect("encode independently modelled management status");
+        let response_bytes =
+            ic_platform::candid::contract::encode_one(CanonicalManagementCanisterStatusFixture {
+                version: 42,
+                module_hash: Some(vec![0x22; 32]),
+            })
+            .expect("encode independently modelled management status");
         let script = crate::test_support::tool_script(&format!(
             "#!/bin/sh\n\
              if [ \"$1\" = \"--version\" ]; then printf '%s\\n' 'icp @ICP_VERSION@'; exit 0; fi\n\
@@ -9437,7 +9466,8 @@ esac
                     effective_canister_id,
                     canister.parse().expect("target Principal")
                 );
-                candid::decode_one(&response_bytes).map_err(IcpManagementCallError::CandidResponse)
+                ic_platform::candid::decoder::decode_one(&response_bytes)
+                    .map_err(IcpManagementCallError::CandidResponse)
             },
         )
         .expect("obtain exact typed management status");

@@ -66,7 +66,7 @@ fn lifecycle_participant_post_upgrade() {
         "the runtime-probe post-upgrade participant must run exactly once on the fresh heap"
     );
     if option_env!("CANIC_TEST_LIFECYCLE_PARTICIPANT_TRAP").is_some() {
-        ic_cdk::trap("runtime-probe lifecycle participant requested a test trap");
+        ic_platform::cdk::api::trap("runtime-probe lifecycle participant requested a test trap");
     }
     LIFECYCLE_POST_UPGRADE_EXECUTIONS
         .set(LIFECYCLE_POST_UPGRADE_EXECUTIONS.get().saturating_add(1));
@@ -208,7 +208,7 @@ async fn schedule_cost_probe_watchdog() -> Result<(), Error> {
                 ic_timers::TimerStart::Retained { initial: None },
                 |_context| {
                     if TRAP_COST_WATCHDOG.get() {
-                        ic_cdk::trap("cost watchdog interruption probe");
+                        ic_platform::cdk::api::trap("cost watchdog interruption probe");
                     }
                     ic_timers::WatchdogRunResult::new(
                         ic_timers::TimerCompletion::success(1),
@@ -332,17 +332,18 @@ async fn sample_public_metrics() -> Result<(), canic::Error> {
     canic::api::public_status::PublicStatusApi::record_application_metrics(vec![
         canic::dto::public_status::PublicMetric {
             name: "assigned_items".to_string(),
-            canister_id: Some(ic_cdk::api::canister_self()),
+            canister_id: Some(ic_platform::cdk::api::canister_self()),
             value: 7,
             unit: "assignments".to_string(),
-            observed_at_ns: ic_cdk::api::time(),
+            observed_at_ns: ic_platform::cdk::api::time(),
             kind: canic::dto::public_status::PublicMetricKind::Gauge,
         },
     ])
 }
 
 /// Bounded fixture evidence for optional sampling and ordinary cycle tracking.
-#[derive(candid::CandidType)]
+#[derive(ic_platform::candid::contract::CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct PublicSamplingProbe {
     sample_instructions: u64,
     sample: Result<(), canic::Error>,
@@ -369,9 +370,9 @@ async fn qualify_public_metrics_sampling(
     }
     process_fixture::record();
     let before = canic::__internal::core::api::memory::MemoryQuery::allocations()?;
-    let start = ic_cdk::api::performance_counter(0);
+    let start = ic_platform::cdk::api::performance_counter(0);
     let sample = canic::api::public_status::PublicStatusApi::sample_metrics();
-    let sample_instructions = ic_cdk::api::performance_counter(0).saturating_sub(start);
+    let sample_instructions = ic_platform::cdk::api::performance_counter(0).saturating_sub(start);
     let after = canic::__internal::core::api::memory::MemoryQuery::allocations()?;
     let allocation_unchanged = before == after;
     let allocation_ids_measured = after.memories.len() as u64;
@@ -405,10 +406,10 @@ fn sample_application_counters() -> Result<Vec<canic::dto::public_status::Public
     }
     Ok(vec![canic::dto::public_status::PublicMetric {
         name: "timer_completions".into(),
-        canister_id: Some(ic_cdk::api::canister_self()),
+        canister_id: Some(ic_platform::cdk::api::canister_self()),
         value: TIMER_INTERVAL_EXECUTIONS.get().into(),
         unit: "count".into(),
-        observed_at_ns: ic_cdk::api::time(),
+        observed_at_ns: ic_platform::cdk::api::time(),
         kind: canic::dto::public_status::PublicMetricKind::Counter {
             window_id: 0,
             saturated: TIMER_INTERVAL_EXECUTIONS.get() == u64::MAX,

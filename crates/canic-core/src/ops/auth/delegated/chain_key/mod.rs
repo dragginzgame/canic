@@ -107,7 +107,7 @@ mod tests {
         },
     };
     use canic_contracts::ids::{BuildNetwork, CanisterRole};
-    use ic_auth::token::TokenVerificationError;
+    use ic_auth::delegation::DelegationProofError;
     use k256::ecdsa::{SigningKey, signature::hazmat::PrehashSigner};
 
     fn p(id: u8) -> Principal {
@@ -277,7 +277,7 @@ mod tests {
         assert_eq!(
             verify(&cert, &proof, &policy),
             Err(RootDelegationProofError::Verification(
-                TokenVerificationError::BindingMismatch {
+                DelegationProofError::BindingMismatch {
                     field: "issuer_canister_id"
                 }
             ))
@@ -299,7 +299,7 @@ mod tests {
         assert_eq!(
             verify(&cert, &proof, &policy),
             Err(RootDelegationProofError::Verification(
-                TokenVerificationError::BindingMismatch {
+                DelegationProofError::BindingMismatch {
                     field: "leaf_audience"
                 }
             ))
@@ -322,7 +322,7 @@ mod tests {
         assert_eq!(
             verify(&cert, &proof, &policy),
             Err(RootDelegationProofError::Verification(
-                TokenVerificationError::BindingMismatch {
+                DelegationProofError::BindingMismatch {
                     field: "leaf_grants"
                 }
             ))
@@ -341,7 +341,7 @@ mod tests {
         assert_eq!(
             verify(&cert, &proof, &policy),
             Err(RootDelegationProofError::Verification(
-                TokenVerificationError::BindingMismatch {
+                DelegationProofError::BindingMismatch {
                     field: "root_canister_id"
                 }
             ))
@@ -360,7 +360,7 @@ mod tests {
         assert_eq!(
             verify(&cert, &proof, &policy),
             Err(RootDelegationProofError::Verification(
-                TokenVerificationError::BindingMismatch {
+                DelegationProofError::BindingMismatch {
                     field: "leaf_batch_window"
                 }
             ))
@@ -380,7 +380,7 @@ mod tests {
         assert_eq!(
             verify(&cert, &proof, &policy),
             Err(RootDelegationProofError::Verification(
-                TokenVerificationError::RootKeyPolicyBindingMismatch { field: "key_id" }
+                DelegationProofError::RootKeyPolicyBindingMismatch { field: "key_id" }
             ))
         );
     }
@@ -397,7 +397,7 @@ mod tests {
         assert_eq!(
             verify(&cert, &proof, &policy),
             Err(RootDelegationProofError::Verification(
-                TokenVerificationError::RootSignatureBindingMismatch {
+                DelegationProofError::RootSignatureBindingMismatch {
                     field: "derivation_path_hash",
                 }
             ))
@@ -416,7 +416,7 @@ mod tests {
         assert_eq!(
             verify(&cert, &proof, &policy),
             Err(RootDelegationProofError::Verification(
-                TokenVerificationError::BindingMismatch {
+                DelegationProofError::BindingMismatch {
                     field: "root_public_key"
                 }
             ))
@@ -434,7 +434,7 @@ mod tests {
         assert_eq!(
             verify(&cert, &proof, &policy),
             Err(RootDelegationProofError::Verification(
-                TokenVerificationError::StaleAuthority {
+                DelegationProofError::StaleAuthority {
                     field: "proof_epoch"
                 }
             ))
@@ -452,7 +452,7 @@ mod tests {
         assert_eq!(
             verify(&cert, &proof, &policy),
             Err(RootDelegationProofError::Verification(
-                TokenVerificationError::StaleAuthority {
+                DelegationProofError::StaleAuthority {
                     field: "registry_epoch"
                 }
             ))
@@ -470,7 +470,7 @@ mod tests {
         assert_eq!(
             verify(&cert, &proof, &policy),
             Err(RootDelegationProofError::Verification(
-                TokenVerificationError::TtlExceeded {
+                DelegationProofError::TtlExceeded {
                     target: "batch",
                     ttl_ns: 400,
                     max_ttl_ns: 399,
@@ -504,7 +504,7 @@ mod tests {
         assert_eq!(
             verify(&cert, &proof, &policy),
             Err(RootDelegationProofError::Verification(
-                TokenVerificationError::RootSignatureInvalid
+                DelegationProofError::RootSignatureInvalid
             ))
         );
     }
@@ -524,7 +524,7 @@ mod tests {
         assert_eq!(
             verify(&cert, &proof, &policy),
             Err(RootDelegationProofError::Verification(
-                TokenVerificationError::HighSSignature
+                DelegationProofError::HighSSignature
             ))
         );
     }
@@ -544,7 +544,7 @@ mod tests {
         assert_eq!(
             verify(&cert, &proof, &policy),
             Err(RootDelegationProofError::Verification(
-                TokenVerificationError::InvalidMerkleWitness
+                DelegationProofError::InvalidMerkleWitness
             ))
         );
     }
@@ -558,7 +558,7 @@ mod tests {
         assert_eq!(
             verify(&cert, &proof, &policy),
             Err(RootDelegationProofError::Verification(
-                TokenVerificationError::RootSignatureInvalid
+                DelegationProofError::RootSignatureInvalid
             ))
         );
     }
@@ -612,9 +612,9 @@ mod tests {
                 "key_id"
             };
             let expected_cause = if signature_only || conflicting_metadata {
-                TokenVerificationError::RootSignatureBindingMismatch { field }
+                DelegationProofError::RootSignatureBindingMismatch { field }
             } else {
-                TokenVerificationError::RootKeyPolicyBindingMismatch { field }
+                DelegationProofError::RootKeyPolicyBindingMismatch { field }
             };
             let installed = install_active_delegation_proof(InstallActiveDelegationProofInput {
                 proof: crate::dto::auth::DelegationProof {

@@ -13,19 +13,18 @@ use crate::{
     },
     icp::IcpRequestKind,
 };
-use candid::Principal;
-use canic_contracts::dto::error::Error;
-use canic_contracts::dto::pool_import::PoolImportCommand;
-use canic_contracts::dto::pool_import::PoolImportContext;
-use canic_contracts::dto::pool_import::PoolImportIdentity;
-use canic_contracts::dto::pool_import::PoolImportStatus;
-use canic_contracts::dto::wire::projection::capacity_import::Command;
-use canic_contracts::dto::wire::projection::capacity_import::Response;
-use canic_contracts::dto::wire::projection::capacity_import::StatusRequest;
-use canic_contracts::dto::wire::projection::capacity_import::StatusResponse;
-use canic_contracts::dto::wire::projection::capacity_inventory::CoordinatorRequest;
-use canic_contracts::dto::wire::projection::capacity_inventory::CoordinatorResponse;
-use canic_contracts::protocol;
+use canic_contracts::{
+    dto::{
+        error::Error,
+        pool_import::{PoolImportCommand, PoolImportContext, PoolImportIdentity, PoolImportStatus},
+        wire::projection::{
+            capacity_import::{Command, Response, StatusRequest, StatusResponse},
+            capacity_inventory::{CoordinatorRequest, CoordinatorResponse},
+        },
+    },
+    protocol,
+};
+use ic_platform::Principal;
 
 /// One Root update whose local checks and read-only authority preflight succeeded.
 /// Workflow persists its submission allowance before consuming this one-use value.
@@ -56,7 +55,7 @@ impl CapacityImportTransport {
         verify_agent(&self.agent, plan)?;
         let context = self.root_context(plan.authority.root).await?;
         let coordinator = plan.authority.coordinator;
-        let argument = candid::encode_one(CoordinatorRequest::Registry)
+        let argument = ic_platform::candid::contract::encode_one(CoordinatorRequest::Registry)
             .map_err(|_| CapacityImportJournalError::RootResponseInvalid)?;
         let registry = self
             .icp
@@ -80,10 +79,10 @@ impl CapacityImportTransport {
                     .map_err(|_| {
                         CapacityImportJournalError::CoordinatorUnavailable { coordinator }
                     })?;
-                    let response: Result<CoordinatorResponse, Error> = candid::decode_one(&bytes)
-                        .map_err(|_| {
-                        CapacityImportJournalError::CoordinatorUnavailable { coordinator }
-                    })?;
+                    let response: Result<CoordinatorResponse, Error> =
+                        ic_platform::candid::decoder::decode_one(&bytes).map_err(|_| {
+                            CapacityImportJournalError::CoordinatorUnavailable { coordinator }
+                        })?;
                     let CoordinatorResponse::Registry(registry) =
                         response.map_err(CapacityImportJournalError::CoordinatorRejected)?;
                     Ok::<_, CapacityImportJournalError>(registry)
@@ -243,8 +242,9 @@ impl CapacityImportTransport {
             PoolImportCommand::Advance { canister_id, .. } => Some(*canister_id),
             _ => None,
         };
-        let argument = candid::encode_one(Command::ImportPoolCapacity(command))
-            .map_err(|_| CapacityImportJournalError::RootResponseInvalid)?;
+        let argument =
+            ic_platform::candid::contract::encode_one(Command::ImportPoolCapacity(command))
+                .map_err(|_| CapacityImportJournalError::RootResponseInvalid)?;
         Ok(PreparedRootCommand {
             transport: self.clone(),
             plan: plan.clone(),
@@ -277,8 +277,9 @@ impl CapacityImportTransport {
                     .await
                     .map_err(|_| CapacityImportJournalError::Unresolved)?
                     .map_err(|_| CapacityImportJournalError::Unresolved)?;
-                    let response: Result<Response, Error> = candid::decode_one(&bytes)
-                        .map_err(|_| CapacityImportJournalError::RootResponseInvalid)?;
+                    let response: Result<Response, Error> =
+                        ic_platform::candid::decoder::decode_one(&bytes)
+                            .map_err(|_| CapacityImportJournalError::RootResponseInvalid)?;
                     let Response::ImportPoolCapacity(status) =
                         response.map_err(CapacityImportJournalError::RootRejected)?;
                     validate_root_status(plan, &status)?;
@@ -314,7 +315,7 @@ impl CapacityImportTransport {
         root: Principal,
         request: StatusRequest,
     ) -> Result<StatusResponse, CapacityImportJournalError> {
-        let argument = candid::encode_one(request)
+        let argument = ic_platform::candid::contract::encode_one(request)
             .map_err(|_| CapacityImportJournalError::RootResponseInvalid)?;
         let bytes = tokio::time::timeout(
             CALL_TIMEOUT,
@@ -326,8 +327,9 @@ impl CapacityImportTransport {
         .await
         .map_err(|_| CapacityImportJournalError::Unresolved)?
         .map_err(|_| CapacityImportJournalError::Unresolved)?;
-        let response: Result<StatusResponse, Error> = candid::decode_one(&bytes)
-            .map_err(|_| CapacityImportJournalError::RootResponseInvalid)?;
+        let response: Result<StatusResponse, Error> =
+            ic_platform::candid::decoder::decode_one(&bytes)
+                .map_err(|_| CapacityImportJournalError::RootResponseInvalid)?;
         response.map_err(CapacityImportJournalError::RootRejected)
     }
 }

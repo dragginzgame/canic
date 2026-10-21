@@ -7,6 +7,7 @@
 use crate::dto::prelude::*;
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum Request {
     AcknowledgePlacementReceipt(AcknowledgePlacementReceiptRequest),
     AllocatePlacementChild(CreateCanisterRequest),
@@ -66,6 +67,7 @@ impl Request {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct AcknowledgePlacementReceiptRequest {
     pub operation_id: [u8; 32],
     pub metadata: Option<RootRequestMetadata>,
@@ -78,6 +80,7 @@ pub struct AcknowledgePlacementReceiptRequest {
 //
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootRequestMetadata {
     pub request_id: [u8; 32],
     pub ttl_ns: u64,
@@ -90,6 +93,7 @@ pub struct RootRequestMetadata {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CreateCanisterRequest {
     pub canister_role: CanisterRole,
     pub parent: CreateCanisterParent,
@@ -104,6 +108,7 @@ pub struct CreateCanisterRequest {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CreateCanisterParent {
     Root,
     // Use the requesting canister.
@@ -121,6 +126,7 @@ pub enum CreateCanisterParent {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RecycleCanisterRequest {
     pub allocation_operation_id: [u8; 32],
     pub canister_pid: Principal,
@@ -134,6 +140,7 @@ pub struct RecycleCanisterRequest {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CyclesRequest {
     pub cycles: u128,
     pub metadata: Option<RootRequestMetadata>,
@@ -146,6 +153,7 @@ pub struct CyclesRequest {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum Response {
     AcknowledgePlacementReceipt,
     CreateCanister(CreateCanisterResponse),
@@ -159,6 +167,7 @@ pub enum Response {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CreateCanisterResponse {
     pub new_canister_pid: Principal,
 }
@@ -169,6 +178,7 @@ pub struct CreateCanisterResponse {
 //
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CyclesFundingPreflightResponse {
     ChildBudgetExhausted {
         remaining_child_budget: u128,
@@ -188,6 +198,7 @@ pub enum CyclesFundingPreflightResponse {
 //
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CyclesResponse {
     PreflightRejected(CyclesFundingPreflightResponse),
     Transferred { cycles_transferred: u128 },

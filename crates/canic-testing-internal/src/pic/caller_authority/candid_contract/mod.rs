@@ -3,7 +3,8 @@
 //! Compare generated protected command/status variants with the maintained public DTOs.
 
 use super::*;
-use candid::types::{Type, TypeInner, internal::TypeContainer, subtype};
+use ic_platform::candid::contract::types::{Type, TypeInner};
+use ic_platform::candid::contract::types::{internal::TypeContainer, subtype};
 use std::path::Path;
 
 pub(super) fn qualify(workspace: &Path) {
@@ -26,10 +27,10 @@ pub(super) fn qualify(workspace: &Path) {
             .unwrap();
     let program = std::str::from_utf8(&bytes)
         .unwrap()
-        .parse::<candid_parser::IDLProg>()
+        .parse::<ic_platform::candid_parser::IDLProg>()
         .unwrap();
-    let mut env = candid::TypeEnv::new();
-    let actor = candid_parser::check_prog(&mut env, &program)
+    let mut env = ic_platform::candid::contract::TypeEnv::new();
+    let actor = ic_platform::candid_parser::check_prog(&mut env, &program)
         .unwrap()
         .unwrap();
     let command = env
@@ -50,7 +51,10 @@ pub(super) fn qualify(workspace: &Path) {
         .get_method(&actor, canic::protocol::CANIC_CONTROL_STATUS)
         .unwrap()
         .clone();
-    assert_eq!(status.modes, vec![candid::types::FuncMode::Query]);
+    assert_eq!(
+        status.modes,
+        vec![ic_platform::candid::contract::types::FuncMode::Query]
+    );
     let request = variant(&env, &status.args[0], "CallerAuthority");
     equal::<OperationStatusRequest>(&mut env, &request);
     let result = variant(&env, &status.rets[0], "Ok");
@@ -58,22 +62,28 @@ pub(super) fn qualify(workspace: &Path) {
     equal::<CallerAuthorityStatus>(&mut env, &status);
 }
 
-fn variant(env: &candid::TypeEnv, ty: &Type, name: &str) -> Type {
+fn variant(env: &ic_platform::candid::contract::TypeEnv, ty: &Type, name: &str) -> Type {
     let ty = env.trace_type(ty).unwrap();
     let TypeInner::Variant(fields) = ty.as_ref() else {
         panic!("expected generated Candid variant")
     };
     fields
         .iter()
-        .find(|field| field.id.get_id() == candid::idl_hash(name))
+        .find(|field| field.id.get_id() == ic_platform::candid::contract::idl_hash(name))
         .unwrap()
         .ty
         .clone()
 }
 
-fn equal<T: CandidType>(env: &mut candid::TypeEnv, actual: &Type) {
+fn equal<T: CandidType>(env: &mut ic_platform::candid::contract::TypeEnv, actual: &Type) {
     let mut rust = TypeContainer::new();
     let ty = rust.add::<T>();
     let expected = env.merge_type(rust.env, ty);
-    subtype::equal(&mut subtype::Gamma::new(), env, actual, &expected).unwrap();
+    subtype::equal(
+        &mut std::collections::HashSet::default(),
+        env,
+        actual,
+        &expected,
+    )
+    .unwrap();
 }

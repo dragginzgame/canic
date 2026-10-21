@@ -26,7 +26,7 @@ pub(super) fn validate_allocation_caller(
 
 #[derive(Clone, Copy)]
 pub(super) struct PeerRequesterAccessEvidence<'a> {
-    pub(super) caller: candid::Principal,
+    pub(super) caller: ic_platform::Principal,
     pub(super) indexed_component: Option<canic_contracts::ids::ComponentInstanceId>,
     pub(super) retained: &'a canic_contracts::ids::ComponentBinding,
     pub(super) current: &'a canic_contracts::ids::ComponentBinding,
@@ -69,7 +69,7 @@ pub(super) fn revalidate_peer_provisioning_origin(
     topology: &canic_core::control_plane_support::config::ComponentTopology,
     request: &PeerComponentRequester,
     origin: &ComponentProvisioningOrigin,
-    caller: candid::Principal,
+    caller: ic_platform::Principal,
 ) -> Result<(), InternalError> {
     let request_matches_origin = match (request, origin) {
         (PeerComponentRequester::SameRoot, ComponentProvisioningOrigin::Component { .. }) => true,
@@ -96,7 +96,7 @@ pub(super) fn revalidate_retained_peer_origin(
     authority: &canic_contracts::dto::fleet_subnet_root::FleetSubnetRootAuthority,
     topology: &canic_core::control_plane_support::config::ComponentTopology,
     origin: &ComponentProvisioningOrigin,
-    caller: candid::Principal,
+    caller: ic_platform::Principal,
 ) -> Result<(), InternalError> {
     match origin {
         ComponentProvisioningOrigin::Component { requester, grant } => {
@@ -121,7 +121,7 @@ pub(super) fn revalidate_same_root_peer_origin(
     topology: &canic_core::control_plane_support::config::ComponentTopology,
     requester: &ComponentBinding,
     grant: &canic_core::control_plane_support::config::ComponentProvisioningGrant,
-    caller: candid::Principal,
+    caller: ic_platform::Principal,
 ) -> Result<(), InternalError> {
     topology
         .validate_component_binding(&authority.binding, requester)
@@ -152,7 +152,7 @@ pub(super) fn revalidate_fleet_service_peer_origin(
     requester: &FleetServiceComponentRequester,
     registry: &FleetRegistryVersion,
     grant: &canic_core::control_plane_support::config::ComponentProvisioningGrant,
-    caller: candid::Principal,
+    caller: ic_platform::Principal,
 ) -> Result<(), InternalError> {
     let mirror =
         FleetRegistryMirrorOps::validated_current(authority, authority.binding.fleet_subnet_root)?;
@@ -220,7 +220,7 @@ pub(super) fn validate_child_install_effect(
 
 pub(super) const fn creation_evidence(
     effect: RootComponentCreationEffectView,
-    canister: Option<candid::Principal>,
+    canister: Option<ic_platform::Principal>,
 ) -> RootComponentCreationEvidence {
     RootComponentCreationEvidence {
         wasm_store: effect.wasm_store,
@@ -343,7 +343,7 @@ pub(super) fn validate_provisioning_origin(
 
 pub(super) const fn retained_subtree_stop_controller(
     progress: &RootComponentSubtreeRemovalProgressView,
-) -> Option<candid::Principal> {
+) -> Option<ic_platform::Principal> {
     match progress {
         RootComponentSubtreeRemovalProgressView::StopIntent(effect) => Some(effect.controller),
         RootComponentSubtreeRemovalProgressView::Stopped(receipt) => Some(receipt.stop.controller),

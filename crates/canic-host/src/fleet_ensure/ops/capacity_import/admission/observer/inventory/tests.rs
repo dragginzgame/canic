@@ -142,7 +142,10 @@ fn failed_assets_remain_owned_without_blocking_a_quiet_destination() {
 #[test]
 fn inventory_decode_bounds_bytes_types_and_malformed_replies() {
     let canister = principal(2);
-    let valid = candid::encode_one(Ok::<_, Error>(RootResponse::Pool(Box::new(page())))).unwrap();
+    let valid = ic_platform::candid::contract::encode_one(Ok::<_, Error>(RootResponse::Pool(
+        Box::new(page()),
+    )))
+    .unwrap();
     let decoded: Result<RootResponse, Error> = decode(canister, &valid).unwrap();
     let RootResponse::Pool(observed) = decoded.unwrap();
     assert_eq!(*observed, page());
@@ -162,11 +165,15 @@ fn inventory_decode_bounds_bytes_types_and_malformed_replies() {
         excess_types.extend([0x6c, 0]);
     }
     excess_types.extend([1, 0]);
-    let mut generous = candid::de::DecoderConfig::new();
+    let mut generous = ic_platform::candid::decoder::DecoderConfig::new();
     generous.set_max_type_len(4097);
-    candid::utils::decode_one_with_config::<candid::Reserved>(&excess_types, &generous).unwrap();
+    ic_platform::candid::decoder::decode_one_with_config::<ic_platform::candid::contract::Reserved>(
+        &excess_types,
+        &generous,
+    )
+    .unwrap();
     assert!(matches!(
-        decode::<candid::Reserved>(canister, &excess_types),
+        decode::<ic_platform::candid::contract::Reserved>(canister, &excess_types),
         Err(CapacityImportJournalError::InventoryObservation {
             stage: CapacityImportInventoryStage::Decode,
             ..

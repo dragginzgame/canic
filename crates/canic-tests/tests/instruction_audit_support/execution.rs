@@ -238,13 +238,13 @@ fn execute_scenario(
     let target_pid = prepared.target_pid;
     match scenario.key {
         "scale:request_cycles_from_parent:fresh" => {
-            let response: Result<u128, Error> = ::ic_testkit::pic::update_candid_args(
-                &setup.pic,
+            let response: Result<u128, Error> = ic_testkit::pic::update_candid_args(
+                &(setup.pic),
                 target_pid,
-                candid::Principal::anonymous(),
+                ic_platform::Principal::anonymous(),
                 "request_cycles_from_parent",
                 (999u128,),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .expect("scale request_cycles_from_parent transport failed");
@@ -258,26 +258,26 @@ fn execute_scenario(
             execute_root_cycles_scenario(setup, target_pid);
         }
         "user_hub:create_account:new-principal" => {
-            let created: Result<Principal, Error> = ::ic_testkit::pic::update_candid_args(
-                &setup.pic,
+            let created: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
+                &(setup.pic),
                 target_pid,
-                candid::Principal::anonymous(),
+                ic_platform::Principal::anonymous(),
                 "create_account",
                 (Principal::from_slice(&[51; 29]),),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .expect("create_account transport failed");
             created.expect("create_account application failed");
         }
         "scale_hub:create_worker:empty-pool" => {
-            let created: Result<Principal, Error> = ::ic_testkit::pic::update_candid_args(
-                &setup.pic,
+            let created: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
+                &(setup.pic),
                 target_pid,
-                candid::Principal::anonymous(),
+                ic_platform::Principal::anonymous(),
                 "create_worker",
                 (),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .expect("create_worker transport failed");
@@ -288,13 +288,13 @@ fn execute_scenario(
 }
 
 fn provision_delegation_proof(pic: &PocketIc, root: Principal, issuer_pid: Principal) {
-    let provisioned: Result<(), Error> = ::ic_testkit::pic::update_candid_args(
+    let provisioned: Result<(), Error> = ic_testkit::pic::update_candid_args(
         pic,
         root,
-        candid::Principal::anonymous(),
+        ic_platform::Principal::anonymous(),
         "test_provision_chain_key_delegation_proof_for_issuer",
         (issuer_pid,),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .expect("root proof provisioning transport failed");
@@ -307,10 +307,10 @@ fn configure_delegation_issuer(
     issuer_pid: Principal,
     verifier_role: &canic::ids::CanisterRole,
 ) {
-    let registered: Result<RootCommandResponse, Error> = ::ic_testkit::pic::update_candid_args(
+    let registered: Result<RootCommandResponse, Error> = ic_testkit::pic::update_candid_args(
         pic,
         root,
-        candid::Principal::anonymous(),
+        ic_platform::Principal::anonymous(),
         protocol::CANIC_ROOT_COMMAND,
         (RootCommand::ConfigureIssuer(RootIssuerConfigureRequest {
             issuer_pid,
@@ -323,7 +323,7 @@ fn configure_delegation_issuer(
             cert_ttl_ns: 60_000_000_000,
             refresh_after_ratio_bps: 8_000,
         }),),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .expect("root issuer registration transport failed");
@@ -357,10 +357,10 @@ fn execute_root_cycles_scenario(setup: &root::harness::RootSetup, target_pid: Pr
 
 // Read the current perf metrics table for one canister.
 fn perf_entries(pic: &PocketIc, canister_id: Principal) -> Vec<MetricEntry> {
-    let response: Result<RoleStatusResponse, Error> = ::ic_testkit::pic::query_candid_args(
+    let response: Result<RoleStatusResponse, Error> = ic_testkit::pic::query_candid_args(
         pic,
         canister_id,
-        candid::Principal::anonymous(),
+        ic_platform::Principal::anonymous(),
         protocol::CANIC_OBSERVABILITY,
         (RoleStatusRequest::Metrics(MetricsStatusRequest {
             kind: MetricsKind::Runtime,
@@ -369,7 +369,7 @@ fn perf_entries(pic: &PocketIc, canister_id: Principal) -> Vec<MetricEntry> {
                 offset: 0,
             },
         }),),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .expect("perf metrics transport query failed");
@@ -518,13 +518,13 @@ fn root_capability_response_as(
     };
 
     let result: Result<Result<RootCommandResponse, Error>, _> =
-        ::ic_testkit::pic::update_candid_args(
-            &setup.pic,
+        ic_testkit::pic::update_candid_args(
+            &(setup.pic),
             target_pid,
             caller,
             protocol::CANIC_ROOT_COMMAND,
             (RootCommand::RespondCapability(envelope),),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply);
     let response = result.expect("root capability transport call failed")?;

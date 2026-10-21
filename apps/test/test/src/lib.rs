@@ -30,7 +30,7 @@ fn lifecycle_participant_init() {
         "the managed init participant must run exactly once"
     );
     if option_env!("CANIC_TEST_LIFECYCLE_PARTICIPANT_INIT_TRAP").is_some() {
-        ic_cdk::trap("managed init lifecycle participant requested a test trap");
+        ic_platform::cdk::api::trap("managed init lifecycle participant requested a test trap");
     }
     LIFECYCLE_INIT_EXECUTIONS.set(LIFECYCLE_INIT_EXECUTIONS.get().saturating_add(1));
 }
@@ -46,7 +46,7 @@ fn lifecycle_participant_post_upgrade() {
         "the managed post-upgrade participant must run exactly once on the fresh heap"
     );
     if option_env!("CANIC_TEST_LIFECYCLE_PARTICIPANT_TRAP").is_some() {
-        ic_cdk::trap("managed lifecycle participant requested a test trap");
+        ic_platform::cdk::api::trap("managed lifecycle participant requested a test trap");
     }
     LIFECYCLE_POST_UPGRADE_EXECUTIONS
         .set(LIFECYCLE_POST_UPGRADE_EXECUTIONS.get().saturating_add(1));

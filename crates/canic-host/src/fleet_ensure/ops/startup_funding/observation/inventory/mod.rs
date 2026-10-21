@@ -15,7 +15,6 @@ use crate::{
     },
     icp::IcpCli,
 };
-use candid::Principal;
 use canic_contracts::{
     dto::{
         component_registry::{
@@ -28,6 +27,7 @@ use canic_contracts::{
     protocol,
 };
 use canic_core::control_plane_support::config::ComponentTopology;
+use ic_platform::Principal;
 use std::{collections::BTreeMap, path::Path};
 
 /// Invocation-local evidence retained across ledger reads, with no durable spending authority.

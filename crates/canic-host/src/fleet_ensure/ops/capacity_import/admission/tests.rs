@@ -77,7 +77,9 @@ fn reviewed_with_controllers(controllers: Vec<Principal>) -> CapacityImportPlanR
         plan,
         CapacityImportAdmissionRecord {
             infrastructure,
-            registry_candid_hex: hex_bytes(candid::encode_one(&registry).unwrap()),
+            registry_candid_hex: hex_bytes(
+                ic_platform::candid::contract::encode_one(&registry).unwrap(),
+            ),
             declarations_toml: text,
             declarations_sha256: digest,
         },
@@ -99,7 +101,8 @@ fn recovery_controller_order_preserves_admission_bytes_and_review_hash() {
         let admission = changed.admission.as_mut().unwrap();
         let mut observed = registry(admission).unwrap();
         observed.authority.binding.recovery_controllers = controllers;
-        admission.registry_candid_hex = hex_bytes(candid::encode_one(&observed).unwrap());
+        admission.registry_candid_hex =
+            hex_bytes(ic_platform::candid::contract::encode_one(&observed).unwrap());
         assert!(matches!(
             validate(&changed),
             Err(CapacityImportReviewError::AdmissionInvalid)

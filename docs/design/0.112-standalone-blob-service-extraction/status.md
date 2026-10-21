@@ -1,5 +1,14 @@
 # Upstream Integration Implementation Status
 
+## Capture executor retirement — 2026-10-18
+
+The unused injected Canic capture runner is removed in favor of the IC Backup
+execution/recovery owner. This is a hard cut of an unconnected public executor,
+not completion of live backup. Dry-run planning and retained evidence models remain,
+as do active restore execution and its interruption proofs. Integration of Root
+checkpoint authority with upstream capture is still tracked in #513 and #550.
+The older package-test counts below describe their original validation snapshots.
+
 ## Live Backup work resumed — 2026-10-15
 
 The maintainer requested getting Backup working, superseding the implementation

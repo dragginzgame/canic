@@ -16,7 +16,6 @@ use crate::{
     fleet::{DEFAULT_CYCLES_LEDGER, FleetCommandError, format_cycles},
     version_text,
 };
-use candid::Principal;
 use canic_contracts::cycles::Cycles;
 use canic_host::{
     fleet_ensure::{
@@ -28,6 +27,7 @@ use canic_host::{
     icp_config::resolve_current_canic_icp_root,
 };
 use clap::{ArgAction, Command};
+use ic_platform::Principal;
 use std::ffi::OsString;
 
 pub(super) fn command() -> Command {

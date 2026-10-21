@@ -9,8 +9,8 @@ use crate::{
     model::caller_authority::CallerAdmissionError,
     view::caller_authority::CallerAdmissionView,
 };
-use candid::Principal;
 use canic_contracts::ids::{CallerInstallation, CallerReceiverAuthority};
+use ic_platform::Principal;
 
 ///
 /// CallerAdmissionTicket

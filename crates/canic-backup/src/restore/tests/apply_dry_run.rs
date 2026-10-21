@@ -1,4 +1,5 @@
 use super::*;
+use ic_backup::model::artifacts::ArtifactChecksumRecord;
 
 #[test]
 fn apply_dry_run_verifies_uppercase_manifest_checksums() {
@@ -82,7 +83,7 @@ fn apply_dry_run_renders_ordered_member_operations() {
         operations[0]
             .artifact_checksum
             .as_ref()
-            .map(|checksum| checksum.hash.as_str()),
+            .map(ArtifactChecksumRecord::hash),
         Some(HASH)
     );
     assert_eq!(
@@ -395,7 +396,9 @@ fn apply_dry_run_validates_artifacts_under_backup_root() {
         err,
         RestoreApplyDryRunValidationError::ArtifactChecksum {
             field: "artifact_validation.checks[].checksum_expected",
-            source: ArtifactChecksumError::InvalidHash(_),
+            source: ArtifactChecksumError::Checksum(
+                ic_backup::model::artifacts::ChecksumError::InvalidHash(_)
+            ),
         }
     );
 
@@ -498,7 +501,11 @@ fn apply_dry_run_rejects_symlinked_artifact_components() {
         .find(|member| member.canister_id == ROOT)
         .expect("root member");
     member.source_snapshot.artifact_path = "artifacts/root".to_string();
-    member.source_snapshot.checksum = Some(ArtifactChecksum::from_bytes(b"outside").hash);
+    member.source_snapshot.checksum = Some(
+        ArtifactChecksumRecord::from_bytes(b"outside")
+            .hash()
+            .to_owned(),
+    );
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
     let error = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)

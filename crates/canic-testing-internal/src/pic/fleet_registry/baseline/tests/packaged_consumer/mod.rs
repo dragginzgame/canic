@@ -133,13 +133,13 @@ fn installed_package_build_deploy_recover_and_replay() {
     verify_installed_artifacts(&consumer, &pic, operator, &desired, &infrastructure);
     verify_workload(&consumer, &pic, root, operator, &desired);
     let ledger = Principal::from_text(&desired.cycles_ledger).unwrap();
-    let requests: u64 = ::ic_testkit::pic::query_candid_args(
-        &pic,
+    let requests: u64 = ic_testkit::pic::query_candid_args(
+        &(pic),
         ledger,
-        candid::Principal::anonymous(),
+        ic_platform::Principal::anonymous(),
         "request_count",
         (),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .unwrap();
@@ -151,13 +151,13 @@ fn installed_package_build_deploy_recover_and_replay() {
     assert_eq!(replay["effects_applied"], 0);
     assert_eq!(mutation_counts(&consumer.root), mutations);
     assert_eq!(
-        ::ic_testkit::pic::query_candid_args::<(u64,), ()>(
-            &pic,
+        ic_testkit::pic::query_candid_args::<(u64,), ()>(
+            &(pic),
             ledger,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "request_count",
             (),
-            ::canic::testing::CANDID_REPLY_LIMITS
+            canic::testing::CANDID_REPLY_LIMITS
         )
         .map(|(reply,)| reply)
         .unwrap(),
@@ -478,13 +478,13 @@ fn verify_workload(
         hex_bytes(status.module_hash.unwrap()),
         artifact.wasm_gz_sha256_hex
     );
-    let reply: Result<u64, Error> = ::ic_testkit::pic::query_candid_args(
+    let reply: Result<u64, Error> = ic_testkit::pic::query_candid_args(
         pic,
         workload.canister_id,
         root,
         "packaged_probe",
         (),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .unwrap();

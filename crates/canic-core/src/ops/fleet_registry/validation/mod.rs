@@ -19,11 +19,11 @@ use crate::{
         fleet_registry::FleetRegistryOpsError,
     },
 };
-use candid::Principal;
 use canic_contracts::ids::{
     AppId, CanonicalNetworkId, ComponentInstanceId, FleetAdmissionPolicy, FleetRegistryAuthority,
     FleetServiceId,
 };
+use ic_platform::Principal;
 use std::collections::{BTreeMap, BTreeSet};
 
 pub(super) fn compile_genesis(

@@ -8,8 +8,11 @@ use crate::{
     dto::fleet_registry::FleetLedgerTransferIntent,
     infra::ic::{IcInfraError, call::Call, known::CYCLES_LEDGER_CANISTER},
 };
-use candid::{CandidType, Nat, Principal};
 use canic_contracts::cycles::Cycles;
+use ic_platform::{
+    Principal,
+    candid::contract::{CandidType, Nat},
+};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use thiserror::Error as ThisError;
@@ -17,6 +20,7 @@ use thiserror::Error as ThisError;
 /// Exact ICRC-1 account used for Root-owned estate funding.
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CyclesLedgerAccount {
     pub owner: Principal,
     pub subaccount: Option<[u8; 32]>,
@@ -24,6 +28,7 @@ pub struct CyclesLedgerAccount {
 
 /// Exact Cycles Ledger canister-creation request.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CyclesLedgerCreateCanisterArgs {
     pub from_subaccount: Option<[u8; 32]>,
     pub created_at_time: Option<u64>,
@@ -33,6 +38,7 @@ pub struct CyclesLedgerCreateCanisterArgs {
 
 /// CMC arguments nested in a Cycles Ledger creation request.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CyclesLedgerCmcCreateCanisterArgs {
     pub settings: Option<CyclesLedgerCanisterSettings>,
     pub subnet_selection: Option<CyclesLedgerSubnetSelection>,
@@ -40,6 +46,7 @@ pub struct CyclesLedgerCmcCreateCanisterArgs {
 
 /// Settings applied by the CMC while creating the empty pool Canister.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CyclesLedgerCanisterSettings {
     pub controllers: Option<Vec<Principal>>,
     pub compute_allocation: Option<Nat>,
@@ -50,12 +57,14 @@ pub struct CyclesLedgerCanisterSettings {
 
 /// Exact physical Subnet selection used for one pool refill.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CyclesLedgerSubnetSelection {
     Subnet { subnet: Principal },
 }
 
 /// Successful Cycles Ledger creation evidence.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CyclesLedgerCreateCanisterSuccess {
     pub block_id: Nat,
     pub canister_id: Principal,
@@ -63,6 +72,7 @@ pub struct CyclesLedgerCreateCanisterSuccess {
 
 /// Lossless Cycles Ledger create-canister error surface.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CyclesLedgerCreateCanisterError {
     InsufficientFunds {
         balance: Nat,
@@ -137,6 +147,7 @@ pub enum CyclesLedgerInfraError {
 
 /// ICRC-1 transfer failure retained as a typed boundary until workflow classification.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CyclesLedgerTransferError {
     BadBurn { min_burn_amount: Nat },
     BadFee { expected_fee: Nat },
@@ -149,6 +160,7 @@ pub enum CyclesLedgerTransferError {
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct CyclesLedgerTransferArgs {
     amount: Nat,
     created_at_time: Option<u64>,

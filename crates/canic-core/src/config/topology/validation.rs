@@ -5,11 +5,11 @@
 //! Boundary: compares passive binding facts against one canonical compiled topology.
 
 use crate::config::{ComponentTopology, ComponentTopologyError};
-use candid::Principal;
 use canic_contracts::ids::{
     ComponentBinding, ComponentChildBinding, ComponentSpecAdmission, ComponentTopologyDigest,
     FleetSubnetRootBinding, FleetSubnetRootLimits,
 };
+use ic_platform::Principal;
 
 impl ComponentTopology {
     /// Validate one root binding and return its exact canonical topology projection.

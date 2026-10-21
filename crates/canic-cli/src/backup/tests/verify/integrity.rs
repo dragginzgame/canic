@@ -21,7 +21,7 @@ fn verify_backup_reads_layout_and_artifacts() {
         .publish_manifest(&valid_manifest())
         .expect("write manifest");
     layout
-        .write_journal(&journal_with_checksum(checksum.hash.clone()))
+        .write_journal(&journal_with_checksum(checksum.hash().to_owned()))
         .expect("write journal");
 
     let options = BackupVerifyOptions {
@@ -35,5 +35,5 @@ fn verify_backup_reads_layout_and_artifacts() {
     assert_eq!(report.backup_id, "backup-test");
     assert!(report.verified);
     assert_eq!(report.durable_artifacts, 1);
-    assert_eq!(report.artifacts[0].checksum, checksum.hash);
+    assert_eq!(report.artifacts[0].checksum, checksum.hash().to_owned());
 }

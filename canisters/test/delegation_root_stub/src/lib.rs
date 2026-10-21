@@ -16,12 +16,12 @@ fn root_verify_role_attestation(
 
 #[canic_query(public)]
 async fn root_now_secs() -> Result<u64, Error> {
-    Ok(ic_cdk::api::time() / 1_000_000_000)
+    Ok(ic_platform::cdk::api::time() / 1_000_000_000)
 }
 
 #[canic_update(requires(caller::is_controller()))]
 async fn test_provision_chain_key_delegation_proof_for_issuer(
-    issuer_pid: candid::Principal,
+    issuer_pid: ic_platform::Principal,
 ) -> Result<(), Error> {
     AuthApi::provision_chain_key_delegation_proof_for_issuer_root(issuer_pid).await
 }

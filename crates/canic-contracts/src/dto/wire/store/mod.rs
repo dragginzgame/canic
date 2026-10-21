@@ -14,8 +14,10 @@ macro_rules! __canic_store_wire_types {
 
     ) => {
         #[derive(
-            $crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize,
+            $crate::__reexports::ic_platform::candid::contract::CandidType,
+            $crate::__reexports::serde::Deserialize,
         )]
+        #[candid_path("ic_platform::candid::contract")]
         #[serde(crate = $serde_crate)]
         /// PublicStatusRequest wire union selected from the role's compiled capabilities.
         pub enum PublicStatusRequest {
@@ -26,8 +28,10 @@ macro_rules! __canic_store_wire_types {
         }
 
         #[derive(
-            $crate::__reexports::candid::CandidType, $crate::__reexports::serde::Deserialize,
+            $crate::__reexports::ic_platform::candid::contract::CandidType,
+            $crate::__reexports::serde::Deserialize,
         )]
+        #[candid_path("ic_platform::candid::contract")]
         #[serde(crate = $serde_crate)]
         /// PublicStatusResponse wire union selected from the role's compiled capabilities.
         pub enum PublicStatusResponse {

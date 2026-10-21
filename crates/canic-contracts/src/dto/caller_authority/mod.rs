@@ -10,6 +10,7 @@ use crate::{
 /// Exact source or receiver lifecycle change issued by the owning Root.
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CallerAuthorityChange {
     StageSource(CallerInstallation),
     Grant(CallerInstallation),
@@ -21,6 +22,7 @@ pub enum CallerAuthorityChange {
 
 /// Immutable recipient-specific original publication; generation and hash are issuer-owned.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CallerAuthorityPublication {
     pub operation_id: [u8; 32],
     pub authority: CallerReceiverAuthority,
@@ -32,6 +34,7 @@ pub struct CallerAuthorityPublication {
 
 /// Protected publication phases, serialized with source membership changes.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CallerAuthorityCommand {
     Prepare(CallerAuthorityPublication),
     Commit(CallerAuthorityPublication),
@@ -40,6 +43,7 @@ pub enum CallerAuthorityCommand {
 
 /// Exact durable receiver progress for lost-response reconciliation.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CallerAuthorityPhase {
     Prepared,
     Committed,
@@ -48,6 +52,7 @@ pub enum CallerAuthorityPhase {
 
 /// Retained immutable original publication and observed durable phase.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CallerAuthorityReceipt {
     pub publication: CallerAuthorityPublication,
     pub phase: CallerAuthorityPhase,
@@ -55,6 +60,7 @@ pub struct CallerAuthorityReceipt {
 
 /// Receiver authority and optional original-operation receipt, without copying the source census.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CallerAuthorityStatus {
     pub readiness: CallerAuthorityReadiness,
     pub authority: CallerReceiverAuthority,
@@ -69,6 +75,7 @@ pub struct CallerAuthorityStatus {
 
 /// Framework bootstrap may finish before protected application initialization and fixtures.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CallerAuthorityReadiness {
     FrameworkPending,
     FrameworkReady,

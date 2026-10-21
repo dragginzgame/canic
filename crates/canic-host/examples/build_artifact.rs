@@ -2,7 +2,7 @@ use canic_contracts::ids::ReleaseBuildId;
 use canic_host::{
     canister_build::{
         CanisterBuildProfile, WorkspaceBuildContext, build_workspace_canister_artifact,
-        copy_icp_wasm_output, print_workspace_build_context_once,
+        copy_icp_wasm_output,
     },
     icp_config::resolve_icp_build_network_from_root,
 };
@@ -85,7 +85,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         refresh_canonical_infrastructure_did,
         release_build_id,
     };
-    print_workspace_build_context_once(&context)?;
+    eprintln!("{}", context.lines().join("\n"));
     let output = build_workspace_canister_artifact(&context)?;
     copy_icp_wasm_output(&canister_name, &output)?;
     println!("{}", output.wasm_gz_path.display());

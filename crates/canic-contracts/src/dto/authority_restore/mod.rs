@@ -4,12 +4,13 @@
 //! Does not own: history proof, transition validation, persistence, or timer suspension.
 //! Boundary: controller endpoints accept and return these passive v1 shapes.
 
-use candid::{CandidType, Principal};
+use ic_platform::{Principal, candid::contract::CandidType};
 use serde::{Deserialize, Serialize};
 
 /// Controller-selected identity for one authority snapshot operation.
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct AuthoritySnapshotRequest {
     pub operation_id: [u8; 32],
 }
@@ -17,6 +18,7 @@ pub struct AuthoritySnapshotRequest {
 /// Exact reviewed identity for irreversible release fencing within one installation.
 /// This request alone proves neither quiescence nor permission to clear owner state.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct AuthorityReleaseRequest {
     pub operation_id: [u8; 32],
     pub review_sha256: [u8; 32],
@@ -25,6 +27,7 @@ pub struct AuthorityReleaseRequest {
 
 /// Durable phase of one authority canister's restore fence.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum AuthorityRestoreFencePhase {
     Open,
     Sealed,
@@ -36,6 +39,7 @@ pub enum AuthorityRestoreFencePhase {
 
 /// Current durable authority snapshot/release-fence state.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct AuthorityRestoreFenceStatusResponse {
     pub authority_canister: Principal,
     pub phase: AuthorityRestoreFencePhase,

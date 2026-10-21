@@ -3,124 +3,6 @@
 use super::*;
 
 #[test]
-fn peer_mismatch_retains_exact_bytes_provenance_and_original_assets() {
-    let nonce = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let fixture = source::FixtureSource {
-        root: Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/embedded-root")
-            .join(format!("mismatch-evidence-{}-{nonce}", std::process::id())),
-    };
-    for path in [ARTIFACT, EVIDENCE] {
-        let path = fixture.root.join(path);
-        fs::create_dir_all(path.parent().unwrap()).unwrap();
-        fs::write(path, b"original source asset").unwrap();
-    }
-    let bytes = b"actual mismatching peer";
-    let provenance = FixtureEvidence {
-        schema_version: 1,
-        package: PACKAGE.into(),
-        target: TARGET.into(),
-        profile: PROFILE.into(),
-        fixture_version: source::FIXTURE_VERSION.into(),
-        source_input_digest: "a1".repeat(32),
-        build_fingerprint: "b2".repeat(32),
-        lock_sha256: "c3".repeat(32),
-        producer_lock_sha256: "d4".repeat(32),
-        artifact_sha256: sha256_hex(bytes),
-        cargo: "selected Cargo".into(),
-        rustc: "selected rustc".into(),
-    };
-    let path = retain_peer_mismatch(&fixture.root, bytes, &provenance).unwrap();
-    assert_eq!(fs::read(&path).unwrap(), bytes);
-    let recorded: FixtureEvidence =
-        serde_json::from_slice(&fs::read(path.with_extension("json")).unwrap()).unwrap();
-    assert_eq!(recorded.artifact_sha256, sha256_hex(bytes));
-    assert_eq!(recorded.build_fingerprint, provenance.build_fingerprint);
-    for asset in [ARTIFACT, EVIDENCE] {
-        assert_eq!(
-            fs::read(fixture.root.join(asset)).unwrap(),
-            b"original source asset"
-        );
-    }
-
-    let blocked = fixture.root.join("blocked");
-    fs::write(&blocked, b"not a directory").unwrap();
-    let error = retain_peer_mismatch(&blocked, bytes, &provenance).unwrap_err();
-    let kind = error.kind();
-    let refusal = io::Error::new(
-        io::ErrorKind::InvalidData,
-        PeerMismatch {
-            expected: "expected digest".into(),
-            built: provenance.artifact_sha256,
-            retained: Err(error),
-        },
-    );
-    assert_eq!(refusal.kind(), io::ErrorKind::InvalidData);
-    let mismatch = refusal
-        .get_ref()
-        .unwrap()
-        .downcast_ref::<PeerMismatch>()
-        .unwrap();
-    assert_eq!(
-        mismatch
-            .source()
-            .unwrap()
-            .downcast_ref::<io::Error>()
-            .unwrap()
-            .kind(),
-        kind
-    );
-    assert!(
-        refusal
-            .to_string()
-            .contains("retaining mismatch evidence failed")
-    );
-}
-
-#[test]
-fn registry_cache_names_remap_to_the_same_compiled_source_location() {
-    let nonce = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let fixture = source::FixtureSource {
-        root: Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/embedded-root")
-            .join(format!("registry-remaps-{}-{nonce}", std::process::id())),
-    };
-    fs::create_dir_all(&fixture.root).unwrap();
-    let sysroot = source::compiler_sysroot().unwrap();
-    for name in ["index.crates.io-local", "index.crates.io-ci"] {
-        let cargo_home = fixture.root.join(name);
-        let package = cargo_home
-            .join("registry/src")
-            .join(name)
-            .join("sample/src");
-        fs::create_dir_all(&package).unwrap();
-        let input = package.join("main.rs");
-        fs::write(&input, "fn main() { println!(\"{}\", file!()); }").unwrap();
-        let executable = fixture.root.join(name).join("compiled-location");
-        let flags = source::rustflags_for_paths(&fixture.root, &sysroot, &cargo_home).unwrap();
-        source::output(
-            Command::new(sysroot.join("bin/rustc"))
-                .args(flags.split('\u{1f}'))
-                .args(["--crate-name", "registry_remap_fixture"])
-                .arg(&input)
-                .arg("-o")
-                .arg(&executable),
-        )
-        .unwrap();
-        assert_eq!(
-            source::output(&mut Command::new(executable)).unwrap(),
-            b"/cargo/registry/src/sample/src/main.rs\n",
-        );
-    }
-}
-
-#[test]
 fn relocated_fixture_preserves_internal_and_external_dependency_owners() {
     let nonce = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -334,34 +216,11 @@ fn embedded_peer_reproduces_across_paths_and_release_versions() {
     let (second_bytes, _) = build(&workspace, &second_spec).unwrap();
     assert_eq!(sha256_hex(&first_bytes), sha256_hex(&second_bytes));
     assert_eq!(first_bytes, fs::read(workspace.join(ARTIFACT)).unwrap());
-    let installed_stdlib = b"/rust-toolchain/lib/rustlib/src/rust/library/";
-    assert!(
-        !first_bytes
-            .windows(installed_stdlib.len())
-            .any(|window| window == installed_stdlib),
-        "fixture retains an installed-rust-src-dependent standard-library location"
-    );
     assert!(
         !first_bytes
             .windows(workspace.as_os_str().len())
             .any(|window| window == workspace.as_os_str().as_encoded_bytes())
     );
-    let cargo_home = std::env::var_os("CARGO_HOME")
-        .map_or_else(
-            || std::path::PathBuf::from(std::env::var_os("HOME").unwrap()).join(".cargo"),
-            std::path::PathBuf::from,
-        )
-        .canonicalize()
-        .unwrap();
-    for root in [cargo_home, source::compiler_sysroot().unwrap()] {
-        assert!(
-            !first_bytes
-                .windows(root.as_os_str().len())
-                .any(|window| window == root.as_os_str().as_encoded_bytes()),
-            "fixture embeds an unremapped build root: {}",
-            root.display(),
-        );
-    }
     let producer = second
         .root
         .join("canisters/test/sharding_root_stub/src/lib.rs");

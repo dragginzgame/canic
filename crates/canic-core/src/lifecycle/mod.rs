@@ -31,7 +31,7 @@ impl fmt::Display for LifecyclePhase {
 }
 
 pub fn lifecycle_trap(phase: LifecyclePhase, err: impl fmt::Display) -> ! {
-    ic_cdk::api::trap(format!("{phase}: {err}"))
+    ic_platform::cdk::api::trap(format!("{phase}: {err}"))
 }
 
 fn retryable_nonroot_bootstrap_error(error: &crate::InternalError) -> bool {
@@ -65,8 +65,8 @@ mod tests {
 
     #[test]
     fn nonroot_bootstrap_preserves_retry_after_typed_liquid_cycle_failure() {
-        let failure = ic_cdk::call::CallFailed::InsufficientLiquidCycleBalance(
-            ic_cdk::call::InsufficientLiquidCycleBalance {
+        let failure = ic_platform::cdk::call::CallFailed::InsufficientLiquidCycleBalance(
+            ic_platform::cdk::call::InsufficientLiquidCycleBalance {
                 available: 50,
                 required: 100,
             },

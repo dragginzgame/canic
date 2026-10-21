@@ -15,8 +15,7 @@ use crate::fleet_ensure::{
     model::operator_mint::{OperatorMintIntentRecord, OperatorMintNotificationOutcomeRecord},
     ops::operator_mint::{OperatorMintWireError, validate_intent},
 };
-use ic_agent::Agent;
-use icrc_ledger_types::icrc3::blocks::ICRC3DataCertificate;
+use ic_platform::{agent::Agent, icrc_ledger_types::ICRC3DataCertificate};
 use sha2_host::{Digest, Sha256};
 use thiserror::Error;
 

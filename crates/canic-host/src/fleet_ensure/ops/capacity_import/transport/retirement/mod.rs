@@ -13,8 +13,7 @@ use crate::fleet_ensure::{
     },
     policy::capacity_import::expired_absence_proves_retirement,
 };
-use candid::Principal;
-use ic_agent::{Certificate, agent::RequestStatusResponse};
+use ic_platform::{Principal, agent::RequestStatusResponse, certification::Certificate};
 use sha2_host::{Digest, Sha256};
 
 /// Authenticated outcome of the exact issued controller request.
@@ -86,7 +85,7 @@ pub(super) fn outcome(
 
 // The IC certifies time as an unsigned LEB128 natural; retain only bounded nanoseconds.
 fn certified_time(certificate: &Certificate) -> Result<u64, CapacityImportJournalError> {
-    let bytes = ic_agent::lookup_value(certificate, [b"time".as_slice()])
+    let bytes = ic_platform::agent::lookup_value(certificate, [b"time".as_slice()])
         .map_err(|_| CapacityImportJournalError::Unresolved)?;
     let mut value = 0_u64;
     for (index, byte) in bytes.iter().copied().enumerate().take(10) {

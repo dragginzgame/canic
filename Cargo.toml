@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    # Tests and tooling packages
     "apps/demo/app",
     "apps/demo/user_hub",
     "apps/demo/user_shard",
@@ -28,6 +29,7 @@ members = [
     "canisters/test/root_funding_probe",
     "canisters/test/runtime_probe",
     "canisters/test/sharding_root_stub",
+    # Production packages
     "crates/canic",
     "crates/canic-backup",
     "crates/canic-cli",
@@ -36,8 +38,10 @@ members = [
     "crates/canic-core",
     "crates/canic-host",
     "crates/canic-macros",
+    # Tests and tooling packages
     "crates/canic-testing-internal",
     "crates/canic-tests",
+    # Production packages
     "integrations/blob-service",
 ]
 exclude = [
@@ -60,23 +64,18 @@ categories = ["wasm"]
 readme = "README.md"
 
 [workspace.dependencies]
+# Production dependencies
 async-trait = "0.1"
-candid = { version = "0.10", default-features = false }
-candid_parser = "0.4.0"
 canic = { version = "0.111.0", path = "crates/canic", default-features = false }
 canic-backup = { version = "0.111.0", path = "crates/canic-backup" }
-canic-blob-service = { version = "0.111.0", path = "integrations/blob-service" }
-canic-cli = { version = "0.111.0", path = "crates/canic-cli" }
 canic-contracts = { version = "0.111.0", path = "crates/canic-contracts" }
 canic-control-plane = { version = "0.111.0", path = "crates/canic-control-plane", default-features = false }
 canic-core = { version = "0.111.0", path = "crates/canic-core" }
 canic-host = { version = "0.111.0", path = "crates/canic-host" }
 canic-macros = { version = "0.111.0", path = "crates/canic-macros" }
-canic-testing-internal = { version = "0.111.0", path = "crates/canic-testing-internal" }
 ciborium = "0.2"
 clap = { version = "4.6.1", features = ["derive"] }
 crc32fast = "1.5.2"
-criterion = "0.8"
 ctor = { version = "1.0", default-features = false, features = ["proc_macro"] }
 ed25519-dalek = { version = "3.0", default-features = false }
 flate2 = { version = "1.1", default-features = false, features = [
@@ -85,37 +84,26 @@ flate2 = { version = "1.1", default-features = false, features = [
 futures = "0.3"
 getrandom = "0.4"
 hmac = "0.13.0"
-ic-agent = "=0.49.2"
-ic-auth = { version = "0.7", default-features = false }
-ic-auth-protocol-types = "0.7"
-ic-backup = { version = "0.27", default-features = false }
-ic-blob-storage = "0.30"
-ic-blob-storage-contracts = "0.30"
-ic-build = { version = "0.11" }
-ic-canister-sig-creation = "1.3.1"
-ic-cdk = "0.20.3"
-ic-certification = "3.0"
-ic-host-artifacts = { version = "0.23", default-features = false }
-ic-host-fs = { version = "0.23", default-features = false }
-ic-host-process = { version = "0.23", default-features = false }
-ic-host-text = "0.23"
-ic-host-tools = "0.23"
-ic-management-canister-types = "0.11"
-ic-memory = "0.44"
-ic-metrics = "0.11"
-ic-query = { version = "0.59", default-features = false, features = [
+ic-auth = { version = "0.10", default-features = false }
+ic-auth-protocol-types = "0.10"
+ic-backup = { version = "0.31", default-features = false }
+ic-blob-storage = "0.35"
+ic-blob-storage-contracts = "0.35"
+ic-build = { version = "0.19" }
+ic-host-artifacts = { version = "0.27", default-features = false }
+ic-host-fs = { version = "0.27", default-features = false }
+ic-host-process = { version = "0.27", default-features = false }
+ic-host-text = "0.27"
+ic-host-tools = "0.27"
+ic-memory = "0.48"
+ic-metrics = "0.14"
+ic-platform = { version = "0.1.13", default-features = false }
+ic-query = { version = "0.62", default-features = false, features = [
     "subnet-catalog-host",
 ] }
-ic-secp256k1 = "=0.3.0"
-ic-signature-verification = "0.3.0"
-ic-testkit = { version = "0.53" }
-ic-testkit-candid = "0.53"
-ic-timers = "0.25"
-ic-verify-bls-signature = { version = "0.6.0", default-features = false, features = [
-    "alloc",
-] }
-ic0 = "1.2.0"
-icrc-ledger-types = "0.2.0"
+ic-storage = "0.5.3"
+ic-testkit = { version = "0.54" }
+ic-timers = "0.29"
 k256 = { version = "0.13.4", default-features = false, features = ["ecdsa"] }
 proc-macro2 = "1.0"
 prost = "0.14.4"
@@ -132,10 +120,9 @@ serde-saphyr = { version = "1.2.0", default-features = false, features = [
 serde_bytes = "0.11"
 serde_json = "1.0"
 serde_path_to_error = "0.1.20"
-# Keep `sha2` pinned to the existing 0.10 line used by the IC/runtime stack so
-# canister builds do not pull in a second `sha2` version.
+# Keep the runtime SHA-256 dependency on the IC stack’s 0.10 line.
 sha2 = "0.10.9"
-# Host HMAC 0.13 uses digest 0.11, independently of canister cryptography.
+# Host HMAC uses digest 0.11 independently of canister cryptography.
 sha2-host = { package = "sha2", version = "0.11.0" }
 signal-hook = { version = "0.3.18", default-features = false }
 syn = "3.0"
@@ -143,6 +130,14 @@ thiserror = "2.0"
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
 toml = "1.0"
 url = "2.5.8"
+
+# Tests and tooling only
+canic-blob-service = { version = "0.111.0", path = "integrations/blob-service" }
+canic-cli = { version = "0.111.0", path = "crates/canic-cli" }
+canic-testing-internal = { version = "0.111.0", path = "crates/canic-testing-internal" }
+criterion = "0.8"
+# Raw stable-byte corruption fixtures only; deployed collections use IC Storage.
+ic-stable-structures = "0.7.2"
 
 # Rust lint hygiene
 [workspace.lints.rust]

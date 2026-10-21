@@ -15,7 +15,6 @@ use crate::config::schema::{
     MetricsProfile, ScalePoolPolicy, ScalingConfig, ShardPoolPolicy, ShardingConfig,
     StandardsCanisterConfig, TopupPolicy,
 };
-use candid::CandidType;
 use canic_contracts::{
     cycles::Cycles,
     ids::{
@@ -23,6 +22,7 @@ use canic_contracts::{
         CyclesFundingBudget,
     },
 };
+use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -49,6 +49,7 @@ impl ConfigModel {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ComponentTopology {
     pub component_specs: Vec<ComponentSpec>,
@@ -419,6 +420,7 @@ impl ComponentTopology {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ComponentSpec {
     pub component_spec: ComponentSpecId,
@@ -464,6 +466,7 @@ impl ComponentSpec {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ComponentLimits {
     pub maximum_descendants: u32,
@@ -478,6 +481,7 @@ pub struct ComponentLimits {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ComponentChildSpec {
     pub role: CanisterRole,
@@ -492,6 +496,7 @@ pub struct ComponentChildSpec {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ComponentSpawnGrant {
     pub parent_role: CanisterRole,
@@ -514,6 +519,7 @@ pub struct ComponentSpawnGrant {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(deny_unknown_fields)]
 pub struct ComponentChildFundingPolicy {
     pub max_per_request: Cycles,

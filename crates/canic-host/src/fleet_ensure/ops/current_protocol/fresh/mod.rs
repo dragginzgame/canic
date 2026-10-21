@@ -13,12 +13,12 @@ use super::{
 use crate::fleet_ensure::model::{
     CurrentFleetProtocolAction, DesiredFleet, EnsureAction, FleetEnsureStateRecord,
 };
-use candid::Principal;
 use canic_contracts::dto::pool::PoolCanisterRequest;
 use canic_core::{
     control_plane_support::ops::fleet_registry::FleetRegistryOps,
     shared_support::fleet_admission_policy::bind_initial_fleet_admission_policy,
 };
+use ic_platform::Principal;
 use std::{collections::BTreeMap, path::Path};
 
 /// Expand only the protocol selected by the reviewed fresh installation inputs.

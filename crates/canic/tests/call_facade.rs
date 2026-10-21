@@ -1,8 +1,8 @@
-use candid::Principal;
 use canic::{
     Error,
     api::call::{Call, CallBuilder, CallResult},
 };
+use ic_platform::Principal;
 
 #[test]
 fn public_call_builder_supports_maintained_construction_paths() {

@@ -15,9 +15,7 @@ use crate::{
 };
 use std::time::Duration;
 
-use candid::{Nat, Principal};
-use ic_agent::Agent;
-use icrc_ledger_types::icrc1::account::Account;
+use ic_platform::{Principal, agent::Agent, candid::contract::Nat, icrc_ledger_types::Account};
 use thiserror::Error;
 
 const RESPONSE_BYTES: usize = 4096;
@@ -86,8 +84,8 @@ async fn collect_with_agent(
                 owner: expected.owner,
                 stage,
             };
-            let argument =
-                candid::encode_one(account).map_err(|_| fail(ReleaseAccountStage::Query))?;
+            let argument = ic_platform::candid::contract::encode_one(account)
+                .map_err(|_| fail(ReleaseAccountStage::Query))?;
             // Queries attach no cycles, issue no update, and have no automatic retry.
             let bytes = tokio::time::timeout(
                 QUERY_DEADLINE,
@@ -115,13 +113,14 @@ fn decode_balance(bytes: &[u8]) -> Result<u128, ReleaseAccountStage> {
     if bytes.len() > RESPONSE_BYTES {
         return Err(ReleaseAccountStage::Decode);
     }
-    let mut config = candid::de::DecoderConfig::new();
-    config
-        .set_decoding_quota(RESPONSE_BYTES * 8)
-        .set_skipping_quota(RESPONSE_BYTES * 8)
-        .set_max_type_len(16)
-        .set_max_header_len(128);
-    let value: Nat = candid::utils::decode_one_with_config(bytes, &config)
-        .map_err(|_| ReleaseAccountStage::Decode)?;
+    let limits = ic_platform::candid::DecodeLimits {
+        reply_bytes: RESPONSE_BYTES,
+        decoding_quota: RESPONSE_BYTES * 8,
+        skipping_quota: RESPONSE_BYTES * 8,
+        type_entries: 16,
+        header_bytes: 128,
+    };
+    let value: Nat =
+        ic_platform::candid::decode_one(bytes, limits).map_err(|_| ReleaseAccountStage::Decode)?;
     u128::try_from(value.0).map_err(|_| ReleaseAccountStage::Overflow)
 }

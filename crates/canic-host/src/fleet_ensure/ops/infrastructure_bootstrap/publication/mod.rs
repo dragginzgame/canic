@@ -16,11 +16,11 @@ use crate::fleet_ensure::{
     },
     policy::expected_plan_sha256,
 };
-use candid::Principal;
 use ic_host_fs::{
     durable::{PublicationMode, WriteOptions, write_bytes},
     read::{read_file_no_follow, read_optional_file_no_follow},
 };
+use ic_platform::Principal;
 use sha2_host::{Digest, Sha256};
 use std::path::{Component, Path, PathBuf};
 

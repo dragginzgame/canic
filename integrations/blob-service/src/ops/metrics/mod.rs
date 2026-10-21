@@ -17,12 +17,12 @@ pub fn sample() -> Result<Vec<PublicMetric>, Error> {
         let host = host
             .as_ref()
             .ok_or_else(|| Error::from_registered(codes::STORAGE_INACTIVE))?;
-        let uploads = &host.installation.stores().uploads;
+        let uploads = &host.stores().uploads;
         let usage = uploads
             .usage()
             .map_err(|_| Error::from_registered(codes::STORAGE_INVALID_STATE))?;
-        let observed_at_ns = ic_cdk::api::time();
-        let canister_id = Some(ic_cdk::api::canister_self());
+        let observed_at_ns = ic_platform::cdk::api::time();
+        let canister_id = Some(ic_platform::cdk::api::canister_self());
         Ok([
             (
                 "blob.active_reservations",

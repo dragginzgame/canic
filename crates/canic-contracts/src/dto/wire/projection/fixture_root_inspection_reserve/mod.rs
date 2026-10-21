@@ -6,7 +6,8 @@
 use crate::dto::canister::CanisterInspectionRequest;
 
 /// Bounded ReserveRequest selectors for root inspection reserve validation.
-#[derive(candid::CandidType)]
+#[derive(ic_platform::candid::contract::CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ReserveRequest {
     CycleBalance,
     InspectionReserve(CanisterInspectionRequest),

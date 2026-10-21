@@ -7,7 +7,6 @@ use crate::pic::{
     },
     progress as test_progress,
 };
-use candid::Principal;
 use canic::{Error, ids::CanisterRole, protocol};
 use canic_contracts::{
     dto::template::{
@@ -19,11 +18,18 @@ use canic_contracts::{
     },
 };
 use canic_core::cdk::utils::hash::wasm_hash;
-use canic_host::release_set::AppConfigSnapshot;
+use canic_host::{
+    release_set::AppConfigSnapshot,
+    role_contract::{
+        CargoFeatureSelection, PackageValidationMode, RolePackageValidation,
+        validate_declared_role_package,
+    },
+};
 use ic_build::artifacts::{
     ArtifactCacheOutcome, ArtifactCachePreparation, ArtifactCacheRecord, ArtifactCacheSpec,
     WasmBuildSpec, prepare_artifact_cache, resolve_cargo_build_inputs,
 };
+use ic_platform::Principal;
 use ic_testkit::pic::PocketIc;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -31,7 +37,7 @@ use std::{
     path::PathBuf,
 };
 
-/// Build or transactionally reuse the complete local `.icp` root artifact set.
+/// Build or transactionally reuse the complete qualified root artifact set.
 ///
 /// # Panics
 ///
@@ -43,7 +49,7 @@ pub fn ensure_root_release_artifacts_built(spec: &RootBaselineSpec<'_>) -> Artif
     progress(spec, "acquiring local ICP artifacts for root baseline");
     let started_at = std::time::Instant::now();
     let build_env = effective_build_env(spec);
-    let outputs = root_release_artifact_outputs(spec);
+    let outputs = root_release_artifact_outputs(spec, &build_env);
     let cache_spec = root_release_artifact_cache_spec(spec, &build_env, &outputs);
     let outcome =
         match prepare_artifact_cache(&cache_spec).expect("prepare root release artifact cache") {
@@ -256,42 +262,67 @@ fn root_release_cargo_build_spec(
 ) -> WasmBuildSpec {
     let config = AppConfigSnapshot::load(&spec.build_config_path)
         .expect("load root release build config for Cargo inputs");
-    let role_packages = config
-        .role_lifecycle()
-        .into_iter()
-        .map(|lifecycle| (lifecycle.role, lifecycle.package))
-        .collect::<BTreeMap<_, _>>();
     let mut packages = BTreeSet::from(["canic-host".to_string(), "canic".to_string()]);
     for role in spec.release_roles.iter().copied() {
         if role == "root" {
             continue;
         }
-        packages.insert(
-            role_packages
-                .get(role)
-                .unwrap_or_else(|| panic!("root release role `{role}` missing from build config"))
-                .clone(),
+        let validation = validate_declared_role_package(
+            &spec.build_config_path,
+            config.model(),
+            &CanisterRole::owned(role.to_string()),
+            PackageValidationMode::Build,
+            &CargoFeatureSelection::default(),
         );
+        let RolePackageValidation::Supported(evidence) = validation else {
+            panic!("root release role `{role}` must resolve: {validation:?}");
+        };
+        assert_eq!(
+            evidence.cargo_workspace_root, spec.workspace_root,
+            "Root test roles must share the fixture Cargo workspace"
+        );
+        packages.insert(evidence.role_package_name);
     }
     let packages = packages.iter().map(String::as_str).collect::<Vec<_>>();
-    let mut cargo_args = spec.build_profile.cargo_profile_args().to_vec();
-    cargo_args.push("--locked");
 
     WasmBuildSpec::new(
         &spec.workspace_root,
         &spec.workspace_root.join("target/icp-build"),
         &packages,
+        std::env::vars_os(),
     )
-    .with_cargo_profile_args(cargo_args.iter().copied())
-    .with_extra_env(environment.iter().copied())
+    .with_cargo_selection(spec.build_profile.cargo_selection())
+    .with_environment(std::env::vars_os().chain((environment.iter().copied()).map(
+        |(key, value)| {
+            (
+                std::ffi::OsString::from(key),
+                std::ffi::OsString::from(value),
+            )
+        },
+    )))
 }
 
-fn root_release_artifact_outputs(spec: &RootBaselineSpec<'_>) -> BTreeMap<String, PathBuf> {
+fn root_release_artifact_outputs(
+    spec: &RootBaselineSpec<'_>,
+    build_env: &[(&str, &str)],
+) -> BTreeMap<String, PathBuf> {
+    let release_id = build_env
+        .iter()
+        .find(|(key, _)| *key == INTERNAL_TEST_RELEASE_BUILD_ID.0)
+        .expect("effective root environment includes a release identity")
+        .1
+        .parse::<canic_contracts::ids::ReleaseBuildId>()
+        .expect("root build release identity must be valid");
+    let artifact_root = spec
+        .workspace_root
+        .join(".canic/release-builds")
+        .join(release_id.to_string())
+        .join("artifacts");
     let mut outputs = BTreeMap::new();
     for role_name in ["root", "wasm_store"] {
         outputs.insert(
             role_name.to_string(),
-            spec.root_release_artifacts_dir
+            artifact_root
                 .join(role_name)
                 .join(format!("{role_name}.wasm.gz")),
         );
@@ -300,7 +331,7 @@ fn root_release_artifact_outputs(spec: &RootBaselineSpec<'_>) -> BTreeMap<String
         let role_name = role.as_str().to_string();
         outputs.insert(
             role_name.clone(),
-            spec.root_release_artifacts_dir
+            artifact_root
                 .join(&role_name)
                 .join(format!("{role_name}.wasm.gz")),
         );
@@ -342,13 +373,13 @@ fn stage_manifest(
     installation_controller: Principal,
     manifest: TemplateManifestInput,
 ) {
-    let result: Result<StoreCommandResponse, Error> = ::ic_testkit::pic::update_candid_args(
+    let result: Result<StoreCommandResponse, Error> = ic_testkit::pic::update_candid_args(
         pic,
         store,
         installation_controller,
         protocol::CANIC_WASM_STORE_COMMAND,
         (StoreCommand::StageManifest(manifest),),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .expect("Store manifest transport");
@@ -365,13 +396,13 @@ fn prepare_chunk_set(
     installation_controller: Principal,
     prepare: TemplateChunkSetPrepareInput,
 ) {
-    let result: Result<StoreCommandResponse, Error> = ::ic_testkit::pic::update_candid_args(
+    let result: Result<StoreCommandResponse, Error> = ic_testkit::pic::update_candid_args(
         pic,
         store,
         installation_controller,
         protocol::CANIC_WASM_STORE_COMMAND,
         (StoreCommand::PrepareChunkSet(prepare),),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .expect("Store prepare transport");
@@ -389,13 +420,13 @@ fn publish_chunk(
     installation_controller: Principal,
     chunk: TemplateChunkInput,
 ) {
-    let result: Result<(), Error> = ::ic_testkit::pic::update_candid_args(
+    let result: Result<(), Error> = ic_testkit::pic::update_candid_args(
         pic,
         store,
         installation_controller,
         protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
         (chunk,),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .expect("Store chunk transport");

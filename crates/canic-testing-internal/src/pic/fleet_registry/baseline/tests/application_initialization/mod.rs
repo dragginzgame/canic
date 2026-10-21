@@ -111,8 +111,8 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
     let before = allocation(&pic, fixture.root_id, member_operation);
     assert!(before.application_initialization.is_none());
     let status_refused: Result<RootStatusResponseFragment, Error> =
-        ::ic_testkit::pic::query_candid_args(
-            &pic,
+        ic_testkit::pic::query_candid_args(
+            &(pic),
             fixture.root_id,
             target,
             canic::protocol::CANIC_ROOT_OPERATION_STATUS,
@@ -121,7 +121,7 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
                     operation_id: member_operation,
                 },
             ),),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap();
@@ -134,32 +134,30 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
     );
     let mut wrong = request.clone();
     wrong.initialization.target_canister = coordinator;
-    let rejected: Result<RootCommandResponseFragment, Error> =
-        ::ic_testkit::pic::update_candid_args(
-            &pic,
-            fixture.root_id,
-            Principal::anonymous(),
-            canic::protocol::CANIC_ROOT_COMMAND,
-            (Command::BindComponentInitialization(wrong),),
-            ::canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .map(|(reply,)| reply)
-        .unwrap();
+    let rejected: Result<RootCommandResponseFragment, Error> = ic_testkit::pic::update_candid_args(
+        &(pic),
+        fixture.root_id,
+        Principal::anonymous(),
+        canic::protocol::CANIC_ROOT_COMMAND,
+        (Command::BindComponentInitialization(wrong),),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap();
     assert_eq!(
         rejected.err().expect("target mismatch refusal").code(),
         canic::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
-    let refused: Result<RootCommandResponseFragment, Error> =
-        ::ic_testkit::pic::update_candid_args(
-            &pic,
-            fixture.root_id,
-            target,
-            canic::protocol::CANIC_ROOT_COMMAND,
-            (Command::BindComponentInitialization(request.clone()),),
-            ::canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .map(|(reply,)| reply)
-        .unwrap();
+    let refused: Result<RootCommandResponseFragment, Error> = ic_testkit::pic::update_candid_args(
+        &(pic),
+        fixture.root_id,
+        target,
+        canic::protocol::CANIC_ROOT_COMMAND,
+        (Command::BindComponentInitialization(request.clone()),),
+        canic::testing::CANDID_REPLY_LIMITS,
+    )
+    .map(|(reply,)| reply)
+    .unwrap();
     assert_eq!(
         refused.err().expect("controller refusal").code(),
         canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
@@ -200,13 +198,13 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
         bound.application_initialization,
         Some(request.initialization.clone())
     );
-    let replay: Result<RootCommandResponseFragment, Error> = ::ic_testkit::pic::update_candid_args(
-        &pic,
+    let replay: Result<RootCommandResponseFragment, Error> = ic_testkit::pic::update_candid_args(
+        &(pic),
         fixture.root_id,
         Principal::anonymous(),
         canic::protocol::CANIC_ROOT_COMMAND,
         (Command::BindComponentInitialization(request.clone()),),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .unwrap();
@@ -222,13 +220,13 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
     await_root_provisioning(&pic, fixture.root_id, operation, |status| {
         status.root_runtime_active
     });
-    let delivered: Result<Vec<u8>, Error> = ::ic_testkit::pic::query_candid_args(
-        &pic,
+    let delivered: Result<Vec<u8>, Error> = ic_testkit::pic::query_candid_args(
+        &(pic),
         target,
         Principal::anonymous(),
         "managed_initialization_bytes",
         (),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .unwrap();
@@ -237,13 +235,13 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
         .canister_status(target, Some(fixture.root_id))
         .unwrap()
         .version;
-    let replay: Result<RootCommandResponseFragment, Error> = ::ic_testkit::pic::update_candid_args(
-        &pic,
+    let replay: Result<RootCommandResponseFragment, Error> = ic_testkit::pic::update_candid_args(
+        &(pic),
         fixture.root_id,
         Principal::anonymous(),
         canic::protocol::CANIC_ROOT_COMMAND,
         (Command::BindComponentInitialization(request.clone()),),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .unwrap();
@@ -261,13 +259,13 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
         Some(fixture.root_id),
     )
     .unwrap();
-    let restored: Result<Vec<u8>, Error> = ::ic_testkit::pic::query_candid_args(
-        &pic,
+    let restored: Result<Vec<u8>, Error> = ic_testkit::pic::query_candid_args(
+        &(pic),
         target,
         Principal::anonymous(),
         "managed_initialization_bytes",
         (),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .unwrap();
@@ -327,7 +325,7 @@ fn restart_root_during_installation(
             target,
             Principal::anonymous(),
             "managed_initialization_bytes",
-            candid::encode_args(()).unwrap()
+            ic_platform::candid::contract::encode_args(()).unwrap()
         )
         .map(|bytes| bytes.len()),
         observed_root_provisioning(pic, root, provisioning_operation_id)

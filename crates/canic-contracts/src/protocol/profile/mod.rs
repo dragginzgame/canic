@@ -1,6 +1,6 @@
 //! Immutable compiled protocol-profile identity, independent of runtime policy.
 
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::{Deserialize, Serialize};
 use std::{fmt, str::FromStr};
 use thiserror::Error as ThisError;
@@ -8,6 +8,7 @@ use thiserror::Error as ThisError;
 #[derive(
     CandidType, Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
 )]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(transparent)]
 pub struct ProtocolProfileDigest([u8; 32]);
 

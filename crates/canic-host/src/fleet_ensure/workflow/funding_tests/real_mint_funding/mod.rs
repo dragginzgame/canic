@@ -18,8 +18,11 @@ use crate::{
     },
     test_support::temp_dir,
 };
-use candid::{CandidType, Nat, Principal};
 use canic_core::cdk::utils::hash::{decode_hex, hex_bytes, sha256_hex};
+use ic_platform::{
+    Principal,
+    candid::contract::{CandidType, Nat},
+};
 use ic_testkit::pocket_ic::{CanisterSettings, CreateCanisterParams, PocketIc};
 use serde::Deserialize;
 use std::{
@@ -190,8 +193,8 @@ impl EnsurePlatform for FundedCanister {
         };
         assert_eq!(principal, &self.destination.to_text());
         self.calls += 1;
-        let reply: Result<Nat, WithdrawError> = ::ic_testkit::pic::update_candid_args(
-            &self.pic,
+        let reply: Result<Nat, WithdrawError> = ic_testkit::pic::update_candid_args(
+            &(self.pic),
             Principal::from_text(ledger).unwrap(),
             self.transport.operator().unwrap(),
             "withdraw",
@@ -236,10 +239,10 @@ fn governed_pocketic_mint_credit_resumes_original_native_withdrawal() {
     let (pic, transport) = funded_operator();
     let operator = transport.operator().unwrap();
     let ledger = Principal::from_text(LEDGER).unwrap();
-    let fee: Nat = ::ic_testkit::pic::query_candid_args(
-        &pic,
+    let fee: Nat = ic_testkit::pic::query_candid_args(
+        &(pic),
         ledger,
-        candid::Principal::anonymous(),
+        ic_platform::Principal::anonymous(),
         "icrc1_fee",
         (),
         crate::test_support::CANDID_REPLY_LIMITS,
@@ -434,6 +437,7 @@ fn digest(text: &str) -> [u8; 32] {
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 struct WithdrawArgs {
     amount: Nat,
     created_at_time: Option<u64>,
@@ -442,6 +446,7 @@ struct WithdrawArgs {
 }
 
 #[derive(CandidType, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 enum WithdrawError {
     BadFee {
         expected_fee: Nat,
@@ -472,6 +477,7 @@ enum WithdrawError {
 }
 
 #[derive(CandidType, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 enum RejectionCode {
     CanisterError,
     CanisterReject,

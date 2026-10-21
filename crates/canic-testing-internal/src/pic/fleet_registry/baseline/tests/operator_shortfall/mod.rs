@@ -26,13 +26,13 @@ pub(super) fn assert_fresh_reinstall_rejection(
         })
     };
     let before = snapshot();
-    let withdrawals: u64 = ::ic_testkit::pic::query_candid_args(
+    let withdrawals: u64 = ic_testkit::pic::query_candid_args(
         input.pic,
         ledger,
-        candid::Principal::anonymous(),
+        ic_platform::Principal::anonymous(),
         "withdrawal_count",
         (),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .unwrap();
@@ -69,13 +69,13 @@ pub(super) fn assert_fresh_reinstall_rejection(
     );
     assert_eq!(snapshot(), before);
     assert_eq!(
-        ::ic_testkit::pic::query_candid_args::<(u64,), _>(
+        ic_testkit::pic::query_candid_args::<(u64,), _>(
             input.pic,
             ledger,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "withdrawal_count",
             (),
-            ::canic::testing::CANDID_REPLY_LIMITS
+            canic::testing::CANDID_REPLY_LIMITS
         )
         .map(|(reply,)| reply)
         .unwrap(),
@@ -94,18 +94,18 @@ fn move_fixture_balance(
 ) {
     // The fixture-only override makes the out-and-back setup conserve the exact
     // original balance. Restore the reviewed fee before production admission.
-    let _: () = ::ic_testkit::pic::update_candid_args(
+    let _: () = ic_testkit::pic::update_candid_args(
         pic,
         ledger,
-        candid::Principal::anonymous(),
+        ic_platform::Principal::anonymous(),
         "set_transfer_fee_override",
         (Some(Nat::from(0_u8)),),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .unwrap();
     let receipt: Result<Nat, QualificationIcrc1TransferError> =
-        ::ic_testkit::pic::update_candid_args(
+        ic_testkit::pic::update_candid_args(
             pic,
             ledger,
             from,
@@ -121,18 +121,18 @@ fn move_fixture_balance(
                 memo: Some(b"fresh funding admission fixture".to_vec()),
                 amount,
             },),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap();
     receipt.unwrap();
-    let _: () = ::ic_testkit::pic::update_candid_args(
+    let _: () = ic_testkit::pic::update_candid_args(
         pic,
         ledger,
-        candid::Principal::anonymous(),
+        ic_platform::Principal::anonymous(),
         "set_transfer_fee_override",
         (None::<Nat>,),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .unwrap();

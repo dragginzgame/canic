@@ -64,7 +64,6 @@ fn install_version_reader(root: &Path) {
     write_executable(root, "scripts/ci/read-workspace-version.sh", &source);
     for path in [
         "scripts/ci/next-release-version.sh",
-        "scripts/ci/validate-release-inputs.pl",
         "scripts/ci/finalize-release-changelog.awk",
         "scripts/release/rewrite-owned-lock.sh",
         "scripts/release/adapter.sh",

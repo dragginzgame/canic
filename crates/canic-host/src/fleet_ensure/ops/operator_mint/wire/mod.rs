@@ -1,19 +1,22 @@
 //! Exact upstream ICP Ledger and CMC Candid contracts used by the mint adapter.
 
-use candid::{CandidType, Nat};
+use ic_platform::candid::contract::{CandidType, Nat};
 use serde::Deserialize;
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct Tokens {
     pub e8s: u64,
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct Timestamp {
     pub timestamp_nanos: u64,
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct TransferArgs {
     pub memo: u64,
     pub amount: Tokens,
@@ -24,6 +27,7 @@ pub struct TransferArgs {
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum TransferError {
     BadFee { expected_fee: Tokens },
     InsufficientFunds { balance: Tokens },
@@ -33,6 +37,7 @@ pub enum TransferError {
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct NotifyMintArgs {
     pub block_index: u64,
     pub deposit_memo: Option<Vec<u8>>,
@@ -40,6 +45,7 @@ pub struct NotifyMintArgs {
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct NotifyMintOk {
     pub balance: Nat,
     pub block_index: Nat,
@@ -47,6 +53,7 @@ pub struct NotifyMintOk {
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum NotifyMintError {
     Refunded {
         block_index: Option<u64>,

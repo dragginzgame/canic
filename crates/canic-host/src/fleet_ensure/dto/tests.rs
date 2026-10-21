@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::fleet_ensure::model::capacity_import::CapacityImportBootstrapRecord;
-use candid::Principal;
+use ic_platform::Principal;
 
 /// Exercise the real generator output in the ordinary host suite before PocketIC.
 pub(in crate::fleet_ensure) fn qualify_generated_toml(root: &Path, desired: &DesiredFleet) {

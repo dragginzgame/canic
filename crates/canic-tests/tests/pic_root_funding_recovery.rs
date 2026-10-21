@@ -1,10 +1,14 @@
 // Category C - Artifact test (built Wasm; no production funding surface).
 
-use candid::{CandidType, Deserialize, Principal, encode_one};
 use canic_testing_internal::pic::{
     CanicWasmBuildProfile, InternalTestWasms, build_internal_test_wasm_canisters, start_pocket_ic,
 };
+use ic_platform::{
+    Principal,
+    candid::contract::{CandidType, encode_one},
+};
 use ic_testkit::pic::{InstallSpec, PocketIc, PocketIcBuilder, prelude::*};
+use serde::Deserialize;
 use std::{
     path::{Path, PathBuf},
     sync::OnceLock,
@@ -30,6 +34,7 @@ struct BalanceObservation {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 enum ProbeInit {
     Coordinator,
     Root { coordinator: Principal },
@@ -39,12 +44,14 @@ enum ProbeInit {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct GrantRequest {
     operation_id: [u8; 32],
     amount: u128,
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct GrantReceipt {
     operation_id: [u8; 32],
     coordinator: Principal,
@@ -53,12 +60,14 @@ struct GrantReceipt {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct AcceptanceObservation {
     balance_before_accept: u128,
     balance_after_accept: u128,
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct RootRequestObservation {
     result: IssueResult,
     call_cost: u128,
@@ -67,6 +76,7 @@ struct RootRequestObservation {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct EmergencyTransferRequest {
     operation_id: [u8; 32],
     from_subaccount: Option<[u8; 32]>,
@@ -79,6 +89,7 @@ struct EmergencyTransferRequest {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 enum EmergencyRefillPhase {
     Prepared,
     Transferred { block_index: u64 },
@@ -86,6 +97,7 @@ enum EmergencyRefillPhase {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct EmergencyRefillOperation {
     transfer: EmergencyTransferRequest,
     max_call_cost: u128,
@@ -93,12 +105,14 @@ struct EmergencyRefillOperation {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 enum IntentState {
     Prepared,
     Committed { receipt: GrantReceipt },
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct GrantIntent {
     root: Principal,
     request: GrantRequest,
@@ -108,6 +122,7 @@ struct GrantIntent {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 enum IssueResult {
     Committed {
         receipt: GrantReceipt,
@@ -299,26 +314,26 @@ fn emergency_refill_recovery_floor_covers_transfer_and_notify_response_loss() {
     );
     let balance_before = pic.cycle_balance(root);
 
-    let transfer_loss: Result<EmergencyRefillOperation, _> = ::ic_testkit::pic::update_candid_args(
-        &pic,
+    let transfer_loss: Result<EmergencyRefillOperation, _> = ic_testkit::pic::update_candid_args(
+        &(pic),
         root,
-        candid::Principal::anonymous(),
+        ic_platform::Principal::anonymous(),
         "root_funding_probe_emergency_refill_transfer_then_trap",
         (),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply);
     assert!(transfer_loss.is_err());
     let prepared = emergency_operation(&pic, root).expect("prepared emergency operation");
     assert_eq!(prepared.phase, EmergencyRefillPhase::Prepared);
 
-    let notify_loss: Result<EmergencyRefillOperation, _> = ::ic_testkit::pic::update_candid_args(
-        &pic,
+    let notify_loss: Result<EmergencyRefillOperation, _> = ic_testkit::pic::update_candid_args(
+        &(pic),
         root,
-        candid::Principal::anonymous(),
+        ic_platform::Principal::anonymous(),
         "root_funding_probe_emergency_refill_notify_then_trap",
         (),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply);
     assert!(notify_loss.is_err());
@@ -328,13 +343,13 @@ fn emergency_refill_recovery_floor_covers_transfer_and_notify_response_loss() {
         EmergencyRefillPhase::Transferred { block_index: 77 }
     );
 
-    let completed: EmergencyRefillOperation = ::ic_testkit::pic::update_candid_args(
-        &pic,
+    let completed: EmergencyRefillOperation = ic_testkit::pic::update_candid_args(
+        &(pic),
         root,
-        candid::Principal::anonymous(),
+        ic_platform::Principal::anonymous(),
         "root_funding_probe_emergency_refill",
         (),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .expect("update Candid harness call");
@@ -426,13 +441,13 @@ fn attached_cycles_recover_across_intent_call_and_receipt_boundaries() {
 
     let coordinator_before_fresh = pic.cycle_balance(coordinator);
     let root_before_fresh = pic.cycle_balance(root);
-    let trapped: Result<IssueResult, _> = ::ic_testkit::pic::update_candid_args(
-        &pic,
+    let trapped: Result<IssueResult, _> = ic_testkit::pic::update_candid_args(
+        &(pic),
         coordinator,
-        candid::Principal::anonymous(),
+        ic_platform::Principal::anonymous(),
         "root_funding_probe_issue_then_trap",
         (),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply);
     assert!(trapped.is_err(), "receipt-boundary callback must trap");
@@ -579,104 +594,104 @@ fn install_probe(pic: &PocketIc, wasm: Vec<u8>, init: ProbeInit, cycles: u128) -
 }
 
 fn prepare(pic: &PocketIc, coordinator: Principal, root: Principal) -> GrantIntent {
-    ::ic_testkit::pic::update_candid_args(
+    ic_testkit::pic::update_candid_args(
         pic,
         coordinator,
-        candid::Principal::anonymous(),
+        ic_platform::Principal::anonymous(),
         "root_funding_probe_prepare",
         (root, OPERATION_ID, GRANT_CYCLES),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .expect("update Candid harness call")
 }
 
 fn issue(pic: &PocketIc, coordinator: Principal) -> IssueResult {
-    ::ic_testkit::pic::update_candid_args(
+    ic_testkit::pic::update_candid_args(
         pic,
         coordinator,
-        candid::Principal::anonymous(),
+        ic_platform::Principal::anonymous(),
         "root_funding_probe_issue",
         (),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .expect("update Candid harness call")
 }
 
 fn issue_root_accept_then_trap(pic: &PocketIc, coordinator: Principal) -> IssueResult {
-    ::ic_testkit::pic::update_candid_args(
+    ic_testkit::pic::update_candid_args(
         pic,
         coordinator,
-        candid::Principal::anonymous(),
+        ic_platform::Principal::anonymous(),
         "root_funding_probe_issue_root_accept_then_trap",
         (),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .expect("update Candid harness call")
 }
 
 fn request_from_root(pic: &PocketIc, root: Principal) -> RootRequestObservation {
-    ::ic_testkit::pic::update_candid_args(
+    ic_testkit::pic::update_candid_args(
         pic,
         root,
-        candid::Principal::anonymous(),
+        ic_platform::Principal::anonymous(),
         "root_funding_probe_request",
         (),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .expect("update Candid harness call")
 }
 
 fn intent(pic: &PocketIc, coordinator: Principal) -> Option<GrantIntent> {
-    ::ic_testkit::pic::query_candid_args(
+    ic_testkit::pic::query_candid_args(
         pic,
         coordinator,
-        candid::Principal::anonymous(),
+        ic_platform::Principal::anonymous(),
         "root_funding_probe_intent",
         (),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .expect("query Candid harness call")
 }
 
 fn receipt(pic: &PocketIc, root: Principal) -> Option<GrantReceipt> {
-    ::ic_testkit::pic::query_candid_args(
+    ic_testkit::pic::query_candid_args(
         pic,
         root,
-        candid::Principal::anonymous(),
+        ic_platform::Principal::anonymous(),
         "root_funding_probe_receipt",
         (),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .expect("query Candid harness call")
 }
 
 fn acceptance_observation(pic: &PocketIc, root: Principal) -> Option<AcceptanceObservation> {
-    ::ic_testkit::pic::query_candid_args(
+    ic_testkit::pic::query_candid_args(
         pic,
         root,
-        candid::Principal::anonymous(),
+        ic_platform::Principal::anonymous(),
         "root_funding_probe_acceptance_observation",
         (),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .expect("query Candid harness call")
 }
 
 fn emergency_operation(pic: &PocketIc, root: Principal) -> Option<EmergencyRefillOperation> {
-    ::ic_testkit::pic::query_candid_args(
+    ic_testkit::pic::query_candid_args(
         pic,
         root,
-        candid::Principal::anonymous(),
+        ic_platform::Principal::anonymous(),
         "root_funding_probe_emergency_operation",
         (),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .expect("query Candid harness call")

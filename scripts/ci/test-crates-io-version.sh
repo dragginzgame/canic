@@ -44,68 +44,50 @@ exit "${REGISTRY_TRANSPORT:-0}"
 STUB
 chmod +x "$fixture/bin/curl"
 export PATH="$fixture/bin:$PATH"
+# Presence-only callers need no body, metadata directory or curl version probe.
+# An unsuccessful transport never authorizes publication, even with HTTP 404.
 for http in 200 404 401 429 503 000 malformed '200404'; do
     : > "$fixture/calls"
     expected=2
     case "$http" in 200) expected=0 ;; 404) expected=1 ;; esac
     status=0
-    REGISTRY_HTTP="$http" bash "$root/scripts/ci/check-crates-io-version.sh" fixture_crate 0.1.2 \
-        > "$fixture/output" 2>&1 || status=$?
-    [[ "$status" == "$expected" && "$(wc -l < "$fixture/calls")" -eq 1 ]] || exit 1
+    REGISTRY_CURL_VERSION='curl 7.88.1 fixture' REGISTRY_HTTP="$http" \
+        bash "$root/scripts/ci/check-crates-io-version.sh" fixture_crate 0.1.2 \
+        > "$fixture/stdout" 2> "$fixture/stderr" || status=$?
+    [[ "$status" == "$expected" && ! -s "$fixture/stdout" && "$(wc -l < "$fixture/calls")" -eq 1 ]] || exit 1
 done
-# Even HTTP-looking output from an unsuccessful transport is unknown.
+grep -Fx /dev/null "$fixture/args" > /dev/null
+if grep -Fx -- --max-filesize "$fixture/args"; then exit 1; fi
 for http in 200 404; do
-    for transport in 6 28 35 60; do
+    for transport in 6 28 35 60 63; do
         status=0
-        REGISTRY_HTTP="$http" REGISTRY_TRANSPORT="$transport" bash "$root/scripts/ci/check-crates-io-version.sh" fixture_crate 0.1.2 \
-            > "$fixture/output" 2>&1 || status=$?
-        [[ "$status" == 2 ]] || exit 1
+        REGISTRY_HTTP="$http" REGISTRY_TRANSPORT="$transport" \
+            bash "$root/scripts/ci/check-crates-io-version.sh" fixture_crate 0.1.2 \
+            > "$fixture/stdout" 2> "$fixture/stderr" || status=$?
+        [[ "$status" == 2 && ! -s "$fixture/stdout" ]] || exit 1
     done
 done
-cat > "$fixture/expected" <<'ARGS'
---disable
---silent
---show-error
---location
---proto
-=https
---proto-redir
-=https
---tlsv1.2
---connect-timeout
-10
---max-time
-30
---output
-/dev/null
---write-out
-%{http_code}
---user-agent
-dragginzgame-shared-tooling (https://github.com/dragginzgame/shared-tooling)
-https://crates.io/api/v1/crates/fixture_crate/0.1.2
-ARGS
-cmp "$fixture/expected" "$fixture/args"
 : > "$fixture/calls"
 for crate in '' '-option' 'a/b' 'a?b' 'a b'; do
     status=0
-    bash "$root/scripts/ci/check-crates-io-version.sh" "$crate" 0.1.2 > /dev/null 2>&1 || status=$?
+    bash "$root/scripts/ci/check-crates-io-version.sh" --metadata "$fixture/invalid" "$crate" 0.1.2 > /dev/null 2>&1 || status=$?
     [[ "$status" == 2 ]] || exit 1
 done
 for version in '' 01.1.2 v0.1.2 0.1.2-rc.1 0.1.2+build '0.1.2/other' '0.1.2?x'; do
     status=0
-    bash "$root/scripts/ci/check-crates-io-version.sh" fixture "$version" > /dev/null 2>&1 || status=$?
+    bash "$root/scripts/ci/check-crates-io-version.sh" --metadata "$fixture/invalid" fixture "$version" > /dev/null 2>&1 || status=$?
     [[ "$status" == 2 ]] || exit 1
 done
-for count in 0 1 3; do
+for count in 0 1 2 3 5; do
     args=()
     while [[ "${#args[@]}" -lt "$count" ]]; do args+=(fixture); done
     status=0
     bash "$root/scripts/ci/check-crates-io-version.sh" ${args[@]+"${args[@]}"} > /dev/null 2>&1 || status=$?
     [[ "$status" == 2 ]] || exit 1
 done
-[[ ! -s "$fixture/calls" ]] || exit 1
+[[ ! -s "$fixture/calls" && ! -e "$fixture/invalid" ]] || exit 1
 
-# Metadata mode retains each response, validates one exact identity, and never
+# Observation retains each response, validates one exact identity, and never
 # turns inconclusive transport/JSON into permission to publish.
 export REGISTRY_BODY="$fixture/body" REGISTRY_HTTP=200 REGISTRY_TRANSPORT=0
 jq -nc '{version:{crate:"fixture_crate",num:"0.1.2",checksum:("a" * 64),yanked:false}}' > "$fixture/valid"
@@ -132,8 +114,13 @@ observe() {
     fi
 }
 observe 0
-grep -Fx -- --max-filesize "$fixture/args"
-grep -Fx 1048576 "$fixture/args"
+printf '%s\n' --disable --silent --show-error --location --proto '=https' \
+    --proto-redir '=https' --tlsv1.2 --connect-timeout 10 --max-time 30 \
+    --output "$evidence/response.json" --max-filesize 1048576 --stderr "$evidence/curl.stderr" \
+    --write-out '%{http_code}' --user-agent \
+    'dragginzgame-shared-tooling (https://github.com/dragginzgame/shared-tooling)' \
+    'https://crates.io/api/v1/crates/fixture_crate/0.1.2' > "$fixture/expected-args"
+cmp "$fixture/expected-args" "$fixture/args"
 # Existing evidence (including a symlink to it) cannot be overwritten or queried again.
 cp "$evidence/response.json" "$fixture/retained"
 ln -s "$evidence" "$fixture/evidence-link"
@@ -149,7 +136,7 @@ cmp "$fixture/retained" "$evidence/response.json"
 # Yanked is an observed fact; the consumer owns its acceptance policy.
 jq '.version.yanked = true' "$fixture/valid" > "$REGISTRY_BODY"
 observe 0
-for http in 404 401 429 503 000 malformed; do
+for http in 404 401 429 503 000 malformed '200404'; do
     REGISTRY_HTTP="$http" observe "$([[ "$http" == 404 ]] && echo 1 || echo 2)"
 done
 for http in 200 404; do
@@ -196,9 +183,6 @@ for curl_version in 'curl 7.88.1 fixture' 'curl 8.3.0 fixture' 'not a version'; 
         --metadata "$fixture/old-curl" fixture_crate 0.1.2 > "$fixture/stdout" 2> "$fixture/stderr" || status=$?
     [[ "$status" == 2 && ! -e "$fixture/old-curl" && ! -s "$fixture/calls" && ! -s "$fixture/stdout" ]] || exit 1
 done
-# The older presence-only contract does not gain the metadata prerequisites.
-REGISTRY_CURL_VERSION='curl 7.88.1 fixture' REGISTRY_HTTP=200 \
-    bash "$root/scripts/ci/check-crates-io-version.sh" fixture_crate 0.1.2
 for args in --metadata '--metadata only-directory'; do
     status=0
     # Intentional splitting exercises missing positional inputs.
@@ -206,5 +190,5 @@ for args in --metadata '--metadata only-directory'; do
     bash "$root/scripts/ci/check-crates-io-version.sh" $args > /dev/null 2>&1 || status=$?
     [[ "$status" == 2 ]] || exit 1
 done
-echo 'Exact registry presence, metadata and retained evidence tests passed (curl substitute)'
+echo 'Exact registry metadata and retained evidence tests passed (curl substitute)'
 fixture_complete=true

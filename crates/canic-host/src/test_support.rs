@@ -14,15 +14,6 @@ use std::{
 const POCKET_IC_SERVER_URL_ENV: &str = "IC_TESTKIT_POCKET_IC_URL";
 const POCKET_IC_STARTUP_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// Host qualification reply ceilings; production request policy remains separate.
-pub const CANDID_REPLY_LIMITS: ic_testkit_candid::DecodeLimits = ic_testkit_candid::DecodeLimits {
-    reply_bytes: 16 * 1024 * 1024,
-    decoding_quota: 100_000_000,
-    skipping_quota: 1_000_000,
-    type_entries: 4_096,
-    header_bytes: 256 * 1024,
-};
-
 pub fn start_pocket_ic(builder: PocketIcBuilder) -> PocketIc {
     let server_url = std::env::var(POCKET_IC_SERVER_URL_ENV)
         .ok()
@@ -149,3 +140,13 @@ pub fn synthetic_identity_pem(seed: u8) -> String {
     }
     format!("-----BEGIN PRIVATE KEY-----\n{body}\n-----END PRIVATE KEY-----\n")
 }
+
+/// Finite reply budgets for small mint, withdrawal and fee fixture responses.
+pub const CANDID_REPLY_LIMITS: ic_platform::candid::DecodeLimits =
+    ic_platform::candid::DecodeLimits {
+        reply_bytes: 64 * 1024,
+        decoding_quota: 1_000_000,
+        skipping_quota: 100_000,
+        type_entries: 256,
+        header_bytes: 16 * 1024,
+    };

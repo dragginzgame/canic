@@ -8,10 +8,7 @@ use crate::{
     fleet_ensure::model::EnsureAction,
     icp::{IcpCli, IcpCommandError, IcpJsonResponseError},
 };
-use candid_parser::{
-    parse_idl_args,
-    utils::{CandidSource, instantiate_candid},
-};
+use ic_platform::candid_parser::{CandidSource, instantiate_candid, parse_idl_args};
 use std::{
     collections::BTreeMap,
     fmt::Write as _,
@@ -428,10 +425,9 @@ pub(super) fn write_argument_file(bytes: &[u8]) -> Result<PathBuf, ProtocolEffec
 #[cfg(test)]
 mod tests {
     use super::{encode_call, render, write_init_arguments};
-    use candid::Principal;
     use canic_core::cdk::utils::hash::sha256_hex;
-    use std::collections::BTreeMap;
-    use std::fs;
+    use ic_platform::Principal;
+    use std::{collections::BTreeMap, fs};
 
     #[test]
     fn shared_transport_preserves_the_protocol_argument_bound() {
@@ -469,11 +465,12 @@ mod tests {
         let (status, expected) = encode_call(candid, "status", "(\"operation\")", Some("(true)"))
             .expect("encode exact status contract");
         assert_eq!(
-            candid::decode_one::<String>(&status).expect("decode status input"),
+            ic_platform::candid::decoder::decode_one::<String>(&status)
+                .expect("decode status input"),
             "operation"
         );
         assert!(
-            candid::decode_one::<bool>(&expected.expect("expected response"))
+            ic_platform::candid::decoder::decode_one::<bool>(&expected.expect("expected response"))
                 .expect("decode expected status")
         );
     }
@@ -502,7 +499,8 @@ mod tests {
         .expect("render typed init arguments");
         let encoded = fs::read(&encoded_path).expect("read encoded init arguments");
         let (principal, operation_bytes) =
-            candid::decode_args::<(Principal, Vec<u8>)>(&encoded).expect("decode init arguments");
+            ic_platform::candid::decoder::decode_args::<(Principal, Vec<u8>)>(&encoded)
+                .expect("decode init arguments");
         assert_eq!(principal, Principal::management_canister());
         assert_eq!(operation_bytes, vec![0x22; 32]);
         fs::remove_file(encoded_path).expect("remove encoded init arguments");

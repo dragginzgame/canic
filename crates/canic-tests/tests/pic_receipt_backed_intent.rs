@@ -1,10 +1,14 @@
 // Category C - Artifact test (built wasm; no runtime config).
 
-use candid::{CandidType, Deserialize, Principal, encode_one};
 use canic_testing_internal::pic::{
     CanicWasmBuildProfile, InternalTestWasms, build_internal_test_wasm_canisters, start_pocket_ic,
 };
+use ic_platform::{
+    Principal,
+    candid::contract::{CandidType, encode_one},
+};
 use ic_testkit::pic::{InstallSpec, PocketIc, PocketIcBuilder, RetryPolicy, prelude::*};
+use serde::Deserialize;
 use std::{
     path::{Path, PathBuf},
     sync::OnceLock,
@@ -20,6 +24,7 @@ const CANISTERS: [&str; 1] = ["intent_authority"];
 static BUILD_ONCE: OnceLock<InternalTestWasms> = OnceLock::new();
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 enum ReceiptStateView {
     Pending,
     Committed {
@@ -33,6 +38,7 @@ enum ReceiptStateView {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct ReceiptIntentView {
     payload_digest: [u8; 32],
     quantity: u64,
@@ -41,6 +47,7 @@ struct ReceiptIntentView {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 enum ReceiptBeginStatus {
     Created,
     ExistingPending,
@@ -66,12 +73,14 @@ enum ReceiptBeginStatus {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct ReceiptBeginView {
     status: ReceiptBeginStatus,
     intent: Option<ReceiptIntentView>,
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 enum ReceiptSettlementStatus {
     Settled,
     AlreadySettled,
@@ -81,12 +90,14 @@ enum ReceiptSettlementStatus {
 }
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 struct ReceiptSettlementView {
     status: ReceiptSettlementStatus,
     intent: Option<ReceiptIntentView>,
 }
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 enum ReceiptDecisionView {
     Committed,
     RolledBack,
@@ -544,10 +555,10 @@ fn begin_receipt(
     quantity: u64,
     replay_deadline_ns: u64,
 ) -> ReceiptBeginView {
-    ::ic_testkit::pic::update_candid_args::<(Result<ReceiptBeginView, String>,), _>(
+    ic_testkit::pic::update_candid_args::<(Result<ReceiptBeginView, String>,), _>(
         pic,
         authority_id,
-        candid::Principal::anonymous(),
+        ic_platform::Principal::anonymous(),
         "begin_receipt",
         (
             operation_seed,
@@ -556,7 +567,7 @@ fn begin_receipt(
             quantity,
             replay_deadline_ns,
         ),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .expect("begin receipt transport")
@@ -574,10 +585,10 @@ fn settle_receipt(
     source_canister: Principal,
     evidence_seed: u8,
 ) -> Result<ReceiptSettlementView, String> {
-    ::ic_testkit::pic::update_candid_args::<(Result<ReceiptSettlementView, String>,), _>(
+    ic_testkit::pic::update_candid_args::<(Result<ReceiptSettlementView, String>,), _>(
         pic,
         authority_id,
-        candid::Principal::anonymous(),
+        ic_platform::Principal::anonymous(),
         "settle_receipt",
         (
             operation_seed,
@@ -587,7 +598,7 @@ fn settle_receipt(
             source_canister,
             evidence_seed,
         ),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .expect("settle receipt transport")
@@ -598,13 +609,13 @@ fn load_receipt(
     authority_id: Principal,
     operation_seed: u8,
 ) -> Option<ReceiptIntentView> {
-    ::ic_testkit::pic::query_candid_args::<(Result<Option<ReceiptIntentView>, String>,), _>(
+    ic_testkit::pic::query_candid_args::<(Result<Option<ReceiptIntentView>, String>,), _>(
         pic,
         authority_id,
-        candid::Principal::anonymous(),
+        ic_platform::Principal::anonymous(),
         "load_receipt",
         (operation_seed,),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .expect("load receipt transport")

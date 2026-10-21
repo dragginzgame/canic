@@ -1,5 +1,5 @@
 use super::*;
-use candid::Principal;
+use ic_platform::Principal;
 use serde::{Deserialize, Serialize};
 use std::{
     env, fs,

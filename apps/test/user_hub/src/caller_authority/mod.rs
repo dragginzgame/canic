@@ -4,8 +4,8 @@
 //!
 //! Counters use the fixture's existing application storage; publication remains Root-owned.
 
-use candid::Principal;
 use canic::{Error, access::caller_authority, prelude::*};
+use ic_platform::Principal;
 use std::cell::Cell;
 
 const EFFECT_ROW: u64 = 999;
@@ -59,7 +59,7 @@ async fn test_caller_effect() -> Result<u64, Error> {
             return Ok(next);
         }
     }
-    ic_cdk::trap("caller-effect fixture barrier exhausted");
+    ic_platform::cdk::api::trap("caller-effect fixture barrier exhausted");
 }
 
 fn effects() -> u64 {

@@ -4,7 +4,6 @@
 //! Does not own: persistence, Registry mutation, target calls, or endpoint DTOs.
 //! Boundary: ops projects validated durable records for workflow orchestration.
 
-use candid::Principal;
 use canic_contracts::{
     dto::{
         component_provisioning::RootComponentDirectorySynchronizationResponse,
@@ -12,6 +11,7 @@ use canic_contracts::{
     },
     ids::ComponentInstanceId,
 };
+use ic_platform::Principal;
 
 /// Existing active service member selected before Fleet Registry mirror advancement.
 

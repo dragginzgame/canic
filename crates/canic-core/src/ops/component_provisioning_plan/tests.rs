@@ -447,8 +447,8 @@ fn canonical_plan_binds_exact_roots_placements_members_and_limits() {
         hash
     );
     assert_eq!(
-        candid::decode_one::<FleetComponentProvisioningPlan>(
-            &candid::encode_one(&plan).expect("encode plan")
+        ic_platform::candid::decoder::decode_one::<FleetComponentProvisioningPlan>(
+            &ic_platform::candid::contract::encode_one(&plan).expect("encode plan")
         )
         .expect("decode plan"),
         plan
@@ -588,8 +588,8 @@ fn assert_root_batch_candid_contracts(
     component_count: u32,
 ) {
     assert_eq!(
-        candid::decode_one::<RootComponentProvisioningAcceptanceRequest>(
-            &candid::encode_one(request).expect("encode acceptance request")
+        ic_platform::candid::decoder::decode_one::<RootComponentProvisioningAcceptanceRequest>(
+            &ic_platform::candid::contract::encode_one(request).expect("encode acceptance request")
         )
         .expect("decode acceptance request"),
         *request
@@ -599,8 +599,9 @@ fn assert_root_batch_candid_contracts(
         plan_hash: request.plan_hash,
     };
     assert_eq!(
-        candid::decode_one::<RootComponentProvisioningStatusRequest>(
-            &candid::encode_one(status_request).expect("encode status request")
+        ic_platform::candid::decoder::decode_one::<RootComponentProvisioningStatusRequest>(
+            &ic_platform::candid::contract::encode_one(status_request)
+                .expect("encode status request")
         )
         .expect("decode status request"),
         status_request
@@ -614,8 +615,9 @@ fn assert_root_batch_candid_contracts(
         expected_registry_committed_component_count: 0,
     };
     assert_eq!(
-        candid::decode_one::<RootComponentProvisioningAdvanceRequest>(
-            &candid::encode_one(advance_request).expect("encode advance request")
+        ic_platform::candid::decoder::decode_one::<RootComponentProvisioningAdvanceRequest>(
+            &ic_platform::candid::contract::encode_one(advance_request)
+                .expect("encode advance request")
         )
         .expect("decode advance request"),
         advance_request
@@ -649,8 +651,8 @@ fn assert_root_batch_candid_contracts(
         receipt_content_hash: [15; 32],
     };
     assert_eq!(
-        candid::decode_one::<RootComponentProvisioningStatusResponse>(
-            &candid::encode_one(&response).expect("encode status response")
+        ic_platform::candid::decoder::decode_one::<RootComponentProvisioningStatusResponse>(
+            &ic_platform::candid::contract::encode_one(&response).expect("encode status response")
         )
         .expect("decode status response"),
         response

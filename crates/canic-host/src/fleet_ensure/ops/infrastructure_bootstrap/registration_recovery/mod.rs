@@ -269,9 +269,9 @@ pub(in crate::fleet_ensure) fn journal_projection(
         .as_mut()
         .and_then(|record| record.review.take())
     else {
-        return crate::fleet_ensure::json::to_value(journal);
+        return serde_json::to_value(journal);
     };
-    let mut projection = crate::fleet_ensure::json::to_value(&compact)?;
+    let mut projection = serde_json::to_value(&compact)?;
     let mut review = crate::fleet_ensure::json::registration_recovery_json_value(&review)?;
     if let Some(actions) = review["protocol_actions"].as_array_mut() {
         for action in actions {
@@ -482,7 +482,7 @@ pub(in crate::fleet_ensure) fn verify_funding_target(
         .binding
         .controllers
         .iter()
-        .map(candid::Principal::to_text)
+        .map(ic_platform::Principal::to_text)
         .collect::<std::collections::BTreeSet<_>>();
     let actual_controllers = live
         .controllers

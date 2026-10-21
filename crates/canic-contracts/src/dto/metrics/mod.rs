@@ -13,6 +13,7 @@ pub use crate::values::metrics::MetricsKind;
 //
 
 #[derive(CandidType, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct MetricEntry {
     // Ordered labels.
     pub labels: Vec<String>,
@@ -29,6 +30,7 @@ pub struct MetricEntry {
 //
 
 #[derive(CandidType, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum MetricValue {
     Count(u64),
     CountAndU64 { count: u64, value_u64: u64 },
@@ -42,6 +44,7 @@ pub enum MetricValue {
 //
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct QueryPerfSample<T> {
     // Query result returned by the probe.
     pub value: T,
@@ -58,8 +61,9 @@ mod tests {
     fn reexported_metrics_kind_roundtrips_through_candid() {
         let kind = crate::values::metrics::MetricsKind::Security;
 
-        let bytes = candid::encode_one(kind).expect("encode metrics kind");
-        let decoded: MetricsKind = candid::decode_one(&bytes).expect("decode metrics kind");
+        let bytes = ic_platform::candid::contract::encode_one(kind).expect("encode metrics kind");
+        let decoded: MetricsKind =
+            ic_platform::candid::decoder::decode_one(&bytes).expect("decode metrics kind");
 
         assert!(matches!(decoded, MetricsKind::Security));
     }

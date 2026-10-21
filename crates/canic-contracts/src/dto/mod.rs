@@ -72,7 +72,10 @@ pub mod state;
 
 pub mod prelude {
     pub use crate::ids::{CanisterRole, ComponentSpecId};
-    pub use candid::{CandidType, Nat, Principal};
+    pub use ic_platform::{
+        Principal,
+        candid::contract::{CandidType, Nat},
+    };
     pub use serde::{Deserialize, Serialize};
 }
 

@@ -1,12 +1,13 @@
 //! Passive fixture content, Store publication and exact target grant contracts.
 
 use crate::ids::{ManagedCanisterBinding, ReleaseBuildId};
-use candid::{CandidType, Principal};
+use ic_platform::{Principal, candid::contract::CandidType};
 use serde::{Deserialize, Serialize};
 
 /// One independently decodable opaque chunk selected by an application descriptor.
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FixtureChunkDescriptor {
     pub digest: [u8; 32],
     pub length: u32,
@@ -14,6 +15,7 @@ pub struct FixtureChunkDescriptor {
 
 /// Release-independent fixture content; release authority binds its resulting digest.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FixtureDescriptor {
     pub schema_version: u16,
     pub format_hash: [u8; 32],
@@ -24,6 +26,7 @@ pub struct FixtureDescriptor {
 
 /// One bounded, sequential Store upload; exact earlier chunks may be replayed.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FixtureChunkUpload {
     pub content_id: [u8; 32],
     pub index: u32,
@@ -32,6 +35,7 @@ pub struct FixtureChunkUpload {
 
 /// Durable source-byte progress; completion is not an application data receipt.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FixtureSourceStatus {
     pub content_id: [u8; 32],
     pub next_chunk: u32,
@@ -42,6 +46,7 @@ pub struct FixtureSourceStatus {
 
 /// Root-derived installation authority independent of reusable content identity.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FixtureTargetBinding {
     pub target: ManagedCanisterBinding,
     pub installation: [u8; 32],
@@ -51,6 +56,7 @@ pub struct FixtureTargetBinding {
 
 /// Compare-and-set read-grant intent; stale grant or revoke messages cannot replace it.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FixtureGrantRequest {
     pub expected_revision: u64,
     pub binding: FixtureTargetBinding,
@@ -59,6 +65,7 @@ pub struct FixtureGrantRequest {
 
 /// Current target authority, including revoked revisions retained against stale replay.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FixtureGrant {
     pub revision: u64,
     pub binding: FixtureTargetBinding,
@@ -67,6 +74,7 @@ pub struct FixtureGrant {
 
 /// Authenticated target pull, pinned to the exact granted revision and content.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FixtureChunkRead {
     pub grant: FixtureGrant,
     pub index: u32,
@@ -74,6 +82,7 @@ pub struct FixtureChunkRead {
 
 /// Closed Store outcomes for deterministic caller retry and conflict handling.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum FixtureStoreError {
     Authority,
     Bounds,
@@ -87,6 +96,7 @@ pub enum FixtureStoreError {
 
 /// Immutable source selection installed by Root before the target can import data.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FixtureAssignment {
     pub store: Principal,
     pub grant: FixtureGrant,
@@ -95,6 +105,7 @@ pub struct FixtureAssignment {
 
 /// Application-owned durable evidence of validated data for one exact installation.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FixtureImportReceipt {
     pub binding: FixtureTargetBinding,
     pub completion_summary: [u8; 32],
@@ -102,6 +113,7 @@ pub struct FixtureImportReceipt {
 
 /// Read-only projection of the application's sole durable import checkpoint.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FixtureImportProgress {
     pub binding: FixtureTargetBinding,
     pub next_chunk: u32,
@@ -110,6 +122,7 @@ pub struct FixtureImportProgress {
 
 /// Data prerequisite observed from protected selection and application-owned evidence.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum FixtureProvisioningStatus {
     NotRequired,
     AwaitingImporter,
@@ -120,6 +133,7 @@ pub enum FixtureProvisioningStatus {
 
 /// Closed consumer failures preserve source, transport and application diagnostic owners.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum FixtureImportError {
     Application { code: u32 },
     Authority,

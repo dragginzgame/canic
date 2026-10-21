@@ -12,8 +12,9 @@ use canic_core::ingress::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES;
 
 pub fn content_id(descriptor: &FixtureDescriptor) -> Result<[u8; 32], FixtureStoreError> {
     let content_id = canic_core::api::fixture_content::FixtureContentApi::content_id(descriptor)?;
-    let encoded = candid::encode_one(StoreCommand::PrepareFixture(descriptor.clone()))
-        .map_err(|_| FixtureStoreError::Bounds)?;
+    let encoded =
+        ic_platform::candid::contract::encode_one(StoreCommand::PrepareFixture(descriptor.clone()))
+            .map_err(|_| FixtureStoreError::Bounds)?;
     if encoded.len() > DEFAULT_UPDATE_INGRESS_MAX_BYTES {
         return Err(FixtureStoreError::Bounds);
     }

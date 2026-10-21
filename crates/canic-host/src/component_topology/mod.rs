@@ -7,12 +7,12 @@
 #[cfg(test)]
 mod tests;
 
-use candid::Principal;
 use canic_contracts::ids::{
     ComponentSpecAdmission, ComponentSpecId, ComponentTopologyDigest, FleetSubnetRootLimits,
     SubnetId,
 };
 use canic_core::bootstrap::compiled::{ComponentTopology, ConfigModel};
+use ic_platform::Principal;
 use std::collections::BTreeSet;
 use thiserror::Error as ThisError;
 

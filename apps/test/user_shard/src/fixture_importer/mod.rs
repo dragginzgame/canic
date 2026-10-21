@@ -4,15 +4,12 @@
 //! Does not own: provisioning, grants, Canic readiness or production application schemas.
 //! Boundary: one application cell owns imported bytes and the durable completion checkpoint.
 
+use canic::__internal::core::cdk::structures::{DefaultMemoryImpl, StableCell as Cell};
 use canic::{
     api::fixture_provisioning::{FixtureImporter, FixtureProvisioningApi},
     dto::fixture_provisioning::{
         FixtureAssignment, FixtureImportError, FixtureImportProgress, FixtureImportReceipt,
     },
-};
-use ic_memory::{
-    RuntimeMemory,
-    ic_stable_structures::{Cell, DefaultMemoryImpl},
 };
 use std::cell::RefCell;
 
@@ -20,7 +17,8 @@ pub const MEMORY_KEY: &str = "test.fixture_import.v1";
 
 const PAYLOAD: &[u8] = b"reviewed fixture source";
 
-#[derive(candid::CandidType, canic::__internal::serde::Deserialize)]
+#[derive(ic_platform::candid::contract::CandidType, canic::__internal::serde::Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(crate = "canic::__internal::serde")]
 struct ImportRecord {
     bytes: Vec<u8>,
@@ -28,7 +26,7 @@ struct ImportRecord {
 }
 
 thread_local! {
-    static IMPORT: RefCell<Cell<Vec<u8>, RuntimeMemory<DefaultMemoryImpl>>> = RefCell::new(Cell::init(
+    static IMPORT: RefCell<Cell<Vec<u8>, DefaultMemoryImpl>> = RefCell::new(Cell::init(
         canic::memory::open(MEMORY_KEY),
         Vec::new(),
     ));
@@ -54,14 +52,18 @@ fn load() -> ImportRecord {
                 progress: None,
             }
         } else {
-            candid::decode_one(cell.get()).expect("decode application import record")
+            ic_platform::candid::decoder::decode_one(cell.get())
+                .expect("decode application import record")
         }
     })
 }
 
 fn persist(record: &ImportRecord) {
     IMPORT.with_borrow_mut(|cell| {
-        cell.set(candid::encode_one(record).expect("encode application import record"));
+        cell.set(
+            ic_platform::candid::contract::encode_one(record)
+                .expect("encode application import record"),
+        );
     });
 }
 

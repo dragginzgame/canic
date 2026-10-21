@@ -1,7 +1,7 @@
 //! Typed retry, failure precedence and actual HTTP request qualification.
 
 use super::*;
-use ic_agent::agent::agent_error::HttpErrorPayload;
+use ic_platform::agent::HttpErrorPayload;
 use std::{
     cell::Cell,
     collections::VecDeque,
@@ -64,7 +64,7 @@ fn read_query_never_retries_authentication_integrity_or_decode_failures() {
         IcpQueryError::Agent(Box::new(AgentError::MessageError(
             "502 is only text".into(),
         ))),
-        IcpQueryError::Decode(candid::decode_one::<u64>(&[0]).unwrap_err()),
+        IcpQueryError::Decode(ic_platform::candid::decoder::decode_one::<u64>(&[0]).unwrap_err()),
     ] {
         assert!(!transient(&error));
         let mut error = Some(error);
@@ -93,7 +93,7 @@ fn assert_http_502_read_retry(method: &'static str) {
     let url = format!("http://{}/", listener.local_addr().unwrap());
     listener.set_nonblocking(true).unwrap();
     let target = Principal::from_slice(&[1]);
-    let argument = candid::encode_one([7_u8; 32]).unwrap();
+    let argument = ic_platform::candid::contract::encode_one([7_u8; 32]).unwrap();
     let expected_argument = argument.clone();
     let server = thread::spawn(move || {
         let deadline = Instant::now() + Duration::from_secs(8);
@@ -223,7 +223,7 @@ fn query_runtime_drives_concurrent_contexts_without_serializing_reads() {
 #[cfg(unix)]
 #[test]
 fn pooled_transport_rechecks_signer_and_network_authority() {
-    use ic_agent::{Identity as _, identity::BasicIdentity};
+    use ic_platform::agent::{BasicIdentity, Identity as _};
     use std::fs;
 
     let root = crate::test_support::temp_dir("pooled-query-authority");

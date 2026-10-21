@@ -2,7 +2,7 @@
 
 use super::{TemplateChunkInput, TemplateChunkInputRef, TemplateChunkSetPrepareInput};
 use crate::ids::{TemplateId, TemplateVersion};
-use candid::types::{internal::TypeContainer, subtype};
+use ic_platform::candid::contract::types::{internal::TypeContainer, subtype};
 use std::collections::HashSet;
 
 #[test]
@@ -37,10 +37,13 @@ fn borrowed_chunk_input_matches_owned_schema_and_bytes() {
             chunk_index: owned.chunk_index,
             bytes: &owned.bytes,
         };
-        let bytes = candid::encode_one(borrowed).unwrap();
-        assert_eq!(bytes, candid::encode_one(&owned).unwrap());
+        let bytes = ic_platform::candid::contract::encode_one(borrowed).unwrap();
         assert_eq!(
-            candid::decode_one::<TemplateChunkInput>(&bytes).unwrap(),
+            bytes,
+            ic_platform::candid::contract::encode_one(&owned).unwrap()
+        );
+        assert_eq!(
+            ic_platform::candid::decoder::decode_one::<TemplateChunkInput>(&bytes).unwrap(),
             owned
         );
     }

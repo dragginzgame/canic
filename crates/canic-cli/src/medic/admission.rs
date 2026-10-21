@@ -4,14 +4,13 @@
 //! Does not own: status transport, policy validation, or recovery mutation.
 //! Boundary: consumes the same read-only report rendered by `canic admission status`.
 
-use crate::{
-    admission::{AdmissionStatusReport, collect_status},
-    medic::{
-        command::MedicOptions,
-        fleet::FleetMedicContext,
-        report::{MedicCategory, MedicCheck, MedicSource},
-    },
-    support::icp_target::IcpTargetOptions,
+use crate::medic::{
+    command::MedicOptions,
+    fleet::FleetMedicContext,
+    report::{MedicCategory, MedicCheck, MedicSource},
+};
+use canic_host::admission::{
+    AdmissionTarget, view::AdmissionStatusReport, workflow::collect_status,
 };
 
 pub(super) fn check_fleet_admission(
@@ -28,7 +27,7 @@ pub(super) fn check_fleet_admission(
             MedicSource::AdmissionStatus,
         );
     }
-    let target = IcpTargetOptions {
+    let target = AdmissionTarget {
         environment: context.environment.clone(),
         icp: options.icp.clone(),
     };
@@ -139,8 +138,8 @@ fn classify_report(report: &AdmissionStatusReport) -> MedicCheck {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::admission::AdmissionRootReport;
-    use candid::Principal;
+    use canic_host::admission::view::AdmissionRootReport;
+    use ic_platform::Principal;
 
     fn report() -> AdmissionStatusReport {
         AdmissionStatusReport {

@@ -19,7 +19,7 @@ use canic_contracts::{
         FleetId, FleetKey, FleetRegistryAuthority, SubnetId,
     },
 };
-use canic_core::cdk::structures::{BTreeMap, Memory, VectorMemory};
+use canic_core::cdk::structures::{StableBTreeMap as BTreeMap, VectorMemory};
 
 fn principal(byte: u8) -> Principal {
     Principal::from_slice(&[byte; 29])
@@ -222,14 +222,24 @@ fn provisioning_operation_map_uses_small_pages_and_checks_oversize_before_writes
     let record =
         RootComponentProvisioningStore::directory_synchronization(command.operation_id).unwrap();
     let memory = VectorMemory::default();
-    let mut map = BTreeMap::init(memory.clone());
+    let runtime = ic_memory::testing::fixture_runtime(
+        memory.clone(),
+        "test",
+        "test.",
+        &["test.rows.v1"],
+        ic_memory::MemoryManagerConfig::new(1).unwrap(),
+    )
+    .unwrap();
+    let mut map = BTreeMap::init(runtime.open_memory("test.rows.v1").unwrap());
     let key = RootComponentOperationKey::DirectorySynchronization(command.operation_id);
     let value = RootComponentOperationRecord::DirectorySynchronization(Box::new(record.clone()));
     map.insert(key, value.clone());
-    assert_eq!(memory.size(), 1);
+    let (retained, pages) = map.allocated_pages();
+    map = retained;
+    assert_eq!(pages, 1);
     drop(map);
     let mut reopened = BTreeMap::<RootComponentOperationKey, RootComponentOperationRecord, _>::init(
-        memory.clone(),
+        runtime.open_memory("test.rows.v1").unwrap(),
     );
     assert_eq!(reopened.get(&key), Some(value.clone()));
     let before = memory.borrow().clone();

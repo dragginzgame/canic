@@ -34,6 +34,7 @@ scripts/ci/check-make-execution.sh
 scripts/ci/check-release-source.sh
 scripts/ci/next-release-version.sh
 scripts/ci/validate-release-inputs.pl
+scripts/ci/StableVersion.pm
 scripts/ci/finalize-release-changelog.awk
 scripts/ci/check-dependency-pins.sh
 scripts/ci/dependency-pins.jq

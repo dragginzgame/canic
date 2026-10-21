@@ -11,7 +11,7 @@ use super::build::{
 use super::build::{
     build_pic, build_test_root_wasm, build_test_wasm_store_wasm, root_canister_config_path,
 };
-use candid::Principal;
+use ic_platform::Principal;
 use ic_testkit::pic::PocketIc;
 use std::path::Path;
 
@@ -55,6 +55,8 @@ mod tests {
     #[cfg(test)]
     mod pool_creation_uncertainty;
     #[cfg(test)]
+    mod pooled_restore;
+    #[cfg(test)]
     mod provisioning_release;
     #[cfg(test)]
     mod release_artifacts;
@@ -74,43 +76,36 @@ mod tests {
     use super::*;
     use crate::pic::{report_canister_diagnostics, report_canister_diagnostics_batch};
     #[cfg(test)]
-    use candid::CandidType;
-    #[cfg(test)]
-    use candid::Deserialize;
-    #[cfg(test)]
-    use candid::Nat;
-    use candid::decode_one;
-    use candid::encode_one;
-    #[cfg(test)]
     use canic::dto::authority_restore::AuthorityRestoreFencePhase;
     #[cfg(test)]
     use canic::dto::authority_restore::AuthoritySnapshotRequest;
+    #[cfg(test)]
+    use canic::dto::fleet_admission::FleetAdmissionProjectionStatusResponse;
+    #[cfg(test)]
+    use canic::{
+        dto::{
+            component_registry::RootComponentRegistryStatusResponse, page::PageRequest,
+            role::MetricsStatusRequest, runtime::TimerRegistrationStatus,
+        },
+        ids::ManagedCanisterBinding,
+    };
+    #[cfg(test)]
+    use ic_platform::candid::contract::CandidType;
+    #[cfg(test)]
+    use ic_platform::candid::contract::Nat;
+    use ic_platform::candid::contract::encode_one;
+    use ic_platform::candid::decoder::decode_one;
+    #[cfg(test)]
+    use serde::Deserialize;
 
     #[cfg(test)]
     use canic::dto::component_registry::ComponentLifecycleStatus;
     #[cfg(test)]
     use canic::dto::component_registry::ComponentRegistryActivePartitionRequest;
 
-    use canic::CANIC_WASM_CHUNK_BYTES;
-    use canic::dto::component_registry::ComponentRuntimePhase;
-    use canic::dto::component_registry::RootComponentAllocationPhase;
-    use canic::dto::component_registry::RootComponentAllocationRequest;
-    use canic::dto::component_registry::RootComponentAllocationResponse;
-    use canic::dto::component_registry::RootComponentRegistryPreparationRequest;
-    #[cfg(test)]
-    use canic::dto::component_registry::RootComponentRegistryStatusResponse;
-    use canic::dto::fixture_provisioning::FixtureChunkUpload;
-    use canic::dto::fixture_provisioning::FixtureSourceStatus;
-    use canic::dto::fixture_provisioning::FixtureStoreError;
-    #[cfg(test)]
-    use canic::dto::fleet_admission::FleetAdmissionProjectionStatusResponse;
-    use canic::dto::fleet_registry::FleetRegistryActivationRequest;
-    use canic::dto::fleet_registry::FleetSubnetRootEntry;
-    use canic::dto::fleet_registry::FleetSubnetRootJoinRequest;
-    use canic::dto::fleet_registry::FleetSubnetRootRegistrySyncRequest;
-    use canic::dto::fleet_registry::FleetSubnetRootStatus;
-    use canic::dto::fleet_subnet_root::FleetSubnetRootInitArgs;
-    use canic::dto::fleet_subnet_root::FleetSubnetWasmStoreInitArgs;
+    use canic::dto::fixture_provisioning::{
+        FixtureChunkUpload, FixtureSourceStatus, FixtureStoreError,
+    };
     #[cfg(test)]
     use canic::dto::metrics::MetricsKind;
     #[cfg(test)]
@@ -120,10 +115,6 @@ mod tests {
     #[cfg(test)]
     use canic::dto::observability::FleetCanisterObservabilityRequest;
     #[cfg(test)]
-    use canic::dto::page::PageRequest;
-    use canic::dto::pool::CanisterPoolResponse;
-    use canic::dto::pool::CanisterPoolStatusRequest;
-    #[cfg(test)]
     use canic::dto::pool::PoolCanisterRequest;
     #[cfg(test)]
     use canic::dto::pool::PoolImportResponse;
@@ -131,27 +122,32 @@ mod tests {
     use canic::dto::pool::PoolMaintenanceResponse;
     #[cfg(test)]
     use canic::dto::pool::{CanisterPoolAssetOrigin, CanisterPoolAssetStatus};
-    #[cfg(test)]
-    use canic::dto::role::MetricsStatusRequest;
-    use canic::dto::role::OperationStatusRequest;
-    use canic::dto::root_store::ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX;
-    use canic::dto::root_store::ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX;
-    use canic::dto::root_store::RootStoreArtifact;
-    use canic::dto::root_store::RootStoreBootstrapRequest;
-    use canic::dto::root_store::RootStoreBootstrapResponse;
-    use canic::dto::root_store::RootStoreFixturePrepareRequest;
-    use canic::dto::root_store::RootStoreReleaseSetEntry;
-    use canic::dto::root_store::RootStoreReleaseSetEntryKind;
-    use canic::dto::root_store::RootStoreReleaseSetManifest;
-    #[cfg(test)]
-    use canic::dto::runtime::TimerRegistrationStatus;
-    use canic::ids::CanisterRole;
-    use canic::ids::ComponentBinding;
-    use canic::ids::FleetId;
-    #[cfg(test)]
-    use canic::ids::ManagedCanisterBinding;
-    use canic::ids::ReleaseSetDigest;
-    use canic::ids::SubnetId;
+    use canic::dto::pool::{CanisterPoolResponse, CanisterPoolStatusRequest};
+    use canic::dto::{
+        fleet_registry::{
+            FleetRegistryActivationRequest, FleetSubnetRootEntry, FleetSubnetRootJoinRequest,
+            FleetSubnetRootRegistrySyncRequest, FleetSubnetRootStatus,
+        },
+        fleet_subnet_root::{FleetSubnetRootInitArgs, FleetSubnetWasmStoreInitArgs},
+    };
+    use canic::dto::{
+        role::OperationStatusRequest,
+        root_store::{
+            ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX, ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX,
+            RootStoreArtifact, RootStoreBootstrapRequest, RootStoreBootstrapResponse,
+            RootStoreFixturePrepareRequest, RootStoreReleaseSetEntry, RootStoreReleaseSetEntryKind,
+            RootStoreReleaseSetManifest,
+        },
+    };
+    use canic::ids::{CanisterRole, ComponentBinding, FleetId};
+    use canic::ids::{ReleaseSetDigest, SubnetId};
+    use canic::{
+        CANIC_WASM_CHUNK_BYTES,
+        dto::component_registry::{
+            ComponentRuntimePhase, RootComponentAllocationPhase, RootComponentAllocationRequest,
+            RootComponentAllocationResponse, RootComponentRegistryPreparationRequest,
+        },
+    };
 
     use canic::{
         Error,
@@ -356,11 +352,12 @@ mod tests {
     #[cfg(test)]
     use ic_testkit::pic::PocketIcSnapshotExt;
     use ic_testkit::pic::{
-        BaselinePreparationStage, CachedPocketIcBaseline, CachedPocketIcBaselinePool,
-        CachedPocketIcBaselinePoolGuard, CandidCallError, CanisterSnapshotTarget,
-        ControllerSnapshotError, FailureDisposition, PocketIcBaselineRecipe, PreparedBaseline,
-        RebuildReason, ResetPolicies, ResetReceipt, ResetRequirements, SnapshotRestoreFunding,
-        TimeResetPolicy, is_dead_pocket_ic_transport_error,
+        BaselinePoolContractError, BaselinePreparationStage, CachedPocketIcBaseline,
+        CachedPocketIcBaselinePool, CachedPocketIcBaselinePoolGuard, CandidCallError,
+        CanisterSnapshotTarget, ControllerSnapshotError, FailureDisposition,
+        PocketIcBaselineRecipe, PreparedBaseline, RebuildReason, ResetPolicies, ResetReceipt,
+        ResetRequirements, SnapshotRestoreFunding, TimeResetPolicy,
+        is_dead_pocket_ic_transport_error,
     };
     #[cfg(test)]
     use ic_testkit::pocket_ic::{
@@ -481,13 +478,13 @@ mod tests {
         caller: Principal,
         command: RootCommandFragment,
     ) -> Result<RootCommandResponseFragment, Error> {
-        ::ic_testkit::pic::update_candid_args(
+        ic_testkit::pic::update_candid_args(
             pic,
             root,
             caller,
             canic::protocol::CANIC_ROOT_COMMAND,
             (command,),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .expect("Root command transport")
@@ -536,10 +533,10 @@ mod tests {
         root: Principal,
         request: RootStatusRequestFragment,
     ) -> Result<RootStatusResponseFragment, Error> {
-        ::ic_testkit::pic::query_candid_args(
+        ic_testkit::pic::query_candid_args(
             pic,
             root,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             match &request {
                 RootStatusRequestFragment::Operation(_) => {
                     canic::protocol::CANIC_ROOT_OPERATION_STATUS
@@ -552,7 +549,7 @@ mod tests {
                 _ => canic::protocol::CANIC_ROOT_STATUS,
             },
             (request,),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .expect("Root status transport")
@@ -587,16 +584,15 @@ mod tests {
     where
         F: Fn() -> RootStatusRequestFragment,
     {
-        let denied: Result<RootStatusResponseFragment, Error> =
-            ::ic_testkit::pic::query_candid_args(
-                pic,
-                root,
-                outsider,
-                canic::protocol::CANIC_OBSERVABILITY,
-                (request(),),
-                ::canic::testing::CANDID_REPLY_LIMITS,
-            )
-            .map(|(reply,)| reply)?;
+        let denied: Result<RootStatusResponseFragment, Error> = ic_testkit::pic::query_candid_args(
+            pic,
+            root,
+            outsider,
+            canic::protocol::CANIC_OBSERVABILITY,
+            (request(),),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)?;
         if !controller_authority_unavailable(&denied) {
             return Err(ActiveComponentRegistryBaselineError::Invariant(
                 "Root sensitive observability accepted a non-controller".to_string(),
@@ -626,29 +622,28 @@ mod tests {
     where
         F: Fn() -> StoreObservabilityRequest,
     {
-        let denied: Result<StoreObservabilityResponse, Error> =
-            ::ic_testkit::pic::query_candid_args(
-                pic,
-                store,
-                outsider,
-                canic::protocol::CANIC_OBSERVABILITY,
-                (request(),),
-                ::canic::testing::CANDID_REPLY_LIMITS,
-            )
-            .map(|(reply,)| reply)?;
+        let denied: Result<StoreObservabilityResponse, Error> = ic_testkit::pic::query_candid_args(
+            pic,
+            store,
+            outsider,
+            canic::protocol::CANIC_OBSERVABILITY,
+            (request(),),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)?;
         if !controller_authority_unavailable(&denied) {
             return Err(ActiveComponentRegistryBaselineError::Invariant(
                 "Store sensitive observability accepted a non-controller".to_string(),
             ));
         }
         let response: Result<StoreObservabilityResponse, Error> =
-            ::ic_testkit::pic::query_candid_args(
+            ic_testkit::pic::query_candid_args(
                 pic,
                 store,
                 controller,
                 canic::protocol::CANIC_OBSERVABILITY,
                 (request(),),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)?;
         let response = baseline_application_result(
@@ -664,10 +659,6 @@ mod tests {
     }
 
     #[cfg(test)]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "one authority matrix compares anonymous, active and unlisted callers across sensitive endpoints"
-    )]
     fn validate_sensitive_observability_authority(
         pic: &PocketIc,
         metadata: &ActiveComponentRegistryBaselineMetadata,
@@ -721,14 +712,27 @@ mod tests {
             matches_store_cycle_history,
         )?;
 
+        validate_managed_observability_authority(pic, metadata, outsider)
+    }
+
+    #[cfg(test)]
+    fn validate_managed_observability_authority(
+        pic: &PocketIc,
+        metadata: &ActiveComponentRegistryBaselineMetadata,
+        outsider: Principal,
+    ) -> Result<(), ActiveComponentRegistryBaselineError> {
+        let page = || PageRequest {
+            limit: 1,
+            offset: 0,
+        };
         let direct_denied: Result<ManagedStatusResponseFragment, Error> =
-            ::ic_testkit::pic::query_candid_args(
+            ic_testkit::pic::query_candid_args(
                 pic,
                 metadata.issuer.canister_id,
                 outsider,
                 canic::protocol::CANIC_OBSERVABILITY,
                 (ManagedStatusRequestFragment::CycleHistory(page()),),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)?;
         if !controller_authority_unavailable(&direct_denied) {
@@ -744,13 +748,13 @@ mod tests {
             })
         };
         let relay_denied: Result<RootCommandResponseFragment, Error> =
-            ::ic_testkit::pic::update_candid_args(
+            ic_testkit::pic::update_candid_args(
                 pic,
                 metadata.root,
                 outsider,
                 canic::protocol::CANIC_ROOT_COMMAND,
                 (relay_request(),),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)?;
         if !controller_authority_unavailable(&relay_denied) {
@@ -759,13 +763,13 @@ mod tests {
             ));
         }
         let relayed: Result<RootCommandResponseFragment, Error> =
-            ::ic_testkit::pic::update_candid_args(
+            ic_testkit::pic::update_candid_args(
                 pic,
                 metadata.root,
-                candid::Principal::anonymous(),
+                ic_platform::Principal::anonymous(),
                 canic::protocol::CANIC_ROOT_COMMAND,
                 (relay_request(),),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)?;
         if !matches!(
@@ -813,13 +817,13 @@ mod tests {
         canister: Principal,
     ) -> ManagedCanisterBinding {
         let response: Result<ManagedStatusResponseFragment, Error> =
-            ::ic_testkit::pic::query_candid_args(
+            ic_testkit::pic::query_candid_args(
                 pic,
                 canister,
                 root,
                 canic::protocol::CANIC_OBSERVABILITY,
                 (ManagedStatusRequestFragment::Binding,),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .expect("managed binding status transport");
@@ -927,7 +931,7 @@ mod tests {
         caller: Principal,
     ) -> CanisterPoolResponse {
         let response: Result<RootStatusResponseFragment, Error> =
-            ::ic_testkit::pic::query_candid_args(
+            ic_testkit::pic::query_candid_args(
                 pic,
                 root,
                 caller,
@@ -936,7 +940,7 @@ mod tests {
                     start_after: None,
                     limit: 256,
                 }),),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .expect("query Canister pool transport");
@@ -1029,16 +1033,16 @@ mod tests {
         pic: &PocketIc,
         canister_id: Principal,
     ) -> Result<RoleOverviewReadinessObservation, CandidCallError> {
-        match ::ic_testkit::pic::query_candid_args::<
+        match ic_testkit::pic::query_candid_args::<
             (Result<RoleOverviewStatusResponseFragment, Error>,),
             _,
         >(
             pic,
             canister_id,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             canic::protocol::CANIC_PUBLIC_STATUS,
             (RoleOverviewStatusRequestFragment::Overview,),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         {
@@ -1062,13 +1066,13 @@ mod tests {
         coordinator: Principal,
         command: CoordinatorCommand,
     ) -> Result<CoordinatorCommandResponse, Error> {
-        ::ic_testkit::pic::update_candid_args(
+        ic_testkit::pic::update_candid_args(
             pic,
             coordinator,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             canic::protocol::CANIC_COORDINATOR_COMMAND,
             (command,),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .expect("Coordinator command transport")
@@ -1079,13 +1083,13 @@ mod tests {
         coordinator: Principal,
         request: R,
     ) -> Result<R::Response, Error> {
-        ::ic_testkit::pic::query_candid_args(
+        ic_testkit::pic::query_candid_args(
             pic,
             coordinator,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             R::METHOD,
             (request,),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .expect("Coordinator status transport")
@@ -1110,7 +1114,7 @@ mod tests {
         let mut last_phase = String::new();
         for _ in 0..128 {
             let status: Result<CoordinatorOperationReadResponse, Error> =
-                ::ic_testkit::pic::query_candid_args(
+                ic_testkit::pic::query_candid_args(
                     pic,
                     coordinator,
                     caller,
@@ -1118,7 +1122,7 @@ mod tests {
                     (CoordinatorOperationReadRequest::Operation(
                         OperationStatusRequest { operation_id },
                     ),),
-                    ::canic::testing::CANDID_REPLY_LIMITS,
+                    canic::testing::CANDID_REPLY_LIMITS,
                 )
                 .map(|(reply,)| reply)
                 .expect("query Fleet admission transport");
@@ -1284,7 +1288,7 @@ mod tests {
         root: Principal,
     ) -> FleetAdmissionProjectionStatusResponse {
         let response: Result<ManagedAdmissionStatusResponseFragment, Error> =
-            ::ic_testkit::pic::query_candid_args(
+            ic_testkit::pic::query_candid_args(
                 pic,
                 canister_id,
                 root,
@@ -1295,7 +1299,7 @@ mod tests {
                         offset: 0,
                     },
                 ),),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .expect("managed admission status transport");
@@ -1310,13 +1314,13 @@ mod tests {
         caller: Principal,
         command: StoreCommand,
     ) -> Result<StoreCommandResponse, Error> {
-        ::ic_testkit::pic::update_candid_args(
+        ic_testkit::pic::update_candid_args(
             pic,
             store,
             caller,
             canic::protocol::CANIC_WASM_STORE_COMMAND,
             (command,),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .expect("Store command transport")
@@ -1446,6 +1450,7 @@ mod tests {
             context: String,
             failures: Vec<RoleOverviewQueryFailure>,
         },
+        Contract(BaselinePoolContractError),
         Invariant(String),
         Snapshot(ControllerSnapshotError),
     }
@@ -1586,13 +1591,19 @@ mod tests {
         fn classify_failure(
             &self,
             stage: BaselinePreparationStage,
-            error: &(dyn std::error::Error + 'static),
+            error: &(dyn StdError + 'static),
         ) -> FailureDisposition {
             if is_dead_pocket_ic_transport_error(error) {
                 FailureDisposition::Rebuild(RebuildReason::DeadPocketIcTransport)
             } else {
                 FailureDisposition::Rebuild(stage.default_rebuild_reason())
             }
+        }
+    }
+
+    impl From<BaselinePoolContractError> for ActiveComponentRegistryBaselineError {
+        fn from(error: BaselinePoolContractError) -> Self {
+            Self::Contract(error)
         }
     }
 
@@ -1623,6 +1634,7 @@ mod tests {
                     }
                     Ok(())
                 }
+                Self::Contract(error) => error.fmt(formatter),
                 Self::Invariant(message) => formatter.write_str(message),
                 Self::Snapshot(error) => error.fmt(formatter),
             }
@@ -1636,6 +1648,7 @@ mod tests {
                 Self::Calls { failures, .. } => failures
                     .first()
                     .map(|failure| &failure.error as &(dyn StdError + 'static)),
+                Self::Contract(error) => Some(error),
                 Self::Invariant(_) => None,
                 Self::Snapshot(error) => Some(error),
             }
@@ -1691,6 +1704,7 @@ mod tests {
 
     #[cfg(test)]
     #[derive(CandidType)]
+    #[candid_path("ic_platform::candid::contract")]
     struct CyclesLedgerStubInitArgs {
         canister_ids: Vec<Principal>,
         expected_controllers_by_index: Option<Vec<Vec<Principal>>>,
@@ -1703,6 +1717,7 @@ mod tests {
 
     #[cfg(test)]
     #[derive(CandidType)]
+    #[candid_path("ic_platform::candid::contract")]
     struct CyclesLedgerStubAccountBalance {
         balance: Nat,
         owner: Principal,
@@ -1710,6 +1725,7 @@ mod tests {
 
     #[cfg(test)]
     #[derive(CandidType)]
+    #[candid_path("ic_platform::candid::contract")]
     enum IcpRefillStubInit {
         Ledger {
             balance_e8s: u64,
@@ -1722,6 +1738,7 @@ mod tests {
 
     #[cfg(test)]
     #[derive(CandidType, Clone)]
+    #[candid_path("ic_platform::candid::contract")]
     struct QualificationCreateCanisterArgs {
         from_subaccount: Option<[u8; 32]>,
         created_at_time: Option<u64>,
@@ -1731,6 +1748,7 @@ mod tests {
 
     #[cfg(test)]
     #[derive(CandidType, Clone)]
+    #[candid_path("ic_platform::candid::contract")]
     struct QualificationCmcCreateCanisterArgs {
         settings: Option<QualificationCanisterSettings>,
         subnet_selection: Option<QualificationSubnetSelection>,
@@ -1738,6 +1756,7 @@ mod tests {
 
     #[cfg(test)]
     #[derive(CandidType, Clone)]
+    #[candid_path("ic_platform::candid::contract")]
     struct QualificationCanisterSettings {
         controllers: Option<Vec<Principal>>,
         compute_allocation: Option<Nat>,
@@ -1748,12 +1767,14 @@ mod tests {
 
     #[cfg(test)]
     #[derive(CandidType, Clone)]
+    #[candid_path("ic_platform::candid::contract")]
     enum QualificationSubnetSelection {
         Subnet { subnet: Principal },
     }
 
     #[cfg(test)]
     #[derive(CandidType, Debug, Deserialize)]
+    #[candid_path("ic_platform::candid::contract")]
     struct QualificationCreateCanisterSuccess {
         block_id: Nat,
         canister_id: Principal,
@@ -1761,6 +1782,7 @@ mod tests {
 
     #[cfg(test)]
     #[derive(CandidType, Debug, Deserialize)]
+    #[candid_path("ic_platform::candid::contract")]
     enum QualificationCreateCanisterError {
         Duplicate {
             duplicate_of: Nat,
@@ -1774,6 +1796,7 @@ mod tests {
 
     #[cfg(test)]
     #[derive(CandidType)]
+    #[candid_path("ic_platform::candid::contract")]
     struct QualificationCanisterIdRecord {
         canister_id: Principal,
     }
@@ -3319,13 +3342,13 @@ exec icp "$@"
         }
         let cycles_ledger = Principal::from_text("um5iw-rqaaa-aaaaq-qaaba-cai")
             .expect("canonical Cycles Ledger principal");
-        let request_count: u64 = ::ic_testkit::pic::query_candid_args(
-            &pic,
+        let request_count: u64 = ic_testkit::pic::query_candid_args(
+            &(pic),
             cycles_ledger,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "request_count",
             (),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .expect("query pool creation request count");
@@ -3344,17 +3367,16 @@ exec icp "$@"
         root: Principal,
         target: Principal,
     ) -> canic::dto::runtime::CanicReadinessStatus {
-        let response: Result<FixtureReadinessResponse, Error> =
-            ::ic_testkit::pic::query_candid_args(
-                pic,
-                target,
-                root,
-                canic::protocol::CANIC_OBSERVABILITY,
-                (FixtureReadinessRequest::Readiness,),
-                ::canic::testing::CANDID_REPLY_LIMITS,
-            )
-            .map(|(reply,)| reply)
-            .expect("protected readiness remains observable");
+        let response: Result<FixtureReadinessResponse, Error> = ic_testkit::pic::query_candid_args(
+            pic,
+            target,
+            root,
+            canic::protocol::CANIC_OBSERVABILITY,
+            (FixtureReadinessRequest::Readiness,),
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)
+        .expect("protected readiness remains observable");
         let FixtureReadinessResponse::Readiness(response) = response.unwrap();
         response
     }
@@ -3374,7 +3396,7 @@ exec icp "$@"
             .iter()
             .filter(|entry| matches!(entry.status, CanisterPoolAssetStatus::Workload { .. }))
             .filter_map(|entry| {
-                let response = ::ic_testkit::pic::query_candid_args::<
+                let response = ic_testkit::pic::query_candid_args::<
                     (Result<ManagedStatusResponseFragment, Error>,),
                     _,
                 >(
@@ -3383,7 +3405,7 @@ exec icp "$@"
                     root,
                     canic::protocol::CANIC_OBSERVABILITY,
                     (ManagedStatusRequestFragment::Binding,),
-                    ::canic::testing::CANDID_REPLY_LIMITS,
+                    canic::testing::CANDID_REPLY_LIMITS,
                 )
                 .map(|(reply,)| reply)
                 .ok()?
@@ -3431,7 +3453,7 @@ exec icp "$@"
     #[cfg(test)]
     #[expect(
         clippy::too_many_lines,
-        reason = "one bootstrap journey preserves staged readiness and exact-sender reply assertions"
+        reason = "keep the ordered PocketIC scenario and its authority assertions together"
     )]
     fn qualify_pending_fixture_bootstrap(
         pic: &PocketIc,
@@ -3477,25 +3499,25 @@ exec icp "$@"
         );
         assert_eq!(readiness.fixture, Err(FixtureImportError::NotReady));
         assert!(
-            ::ic_testkit::pic::query_candid_args::<(Result<String, Error>,), _>(
+            ic_testkit::pic::query_candid_args::<(Result<String, Error>,), _>(
                 pic,
                 hub,
-                candid::Principal::anonymous(),
+                ic_platform::Principal::anonymous(),
                 "test_recovery_generation",
                 (),
-                ::canic::testing::CANDID_REPLY_LIMITS
+                canic::testing::CANDID_REPLY_LIMITS
             )
             .map(|(reply,)| reply)
             .is_err()
         );
         assert!(
-            ::ic_testkit::pic::update_candid_args::<(Result<Principal, Error>,), _>(
+            ic_testkit::pic::update_candid_args::<(Result<Principal, Error>,), _>(
                 pic,
                 hub,
-                candid::Principal::anonymous(),
+                ic_platform::Principal::anonymous(),
                 "create_account",
                 (Principal::anonymous(),),
-                ::canic::testing::CANDID_REPLY_LIMITS
+                canic::testing::CANDID_REPLY_LIMITS
             )
             .map(|(reply,)| reply)
             .is_err()
@@ -3530,13 +3552,13 @@ exec icp "$@"
             Err(FixtureImportError::NotReady)
         );
         assert_root_waits_for_fixture_membership(pic, fixture.root_id, operation_id);
-        ::ic_testkit::pic::update_candid_args::<((),), _>(
+        ic_testkit::pic::update_candid_args::<((),), _>(
             pic,
             hub,
             fixture.root_id,
             "test_release_fixture",
             (),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap();
@@ -3687,7 +3709,7 @@ exec icp "$@"
     #[cfg(test)]
     #[expect(
         clippy::too_many_lines,
-        reason = "one shard journey preserves admission, binding and readiness assertions in execution order"
+        reason = "keep the ordered PocketIC scenario and its authority assertions together"
     )]
     fn qualify_later_fixture_shard(
         pic: &PocketIc,
@@ -3699,13 +3721,13 @@ exec icp "$@"
         // The initial journey already assigned one distinct account.
         for index in 1..capacity {
             let user = Principal::from_slice(&index.to_be_bytes());
-            let assigned: Result<Principal, Error> = ::ic_testkit::pic::update_candid_args(
+            let assigned: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
                 pic,
                 hub,
-                candid::Principal::anonymous(),
+                ic_platform::Principal::anonymous(),
                 "create_account",
                 (user,),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .expect("fill the configured initial Shard capacity");
@@ -3723,13 +3745,13 @@ exec icp "$@"
         pic.stop_canister(store, Some(fixture.root_id))
             .expect("interrupt retained source access");
         let user = Principal::from_slice(&[0xe4; 29]);
-        let interrupted: Result<Principal, Error> = ::ic_testkit::pic::update_candid_args(
+        let interrupted: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
             pic,
             hub,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "create_account",
             (user,),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .expect("source outage returns an application result");
@@ -3742,13 +3764,13 @@ exec icp "$@"
         let mut last = None;
         let mut assigned = None;
         for _ in 0..120 {
-            let result: Result<Principal, Error> = ::ic_testkit::pic::update_candid_args(
+            let result: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
                 pic,
                 hub,
-                candid::Principal::anonymous(),
+                ic_platform::Principal::anonymous(),
                 "create_account",
                 (user,),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .expect("retry the same account allocation");
@@ -3767,13 +3789,13 @@ exec icp "$@"
         let after = root_pool_status(pic, fixture.root_id);
         assert_eq!(after.workload, before.workload + 1);
         assert_eq!(after.failed, before.failed);
-        let response: Result<StoreCatalogResponse, Error> = ::ic_testkit::pic::query_candid_args(
+        let response: Result<StoreCatalogResponse, Error> = ic_testkit::pic::query_candid_args(
             pic,
             store,
             fixture.root_id,
             canic::protocol::CANIC_WASM_STORE_CATALOG,
             (StoreCatalogRequest::FixtureGrant(shard),),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap();
@@ -3813,13 +3835,13 @@ exec icp "$@"
             source.descriptor.completion_summary
         );
         // Discard the first successful assignment response and reconcile by the same key.
-        let replay: Result<Principal, Error> = ::ic_testkit::pic::update_candid_args(
+        let replay: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
             pic,
             hub,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "create_account",
             (user,),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap();
@@ -3971,17 +3993,16 @@ exec icp "$@"
         request: canic::dto::component_registry::RootComponentSubtreeRemovalRequest,
     ) {
         let read_grant = || {
-            let response: Result<StoreCatalogResponse, Error> =
-                ::ic_testkit::pic::query_candid_args(
-                    pic,
-                    store,
-                    root,
-                    canic::protocol::CANIC_WASM_STORE_CATALOG,
-                    (StoreCatalogRequest::FixtureGrant(shard),),
-                    ::canic::testing::CANDID_REPLY_LIMITS,
-                )
-                .map(|(reply,)| reply)
-                .unwrap();
+            let response: Result<StoreCatalogResponse, Error> = ic_testkit::pic::query_candid_args(
+                pic,
+                store,
+                root,
+                canic::protocol::CANIC_WASM_STORE_CATALOG,
+                (StoreCatalogRequest::FixtureGrant(shard),),
+                canic::testing::CANDID_REPLY_LIMITS,
+            )
+            .map(|(reply,)| reply)
+            .unwrap();
             let StoreCatalogResponse::FixtureGrant(Some(revoked)) = response.unwrap() else {
                 panic!("revoked grant remains retained");
             };
@@ -4041,13 +4062,13 @@ exec icp "$@"
         let mut last = None;
         let mut replacement = None;
         for _ in 0..120 {
-            let result: Result<Principal, Error> = ::ic_testkit::pic::update_candid_args(
+            let result: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
                 pic,
                 hub,
                 root,
                 "test_create_fixture_child",
                 (operation_id,),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .unwrap();
@@ -4070,13 +4091,13 @@ exec icp "$@"
             "replacement must reuse the recycled asset: {last:?}"
         );
         let store = fixture.response.wasm_store;
-        let response: Result<StoreCatalogResponse, Error> = ::ic_testkit::pic::query_candid_args(
+        let response: Result<StoreCatalogResponse, Error> = ic_testkit::pic::query_candid_args(
             pic,
             store,
             root,
             canic::protocol::CANIC_WASM_STORE_CATALOG,
             (StoreCatalogRequest::FixtureGrant(shard),),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap();
@@ -4102,13 +4123,13 @@ exec icp "$@"
             panic!("replacement requires its own completed import");
         };
         assert_eq!(receipt.binding, grant.binding);
-        let replay: Result<Principal, Error> = ::ic_testkit::pic::update_candid_args(
+        let replay: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
             pic,
             hub,
             root,
             "test_create_fixture_child",
             (operation_id,),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap();
@@ -4238,13 +4259,13 @@ exec icp "$@"
             panic!("exact grant response");
         };
         assert_eq!(*stale, Err(FixtureStoreError::Conflict));
-        let response: Result<StoreCatalogResponse, Error> = ::ic_testkit::pic::query_candid_args(
+        let response: Result<StoreCatalogResponse, Error> = ic_testkit::pic::query_candid_args(
             pic,
             store,
             root,
             canic::protocol::CANIC_WASM_STORE_CATALOG,
             (StoreCatalogRequest::FixtureGrant(shard),),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap();
@@ -4258,13 +4279,13 @@ exec icp "$@"
     #[cfg(test)]
     fn assert_retired_shard_routing_unavailable(pic: &PocketIc, hub: Principal) {
         let user = Principal::from_slice(&[0xe4; 29]);
-        let plan: Result<String, Error> = ::ic_testkit::pic::query_candid_args(
+        let plan: Result<String, Error> = ic_testkit::pic::query_candid_args(
             pic,
             hub,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "plan_create_account",
             (user,),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap();
@@ -4272,13 +4293,13 @@ exec icp "$@"
             plan.unwrap_err().code(),
             canic::diagnostics::codes::POSITION_UNAVAILABLE.raw_code()
         );
-        let result: Result<Principal, Error> = ::ic_testkit::pic::update_candid_args(
+        let result: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
             pic,
             hub,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "create_account",
             (user,),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap();
@@ -4529,9 +4550,9 @@ exec icp "$@"
                 })
                 .filter_map(|operation_id| {
                     workload_callers.iter().find_map(|caller| {
-                        let response: Result<RootStatusResponseFragment, Error> = ::ic_testkit::pic::query_candid_args(&pic, fixture.root_id, *caller, canic::protocol::CANIC_ROOT_OPERATION_STATUS, (RootStatusRequestFragment::Operation(OperationStatusRequest {
+                        let response: Result<RootStatusResponseFragment, Error> = ic_testkit::pic::query_candid_args(&(pic), fixture.root_id, *caller, canic::protocol::CANIC_ROOT_OPERATION_STATUS, (RootStatusRequestFragment::Operation(OperationStatusRequest {
                                     operation_id,
-                                }),), ::canic::testing::CANDID_REPLY_LIMITS).map(|(reply,)| reply)
+                                }),), canic::testing::CANDID_REPLY_LIMITS).map(|(reply,)| reply)
                             .expect("Root child-operation status transport");
                         match response {
                             Ok(RootStatusResponseFragment::Operation(
@@ -4700,13 +4721,13 @@ exec icp "$@"
             .iter()
             .filter_map(|(canister, binding)| {
                 let response: Result<StoreCatalogResponse, Error> =
-                    ::ic_testkit::pic::query_candid_args(
-                        &pic,
+                    ic_testkit::pic::query_candid_args(
+                        &(pic),
                         store,
                         controller,
                         canic::protocol::CANIC_WASM_STORE_CATALOG,
                         (StoreCatalogRequest::FixtureGrant(*canister),),
-                        ::canic::testing::CANDID_REPLY_LIMITS,
+                        canic::testing::CANDID_REPLY_LIMITS,
                     )
                     .map(|(reply,)| reply)
                     .unwrap();
@@ -4740,8 +4761,8 @@ exec icp "$@"
                 );
                 assert_eq!(grant.binding.content_id, source.content_id);
                 let runtime: Result<ManagedStatusResponseFragment, Error> =
-                    ::ic_testkit::pic::query_candid_args(
-                        &pic,
+                    ic_testkit::pic::query_candid_args(
+                        &(pic),
                         *canister,
                         fixture.root_id,
                         canic::protocol::CANIC_CONTROL_STATUS,
@@ -4750,7 +4771,7 @@ exec icp "$@"
                                 operation_id: grant.binding.installation,
                             },
                         ),),
-                        ::canic::testing::CANDID_REPLY_LIMITS,
+                        canic::testing::CANDID_REPLY_LIMITS,
                     )
                     .map(|(reply,)| reply)
                     .unwrap();
@@ -4792,13 +4813,13 @@ exec icp "$@"
 
         let user = Principal::from_slice(&[0xe3; 29]);
         for _ in 0..2 {
-            let assigned: Result<Principal, Error> = ::ic_testkit::pic::update_candid_args(
-                &pic,
+            let assigned: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
+                &(pic),
                 *hub,
-                candid::Principal::anonymous(),
+                ic_platform::Principal::anonymous(),
                 "create_account",
                 (user,),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .expect("ready Hub application dispatch");
@@ -4908,17 +4929,16 @@ exec icp "$@"
         };
         assert_eq!(workloads(replayed_pool), workloads(replay_pool));
         for (canister, grant) in grants {
-            let response: Result<StoreCatalogResponse, Error> =
-                ::ic_testkit::pic::query_candid_args(
-                    &pic,
-                    store,
-                    controller,
-                    canic::protocol::CANIC_WASM_STORE_CATALOG,
-                    (StoreCatalogRequest::FixtureGrant(canister),),
-                    ::canic::testing::CANDID_REPLY_LIMITS,
-                )
-                .map(|(reply,)| reply)
-                .unwrap();
+            let response: Result<StoreCatalogResponse, Error> = ic_testkit::pic::query_candid_args(
+                &(pic),
+                store,
+                controller,
+                canic::protocol::CANIC_WASM_STORE_CATALOG,
+                (StoreCatalogRequest::FixtureGrant(canister),),
+                canic::testing::CANDID_REPLY_LIMITS,
+            )
+            .map(|(reply,)| reply)
+            .unwrap();
             let StoreCatalogResponse::FixtureGrant(Some(replayed)) = response.unwrap() else {
                 panic!("terminal replay must retain the exact grant");
             };
@@ -4979,17 +4999,16 @@ exec icp "$@"
     fn assert_retained_fixtures(pic: &PocketIc, fixture: &BootstrappedRootFixture) {
         let store = fixture.response.wasm_store;
         for source in &fixture.response.fixtures {
-            let retained: Result<StoreCatalogResponse, Error> =
-                ::ic_testkit::pic::query_candid_args(
-                    pic,
-                    store,
-                    fixture.root_id,
-                    canic::protocol::CANIC_WASM_STORE_CATALOG,
-                    (StoreCatalogRequest::Fixture(source.content_id),),
-                    ::canic::testing::CANDID_REPLY_LIMITS,
-                )
-                .map(|(reply,)| reply)
-                .expect("retained fixture catalog before whole-Root retirement");
+            let retained: Result<StoreCatalogResponse, Error> = ic_testkit::pic::query_candid_args(
+                pic,
+                store,
+                fixture.root_id,
+                canic::protocol::CANIC_WASM_STORE_CATALOG,
+                (StoreCatalogRequest::Fixture(source.content_id),),
+                canic::testing::CANDID_REPLY_LIMITS,
+            )
+            .map(|(reply,)| reply)
+            .expect("retained fixture catalog before whole-Root retirement");
             let Ok(StoreCatalogResponse::Fixture(Ok(retained))) = retained else {
                 panic!("completed imports must retain their exact source");
             };
@@ -5111,6 +5130,7 @@ exec icp "$@"
 
     #[cfg(test)]
     #[derive(CandidType)]
+    #[candid_path("ic_platform::candid::contract")]
     enum FixtureHeldReply {
         Grant,
         Revoke,
@@ -5124,13 +5144,13 @@ exec icp "$@"
         kind: FixtureHeldReply,
     ) {
         assert!(
-            ::ic_testkit::pic::update_candid_args::<(bool,), _>(
+            ic_testkit::pic::update_candid_args::<(bool,), _>(
                 pic,
                 store,
                 root,
                 "canic_test_fixture_reply_arm",
                 (kind,),
-                ::canic::testing::CANDID_REPLY_LIMITS
+                canic::testing::CANDID_REPLY_LIMITS
             )
             .map(|(reply,)| reply)
             .unwrap()
@@ -5139,13 +5159,13 @@ exec icp "$@"
 
     #[cfg(test)]
     fn fixture_replies_waiting(pic: &PocketIc, store: Principal, root: Principal) -> u32 {
-        ::ic_testkit::pic::query_candid_args(
+        ic_testkit::pic::query_candid_args(
             pic,
             store,
             root,
             "canic_test_fixture_reply_waiting",
             (),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap()
@@ -5173,13 +5193,13 @@ exec icp "$@"
         root: Principal,
         target: Principal,
     ) -> canic::dto::fixture_provisioning::FixtureGrant {
-        let response: Result<StoreCatalogResponse, Error> = ::ic_testkit::pic::query_candid_args(
+        let response: Result<StoreCatalogResponse, Error> = ic_testkit::pic::query_candid_args(
             pic,
             store,
             root,
             canic::protocol::CANIC_WASM_STORE_CATALOG,
             (StoreCatalogRequest::FixtureGrant(target),),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap();
@@ -5270,13 +5290,13 @@ exec icp "$@"
 
     #[cfg(test)]
     fn release_fixture_reply(pic: &PocketIc, store: Principal, root: Principal) {
-        ::ic_testkit::pic::update_candid_args::<((),), _>(
+        ic_testkit::pic::update_candid_args::<((),), _>(
             pic,
             store,
             root,
             "canic_test_fixture_reply_release",
             (),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap();
@@ -5487,13 +5507,13 @@ exec icp "$@"
             Err(canic::dto::fixture_provisioning::FixtureImportError::NotReady)
         );
         let selected = selected_fixture_targets(&pic, fixture.root_id);
-        ::ic_testkit::pic::update_candid_args::<((),), _>(
-            &pic,
+        ic_testkit::pic::update_candid_args::<((),), _>(
+            &(pic),
             hub,
             fixture.root_id,
             "test_release_fixture",
             (),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap();
@@ -5562,7 +5582,7 @@ exec icp "$@"
         target: Principal,
     ) -> Vec<canic::dto::cycles::CycleTopupEvent> {
         let response: Result<CanisterObservabilityResponse, Error> =
-            ::ic_testkit::pic::query_candid_args(
+            ic_testkit::pic::query_candid_args(
                 pic,
                 target,
                 root,
@@ -5573,7 +5593,7 @@ exec icp "$@"
                         limit: 100,
                     },
                 ),),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .unwrap();
@@ -5652,13 +5672,14 @@ exec icp "$@"
                 }
             )
         );
-        let history = candid::encode_one(&events).unwrap();
+        let history = ic_platform::candid::contract::encode_one(&events).unwrap();
         for _ in 0..5 {
             pic.advance_time(Duration::from_secs(60));
             pic.tick();
         }
         assert_eq!(
-            candid::encode_one(fixture_topup_events(pic, root, hub)).unwrap(),
+            ic_platform::candid::contract::encode_one(fixture_topup_events(pic, root, hub))
+                .unwrap(),
             history,
             "exhausted automatic funding stops issuing further requests"
         );
@@ -5694,13 +5715,13 @@ exec icp "$@"
             },
         );
         activate_root(&pic, fixture.root_id);
-        let assigned: Result<Principal, Error> = ::ic_testkit::pic::update_candid_args(
-            &pic,
+        let assigned: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
+            &(pic),
             installed_component_binding(&hub).canister_id,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "create_account",
             (Principal::from_slice(&[0xe3; 29]),),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap();
@@ -5905,13 +5926,13 @@ exec icp "$@"
                     installation_controller
                 ));
                 let status: Result<StoreCatalogResponse, Error> =
-                    ::ic_testkit::pic::query_candid_args(
-                        &pic,
+                    ic_testkit::pic::query_candid_args(
+                        &(pic),
                         wasm_store,
                         installation_controller,
                         canic::protocol::CANIC_WASM_STORE_CATALOG,
                         (StoreCatalogRequest::Fixture(source.content_id),),
-                        ::canic::testing::CANDID_REPLY_LIMITS,
+                        canic::testing::CANDID_REPLY_LIMITS,
                     )
                     .map(|(reply,)| reply)
                     .unwrap();
@@ -5958,13 +5979,13 @@ exec icp "$@"
             chunk_index: u32::try_from(index).unwrap(),
             bytes: chunks[index].clone(),
         };
-        let prepared: Result<(), Error> = ::ic_testkit::pic::update_candid_args(
+        let prepared: Result<(), Error> = ic_testkit::pic::update_candid_args(
             pic,
             store,
             caller,
             canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
             (request(0),),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap();
@@ -6001,13 +6022,13 @@ exec icp "$@"
         // Reject a conflicting sibling without changing any acknowledged chunk.
         let mut conflicting = request(2);
         conflicting.bytes[0] ^= 1;
-        let response: Result<(), Error> = ::ic_testkit::pic::update_candid_args(
+        let response: Result<(), Error> = ic_testkit::pic::update_candid_args(
             pic,
             store,
             caller,
             canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
             (conflicting,),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap();
@@ -6015,13 +6036,13 @@ exec icp "$@"
             response.unwrap_err().code(),
             canic_contracts::diagnostics::codes::DIGEST_CONFLICT.raw_code()
         );
-        let replay: Result<(), Error> = ::ic_testkit::pic::update_candid_args(
+        let replay: Result<(), Error> = ic_testkit::pic::update_candid_args(
             pic,
             store,
             caller,
             canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
             (request(1),),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap();
@@ -6452,8 +6473,8 @@ exec icp "$@"
                 assert_eq!(first.operation_id, expected_operation);
                 assert!(!failed.root_runtime_active);
                 let forbidden: Result<RootStatusResponseFragment, Error> =
-                    ::ic_testkit::pic::query_candid_args(
-                        &pic,
+                    ic_testkit::pic::query_candid_args(
+                        &(pic),
                         installed.root_id,
                         Principal::from_slice(&[0x92; 29]),
                         canic::protocol::CANIC_ROOT_OPERATION_STATUS,
@@ -6462,7 +6483,7 @@ exec icp "$@"
                                 operation_id: request.operation_id,
                             },
                         ),),
-                        ::canic::testing::CANDID_REPLY_LIMITS,
+                        canic::testing::CANDID_REPLY_LIMITS,
                     )
                     .map(|(reply,)| reply)
                     .expect("unauthorized protected status transport");
@@ -6937,7 +6958,7 @@ exec icp "$@"
         let canister_id = Principal::from_text(&application.pid).unwrap();
         let release = desired.bootstrap.as_ref().unwrap().release_build_id;
         let candid = literal_zero_role_artifact_path(root, release, "app", "did");
-        canic_host::canister_build::validate_wasm_candid_endpoints(
+        canic_host::canister_build::validate_wasm_endpoints(
             &literal_zero_role_artifact_path(root, release, "app", "wasm"),
             &candid,
         )
@@ -7354,7 +7375,7 @@ exec icp "$@"
         let path = canic_host::icp::local_canister_candid_path(directory, "ic", role);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, &candid).unwrap();
-        canic_host::canister_build::validate_wasm_candid_endpoints(&wasm_path, &path).unwrap();
+        canic_host::canister_build::validate_wasm_endpoints(&wasm_path, &path).unwrap();
         let role = canic_contracts::ids::CanisterRole::from(role.to_string());
         let capabilities = std::collections::BTreeSet::new();
         let release_identity = "operator-cli-runtime-fixture".to_string();
@@ -7670,13 +7691,13 @@ esac
         )
         .expect("replay exact completed admission");
         let registry: Result<CoordinatorRegistryResponse, Error> =
-            ::ic_testkit::pic::query_candid_args(
+            ic_testkit::pic::query_candid_args(
                 pic,
                 coordinator,
                 operator,
                 canic::protocol::CANIC_COORDINATOR_REGISTRY,
                 (CoordinatorRegistryRequest::Registry,),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .unwrap();
@@ -7917,13 +7938,13 @@ esac
                 _ => canic::protocol::CANIC_ROOT_STATUS,
             };
             let response: Result<RootStatusResponseFragment, Error> =
-                ::ic_testkit::pic::query_candid_args(
+                ic_testkit::pic::query_candid_args(
                     self.fixture.pic(),
                     self.fixture.root,
                     self.caller,
                     method,
                     (request,),
-                    ::canic::testing::CANDID_REPLY_LIMITS,
+                    canic::testing::CANDID_REPLY_LIMITS,
                 )
                 .map(|(reply,)| reply)
                 .expect("operator Root query transport");
@@ -9042,13 +9063,13 @@ esac
                 pool_count,
                 "lost response and replay must not repeat a controller effect"
             );
-            let request_count: u64 = ::ic_testkit::pic::query_candid_args(
-                &pic,
+            let request_count: u64 = ic_testkit::pic::query_candid_args(
+                &(pic),
                 cycles_ledger,
-                candid::Principal::anonymous(),
+                ic_platform::Principal::anonymous(),
                 "request_count",
                 (),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .expect("query literal-zero creation count");
@@ -9145,13 +9166,13 @@ esac
                 assert!(matches!(rejected, Err(EnsureWorkflowError::Platform(
                     canic_host::fleet_ensure::ops::IcpEnsurePlatformError::FundingInspectionAuthorityConflict { .. }
                 ))));
-                let before: u64 = ::ic_testkit::pic::query_candid_args(
-                    &pic,
+                let before: u64 = ic_testkit::pic::query_candid_args(
+                    &(pic),
                     cycles_ledger,
-                    candid::Principal::anonymous(),
+                    ic_platform::Principal::anonymous(),
                     "withdrawal_count",
                     (),
-                    ::canic::testing::CANDID_REPLY_LIMITS,
+                    canic::testing::CANDID_REPLY_LIMITS,
                 )
                 .map(|(reply,)| reply)
                 .unwrap();
@@ -9173,13 +9194,13 @@ esac
                     matches!(lost_funding, Err(EnsureWorkflowError::Platform(_))),
                     "lose one completed withdrawal reply: {lost_funding:?}"
                 );
-                let withdrawals: u64 = ::ic_testkit::pic::query_candid_args(
-                    &pic,
+                let withdrawals: u64 = ic_testkit::pic::query_candid_args(
+                    &(pic),
                     cycles_ledger,
-                    candid::Principal::anonymous(),
+                    ic_platform::Principal::anonymous(),
                     "withdrawal_count",
                     (),
-                    ::canic::testing::CANDID_REPLY_LIMITS,
+                    canic::testing::CANDID_REPLY_LIMITS,
                 )
                 .map(|(reply,)| reply)
                 .expect("query withdrawal receipts");
@@ -9269,13 +9290,13 @@ esac
                 1,
                 "protected Ready status must prevent replaying a completed reset"
             );
-            let withdrawals: u64 = ::ic_testkit::pic::query_candid_args(
-                &pic,
+            let withdrawals: u64 = ic_testkit::pic::query_candid_args(
+                &(pic),
                 cycles_ledger,
-                candid::Principal::anonymous(),
+                ic_platform::Principal::anonymous(),
                 "withdrawal_count",
                 (),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .expect("query repaired withdrawal receipts");
@@ -9533,13 +9554,13 @@ esac
             if funded_import_repair { 0 } else { pool_count },
             "protocol convergence and terminal replay must not repeat controller effects"
         );
-        let replay_withdrawals: u64 = ::ic_testkit::pic::query_candid_args(
-            &pic,
+        let replay_withdrawals: u64 = ic_testkit::pic::query_candid_args(
+            &(pic),
             cycles_ledger,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "withdrawal_count",
             (),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .expect("query replayed withdrawal receipts");
@@ -9661,13 +9682,13 @@ esac
         fixtures: &canic_host::release_set::fixture::PersistedFixtureArtifactManifest,
     ) {
         for source in &fixtures.manifest.entries {
-            let status: Result<StoreCatalogResponse, Error> = ::ic_testkit::pic::query_candid_args(
+            let status: Result<StoreCatalogResponse, Error> = ic_testkit::pic::query_candid_args(
                 pic,
                 store,
                 operator,
                 canic::protocol::CANIC_WASM_STORE_CATALOG,
                 (StoreCatalogRequest::Fixture(source.content_id),),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .unwrap();
@@ -9725,7 +9746,7 @@ esac
         pic: &PocketIc,
         target: Principal,
     ) -> canic::dto::public_status::PublicMetricsSnapshot {
-        let response: Result<PublicMemoryResponse, Error> = ::ic_testkit::pic::query_candid_args(
+        let response: Result<PublicMemoryResponse, Error> = ic_testkit::pic::query_candid_args(
             pic,
             target,
             Principal::anonymous(),
@@ -9739,7 +9760,7 @@ esac
                     },
                 },
             ),),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .expect("anonymous public memory transport");
@@ -9796,7 +9817,7 @@ esac
     #[cfg(test)]
     #[expect(
         clippy::too_many_lines,
-        reason = "one contract matrix compares every public memory target with its observed runtime projection"
+        reason = "keep the ordered PocketIC scenario and its authority assertions together"
     )]
     fn assert_public_memory_target(
         pic: &PocketIc,
@@ -9805,13 +9826,13 @@ esac
         store: Principal,
         operator: Principal,
     ) -> String {
-        let health: Result<PublicMemoryResponse, Error> = ::ic_testkit::pic::query_candid_args(
+        let health: Result<PublicMemoryResponse, Error> = ic_testkit::pic::query_candid_args(
             pic,
             target,
             Principal::anonymous(),
             canic::protocol::CANIC_PUBLIC_STATUS,
             (PublicMemoryRequest::Health,),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap();
@@ -9870,26 +9891,26 @@ esac
                 .all(|row| row.canister_id.is_none() && row.observed_at_ns > 0)
         );
         let denied: Result<CanisterObservabilityResponse, Error> =
-            ::ic_testkit::pic::query_candid_args(
+            ic_testkit::pic::query_candid_args(
                 pic,
                 target,
                 Principal::anonymous(),
                 canic::protocol::CANIC_OBSERVABILITY,
                 (CanisterObservabilityRequest::MemoryAllocations,),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .unwrap();
         assert!(controller_authority_unavailable(&denied));
         let controller = if target == root { operator } else { root };
         let diagnostic: Result<CanisterObservabilityResponse, Error> =
-            ::ic_testkit::pic::query_candid_args(
+            ic_testkit::pic::query_candid_args(
                 pic,
                 target,
                 controller,
                 canic::protocol::CANIC_OBSERVABILITY,
                 (CanisterObservabilityRequest::MemoryAllocations,),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .unwrap();
@@ -9928,6 +9949,7 @@ esac
     /// Passive application row returned by both fixture roles.
     #[cfg(test)]
     #[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
+    #[candid_path("ic_platform::candid::contract")]
     struct ReinstallUserRow {
         id: u64,
         value: u64,
@@ -9993,13 +10015,13 @@ esac
         let root = input.adapter_root;
         let operator = Principal::from_text(&input.desired.operator).unwrap();
         let rows = |id| {
-            ::ic_testkit::pic::query_candid_args::<(Result<Vec<ReinstallUserRow>, Error>,), _>(
+            ic_testkit::pic::query_candid_args::<(Result<Vec<ReinstallUserRow>, Error>,), _>(
                 input.pic,
                 id,
-                candid::Principal::anonymous(),
+                ic_platform::Principal::anonymous(),
                 "test_user_rows",
                 (),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .ok()
@@ -10014,13 +10036,13 @@ esac
         assert_eq!(applications.len(), 2, "real Hub and Shard application rows");
         for id in applications {
             for (key, value) in [(0_u64, 99_u64), (42, 1001)] {
-                let result: Result<(), Error> = ::ic_testkit::pic::update_candid_args(
+                let result: Result<(), Error> = ic_testkit::pic::update_candid_args(
                     input.pic,
                     id,
-                    candid::Principal::anonymous(),
+                    ic_platform::Principal::anonymous(),
                     "test_set_user_row",
                     (key, value),
-                    ::canic::testing::CANDID_REPLY_LIMITS,
+                    canic::testing::CANDID_REPLY_LIMITS,
                 )
                 .map(|(reply,)| reply)
                 .unwrap();
@@ -10152,7 +10174,7 @@ esac
         let operator = Principal::from_text(&input.desired.operator).unwrap();
         let ledger = Principal::from_text(&input.desired.cycles_ledger).unwrap();
         let transfer: Result<Nat, QualificationIcrc1TransferError> =
-            ::ic_testkit::pic::update_candid_args(
+            ic_testkit::pic::update_candid_args(
                 pic,
                 ledger,
                 operator,
@@ -10168,7 +10190,7 @@ esac
                     memo: None,
                     amount: Nat::from(1_000_000_000_u128),
                 },),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .expect("fund the retained Root Ledger account");
@@ -10348,12 +10370,14 @@ exec '{}' "$@"
 
     #[cfg(test)]
     #[derive(CandidType)]
+    #[candid_path("ic_platform::candid::contract")]
     struct JourneySubnetRequest {
         principal: Principal,
     }
 
     #[cfg(test)]
     #[derive(CandidType, Deserialize)]
+    #[candid_path("ic_platform::candid::contract")]
     struct JourneySubnetPayload {
         subnet_id: Option<Principal>,
     }
@@ -10387,15 +10411,15 @@ exec '{}' "$@"
             .unwrap(),
             None,
         );
-        let unknown: Result<JourneySubnetPayload, String> = ::ic_testkit::pic::query_candid_args(
+        let unknown: Result<JourneySubnetPayload, String> = ic_testkit::pic::query_candid_args(
             pic,
             registry,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "get_subnet_for_canister",
             (JourneySubnetRequest {
                 principal: Principal::from_slice(&[0x99; 29]),
             },),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .expect("query unknown Principal routing");
@@ -10875,13 +10899,13 @@ exec '{}' "$@"
         } else {
             planned.plan.plan_sha256.clone()
         };
-        let _: () = ::ic_testkit::pic::update_candid_args(
+        let _: () = ic_testkit::pic::update_candid_args(
             input.pic,
             input.cycles_ledger,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "set_transfer_fee_override",
             (Some(Nat::from(MAINNET_REFILL_LEDGER_FEE * 2)),),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap();
@@ -10901,13 +10925,13 @@ exec '{}' "$@"
         )) if expected_fee_cycles == MAINNET_REFILL_LEDGER_FEE * 2),
             "a changed fee must reject before debit: {fee_rejection:?}"
         );
-        let transfers: u64 = ::ic_testkit::pic::query_candid_args(
+        let transfers: u64 = ic_testkit::pic::query_candid_args(
             input.pic,
             input.cycles_ledger,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "transfer_count",
             (),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap();
@@ -10920,13 +10944,13 @@ exec '{}' "$@"
             ledger_account_balance(input.pic, input.cycles_ledger, input.root),
             Nat::from(0_u8)
         );
-        let _: () = ::ic_testkit::pic::update_candid_args(
+        let _: () = ic_testkit::pic::update_candid_args(
             input.pic,
             input.cycles_ledger,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "set_transfer_fee_override",
             (None::<Nat>,),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap();
@@ -10950,13 +10974,13 @@ exec '{}' "$@"
                 .is_file(),
             "the transfer must reach response-loss injection: {lost:?}"
         );
-        let transfers: u64 = ::ic_testkit::pic::query_candid_args(
+        let transfers: u64 = ic_testkit::pic::query_candid_args(
             input.pic,
             input.cycles_ledger,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "transfer_count",
             (),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap();
@@ -11080,13 +11104,13 @@ exec '{}' "$@"
             assert_eq!(status.settings.controllers, vec![input.root]);
             assert!(status.cycles >= input.readiness_floor);
         }
-        let requests: u64 = ::ic_testkit::pic::query_candid_args(
+        let requests: u64 = ic_testkit::pic::query_candid_args(
             input.pic,
             input.cycles_ledger,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "request_count",
             (),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap();
@@ -11111,23 +11135,23 @@ exec '{}' "$@"
         .expect("effect-free funded estate replay");
         assert!(replay.terminal);
         assert_eq!(replay.effects_applied, 0);
-        let transfers: u64 = ::ic_testkit::pic::query_candid_args(
+        let transfers: u64 = ic_testkit::pic::query_candid_args(
             input.pic,
             input.cycles_ledger,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "transfer_count",
             (),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap();
-        let replay_requests: u64 = ::ic_testkit::pic::query_candid_args(
+        let replay_requests: u64 = ic_testkit::pic::query_candid_args(
             input.pic,
             input.cycles_ledger,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "request_count",
             (),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap();
@@ -11218,13 +11242,13 @@ exec '{}' "$@"
             ledger_account_balance(input.pic, input.cycles_ledger, input.root),
             Nat::from(0_u8)
         );
-        let transfers: u64 = ::ic_testkit::pic::query_candid_args(
+        let transfers: u64 = ic_testkit::pic::query_candid_args(
             input.pic,
             input.cycles_ledger,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "transfer_count",
             (),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap();
@@ -11274,33 +11298,33 @@ exec '{}' "$@"
         platform: &mut IcpEnsurePlatform,
     ) {
         let counts = || {
-            let withdrawals: u64 = ::ic_testkit::pic::query_candid_args(
+            let withdrawals: u64 = ic_testkit::pic::query_candid_args(
                 input.pic,
                 input.cycles_ledger,
-                candid::Principal::anonymous(),
+                ic_platform::Principal::anonymous(),
                 "withdrawal_count",
                 (),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .unwrap();
-            let transfers: u64 = ::ic_testkit::pic::query_candid_args(
+            let transfers: u64 = ic_testkit::pic::query_candid_args(
                 input.pic,
                 input.cycles_ledger,
-                candid::Principal::anonymous(),
+                ic_platform::Principal::anonymous(),
                 "transfer_count",
                 (),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .unwrap();
-            let creates: u64 = ::ic_testkit::pic::query_candid_args(
+            let creates: u64 = ic_testkit::pic::query_candid_args(
                 input.pic,
                 input.cycles_ledger,
-                candid::Principal::anonymous(),
+                ic_platform::Principal::anonymous(),
                 "request_count",
                 (),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .unwrap();
@@ -12085,13 +12109,13 @@ cycles = "80T"
                 request, expected, ..
             } => {
                 let response: Result<Result<FixtureSourceStatus, FixtureStoreError>, Error> =
-                    ::ic_testkit::pic::update_candid_args(
+                    ic_testkit::pic::update_candid_args(
                         pic,
                         step.target,
                         store_controller,
                         canic::protocol::CANIC_WASM_STORE_PUBLISH_FIXTURE,
                         (request.clone(),),
-                        ::canic::testing::CANDID_REPLY_LIMITS,
+                        canic::testing::CANDID_REPLY_LIMITS,
                     )
                     .map(|(reply,)| reply)
                     .unwrap();
@@ -12125,13 +12149,13 @@ cycles = "80T"
                 ));
             }
             CurrentFleetProtocolAction::PublishStoreChunk { request } => {
-                let response: Result<(), Error> = ::ic_testkit::pic::update_candid_args(
+                let response: Result<(), Error> = ic_testkit::pic::update_candid_args(
                     pic,
                     step.target,
                     store_controller,
                     canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
                     (request.clone(),),
-                    ::canic::testing::CANDID_REPLY_LIMITS,
+                    canic::testing::CANDID_REPLY_LIMITS,
                 )
                 .map(|(reply,)| reply)
                 .expect("publish current Store chunk transport");
@@ -12270,13 +12294,13 @@ cycles = "80T"
             ),
             CurrentFleetProtocolAction::PrepareStoreFixture { source, .. } => {
                 let status: Result<Result<FixtureSourceStatus, FixtureStoreError>, Error> =
-                    ::ic_testkit::pic::query_candid_args(
+                    ic_testkit::pic::query_candid_args(
                         pic,
                         step.target,
-                        candid::Principal::anonymous(),
+                        ic_platform::Principal::anonymous(),
                         canic::protocol::CANIC_ROOT_FIXTURE_STATUS,
                         (source.content_id,),
-                        ::canic::testing::CANDID_REPLY_LIMITS,
+                        canic::testing::CANDID_REPLY_LIMITS,
                     )
                     .map(|(reply,)| reply)
                     .unwrap();
@@ -12285,7 +12309,7 @@ cycles = "80T"
             }
             CurrentFleetProtocolAction::PublishStoreFixtureChunk { expected, .. } => {
                 let response: Result<canic_contracts::dto::template::StoreCatalogResponse, Error> =
-                    ::ic_testkit::pic::query_candid_args(
+                    ic_testkit::pic::query_candid_args(
                         pic,
                         step.target,
                         store_controller,
@@ -12295,7 +12319,7 @@ cycles = "80T"
                                 expected.content_id,
                             ),
                         ),
-                        ::canic::testing::CANDID_REPLY_LIMITS,
+                        canic::testing::CANDID_REPLY_LIMITS,
                     )
                     .map(|(reply,)| reply)
                     .unwrap();
@@ -12379,7 +12403,7 @@ cycles = "80T"
         template_id: &TemplateId,
         version: &TemplateVersion,
     ) -> TemplateStagingStatusResponse {
-        let response: Result<StoreCatalogResponse, Error> = ::ic_testkit::pic::query_candid_args(
+        let response: Result<StoreCatalogResponse, Error> = ic_testkit::pic::query_candid_args(
             pic,
             store,
             caller,
@@ -12388,7 +12412,7 @@ cycles = "80T"
                 template_id: template_id.clone(),
                 version: version.clone(),
             }),),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .expect("query current Store staging transport");
@@ -12675,13 +12699,13 @@ cycles = "80T"
             policy_hash: first_grant.request.policy_hash,
         };
         let replay: Result<CoordinatorCommandResponse, Error> =
-            ::ic_testkit::pic::update_candid_args(
-                &fixture.pic,
+            ic_testkit::pic::update_candid_args(
+                &(fixture.pic),
                 fixture.coordinator,
                 fixture.root,
                 canic::protocol::CANIC_COORDINATOR_COMMAND,
                 (CoordinatorCommand::RequestRootFunding(request),),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .expect("retained grant replay should reach the Coordinator during rotation");
@@ -13072,13 +13096,13 @@ cycles = "80T"
             .expect("canonical ICP Ledger principal");
         let cmc =
             Principal::from_text("rkp4c-7iaaa-aaaaa-aaaca-cai").expect("canonical CMC principal");
-        let fee: Nat = ::ic_testkit::pic::query_candid_args(
-            &pic,
+        let fee: Nat = ic_testkit::pic::query_candid_args(
+            &(pic),
             ledger,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "icrc1_fee",
             (),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .expect("query production ICP Ledger fee");
@@ -13094,25 +13118,25 @@ cycles = "80T"
             amount: Nat::from(100_000_000_u64),
         };
         let first: Result<Nat, QualificationIcrc1TransferError> =
-            ::ic_testkit::pic::update_candid_args(
-                &pic,
+            ic_testkit::pic::update_candid_args(
+                &(pic),
                 ledger,
-                candid::Principal::anonymous(),
+                ic_platform::Principal::anonymous(),
                 "icrc1_transfer",
                 (&request,),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .expect("execute production ICP Ledger transfer");
         let block_index = first.expect("first production transfer must succeed");
         let duplicate: Result<Nat, QualificationIcrc1TransferError> =
-            ::ic_testkit::pic::update_candid_args(
-                &pic,
+            ic_testkit::pic::update_candid_args(
+                &(pic),
                 ledger,
-                candid::Principal::anonymous(),
+                ic_platform::Principal::anonymous(),
                 "icrc1_transfer",
                 (&request,),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .expect("replay production ICP Ledger transfer");
@@ -13132,13 +13156,13 @@ cycles = "80T"
         };
         let cycles_before = pic.cycle_balance(target);
         let first_notify: Result<Nat, QualificationNotifyTopUpError> =
-            ::ic_testkit::pic::update_candid_args(
-                &pic,
+            ic_testkit::pic::update_candid_args(
+                &(pic),
                 cmc,
-                candid::Principal::anonymous(),
+                ic_platform::Principal::anonymous(),
                 "notify_top_up",
                 (&notify,),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .expect("execute production CMC notification");
@@ -13148,13 +13172,13 @@ cycles = "80T"
         assert!(cycles_after_first > cycles_before);
 
         let replay: Result<Nat, QualificationNotifyTopUpError> =
-            ::ic_testkit::pic::update_candid_args(
-                &pic,
+            ic_testkit::pic::update_candid_args(
+                &(pic),
                 cmc,
-                candid::Principal::anonymous(),
+                ic_platform::Principal::anonymous(),
                 "notify_top_up",
                 (&notify,),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .expect("replay production CMC notification");
@@ -13182,6 +13206,7 @@ cycles = "80T"
 
     #[cfg(test)]
     #[derive(CandidType)]
+    #[candid_path("ic_platform::candid::contract")]
     struct QualificationIcrc1Account {
         owner: Principal,
         subaccount: Option<[u8; 32]>,
@@ -13189,6 +13214,7 @@ cycles = "80T"
 
     #[cfg(test)]
     #[derive(CandidType)]
+    #[candid_path("ic_platform::candid::contract")]
     struct QualificationIcrc1TransferArg {
         from_subaccount: Option<[u8; 32]>,
         to: QualificationIcrc1Account,
@@ -13200,6 +13226,7 @@ cycles = "80T"
 
     #[cfg(test)]
     #[derive(CandidType, Debug, Deserialize)]
+    #[candid_path("ic_platform::candid::contract")]
     enum QualificationIcrc1TransferError {
         BadBurn { min_burn_amount: Nat },
         BadFee { expected_fee: Nat },
@@ -13213,6 +13240,7 @@ cycles = "80T"
 
     #[cfg(test)]
     #[derive(CandidType)]
+    #[candid_path("ic_platform::candid::contract")]
     struct QualificationNotifyTopUpArg {
         block_index: u64,
         canister_id: Principal,
@@ -13220,6 +13248,7 @@ cycles = "80T"
 
     #[cfg(test)]
     #[derive(CandidType, Debug, Deserialize)]
+    #[candid_path("ic_platform::candid::contract")]
     enum QualificationNotifyTopUpError {
         Refunded {
             block_index: Option<u64>,
@@ -13659,10 +13688,10 @@ cycles = "80T"
         amount_e8s: u64,
     ) {
         let transfer: Result<Nat, QualificationIcrc1TransferError> =
-            ::ic_testkit::pic::update_candid_args(
+            ic_testkit::pic::update_candid_args(
                 pic,
                 ledger,
-                candid::Principal::anonymous(),
+                ic_platform::Principal::anonymous(),
                 "icrc1_transfer",
                 (QualificationIcrc1TransferArg {
                     from_subaccount: None,
@@ -13675,7 +13704,7 @@ cycles = "80T"
                     memo: None,
                     amount: Nat::from(amount_e8s),
                 },),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .expect("fund Root account through the production ICP Ledger");
@@ -13684,16 +13713,16 @@ cycles = "80T"
 
     #[cfg(test)]
     fn ledger_account_balance(pic: &PocketIc, ledger: Principal, owner: Principal) -> Nat {
-        ::ic_testkit::pic::query_candid_args(
+        ic_testkit::pic::query_candid_args(
             pic,
             ledger,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "icrc1_balance_of",
             (QualificationIcrc1Account {
                 owner,
                 subaccount: None,
             },),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .expect("query the exact ICRC-1 Ledger account balance")
@@ -14136,24 +14165,24 @@ cycles = "80T"
                     < MAINNET_REFILL_READINESS_FLOOR + MAINNET_REFILL_EXECUTION_MARGIN
             );
         }
-        let request_count: u64 = ::ic_testkit::pic::query_candid_args(
-            &fixture.pic,
+        let request_count: u64 = ic_testkit::pic::query_candid_args(
+            &(fixture.pic),
             fixture.cycles_ledger,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "request_count",
             (),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .expect("query ledger request count");
         assert_eq!(request_count, expected_request_count);
-        let requested_amounts: Vec<Nat> = ::ic_testkit::pic::query_candid_args(
-            &fixture.pic,
+        let requested_amounts: Vec<Nat> = ic_testkit::pic::query_candid_args(
+            &(fixture.pic),
             fixture.cycles_ledger,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "requested_amounts",
             (),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .expect("query exact Ledger creation amounts");
@@ -14177,13 +14206,13 @@ cycles = "80T"
         .expect("effect-free terminal pool replay") else {
             panic!("Root returned a differently correlated pool response");
         };
-        let replay_request_count: u64 = ::ic_testkit::pic::query_candid_args(
-            &fixture.pic,
+        let replay_request_count: u64 = ic_testkit::pic::query_candid_args(
+            &(fixture.pic),
             fixture.cycles_ledger,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "request_count",
             (),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .expect("query replayed ledger request count");
@@ -14413,13 +14442,13 @@ cycles = "80T"
         );
         assert!(retained.complete);
         assert_eq!(retained.stored_chunk_hashes, vec![Some(wasm_hash(payload))]);
-        let replay: Result<(), Error> = ::ic_testkit::pic::update_candid_args(
-            &pic,
+        let replay: Result<(), Error> = ic_testkit::pic::update_candid_args(
+            &(pic),
             fixture.response.wasm_store,
             retained_installation_controller,
             canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
             (upload,),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .unwrap();
@@ -15565,7 +15594,7 @@ cycles = "80T"
             fixture.pic.advance_time(Duration::from_secs(1));
         }
         let terminal = terminal.unwrap_or_else(|| {
-            let storage: Result<StoreCatalogResponse, Error> = ::ic_testkit::pic::query_candid_args(fixture.pic, fixture.wasm_store, fixture.root, canic::protocol::CANIC_WASM_STORE_CATALOG, (StoreCatalogRequest::Storage,), ::canic::testing::CANDID_REPLY_LIMITS).map(|(reply,)| reply).expect("retirement Store diagnostic transport");
+            let storage: Result<StoreCatalogResponse, Error> = ic_testkit::pic::query_candid_args(fixture.pic, fixture.wasm_store, fixture.root, canic::protocol::CANIC_WASM_STORE_CATALOG, (StoreCatalogRequest::Storage,), canic::testing::CANDID_REPLY_LIMITS).map(|(reply,)| reply).expect("retirement Store diagnostic transport");
             match storage {
                 Ok(StoreCatalogResponse::Storage(storage)) => eprintln!("retirement Store: {storage:?}"),
                 Ok(_) => eprintln!("retirement Store returned another response variant"),
@@ -15685,13 +15714,13 @@ cycles = "80T"
         assert_eq!(ledger_receipt.intent.balance_before, 1_000_000_000);
         assert_eq!(ledger_receipt.intent.fee, 100_000_000);
         assert!(ledger_receipt.block_index.is_some());
-        let transfers: u64 = ::ic_testkit::pic::query_candid_args(
+        let transfers: u64 = ic_testkit::pic::query_candid_args(
             fixture.pic,
             cycles_ledger,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "transfer_count",
             (),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .expect("one transfer despite lost reply");
@@ -15721,7 +15750,7 @@ cycles = "80T"
     #[cfg(test)]
     #[expect(
         clippy::too_many_lines,
-        reason = "one retirement journey preserves refund, completion and no-effect replay assertions"
+        reason = "keep the ordered PocketIC scenario and its authority assertions together"
     )]
     fn finish_coordinator_retirement(
         fixture: &RootRetirementFixture<'_>,
@@ -15746,13 +15775,13 @@ cycles = "80T"
             maximum_ledger_fee: 100_000_000,
         };
         let call = |request| -> Result<CoordinatorCommandResponse, Error> {
-            ::ic_testkit::pic::update_candid_args(
+            ic_testkit::pic::update_candid_args(
                 pic,
                 fixture.coordinator,
                 operator,
                 canic::protocol::CANIC_COORDINATOR_COMMAND,
                 (CoordinatorCommand::Retire(request),),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .expect("retirement transport")
@@ -15778,13 +15807,13 @@ cycles = "80T"
             ledger_account_balance(pic, ledger, fixture.coordinator),
             Nat::from(900_000_000_u128)
         );
-        let (): () = ::ic_testkit::pic::update_candid_args(
+        let (): () = ic_testkit::pic::update_candid_args(
             pic,
             ledger,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "lose_next_transfer_reply",
             (),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .expect("lose Coordinator transfer reply");
@@ -15816,13 +15845,13 @@ cycles = "80T"
             panic!("retirement replay correlation");
         };
         assert_eq!(replayed, completed);
-        let transfers: u64 = ::ic_testkit::pic::query_candid_args(
+        let transfers: u64 = ic_testkit::pic::query_candid_args(
             pic,
             ledger,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "transfer_count",
             (),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .expect("exact transfer count");
@@ -15971,13 +16000,13 @@ cycles = "80T"
             ledger_account_balance(pic, ledger, fixture.coordinator),
             Nat::from(0_u128)
         );
-        let transfers: u64 = ::ic_testkit::pic::query_candid_args(
+        let transfers: u64 = ic_testkit::pic::query_candid_args(
             pic,
             ledger,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "transfer_count",
             (),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .expect("Ledger transfer count");
@@ -16046,13 +16075,13 @@ cycles = "80T"
             .expect("retirement Ledger init"),
             None,
         );
-        let (): () = ::ic_testkit::pic::update_candid_args(
+        let (): () = ic_testkit::pic::update_candid_args(
             pic,
             ledger,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "lose_next_transfer_reply",
             (),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .expect("lose committed transfer reply");
@@ -16380,26 +16409,26 @@ cycles = "80T"
 
         for canister in [fixture.root, target] {
             let denied: Result<CanisterObservabilityResponse, Error> =
-                ::ic_testkit::pic::query_candid_args(
+                ic_testkit::pic::query_candid_args(
                     pic,
                     canister,
                     outsider,
                     canic::protocol::CANIC_OBSERVABILITY,
                     (CanisterObservabilityRequest::MemoryAllocations,),
-                    ::canic::testing::CANDID_REPLY_LIMITS,
+                    canic::testing::CANDID_REPLY_LIMITS,
                 )
                 .map(|(reply,)| reply)
                 .expect("direct observation transport");
             assert!(controller_authority_unavailable(&denied));
         }
         let root_report: Result<CanisterObservabilityResponse, Error> =
-            ::ic_testkit::pic::query_candid_args(
+            ic_testkit::pic::query_candid_args(
                 pic,
                 fixture.root,
-                candid::Principal::anonymous(),
+                ic_platform::Principal::anonymous(),
                 canic::protocol::CANIC_OBSERVABILITY,
                 (CanisterObservabilityRequest::MemoryAllocations,),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .expect("Root allocation query");
@@ -16430,13 +16459,13 @@ cycles = "80T"
             })
         };
         let denied: Result<RootCommandResponseFragment, Error> =
-            ::ic_testkit::pic::update_candid_args(
+            ic_testkit::pic::update_candid_args(
                 pic,
                 fixture.root,
                 outsider,
                 canic::protocol::CANIC_ROOT_COMMAND,
                 (relay_request(),),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .expect("relay refusal transport");
@@ -16449,13 +16478,13 @@ cycles = "80T"
         let mut previous = None;
         for _ in 0..2 {
             let response: Result<RootCommandResponseFragment, Error> =
-                ::ic_testkit::pic::update_candid_args(
+                ic_testkit::pic::update_candid_args(
                     pic,
                     fixture.root,
-                    candid::Principal::anonymous(),
+                    ic_platform::Principal::anonymous(),
                     canic::protocol::CANIC_ROOT_COMMAND,
                     (relay_request(),),
-                    ::canic::testing::CANDID_REPLY_LIMITS,
+                    canic::testing::CANDID_REPLY_LIMITS,
                 )
                 .map(|(reply,)| reply)
                 .expect("relay transport");
@@ -16575,7 +16604,7 @@ cycles = "80T"
             (&metadata.verifier, metadata.verifier_runtime_operation_id),
         ] {
             let runtime: Result<ManagedStatusResponseFragment, Error> =
-                ::ic_testkit::pic::query_candid_args(
+                ic_testkit::pic::query_candid_args(
                     pic,
                     binding.canister_id,
                     metadata.root,
@@ -16583,7 +16612,7 @@ cycles = "80T"
                     (ManagedStatusRequestFragment::Operation(
                         OperationStatusRequest { operation_id },
                     ),),
-                    ::canic::testing::CANDID_REPLY_LIMITS,
+                    canic::testing::CANDID_REPLY_LIMITS,
                 )
                 .map(|(reply,)| reply)?;
             let ManagedStatusResponseFragment::Operation(operation) =
@@ -17678,26 +17707,26 @@ cycles = "80T"
             bytes: b"reviewed fixture source".to_vec(),
         };
         let uploaded: Result<Result<FixtureSourceStatus, FixtureStoreError>, Error> =
-            ::ic_testkit::pic::update_candid_args(
+            ic_testkit::pic::update_candid_args(
                 pic,
                 store,
                 controller,
                 canic::protocol::CANIC_WASM_STORE_PUBLISH_FIXTURE,
                 (upload.clone(),),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .unwrap();
         let uploaded = uploaded.unwrap().unwrap();
         assert!(uploaded.complete);
         let replayed: Result<Result<FixtureSourceStatus, FixtureStoreError>, Error> =
-            ::ic_testkit::pic::update_candid_args(
+            ic_testkit::pic::update_candid_args(
                 pic,
                 store,
                 controller,
                 canic::protocol::CANIC_WASM_STORE_PUBLISH_FIXTURE,
                 (upload,),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .unwrap();
@@ -18111,7 +18140,7 @@ cycles = "80T"
         );
         prepared.expect("prepare staged payload");
         for (chunk_index, bytes) in chunks.into_iter().enumerate() {
-            let published: Result<(), Error> = ::ic_testkit::pic::update_candid_args(
+            let published: Result<(), Error> = ic_testkit::pic::update_candid_args(
                 pic,
                 store,
                 installation_controller,
@@ -18123,7 +18152,7 @@ cycles = "80T"
                     chunk_index: u32::try_from(chunk_index).expect("bounded chunk index"),
                     bytes,
                 },),
-                ::canic::testing::CANDID_REPLY_LIMITS,
+                canic::testing::CANDID_REPLY_LIMITS,
             )
             .map(|(reply,)| reply)
             .expect("publish staged payload transport");
@@ -18219,6 +18248,10 @@ cycles = "80T"
             (
                 "operator Component lost-response recovery",
                 operator_component_recovers_lost_response_and_replays_terminal_binding,
+            ),
+            (
+                "pooled Fleet restores installed state without rebuilding",
+                pooled_restore::pooled_fleet_restores_installed_state_without_rebuilding,
             ),
             (
                 "protected current memory allocations",

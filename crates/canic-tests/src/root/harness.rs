@@ -1,9 +1,9 @@
 // Category C - Artifact / deployment test (embedded config).
 // This test relies on embedded production config by design.
 
-use candid::Principal;
 use canic::ids::CanisterRole;
 use canic_testing_internal::pic::{RootBaselineRecipe, RootBaselineSpec};
+use ic_platform::Principal;
 use ic_testkit::pic::{CachedPocketIcBaselinePool, CachedPocketIcBaselinePoolGuard, PocketIc};
 use std::{
     collections::HashMap,

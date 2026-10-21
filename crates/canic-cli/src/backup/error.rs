@@ -6,8 +6,10 @@
 
 use super::manifest::ManifestCommandError;
 use canic_backup::{
-    discovery::DiscoveryError, execution::BackupExecutionJournalError,
-    persistence::PersistenceError, plan::BackupPlanError, runner::BackupRunnerError,
+    discovery::DiscoveryError,
+    execution::BackupExecutionJournalError,
+    persistence::{JournalLockError, PersistenceError},
+    plan::BackupPlanError,
 };
 use canic_host::{
     fleet_ensure::CurrentFleetInventoryError, icp::IcpCommandError, icp_config::IcpConfigError,
@@ -102,5 +104,5 @@ pub enum BackupCommandError {
     BackupExecutionJournal(#[from] BackupExecutionJournalError),
 
     #[error(transparent)]
-    BackupRunner(#[from] BackupRunnerError),
+    JournalLock(#[from] JournalLockError),
 }

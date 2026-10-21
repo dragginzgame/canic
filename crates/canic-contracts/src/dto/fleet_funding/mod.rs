@@ -9,7 +9,7 @@ use crate::{
     dto::fleet_registry::FleetRegistryVersion,
     ids::{FleetCoordinatorRootFundingPolicy, FleetSubnetRootFundingPolicy, SubnetId},
 };
-use candid::{CandidType, Principal};
+use ic_platform::{Principal, candid::contract::CandidType};
 use serde::{Deserialize, Serialize};
 
 /// Frozen ingress envelope used by both sides of the funding command exchange.
@@ -26,6 +26,7 @@ pub const MAX_FLEET_FUNDING_POLICY_ROTATION_HISTORY_ROOTS: usize =
 
 /// Current-generation and retained predecessor automatic-funding usage.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetFundingPolicyUsage {
     pub historical_automatic_grants: u64,
     pub historical_automatic_cycles: Cycles,
@@ -35,6 +36,7 @@ pub struct FleetFundingPolicyUsage {
 
 /// Exact protected physical-placement evidence reviewed for one rotation.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetFundingPolicyRotationPlacementEvidence {
     pub subnet: SubnetId,
     pub node_count: u64,
@@ -46,12 +48,14 @@ pub struct FleetFundingPolicyRotationPlacementEvidence {
 
 /// Sole future value source authorized by a funding-policy rotation.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum FleetFundingPolicyRotationFundingSource {
     CoordinatorTreasury,
 }
 
 /// Immutable header of one no-effect operator-reviewed rotation plan.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetFundingPolicyRotationPlanHeader {
     pub predecessor_registry: FleetRegistryVersion,
     pub predecessor_generation: u64,
@@ -70,6 +74,7 @@ pub struct FleetFundingPolicyRotationPlanHeader {
 
 /// Exact current and proposed authority for one affected Root.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetFundingPolicyRotationRootPlan {
     pub fleet_subnet_root: Principal,
     pub predecessor_policy_hash: [u8; 32],
@@ -80,6 +85,7 @@ pub struct FleetFundingPolicyRotationRootPlan {
 
 /// Complete read-only rotation plan whose digest is accepted by apply.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetFundingPolicyRotationPlan {
     pub header: FleetFundingPolicyRotationPlanHeader,
     pub roots: Vec<FleetFundingPolicyRotationRootPlan>,
@@ -87,6 +93,7 @@ pub struct FleetFundingPolicyRotationPlan {
 
 /// Begin staging one accepted no-effect rotation plan.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetFundingPolicyRotationBeginRequest {
     pub operation_id: [u8; 32],
     pub plan_digest: [u8; 32],
@@ -95,6 +102,7 @@ pub struct FleetFundingPolicyRotationBeginRequest {
 
 /// Stage one digest-bound Root policy beneath the current rotation.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetFundingPolicyRotationStageRootRequest {
     pub operation_id: [u8; 32],
     pub plan_digest: [u8; 32],
@@ -103,6 +111,7 @@ pub struct FleetFundingPolicyRotationStageRootRequest {
 
 /// Start or exactly resume the fully staged rotation operation.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetFundingPolicyRotationApplyRequest {
     pub operation_id: [u8; 32],
     pub plan_digest: [u8; 32],
@@ -111,6 +120,7 @@ pub struct FleetFundingPolicyRotationApplyRequest {
 
 /// Coordinator-authored request that fences one Root beneath a staged plan.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetFundingPolicyRotationRootPrepareRequest {
     pub operation_id: [u8; 32],
     pub plan_digest: [u8; 32],
@@ -122,6 +132,7 @@ pub struct FleetFundingPolicyRotationRootPrepareRequest {
 
 /// Coordinator-authored request that converges one prepared Root.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetFundingPolicyRotationRootActivateRequest {
     pub operation_id: [u8; 32],
     pub plan_digest: [u8; 32],
@@ -134,6 +145,7 @@ pub struct FleetFundingPolicyRotationRootActivateRequest {
 
 /// Idempotent Root receipt for one exact rotation phase.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetFundingPolicyRotationRootReceipt {
     pub operation_id: [u8; 32],
     pub plan_digest: [u8; 32],
@@ -147,6 +159,7 @@ pub struct FleetFundingPolicyRotationRootReceipt {
 
 /// Terminal Coordinator receipt for a converged policy generation.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetFundingPolicyRotationReceipt {
     pub operation_id: [u8; 32],
     pub plan_digest: [u8; 32],
@@ -165,6 +178,7 @@ pub struct FleetFundingPolicyRotationReceipt {
 
 /// Root-authored request for one exact Coordinator operating-cycle decision.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetRootFundingRequest {
     pub operation_id: [u8; 32],
     pub operation_sequence: u64,
@@ -176,6 +190,7 @@ pub struct FleetRootFundingRequest {
 
 /// Coordinator-authored exact same-Root acceptance request carrying cycles.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetRootFundingAcceptanceRequest {
     pub operation_id: [u8; 32],
     pub operation_sequence: u64,
@@ -187,15 +202,17 @@ pub struct FleetRootFundingAcceptanceRequest {
 
 /// Root-authored exact receipt for one fresh or replayed grant acceptance.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetRootFundingAcceptanceReceipt {
     pub request: FleetRootFundingAcceptanceRequest,
-    pub fleet_subnet_root: candid::Principal,
-    pub coordinator: candid::Principal,
+    pub fleet_subnet_root: ic_platform::Principal,
+    pub coordinator: ic_platform::Principal,
     pub accepted_at_ns: u64,
 }
 
 /// Terminal reason that one authenticated request transferred no cycles.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum FleetRootFundingNoGrantReason {
     CooldownActive,
     CoordinatorReserveUnavailable,
@@ -213,6 +230,7 @@ pub enum FleetRootFundingNoGrantReason {
 
 /// Durable exact zero-transfer result for one Root operation.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetRootFundingNoGrantReceipt {
     pub request: FleetRootFundingRequest,
     pub reason: FleetRootFundingNoGrantReason,
@@ -221,6 +239,7 @@ pub struct FleetRootFundingNoGrantReceipt {
 
 /// Exact terminal outcome returned to the authenticated requesting Root.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum FleetRootFundingResponse {
     Granted(FleetRootFundingAcceptanceReceipt),
     NoGrant(FleetRootFundingNoGrantReceipt),
@@ -234,7 +253,8 @@ mod tests {
         FleetCoordinatorRootFundingPolicy, FleetFundingProfile, FleetId, FleetKey,
         FleetRegistryAuthority, FleetSubnetRootFundingPolicy, SubnetId,
     };
-    use candid::{Decode, Encode, Principal};
+    use ic_platform::Principal;
+    use ic_platform::candid::contract::{Decode, Encode};
 
     #[test]
     fn exact_funding_commands_roundtrip_below_the_frozen_ingress_envelope() {

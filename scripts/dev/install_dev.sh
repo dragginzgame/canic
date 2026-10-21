@@ -83,7 +83,9 @@ install_ci_lint_tools() {
 install_repository_tools() {
     yellow "Repository JSON/YAML and IC tools:"
     make -C "$ROOT_DIR" --no-print-directory install-tools
-    export PATH="$ROOT_DIR/.tools/host/bin:$ROOT_DIR/.tools/ic/bin:$ROOT_DIR/.tools/rust/common/bin:$PATH"
+    local extractor
+    extractor="$(bash "$ROOT_DIR/scripts/dev/candid-extractor.sh" --check)"
+    export PATH="${extractor%/*}:$ROOT_DIR/.tools/host/bin:$ROOT_DIR/.tools/ic/bin:$ROOT_DIR/.tools/rust/common/bin:$PATH"
     hash -r 2>/dev/null || true
 }
 
@@ -102,8 +104,8 @@ configure_git_formatting_hook_if_present() {
     fi
 
     yellow "Git formatting hook:"
-    cyan_command "bash scripts/dev/install-git-hooks.sh"
-    bash "$hook_installer"
+    cyan_command "bash scripts/dev/install-git-hooks.sh --consumer $ROOT_DIR"
+    bash "$hook_installer" --consumer "$ROOT_DIR"
 }
 
 main() {

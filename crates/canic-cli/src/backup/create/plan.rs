@@ -6,12 +6,12 @@
 
 use super::super::BackupCommandError;
 use crate::support::path_stamp::{current_backup_directory_stamp, file_safe_component};
-use candid::Principal;
 use canic_backup::{
     registry::RegistryEntry as BackupRegistryEntry,
     topology::{TopologyHasher, TopologyRecord},
 };
 use canic_host::registry::RegistryEntry as HostRegistryEntry;
+use ic_platform::Principal;
 use std::path::PathBuf;
 
 pub(super) fn backup_registry_entries(entries: &[HostRegistryEntry]) -> Vec<BackupRegistryEntry> {

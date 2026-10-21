@@ -10,8 +10,7 @@
 use crate::cdk::types::Principal;
 use crate::{
     cdk::structures::{
-        DefaultMemoryImpl, Storable, btreemap::BTreeMap as StableBtreeMap, memory::RuntimeMemory,
-        storable::Bound,
+        DefaultMemoryImpl, StableBTreeMap as StableBtreeMap, Storable, storable::Bound,
     },
     model::replay::{
         CommandKind, ExternalEffectDescriptor, OperationId, REPLAY_RECEIPT_SCHEMA_VERSION,
@@ -31,7 +30,7 @@ const REPLAY_RECEIPT_MAX_BYTES: usize = 32 * 1024 * 1024;
 
 std::thread_local! {
     static REPLAY_RECEIPTS: RefCell<
-        StableBtreeMap<ReplayReceiptSlotKey, ReplayReceiptRecord, RuntimeMemory<DefaultMemoryImpl>>
+        StableBtreeMap<ReplayReceiptSlotKey, ReplayReceiptRecord, DefaultMemoryImpl>
     > = RefCell::new(
         StableBtreeMap::init(crate::memory::open(crate::memory::keys::REPLAY_RECEIPTS_V1)),
     );
@@ -351,7 +350,7 @@ impl ReplayReceiptStore {
     pub(crate) fn collect_expired(now_ns: u64, limit: usize) -> Vec<ReplayReceiptSlotKey> {
         let mut expired = Vec::new();
         REPLAY_RECEIPTS.with_borrow(|map| {
-            for entry in map.iter() {
+            for entry in map {
                 let record = entry.value();
                 if !record_survives_replay_expiry(&record)
                     && record
@@ -411,7 +410,7 @@ impl ReplayReceiptStore {
 
     pub(crate) fn import(data: ReplayReceiptsData) {
         REPLAY_RECEIPTS.with_borrow_mut(|map| {
-            map.clear_new();
+            map.clear();
             for entry in data.entries {
                 map.insert(entry.key, entry.record);
             }
@@ -419,7 +418,7 @@ impl ReplayReceiptStore {
     }
 
     pub(crate) fn reset_for_tests() {
-        REPLAY_RECEIPTS.with_borrow_mut(StableBtreeMap::clear_new);
+        REPLAY_RECEIPTS.with_borrow_mut(StableBtreeMap::clear);
     }
 }
 
@@ -478,7 +477,15 @@ mod tests {
     #[test]
     fn replay_record_limit_refuses_oversize_before_stable_writes() {
         let memory = crate::cdk::structures::VectorMemory::default();
-        let mut map = StableBtreeMap::init(memory.clone());
+        let runtime = ic_memory::testing::fixture_runtime(
+            memory.clone(),
+            "test",
+            "test.",
+            &["test.replay.v1"],
+            ic_memory::MemoryManagerConfig::new(1).unwrap(),
+        )
+        .unwrap();
+        let mut map = StableBtreeMap::init(runtime.open_memory("test.replay.v1").unwrap());
         let key = ReplayReceiptSlotKey([4; 32]);
         let record = receipt_record_fixture();
         map.insert(key, record.clone());

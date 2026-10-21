@@ -1,10 +1,10 @@
+use ic_backup::model::artifacts::ArtifactChecksumRecord;
 #[cfg(unix)]
 mod operational_readiness;
 
 use super::*;
 use crate::test_support::temp_dir;
 use crate::{
-    artifacts::ArtifactChecksum,
     execution::{
         BackupExecutionJournal, BackupExecutionOperationReceipt, BackupExecutionOperationState,
     },
@@ -324,7 +324,7 @@ fn integrity_verifies_durable_artifacts() {
     let root = temp_dir("canic-backup-integrity");
     let layout = BackupLayout::new(root.clone());
     let checksum = write_artifact(&root, b"root artifact");
-    let journal = journal_with_checksum(checksum.hash.clone());
+    let journal = journal_with_checksum(checksum.hash().to_owned());
 
     layout
         .publish_manifest(&valid_manifest())
@@ -338,7 +338,7 @@ fn integrity_verifies_durable_artifacts() {
     assert!(report.verified);
     assert_eq!(report.manifest_members, 1);
     assert_eq!(report.durable_artifacts, 1);
-    assert_eq!(report.artifacts[0].checksum, checksum.hash);
+    assert_eq!(report.artifacts[0].checksum, checksum.hash().to_owned());
 }
 
 #[test]
@@ -350,14 +350,14 @@ fn integrity_accepts_equivalent_digest_case_without_rewriting_retained_records()
         let layout = BackupLayout::new(root.clone());
         let checksum = write_artifact(&root, b"root artifact");
         let manifest_hash = if upper_manifest {
-            checksum.hash.to_ascii_uppercase()
+            checksum.hash().to_owned().to_ascii_uppercase()
         } else {
-            checksum.hash.clone()
+            checksum.hash().to_owned()
         };
         let journal_hash = if upper_journal {
-            checksum.hash.to_ascii_uppercase()
+            checksum.hash().to_owned().to_ascii_uppercase()
         } else {
-            checksum.hash.clone()
+            checksum.hash().to_owned()
         };
         let mut manifest = valid_manifest();
         manifest.deployment.members[0].source_snapshot.checksum = Some(manifest_hash);
@@ -387,7 +387,7 @@ fn integrity_rejects_backup_id_mismatch() {
     let root = temp_dir("canic-backup-integrity-id");
     let layout = BackupLayout::new(root.clone());
     let checksum = write_artifact(&root, b"root artifact");
-    let mut journal = journal_with_checksum(checksum.hash);
+    let mut journal = journal_with_checksum(checksum.hash().to_owned());
     journal.backup_id = "other-backup".to_string();
 
     layout
@@ -408,7 +408,7 @@ fn integrity_rejects_manifest_journal_topology_receipt_mismatch() {
     let root = temp_dir("canic-backup-integrity-topology");
     let layout = BackupLayout::new(root.clone());
     let checksum = write_artifact(&root, b"root artifact");
-    let mut journal = journal_with_checksum(checksum.hash);
+    let mut journal = journal_with_checksum(checksum.hash().to_owned());
     journal.discovery_topology_hash =
         "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string();
 
@@ -454,7 +454,7 @@ fn integrity_rejects_unexpected_journal_artifacts() {
     let root = temp_dir("canic-backup-integrity-extra");
     let layout = BackupLayout::new(root.clone());
     let checksum = write_artifact(&root, b"root artifact");
-    let mut journal = journal_with_checksum(checksum.hash);
+    let mut journal = journal_with_checksum(checksum.hash().to_owned());
     let mut extra = journal.artifacts[0].clone();
     extra.snapshot_id = "extra-snapshot".to_string();
     journal.artifacts.push(extra);
@@ -483,7 +483,7 @@ fn integrity_rejects_manifest_journal_checksum_mismatch() {
 
     layout.publish_manifest(&manifest).expect("write manifest");
     layout
-        .write_journal(&journal_with_checksum(checksum.hash))
+        .write_journal(&journal_with_checksum(checksum.hash().to_owned()))
         .expect("write journal");
 
     let err = layout
@@ -508,7 +508,7 @@ fn integrity_rejects_manifest_journal_artifact_path_mismatch() {
 
     layout.publish_manifest(&manifest).expect("write manifest");
     layout
-        .write_journal(&journal_with_checksum(checksum.hash))
+        .write_journal(&journal_with_checksum(checksum.hash().to_owned()))
         .expect("write journal");
 
     let err = layout
@@ -645,9 +645,9 @@ fn journal_with_checksum(checksum: String) -> DownloadJournal {
     }
 }
 
-fn write_artifact(root: &Path, bytes: &[u8]) -> ArtifactChecksum {
+fn write_artifact(root: &Path, bytes: &[u8]) -> ArtifactChecksumRecord {
     let path = root.join("artifacts/root");
     fs::create_dir_all(path.parent().expect("artifact has parent")).expect("create artifacts");
     fs::write(&path, bytes).expect("write artifact");
-    ArtifactChecksum::from_bytes(bytes)
+    ArtifactChecksumRecord::from_bytes(bytes)
 }

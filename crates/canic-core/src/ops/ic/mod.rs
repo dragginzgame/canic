@@ -28,19 +28,19 @@ impl IcOps {
     /// Return the current canister principal.
     #[must_use]
     pub fn canister_self() -> Principal {
-        ic_cdk::api::canister_self()
+        ic_platform::cdk::api::canister_self()
     }
 
     /// Return the exact sender version bound into management effect history.
     #[must_use]
     pub fn canister_version() -> u64 {
-        ic_cdk::api::canister_version()
+        ic_platform::cdk::api::canister_version()
     }
 
     /// Return the current canister's cycle balance.
     #[must_use]
     pub fn canister_cycle_balance() -> crate::cdk::types::Cycles {
-        ic_cdk::api::canister_cycle_balance().into()
+        ic_platform::cdk::api::canister_cycle_balance().into()
     }
 
     /// Return the exact creation amount that leaves the new Canister at the configured balance.
@@ -49,7 +49,7 @@ impl IcOps {
     ) -> Result<Cycles, InternalError> {
         checked_canister_creation_attached_cycles(
             initial_cycles.to_u128(),
-            ic_cdk::api::cost_create_canister(),
+            ic_platform::cdk::api::cost_create_canister(),
         )
         .map(Cycles::new)
         .ok_or_else(InternalError::resource_exhausted)
@@ -58,25 +58,25 @@ impl IcOps {
     /// Return the current caller principal.
     #[must_use]
     pub fn msg_caller() -> Principal {
-        ic_cdk::api::msg_caller()
+        ic_platform::cdk::api::msg_caller()
     }
 
     /// Return cycles attached to the current call that remain unaccepted.
     #[must_use]
     pub fn msg_cycles_available() -> u128 {
-        ic_cdk::api::msg_cycles_available()
+        ic_platform::cdk::api::msg_cycles_available()
     }
 
     /// Accept at most the requested cycles from the current call.
     #[must_use]
     pub fn msg_cycles_accept(max_amount: u128) -> u128 {
-        ic_cdk::api::msg_cycles_accept(max_amount)
+        ic_platform::cdk::api::msg_cycles_accept(max_amount)
     }
 
     /// Return the physical Subnet currently executing this canister.
     #[must_use]
     pub fn subnet_self() -> Principal {
-        ic_cdk::api::subnet_self()
+        ic_platform::cdk::api::subnet_self()
     }
 
     /// Return a metadata-hash caller principal on both IC and host targets.
@@ -144,12 +144,12 @@ impl IcOps {
 
     /// Print a line to the IC debug output.
     pub fn println(message: &str) {
-        ic_cdk::println!("{message}");
+        ic_platform::cdk::println!("{message}");
     }
 
     /// Abort the current IC message so partially established runtime state is rolled back.
     pub fn trap(message: impl Into<String>) -> ! {
-        ic_cdk::api::trap(message.into())
+        ic_platform::cdk::api::trap(message.into())
     }
 
     /// Spawn a task on the IC runtime.
@@ -157,7 +157,7 @@ impl IcOps {
     where
         F: Future<Output = ()> + 'static,
     {
-        ic_cdk::futures::spawn(future);
+        ic_platform::cdk::futures::spawn(future);
     }
 }
 
@@ -173,7 +173,7 @@ const fn checked_canister_creation_attached_cycles(
 fn time_nanos() -> u128 {
     #[cfg(target_arch = "wasm32")]
     {
-        return u128::from(ic_cdk::api::time());
+        return u128::from(ic_platform::cdk::api::time());
     }
 
     match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {

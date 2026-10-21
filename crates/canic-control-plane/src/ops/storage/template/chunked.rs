@@ -19,7 +19,7 @@ use canic_core::{
     cdk::{structures::storable::Storable, utils::hash::wasm_hash},
     control_plane_support::{error::InternalError, format::byte_size, ops::ic::mgmt::MgmtOps},
 };
-use ic_cdk::api::canister_self;
+use ic_platform::cdk::api::canister_self;
 use std::collections::{BTreeMap, BTreeSet};
 
 ///

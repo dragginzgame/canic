@@ -9,12 +9,13 @@ use crate::dto::fleet_admission::{
     FleetAdmissionActivateTargetRequest, FleetAdmissionOpenTargetRequest,
     FleetAdmissionPrepareTargetRequest, FleetAdmissionTargetReceipt,
 };
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Bounded RemoteManagedCommand wire projection for root admission.
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RemoteManagedCommand {
     ActivateFleetAdmission(FleetAdmissionActivateTargetRequest),
     OpenFleetAdmission(FleetAdmissionOpenTargetRequest),
@@ -23,6 +24,7 @@ pub enum RemoteManagedCommand {
 
 /// Bounded RemoteManagedCommandResponse wire projection for root admission.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RemoteManagedCommandResponse {
     ActivateFleetAdmission(FleetAdmissionTargetReceipt),
     OpenFleetAdmission(FleetAdmissionTargetReceipt),

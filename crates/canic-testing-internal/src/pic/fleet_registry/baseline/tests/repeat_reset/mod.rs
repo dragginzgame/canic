@@ -127,13 +127,13 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, previous_operation: &s
         .into_iter()
         .filter(|action| matches!(action, EnsureAction::Fund { .. }))
         .count();
-    let withdrawals: u64 = ::ic_testkit::pic::query_candid_args(
+    let withdrawals: u64 = ic_testkit::pic::query_candid_args(
         input.pic,
         ledger,
-        candid::Principal::anonymous(),
+        ic_platform::Principal::anonymous(),
         "withdrawal_count",
         (),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .unwrap();
@@ -163,13 +163,13 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, previous_operation: &s
         );
         if funding_interrupted {
             assert_eq!(
-                ::ic_testkit::pic::query_candid_args::<(u64,), _>(
+                ic_testkit::pic::query_candid_args::<(u64,), _>(
                     input.pic,
                     ledger,
-                    candid::Principal::anonymous(),
+                    ic_platform::Principal::anonymous(),
                     "withdrawal_count",
                     (),
-                    ::canic::testing::CANDID_REPLY_LIMITS
+                    canic::testing::CANDID_REPLY_LIMITS
                 )
                 .map(|(reply,)| reply)
                 .unwrap(),
@@ -188,13 +188,13 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, previous_operation: &s
     };
     assert!(initialized.terminal);
     assert_eq!(
-        ::ic_testkit::pic::query_candid_args::<(u64,), _>(
+        ic_testkit::pic::query_candid_args::<(u64,), _>(
             input.pic,
             ledger,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             "withdrawal_count",
             (),
-            ::canic::testing::CANDID_REPLY_LIMITS
+            canic::testing::CANDID_REPLY_LIMITS
         )
         .map(|(reply,)| reply)
         .unwrap(),

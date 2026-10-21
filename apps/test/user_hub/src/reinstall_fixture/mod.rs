@@ -4,10 +4,7 @@
 //! Does not own: Canic lifecycle or Fleet orchestration.
 //! Boundary: application memory is initialized only after Canic restoration.
 
-use ic_memory::{
-    RuntimeMemory,
-    ic_stable_structures::{BTreeMap, DefaultMemoryImpl},
-};
+use canic::__internal::core::cdk::structures::{DefaultMemoryImpl, StableBTreeMap as BTreeMap};
 use std::cell::RefCell;
 
 const ROWS_KEY: &str = "test.user_rows.v1";
@@ -22,23 +19,23 @@ pub fn memory() -> canic::memory::MemoryBootstrap {
     let mut input = canic::memory::framework();
     input.pool = memory_pool().expect("fixture grants");
     for key in [ROWS_KEY, super::fixture_importer::MEMORY_KEY] {
-        input.requests.push(
-            ic_memory::MemoryRequest::new("test", key, ic_memory::SchemaMetadata::default())
-                .expect("fixture memory request"),
-        );
+        input
+            .requests
+            .push(ic_memory::MemoryRequest::new("test", key).expect("fixture memory request"));
     }
     input
 }
 
 /// One passive application row exposed by the disposable fixture.
-#[derive(candid::CandidType)]
+#[derive(ic_platform::candid::contract::CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct UserRow {
     pub id: u64,
     pub value: u64,
 }
 
 thread_local! {
-    static ROWS: RefCell<BTreeMap<u64, u64, RuntimeMemory<DefaultMemoryImpl>>> = RefCell::new(
+    static ROWS: RefCell<BTreeMap<u64, u64, DefaultMemoryImpl>> = RefCell::new(
         BTreeMap::init(canic::memory::open(ROWS_KEY))
     );
 }

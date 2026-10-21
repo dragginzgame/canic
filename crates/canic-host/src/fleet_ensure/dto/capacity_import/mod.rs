@@ -1,6 +1,6 @@
 //! Explicit operator input for a current-Fleet capacity review.
 
-use candid::Principal;
+use ic_platform::Principal;
 use serde::Serialize;
 use std::path::PathBuf;
 

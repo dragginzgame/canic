@@ -14,13 +14,13 @@ use crate::{
         FleetSubnetRootStatus,
     },
 };
-use candid::Principal;
 use canic_contracts::ids::{
     AppId, CanonicalNetworkId, ComponentGroupMemberPath, ComponentGroupPlacementId,
     ComponentInstanceId, ComponentSpecAdmission, CyclesFundingBudget, FleetBinding,
     FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority, FleetSubnetRootLimits,
     FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
 };
+use ic_platform::Principal;
 
 fn topology() -> ComponentTopology {
     parse_config_model(
@@ -268,8 +268,10 @@ fn genesis_is_revision_one_with_complete_specs_and_no_roots() {
         vec!["alpha", "beta"]
     );
 
-    let bytes = candid::encode_one(&registry).expect("encode Fleet Registry Candid");
-    let decoded: FleetRegistry = candid::decode_one(&bytes).expect("decode Fleet Registry Candid");
+    let bytes =
+        ic_platform::candid::contract::encode_one(&registry).expect("encode Fleet Registry Candid");
+    let decoded: FleetRegistry =
+        ic_platform::candid::decoder::decode_one(&bytes).expect("decode Fleet Registry Candid");
     assert_eq!(decoded, registry);
 }
 

@@ -15,10 +15,11 @@ use crate::dto::{
     root::RootOperationStatusResponse,
     root_store::RootStoreBootstrapRequest,
 };
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootCommandFragment {
     MaintainPool,
     ImportPoolCanister(crate::dto::pool::PoolCanisterRequest),
@@ -30,6 +31,7 @@ pub enum RootCommandFragment {
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[expect(
     clippy::large_enum_variant,
     reason = "the private decoder mirrors the exact Root command response wire"
@@ -48,6 +50,7 @@ pub enum RootCommandResponseFragment {
 }
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 #[expect(
     clippy::large_enum_variant,
     reason = "the private encoder mirrors the exact Root status request wire"
@@ -60,6 +63,7 @@ pub enum RootStatusRequestFragment {
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[expect(
     clippy::large_enum_variant,
     reason = "the private decoder mirrors the exact Root status response wire"

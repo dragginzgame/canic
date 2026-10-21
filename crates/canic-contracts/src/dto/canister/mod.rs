@@ -4,6 +4,7 @@ pub use crate::values::canister::{CanisterStatusType, LogVisibility};
 
 /// Exact management-canister inspection target selected by a Root controller.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CanisterInspectionRequest {
     pub canister_id: Principal,
 }
@@ -11,6 +12,7 @@ pub struct CanisterInspectionRequest {
 /// Protected reserve sample for an exact target's management status call.
 /// A preflight query is indicative; only an attempted call reports SDK admission failure.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CanisterInspectionReserveResponse {
     pub caller: Principal,
     pub canister_id: Principal,
@@ -21,6 +23,7 @@ pub struct CanisterInspectionReserveResponse {
 
 /// Protected inspection result; a reserve failure never implies that the target is absent.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CanisterInspectionOutcome {
     Status(Box<CanisterStatusResponse>),
     ReserveRequired(CanisterInspectionReserveResponse),
@@ -28,6 +31,7 @@ pub enum CanisterInspectionOutcome {
 
 /// Replicated upstream management history for one exact inspection target.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CanisterHistoryResponse {
     pub canister_id: Principal,
     pub history_candid: Vec<u8>,
@@ -38,6 +42,7 @@ pub struct CanisterHistoryResponse {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CanisterInfo {
     pub pid: Principal,
     pub role: CanisterRole,
@@ -51,6 +56,7 @@ pub struct CanisterInfo {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CanisterStatusResponse {
     pub version: u64,
     pub status: CanisterStatusType,
@@ -69,6 +75,7 @@ pub struct CanisterStatusResponse {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CanisterSettings {
     pub controllers: Vec<Principal>,
     pub compute_allocation: Nat,
@@ -87,6 +94,7 @@ pub struct CanisterSettings {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct EnvironmentVariable {
     pub name: String,
     pub value: String,
@@ -97,6 +105,7 @@ pub struct EnvironmentVariable {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct MemoryMetrics {
     pub wasm_memory_size: Nat,
     pub stable_memory_size: Nat,
@@ -113,6 +122,7 @@ pub struct MemoryMetrics {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct QueryStats {
     pub num_calls_total: Nat,
     pub num_instructions_total: Nat,
@@ -123,7 +133,7 @@ pub struct QueryStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use candid::{Decode, Encode};
+    use ic_platform::candid::contract::{Decode, Encode};
     use serde::de::DeserializeOwned;
     use std::fmt::Debug;
 

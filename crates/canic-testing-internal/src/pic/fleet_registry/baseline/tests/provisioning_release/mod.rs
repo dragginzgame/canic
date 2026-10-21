@@ -1,11 +1,11 @@
 //! Verify retained provisioning discovery against the installed production Root.
 
-use candid::Principal;
 use canic::protocol;
 use canic_contracts::dto::{
     root::{RootProvisioningReleaseKey, RootProvisioningReleasePhase},
     wire::projection::release_provisioning::Request,
 };
+use ic_platform::Principal;
 use ic_testkit::pic::PocketIc;
 
 /// Discover the original operation in both interrupted and completed states without resuming it.
@@ -23,7 +23,8 @@ pub(super) fn assert_census(
                 root,
                 caller,
                 protocol::CANIC_ROOT_STATUS,
-                candid::encode_one(Request::ProvisioningRelease(cursor)).unwrap(),
+                ic_platform::candid::contract::encode_one(Request::ProvisioningRelease(cursor))
+                    .unwrap(),
             )
             .expect("provisioning census transport");
         let mut remaining = 8 * 1024 * 1024;

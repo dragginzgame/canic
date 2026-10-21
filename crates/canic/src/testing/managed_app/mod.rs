@@ -41,21 +41,29 @@ use crate::{
     protocol::{CANIC_ADMISSION_STATUS, CANIC_COMMAND, CANIC_CONTROL_STATUS},
     testing::build_pocketic,
 };
-use candid::{Principal, encode_args, encode_one};
-use canic_contracts::cycles::Cycles;
-use canic_contracts::dto::wire::projection::component_registry::CanisterOperationStatusFragment as ManagedOperationStatusResponse;
-use canic_contracts::dto::wire::projection::fixture_managed_app::ManagedCommand;
-use canic_contracts::dto::wire::projection::fixture_managed_app::ManagedStatusRequest;
-use canic_contracts::dto::wire::projection::fixture_managed_app::ManagedStatusResponse;
-use canic_contracts::dto::wire::projection::fixture_managed_component_group::ManagedCommandResponse;
-use canic_contracts::ids::FleetFundingProfile;
-use canic_contracts::ids::FleetSubnetRootFundingAuthority;
-use canic_contracts::ids::FleetSubnetRootFundingPolicy;
-use canic_contracts::ids::ReleaseBuildId;
-use canic_core::bootstrap::parse_config_model;
-use canic_core::cdk::utils::hash::sha256_bytes;
-use canic_core::shared_support::fleet_admission_policy::compile_fleet_admission_projection;
-use canic_core::shared_support::fleet_admission_policy::compile_installed_fleet_admission_policy;
+use canic_contracts::{
+    cycles::Cycles,
+    dto::wire::projection::{
+        component_registry::CanisterOperationStatusFragment as ManagedOperationStatusResponse,
+        fixture_managed_app::{ManagedCommand, ManagedStatusRequest, ManagedStatusResponse},
+        fixture_managed_component_group::ManagedCommandResponse,
+    },
+    ids::{
+        FleetFundingProfile, FleetSubnetRootFundingAuthority, FleetSubnetRootFundingPolicy,
+        ReleaseBuildId,
+    },
+};
+use canic_core::{
+    bootstrap::parse_config_model,
+    cdk::utils::hash::sha256_bytes,
+    shared_support::fleet_admission_policy::{
+        compile_fleet_admission_projection, compile_installed_fleet_admission_policy,
+    },
+};
+use ic_platform::{
+    Principal,
+    candid::contract::{encode_args, encode_one},
+};
 use ic_testkit::pic::{CandidCallError, CanisterInstallExt, PocketIc};
 use std::{fmt, time::Duration};
 
@@ -140,18 +148,17 @@ impl ManagedAppFixture {
 
     /// Configure the exact retained runtime directory through Canic's managed command endpoint.
     pub fn configure_runtime(&self) -> Result<OperationReceipt, ManagedAppQualificationError> {
-        let response: Result<ManagedCommandResponse, Error> =
-            ::ic_testkit::pic::update_candid_args(
-                &self.pic,
-                self.app,
-                self.root,
-                CANIC_COMMAND,
-                (ManagedCommand::ConfigureRuntime(Box::new(
-                    self.directory.clone(),
-                )),),
-                crate::testing::CANDID_REPLY_LIMITS,
-            )
-            .map(|(reply,)| reply)?;
+        let response: Result<ManagedCommandResponse, Error> = ic_testkit::pic::update_candid_args(
+            &self.pic,
+            self.app,
+            self.root,
+            CANIC_COMMAND,
+            (ManagedCommand::ConfigureRuntime(Box::new(
+                self.directory.clone(),
+            )),),
+            crate::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)?;
         let response = response.map_err(ManagedAppQualificationError::Canic)?;
         let ManagedCommandResponse::OperationAccepted(receipt) = response else {
             return Err(ManagedAppQualificationError::UnexpectedResponse(
@@ -206,7 +213,7 @@ impl ManagedAppFixture {
     pub fn admission_status(
         &self,
     ) -> Result<FleetAdmissionProjectionStatusResponse, ManagedAppQualificationError> {
-        let response: Result<ManagedStatusResponse, Error> = ::ic_testkit::pic::query_candid_args(
+        let response: Result<ManagedStatusResponse, Error> = ic_testkit::pic::query_candid_args(
             &self.pic,
             self.app,
             self.root,
@@ -253,16 +260,15 @@ impl ManagedAppFixture {
             expected_policy_digest: current.policy_digest,
             successor,
         };
-        let response: Result<ManagedCommandResponse, Error> =
-            ::ic_testkit::pic::update_candid_args(
-                &self.pic,
-                self.app,
-                self.root,
-                CANIC_COMMAND,
-                (ManagedCommand::PrepareFleetAdmission(Box::new(request)),),
-                crate::testing::CANDID_REPLY_LIMITS,
-            )
-            .map(|(reply,)| reply)?;
+        let response: Result<ManagedCommandResponse, Error> = ic_testkit::pic::update_candid_args(
+            &self.pic,
+            self.app,
+            self.root,
+            CANIC_COMMAND,
+            (ManagedCommand::PrepareFleetAdmission(Box::new(request)),),
+            crate::testing::CANDID_REPLY_LIMITS,
+        )
+        .map(|(reply,)| reply)?;
         let response = response.map_err(ManagedAppQualificationError::Canic)?;
         let ManagedCommandResponse::PrepareFleetAdmission(receipt) = response else {
             return Err(ManagedAppQualificationError::UnexpectedResponse(
@@ -291,7 +297,7 @@ impl ManagedAppFixture {
     }
 
     fn runtime_is_active(&self) -> Result<bool, ManagedAppQualificationError> {
-        let response: Result<ManagedStatusResponse, Error> = ::ic_testkit::pic::query_candid_args(
+        let response: Result<ManagedStatusResponse, Error> = ic_testkit::pic::query_candid_args(
             &self.pic,
             self.app,
             self.root,

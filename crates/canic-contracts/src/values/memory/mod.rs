@@ -7,12 +7,13 @@
 //! Boundary: DTOs re-export these values to preserve the public API path while
 //! internal code imports them from the domain owner.
 
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 /// Source of a measured ID's binding; unknown does not mean unused.
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum MemoryAllocationBinding {
     Current { stable_key: String, owner: String },
     Ledger { stable_key: String, owner: String },
@@ -24,21 +25,11 @@ pub enum MemoryAllocationBinding {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum MemoryCommitRecoveryErrorResponse {
     NoValidGeneration,
     InvalidSnapshot,
     GenerationOverflow,
     UnexpectedGeneration,
     Unknown,
-}
-
-///
-/// MemoryAllocationState
-///
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-pub enum MemoryAllocationState {
-    Reserved,
-    Active,
-    Retired,
 }

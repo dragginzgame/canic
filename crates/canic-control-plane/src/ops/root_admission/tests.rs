@@ -405,15 +405,15 @@ fn managed_component_binding() -> ManagedCanisterBinding {
         },
         app: AppId::from("root-admission-test"),
     };
-    let placement_subnet = SubnetId::from_principal(candid::Principal::from_slice(&[44; 29]));
+    let placement_subnet = SubnetId::from_principal(ic_platform::Principal::from_slice(&[44; 29]));
     ManagedCanisterBinding::Component(ComponentBinding {
         authority: FleetRegistryAuthority {
             binding: FleetCoordinatorBinding {
                 fleet,
-                coordinator_subnet: SubnetId::from_principal(candid::Principal::from_slice(
+                coordinator_subnet: SubnetId::from_principal(ic_platform::Principal::from_slice(
                     &[45; 29],
                 )),
-                coordinator: candid::Principal::from_slice(&[46; 29]),
+                coordinator: ic_platform::Principal::from_slice(&[46; 29]),
                 recovery_controllers: Vec::new(),
             },
             epoch: 1,
@@ -423,7 +423,7 @@ fn managed_component_binding() -> ManagedCanisterBinding {
         spec_hash: [48; 32],
         role: CanisterRole::from("app"),
         placement_subnet,
-        fleet_subnet_root: candid::Principal::from_slice(&[49; 29]),
-        canister_id: candid::Principal::from_slice(&[50; 29]),
+        fleet_subnet_root: ic_platform::Principal::from_slice(&[49; 29]),
+        canister_id: ic_platform::Principal::from_slice(&[50; 29]),
     })
 }

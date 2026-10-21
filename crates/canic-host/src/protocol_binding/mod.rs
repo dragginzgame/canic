@@ -4,7 +4,10 @@
 //! Does not own: Fleet discovery, artifact production, or live Overview negotiation.
 //! Boundary: immutable release/Directory evidence must reproduce the local Candid profile.
 
+mod installed;
 mod release;
+
+pub use installed::{InstalledCandidError, load_installed_candid};
 #[cfg(test)]
 mod tests;
 
@@ -179,11 +182,6 @@ pub(crate) fn resolve_protocol_binding(
     binding: RegistryProtocolBinding,
     candid_path: PathBuf,
 ) -> Result<ResolvedProtocolBinding, ProtocolBindingError> {
-    if binding.release_identity.trim().is_empty() {
-        return Err(ProtocolBindingError::MissingReleaseIdentity {
-            canister: target.to_string(),
-        });
-    }
     let candid = match read_optional_file_no_follow(&candid_path, MAX_DOCUMENT_READ_BYTES) {
         Ok(Some(bytes)) => bytes,
         Ok(None) => {
@@ -202,11 +200,29 @@ pub(crate) fn resolve_protocol_binding(
             });
         }
     };
+    verify_protocol_binding(target, &binding, &candid)?;
+    Ok(ResolvedProtocolBinding {
+        binding,
+        candid_path,
+    })
+}
+
+// Validate the bytes the caller will actually consume, without reopening a sidecar.
+fn verify_protocol_binding(
+    target: &str,
+    binding: &RegistryProtocolBinding,
+    candid: &[u8],
+) -> Result<(), ProtocolBindingError> {
+    if binding.release_identity.trim().is_empty() {
+        return Err(ProtocolBindingError::MissingReleaseIdentity {
+            canister: target.to_string(),
+        });
+    }
     let observed = derive_protocol_profile_hashes(
         &binding.release_identity,
         &binding.role,
         &binding.capabilities,
-        &candid,
+        candid,
     );
     if observed.candid_sha256 != binding.candid_sha256 {
         return Err(ProtocolBindingError::CandidHashMismatch {
@@ -218,8 +234,5 @@ pub(crate) fn resolve_protocol_binding(
             canister: target.to_string(),
         });
     }
-    Ok(ResolvedProtocolBinding {
-        binding,
-        candid_path,
-    })
+    Ok(())
 }

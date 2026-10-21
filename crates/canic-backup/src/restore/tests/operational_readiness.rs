@@ -88,12 +88,12 @@ fn publish_document_at_barrier<T: serde::Serialize>(
         document,
         || {
             if barrier == "before-publication" {
-                hold_at_acknowledged_barrier(handshake_root);
+                hold_at_acknowledged_barrier(handshake_root, std::time::Duration::from_secs(5));
             }
         },
         || {
             if barrier == "after-directory-sync" {
-                hold_at_acknowledged_barrier(handshake_root);
+                hold_at_acknowledged_barrier(handshake_root, std::time::Duration::from_secs(5));
             }
         },
     )
@@ -127,7 +127,12 @@ fn prove_initial_restore_document_publication(document: &str, barrier: &str) {
         .spawn()
         .expect("spawn restore publication child");
 
-    kill_child_at_acknowledged_barrier(&mut child, &handshake_root);
+    kill_child_at_acknowledged_barrier(
+        &mut child,
+        &handshake_root,
+        std::time::Duration::from_secs(5),
+    )
+    .expect("complete crash barrier handshake");
 
     if document == "plan" {
         assert!(!journal_path.exists());

@@ -9,9 +9,7 @@ pub(super) use tests::governed_pocketic_cases;
 
 #[cfg(test)]
 mod tests {
-    use crate::pic::artifacts::build_canonical_fleet_coordinator_wasm;
-    use crate::pic::startup::start_pocket_ic;
-    use candid::{Principal, encode_one};
+    use crate::pic::{artifacts::build_canonical_fleet_coordinator_wasm, startup::start_pocket_ic};
     use canic_contracts::dto::fleet_coordinator::{
         CoordinatorCommand, CoordinatorCommandResponse, CoordinatorObservabilityRequest,
         CoordinatorObservabilityResponse, CoordinatorOperationReadRequest,
@@ -53,6 +51,7 @@ mod tests {
             fleet_registry::FleetRegistryOps,
         },
     };
+    use ic_platform::{Principal, candid::contract::encode_one};
     use ic_testkit::pic::{
         CanisterSnapshotTarget, PocketIc, PocketIcBuilder, PocketIcSnapshotExt,
         SnapshotRestoreFunding,
@@ -65,13 +64,13 @@ mod tests {
         coordinator: Principal,
         command: CoordinatorCommand,
     ) -> Result<CoordinatorCommandResponse, Error> {
-        ::ic_testkit::pic::update_candid_args(
+        ic_testkit::pic::update_candid_args(
             pic,
             coordinator,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             protocol::CANIC_COORDINATOR_COMMAND,
             (command,),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .expect("Coordinator command transport")
@@ -83,13 +82,13 @@ mod tests {
         caller: Principal,
         command: CoordinatorCommand,
     ) -> Result<CoordinatorCommandResponse, Error> {
-        ::ic_testkit::pic::update_candid_args(
+        ic_testkit::pic::update_candid_args(
             pic,
             coordinator,
             caller,
             protocol::CANIC_COORDINATOR_COMMAND,
             (command,),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .expect("Coordinator command transport")
@@ -100,13 +99,13 @@ mod tests {
         coordinator: Principal,
         request: R,
     ) -> Result<R::Response, Error> {
-        ::ic_testkit::pic::query_candid_args(
+        ic_testkit::pic::query_candid_args(
             pic,
             coordinator,
-            candid::Principal::anonymous(),
+            ic_platform::Principal::anonymous(),
             R::METHOD,
             (request,),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .expect("Coordinator status transport")
@@ -118,13 +117,13 @@ mod tests {
         caller: Principal,
         request: R,
     ) -> Result<R::Response, Error> {
-        ::ic_testkit::pic::query_candid_args(
+        ic_testkit::pic::query_candid_args(
             pic,
             coordinator,
             caller,
             R::METHOD,
             (request,),
-            ::canic::testing::CANDID_REPLY_LIMITS,
+            canic::testing::CANDID_REPLY_LIMITS,
         )
         .map(|(reply,)| reply)
         .expect("Coordinator status transport")

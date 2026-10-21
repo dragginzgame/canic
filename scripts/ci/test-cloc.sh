@@ -213,6 +213,18 @@ jq -e --arg manifest "$independent/Cargo.toml" '
     .totals == {runtime_loc:1,test_loc:0,test_pct:0,test_fns:0,inline_fns:0}
 ' "$FIXTURE/independent.json" >/dev/null
 
+# Identical files still represent distinct selected runtime and test paths.
+bash "$ROOT/scripts/dev/cloc.sh" --json --manifest "$FIXTURE/Cargo.toml" "$FIXTURE" > "$FIXTURE/before-duplicates.json"
+printf 'pub fn duplicated() {}\n' > "$FIXTURE/crates/alpha/src/duplicate.rs"
+cp "$FIXTURE/crates/alpha/src/duplicate.rs" "$FIXTURE/crates/alpha/src/second.rs"
+cp "$FIXTURE/crates/alpha/src/duplicate.rs" "$FIXTURE/crates/alpha/tests/duplicate.rs"
+bash "$ROOT/scripts/dev/cloc.sh" --json --manifest "$FIXTURE/Cargo.toml" "$FIXTURE" > "$FIXTURE/with-duplicates.json"
+jq -e --slurpfile before "$FIXTURE/before-duplicates.json" '
+    .totals.runtime_loc == $before[0].totals.runtime_loc + 2 and
+    .totals.test_loc == $before[0].totals.test_loc + 1 and
+    .totals.test_fns == $before[0].totals.test_fns
+' "$FIXTURE/with-duplicates.json" >/dev/null
+
 # A later count failure preserves its status and cannot emit a partial JSON report.
 mkdir -p "$FIXTURE/reporter/scripts/dev" "$FIXTURE/failing-bin"
 cp "$ROOT/scripts/dev/cloc.sh" "$FIXTURE/reporter/scripts/dev/"
@@ -220,12 +232,12 @@ cat > "$FIXTURE/failing-bin/cloc" <<'STUB'
 #!/usr/bin/env bash
 if [[ -e "$CLOC_FAILURE_MARKER" ]]; then exit 23; fi
 touch "$CLOC_FAILURE_MARKER"
-printf '{"Rust":{"code":1}}\n'
+printf '{"%s":{"language":"Rust","code":1}}\n' "$CLOC_SOURCE_FILE"
 STUB
 chmod +x "$FIXTURE/failing-bin/cloc"
 status=0
-CLOC_FAILURE_MARKER="$FIXTURE/count-started" PATH="$FIXTURE/failing-bin:$PATH" \
-    bash "$FIXTURE/reporter/scripts/dev/cloc.sh" --json --manifest "$independent/Cargo.toml" "$FIXTURE" \
+CLOC_SOURCE_FILE="$FIXTURE/crates/alpha/src/lib.rs" CLOC_FAILURE_MARKER="$FIXTURE/count-started" PATH="$FIXTURE/failing-bin:$PATH" \
+    bash "$FIXTURE/reporter/scripts/dev/cloc.sh" --json --manifest "$FIXTURE/Cargo.toml" "$FIXTURE" \
     > "$FIXTURE/failed.json" 2> "$FIXTURE/failed.err" || status=$?
 [[ "$status" == 23 && -e "$FIXTURE/count-started" && ! -s "$FIXTURE/failed.json" ]] || exit 1
 echo 'cloc tests, including independent workspace selection, passed'

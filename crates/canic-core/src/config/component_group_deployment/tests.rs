@@ -815,9 +815,10 @@ placement.minimum_distinct_roots = 1
         } if service.as_str() == "project-hubs"
     ));
 
-    let encoded = candid::encode_one(&topology).expect("encode purpose topology");
+    let encoded =
+        ic_platform::candid::contract::encode_one(&topology).expect("encode purpose topology");
     let decoded: ComponentGroupDeploymentTopology =
-        candid::decode_one(&encoded).expect("decode purpose topology");
+        ic_platform::candid::decoder::decode_one(&encoded).expect("decode purpose topology");
     assert_eq!(decoded, topology);
     decoded
         .validate(

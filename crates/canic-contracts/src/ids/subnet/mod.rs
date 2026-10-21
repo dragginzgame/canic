@@ -4,7 +4,7 @@
 //! Does not own: placement selection, trusted-network metadata, or Subnet eligibility.
 //! Boundary: preserves the principal wire shape while preventing Canister/Subnet confusion.
 
-use candid::{CandidType, Principal};
+use ic_platform::{Principal, candid::contract::CandidType};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -36,13 +36,13 @@ impl SubnetId {
 }
 
 impl CandidType for SubnetId {
-    fn _ty() -> candid::types::Type {
+    fn _ty() -> ic_platform::candid::contract::types::Type {
         Principal::_ty()
     }
 
     fn idl_serialize<S>(&self, serializer: S) -> Result<(), S::Error>
     where
-        S: candid::types::Serializer,
+        S: ic_platform::candid::contract::types::Serializer,
     {
         self.0.idl_serialize(serializer)
     }
@@ -78,11 +78,11 @@ mod tests {
     fn subnet_id_preserves_the_principal_candid_shape() {
         let principal = Principal::from_slice(&[7; 29]);
         let subnet = SubnetId::from_principal(principal);
-        let bytes = candid::encode_one(subnet).expect("encode Subnet ID");
-        let decoded_principal: Principal =
-            candid::decode_one(&bytes).expect("decode Subnet ID as principal");
-        let decoded_subnet: SubnetId =
-            candid::decode_one(&bytes).expect("decode principal as Subnet ID");
+        let bytes = ic_platform::candid::contract::encode_one(subnet).expect("encode Subnet ID");
+        let decoded_principal: Principal = ic_platform::candid::decoder::decode_one(&bytes)
+            .expect("decode Subnet ID as principal");
+        let decoded_subnet: SubnetId = ic_platform::candid::decoder::decode_one(&bytes)
+            .expect("decode principal as Subnet ID");
 
         assert_eq!(decoded_principal, principal);
         assert_eq!(decoded_subnet, subnet);

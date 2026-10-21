@@ -19,12 +19,13 @@ use crate::{
     },
     protocol::profile::ProtocolProfileDigest,
 };
-use candid::{CandidType, Principal};
+use ic_platform::{Principal, candid::contract::CandidType};
 use serde::{Deserialize, Serialize};
 
 /// Subject of an authoritative, point-in-time Root membership lookup.
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootMembershipRequest {
     pub subject: Principal,
 }
@@ -32,6 +33,7 @@ pub struct RootMembershipRequest {
 /// Active binding, including a descendant's own role, or an ordinary negative.
 /// Registry and runtime failures are returned separately as endpoint errors.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootMembershipResponse {
     pub member: Option<ManagedCanisterBinding>,
 }
@@ -43,6 +45,7 @@ pub struct RootMembershipResponse {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentRegistryPreparationRequest {
     pub store_bootstrap: RootStoreBootstrapRequest,
     pub expected_fleet_registry: FleetRegistryVersion,
@@ -55,6 +58,7 @@ pub struct RootComponentRegistryPreparationRequest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentInitialInventoryStatus {
     pub fleet_activation_operation_id: [u8; 32],
     pub component_count: u32,
@@ -71,6 +75,7 @@ pub struct RootComponentInitialInventoryStatus {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentRegistryStatusResponse {
     pub fleet_subnet_root: Principal,
     pub prepared_against_registry: FleetRegistryVersion,
@@ -92,6 +97,7 @@ pub struct RootComponentRegistryStatusResponse {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentAllocationRequest {
     pub operation_id: [u8; 32],
     pub component_spec: ComponentSpecId,
@@ -104,6 +110,7 @@ pub struct RootComponentAllocationRequest {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum PeerComponentRequester {
     SameRoot,
     FleetService {
@@ -119,6 +126,7 @@ pub enum PeerComponentRequester {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootPeerComponentAllocationRequest {
     pub operation_id: [u8; 32],
     pub component_spec: ComponentSpecId,
@@ -132,6 +140,7 @@ pub struct RootPeerComponentAllocationRequest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentAllocationStatusRequest {
     pub operation_id: [u8; 32],
 }
@@ -143,6 +152,7 @@ pub struct RootComponentAllocationStatusRequest {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentChildAllocationRequest {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -158,6 +168,7 @@ pub struct RootComponentChildAllocationRequest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentChildAllocationStatusRequest {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -170,6 +181,7 @@ pub struct RootComponentChildAllocationStatusRequest {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentSubtreeRemovalRequest {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -184,6 +196,7 @@ pub struct RootComponentSubtreeRemovalRequest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentSubtreeRemovalAdvanceRequest {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -197,6 +210,7 @@ pub struct RootComponentSubtreeRemovalAdvanceRequest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentSubtreeRemovalStopPreparationRequest {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -212,6 +226,7 @@ pub struct RootComponentSubtreeRemovalStopPreparationRequest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentSubtreeRemovalStopRequest {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -227,6 +242,7 @@ pub struct RootComponentSubtreeRemovalStopRequest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentSubtreeRemovalDeletePreparationRequest {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -242,6 +258,7 @@ pub struct RootComponentSubtreeRemovalDeletePreparationRequest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentSubtreeRemovalDeleteRequest {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -257,6 +274,7 @@ pub struct RootComponentSubtreeRemovalDeleteRequest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentSubtreeRemovalMembershipRemovalRequest {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -272,6 +290,7 @@ pub struct RootComponentSubtreeRemovalMembershipRemovalRequest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentSubtreeRemovalDirectorySynchronizationRequest {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -287,6 +306,7 @@ pub struct RootComponentSubtreeRemovalDirectorySynchronizationRequest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentSubtreeRemovalLeafFinalizationRequest {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -302,6 +322,7 @@ pub struct RootComponentSubtreeRemovalLeafFinalizationRequest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentSubtreeRemovalStatusRequest {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -314,6 +335,7 @@ pub struct RootComponentSubtreeRemovalStatusRequest {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentDrainingRequest {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -327,6 +349,7 @@ pub struct RootComponentDrainingRequest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentDrainingStatusRequest {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -339,6 +362,7 @@ pub struct RootComponentDrainingStatusRequest {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentQuiescenceRequest {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -352,6 +376,7 @@ pub struct RootComponentQuiescenceRequest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentQuiescenceStatusRequest {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -364,6 +389,7 @@ pub struct RootComponentQuiescenceStatusRequest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentDrainingAdvanceRequest {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -376,6 +402,7 @@ pub struct RootComponentDrainingAdvanceRequest {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentFinalInventoryRequest {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -389,6 +416,7 @@ pub struct RootComponentFinalInventoryRequest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentDeletionRequest {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -402,6 +430,7 @@ pub struct RootComponentDeletionRequest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentDeletionStatusRequest {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -414,6 +443,7 @@ pub struct RootComponentDeletionStatusRequest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentChildCreationRequest {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -426,6 +456,7 @@ pub struct RootComponentChildCreationRequest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentChildInstallRequest {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -438,6 +469,7 @@ pub struct RootComponentChildInstallRequest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentChildCommitRequest {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -450,6 +482,7 @@ pub struct RootComponentChildCommitRequest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentChildDirectoryPreparationRequest {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -462,6 +495,7 @@ pub struct RootComponentChildDirectoryPreparationRequest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentChildRuntimeActivationRequest {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -474,6 +508,7 @@ pub struct RootComponentChildRuntimeActivationRequest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentChildMembershipActivationRequest {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -486,6 +521,7 @@ pub struct RootComponentChildMembershipActivationRequest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentCreationRequest {
     pub operation_id: [u8; 32],
 }
@@ -493,6 +529,7 @@ pub struct RootComponentCreationRequest {
 /// Opaque application bytes bound to the already allocated hosting identity.
 /// The application owns encoding and validation of its inner Candid contract.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ComponentApplicationInitialization {
     pub target_canister: Principal,
     #[serde(with = "serde_bytes")]
@@ -501,6 +538,7 @@ pub struct ComponentApplicationInitialization {
 
 /// Controller command freezing initialization before the first install intent.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentInitializationRequest {
     pub operation_id: [u8; 32],
     pub initialization: ComponentApplicationInitialization,
@@ -516,6 +554,7 @@ pub const MAX_COMPONENT_APPLICATION_INIT_BYTES: usize = 16_384;
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentCommitRequest {
     pub operation_id: [u8; 32],
 }
@@ -527,6 +566,7 @@ pub struct RootComponentCommitRequest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentDirectoryPreparationRequest {
     pub operation_id: [u8; 32],
 }
@@ -538,6 +578,7 @@ pub struct RootComponentDirectoryPreparationRequest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentRuntimeActivationRequest {
     pub operation_id: [u8; 32],
 }
@@ -549,6 +590,7 @@ pub struct RootComponentRuntimeActivationRequest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentMembershipActivationRequest {
     pub operation_id: [u8; 32],
 }
@@ -560,6 +602,7 @@ pub struct RootComponentMembershipActivationRequest {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ComponentProvisioningOrigin {
     FleetAdministrator {
         caller: Principal,
@@ -588,6 +631,7 @@ pub enum ComponentProvisioningOrigin {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetServiceComponentRequester {
     pub service: FleetServiceId,
     pub member_purpose: FleetServiceMemberPurpose,
@@ -603,6 +647,7 @@ pub struct FleetServiceComponentRequester {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootComponentAllocationPhase {
     Reserved,
     CreationIntent,
@@ -621,6 +666,7 @@ pub enum RootComponentAllocationPhase {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[expect(
     clippy::large_enum_variant,
     reason = "wire phases retain complete inline receipts for deterministic Candid responses"
@@ -645,6 +691,7 @@ pub enum RootComponentSubtreeRemovalPhase {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentSubtreeRemovalNode {
     pub canister_id: Principal,
     pub parent_canister_id: Principal,
@@ -661,6 +708,7 @@ pub struct RootComponentSubtreeRemovalNode {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentSubtreeRemovalStopIntent {
     pub leaf: RootComponentSubtreeRemovalNode,
     pub controller: Principal,
@@ -673,6 +721,7 @@ pub struct RootComponentSubtreeRemovalStopIntent {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentSubtreeRemovalStoppedReceipt {
     pub stop: RootComponentSubtreeRemovalStopIntent,
     pub observed_module_hash: [u8; 32],
@@ -685,6 +734,7 @@ pub struct RootComponentSubtreeRemovalStoppedReceipt {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentSubtreeRemovalDeleteIntent {
     pub stopped: RootComponentSubtreeRemovalStoppedReceipt,
 }
@@ -696,6 +746,7 @@ pub struct RootComponentSubtreeRemovalDeleteIntent {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentSubtreeRemovalDeletedReceipt {
     pub deletion: RootComponentSubtreeRemovalDeleteIntent,
 }
@@ -707,6 +758,7 @@ pub struct RootComponentSubtreeRemovalDeletedReceipt {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentSubtreeRemovalMembershipRemovedReceipt {
     pub deleted: RootComponentSubtreeRemovalDeletedReceipt,
     pub removed_from_registry: ComponentRegistryHead,
@@ -731,6 +783,7 @@ pub struct RootComponentSubtreeRemovalMembershipRemovedReceipt {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentSubtreeRemovalDirectoryConvergenceEvidence {
     pub operation_id: [u8; 32],
     pub canister_id: Principal,
@@ -746,6 +799,7 @@ pub struct RootComponentSubtreeRemovalDirectoryConvergenceEvidence {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentSubtreeRemovalDirectorySynchronizedReceipt {
     pub membership_removed: RootComponentSubtreeRemovalMembershipRemovedReceipt,
     pub covered_fleet_registry_revision: u64,
@@ -763,6 +817,7 @@ pub struct RootComponentSubtreeRemovalDirectorySynchronizedReceipt {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentSubtreeRemovalCompletedReceipt {
     pub registry: ComponentRegistryHead,
     pub directory_authority_hash: [u8; 32],
@@ -775,6 +830,7 @@ pub struct RootComponentSubtreeRemovalCompletedReceipt {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ComponentLifecycleStatus {
     Prepared,
     Active,
@@ -789,6 +845,7 @@ pub enum ComponentLifecycleStatus {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ComponentRegistryHead {
     pub component: ComponentInstanceId,
     pub revision: u64,
@@ -802,6 +859,7 @@ pub struct ComponentRegistryHead {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ComponentRegistryPartitionRequest {
     pub component: ComponentInstanceId,
 }
@@ -813,6 +871,7 @@ pub struct ComponentRegistryPartitionRequest {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ComponentRegistryPartitionResponse {
     pub head: ComponentRegistryHead,
     pub binding: ComponentBinding,
@@ -833,6 +892,7 @@ pub struct ComponentRegistryPartitionResponse {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ComponentRegistryActivePartitionRequest {
     pub component: ComponentInstanceId,
     pub provisioning_operation_id: [u8; 32],
@@ -849,6 +909,7 @@ pub struct ComponentRegistryActivePartitionRequest {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ComponentRegistryActivePartitionResponse {
     pub allocation_operation_id: [u8; 32],
     pub prepared: ComponentRegistryPartitionResponse,
@@ -863,6 +924,7 @@ pub struct ComponentRegistryActivePartitionResponse {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ComponentDirectoryProvenance {
     pub component: ComponentBinding,
     pub source_fleet_subnet_root: Principal,
@@ -878,6 +940,7 @@ pub struct ComponentDirectoryProvenance {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ComponentDirectoryHead {
     pub provenance: ComponentDirectoryProvenance,
     pub descendant_count: u32,
@@ -890,6 +953,7 @@ pub struct ComponentDirectoryHead {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ComponentDirectoryHeadRequest {
     pub component: ComponentInstanceId,
 }
@@ -901,6 +965,7 @@ pub struct ComponentDirectoryHeadRequest {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ComponentDirectoryPageCursor(pub Vec<u8>);
 
 ///
@@ -910,6 +975,7 @@ pub struct ComponentDirectoryPageCursor(pub Vec<u8>);
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ComponentDirectoryPageRequest {
     pub directory: ComponentDirectoryHead,
     pub parent_canister_id: Option<Principal>,
@@ -926,6 +992,7 @@ pub struct ComponentDirectoryPageRequest {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ComponentDirectoryChildEntry {
     pub binding: ComponentChildBinding,
     pub kind: ComponentChildKind,
@@ -941,6 +1008,7 @@ pub struct ComponentDirectoryChildEntry {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ComponentDirectoryPageResponse {
     pub directory: ComponentDirectoryHead,
     pub entries: Vec<ComponentDirectoryChildEntry>,
@@ -954,6 +1022,7 @@ pub struct ComponentDirectoryPageResponse {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ComponentRuntimeDirectoryAuthority {
     pub fleet: FleetDirectorySnapshot,
     pub component: ComponentDirectoryHead,
@@ -967,6 +1036,7 @@ pub struct ComponentRuntimeDirectoryAuthority {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ComponentRuntimeDirectChild {
     pub canister_id: Principal,
     pub allocation_operation_id: [u8; 32],
@@ -981,6 +1051,7 @@ pub struct ComponentRuntimeDirectChild {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ComponentRuntimeDirectoryPreparationRequest {
     pub operation_id: [u8; 32],
     pub authority: ComponentRuntimeDirectoryAuthority,
@@ -994,6 +1065,7 @@ pub struct ComponentRuntimeDirectoryPreparationRequest {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ComponentRuntimeDirectorySynchronizationRequest {
     pub operation_id: [u8; 32],
     pub authority: ComponentRuntimeDirectoryAuthority,
@@ -1007,6 +1079,7 @@ pub struct ComponentRuntimeDirectorySynchronizationRequest {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ComponentRuntimePhase {
     AwaitingDirectory,
     DirectoryPrepared,
@@ -1020,6 +1093,7 @@ pub enum ComponentRuntimePhase {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ComponentRuntimeActivationEvidence {
     pub directory_authority_hash: [u8; 32],
     pub activated_at_ns: u64,
@@ -1032,6 +1106,7 @@ pub struct ComponentRuntimeActivationEvidence {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ComponentRuntimeActivationRequest {
     pub operation_id: [u8; 32],
     pub directory_authority_hash: [u8; 32],
@@ -1044,6 +1119,7 @@ pub struct ComponentRuntimeActivationRequest {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ComponentRuntimeStatusResponse {
     pub fixture: Option<Box<crate::dto::fixture_provisioning::FixtureAssignment>>,
     pub operation_id: [u8; 32],
@@ -1063,6 +1139,7 @@ pub struct ComponentRuntimeStatusResponse {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ComponentRuntimeDirectoryConvergenceEvidence {
     pub operation_id: [u8; 32],
     pub binding: ManagedCanisterBinding,
@@ -1078,6 +1155,7 @@ pub struct ComponentRuntimeDirectoryConvergenceEvidence {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentCreationEvidence {
     pub wasm_store: Principal,
     pub payload_hash: [u8; 32],
@@ -1094,6 +1172,7 @@ pub struct RootComponentCreationEvidence {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentInstallEvidence {
     pub raw_module_hash: [u8; 32],
     pub chunk_hashes: Vec<Vec<u8>>,
@@ -1107,6 +1186,7 @@ pub struct RootComponentInstallEvidence {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentChildInstallEvidence {
     pub raw_module_hash: [u8; 32],
     pub chunk_hashes: Vec<Vec<u8>>,
@@ -1120,6 +1200,7 @@ pub struct RootComponentChildInstallEvidence {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentAllocationResponse {
     pub application_initialization: Option<ComponentApplicationInitialization>,
     pub operation_id: [u8; 32],
@@ -1142,6 +1223,7 @@ pub struct RootComponentAllocationResponse {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentChildAllocationResponse {
     pub last_failure: Option<RootComponentChildAllocationFailure>,
     pub operation_id: [u8; 32],
@@ -1162,6 +1244,7 @@ pub struct RootComponentChildAllocationResponse {
 
 /// Latest bounded failure of a retained child allocation; not lifecycle progress.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentChildAllocationFailure {
     pub diagnostic_code: u16,
     pub failed_at_ns: u64,
@@ -1178,6 +1261,7 @@ pub struct RootComponentChildAllocationFailure {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentSubtreeRemovalResponse {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -1199,6 +1283,7 @@ pub struct RootComponentSubtreeRemovalResponse {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentDrainingResponse {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -1217,6 +1302,7 @@ pub struct RootComponentDrainingResponse {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentQuiescenceStopIntent {
     pub registry: ComponentRegistryHead,
     pub descendant_count: u32,
@@ -1239,6 +1325,7 @@ pub struct RootComponentQuiescenceStopIntent {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentQuiescentReceipt {
     pub stop: RootComponentQuiescenceStopIntent,
     pub observed_module_hash: [u8; 32],
@@ -1252,6 +1339,7 @@ pub struct RootComponentQuiescentReceipt {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootComponentQuiescencePhase {
     StopIntent(RootComponentQuiescenceStopIntent),
     Quiescent(RootComponentQuiescentReceipt),
@@ -1264,6 +1352,7 @@ pub enum RootComponentQuiescencePhase {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentQuiescenceResponse {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -1277,6 +1366,7 @@ pub struct RootComponentQuiescenceResponse {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentDrainingDescendantsEmpty {
     pub registry: ComponentRegistryHead,
     pub descendant_content_hash: [u8; 32],
@@ -1289,6 +1379,7 @@ pub struct RootComponentDrainingDescendantsEmpty {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[expect(
     clippy::large_enum_variant,
     reason = "wire result embeds the current durable subtree snapshot without a Rust-only indirection"
@@ -1305,6 +1396,7 @@ pub enum RootComponentDrainingAdvancePhase {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentDrainingAdvanceResponse {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -1318,6 +1410,7 @@ pub struct RootComponentDrainingAdvanceResponse {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentFinalInventory {
     pub registry: ComponentRegistryHead,
     pub descendant_content_hash: [u8; 32],
@@ -1337,6 +1430,7 @@ pub struct RootComponentFinalInventory {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentFinalInventoryResponse {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -1350,6 +1444,7 @@ pub struct RootComponentFinalInventoryResponse {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentDeletionIntent {
     pub final_inventory: RootComponentFinalInventory,
     pub quiescence: RootComponentQuiescentReceipt,
@@ -1363,6 +1458,7 @@ pub struct RootComponentDeletionIntent {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentDeletedReceipt {
     pub deletion: RootComponentDeletionIntent,
     pub deleted_at_ns: u64,
@@ -1375,6 +1471,7 @@ pub struct RootComponentDeletedReceipt {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentMembershipRemovedReceipt {
     pub deleted: RootComponentDeletedReceipt,
     pub allocation_operation_id: [u8; 32],
@@ -1393,6 +1490,7 @@ pub struct RootComponentMembershipRemovedReceipt {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootComponentDeletionPhase {
     DeleteIntent(RootComponentDeletionIntent),
     Deleted(RootComponentDeletedReceipt),
@@ -1406,6 +1504,7 @@ pub enum RootComponentDeletionPhase {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentDeletionResponse {
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
@@ -1419,6 +1518,7 @@ pub struct RootComponentDeletionResponse {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentChildCommitResponse {
     pub allocation: RootComponentChildAllocationResponse,
     pub registry: ComponentRegistryPartitionResponse,
@@ -1432,6 +1532,7 @@ pub struct RootComponentChildCommitResponse {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentChildDirectoryPreparationResponse {
     pub committed: RootComponentChildCommitResponse,
     pub child: ComponentRuntimeStatusResponse,
@@ -1446,6 +1547,7 @@ pub struct RootComponentChildDirectoryPreparationResponse {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentChildRuntimeActivationResponse {
     pub committed: RootComponentChildCommitResponse,
     pub child: ComponentRuntimeStatusResponse,
@@ -1458,6 +1560,7 @@ pub struct RootComponentChildRuntimeActivationResponse {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentChildMembershipActivationResponse {
     pub committed: RootComponentChildCommitResponse,
     pub registry: ComponentRegistryPartitionResponse,
@@ -1472,6 +1575,7 @@ pub struct RootComponentChildMembershipActivationResponse {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentCommitResponse {
     pub allocation: RootComponentAllocationResponse,
     pub registry: ComponentRegistryPartitionResponse,
@@ -1485,6 +1589,7 @@ pub struct RootComponentCommitResponse {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentDirectoryPreparationResponse {
     pub committed: RootComponentCommitResponse,
     pub target: ComponentRuntimeStatusResponse,
@@ -1497,6 +1602,7 @@ pub struct RootComponentDirectoryPreparationResponse {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentRuntimeActivationResponse {
     pub committed: RootComponentCommitResponse,
     pub target: ComponentRuntimeStatusResponse,
@@ -1509,6 +1615,7 @@ pub struct RootComponentRuntimeActivationResponse {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct RootComponentMembershipActivationResponse {
     pub allocation: RootComponentAllocationResponse,
     pub registry: ComponentRegistryPartitionResponse,
@@ -1594,29 +1701,41 @@ mod tests {
             installation: None,
             ..allocation.clone()
         };
-        let request_bytes = candid::encode_one(&request).expect("encode request");
-        let response_bytes = candid::encode_one(&response).expect("encode response");
-        let allocation_bytes = candid::encode_one(&allocation).expect("encode allocation");
-        let created_bytes = candid::encode_one(&created).expect("encode created allocation");
+        let request_bytes =
+            ic_platform::candid::contract::encode_one(&request).expect("encode request");
+        let response_bytes =
+            ic_platform::candid::contract::encode_one(&response).expect("encode response");
+        let allocation_bytes =
+            ic_platform::candid::contract::encode_one(&allocation).expect("encode allocation");
+        let created_bytes =
+            ic_platform::candid::contract::encode_one(&created).expect("encode created allocation");
 
         assert_eq!(
-            candid::decode_one::<RootComponentRegistryPreparationRequest>(&request_bytes)
-                .expect("decode request"),
+            ic_platform::candid::decoder::decode_one::<RootComponentRegistryPreparationRequest>(
+                &request_bytes
+            )
+            .expect("decode request"),
             request
         );
         assert_eq!(
-            candid::decode_one::<RootComponentRegistryStatusResponse>(&response_bytes)
-                .expect("decode response"),
+            ic_platform::candid::decoder::decode_one::<RootComponentRegistryStatusResponse>(
+                &response_bytes
+            )
+            .expect("decode response"),
             response
         );
         assert_eq!(
-            candid::decode_one::<RootComponentAllocationResponse>(&allocation_bytes)
-                .expect("decode allocation"),
+            ic_platform::candid::decoder::decode_one::<RootComponentAllocationResponse>(
+                &allocation_bytes
+            )
+            .expect("decode allocation"),
             allocation
         );
         assert_eq!(
-            candid::decode_one::<RootComponentAllocationResponse>(&created_bytes)
-                .expect("decode created allocation"),
+            ic_platform::candid::decoder::decode_one::<RootComponentAllocationResponse>(
+                &created_bytes
+            )
+            .expect("decode created allocation"),
             created
         );
     }
@@ -1698,11 +1817,14 @@ mod tests {
                 descendant_count: 0,
             },
         };
-        let committed_bytes = candid::encode_one(&committed).expect("encode committed allocation");
+        let committed_bytes = ic_platform::candid::contract::encode_one(&committed)
+            .expect("encode committed allocation");
 
         assert_eq!(
-            candid::decode_one::<RootComponentCommitResponse>(&committed_bytes)
-                .expect("decode committed allocation"),
+            ic_platform::candid::decoder::decode_one::<RootComponentCommitResponse>(
+                &committed_bytes
+            )
+            .expect("decode committed allocation"),
             committed
         );
     }
@@ -1755,17 +1877,23 @@ mod tests {
             }],
             next_cursor: Some(ComponentDirectoryPageCursor(vec![23; 64])),
         };
-        let request_bytes = candid::encode_one(&request).expect("encode Directory page request");
-        let response_bytes = candid::encode_one(&response).expect("encode Directory page response");
+        let request_bytes = ic_platform::candid::contract::encode_one(&request)
+            .expect("encode Directory page request");
+        let response_bytes = ic_platform::candid::contract::encode_one(&response)
+            .expect("encode Directory page response");
 
         assert_eq!(
-            candid::decode_one::<ComponentDirectoryPageRequest>(&request_bytes)
-                .expect("decode Directory page request"),
+            ic_platform::candid::decoder::decode_one::<ComponentDirectoryPageRequest>(
+                &request_bytes
+            )
+            .expect("decode Directory page request"),
             request
         );
         assert_eq!(
-            candid::decode_one::<ComponentDirectoryPageResponse>(&response_bytes)
-                .expect("decode Directory page response"),
+            ic_platform::candid::decoder::decode_one::<ComponentDirectoryPageResponse>(
+                &response_bytes
+            )
+            .expect("decode Directory page response"),
             response
         );
     }
@@ -1793,10 +1921,11 @@ mod tests {
         let request = RootComponentCreationRequest {
             operation_id: [10; 32],
         };
-        let bytes = candid::encode_one(request).expect("encode creation request");
+        let bytes =
+            ic_platform::candid::contract::encode_one(request).expect("encode creation request");
 
         assert_eq!(
-            candid::decode_one::<RootComponentCreationRequest>(&bytes)
+            ic_platform::candid::decoder::decode_one::<RootComponentCreationRequest>(&bytes)
                 .expect("decode creation request"),
             request
         );
@@ -1825,10 +1954,11 @@ mod tests {
                 maximum_instances_per_requester_per_root: 3,
             }),
         };
-        let bytes = candid::encode_one(&origin).expect("encode peer provisioning origin");
+        let bytes = ic_platform::candid::contract::encode_one(&origin)
+            .expect("encode peer provisioning origin");
 
         assert_eq!(
-            candid::decode_one::<ComponentProvisioningOrigin>(&bytes)
+            ic_platform::candid::decoder::decode_one::<ComponentProvisioningOrigin>(&bytes)
                 .expect("decode peer provisioning origin"),
             origin
         );
@@ -1883,16 +2013,20 @@ mod tests {
                 maximum_instances_per_requester_per_root: 3,
             }),
         };
-        let request_bytes = candid::encode_one(&request).expect("encode cross-root request");
-        let origin_bytes = candid::encode_one(&origin).expect("encode cross-root origin");
+        let request_bytes =
+            ic_platform::candid::contract::encode_one(&request).expect("encode cross-root request");
+        let origin_bytes =
+            ic_platform::candid::contract::encode_one(&origin).expect("encode cross-root origin");
 
         assert_eq!(
-            candid::decode_one::<RootPeerComponentAllocationRequest>(&request_bytes)
-                .expect("decode cross-root request"),
+            ic_platform::candid::decoder::decode_one::<RootPeerComponentAllocationRequest>(
+                &request_bytes
+            )
+            .expect("decode cross-root request"),
             request
         );
         assert_eq!(
-            candid::decode_one::<ComponentProvisioningOrigin>(&origin_bytes)
+            ic_platform::candid::decoder::decode_one::<ComponentProvisioningOrigin>(&origin_bytes)
                 .expect("decode cross-root origin"),
             origin
         );
@@ -1912,10 +2046,11 @@ mod tests {
             ])
             .expect("member path"),
         };
-        let bytes = candid::encode_one(&origin).expect("encode group provisioning origin");
+        let bytes = ic_platform::candid::contract::encode_one(&origin)
+            .expect("encode group provisioning origin");
 
         assert_eq!(
-            candid::decode_one::<ComponentProvisioningOrigin>(&bytes)
+            ic_platform::candid::decoder::decode_one::<ComponentProvisioningOrigin>(&bytes)
                 .expect("decode group provisioning origin"),
             origin
         );
@@ -2038,39 +2173,50 @@ mod tests {
             ),
         };
 
-        let request_bytes = candid::encode_one(&request).expect("encode subtree removal request");
-        let advance_bytes =
-            candid::encode_one(advance_request).expect("encode subtree removal advance request");
-        let stop_bytes =
-            candid::encode_one(stop_request).expect("encode subtree removal stop request");
-        let status_bytes =
-            candid::encode_one(status_request).expect("encode subtree removal status request");
-        let response_bytes =
-            candid::encode_one(&response).expect("encode subtree removal response");
+        let request_bytes = ic_platform::candid::contract::encode_one(&request)
+            .expect("encode subtree removal request");
+        let advance_bytes = ic_platform::candid::contract::encode_one(advance_request)
+            .expect("encode subtree removal advance request");
+        let stop_bytes = ic_platform::candid::contract::encode_one(stop_request)
+            .expect("encode subtree removal stop request");
+        let status_bytes = ic_platform::candid::contract::encode_one(status_request)
+            .expect("encode subtree removal status request");
+        let response_bytes = ic_platform::candid::contract::encode_one(&response)
+            .expect("encode subtree removal response");
 
         assert_eq!(
-            candid::decode_one::<RootComponentSubtreeRemovalRequest>(&request_bytes)
-                .expect("decode subtree removal request"),
+            ic_platform::candid::decoder::decode_one::<RootComponentSubtreeRemovalRequest>(
+                &request_bytes
+            )
+            .expect("decode subtree removal request"),
             request
         );
         assert_eq!(
-            candid::decode_one::<RootComponentSubtreeRemovalAdvanceRequest>(&advance_bytes)
-                .expect("decode subtree removal advance request"),
+            ic_platform::candid::decoder::decode_one::<RootComponentSubtreeRemovalAdvanceRequest>(
+                &advance_bytes
+            )
+            .expect("decode subtree removal advance request"),
             advance_request
         );
         assert_eq!(
-            candid::decode_one::<RootComponentSubtreeRemovalStopPreparationRequest>(&stop_bytes)
-                .expect("decode subtree removal stop request"),
+            ic_platform::candid::decoder::decode_one::<
+                RootComponentSubtreeRemovalStopPreparationRequest,
+            >(&stop_bytes)
+            .expect("decode subtree removal stop request"),
             stop_request
         );
         assert_eq!(
-            candid::decode_one::<RootComponentSubtreeRemovalStatusRequest>(&status_bytes)
-                .expect("decode subtree removal status request"),
+            ic_platform::candid::decoder::decode_one::<RootComponentSubtreeRemovalStatusRequest>(
+                &status_bytes
+            )
+            .expect("decode subtree removal status request"),
             status_request
         );
         assert_eq!(
-            candid::decode_one::<RootComponentSubtreeRemovalResponse>(&response_bytes)
-                .expect("decode subtree removal response"),
+            ic_platform::candid::decoder::decode_one::<RootComponentSubtreeRemovalResponse>(
+                &response_bytes
+            )
+            .expect("decode subtree removal response"),
             response
         );
 
@@ -2081,11 +2227,14 @@ mod tests {
             panic!("Directory-synchronized response");
         };
         receipt.owning_component = None;
-        let quiescent_owner_bytes = candid::encode_one(&quiescent_owner_response)
-            .expect("encode quiescent-owner subtree response");
+        let quiescent_owner_bytes =
+            ic_platform::candid::contract::encode_one(&quiescent_owner_response)
+                .expect("encode quiescent-owner subtree response");
         assert_eq!(
-            candid::decode_one::<RootComponentSubtreeRemovalResponse>(&quiescent_owner_bytes)
-                .expect("decode quiescent-owner subtree response"),
+            ic_platform::candid::decoder::decode_one::<RootComponentSubtreeRemovalResponse>(
+                &quiescent_owner_bytes
+            )
+            .expect("decode quiescent-owner subtree response"),
             quiescent_owner_response
         );
     }
@@ -2122,26 +2271,32 @@ mod tests {
             started_at_ns: 66,
         };
 
-        let request_bytes =
-            candid::encode_one(&request).expect("encode Component draining request");
-        let status_bytes =
-            candid::encode_one(status_request).expect("encode Component draining status request");
-        let response_bytes =
-            candid::encode_one(&response).expect("encode Component draining response");
+        let request_bytes = ic_platform::candid::contract::encode_one(&request)
+            .expect("encode Component draining request");
+        let status_bytes = ic_platform::candid::contract::encode_one(status_request)
+            .expect("encode Component draining status request");
+        let response_bytes = ic_platform::candid::contract::encode_one(&response)
+            .expect("encode Component draining response");
 
         assert_eq!(
-            candid::decode_one::<RootComponentDrainingRequest>(&request_bytes)
-                .expect("decode Component draining request"),
+            ic_platform::candid::decoder::decode_one::<RootComponentDrainingRequest>(
+                &request_bytes
+            )
+            .expect("decode Component draining request"),
             request
         );
         assert_eq!(
-            candid::decode_one::<RootComponentDrainingStatusRequest>(&status_bytes)
-                .expect("decode Component draining status request"),
+            ic_platform::candid::decoder::decode_one::<RootComponentDrainingStatusRequest>(
+                &status_bytes
+            )
+            .expect("decode Component draining status request"),
             status_request
         );
         assert_eq!(
-            candid::decode_one::<RootComponentDrainingResponse>(&response_bytes)
-                .expect("decode Component draining response"),
+            ic_platform::candid::decoder::decode_one::<RootComponentDrainingResponse>(
+                &response_bytes
+            )
+            .expect("decode Component draining response"),
             response
         );
     }
@@ -2190,23 +2345,31 @@ mod tests {
             }),
         };
 
-        let request_bytes = candid::encode_one(&request).expect("encode quiescence request");
-        let status_bytes =
-            candid::encode_one(status_request).expect("encode quiescence status request");
-        let response_bytes = candid::encode_one(&response).expect("encode quiescence response");
+        let request_bytes =
+            ic_platform::candid::contract::encode_one(&request).expect("encode quiescence request");
+        let status_bytes = ic_platform::candid::contract::encode_one(status_request)
+            .expect("encode quiescence status request");
+        let response_bytes = ic_platform::candid::contract::encode_one(&response)
+            .expect("encode quiescence response");
         assert_eq!(
-            candid::decode_one::<RootComponentQuiescenceRequest>(&request_bytes)
-                .expect("decode quiescence request"),
+            ic_platform::candid::decoder::decode_one::<RootComponentQuiescenceRequest>(
+                &request_bytes
+            )
+            .expect("decode quiescence request"),
             request
         );
         assert_eq!(
-            candid::decode_one::<RootComponentQuiescenceStatusRequest>(&status_bytes)
-                .expect("decode quiescence status request"),
+            ic_platform::candid::decoder::decode_one::<RootComponentQuiescenceStatusRequest>(
+                &status_bytes
+            )
+            .expect("decode quiescence status request"),
             status_request
         );
         assert_eq!(
-            candid::decode_one::<RootComponentQuiescenceResponse>(&response_bytes)
-                .expect("decode quiescence response"),
+            ic_platform::candid::decoder::decode_one::<RootComponentQuiescenceResponse>(
+                &response_bytes
+            )
+            .expect("decode quiescence response"),
             response
         );
     }
@@ -2253,26 +2416,32 @@ mod tests {
             ),
         };
 
-        let request_bytes =
-            candid::encode_one(request).expect("encode Component draining advance request");
-        let removal_bytes = candid::encode_one(&descendant_removal)
+        let request_bytes = ic_platform::candid::contract::encode_one(request)
+            .expect("encode Component draining advance request");
+        let removal_bytes = ic_platform::candid::contract::encode_one(&descendant_removal)
             .expect("encode Component draining removal response");
-        let empty_bytes = candid::encode_one(&descendants_empty)
+        let empty_bytes = ic_platform::candid::contract::encode_one(&descendants_empty)
             .expect("encode Component draining empty response");
 
         assert_eq!(
-            candid::decode_one::<RootComponentDrainingAdvanceRequest>(&request_bytes)
-                .expect("decode Component draining advance request"),
+            ic_platform::candid::decoder::decode_one::<RootComponentDrainingAdvanceRequest>(
+                &request_bytes
+            )
+            .expect("decode Component draining advance request"),
             request
         );
         assert_eq!(
-            candid::decode_one::<RootComponentDrainingAdvanceResponse>(&removal_bytes)
-                .expect("decode Component draining removal response"),
+            ic_platform::candid::decoder::decode_one::<RootComponentDrainingAdvanceResponse>(
+                &removal_bytes
+            )
+            .expect("decode Component draining removal response"),
             descendant_removal
         );
         assert_eq!(
-            candid::decode_one::<RootComponentDrainingAdvanceResponse>(&empty_bytes)
-                .expect("decode Component draining empty response"),
+            ic_platform::candid::decoder::decode_one::<RootComponentDrainingAdvanceResponse>(
+                &empty_bytes
+            )
+            .expect("decode Component draining empty response"),
             descendants_empty
         );
     }
@@ -2370,46 +2539,60 @@ mod tests {
             ),
         };
 
-        let request_bytes =
-            candid::encode_one(&request).expect("encode Component final inventory request");
-        let response_bytes =
-            candid::encode_one(&response).expect("encode Component final inventory response");
-        let deletion_request_bytes =
-            candid::encode_one(deletion_request).expect("encode Component deletion request");
-        let deletion_status_bytes = candid::encode_one(deletion_status_request)
-            .expect("encode Component deletion status request");
-        let deletion_response_bytes =
-            candid::encode_one(&deletion_response).expect("encode Component deletion response");
-        let membership_removed_response_bytes = candid::encode_one(&membership_removed_response)
-            .expect("encode Component membership-removal response");
+        let request_bytes = ic_platform::candid::contract::encode_one(&request)
+            .expect("encode Component final inventory request");
+        let response_bytes = ic_platform::candid::contract::encode_one(&response)
+            .expect("encode Component final inventory response");
+        let deletion_request_bytes = ic_platform::candid::contract::encode_one(deletion_request)
+            .expect("encode Component deletion request");
+        let deletion_status_bytes =
+            ic_platform::candid::contract::encode_one(deletion_status_request)
+                .expect("encode Component deletion status request");
+        let deletion_response_bytes = ic_platform::candid::contract::encode_one(&deletion_response)
+            .expect("encode Component deletion response");
+        let membership_removed_response_bytes =
+            ic_platform::candid::contract::encode_one(&membership_removed_response)
+                .expect("encode Component membership-removal response");
         assert_eq!(
-            candid::decode_one::<RootComponentFinalInventoryRequest>(&request_bytes)
-                .expect("decode Component final inventory request"),
+            ic_platform::candid::decoder::decode_one::<RootComponentFinalInventoryRequest>(
+                &request_bytes
+            )
+            .expect("decode Component final inventory request"),
             request
         );
         assert_eq!(
-            candid::decode_one::<RootComponentFinalInventoryResponse>(&response_bytes)
-                .expect("decode Component final inventory response"),
+            ic_platform::candid::decoder::decode_one::<RootComponentFinalInventoryResponse>(
+                &response_bytes
+            )
+            .expect("decode Component final inventory response"),
             response
         );
         assert_eq!(
-            candid::decode_one::<RootComponentDeletionRequest>(&deletion_request_bytes)
-                .expect("decode Component deletion request"),
+            ic_platform::candid::decoder::decode_one::<RootComponentDeletionRequest>(
+                &deletion_request_bytes
+            )
+            .expect("decode Component deletion request"),
             deletion_request
         );
         assert_eq!(
-            candid::decode_one::<RootComponentDeletionStatusRequest>(&deletion_status_bytes)
-                .expect("decode Component deletion status request"),
+            ic_platform::candid::decoder::decode_one::<RootComponentDeletionStatusRequest>(
+                &deletion_status_bytes
+            )
+            .expect("decode Component deletion status request"),
             deletion_status_request
         );
         assert_eq!(
-            candid::decode_one::<RootComponentDeletionResponse>(&deletion_response_bytes)
-                .expect("decode Component deletion response"),
+            ic_platform::candid::decoder::decode_one::<RootComponentDeletionResponse>(
+                &deletion_response_bytes
+            )
+            .expect("decode Component deletion response"),
             deletion_response
         );
         assert_eq!(
-            candid::decode_one::<RootComponentDeletionResponse>(&membership_removed_response_bytes)
-                .expect("decode Component membership-removal response"),
+            ic_platform::candid::decoder::decode_one::<RootComponentDeletionResponse>(
+                &membership_removed_response_bytes
+            )
+            .expect("decode Component membership-removal response"),
             membership_removed_response
         );
     }
@@ -2451,47 +2634,51 @@ mod tests {
             expected_leaf_canister_id: prepare.expected_leaf_canister_id,
             expected_leaf_parent_canister_id: prepare.expected_leaf_parent_canister_id,
         };
-        let prepare_bytes = candid::encode_one(prepare)
+        let prepare_bytes = ic_platform::candid::contract::encode_one(prepare)
             .expect("encode subtree removal deletion preparation request");
-        let request_bytes =
-            candid::encode_one(request).expect("encode subtree removal deletion request");
-        let membership_request_bytes = candid::encode_one(membership_request)
-            .expect("encode subtree removal membership-removal request");
-        let directory_request_bytes = candid::encode_one(directory_request)
+        let request_bytes = ic_platform::candid::contract::encode_one(request)
+            .expect("encode subtree removal deletion request");
+        let membership_request_bytes =
+            ic_platform::candid::contract::encode_one(membership_request)
+                .expect("encode subtree removal membership-removal request");
+        let directory_request_bytes = ic_platform::candid::contract::encode_one(directory_request)
             .expect("encode subtree removal Directory synchronization request");
-        let finalization_request_bytes = candid::encode_one(finalization_request)
-            .expect("encode subtree removal leaf-finalization request");
+        let finalization_request_bytes =
+            ic_platform::candid::contract::encode_one(finalization_request)
+                .expect("encode subtree removal leaf-finalization request");
 
         assert_eq!(
-            candid::decode_one::<RootComponentSubtreeRemovalDeletePreparationRequest>(
-                &prepare_bytes
-            )
+            ic_platform::candid::decoder::decode_one::<
+                RootComponentSubtreeRemovalDeletePreparationRequest,
+            >(&prepare_bytes)
             .expect("decode subtree removal deletion preparation request"),
             prepare
         );
         assert_eq!(
-            candid::decode_one::<RootComponentSubtreeRemovalDeleteRequest>(&request_bytes)
-                .expect("decode subtree removal deletion request"),
+            ic_platform::candid::decoder::decode_one::<RootComponentSubtreeRemovalDeleteRequest>(
+                &request_bytes
+            )
+            .expect("decode subtree removal deletion request"),
             request
         );
         assert_eq!(
-            candid::decode_one::<RootComponentSubtreeRemovalMembershipRemovalRequest>(
-                &membership_request_bytes
-            )
+            ic_platform::candid::decoder::decode_one::<
+                RootComponentSubtreeRemovalMembershipRemovalRequest,
+            >(&membership_request_bytes)
             .expect("decode subtree removal membership-removal request"),
             membership_request
         );
         assert_eq!(
-            candid::decode_one::<RootComponentSubtreeRemovalDirectorySynchronizationRequest>(
-                &directory_request_bytes
-            )
+            ic_platform::candid::decoder::decode_one::<
+                RootComponentSubtreeRemovalDirectorySynchronizationRequest,
+            >(&directory_request_bytes)
             .expect("decode subtree removal Directory synchronization request"),
             directory_request
         );
         assert_eq!(
-            candid::decode_one::<RootComponentSubtreeRemovalLeafFinalizationRequest>(
-                &finalization_request_bytes
-            )
+            ic_platform::candid::decoder::decode_one::<
+                RootComponentSubtreeRemovalLeafFinalizationRequest,
+            >(&finalization_request_bytes)
             .expect("decode subtree removal leaf-finalization request"),
             finalization_request
         );
@@ -2506,12 +2693,14 @@ mod tests {
             expected_leaf_canister_id: Principal::from_slice(&[52; 29]),
             expected_leaf_parent_canister_id: Principal::from_slice(&[53; 29]),
         };
-        let bytes =
-            candid::encode_one(request).expect("encode subtree removal stop execution request");
+        let bytes = ic_platform::candid::contract::encode_one(request)
+            .expect("encode subtree removal stop execution request");
 
         assert_eq!(
-            candid::decode_one::<RootComponentSubtreeRemovalStopRequest>(&bytes)
-                .expect("decode subtree removal stop execution request"),
+            ic_platform::candid::decoder::decode_one::<RootComponentSubtreeRemovalStopRequest>(
+                &bytes
+            )
+            .expect("decode subtree removal stop execution request"),
             request
         );
     }
@@ -2764,105 +2953,126 @@ mod tests {
             },
         };
 
-        let request_bytes = candid::encode_one(&request).expect("encode child reservation");
-        let status_bytes =
-            candid::encode_one(status_request).expect("encode child reservation status");
-        let creation_bytes =
-            candid::encode_one(creation_request).expect("encode child creation request");
-        let install_bytes =
-            candid::encode_one(install_request).expect("encode child install request");
-        let response_bytes = candid::encode_one(&response).expect("encode child response");
-        let commit_request_bytes =
-            candid::encode_one(commit_request).expect("encode child commit request");
-        let directory_request_bytes =
-            candid::encode_one(directory_request).expect("encode child Directory request");
+        let request_bytes =
+            ic_platform::candid::contract::encode_one(&request).expect("encode child reservation");
+        let status_bytes = ic_platform::candid::contract::encode_one(status_request)
+            .expect("encode child reservation status");
+        let creation_bytes = ic_platform::candid::contract::encode_one(creation_request)
+            .expect("encode child creation request");
+        let install_bytes = ic_platform::candid::contract::encode_one(install_request)
+            .expect("encode child install request");
+        let response_bytes =
+            ic_platform::candid::contract::encode_one(&response).expect("encode child response");
+        let commit_request_bytes = ic_platform::candid::contract::encode_one(commit_request)
+            .expect("encode child commit request");
+        let directory_request_bytes = ic_platform::candid::contract::encode_one(directory_request)
+            .expect("encode child Directory request");
         let activation_request_bytes =
-            candid::encode_one(activation_request).expect("encode child activation request");
+            ic_platform::candid::contract::encode_one(activation_request)
+                .expect("encode child activation request");
         let membership_request_bytes =
-            candid::encode_one(membership_request).expect("encode child membership request");
-        let commit_response_bytes =
-            candid::encode_one(&commit_response).expect("encode child commit response");
+            ic_platform::candid::contract::encode_one(membership_request)
+                .expect("encode child membership request");
+        let commit_response_bytes = ic_platform::candid::contract::encode_one(&commit_response)
+            .expect("encode child commit response");
         let directory_response_bytes =
-            candid::encode_one(&directory_response).expect("encode child Directory response");
+            ic_platform::candid::contract::encode_one(&directory_response)
+                .expect("encode child Directory response");
         let activation_response_bytes =
-            candid::encode_one(&activation_response).expect("encode child activation response");
+            ic_platform::candid::contract::encode_one(&activation_response)
+                .expect("encode child activation response");
         let membership_response_bytes =
-            candid::encode_one(&membership_response).expect("encode child membership response");
+            ic_platform::candid::contract::encode_one(&membership_response)
+                .expect("encode child membership response");
 
         assert_eq!(
-            candid::decode_one::<RootComponentChildAllocationRequest>(&request_bytes)
-                .expect("decode child reservation"),
+            ic_platform::candid::decoder::decode_one::<RootComponentChildAllocationRequest>(
+                &request_bytes
+            )
+            .expect("decode child reservation"),
             request
         );
         assert_eq!(
-            candid::decode_one::<RootComponentChildAllocationStatusRequest>(&status_bytes)
-                .expect("decode child reservation status"),
+            ic_platform::candid::decoder::decode_one::<RootComponentChildAllocationStatusRequest>(
+                &status_bytes
+            )
+            .expect("decode child reservation status"),
             status_request
         );
         assert_eq!(
-            candid::decode_one::<RootComponentChildCreationRequest>(&creation_bytes)
-                .expect("decode child creation request"),
+            ic_platform::candid::decoder::decode_one::<RootComponentChildCreationRequest>(
+                &creation_bytes
+            )
+            .expect("decode child creation request"),
             creation_request
         );
         assert_eq!(
-            candid::decode_one::<RootComponentChildInstallRequest>(&install_bytes)
-                .expect("decode child install request"),
+            ic_platform::candid::decoder::decode_one::<RootComponentChildInstallRequest>(
+                &install_bytes
+            )
+            .expect("decode child install request"),
             install_request
         );
         assert_eq!(
-            candid::decode_one::<RootComponentChildAllocationResponse>(&response_bytes)
-                .expect("decode child response"),
+            ic_platform::candid::decoder::decode_one::<RootComponentChildAllocationResponse>(
+                &response_bytes
+            )
+            .expect("decode child response"),
             response
         );
         assert_eq!(
-            candid::decode_one::<RootComponentChildCommitRequest>(&commit_request_bytes)
-                .expect("decode child commit request"),
+            ic_platform::candid::decoder::decode_one::<RootComponentChildCommitRequest>(
+                &commit_request_bytes
+            )
+            .expect("decode child commit request"),
             commit_request
         );
         assert_eq!(
-            candid::decode_one::<RootComponentChildDirectoryPreparationRequest>(
+            ic_platform::candid::decoder::decode_one::<RootComponentChildDirectoryPreparationRequest>(
                 &directory_request_bytes
             )
             .expect("decode child Directory request"),
             directory_request
         );
         assert_eq!(
-            candid::decode_one::<RootComponentChildCommitResponse>(&commit_response_bytes)
-                .expect("decode child commit response"),
+            ic_platform::candid::decoder::decode_one::<RootComponentChildCommitResponse>(
+                &commit_response_bytes
+            )
+            .expect("decode child commit response"),
             commit_response
         );
         assert_eq!(
-            candid::decode_one::<RootComponentChildDirectoryPreparationResponse>(
-                &directory_response_bytes
-            )
+            ic_platform::candid::decoder::decode_one::<
+                RootComponentChildDirectoryPreparationResponse,
+            >(&directory_response_bytes)
             .expect("decode child Directory response"),
             directory_response
         );
         assert_eq!(
-            candid::decode_one::<RootComponentChildRuntimeActivationRequest>(
+            ic_platform::candid::decoder::decode_one::<RootComponentChildRuntimeActivationRequest>(
                 &activation_request_bytes
             )
             .expect("decode child activation request"),
             activation_request
         );
         assert_eq!(
-            candid::decode_one::<RootComponentChildRuntimeActivationResponse>(
+            ic_platform::candid::decoder::decode_one::<RootComponentChildRuntimeActivationResponse>(
                 &activation_response_bytes
             )
             .expect("decode child activation response"),
             activation_response
         );
         assert_eq!(
-            candid::decode_one::<RootComponentChildMembershipActivationRequest>(
+            ic_platform::candid::decoder::decode_one::<RootComponentChildMembershipActivationRequest>(
                 &membership_request_bytes
             )
             .expect("decode child membership request"),
             membership_request
         );
         assert_eq!(
-            candid::decode_one::<RootComponentChildMembershipActivationResponse>(
-                &membership_response_bytes
-            )
+            ic_platform::candid::decoder::decode_one::<
+                RootComponentChildMembershipActivationResponse,
+            >(&membership_response_bytes)
             .expect("decode child membership response"),
             membership_response
         );
@@ -2873,10 +3083,11 @@ mod tests {
         let request = RootComponentCommitRequest {
             operation_id: [10; 32],
         };
-        let bytes = candid::encode_one(request).expect("encode commit request");
+        let bytes =
+            ic_platform::candid::contract::encode_one(request).expect("encode commit request");
 
         assert_eq!(
-            candid::decode_one::<RootComponentCommitRequest>(&bytes)
+            ic_platform::candid::decoder::decode_one::<RootComponentCommitRequest>(&bytes)
                 .expect("decode commit request"),
             request
         );
@@ -2894,25 +3105,32 @@ mod tests {
         let membership_request = RootComponentMembershipActivationRequest {
             operation_id: root_request.operation_id,
         };
-        let root_bytes = candid::encode_one(root_request).expect("encode root activation request");
-        let target_bytes =
-            candid::encode_one(target_request).expect("encode target activation request");
-        let membership_bytes =
-            candid::encode_one(membership_request).expect("encode membership activation request");
+        let root_bytes = ic_platform::candid::contract::encode_one(root_request)
+            .expect("encode root activation request");
+        let target_bytes = ic_platform::candid::contract::encode_one(target_request)
+            .expect("encode target activation request");
+        let membership_bytes = ic_platform::candid::contract::encode_one(membership_request)
+            .expect("encode membership activation request");
 
         assert_eq!(
-            candid::decode_one::<RootComponentRuntimeActivationRequest>(&root_bytes)
-                .expect("decode root activation request"),
+            ic_platform::candid::decoder::decode_one::<RootComponentRuntimeActivationRequest>(
+                &root_bytes
+            )
+            .expect("decode root activation request"),
             root_request
         );
         assert_eq!(
-            candid::decode_one::<ComponentRuntimeActivationRequest>(&target_bytes)
-                .expect("decode target activation request"),
+            ic_platform::candid::decoder::decode_one::<ComponentRuntimeActivationRequest>(
+                &target_bytes
+            )
+            .expect("decode target activation request"),
             target_request
         );
         assert_eq!(
-            candid::decode_one::<RootComponentMembershipActivationRequest>(&membership_bytes)
-                .expect("decode membership activation request"),
+            ic_platform::candid::decoder::decode_one::<RootComponentMembershipActivationRequest>(
+                &membership_bytes
+            )
+            .expect("decode membership activation request"),
             membership_request
         );
     }

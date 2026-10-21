@@ -1,7 +1,6 @@
 #![expect(clippy::unused_async)]
 //! Minimal non-root canister for delegation proof tests.
 
-use candid::{CandidType, Deserialize, Principal};
 use canic::{
     Error,
     access::auth::{
@@ -21,23 +20,22 @@ use canic::{
     prelude::*,
     protocol::CANIC_ROOT_COMMAND,
 };
-use canic_contracts::dto::role::OperationAcceptedResponse as RootCommandResponse;
-use canic_contracts::dto::wire::projection::peer_allocation::RootCommand;
+use canic_contracts::dto::{
+    role::OperationAcceptedResponse as RootCommandResponse,
+    wire::projection::peer_allocation::RootCommand,
+};
+use ic_platform::{Principal, candid::contract::CandidType};
+use serde::Deserialize;
 
 const VERIFY_APPLICATION_SCOPE: canic::access::auth::ApplicationScopeRef<'static> =
     canic::application_scope!("app00:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
 
 #[derive(CandidType, Clone, Copy, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 enum LocalAuthorizationDenialProbe {
     Anonymous,
     AuthorityUnavailable,
     CallerMismatch,
-    Disabled,
-    Expired,
-    InadmissibleSubject,
-    MissingScope,
-    MissingSession,
-    StaleAuthority,
 }
 
 impl LocalAuthorizationDenialProbe {
@@ -46,12 +44,6 @@ impl LocalAuthorizationDenialProbe {
             Self::Anonymous => LocalApplicationAuthorizationDenial::Anonymous,
             Self::AuthorityUnavailable => LocalApplicationAuthorizationDenial::AuthorityUnavailable,
             Self::CallerMismatch => LocalApplicationAuthorizationDenial::CallerMismatch,
-            Self::Disabled => LocalApplicationAuthorizationDenial::Disabled,
-            Self::Expired => LocalApplicationAuthorizationDenial::Expired,
-            Self::InadmissibleSubject => LocalApplicationAuthorizationDenial::InadmissibleSubject,
-            Self::MissingScope => LocalApplicationAuthorizationDenial::MissingScope,
-            Self::MissingSession => LocalApplicationAuthorizationDenial::MissingSession,
-            Self::StaleAuthority => LocalApplicationAuthorizationDenial::StaleAuthority,
         }
     }
 
@@ -60,12 +52,6 @@ impl LocalAuthorizationDenialProbe {
             Self::Anonymous => "anonymous",
             Self::AuthorityUnavailable => "authority_unavailable",
             Self::CallerMismatch => "caller_mismatch",
-            Self::Disabled => "disabled",
-            Self::Expired => "expired",
-            Self::InadmissibleSubject => "inadmissible_subject",
-            Self::MissingScope => "missing_scope",
-            Self::MissingSession => "missing_session",
-            Self::StaleAuthority => "stale_authority",
         }
     }
 }
@@ -124,7 +110,7 @@ async fn issuer_runtime_metrics() -> Result<Page<MetricEntry>, Error> {
     }))
 }
 
-/// Measure one branch of the closed local-authorization denial partition.
+/// Measure one implemented caller-gate denial while enrollment is unavailable.
 #[canic_query(public)]
 async fn issuer_application_denial_perf(
     probe: LocalAuthorizationDenialProbe,
@@ -144,7 +130,7 @@ async fn issuer_application_denial_perf(
 }
 
 fn application_subject() -> Result<Principal, Error> {
-    let caller = ic_cdk::api::msg_caller();
+    let caller = ic_platform::cdk::api::msg_caller();
     match authorize_local_application(LocalApplicationAuthorizationRequest {
         observed_transport_caller: caller,
         required_scope: VERIFY_APPLICATION_SCOPE,

@@ -4,12 +4,12 @@
 //! Does not own: runtime grant history, burn forecasts, plan authority or funding effects.
 //! Boundary: live Coordinator usage does not turn fresh-child demand into a funding quotation.
 
-use candid::Principal;
 use canic_contracts::ids::{
     CanisterRole, ComponentBinding, ComponentSpecAdmission, ComponentSpecId,
     ComponentTopologyDigest, CyclesFundingBudget, FleetRegistryAuthority,
     FleetSubnetRootFundingAuthority, FleetSubnetRootLimits, FleetSubnetRootReleaseSet, SubnetId,
 };
+use ic_platform::Principal;
 use std::collections::BTreeMap;
 
 /// Retained observation status and recomputed diagnostic demand; neither approves funding.
@@ -211,8 +211,8 @@ pub struct StartupRecursiveChildDemand {
 pub struct StartupChildFundingBinding {
     pub release_set: FleetSubnetRootReleaseSet,
     pub component: ComponentBinding,
-    pub canister_id: candid::Principal,
-    pub parent: candid::Principal,
+    pub canister_id: ic_platform::Principal,
+    pub parent: ic_platform::Principal,
     pub parent_role: Option<CanisterRole>,
     pub role: CanisterRole,
 }

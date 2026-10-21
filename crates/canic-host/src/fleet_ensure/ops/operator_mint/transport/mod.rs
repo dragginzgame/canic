@@ -21,20 +21,25 @@ use crate::{
     },
     icp::{IcpCli, IcpManagementCallError},
 };
-use candid::{CandidType, Nat, Principal};
-use ic_agent::{Agent, AgentError, agent::RequestStatusResponse};
-use icrc_ledger_types::icrc3::blocks::{GetBlocksRequest, ICRC3DataCertificate};
+use ic_platform::{
+    Principal,
+    agent::{Agent, AgentError, RequestStatusResponse},
+    candid::contract::{CandidType, Nat},
+    icrc_ledger_types::{GetBlocksRequest, ICRC3DataCertificate},
+};
 use serde::{Deserialize, de::DeserializeOwned};
 use std::time::Duration;
 use thiserror::Error;
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 struct Rate {
     timestamp_seconds: u64,
     xdr_permyriad_per_icp: u64,
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 struct RateReply {
     data: Rate,
 }
@@ -69,7 +74,7 @@ pub enum OperatorMintTransportError {
     #[error("operator mint response exceeded its observation budget")]
     BudgetExceeded,
     #[error("operator mint response encoding or decoding failed")]
-    Candid(#[from] candid::Error),
+    Candid(#[from] ic_platform::candid::contract::Error),
     #[error(transparent)]
     Deposit(#[from] DepositVerificationError),
     #[error(transparent)]
@@ -112,6 +117,7 @@ pub struct OperatorMintTransport {
 }
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 struct BlocksReply {
     blocks: Vec<LedgerBlock>,
 }
@@ -127,12 +133,16 @@ impl OperatorMintTransport {
         &self,
         ledger: Principal,
     ) -> Result<u128, OperatorMintTransportError> {
-        let account = icrc_ledger_types::icrc1::account::Account {
+        let account = ic_platform::icrc_ledger_types::Account {
             owner: self.operator()?,
             subaccount: None,
         };
         let amount: Nat = self
-            .query(ledger, "icrc1_balance_of", candid::encode_one(account)?)
+            .query(
+                ledger,
+                "icrc1_balance_of",
+                ic_platform::candid::contract::encode_one(account)?,
+            )
             .await?;
         (&amount.0)
             .try_into()
@@ -160,13 +170,25 @@ impl OperatorMintTransport {
         cycles_ledger: Principal,
     ) -> Result<OperatorMintRateQuote, OperatorMintTransportError> {
         let rate: RateReply = self
-            .query(cmc, "get_icp_xdr_conversion_rate", candid::encode_args(())?)
+            .query(
+                cmc,
+                "get_icp_xdr_conversion_rate",
+                ic_platform::candid::contract::encode_args(())?,
+            )
             .await?;
         let transfer: Nat = self
-            .query(icp_ledger, "icrc1_fee", candid::encode_args(())?)
+            .query(
+                icp_ledger,
+                "icrc1_fee",
+                ic_platform::candid::contract::encode_args(())?,
+            )
             .await?;
         let deposit: Nat = self
-            .query(cycles_ledger, "icrc1_fee", candid::encode_args(())?)
+            .query(
+                cycles_ledger,
+                "icrc1_fee",
+                ic_platform::candid::contract::encode_args(())?,
+            )
             .await?;
         Ok(OperatorMintRateQuote {
             rate_timestamp_seconds: rate.data.timestamp_seconds,
@@ -347,7 +369,7 @@ impl OperatorMintTransport {
             .query(
                 ledger,
                 "icrc3_get_tip_certificate",
-                candid::encode_args(())?,
+                ic_platform::candid::contract::encode_args(())?,
             )
             .await?;
         let evidence = evidence.ok_or(OperatorMintTransportError::ReceiptUnavailable)?;
@@ -361,7 +383,7 @@ impl OperatorMintTransport {
             .query(
                 ledger,
                 "icrc3_get_blocks",
-                candid::encode_one(vec![GetBlocksRequest {
+                ic_platform::candid::contract::encode_one(vec![GetBlocksRequest {
                     start: Nat::from(*deposit_block_index),
                     length: Nat::from(count),
                 }])?,
@@ -391,11 +413,13 @@ impl OperatorMintTransport {
         )
         .await
         .map_err(|_| OperatorMintTransportError::Timeout)??;
-        let mut config = candid::de::DecoderConfig::new();
+        let mut config = ic_platform::candid::decoder::DecoderConfig::new();
         config
             .set_decoding_quota(2_000_000)
             .set_skipping_quota(100_000)
             .set_max_type_len(10_000);
-        Ok(candid::utils::decode_one_with_config(&bytes, &config)?)
+        Ok(ic_platform::candid::decoder::decode_one_with_config(
+            &bytes, &config,
+        )?)
     }
 }

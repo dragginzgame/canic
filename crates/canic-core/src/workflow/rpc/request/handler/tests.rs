@@ -38,7 +38,6 @@ use crate::{
         RootCapabilityCallerAuthority, RootCapabilityMemberAuthority, RootCapabilityParentAuthority,
     },
 };
-use candid::encode_one;
 use canic_contracts::{
     cycles::{Cycles, TC},
     ids::{
@@ -47,6 +46,7 @@ use canic_contracts::{
         FleetRegistryAuthority, ManagedCanisterBinding, SubnetId,
     },
 };
+use ic_platform::candid::contract::encode_one;
 use std::collections::HashMap;
 
 fn p(id: u8) -> Principal {

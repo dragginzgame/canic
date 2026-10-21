@@ -3,10 +3,10 @@ use super::{
     topology::{wait_for_bootstrap, wait_for_children_ready, wait_for_snapshot_pids_ready},
 };
 use ic_testkit::pic::{
-    BaselinePreparationStage, CachedPocketIcBaseline, CanisterSnapshotTarget,
-    ControllerSnapshotError, FailureDisposition, PocketIcBaselineRecipe, PreparedBaseline,
-    RebuildReason, ResetPolicies, ResetReceipt, ResetRequirements, SnapshotRestoreFunding,
-    TimeResetPolicy, is_dead_pocket_ic_transport_error,
+    BaselinePoolContractError, BaselinePreparationStage, CachedPocketIcBaseline,
+    CanisterSnapshotTarget, ControllerSnapshotError, FailureDisposition, PocketIcBaselineRecipe,
+    PreparedBaseline, RebuildReason, ResetPolicies, ResetReceipt, ResetRequirements,
+    SnapshotRestoreFunding, TimeResetPolicy, is_dead_pocket_ic_transport_error,
 };
 use std::{collections::BTreeMap, error::Error as StdError, fmt, path::PathBuf, time::Instant};
 
@@ -21,6 +21,8 @@ pub struct RootBaselineRecipe {
 pub enum RootBaselineRecipeError {
     /// The root artifact set did not contain the expected root Wasm.
     MissingRootWasm(PathBuf),
+    /// The testkit rejected recipe or reset evidence.
+    Contract(BaselinePoolContractError),
     /// Capturing or restoring a controller snapshot failed.
     Snapshot(ControllerSnapshotError),
     /// A post-restore root topology invariant failed.
@@ -29,6 +31,7 @@ pub enum RootBaselineRecipeError {
 
 impl RootBaselineRecipe {
     /// Construct one profile-specific root baseline recipe.
+    ///
     #[must_use]
     pub fn new(spec: RootBaselineSpec<'static>) -> Self {
         Self {
@@ -57,7 +60,9 @@ impl PocketIcBaselineRecipe for RootBaselineRecipe {
     fn build(&self) -> Result<CachedPocketIcBaseline<Self::Metadata>, Self::Error> {
         let artifacts = super::ensure_root_release_artifacts_built(&self.spec);
         let root_wasm = super::load_root_wasm(&self.spec, &artifacts).ok_or_else(|| {
-            RootBaselineRecipeError::MissingRootWasm(self.spec.root_wasm_path.clone())
+            RootBaselineRecipeError::MissingRootWasm(
+                crate::pic::artifacts::retained_artifact_path(&artifacts, "root").to_owned(),
+            )
         })?;
         Ok(build_root_cached_baseline(
             &self.spec, &artifacts, root_wasm,
@@ -118,13 +123,19 @@ impl PocketIcBaselineRecipe for RootBaselineRecipe {
     fn classify_failure(
         &self,
         stage: BaselinePreparationStage,
-        error: &(dyn std::error::Error + 'static),
+        error: &(dyn StdError + 'static),
     ) -> FailureDisposition {
         if is_dead_pocket_ic_transport_error(error) {
             FailureDisposition::Rebuild(RebuildReason::DeadPocketIcTransport)
         } else {
             FailureDisposition::Rebuild(stage.default_rebuild_reason())
         }
+    }
+}
+
+impl From<BaselinePoolContractError> for RootBaselineRecipeError {
+    fn from(error: BaselinePoolContractError) -> Self {
+        Self::Contract(error)
     }
 }
 
@@ -140,6 +151,7 @@ impl fmt::Display for RootBaselineRecipeError {
             Self::MissingRootWasm(path) => {
                 write!(formatter, "missing root Wasm at {}", path.display())
             }
+            Self::Contract(error) => error.fmt(formatter),
             Self::Snapshot(error) => error.fmt(formatter),
             Self::Invariant(message) => formatter.write_str(message),
         }
@@ -150,6 +162,7 @@ impl StdError for RootBaselineRecipeError {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match self {
             Self::MissingRootWasm(_) | Self::Invariant(_) => None,
+            Self::Contract(error) => Some(error),
             Self::Snapshot(error) => Some(error),
         }
     }
@@ -260,9 +273,9 @@ mod tests {
 
     #[test]
     fn root_baseline_snapshot_targets_are_unique_and_controller_exact() {
-        let root_id = candid::Principal::from_slice(&[0x41; 29]);
-        let child_id = candid::Principal::from_slice(&[0x42; 29]);
-        let store_id = candid::Principal::from_slice(&[0x43; 29]);
+        let root_id = ic_platform::Principal::from_slice(&[0x41; 29]);
+        let child_id = ic_platform::Principal::from_slice(&[0x42; 29]);
+        let store_id = ic_platform::Principal::from_slice(&[0x43; 29]);
         let metadata = RootBaselineMetadata {
             root_id,
             component_canisters: HashMap::new(),

@@ -83,8 +83,7 @@ fn generated_packages_preserve_special_characters_in_dependency_patch_paths() {
     }
     let dependencies = GeneratedWrapperDependencies {
         canic_version: "0.1.0".into(),
-        candid_version: "0.10.0".into(),
-        ic_cdk_version: "0.20.0".into(),
+        ic_platform_version: "0.1.8".into(),
     };
     for role in ["root", "fleet_coordinator", "wasm_store"] {
         let package = format!("canic-{role}-fixture");
@@ -109,6 +108,18 @@ fn generated_packages_preserve_special_characters_in_dependency_patch_paths() {
         assert_eq!(
             document["dependencies"]["canic"]["path"].as_str(),
             canic_manifest.parent().unwrap().to_str()
+        );
+        assert_eq!(
+            document["dependencies"]["ic-platform"]["version"].as_str(),
+            Some("=0.1.8")
+        );
+        assert_eq!(
+            document["dependencies"]["ic-platform"]["default-features"].as_bool(),
+            Some(false)
+        );
+        assert_eq!(
+            document["dependencies"]["ic-platform"]["features"][0].as_str(),
+            Some("cdk")
         );
         for &name in CANIC_FAMILY_CRATES {
             let expected = root.join("crates").join(name);
@@ -159,8 +170,7 @@ fn sibling_configurations_preserve_each_others_generated_packages() {
     fs::write(root.join("Cargo.lock"), "version = 4\n").unwrap();
     let dependencies = GeneratedWrapperDependencies {
         canic_version: "0.1.0".into(),
-        candid_version: "0.10.0".into(),
-        ic_cdk_version: "0.20.0".into(),
+        ic_platform_version: "0.1.8".into(),
     };
     for package in [
         "canic-fleet-root",

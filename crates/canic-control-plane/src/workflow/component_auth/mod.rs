@@ -16,7 +16,7 @@ pub use super::component_registry::ActiveComponentMemberError;
 
 /// Inspect membership without converting an ordinary negative into access denial.
 pub fn lookup_active_member(
-    subject: candid::Principal,
+    subject: ic_platform::Principal,
 ) -> Result<Option<ManagedCanisterBinding>, Error> {
     membership_observation(active_component_member_for_access(subject))
 }
@@ -32,7 +32,9 @@ fn membership_observation(
 }
 
 /// Resolve one exact active member under an active Fleet Subnet Root.
-pub fn active_component_member(caller: candid::Principal) -> Result<ManagedCanisterBinding, Error> {
+pub fn active_component_member(
+    caller: ic_platform::Principal,
+) -> Result<ManagedCanisterBinding, Error> {
     active_component_member_for_access(caller)
         .map_err(InternalError::from)
         .map_err(Into::into)
@@ -40,7 +42,7 @@ pub fn active_component_member(caller: candid::Principal) -> Result<ManagedCanis
 
 /// Preserve runtime and Registry causes while evaluating endpoint access.
 pub fn active_component_member_for_access(
-    caller: candid::Principal,
+    caller: ic_platform::Principal,
 ) -> Result<ManagedCanisterBinding, ActiveComponentMemberError> {
     require_active_fleet_subnet_root_internal()?;
     super::component_registry::active_component_member(caller)
@@ -48,7 +50,7 @@ pub fn active_component_member_for_access(
 
 /// Resolve an exact Prepared or Active Registry member after protected Root validation.
 pub fn registered_component_member_for_access(
-    caller: candid::Principal,
+    caller: ic_platform::Principal,
 ) -> Result<ManagedCanisterBinding, ActiveComponentMemberError> {
     Ok(super::component_registry::registered_component_member_authority(caller)?.binding)
 }

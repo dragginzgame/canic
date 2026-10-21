@@ -42,7 +42,6 @@ use crate::{
     },
     subnet_catalog::MainnetCatalogClient,
 };
-use candid::{Nat, Principal};
 use canic_contracts::{
     cycles::Cycles,
     dto::{
@@ -69,6 +68,7 @@ use ic_host_fs::{
     durable::{PublicationMode, WriteOptions, write_bytes},
     read::read_optional_file_no_follow,
 };
+use ic_platform::{Principal, candid::contract::Nat};
 use ic_query::subnet_catalog::{CatalogLoadOutcome, SubnetSpecialization};
 use serde::{Deserialize, Serialize};
 use sha2_host::{Digest, Sha256};

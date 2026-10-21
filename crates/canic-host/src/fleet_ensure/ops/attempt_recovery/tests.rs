@@ -24,7 +24,7 @@ fn exhausted_survey(paths: &EnsurePaths, digest: [u8; 32]) -> std::path::PathBuf
 
 #[test]
 fn reviewed_survey_continuation_keeps_spent_attempts_and_replays_without_another_grant() {
-    let directory = physical_fixture_directory("attempt-recovery-survey");
+    let directory = crate::test_support::temp_dir("attempt-recovery-survey");
     let paths = EnsurePaths::under(&directory, "local", "survey");
     let file = exhausted_survey(&paths, [1; 32]);
     let before = std::fs::read(&file).unwrap();
@@ -74,7 +74,7 @@ fn reviewed_survey_continuation_keeps_spent_attempts_and_replays_without_another
 
 #[test]
 fn changed_owner_and_wrong_digest_refuse_before_any_allowance_changes() {
-    let directory = physical_fixture_directory("attempt-recovery-changed");
+    let directory = crate::test_support::temp_dir("attempt-recovery-changed");
     let paths = EnsurePaths::under(&directory, "local", "survey");
     let first = exhausted_survey(&paths, [1; 32]);
     let second = exhausted_survey(&paths, [2; 32]);
@@ -111,7 +111,7 @@ fn changed_owner_and_wrong_digest_refuse_before_any_allowance_changes() {
 
 #[test]
 fn interrupted_local_grant_publication_resumes_exactly_once() {
-    let directory = physical_fixture_directory("attempt-recovery-partial");
+    let directory = crate::test_support::temp_dir("attempt-recovery-partial");
     let paths = EnsurePaths::under(&directory, "local", "survey");
     exhausted_survey(&paths, [1; 32]);
     exhausted_survey(&paths, [2; 32]);
@@ -142,9 +142,21 @@ fn interrupted_local_grant_publication_resumes_exactly_once() {
     std::fs::remove_dir_all(directory).unwrap();
 }
 
-// Match the workflow's physical path before directly exercising retained owners.
-fn physical_fixture_directory(prefix: &str) -> std::path::PathBuf {
-    let directory = crate::test_support::temp_dir(prefix);
+#[test]
+fn idle_review_reports_no_exhausted_counters_without_retaining_a_review() {
+    let directory = crate::test_support::temp_dir("attempt-recovery-idle");
     std::fs::create_dir_all(&directory).unwrap();
-    directory.canonicalize().unwrap()
+    let paths = EnsurePaths::under(&directory, "local", "idle");
+    assert!(matches!(
+        crate::fleet_ensure::workflow::attempt_recovery::review(&directory, "local", "idle"),
+        Err(CapacityImportJournalError::NoExhaustedAttempts)
+    ));
+    assert!(!paths.plan.with_file_name("capacity-import.json").exists());
+    assert!(
+        !paths
+            .plan
+            .with_file_name("attempt-recovery-reviews")
+            .exists()
+    );
+    std::fs::remove_dir_all(directory).unwrap();
 }

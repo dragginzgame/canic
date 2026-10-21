@@ -9,11 +9,12 @@ use crate::dto::{
     fleet_registry::{FleetRegistry, FleetRegistryManifest, FleetRegistryVersion},
     fleet_subnet_root::FleetSubnetRootCanisterSummary,
 };
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 
 /// Bounded CoordinatorStatusRequestFragment wire projection for subnet information.
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CoordinatorStatusRequestFragment {
     Registry,
     RegistryManifest,
@@ -22,6 +23,7 @@ pub enum CoordinatorStatusRequestFragment {
 
 /// Bounded CoordinatorStatusResponseFragment wire projection for subnet information.
 #[derive(CandidType, serde::Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CoordinatorStatusResponseFragment {
     Registry(Box<FleetRegistry>),
     RegistryManifest(FleetRegistryManifest),
@@ -30,12 +32,14 @@ pub enum CoordinatorStatusResponseFragment {
 
 /// Bounded RootStatusRequestFragment wire projection for subnet information.
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootStatusRequestFragment {
     Inventory,
 }
 
 /// Bounded RootStatusResponseFragment wire projection for subnet information.
 #[derive(CandidType, serde::Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootStatusResponseFragment {
     Inventory(FleetSubnetRootCanisterSummary),
 }

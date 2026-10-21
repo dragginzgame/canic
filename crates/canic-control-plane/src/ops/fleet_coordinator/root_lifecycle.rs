@@ -13,7 +13,6 @@ use crate::storage::stable::fleet_coordinator::{
     FleetSubnetRootDrainingPublicationReceiptRecord,
     FleetSubnetRootRemovalPublicationReceiptRecord,
 };
-use candid::Principal;
 use canic_contracts::{
     dto::{
         component_provisioning::FleetComponentProvisioningPlan,
@@ -33,6 +32,7 @@ use canic_core::control_plane_support::{
         root_draining_reservation::FleetSubnetRootDrainingReservationOps,
     },
 };
+use ic_platform::Principal;
 
 struct GroupedRootLifecycleReferences {
     operation_journal: bool,

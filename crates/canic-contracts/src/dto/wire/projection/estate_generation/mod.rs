@@ -13,14 +13,16 @@ use serde::Deserialize;
 
 /// Bounded RootEstateStatusRequest wire projection for estate generation.
 
-#[derive(candid::CandidType)]
+#[derive(ic_platform::candid::contract::CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootEstateStatusRequest {
     FleetAuthority,
     Pool(CanisterPoolStatusRequest),
 }
 
 /// Bounded RootEstateStatusResponse wire projection for estate generation.
-#[derive(candid::CandidType, Deserialize)]
+#[derive(ic_platform::candid::contract::CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum RootEstateStatusResponse {
     FleetAuthority(Box<FleetSubnetRootAuthority>),
     Pool(Box<CanisterPoolResponse>),

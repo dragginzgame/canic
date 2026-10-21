@@ -37,7 +37,7 @@ use crate::{
     },
     ids::{FleetCoordinatorRootFundingPolicy, FleetFundingProfile, FleetSubnetRootFundingPolicy},
 };
-use candid::CandidType;
+use ic_platform::candid::contract::CandidType;
 use serde::Deserialize;
 
 ///
@@ -49,6 +49,7 @@ use serde::Deserialize;
 /// Closed controller command union for the Fleet Coordinator.
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CoordinatorCommand {
     AcknowledgeRootSnapshot(FleetSubnetRootSnapshotAcknowledgementRequest),
     ActivateRegistry(FleetRegistryActivationRequest),
@@ -70,6 +71,7 @@ pub enum CoordinatorCommand {
 
 /// Closed correlated success union for Fleet Coordinator commands.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CoordinatorCommandResponse {
     AcknowledgeRootSnapshot(FleetSubnetRootSnapshotAcknowledgement),
     ActivateRegistry(FleetRegistryActivationResponse),
@@ -87,30 +89,35 @@ pub enum CoordinatorCommandResponse {
 
 /// Registry reads use the existing Coordinator registry-caller authority.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CoordinatorRegistryRequest {
     Registry,
 }
 
 /// Registry snapshot returned to an authorized registry caller.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CoordinatorRegistryResponse {
     Registry(crate::dto::fleet_registry::FleetRegistry),
 }
 
 /// Operation reads delegate authorization to the durable operation owner.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CoordinatorOperationReadRequest {
     Operation(OperationStatusRequest),
 }
 
 /// One durable operation result under its existing exact caller contract.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CoordinatorOperationReadResponse {
     Operation(CoordinatorOperationStatusResponse),
 }
 
 /// Coordinator diagnostics selected under one observer authorization rule.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CoordinatorObservabilityRequest {
     Admission(FleetAdmissionStatusRequest),
     AuthorityRestore,
@@ -124,6 +131,7 @@ pub enum CoordinatorObservabilityRequest {
 
 /// Current spent and reserved cycles in one exact epoch-anchored funding window.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CoordinatorFundingWindowStatusResponse {
     pub window_start_secs: u64,
     pub spent_cycles: Cycles,
@@ -132,8 +140,9 @@ pub struct CoordinatorFundingWindowStatusResponse {
 
 /// Controller-only funding usage and operation state for one registered Root.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CoordinatorRootFundingStatusResponse {
-    pub fleet_subnet_root: candid::Principal,
+    pub fleet_subnet_root: ic_platform::Principal,
     pub lifecycle_status: crate::dto::fleet_registry::FleetSubnetRootStatus,
     pub policy_hash: [u8; 32],
     pub policy: FleetSubnetRootFundingPolicy,
@@ -149,8 +158,9 @@ pub struct CoordinatorRootFundingStatusResponse {
 
 /// Controller-only Coordinator treasury policy, headroom and per-Root usage.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CoordinatorFundingStatusResponse {
-    pub coordinator: candid::Principal,
+    pub coordinator: ic_platform::Principal,
     pub current_cycles: Cycles,
     pub policy_generation: u64,
     pub funding_enabled: bool,
@@ -170,6 +180,7 @@ pub struct CoordinatorFundingStatusResponse {
 
 /// Coordinator-owned durable operation detail selected by one operation ID.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[expect(
     clippy::large_enum_variant,
     reason = "the accepted Candid union keeps each existing status DTO as its direct payload"
@@ -184,6 +195,7 @@ pub enum CoordinatorOperationStatusResponse {
 
 /// Protected durable phase of one Coordinator-owned policy rotation.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum FleetFundingPolicyRotationStatusPhase {
     Staging {
         staged_root_count: u32,
@@ -203,6 +215,7 @@ pub enum FleetFundingPolicyRotationStatusPhase {
 
 /// Controller-only status of one exact current or terminal rotation.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetFundingPolicyRotationStatusResponse {
     pub operation_id: [u8; 32],
     pub plan_digest: [u8; 32],
@@ -213,6 +226,7 @@ pub struct FleetFundingPolicyRotationStatusResponse {
 
 /// Coordinator-owned progress across the existing durable root-removal boundaries.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct CoordinatorRootRemovalOperationStatus {
     pub operation_id: [u8; 32],
     pub reservation: FleetSubnetRootDrainingReservationResponse,
@@ -226,6 +240,7 @@ pub struct CoordinatorRootRemovalOperationStatus {
 
 /// Operational diagnostics returned only to authorized observers.
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum CoordinatorObservabilityResponse {
     Admission(FleetAdmissionStatusResponse),
     AuthorityRestore(AuthorityRestoreFenceStatusResponse),
@@ -240,7 +255,7 @@ pub enum CoordinatorObservabilityResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use candid::{Decode, Encode};
+    use ic_platform::candid::contract::{Decode, Encode};
 
     #[test]
     fn coordinator_status_request_is_one_closed_candid_variant() {

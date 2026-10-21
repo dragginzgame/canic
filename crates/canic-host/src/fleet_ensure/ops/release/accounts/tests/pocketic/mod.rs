@@ -2,7 +2,7 @@
 
 use super::*;
 use canic_contracts::ids::CanonicalNetworkId;
-use ic_agent::identity::BasicIdentity;
+use ic_platform::agent::BasicIdentity;
 use ic_testkit::pocket_ic::PocketIcBuilder;
 use sha2_host::{Digest, Sha256};
 use std::{fs, process::Command, time::SystemTime};
@@ -36,7 +36,7 @@ fn wire_fixture() -> Vec<u8> {
 }
 
 fn ledger_data(account: &FleetReleaseAccountRecord, reply: Vec<u8>) -> Vec<u8> {
-    let argument = candid::encode_one(Account {
+    let argument = ic_platform::candid::contract::encode_one(Account {
         owner: account.owner,
         subaccount: account.subaccount.filter(|value| *value != [0; 32]),
     })
@@ -88,7 +88,7 @@ fn governed_pocketic_release_accounts_read_exact_balances() {
         wire_fixture(),
         ledger_data(
             &review.accounts[0],
-            candid::encode_one(Nat::from(0_u8)).unwrap(),
+            ic_platform::candid::contract::encode_one(Nat::from(0_u8)).unwrap(),
         ),
         Some(operator),
     );
@@ -113,7 +113,7 @@ fn governed_pocketic_release_accounts_read_exact_balances() {
             "replace",
             ledger_data(
                 &review.accounts[0],
-                candid::encode_one(Nat::from(value)).unwrap(),
+                ic_platform::candid::contract::encode_one(Nat::from(value)).unwrap(),
             ),
         )
         .unwrap();
@@ -162,7 +162,7 @@ fn governed_pocketic_release_accounts_read_exact_balances() {
         wire_fixture(),
         ledger_data(
             &changed.accounts[1],
-            candid::encode_one(Nat::from(42_u8)).unwrap(),
+            ic_platform::candid::contract::encode_one(Nat::from(42_u8)).unwrap(),
         ),
         Some(operator),
     );
@@ -173,7 +173,8 @@ fn governed_pocketic_release_accounts_read_exact_balances() {
     for (bytes, expected) in [
         (b"DIDL".to_vec(), ReleaseAccountStage::Decode),
         (
-            candid::encode_one(Nat::from(u128::MAX) + Nat::from(1_u8)).unwrap(),
+            ic_platform::candid::contract::encode_one(Nat::from(u128::MAX) + Nat::from(1_u8))
+                .unwrap(),
             ReleaseAccountStage::Overflow,
         ),
     ] {

@@ -14,10 +14,10 @@ use crate::canister_build::CanisterBuildProfile;
 
 use std::{
     collections::BTreeMap,
+    ffi::OsString,
     fmt::Write as _,
     fs,
     path::{Path, PathBuf},
-    process::Command,
 };
 
 use ic_host_fs::durable::{PublicationMode, WriteOptions, write_bytes};
@@ -49,8 +49,7 @@ const FAST_PROFILE: &[(&str, &str)] = &[
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GeneratedWrapperDependencies {
     pub canic_version: String,
-    pub candid_version: String,
-    pub ic_cdk_version: String,
+    pub ic_platform_version: String,
 }
 
 /// Role-specific inputs to the shared infrastructure package writer.
@@ -96,8 +95,7 @@ pub fn materialize(
         "lib": { "name": spec.crate_name, "crate-type": ["cdylib"] },
         "dependencies": {
             "canic": { "path": canic_root, "default-features": false, "features": spec.features },
-            "candid": { "version": format!("={}", dependencies.candid_version), "default-features": false },
-            "ic-cdk": { "version": format!("={}", dependencies.ic_cdk_version) },
+            "ic-platform": { "version": format!("={}", dependencies.ic_platform_version), "default-features": false, "features": ["cdk"] },
         },
     });
     if spec.build_script.is_some() {
@@ -146,7 +144,10 @@ fn write_if_changed(path: &Path, bytes: &[u8]) -> Result<(), Box<dyn std::error:
     Ok(())
 }
 
-pub fn append_infrastructure_profile_args(command: &mut Command, profile: CanisterBuildProfile) {
+pub fn append_infrastructure_profile_args(
+    command: &mut Vec<OsString>,
+    profile: CanisterBuildProfile,
+) {
     match profile {
         CanisterBuildProfile::Debug => {}
         CanisterBuildProfile::Fast => {
@@ -180,12 +181,10 @@ pub fn resolved_wrapper_dependencies(
     canic_package: &Package,
 ) -> Result<GeneratedWrapperDependencies, Box<dyn std::error::Error>> {
     let canic_core = resolved_normal_dependency(metadata, canic_package, "canic-core")?;
-    let candid = resolved_normal_dependency(metadata, canic_core, "candid")?;
-    let ic_cdk = resolved_normal_dependency(metadata, canic_core, "ic-cdk")?;
+    let ic_platform = resolved_normal_dependency(metadata, canic_core, "ic-platform")?;
     Ok(GeneratedWrapperDependencies {
         canic_version: canic_package.version.to_string(),
-        candid_version: candid.version.to_string(),
-        ic_cdk_version: ic_cdk.version.to_string(),
+        ic_platform_version: ic_platform.version.to_string(),
     })
 }
 
@@ -350,10 +349,12 @@ pub fn render_infrastructure_profiles(output: &mut String) {
     render_profile(output, "fast", FAST_PROFILE);
 }
 
-pub fn append_profile_config_args(command: &mut Command, profile: &str, settings: &[(&str, &str)]) {
+pub fn append_profile_config_args(
+    command: &mut Vec<OsString>,
+    profile: &str,
+    settings: &[(&str, &str)],
+) {
     for (key, value) in settings {
-        command
-            .arg("--config")
-            .arg(format!("profile.{profile}.{key}={value}"));
+        command.push(format!("profile.{profile}.{key}={value}").into());
     }
 }

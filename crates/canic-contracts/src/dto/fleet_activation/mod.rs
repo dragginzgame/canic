@@ -5,7 +5,7 @@
 //! Boundary: authoritative owners validate these passive shapes before storing or acting on them.
 
 use crate::ids::{FleetBinding, FleetKey, ReleaseBuildId};
-use candid::{CandidType, Principal};
+use ic_platform::{Principal, candid::contract::CandidType};
 use serde::{Deserialize, Serialize};
 
 /// Maximum managed Canisters represented by one Fleet activation.
@@ -19,6 +19,7 @@ pub const MAX_FLEET_CREDENTIAL_MANIFEST_ENTRIES: usize = 64;
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetCascadeManifestEntry {
     pub principal: Principal,
     pub state_snapshot_hash: [u8; 32],
@@ -30,6 +31,7 @@ pub struct FleetCascadeManifestEntry {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum FleetCascadeActivationEvidence {
     Source {
         cascade_manifest_hash: [u8; 32],
@@ -45,6 +47,7 @@ pub enum FleetCascadeActivationEvidence {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetCredentialGenerationRef {
     pub generation: u64,
     pub manifest_hash: [u8; 32],
@@ -55,6 +58,7 @@ pub struct FleetCredentialGenerationRef {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetCredentialManifestEntry {
     pub root_issuer: Principal,
     pub subject_canister: Principal,
@@ -71,6 +75,7 @@ pub struct FleetCredentialManifestEntry {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetCredentialManifest {
     pub fleet: FleetKey,
     pub activation_id: [u8; 32],
@@ -85,6 +90,7 @@ pub struct FleetCredentialManifest {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetActivationIdentity {
     pub fleet: FleetBinding,
     pub operation_id: [u8; 32],
@@ -96,6 +102,7 @@ pub struct FleetActivationIdentity {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum FleetActivationPhase {
     Prepared,
     Active,
@@ -106,6 +113,7 @@ pub enum FleetActivationPhase {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetActivationStatusResponse {
     pub phase: FleetActivationPhase,
     pub identity: FleetActivationIdentity,
@@ -117,18 +125,21 @@ pub struct FleetActivationStatusResponse {
 }
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetActivationResumeRequest {
     pub operation_id: [u8; 32],
     pub credential: FleetCredentialGenerationRef,
 }
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetCredentialGenerationRequest {
     pub operation_id: [u8; 32],
     pub credential: FleetCredentialGenerationRef,
 }
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetActivationRequest {
     pub operation_id: [u8; 32],
     pub credential: FleetCredentialGenerationRef,
@@ -174,9 +185,10 @@ mod tests {
             activated_at_ns: None,
         };
 
-        let bytes = candid::encode_one(&input).expect("encode activation status");
+        let bytes =
+            ic_platform::candid::contract::encode_one(&input).expect("encode activation status");
         let decoded: FleetActivationStatusResponse =
-            candid::decode_one(&bytes).expect("decode activation status");
+            ic_platform::candid::decoder::decode_one(&bytes).expect("decode activation status");
 
         assert_eq!(decoded, input);
     }

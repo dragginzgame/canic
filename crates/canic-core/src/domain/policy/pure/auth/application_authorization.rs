@@ -1,17 +1,12 @@
 //! Module: domain::policy::pure::auth::application_authorization
 //!
-//! Responsibility: make closed local-application authorization and admission decisions.
+//! Responsibility: decide Canic protected-authority transitions and define boundary outcomes.
 //! Does not own: caller/time acquisition, storage, proof cryptography, serialization, or mutation.
 //! Boundary: access and workflow supply model values; policy returns value-only decisions.
 
+use crate::domain::value::Principal;
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
 use crate::model::auth::application_authorization::LocalApplicationAuthorityBinding;
-use crate::{
-    domain::value::Principal,
-    model::auth::application_authorization::{
-        ApplicationScopeRef, LocalApplicationAuthoritySnapshot, LocalApplicationSession,
-    },
-};
 
 /// Stable-binding action required by one locally activated protected-policy change.
 
@@ -86,18 +81,6 @@ pub fn decide_application_authority_binding_transition(
     }
 }
 
-/// Pure authorization inputs acquired once by the synchronous access boundary.
-pub struct LocalApplicationAuthorizationPolicyInput<'a> {
-    pub actual_caller: Principal,
-    pub observed_caller: Principal,
-    pub now_ns: u64,
-    pub capability_enabled: bool,
-    pub authority: Option<&'a LocalApplicationAuthoritySnapshot>,
-    pub session: Option<&'a LocalApplicationSession>,
-    pub subject_admissible: bool,
-    pub required_scope: ApplicationScopeRef<'a>,
-}
-
 /// Successful local application identity and its strict session expiry.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct AuthorizedApplicationSubject {
@@ -124,62 +107,6 @@ pub enum LocalApplicationAuthorizationDenial {
     StaleAuthority,
     InadmissibleSubject,
     MissingScope,
-}
-
-/// Authorize one already-validated scope using only supplied values.
-#[must_use]
-pub fn authorize_local_application(
-    input: LocalApplicationAuthorizationPolicyInput<'_>,
-) -> LocalApplicationAuthorizationDecision {
-    let denial = if input.actual_caller == Principal::anonymous() {
-        Some(LocalApplicationAuthorizationDenial::Anonymous)
-    } else if input.actual_caller != input.observed_caller {
-        Some(LocalApplicationAuthorizationDenial::CallerMismatch)
-    } else if !input.capability_enabled {
-        Some(LocalApplicationAuthorizationDenial::Disabled)
-    } else if input.authority.is_none() {
-        Some(LocalApplicationAuthorizationDenial::AuthorityUnavailable)
-    } else if input.session.is_none() {
-        Some(LocalApplicationAuthorizationDenial::MissingSession)
-    } else {
-        None
-    };
-    if let Some(denial) = denial {
-        return LocalApplicationAuthorizationDecision::Deny(denial);
-    }
-
-    let authority = input
-        .authority
-        .expect("checked protected authority presence");
-    let session = input.session.expect("checked canonical session presence");
-    if input.now_ns >= session.expires_at_ns() {
-        return LocalApplicationAuthorizationDecision::Deny(
-            LocalApplicationAuthorizationDenial::Expired,
-        );
-    }
-    if session.transport_caller() != input.actual_caller
-        || session.fleet() != authority.fleet()
-        || session.role() != authority.role()
-        || session.authority_generation() != authority.generation()
-    {
-        return LocalApplicationAuthorizationDecision::Deny(
-            LocalApplicationAuthorizationDenial::StaleAuthority,
-        );
-    }
-    if !input.subject_admissible {
-        return LocalApplicationAuthorizationDecision::Deny(
-            LocalApplicationAuthorizationDenial::InadmissibleSubject,
-        );
-    }
-    if !session.scopes().contains(input.required_scope) {
-        return LocalApplicationAuthorizationDecision::Deny(
-            LocalApplicationAuthorizationDenial::MissingScope,
-        );
-    }
-    LocalApplicationAuthorizationDecision::Allow(AuthorizedApplicationSubject {
-        subject: session.authenticated_subject(),
-        expires_at_ns: session.expires_at_ns(),
-    })
 }
 
 // -----------------------------------------------------------------------------
@@ -209,27 +136,6 @@ mod tests {
         .unwrap()
     }
 
-    fn session() -> LocalApplicationSession {
-        LocalApplicationSession::new(
-            p(1),
-            p(1),
-            p(2),
-            fleet_key(3),
-            CanisterRole::new("component"),
-            scopes(&["app:read"]),
-            4,
-            10,
-            100,
-            [5; 32],
-            [6; 32],
-        )
-        .unwrap()
-    }
-
-    fn authority() -> LocalApplicationAuthoritySnapshot {
-        LocalApplicationAuthoritySnapshot::new(fleet_key(3), CanisterRole::new("component"), 4)
-    }
-
     fn binding(
         fleet: u8,
         role: &'static str,
@@ -246,35 +152,6 @@ mod tests {
             scopes(allowed_scopes),
             maximum_ttl_secs,
         )
-    }
-
-    fn authorization_input<'a>(
-        authority: Option<&'a LocalApplicationAuthoritySnapshot>,
-        session: Option<&'a LocalApplicationSession>,
-    ) -> LocalApplicationAuthorizationPolicyInput<'a> {
-        LocalApplicationAuthorizationPolicyInput {
-            actual_caller: p(1),
-            observed_caller: p(1),
-            now_ns: 50,
-            capability_enabled: true,
-            authority,
-            session,
-            subject_admissible: true,
-            required_scope: ApplicationScopeRef::from_static("app:read"),
-        }
-    }
-
-    #[test]
-    fn authorization_allows_exact_current_session_scope() {
-        let authority = authority();
-        let session = session();
-        assert_eq!(
-            authorize_local_application(authorization_input(Some(&authority), Some(&session))),
-            LocalApplicationAuthorizationDecision::Allow(AuthorizedApplicationSubject {
-                subject: p(1),
-                expires_at_ns: 100,
-            })
-        );
     }
 
     #[test]
@@ -326,102 +203,6 @@ mod tests {
                 &original,
             ),
             ApplicationAuthorityBindingTransition::AdvanceGeneration
-        );
-    }
-
-    #[test]
-    fn authorization_denial_precedence_is_closed() {
-        let authority = authority();
-        let session = session();
-        let mut input = authorization_input(Some(&authority), Some(&session));
-        input.actual_caller = Principal::anonymous();
-        input.observed_caller = p(9);
-        input.capability_enabled = false;
-        input.authority = None;
-        input.session = None;
-        assert_eq!(
-            authorize_local_application(input),
-            LocalApplicationAuthorizationDecision::Deny(
-                LocalApplicationAuthorizationDenial::Anonymous
-            )
-        );
-
-        let mut input = authorization_input(Some(&authority), Some(&session));
-        input.observed_caller = p(9);
-        input.capability_enabled = false;
-        assert_eq!(
-            authorize_local_application(input),
-            LocalApplicationAuthorizationDecision::Deny(
-                LocalApplicationAuthorizationDenial::CallerMismatch
-            )
-        );
-
-        let mut input = authorization_input(None, None);
-        input.capability_enabled = false;
-        assert_eq!(
-            authorize_local_application(input),
-            LocalApplicationAuthorizationDecision::Deny(
-                LocalApplicationAuthorizationDenial::Disabled
-            )
-        );
-        assert_eq!(
-            authorize_local_application(authorization_input(None, None)),
-            LocalApplicationAuthorizationDecision::Deny(
-                LocalApplicationAuthorizationDenial::AuthorityUnavailable
-            )
-        );
-        assert_eq!(
-            authorize_local_application(authorization_input(Some(&authority), None)),
-            LocalApplicationAuthorizationDecision::Deny(
-                LocalApplicationAuthorizationDenial::MissingSession
-            )
-        );
-    }
-
-    #[test]
-    fn authorization_applies_expiry_staleness_admissibility_and_scope_order() {
-        let authority = authority();
-        let session = session();
-
-        let mut input = authorization_input(Some(&authority), Some(&session));
-        input.now_ns = session.expires_at_ns();
-        input.subject_admissible = false;
-        input.required_scope = ApplicationScopeRef::from_static("app:write");
-        assert_eq!(
-            authorize_local_application(input),
-            LocalApplicationAuthorizationDecision::Deny(
-                LocalApplicationAuthorizationDenial::Expired
-            )
-        );
-
-        let stale_authority =
-            LocalApplicationAuthoritySnapshot::new(fleet_key(3), CanisterRole::new("component"), 5);
-        let mut input = authorization_input(Some(&stale_authority), Some(&session));
-        input.subject_admissible = false;
-        assert_eq!(
-            authorize_local_application(input),
-            LocalApplicationAuthorizationDecision::Deny(
-                LocalApplicationAuthorizationDenial::StaleAuthority
-            )
-        );
-
-        let mut input = authorization_input(Some(&authority), Some(&session));
-        input.subject_admissible = false;
-        input.required_scope = ApplicationScopeRef::from_static("app:write");
-        assert_eq!(
-            authorize_local_application(input),
-            LocalApplicationAuthorizationDecision::Deny(
-                LocalApplicationAuthorizationDenial::InadmissibleSubject
-            )
-        );
-
-        let mut input = authorization_input(Some(&authority), Some(&session));
-        input.required_scope = ApplicationScopeRef::from_static("app:write");
-        assert_eq!(
-            authorize_local_application(input),
-            LocalApplicationAuthorizationDecision::Deny(
-                LocalApplicationAuthorizationDenial::MissingScope
-            )
         );
     }
 }

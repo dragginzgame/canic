@@ -4,10 +4,13 @@
 //! Does not own: source parsing, topology validation, hashing, or protected persistence.
 //! Boundary: validated deployment projections become schema-v1 domain-separated bytes.
 
-use crate::config::{
-    ComponentDeploymentLabel, ComponentDeploymentLimits, ComponentDeploymentMemberLimit,
-    ComponentDeploymentPurpose, ComponentDeploymentSpawnGrantLimit, ComponentGroupDeploymentSpec,
-    ComponentGroupDeploymentTopology, FleetServiceMemberPurpose, canonical::CanonicalEncoder,
+use crate::{
+    cdk::serialize::canonical::CanonicalEncoder,
+    config::{
+        ComponentDeploymentLabel, ComponentDeploymentLimits, ComponentDeploymentMemberLimit,
+        ComponentDeploymentPurpose, ComponentDeploymentSpawnGrantLimit,
+        ComponentGroupDeploymentSpec, ComponentGroupDeploymentTopology, FleetServiceMemberPurpose,
+    },
 };
 use canic_contracts::ids::ComponentGroupMemberPath;
 

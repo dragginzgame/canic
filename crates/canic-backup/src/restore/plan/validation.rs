@@ -9,8 +9,9 @@ use super::{
     restore_operation_summary, restore_ordering_summary, restore_readiness_summary,
     restore_snapshot_summary, restore_verification_summary,
 };
-use crate::{artifacts::ArtifactChecksum, manifest::IdentityMode};
-use candid::Principal;
+use crate::manifest::IdentityMode;
+use ic_backup::model::artifacts::ArtifactChecksumRecord;
+use ic_platform::Principal;
 use std::{
     collections::{BTreeMap, BTreeSet},
     str::FromStr,
@@ -192,8 +193,10 @@ fn validate_principal(field: &'static str, value: &str) -> Result<(), RestorePla
 }
 
 fn validate_hash(field: &'static str, value: &str) -> Result<(), RestorePlanError> {
-    ArtifactChecksum::validate_hash(value).map_err(|_| RestorePlanError::InvalidHash {
-        field,
-        value: value.to_string(),
-    })
+    ArtifactChecksumRecord::from_hash(value)
+        .map(|_| ())
+        .map_err(|_| RestorePlanError::InvalidHash {
+            field,
+            value: value.to_string(),
+        })
 }

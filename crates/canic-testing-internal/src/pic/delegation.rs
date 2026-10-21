@@ -1,8 +1,6 @@
-use candid::Principal;
+use ic_platform::Principal;
 
-use canic::Error;
-use canic::dto::auth::DelegatedRoleGrant;
-use canic::ids::CanisterRole;
+use canic::{Error, dto::auth::DelegatedRoleGrant, ids::CanisterRole};
 
 use ic_testkit::pic::PocketIc;
 
@@ -17,13 +15,13 @@ pub fn create_user_shard(
     user_hub_pid: Principal,
     user_pid: Principal,
 ) -> Principal {
-    let created: Result<Principal, Error> = ::ic_testkit::pic::update_candid_args(
+    let created: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
         pic,
         user_hub_pid,
-        candid::Principal::anonymous(),
+        ic_platform::Principal::anonymous(),
         "create_account",
         (user_pid,),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .expect("update Candid harness call");

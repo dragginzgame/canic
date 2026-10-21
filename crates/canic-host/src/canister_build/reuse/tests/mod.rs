@@ -278,7 +278,12 @@ fn compile_infrastructure_fixture_at(context: &WorkspaceBuildContext, target: &P
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    exports::retain(context, &output.stdout).unwrap();
+    let messages = ic_build::cargo::observation::schema::Message::parse_stream(
+        std::io::Cursor::new(output.stdout),
+    )
+    .collect::<Result<Vec<_>, _>>()
+    .unwrap();
+    exports::retain(context, &messages).unwrap();
 }
 
 #[test]
@@ -302,19 +307,19 @@ fn selected_depfiles_ignore_other_apps_and_retain_external_input_authority() {
             format!("app.wasm: {}\n", input.display()),
         )
         .unwrap();
-        let capture = || {
+        let spec = || {
             let mut paths = BTreeSet::new();
             dependencies::append_observed_cargo_inputs(&context, &selected, &mut paths).unwrap();
-            InputEvidence::capture(&source_evidence_spec("selected graph", &paths)).unwrap()
+            source_evidence_spec("selected graph", &paths)
         };
-        let before = capture();
+        let before = InputEvidence::capture(&spec()).unwrap();
         // A parallel App may add a record under the same shared target directory.
         fs::write(profile.join("other_app.d"), "malformed foreign record").unwrap();
-        before.validate_after(&capture()).unwrap();
+        before.validate_after(&spec()).unwrap();
         fs::write(&input, "changed selected input").unwrap();
-        assert!(matches!(before.validate_after(&capture()),
+        assert!(matches!(before.validate_after(&spec()),
             Err(InputEvidenceError::ChangedInput { path }) if path == input));
-        let before_new = capture();
+        let before_new = InputEvidence::capture(&spec()).unwrap();
         let new_input = root.join("new-input");
         fs::write(&new_input, "new input").unwrap();
         fs::write(
@@ -322,9 +327,9 @@ fn selected_depfiles_ignore_other_apps_and_retain_external_input_authority() {
             format!("app.wasm: {} {}\n", input.display(), new_input.display()),
         )
         .unwrap();
-        let changed = capture();
+        let changed = InputEvidence::capture(&spec()).unwrap();
         assert!(changed.entries().contains_key(&new_input));
-        assert!(matches!(before_new.validate_after(&changed),
+        assert!(matches!(before_new.validate_after(&spec()),
             Err(InputEvidenceError::UnobservedInput { path }) if path == new_input));
         fs::write(profile.join("reuse_app.d"), "malformed selected record").unwrap();
         let mut paths = BTreeSet::new();
@@ -361,8 +366,7 @@ fn repeated_cargo_inputs() {
     )
     .unwrap();
     assert_eq!(paths.iter().filter(|path| **path == input).count(), 1);
-    let fresh =
-        InputEvidence::capture(&source_evidence_spec("same build context", &paths)).unwrap();
+    let fresh = source_evidence_spec("same build context", &paths);
     assert!(matches!(before.validate_after(&fresh),
         Err(InputEvidenceError::ChangedInput { path }) if path == input));
     fs::remove_file(&input).unwrap();
@@ -428,7 +432,7 @@ pub fn value() -> u8 { canic::value() + MODEL + AUTHORITY }
         assert!(!cold.entries().contains_key(path));
     }
     assert!(matches!(
-        cold.validate_after(&exported),
+        cold.validate_after(&input_spec(&context, &[]).unwrap().0),
         Err(InputEvidenceError::UnobservedInput { .. })
     ));
 
@@ -449,11 +453,11 @@ pub fn value() -> u8 { canic::value() + MODEL + AUTHORITY }
         );
     }
     before
-        .validate_after(&input_snapshot(&context, &[]).unwrap())
+        .validate_after(&input_spec(&context, &[]).unwrap().0)
         .unwrap();
     fs::write(&config, "observed = false\n").unwrap();
     assert!(
-        matches!(before.validate_after(&input_snapshot(&context, &[]).unwrap()),
+        matches!(before.validate_after(&input_spec(&context, &[]).unwrap().0),
         Err(InputEvidenceError::ChangedInput { path }) if path == config)
     );
     assert_foreign_cargo_exports_preserve_snapshot(
@@ -481,7 +485,9 @@ fn assert_foreign_cargo_exports_preserve_snapshot(
     }
     let observed = input_snapshot(context, &[]).unwrap();
     assert!(!observed.entries().contains_key(&input));
-    selected.validate_after(&observed).unwrap();
+    selected
+        .validate_after(&input_spec(context, &[]).unwrap().0)
+        .unwrap();
     fs::remove_dir_all(foreign_root).unwrap();
 }
 
@@ -540,7 +546,9 @@ pub fn value() -> u8 { canic::value() }
         );
     }
     let after = input_snapshot(&context, &[]).unwrap();
-    before.validate_after(&after).unwrap();
+    before
+        .validate_after(&input_spec(&context, &[]).unwrap().0)
+        .unwrap();
     assert_eq!(before.digest().unwrap(), after.digest().unwrap());
     // A warm build regenerates both declaration and runtime outputs after an
     // authored catalogue edit made before the build. Only its source is frozen.
@@ -567,17 +575,17 @@ pub fn value() -> u8 { canic::value() }
         }
     }
     edited
-        .validate_after(&input_snapshot(&context, &[]).unwrap())
+        .validate_after(&input_spec(&context, &[]).unwrap().0)
         .unwrap();
     fs::write(&catalogue, "{ \"revision\": 3 }\n").unwrap();
     assert!(
-        matches!(edited.validate_after(&input_snapshot(&context, &[]).unwrap()),
+        matches!(edited.validate_after(&input_spec(&context, &[]).unwrap().0),
         Err(InputEvidenceError::ChangedInput { path }) if path == catalogue)
     );
     fs::write(&catalogue, "{ \"revision\": 2 }\n").unwrap();
     fs::write(&producer, "fn main() {}\n").unwrap();
     assert!(
-        matches!(edited.validate_after(&input_snapshot(&context, &[]).unwrap()),
+        matches!(edited.validate_after(&input_spec(&context, &[]).unwrap().0),
         Err(InputEvidenceError::ChangedInput { path }) if path == producer)
     );
 
@@ -595,7 +603,7 @@ pub fn value() -> u8 { canic::value() }
     assert!(!before_foreign.entries().contains_key(&foreign));
     compile_infrastructure_fixture(&context);
     assert!(
-        matches!(before_foreign.validate_after(&input_snapshot(&context, &[]).unwrap()),
+        matches!(before_foreign.validate_after(&input_spec(&context, &[]).unwrap().0),
         Err(InputEvidenceError::UnobservedInput { path }) if path == foreign)
     );
     fs::remove_dir_all(root).unwrap();
@@ -644,16 +652,20 @@ fn first_release_build_with_absent_cargo_input() {
     assert!(!missing.exists());
     let after = input_snapshot(&context, &[]).unwrap();
     assert_eq!(after.entries()[&missing], InputEvidenceValue::Missing);
-    before.validate_after(&after).unwrap();
+    before
+        .validate_after(&input_spec(&context, &[]).unwrap().0)
+        .unwrap();
     assert_ne!(before.digest().unwrap(), after.digest().unwrap());
     compile_infrastructure_fixture(&context);
     let replay = input_snapshot(&context, &[]).unwrap();
-    after.validate_after(&replay).unwrap();
+    after
+        .validate_after(&input_spec(&context, &[]).unwrap().0)
+        .unwrap();
     assert_eq!(after.digest().unwrap(), replay.digest().unwrap());
 
     fs::write(&source, b"fn main() {}\n").unwrap();
     assert!(
-        matches!(after.validate_after(&input_snapshot(&context, &[]).unwrap()), Err(InputEvidenceError::ChangedInput { path }) if path == source)
+        matches!(after.validate_after(&input_spec(&context, &[]).unwrap().0), Err(InputEvidenceError::ChangedInput { path }) if path == source)
     );
     fs::remove_dir_all(root).unwrap();
 }
@@ -684,7 +696,9 @@ fn first_infrastructure_build_fixture_preserves_source_authority() {
     let target = crate::canister_build::cache::canister_build_target_root(&context.workspace_root);
     compile_infrastructure_fixture(&context);
     let after = input_snapshot(&context, &[]).unwrap();
-    before.validate_after(&after).unwrap();
+    before
+        .validate_after(&input_spec(&context, &[]).unwrap().0)
+        .unwrap();
     assert_eq!(before.digest().unwrap(), after.digest().unwrap());
 
     // An earlier build may have recorded a now-unused external source.
@@ -697,12 +711,14 @@ fn first_infrastructure_build_fixture_preserves_source_authority() {
     fs::remove_file(&record).unwrap();
     compile_infrastructure_fixture(&context);
     let refreshed = input_snapshot(&context, &[]).unwrap();
-    stale.validate_after(&refreshed).unwrap();
+    stale
+        .validate_after(&input_spec(&context, &[]).unwrap().0)
+        .unwrap();
     assert_ne!(stale.digest().unwrap(), refreshed.digest().unwrap());
     assert_eq!(after.digest().unwrap(), refreshed.digest().unwrap());
     fs::write(&control_source, "pub const CONTROL: u8 = 2;\n").unwrap();
     assert!(
-        matches!(refreshed.validate_after(&input_snapshot(&context, &[]).unwrap()), Err(InputEvidenceError::ChangedInput { path }) if path == control_source)
+        matches!(refreshed.validate_after(&input_spec(&context, &[]).unwrap().0), Err(InputEvidenceError::ChangedInput { path }) if path == control_source)
     );
     fs::remove_dir_all(root).unwrap();
 }
@@ -763,7 +779,7 @@ fn governed_fixture_inputs_invalidate_reuse() {
     assert_ne!(original, input_digest(&changed, &tools).unwrap());
     let restored = input_snapshot(&context, &tools).unwrap();
     original_snapshot
-        .validate_after(&restored)
+        .validate_after(&input_spec(&context, &tools).unwrap().0)
         .expect("restored fixture inputs retain their original authority");
     assert_eq!(original, restored.digest().unwrap());
     let external = temp_dir("build-reuse-external");
@@ -884,8 +900,10 @@ fn declared_fixture_payloads_participate_in_cache_inputs_inside_excluded_directo
     fs::write(&rows, [4; 64]).unwrap();
     let after = InputEvidence::capture(&source_evidence_spec("fixture", &paths)).unwrap();
     assert_ne!(before.digest().unwrap(), after.digest().unwrap());
-    assert!(matches!(before.validate_after(&after),
-        Err(InputEvidenceError::ChangedInput { path }) if path == rows));
+    assert!(
+        matches!(before.validate_after(&source_evidence_spec("fixture", &paths)),
+        Err(InputEvidenceError::ChangedInput { path }) if path == rows)
+    );
     fs::remove_dir_all(root).unwrap();
 }
 

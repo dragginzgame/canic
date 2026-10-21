@@ -7,7 +7,7 @@ use crate::fleet_ensure::{
     ops::capacity_import::journal::CapacityImportJournalError,
     view::capacity_import::{CapacityImportDestinationView, CapacityImportSourceView},
 };
-use candid::Principal;
+use ic_platform::Principal;
 use std::future::Future;
 
 /// One prepared paid observation. Preparation has already completed every free precheck.

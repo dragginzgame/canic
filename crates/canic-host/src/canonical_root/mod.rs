@@ -3,7 +3,7 @@
 //! Binds the Canic-owned entrypoint to the selected App configuration and exact
 //! Canic dependency. Runtime lifecycle and capability policy remain their owners.
 
-use ic_build::cargo::observation::CargoFeatureSelection;
+use ic_build::cargo::selection::CargoFeatureSelection;
 
 #[cfg(test)]
 mod tests;

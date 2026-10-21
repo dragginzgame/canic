@@ -1,6 +1,5 @@
 use super::*;
 use crate::{cli::globals, run};
-use candid::{CandidType, Encode, Principal};
 use canic_contracts::{
     diagnostics::codes,
     dto::{
@@ -16,6 +15,8 @@ use canic_contracts::{
 };
 use canic_core::cdk::utils::hash::hex_bytes;
 use canic_host::icp::IcpJsonResponseError;
+use ic_platform::candid::contract::Encode;
+use ic_platform::{Principal, candid::contract::CandidType};
 use std::{cell::RefCell, collections::VecDeque};
 
 fn fleet() -> FleetKey {

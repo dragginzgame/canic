@@ -117,19 +117,19 @@ fn chain_key_root_proof_failures_keep_boundary_specific_codes() {
     let cases = [
         (
             RootDelegationProofError::Verification(
-                ic_auth::token::TokenVerificationError::Expired { target: "batch" },
+                ic_auth::delegation::DelegationProofError::Expired { target: "batch" },
             ),
             crate::diagnostics::codes::AUTH_CERT_EXPIRED.raw_code(),
         ),
         (
             RootDelegationProofError::Verification(
-                ic_auth::token::TokenVerificationError::NotYetValid { target: "batch" },
+                ic_auth::delegation::DelegationProofError::NotYetValid { target: "batch" },
             ),
             crate::diagnostics::codes::SECURITY_UNAVAILABLE.raw_code(),
         ),
         (
             RootDelegationProofError::Verification(
-                ic_auth::token::TokenVerificationError::Expired {
+                ic_auth::delegation::DelegationProofError::Expired {
                     target: "root_key_policy",
                 },
             ),
@@ -137,7 +137,7 @@ fn chain_key_root_proof_failures_keep_boundary_specific_codes() {
         ),
         (
             RootDelegationProofError::Verification(
-                ic_auth::token::TokenVerificationError::StaleAuthority {
+                ic_auth::delegation::DelegationProofError::StaleAuthority {
                     field: "proof_epoch",
                 },
             ),
@@ -145,13 +145,13 @@ fn chain_key_root_proof_failures_keep_boundary_specific_codes() {
         ),
         (
             RootDelegationProofError::Verification(
-                ic_auth::token::TokenVerificationError::RootSignatureInvalid,
+                ic_auth::delegation::DelegationProofError::RootSignatureInvalid,
             ),
             crate::diagnostics::codes::REQUEST_INVALID.raw_code(),
         ),
         (
             RootDelegationProofError::Verification(
-                ic_auth::token::TokenVerificationError::RootSignatureBindingMismatch {
+                ic_auth::delegation::DelegationProofError::RootSignatureBindingMismatch {
                     field: "key_id",
                 },
             ),
@@ -159,7 +159,7 @@ fn chain_key_root_proof_failures_keep_boundary_specific_codes() {
         ),
         (
             RootDelegationProofError::Verification(
-                ic_auth::token::TokenVerificationError::RootKeyPolicyBindingMismatch {
+                ic_auth::delegation::DelegationProofError::RootKeyPolicyBindingMismatch {
                     field: "key_id",
                 },
             ),

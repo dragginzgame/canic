@@ -5,8 +5,9 @@
 //! Boundary: enforces plan invariants before dry-run or live execution.
 
 use super::{BackupPlan, BackupPlanError, BackupScopeKind, BackupTarget, build_backup_phases};
-use crate::artifacts::ArtifactChecksum;
-use candid::Principal;
+use ic_backup::model::artifacts::ArtifactChecksumRecord;
+
+use ic_platform::Principal;
 use std::{
     collections::{BTreeMap, BTreeSet},
     str::FromStr,
@@ -298,10 +299,12 @@ pub(super) fn validate_required_hash(
     value: &str,
 ) -> Result<(), BackupPlanError> {
     validate_nonempty(field, value)?;
-    ArtifactChecksum::validate_hash(value).map_err(|_| BackupPlanError::InvalidTopologyHash {
-        field,
-        value: value.to_string(),
-    })
+    ArtifactChecksumRecord::from_hash(value)
+        .map(|_| ())
+        .map_err(|_| BackupPlanError::InvalidTopologyHash {
+            field,
+            value: value.to_string(),
+        })
 }
 
 pub(super) fn validate_preflight_id(value: &str) -> Result<(), BackupPlanError> {

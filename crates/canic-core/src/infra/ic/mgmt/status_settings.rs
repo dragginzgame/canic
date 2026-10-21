@@ -6,17 +6,15 @@
 
 use super::{
     MgmtInfra,
-    types::{
-        InfraCanisterIdRecord, InfraCanisterInfoArgs, InfraCanisterInfoResult,
-        InfraCanisterStatusResult, InfraUpdateSettingsArgs,
-    },
+    types::{InfraCanisterInfoResult, InfraCanisterStatusResult, InfraUpdateSettingsArgs},
 };
-use crate::{
-    cdk::candid::Principal,
-    infra::ic::{
-        IcInfraError,
-        call::{Call, CallBuilder, CallResult},
-    },
+use crate::infra::ic::{
+    IcInfraError,
+    call::{Call, CallBuilder, CallResult},
+};
+use ic_platform::{
+    Principal,
+    management_canister_types::{CanisterIdRecord, CanisterInfoArgs},
 };
 
 impl MgmtInfra {
@@ -24,7 +22,7 @@ impl MgmtInfra {
     pub fn canister_history_call_cost(canister_pid: Principal) -> Result<u128, IcInfraError> {
         Ok(
             Call::bounded_wait(Principal::management_canister(), "canister_info")
-                .with_arg(InfraCanisterInfoArgs {
+                .with_arg(CanisterInfoArgs {
                     canister_id: canister_pid,
                     num_requested_changes: Some(1),
                 })?
@@ -35,7 +33,7 @@ impl MgmtInfra {
     /// Observe the latest history entry through a replicated management call.
     pub async fn canister_history(canister_pid: Principal) -> Result<CallResult, IcInfraError> {
         Call::bounded_wait(Principal::management_canister(), "canister_info")
-            .with_arg(InfraCanisterInfoArgs {
+            .with_arg(CanisterInfoArgs {
                 canister_id: canister_pid,
                 num_requested_changes: Some(1),
             })?
@@ -47,7 +45,7 @@ impl MgmtInfra {
     pub async fn canister_history_total_changes(
         canister_pid: Principal,
     ) -> Result<u64, IcInfraError> {
-        let args = InfraCanisterInfoArgs {
+        let args = CanisterInfoArgs {
             canister_id: canister_pid,
             num_requested_changes: None,
         };
@@ -96,7 +94,7 @@ impl MgmtInfra {
 
 fn canister_status_call(canister_pid: Principal) -> Result<CallBuilder<'static>, IcInfraError> {
     Call::bounded_wait(Principal::management_canister(), "canister_status").with_arg(
-        InfraCanisterIdRecord {
+        CanisterIdRecord {
             canister_id: canister_pid,
         },
     )

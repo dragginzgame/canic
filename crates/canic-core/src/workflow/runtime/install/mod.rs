@@ -1,11 +1,12 @@
 use crate::{
     InternalError,
-    cdk::{candid::CandidType, types::Principal},
+    cdk::types::Principal,
     ops::{
         cost_guard::CostGuardPermit, ic::mgmt::MgmtOps,
         runtime::install_source::ApprovedModuleSource,
     },
 };
+use ic_platform::candid::contract::CandidType;
 
 ///
 /// ModuleInstallWorkflow

@@ -9,8 +9,11 @@ use crate::infra::ic::{
     call::Call,
     known::{CYCLES_MINTING_CANISTER, ICP_LEDGER_CANISTER},
 };
-use candid::{CandidType, Nat, Principal};
 use canic_contracts::ids::BuildNetwork;
+use ic_platform::{
+    Principal,
+    candid::contract::{CandidType, Nat},
+};
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 use std::fmt;
@@ -26,6 +29,7 @@ const CMC_TOPUP_SUBACCOUNT_MAX_PRINCIPAL_BYTES: usize = 31;
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct Icrc1Account {
     pub owner: Principal,
     pub subaccount: Option<[u8; 32]>,
@@ -38,6 +42,7 @@ pub struct Icrc1Account {
 ///
 
 #[derive(CandidType)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct TransferArg {
     pub from_subaccount: Option<[u8; 32]>,
     pub to: Icrc1Account,
@@ -54,6 +59,7 @@ pub struct TransferArg {
 ///
 
 #[derive(CandidType, Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 #[serde(transparent)]
 pub struct Memo(pub ByteBuf);
 
@@ -70,6 +76,7 @@ impl From<Vec<u8>> for Memo {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum TransferError {
     BadFee { expected_fee: Nat },
     BadBurn { min_burn_amount: Nat },
@@ -169,6 +176,7 @@ pub struct IcpRefillCanisters {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct NotifyTopUpArg {
     pub block_index: u64,
     pub canister_id: Principal,
@@ -182,6 +190,7 @@ pub struct NotifyTopUpArg {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum NotifyTopUpError {
     Refunded {
         block_index: Option<u64>,
@@ -204,6 +213,7 @@ pub enum NotifyTopUpError {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct IcpXdrConversionRate {
     pub xdr_permyriad_per_icp: u64,
     pub timestamp_seconds: u64,
@@ -217,6 +227,7 @@ pub struct IcpXdrConversionRate {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct IcpXdrConversionRateResponse {
     pub data: IcpXdrConversionRate,
     pub hash_tree: Vec<u8>,

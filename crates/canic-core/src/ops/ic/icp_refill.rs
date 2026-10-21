@@ -16,8 +16,8 @@ use crate::{
     },
     ops::{OpsError, cost_guard::CostGuardPermit},
 };
-use candid::{Nat, Principal};
 use canic_contracts::ids::BuildNetwork;
+use ic_platform::{Principal, candid::contract::Nat};
 
 pub use crate::infra::ic::icp_refill::Icrc1Account;
 

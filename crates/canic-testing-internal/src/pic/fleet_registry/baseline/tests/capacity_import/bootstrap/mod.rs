@@ -46,13 +46,13 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn supplied_capacity_fences_
     assert!(initial.config.minimum_size > 0);
     root_command(&pic, root, RootCommandFragment::MaintainPool).unwrap();
     assert_eq!(root_pool_status(&pic, root).entries, initial.entries);
-    let unregistered: Result<StatusResponse, Error> = ::ic_testkit::pic::query_candid_args(
-        &pic,
+    let unregistered: Result<StatusResponse, Error> = ic_testkit::pic::query_candid_args(
+        &(pic),
         root,
         operator,
         canic::protocol::CANIC_ROOT_STATUS,
         (StatusRequest::PoolImportContext,),
-        ::canic::testing::CANDID_REPLY_LIMITS,
+        canic::testing::CANDID_REPLY_LIMITS,
     )
     .map(|(reply,)| reply)
     .unwrap();

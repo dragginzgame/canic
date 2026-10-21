@@ -1105,7 +1105,7 @@ fn json_workflow_errors_resume_exact_approved_provisioning_with_dependency_evide
         let mut options = EnsureOptions::parse(args.into_iter().map(OsString::from)).unwrap();
         options.reinstall = reinstall;
         let dependency = ProvisioningDependencyFailure {
-            target: candid::Principal::from_slice(&[2]),
+            target: ic_platform::Principal::from_slice(&[2]),
             method: canic_contracts::protocol::CANIC_WASM_STORE_COMMAND.into(),
             step: "inspect_template".into(),
             rejection_code: Some(5),
@@ -1113,7 +1113,7 @@ fn json_workflow_errors_resume_exact_approved_provisioning_with_dependency_evide
         };
         let error = json_error(
             FleetCommandError::Workflow(Box::new(EnsureWorkflowError::ProvisioningRetryPending {
-                root: candid::Principal::from_slice(&[1]),
+                root: ic_platform::Principal::from_slice(&[1]),
                 stage: ProvisioningFailureStage::StoreStatus,
                 target: dependency.target,
                 operation_id: [3; 32],

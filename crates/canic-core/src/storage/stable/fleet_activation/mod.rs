@@ -7,10 +7,7 @@
 pub mod fixture;
 
 use crate::{
-    cdk::{
-        bounded_cell::BoundedCell,
-        structures::{DefaultMemoryImpl, memory::RuntimeMemory},
-    },
+    cdk::structures::{BoundedCell, DefaultMemoryImpl},
     config::{
         ComponentDeploymentLabel, ComponentDeploymentLimits, ComponentDeploymentPurpose,
         FleetServiceMemberPurpose, FleetServicePlacementPolicy,
@@ -32,7 +29,7 @@ pub const MAX_RETAINED_PREPARED_CREDENTIAL_GENERATIONS: usize = 2;
 
 std::thread_local! {
     static FLEET_ACTIVATION: RefCell<
-        BoundedCell<Option<FleetActivationRecord>, RuntimeMemory<DefaultMemoryImpl>>,
+        BoundedCell<Option<FleetActivationRecord>, DefaultMemoryImpl>,
     > = RefCell::new(BoundedCell::init(crate::memory::open(crate::memory::keys::FLEET_ACTIVATION_V1), None));
 }
 

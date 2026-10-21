@@ -12,9 +12,8 @@ role = "root"
 crate-type = ["cdylib"]
 
 [dependencies]
-candid = { workspace = true }
 canic = { workspace = true, features = ["auth-chain-key-root-sign", "auth-root-canister-sig-create", "control-plane"] }
-ic-cdk = { workspace = true }
+ic-platform = { workspace = true, features = ["cdk", "candid"] }
 
 [build-dependencies]
 canic = { workspace = true, features = [] }

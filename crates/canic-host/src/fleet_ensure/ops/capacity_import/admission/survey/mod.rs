@@ -14,13 +14,13 @@ use crate::fleet_ensure::{
         capacity_import::journal::{CapacityImportJournalError, CapacityImportJournalStore},
     },
 };
-use candid::Principal;
 use canic_contracts::ids::MAX_FLEET_CAPACITY_IMPORT_SOURCES;
 use canic_core::cdk::utils::hash::hex_bytes;
 use ic_host_fs::{
     durable::{PublicationMode, WriteOptions, write_bytes},
     read::read_optional_file_no_follow,
 };
+use ic_platform::Principal;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::PathBuf,

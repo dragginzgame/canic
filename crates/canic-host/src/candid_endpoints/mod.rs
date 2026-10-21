@@ -1,9 +1,10 @@
 mod payload;
 
 use crate::canister_protocol::contract::parse_text;
-use candid::{
+use ic_platform::candid::contract::types::{Label, Type, TypeInner};
+use ic_platform::candid::contract::{
     TypeEnv,
-    types::{FuncMode, Function, Label, Type, TypeInner},
+    types::{FuncMode, Function},
 };
 use serde::Serialize;
 use thiserror::Error as ThisError;
@@ -317,7 +318,7 @@ fn endpoint_cardinality(
 
 fn endpoint_fields(
     env: &TypeEnv,
-    fields: &[candid::types::Field],
+    fields: &[ic_platform::candid::contract::types::Field],
     named_stack: &mut Vec<String>,
 ) -> Vec<EndpointField> {
     fields

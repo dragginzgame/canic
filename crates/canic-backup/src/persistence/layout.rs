@@ -152,24 +152,6 @@ impl BackupLayout {
         }
     }
 
-    #[cfg(test)]
-    pub(crate) fn publish_manifest_at_barriers(
-        &self,
-        manifest: &DeploymentBackupManifest,
-        before_publication: impl FnMut(),
-        after_directory_sync: impl FnMut(),
-    ) -> Result<(), PersistenceError> {
-        use crate::persistence::json::create_json_durable_at_barriers;
-
-        manifest.validate()?;
-        create_json_durable_at_barriers(
-            &self.manifest_path(),
-            manifest,
-            before_publication,
-            after_directory_sync,
-        )
-    }
-
     /// Write a validated backup plan with durable replace semantics.
     pub fn write_backup_plan(&self, plan: &BackupPlan) -> Result<(), PersistenceError> {
         plan.validate()?;
@@ -203,18 +185,6 @@ impl BackupLayout {
     ) -> Result<(), PersistenceError> {
         journal.validate()?;
         write_json_durable(&self.execution_journal_path(), journal)
-    }
-
-    #[cfg(all(test, unix))]
-    pub(crate) fn write_execution_journal_at_barriers(
-        &self,
-        journal: &BackupExecutionJournal,
-        barriers: impl FnMut(crate::persistence::DurableWriteBarrier),
-    ) -> Result<(), PersistenceError> {
-        use crate::persistence::write_json_durable_at_barriers;
-
-        journal.validate()?;
-        write_json_durable_at_barriers(&self.execution_journal_path(), journal, barriers)
     }
 
     /// Read and validate a backup execution journal from this layout.

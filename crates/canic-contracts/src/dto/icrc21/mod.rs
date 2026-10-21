@@ -19,6 +19,7 @@ pub use errors::*;
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ConsentInfo {
     pub consent_message: ConsentMessage,
     pub metadata: ConsentMessageMetadata,
@@ -29,6 +30,7 @@ pub struct ConsentInfo {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ConsentMessage {
     GenericDisplayMessage(String),
     FieldsDisplayMessage(FieldsDisplay),
@@ -39,6 +41,7 @@ pub enum ConsentMessage {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ConsentMessageMetadata {
     pub language: String,
     pub utc_offset_minutes: Option<i16>,
@@ -49,6 +52,7 @@ pub struct ConsentMessageMetadata {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ConsentMessageRequest {
     pub method: String,
     pub arg: Vec<u8>,
@@ -61,6 +65,7 @@ pub struct ConsentMessageRequest {
 //
 
 #[derive(CandidType, Deserialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum ConsentMessageResponse {
     Ok(ConsentInfo),
     Err(Icrc21Error),
@@ -80,6 +85,7 @@ impl From<Result<ConsentInfo, Icrc21Error>> for ConsentMessageResponse {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct ConsentMessageSpec {
     pub metadata: ConsentMessageMetadata,
     pub device_spec: Option<DisplayMessageType>,
@@ -90,6 +96,7 @@ pub struct ConsentMessageSpec {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum DisplayMessageType {
     GenericDisplay,
     FieldsDisplay,
@@ -100,6 +107,7 @@ pub enum DisplayMessageType {
 //
 
 #[derive(CandidType, Clone, Debug, Default, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FieldsDisplay {
     pub intent: String,
     pub fields: Vec<(String, Value)>,
@@ -110,6 +118,7 @@ pub struct FieldsDisplay {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[candid_path("ic_platform::candid::contract")]
 pub enum Value {
     TokenAmount {
         decimals: u8,

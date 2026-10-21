@@ -4,7 +4,6 @@
 //! Does not own: Registry validation, endpoint authorization, or lifecycle orchestration.
 //! Boundary: Coordinator ops may commit or export one complete validated record.
 
-use candid::{CandidType, Principal};
 use canic_contracts::{
     cycles::Cycles,
     dto::{
@@ -46,9 +45,10 @@ use canic_core::control_plane_support::config::{
 };
 #[cfg(feature = "fleet-coordinator-canister")]
 use canic_core::{
-    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
+    cdk::structures::{DefaultMemoryImpl, StableCell as Cell},
     impl_storable_bounded,
 };
+use ic_platform::{Principal, candid::contract::CandidType};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "fleet-coordinator-canister")]
 use std::cell::RefCell;
@@ -78,7 +78,7 @@ const FLEET_COORDINATOR_FUNDING_STATE_MAX_BYTES: u32 = 33_554_432;
 #[cfg(feature = "fleet-coordinator-canister")]
 std::thread_local! {
     static FLEET_COORDINATOR_STATE:
-        RefCell<Cell<FleetCoordinatorStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
+        RefCell<Cell<FleetCoordinatorStateRecord, DefaultMemoryImpl>> =
         RefCell::new(Cell::init(
             canic_core::memory::open(crate::memory::keys::FLEET_COORDINATOR_REGISTRY_V1),
             FleetCoordinatorStateRecord::default(),
@@ -88,7 +88,7 @@ std::thread_local! {
 #[cfg(feature = "fleet-coordinator-canister")]
 std::thread_local! {
     static FLEET_COORDINATOR_FUNDING_STATE:
-        RefCell<Cell<FleetCoordinatorFundingStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
+        RefCell<Cell<FleetCoordinatorFundingStateRecord, DefaultMemoryImpl>> =
         RefCell::new(Cell::init(
             canic_core::memory::open(crate::memory::keys::FLEET_COORDINATOR_FUNDING_V1),
             FleetCoordinatorFundingStateRecord::default(),
@@ -329,6 +329,7 @@ pub struct FleetComponentGroupDeploymentRecord {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetComponentGroupPlacementRecord {
     pub placement: ComponentGroupPlacementId,
     pub fleet_subnet_root: Principal,
@@ -344,6 +345,7 @@ pub struct FleetComponentGroupPlacementRecord {
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[candid_path("ic_platform::candid::contract")]
 pub struct FleetComponentScaleOutReceiptRecord {
     pub operation_id: [u8; 32],
     pub plan_hash: [u8; 32],

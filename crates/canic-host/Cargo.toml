@@ -20,8 +20,6 @@ ignored = ["serde_bytes"]
 local-fleet = ["dep:ic-testkit"]
 
 [dependencies]
-candid = { workspace = true }
-candid_parser = { workspace = true }
 canic-contracts.workspace = true
 # Host materializes metadata for every infrastructure role.
 canic-control-plane = { workspace = true, features = [
@@ -34,17 +32,15 @@ ciborium = { workspace = true }
 crc32fast = { workspace = true }
 getrandom = { workspace = true }
 hmac = { workspace = true }
-ic-agent = { workspace = true }
 ic-build.workspace = true
-ic-certification = { workspace = true }
 ic-host-artifacts = { workspace = true, features = ["gzip", "wasm"] }
 ic-host-fs = { workspace = true }
 ic-host-process = { workspace = true }
 ic-host-text = { workspace = true }
-ic-host-tools = { workspace = true, features = ["candid-service", "ic-interface", "ic-limits"] }
+ic-host-tools = { workspace = true, features = ["ic-interface"] }
+ic-platform = { workspace = true, features = ["agent", "candid", "certification", "candid-parser", "icrc-ledger-types"] }
 ic-query = { workspace = true, features = ["ledger-evidence-host"] }
 ic-testkit = { workspace = true, optional = true }
-icrc-ledger-types = { workspace = true }
 prost = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
@@ -64,9 +60,8 @@ rustix = { workspace = true }
 [dev-dependencies]
 flate2 = { workspace = true }
 ic-host-process = { workspace = true, features = ["test-support"] }
+ic-platform = { workspace = true, features = ["bls"] }
 ic-testkit = { workspace = true }
-ic-testkit-candid.workspace = true
-ic-verify-bls-signature = { workspace = true }
 
 [[example]]
 name = "local_fleet"

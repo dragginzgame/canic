@@ -323,20 +323,21 @@ esac
         std::fs::write(path.join(format!("{index}.json")), serde_json::json!({ "response_bytes": canic_core::cdk::utils::hash::hex_bytes(&bytes) }).to_string()).unwrap();
     };
     let partition_bytes = |partition| {
-        candid::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
+        ic_platform::candid::contract::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
             Response::ComponentRegistryPartition(Box::new(partition)),
         ))
         .unwrap()
     };
-    let directory_bytes = candid::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
-        Response::ComponentDirectoryHead(Box::new(fixture.directory.clone())),
-    ))
-    .unwrap();
+    let directory_bytes =
+        ic_platform::candid::contract::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
+            Response::ComponentDirectoryHead(Box::new(fixture.directory.clone())),
+        ))
+        .unwrap();
     write(1, partition_bytes(fixture.partition.clone()));
     write(2, directory_bytes.clone());
     write(
         3,
-        candid::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
+        ic_platform::candid::contract::encode_one(Ok::<_, canic_contracts::dto::error::Error>(
             canic_contracts::dto::wire::projection::startup_pages::Response::ComponentDirectoryPage(
                 page(&fixture, &[1, 2], None),
             ),

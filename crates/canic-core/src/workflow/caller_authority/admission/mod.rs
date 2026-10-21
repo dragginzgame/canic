@@ -6,7 +6,7 @@ use crate::{
     model::caller_authority::CallerAdmissionError,
     ops::caller_authority::CallerAuthorityOps,
 };
-use candid::Principal;
+use ic_platform::Principal;
 
 /// Local admission orchestration; endpoint callers supply the authenticated transport identity.
 pub struct CallerAdmissionWorkflow;

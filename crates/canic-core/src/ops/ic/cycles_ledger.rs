@@ -17,8 +17,8 @@ use crate::{
     },
     ops::{OpsError, cost_guard::CostGuardPermit},
 };
-use candid::Nat;
 use canic_contracts::cycles::Cycles;
+use ic_platform::candid::contract::Nat;
 
 /// Operations facade for the IC-mainnet Cycles Ledger.
 

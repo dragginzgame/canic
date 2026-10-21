@@ -76,18 +76,14 @@ fn repository_pin<'a>(pins: &'a str, variable: &str) -> &'a str {
 #[test]
 fn same_version_executable_with_wrong_digest_is_rejected_before_execution() {
     let root = temp_root("wrong-digest");
-    let physical = root.join("physical");
-    fs::create_dir_all(&physical).expect("create test root");
-    let alias = root.join("alias");
-    std::os::unix::fs::symlink(&physical, &alias).expect("alias executable directory");
-    let executable = alias.join("wasm-opt");
+    fs::create_dir_all(&root).expect("create test root");
+    let executable = root.join("wasm-opt");
     write_executable(
         &executable,
         &crate::test_support::tool_script(
-            "#!/bin/sh\nprintf 'this must not execute' > \"$0.executed\"\nprintf '@BINARYEN_IDENTITY@\\n'\n",
+            "#!/bin/sh\nprintf 'this must not execute' > execution-marker\nprintf '@BINARYEN_IDENTITY@\\n'\n",
         ),
     );
-    let canonical = executable.canonicalize().expect("canonical executable");
 
     let error = admit_binaryen_executable(&executable, &"0".repeat(64), None)
         .expect_err("wrong executable digest must reject");
@@ -95,11 +91,11 @@ fn same_version_executable_with_wrong_digest_is_rejected_before_execution() {
 
     assert!(matches!(
         error,
-        BinaryenToolError::ExecutableHashMismatch { path, .. } if path == canonical
+        BinaryenToolError::ExecutableHashMismatch { path, .. } if path == executable
     ));
-    assert!(message.contains(canonical.to_string_lossy().as_ref()));
+    assert!(message.contains(executable.to_string_lossy().as_ref()));
     assert!(message.contains(BINARYEN_REPAIR_COMMAND));
-    assert!(!canonical.with_file_name("wasm-opt.executed").exists());
+    assert!(!root.join("execution-marker").exists());
     fs::remove_dir_all(root).expect("remove test root");
 }
 
@@ -107,11 +103,8 @@ fn same_version_executable_with_wrong_digest_is_rejected_before_execution() {
 #[test]
 fn admitted_executable_records_exact_path_version_and_digest() {
     let root = temp_root("admitted");
-    let physical = root.join("physical");
-    fs::create_dir_all(&physical).expect("create test root");
-    let alias = root.join("alias");
-    std::os::unix::fs::symlink(&physical, &alias).expect("alias executable directory");
-    let executable = alias.join("wasm-opt");
+    fs::create_dir_all(&root).expect("create test root");
+    let executable = root.join("wasm-opt");
     write_executable(
         &executable,
         &crate::test_support::tool_script("#!/bin/sh\nprintf '@BINARYEN_IDENTITY@\\n'\n"),
@@ -121,7 +114,7 @@ fn admitted_executable_records_exact_path_version_and_digest() {
     let admitted =
         admit_binaryen_executable(&executable, &digest, None).expect("admit exact executable");
 
-    assert_eq!(admitted.path(), executable.canonicalize().unwrap());
+    assert_eq!(admitted.path(), executable);
     assert_eq!(admitted.version_identity(), BINARYEN_VERSION_IDENTITY);
     assert_eq!(admitted.sha256(), digest);
     fs::remove_dir_all(root).expect("remove test root");
@@ -227,7 +220,7 @@ fn temp_root(label: &str) -> PathBuf {
         .duration_since(SystemTime::UNIX_EPOCH)
         .expect("system time after epoch")
         .as_nanos();
-    std::env::temp_dir().canonicalize().unwrap().join(format!(
+    std::env::temp_dir().join(format!(
         "canic-binaryen-{label}-{}-{nanos}",
         std::process::id()
     ))

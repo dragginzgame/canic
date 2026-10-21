@@ -12,10 +12,10 @@ fmt=()
 if [[ "$1" == --check ]]; then check=(--check); fmt=(-- --check); fi
 shift
 cd "$ROOT"
-cargo sort --workspace "${check[@]}"
+cargo sort --workspace --grouped "${check[@]}"
 cargo sort-derives "${check[@]}"
 cargo fmt --all "${fmt[@]}"
 for workspace in "$@"; do
-    cargo sort --workspace "${check[@]}" --order workspace,package,lib,dependencies,dev-dependencies,build-dependencies,profile "$workspace"
+    cargo sort --workspace --grouped "${check[@]}" --order workspace,package,lib,dependencies,dev-dependencies,build-dependencies,profile "$workspace"
     (cd "$workspace" && cargo fmt --all "${fmt[@]}")
 done

@@ -8,9 +8,9 @@ use crate::{
     InternalError,
     ops::ic::call::{CallBuilder as OpsCallBuilder, CallOps, CallResult as OpsCallResult},
 };
-use candid::{
-    CandidType, Principal,
-    utils::{ArgumentDecoder, ArgumentEncoder},
+use ic_platform::{
+    Principal,
+    candid::contract::{ArgumentDecoder, ArgumentEncoder, CandidType},
 };
 use serde::de::DeserializeOwned;
 use std::borrow::Cow;
