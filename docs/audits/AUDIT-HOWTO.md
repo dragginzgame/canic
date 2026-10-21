@@ -1,328 +1,183 @@
 # Canic Audit How-To
 
-The structural methods adopted through [the shared catalog](../../audits/README.md)
-use that snapshot's finding-based report and execution contract, with product
-obligations in [METHODS.md](METHODS.md). Their new overlays take precedence over
-older score/tier/report templates below. Historical measurements and domain
-methods retain their exact evidence identities; adoption does not execute a
-product audit or authorize repairs, broad gates or deployment.
-
-This document is the operational contract for defining, running, retaining,
-and closing audits under `docs/audits/`.
+Apply the reviewed [Shared audit contract](../../audits/README.md) first.
+It owns common execution authority, source-bound evidence, finding ownership,
+structural severity/verdicts and historical preservation. [METHODS.md](METHODS.md)
+selects Canic properties; [META-AUDIT.md](META-AUDIT.md) supplies product invariants.
+This overlay retains local report paths and frozen domain measurement/closeout
+contracts. Structural reviews use their shared-method overlays, not the older
+score, tier or report templates required by a different domain method.
 
 ## 1. Canonical Structure
 
-```text
-docs/audits/
-├─ README.md
-├─ AUDIT-HOWTO.md
-├─ META-AUDIT.md
-├─ METHODS.md
-├─ retired-methods.md
-├─ modular/
-├─ recurring/
-│  ├─ invariants/
-│  └─ system/
-├─ release-lines/
-└─ reports/YYYY-MM/YYYY-MM-DD/
-```
+- `METHODS.md` is the single active method/owner catalog.
+- `mandatory-trace-protocol.md` owns release-line end-to-end trace completion;
+  property findings stay with the retained methods, without another method count.
+- `recurring/` holds reusable domain definitions, `modular/` surface/cleanup overlays.
+- `release-lines/` holds numbered closeouts and retained supporting records;
+  `working/` holds bounded investigations owned by an active design batch.
+- `reports/YYYY-MM/YYYY-MM-DD/` holds dated primary reports and necessary artifacts.
+- `0.83-technical-debt/` is a frozen historical exception, not a current backlog.
 
-- `METHODS.md` is the active method and ownership catalog.
-- `mandatory-trace-protocol.md` is the fingerprinted cross-cutting method for
-  release-line mandatory end-to-end traces; it does not add a product-property
-  owner to the retained definition count.
-- `recurring/` contains reusable definitions, never run results.
-- `modular/` contains the manual module-surface method and its explicitly
-  finding-backed implementation workflow.
-- `release-lines/` contains historical numbered closeouts and program-state
-  reports, not reusable definitions.
-- `reports/` contains dated primary evidence and only necessary supporting
-  artifacts.
-- `0.83-technical-debt/` is a frozen historical ledger exception.
-
-Do not add a second active catalog, report root, or release-readiness verdict
-path.
+Do not create another active catalog, report root or standing readiness verdict.
+Use the [directory ownership map](README.md#directory-ownership) for retention.
 
 ## 2. Definition Contract
 
-Every active method must state or directly reference:
+An active method states or references its ID/version, canonical owner/trigger,
+kind/profile, scope/exclusions, source authorities and sinks, deterministic
+commands/manual boundaries, false-positive cases, prerequisites/cost/runtime, trace mode,
+comparison identity and affected success/rejection/boundary/regression proof.
+Shared report, severity and authority requirements are referenced, not recopied.
+Domain exceptions and failure/partial/blocked follow-up stay explicit locally.
 
-- stable audit ID and explicit method version;
-- canonical repository owner and intended trigger;
-- method kind and output profile;
-- current scope and exclusions;
-- canonical rules, source-of-truth files, and code sinks;
-- deterministic commands and manual reasoning boundaries;
-- false-positive exclusions and boundary cases;
-- severity, confidence, risk, and result rules;
-- report fields and verification states;
-- tool prerequisites, cost class, and expected runtime;
-- trace mode and permitted environment;
-- comparability and method-change rules;
-- artifact retention and redaction;
-- positive, rejection, boundary, and regression fixtures where appropriate;
-  and
-- follow-up ownership for fail, partial, or blocked results.
-
-The shared safety, state, evidence, and retention rules below may be referenced
-instead of copied into each definition. Method-specific exceptions must remain
-local and explicit.
+The existing local release-integrity method stays authoritative until the
+reviewed supplying Shared revision is adopted under
+[#618 — Adopt shared CI/release integrity](https://github.com/dragginzgame/canic/issues/618).
+This cleanup adopts no unpublished method or moving sibling source.
 
 ### Output profiles
 
-| Profile | Required output |
-| --- | --- |
-| `invariant` | Exact invariant, positive/rejection/boundary evidence, typed or observable failure, verification readout, findings, verdict. |
-| `trend` | Frozen metric definitions, baseline identity, comparable delta, risk score, attribution, findings, verdict. |
-| `measured` | Fixture/seed, execution environment, raw-to-summary derivation, bounded artifacts, uncertainty, comparison, findings, verdict. |
-| `manual` | Versioned checklist, exact files and samples, unreviewed boundaries, named reviewer, disagreement handling, findings, verdict. |
+Retain the profile selected by the owning domain method:
 
-Do not require generic hub, hotspot, or trend sections from an invariant method
-unless that method says those signals contribute to its decision. This
-prevents report-shape volume from masquerading as coverage.
+| Profile | Domain proof |
+| --- | --- |
+| `invariant` | Exact invariant, positive/rejection/boundary evidence, typed or observable failure, verification and verdict. |
+| `trend` | Frozen metrics, baseline, comparable delta, method-owned risk score and attribution. |
+| `measured` | Fixture/seed, environment, raw-to-summary derivation, bounded artifacts and uncertainty. |
+| `manual` | Versioned checklist, exact files/samples, unreviewed boundaries, named reviewer and disagreement handling. |
+
+These do not introduce scores into shared finding-based structural methods or
+require generic hotspot/hub sections where they prove no selected obligation.
 
 ## 3. Independent State Domains
 
-Use exactly these state values:
+Domain records keep their independent values; none substitutes for another:
 
-```text
-definition_disposition:
-  retain | revise | merge | split | retire | manual_only | blocked
+| Field | Values |
+| --- | --- |
+| `definition_disposition` | `retain`, `revise`, `merge`, `split`, `retire`, `manual_only`, `blocked` |
+| `run_result` | `pass`, `fail`, `partial`, `blocked`, `not_applicable` |
+| `result_validity` | `valid`, `invalid`, `superseded` |
+| `finding_status` | `open`, `accepted`, `fixed`, `deferred`, `rejected`, `duplicate`, `blocked` |
+| `closeout_verdict` | `pass`, `pass_with_limitations`, `fail`, `blocked` |
 
-run_result:
-  pass | fail | partial | blocked | not_applicable
-
-result_validity:
-  valid | invalid | superseded
-
-finding_status:
-  open | accepted | fixed | deferred | rejected | duplicate | blocked
-
-closeout_verdict:
-  pass | pass_with_limitations | fail | blocked
-```
-
-Rules:
-
-- a definition disposition is not a run result;
-- `manual_only` still produces a run result;
-- a required invariant run that is `partial` or `blocked` blocks baselining
-  and closeout;
-- `not_applicable` requires evidence that a conditional trigger is absent;
-- invalid or superseded results keep their original `run_result` but cannot
-  support closeout; and
-- missing evidence or an unavailable tool never becomes `pass`.
+`manual_only` still has a run result. Required invariants with partial/blocked
+proof block baselining and closeout. `not_applicable` needs evidence that its
+conditional trigger is absent. Invalid/superseded results retain their original
+result but cannot support closeout; missing tools/proof never become a pass.
+Shared structural reports retain their own severity/verdict vocabulary.
 
 ## 4. Immutable Run Identity
 
-Every run records:
+Domain runs retain these field identities:
 
 ```text
-release_anchor:
-source_commit_full:
-source_tree_hash:
-product_tree_hash:
-clean_worktree:
-cargo_lock_hash:
-rust_toolchain:
-target_triple:
-feature_set:
-audit_method_id:
-audit_method_version:
-audit_method_fingerprint:
-audit_script_hashes:
-external_tool_versions:
-fixture_or_seed:
-environment_class:
-started_at:
-completed_at:
+release_anchor, source_commit_full, source_tree_hash, product_tree_hash,
+clean_worktree, cargo_lock_hash, rust_toolchain, target_triple, feature_set,
+audit_method_id, audit_method_version, audit_method_fingerprint,
+audit_script_hashes, external_tool_versions, fixture_or_seed,
+environment_class, started_at, completed_at
 ```
 
-Use full commit hashes. A short hash is display-only. Record `not_applicable`
-with a reason when a field genuinely does not apply; do not silently omit it.
-
-Method fingerprints cover the definition plus named scripts, fixtures,
-allowlists, trace templates, and other decision-bearing inputs. A method
-change invalidates numerical comparison until both baselines are rerun with
-the corrected method.
-
-The canonical product-tree scope is
-[product-tree-scope-v1.md](product-tree-scope-v1.md). Compute it only from a
-committed snapshot with `scripts/ci/audit-product-tree-hash.sh`.
+Use full commits; short hashes are display-only. A genuinely inapplicable field
+records `not_applicable` and its reason. Fingerprints bind definitions and all
+named decision-bearing scripts, fixtures, allowlists and trace templates.
+[method-fingerprints-v1.md](method-fingerprints-v1.md) admits their current bytes.
+A changed method requires corrected-method baselines before numerical comparison.
+The [product-tree scope](product-tree-scope-v1.md) and
+`scripts/ci/audit-product-tree-hash.sh` hash committed Git objects only.
 
 ## 5. Trace Modes And Execution Safety
 
-Every trace declares:
+Select `code_trace` for reachable source/authority inspection, or
+`execution_trace` only for a named, explicitly authorized disposable environment
+such as PocketIC or a test deployment. Apply
+[Shared execution authority](../../audits/README.md#authority-and-execution);
+an explicit read-only constraint prohibits writes, including execution outputs.
 
-- `code_trace`: inspect reachable code, ownership, state transitions, errors,
-  diagnostics, and projection without executing the operation; or
-- `execution_trace`: execute only in an explicitly permitted disposable
-  environment such as PocketIC or a named test deployment.
-
-Read-only means read-only for tracked source and authoritative environments.
-Build caches and isolated temporary output are allowed.
-
-Before execution:
-
-1. record `git status --porcelain`;
-2. use an immutable source snapshot or disposable worktree;
-3. isolate mutable state and `CARGO_TARGET_DIR` outside the source snapshot;
-4. disable network by default;
-5. confirm no production credentials or mainnet mutation are possible; and
-6. name any authorized destructive disposable operation.
-
-After execution:
-
-1. record `git status --porcelain` again;
-2. fail the run if tracked source changed unexpectedly;
-3. retain only the required, redacted evidence; and
-4. remove disposable runtime state without deleting primary evidence.
-
-Instruction/Wasm generators may intentionally create the owning dated report
-only when their method authorizes it. Product builds and local deployment
-state still use isolated paths.
+For authorized execution, record Git state before/after; use immutable source
+or a disposable worktree and isolate mutable state/target output. Disable
+network by default, exclude production credentials/mainnet mutation and name
+any authorized destructive disposable operation. Unexpected tracked changes
+fail the run. Retain required redacted evidence before disposable-state cleanup.
+An owning instruction/Wasm method may authorize its dated report output;
+that never supplies authority for product deployment or broad gates.
 
 ## 6. Running And Comparing Audits
 
-For every run:
-
-1. select one method from `METHODS.md`;
-2. freeze scope, identity, fixtures, and environment;
-3. run the declared commands and manual review;
-4. record command outcomes without flattening typed causes;
-5. write one new primary report under the dated layout;
-6. update that day's and month's summaries; and
-7. never overwrite an earlier report.
-
-Mandatory end-to-end trace runs additionally follow
-[mandatory-trace-protocol.md](mandatory-trace-protocol.md). A retained method
-still owns each property; the trace protocol owns only cross-path completion
-and evidence consistency.
+Select a catalog method and freeze scope, identity, fixtures and environment.
+Execute only declared, authorized proof, preserve typed causes, and write one
+new primary report with day/month summary links. Apply the
+[trace protocol](mandatory-trace-protocol.md) for mandatory end-to-end runs;
+it does not replace the property owner. Never overwrite a previous report.
 
 ### Same-day measurement reruns
 
-For repeated measurement scope on one day:
-
-- `<scope>.md` is the daily baseline and uses compared baseline `N/A`;
-- `<scope>-2.md`, `<scope>-3.md`, and later reruns compare directly to
-  `<scope>.md`; and
-- reruns never chain and never select a baseline from another day.
+`<scope>.md` is that day's measurement baseline, compared baseline `N/A`.
+`<scope>-2.md` and later reruns compare directly with it, never another day or
+the preceding rerun. This does not impose a measurement scheme on structural audits.
 
 ### Finding-backed implementation comparisons
 
-After a fix slice, retain both:
-
-- causal comparison against the immediate parent commit; and
-- cumulative comparison against the original frozen product baseline.
-
-The parent comparison validates the slice. The baseline comparison reports
-release-line cumulative risk.
+Retain causal evidence against the immediate parent and cumulative evidence
+against the original frozen product baseline. They answer slice correctness
+and cumulative release-line risk respectively.
 
 ### Post-freeze method defects
 
-When a method defect is found after freeze:
-
-1. mark affected results `result_validity: invalid` in a superseding report;
-2. record an `audit_method_defect` finding;
-3. increment and refingerprint the method;
-4. rerun the original product baseline with the corrected method;
-5. rerun the current fix commit; and
-6. compare only corrected-method results.
-
-If the original baseline cannot be reproduced, closeout is `blocked` or
-explicitly non-comparable.
+A superseding report marks affected results `result_validity: invalid` and
+records `audit_method_defect`. Increment/refingerprint the affected method,
+rerun original product baseline and current fix with the corrected method,
+and compare only those results. An unreproducible original baseline leaves
+closeout blocked or explicitly non-comparable. Historical results stay intact.
 
 ## 7. Findings And Deduplication
 
-Assign canonical identity during triage from the owner and violated invariant,
-not discovery order:
+Apply [Shared finding ownership](../../audits/README.md#ownership-and-history).
+GitHub issues track active work; immutable reports may retain domain finding IDs
+`CANIC-<LINE>-<OWNER>-<NNN>` as evidence joins, not a parallel status ledger.
+Triage by owner/violated invariant and link duplicate discoveries to one owner.
 
-```text
-finding_id: CANIC-<LINE>-<OWNER>-<NNN>
-finding_class:
-severity: P0 | P1 | P2 | P3
-confidence: confirmed | high | medium | low
-finding_status:
-owner:
-current_location:
-intended_owner:
-affected_surfaces:
-source_audit_ids:
-source_method_fingerprints:
-baseline_commit:
-first_observed_at:
-evidence:
-typed_cause_or_invariant:
-risk:
-verification_status:
-duplicate_of:
-recommended_slice:
-fix_commit:
-validation_commit:
-waiver:
-disposition:
-```
+Domain finding records retain `finding_id`, `finding_class`, `severity`,
+`confidence`, `finding_status`, `owner`, `current_location`, `intended_owner`,
+`affected_surfaces`, `source_audit_ids`, `source_method_fingerprints`,
+`baseline_commit`, `first_observed_at`, `evidence`, `typed_cause_or_invariant`,
+`risk`, `verification_status`, `duplicate_of`, `recommended_slice`, `fix_commit`,
+`validation_commit`, `waiver` and `disposition`.
 
-Finding classes are `product_defect`, `audit_method_defect`, `evidence_gap`,
-`governance_conflict`, `operational_risk`, and `documentation_drift`.
-Severity is impact; confidence is evidence strength. Duplicate discoveries
-list every source and point to one triage-assigned canonical ID.
+Domain classes are `product_defect`, `audit_method_defect`, `evidence_gap`,
+`governance_conflict`, `operational_risk` and `documentation_drift`. Their
+severity remains `P0`–`P3`, confidence `confirmed`, `high`, `medium` or `low`.
+Do not silently convert old scores/tiers into shared structural severities.
 
 ## 8. Manual-Only Review
 
-A manual method records:
-
-- stable ID, version, and fingerprint;
-- exact commit and files reviewed;
-- versioned checklist;
-- code references and sampled paths;
-- explicit unreviewed boundaries;
-- named reviewer; and
-- second review or explicit single-review waiver for P0/P1 findings.
-
-Disagreement is recorded as a finding or blocked result and escalated to the
-maintainer. A narrative report without this record is not a passing manual
-audit.
+Record method ID/version/fingerprint, exact source/files/checklist, sampled
+paths, unreviewed boundaries and named reviewer. P0/P1 domain findings need
+second review or an explicit single-review waiver. Record disagreements as
+findings or blocked results for maintainer resolution; narrative alone is no pass.
 
 ## 9. Evidence Manifest, Redaction, And Retention
 
-Every run contains:
+Required domain evidence fields remain:
 
 ```text
-command:
-working_directory:
-exit_code:
-stdout_path:
-stderr_path:
-baseline_identity:
-method_identity:
-tool_versions:
-timestamps:
-artifact_hashes:
-retention_class:
-redactions_applied:
+command, working_directory, exit_code, stdout_path, stderr_path,
+baseline_identity, method_identity, tool_versions, timestamps,
+artifact_hashes, retention_class, redactions_applied
 ```
 
-- Markdown is the primary evidence.
-- Retain raw output only when needed to reproduce a finding or future
-  comparison.
-- Prefer one compact machine-readable form; do not retain duplicate JSON,
-  CSV, TSV, text, and logs.
-- Hash retained evidence with SHA-256 or a recorded equivalent.
-- Scrub credentials, tokens, private material, sensitive principals, private
-  paths, and environment secrets.
-- Record absent stdout/stderr as `not_retained`.
-- Never delete the only evidence for a finding, comparison, or typed cause.
-- Check links before pruning.
-
-Historical primary Markdown is append-only. Superseding reports may invalidate
-or correct conclusions without rewriting them. A retired method must remain
-recoverable through the immutable source snapshot and
-[retired-methods.md](retired-methods.md); no compatibility wrapper remains.
+Markdown is primary evidence. Keep raw output only for needed reproduction or
+comparison; prefer one compact machine-readable form over duplicate formats.
+Hash retained evidence, redact credentials/private material, sensitive principals,
+private paths and environment secrets, and record absent streams as `not_retained`.
+Never delete the sole proof of a finding, comparison or typed cause; check links
+before pruning. Historical primary reports remain immutable. Superseding reports
+may correct/invalidate conclusions. Retired definitions stay reproducible from
+immutable source and [retirement records](retired-methods.md), without active aliases.
 
 ## 10. Reports And Summaries
-
-Report paths are:
 
 ```text
 docs/audits/reports/YYYY-MM/YYYY-MM-DD/<scope>.md
@@ -330,20 +185,16 @@ docs/audits/reports/YYYY-MM/YYYY-MM-DD/summary.md
 docs/audits/reports/YYYY-MM/summary.md
 ```
 
-The day summary records run identities, risk, method/comparability notes,
-findings, verification rollup, and follow-up. The month summary indexes run
-days, records month status, and carries unresolved follow-up.
-
-Historical report links and conclusions are not rewritten. Current day/month
-summaries may be updated during that active period.
+The day summary links run identity, risk, method/comparability, findings,
+verification and follow-up. The month summary indexes days, month status and
+unresolved follow-up links. Active summaries may change; historical reports,
+links and conclusions do not. GitHub remains the active tracker.
 
 ## 11. Closeout
 
-Closeout is `pass` only when every required audit is complete and no accepted
-limitation remains. An accepted waivable P1 or blocked informational/trend
-method forces `pass_with_limitations`. P0 and the non-waivable P1 classes in
-the accepted line design block closeout.
-
-Unavailable broad maintainer-owned release gates are recorded, not fabricated.
-Audit closeout does not authorize package versioning, commits, tags, pushes,
-deployment, or a 1.0 readiness claim.
+Canic domain closeout is `pass` only with all required audits complete and no
+accepted limitations. An accepted waivable P1 or blocked informational/trend
+method requires `pass_with_limitations`. P0 and non-waivable P1 classes in the
+accepted line design block closeout. Record unavailable maintainer-owned gates
+without fabricating results. Audit closeout supplies no release/version, Git,
+publication/deployment or 1.0-readiness authority.
