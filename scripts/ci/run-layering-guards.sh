@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
 ops_policy_pattern='crate\s*::\s*domain\s*::\s*policy|use\s+crate\s*::\s*\{[^;]*\bdomain\s*::\s*(?:policy|\{[^;]*\bpolicy\b)'
+workflow_api_pattern='(^|[^A-Za-z0-9_:])((crate|self|super)::)*api::'
 
 scan_ops_to_policy() {
     local root="$1"
@@ -35,6 +36,12 @@ if [[ "$actual_fixture_matches" != "$expected_fixture_matches" ]]; then
     echo "ops-to-policy detector fixture mismatch" >&2
     printf 'expected:\n%s\nactual:\n%s\n' \
         "$expected_fixture_matches" "$actual_fixture_matches" >&2
+    exit 2
+fi
+
+if ! rg --quiet "$workflow_api_pattern" "$fixture_root/forbidden-workflow-api.txt" ||
+    rg --quiet "$workflow_api_pattern" "$fixture_root/allowed-upstream-api.txt"; then
+    echo "workflow API detector fixture mismatch" >&2
     exit 2
 fi
 
@@ -69,7 +76,7 @@ if rg "storage::.*Record|storage::stable" \
     failed=1
 fi
 
-if rg "(^|[^A-Za-z0-9_])api::|crate::api::" crates/canic-core/src/workflow --glob '*.rs'; then
+if rg "$workflow_api_pattern" crates/canic-core/src/workflow --glob '*.rs'; then
     echo "workflow must not depend on the api layer" >&2
     failed=1
 fi

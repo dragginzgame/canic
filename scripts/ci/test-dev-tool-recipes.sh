@@ -226,5 +226,26 @@ for step in 'Install and qualify pinned native build tools' 'Install PocketIC te
     [[ "$status" != 0 ]] || exit 1
     if grep -Fx "$fixture/admitted bin" "$GITHUB_PATH"; then exit 1; fi
 done
+# Execute the maintained preflight fetch body, including its failure boundary.
+yq -o json '.' "$ROOT/.github/workflows/ci.yml" | jq -er \
+    '.jobs.preflight.steps[] | select(.name == "Prepare locked preflight dependencies") | .run' > workflow-step
+cat > bin/cargo <<'CARGO'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$EVENTS"
+[[ "$*" != "${CANIC_PREFLIGHT_FETCH_FAILURE:-}" ]] || exit 37
+CARGO
+chmod +x bin/cargo
+: > "$EVENTS"
+PATH="$fixture/bin:$PATH" "$real_bash" -e -o pipefail workflow-step
+printf '%s\n' 'fetch --locked' \
+    'fetch --locked --manifest-path integrations/blob-service/consumer/Cargo.toml' \
+    'fetch --locked --manifest-path integrations/blob-service/embedded-consumer/Cargo.toml' > expected-fetch
+cmp expected-fetch "$EVENTS"
+: > "$EVENTS"
+status=0
+CANIC_PREFLIGHT_FETCH_FAILURE='fetch --locked' PATH="$fixture/bin:$PATH" \
+    "$real_bash" -e -o pipefail workflow-step > workflow-output 2>&1 || status=$?
+[[ "$status" == 37 && "$(wc -l < "$EVENTS")" -eq 1 ]] || exit 1
 echo 'Development recipes, explicit extractor admission and native workflow PATH publication passed (installer effects substituted)'
 fixture_complete=true

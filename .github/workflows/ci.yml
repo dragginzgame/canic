@@ -37,7 +37,9 @@ jobs:
         run: |
           source tool-versions.env
           make install-host-tools
+          make install-rust-tools
           echo "$GITHUB_WORKSPACE/.tools/host/bin" >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/.tools/rust/common/bin" >> "$GITHUB_PATH"
           export PATH="$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
           cargo install cargo-edit --version "$CANIC_CARGO_EDIT_VERSION" --locked
           bash scripts/ci/testkit-server.sh >/dev/null
@@ -52,6 +54,11 @@ jobs:
           rg --pcre2-version
           "$ACTIONLINT_BIN" -version
           "$SHELLCHECK_BIN" --version
+      - name: Prepare locked preflight dependencies
+        run: |
+          cargo fetch --locked
+          cargo fetch --locked --manifest-path integrations/blob-service/consumer/Cargo.toml
+          cargo fetch --locked --manifest-path integrations/blob-service/embedded-consumer/Cargo.toml
       - name: Run preflight validation with complete feedback
         shell: bash
         run: make ci-preflight
