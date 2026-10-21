@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Finish the lifecycle and Hub/Shard test canisters’ Storage adoption through
+  the existing governed collection facade, preserving exclusive Memory leases
+  and cell/map encodings while removing imports of the retired raw reexport.
+
+- Pass each disposable repository explicitly to the shared hook installer in
+  Canic’s formatter fixture, exercising installation, repeat setup, physical path
+  aliases and refusal to replace existing hooks under the maintained interface.
+
+- Keep generic Host/IC installer regression matrices in Shared Tooling while
+  retaining Canic setup, tool admission and release integration checks.
+- Prepare formatter tools and locked graphs before preflight; follow shell
+  sources and distinguish upstream CDK APIs from Canic's forbidden API layer.
+- Align both Blob consumer locks with the selected Timers release; show failed
+  dependency audit reports while preserving their evidence and original exit.
+
 - Route all Host canister Cargo builds through IC Build 0.19's typed invocation
   and observed execution, retaining explicit features, profiles, compiler wrappers,
   declaration environments and primary compiler failures. Share the invocation
