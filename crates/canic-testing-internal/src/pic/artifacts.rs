@@ -481,12 +481,15 @@ pub(super) fn build_internal_test_wasm_canisters_with_features(
                     workspace_root,
                     target_dir,
                     &[*package],
-                    std::env::vars_os().chain((build_env.iter().copied()).map(|(key, value)| {
-                        (
-                            std::ffi::OsString::from(key),
-                            std::ffi::OsString::from(value),
-                        )
-                    })),
+                    // Output placement belongs to the spec, not the outer native build.
+                    std::env::vars_os()
+                        .filter(|(key, _)| key != "CARGO_TARGET_DIR")
+                        .chain((build_env.iter().copied()).map(|(key, value)| {
+                            (
+                                std::ffi::OsString::from(key),
+                                std::ffi::OsString::from(value),
+                            )
+                        })),
                 )
                 .with_cargo_selection(selection.clone())
                 .with_additional_inputs(additional_inputs.iter().cloned())

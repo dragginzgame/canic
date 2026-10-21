@@ -2212,11 +2212,26 @@ mod tests {
         crate::pic::application_checkpoint::qualify(&fixture, target);
     }
 
+    #[test]
+    fn application_checkpoint_complete_unit_restoration_and_lost_replies() {
+        let fixture = install_managed_lifecycle_fixture();
+        let targets = std::array::from_fn(|_| {
+            let (target, directory) = fixture.install_managed_canister();
+            activate_projection(&fixture.pic, target, fixture.root, &directory);
+            target
+        });
+        crate::pic::application_checkpoint::unit::qualify(&fixture, targets);
+    }
+
     pub fn governed_runtime_cases() -> Vec<crate::pic::GovernedTestCase> {
         crate::pic::cases::registered![
             (
                 "application checkpoint freeze and restoration",
                 application_checkpoint_freeze_restore_and_delayed_messages
+            ),
+            (
+                "complete application unit checkpoint and restoration",
+                application_checkpoint_complete_unit_restoration_and_lost_replies
             ),
             (
                 "interleaved endpoint and checkpoint instruction contexts",

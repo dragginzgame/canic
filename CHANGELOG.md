@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Complete the lifecycle and Hub/Shard fixture adoption of governed Storage
+  adapters. Keep Wasm build output placement with IC Build instead of forwarding
+  the outer native Cargo target directory as a command override.
+
+- Qualify complete application-unit checkpoint capture and restoration with two
+  installed participants and the canonical retained Root journal. Require every
+  preparation/release acknowledgement, recover lost replies with exact bindings,
+  and preserve Root sequencing outside restored application snapshots.
+
 - Route all Host canister Cargo builds through IC Build 0.19's typed invocation
   and observed execution, retaining explicit features, profiles, compiler wrappers,
   declaration environments and primary compiler failures. Share the invocation

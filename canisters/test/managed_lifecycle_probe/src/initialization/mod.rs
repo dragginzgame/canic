@@ -1,13 +1,10 @@
 //! Own the generic fixture's initialization evidence in application memory.
 
+use canic::__internal::core::cdk::structures::{DefaultMemoryImpl, Memory, StableCell as Cell};
 use canic::{dto::abi::v1::CanisterInitPayload, endpoint::ArgumentLimits};
-use ic_memory::{
-    RuntimeMemory,
-    ic_stable_structures::{Cell, DefaultMemoryImpl, Memory},
-};
 use std::cell::RefCell;
 
-type Evidence = Cell<Vec<u8>, RuntimeMemory<DefaultMemoryImpl>>;
+type Evidence = Cell<Vec<u8>, DefaultMemoryImpl>;
 const KEY: &str = "managed_probe.initialization.v1";
 pub const LIMITS: ArgumentLimits = ArgumentLimits {
     max_bytes: 65_536,

@@ -1,5 +1,33 @@
 # Current handoff — 2026-10-18
 
+## Complete-unit checkpoint qualification — 2026-10-21
+
+PR #607 now carries its two-participant proof and PR #592’s single-participant
+Root-journal proof onto current main. The older Testkit 0.53 dependency plumbing
+is superseded by main’s published 0.54 graph; Platform owns fixture Candid imports.
+Root records round-trip outside application snapshots, retaining original unit
+identity, complete acknowledgement predicates and exact lost-reply recovery.
+
+This remains framework-owned installed-fixture qualification. Stable production
+Root custody, current membership discovery and exclusion, authenticated dispatch,
+paid snapshot reconciliation and the application runner remain separate obligations
+tracked by #550, #394 and Backup #29. Live coordinated create remains unavailable.
+Both exact installed checkpoint cases pass on the pinned compiler, including their
+mandatory derived inventory preflight. The two-participant case also passes on
+Rust 1.91 through the governed Wasm build, after explicit compiler-specific Testkit
+setup. Strict Clippy passes for the governed harness; native Rust 1.91 all-target
+checks pass for the lifecycle and Hub/Shard fixtures. Build specifications exclude
+only the outer native target directory; all other build inputs remain explicit.
+The six stale raw collection imports now use the existing governed Storage facade,
+matching the narrow correction already committed in the local 0.112 checkout.
+No dependency requirements, locks, public contracts or encodings change.
+
+Evidence is retained under `/tmp/backup-canic-adoptions-20261021-_usix6or/`.
+The initial raw Wasm MSRV command correctly refused the unsupported entry point;
+no admission flag was forged. Hosted CI continues asynchronously. No full local
+suite, native macOS or installed-IC acceptance ran. No release, publication,
+normal sibling checkout edits or live IC effects are included.
+
 ## Focused restore and Build 0.19 qualification — 2026-10-19
 
 Continue 0.112 with the framework Candid protocol unchanged and live coordinated
