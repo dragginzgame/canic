@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Patch locked certificate verification and root lists for distrusted emSign
+  intermediates
+  ([#616 — Repair certificate advisories in the locked TLS graph](https://github.com/dragginzgame/canic/issues/616)).
+
 - Route all Host canister Cargo builds through IC Build 0.19's typed invocation
   and observed execution, retaining explicit features, profiles, compiler wrappers,
   declaration environments and primary compiler failures. Share the invocation
