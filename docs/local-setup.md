@@ -63,6 +63,7 @@ tools extend the aggregate through existing consumer-owned targets:
 
 ```make
 # Select only when this repository uses IC executables.
+IC_TOOLS := ic-wasm wasm-opt
 LOCAL_TOOL_INSTALL_TARGETS += install-ic-tools
 LOCAL_TOOL_CHECK_TARGETS += ic-tools-check
 include make/consumer.mk
@@ -727,8 +728,9 @@ Version reporting defaults to host/Cargo selections. To include an explicitly
 selected IC bundle, pass both catalogs:
 
 ```bash
-bash scripts/ci/report-tool-versions.sh "$PWD" ci/tool-versions.env ci/ic-tools.tsv
+bash scripts/ci/report-tool-versions.sh "$PWD" ci/tool-versions.env ci/ic-tools.tsv 'ic-wasm wasm-opt'
 ```
 
-The IC install/check commands continue to verify all five executable selections
-and their reviewed native-host digests. Product ownership does not weaken admission.
+IC setup/check requires the product's explicit `IC_TOOLS` selection and verifies
+its reviewed native-host digests. The complete pin catalog is still validated;
+unselected tools need no installation. Product ownership does not weaken admission.

@@ -22,6 +22,7 @@ CARGO_INSTALL_BIN_DIR ?= $(if $(CARGO_HOME),$(CARGO_HOME),$(HOME)/.cargo)/bin
 include tool-versions.env
 include ci/tool-versions.env
 override SHARED_TOOLING_ROOT := $(CURDIR)
+IC_TOOLS := ic-wasm icp wasm-opt
 CLOC_REPORT := $(CURDIR)/scripts/dev/report-cloc.sh
 LOCAL_TOOL_INSTALL_TARGETS += install-ic-tools install-candid-extractor install-testkit-server
 LOCAL_TOOL_CHECK_TARGETS += ic-tools-check candid-extractor-check testkit-server-check
@@ -287,7 +288,9 @@ test-wasm: test-unit-fast
 # Primitive development targets retain only the operation named by that target.
 validate:
 	+@$(MAKE) --no-print-directory tools-check
+	+@$(VALIDATION_RUNNER) dependency-adoption-admission
 	+@$(VALIDATION_RUNNER) clippy
+	+@$(VALIDATION_RUNNER) dependency-adoption-fixtures
 	+@$(VALIDATION_RUNNER) \
 		fmt-check \
 		check-invariants \
@@ -547,3 +550,11 @@ runtime-dependency-graph-gate:
 		--require ic-memory=1 --require ic-timers=1 --forbid ic-cdk-timers \
 		--forbid canic-blob-service --forbid canic-cli --forbid canic-testing-internal \
 		--forbid criterion --forbid ic-testkit
+
+# Release validation reuses adoption phases without repeating workspace Clippy.
+.PHONY: dependency-adoption-admission dependency-adoption-fixtures
+dependency-adoption-admission:
+	$(CARGO_ENV) bash scripts/dev/check-dependency-adoption.sh --admission-only
+
+dependency-adoption-fixtures:
+	$(CARGO_ENV) bash scripts/dev/check-dependency-adoption.sh --fixtures-only

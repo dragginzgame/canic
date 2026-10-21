@@ -66,5 +66,14 @@ done
 if DUPLICATE=yes bash "$script" canic-host > "$fixture/duplicate.log" 2>&1; then exit 1; fi
 grep -q 'ic-memory v0.49.4' "$fixture/duplicate.log"
 if grep -q '^clippy ' "$TRACE"; then exit 1; fi
+: > "$TRACE"
+bash "$script" --admission-only > "$fixture/admission.log"
+if grep -Eq '^(clippy|run) ' "$TRACE"; then exit 1; fi
+: > "$TRACE"
+bash "$script" --fixtures-only > "$fixture/fixtures.log"
+if grep -Eq '^(metadata|tree|boundary) ' "$TRACE"; then exit 1; fi
+if grep '^clippy ' "$TRACE" | grep -q -- '--package'; then exit 1; fi
+grep -q '^run ' "$TRACE"
+if bash "$script" --fixtures-only canic-host > "$fixture/extra.log" 2>&1; then exit 1; fi
 fixture_complete=true
 echo 'Dependency adoption command fixtures passed.'

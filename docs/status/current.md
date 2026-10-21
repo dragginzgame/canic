@@ -1,5 +1,43 @@
 # Current handoff — 2026-10-20
 
+## Tooling 0.63 / Platform 0.6 / Shared Tooling 0.26.1 — 2026-10-21
+
+Adopted reviewed Shared 67d4f25d1a613a27d7dfd7b5a4ae119e0e529fc7 through its
+canonical exporter. All 132 snapshot files verify. Canic explicitly selects
+ic-wasm/icp/wasm-opt; installation and checks pass on Linux. No sibling source edits.
+The previously prepared automatic release adoption phases are now applied:
+cheap admission, existing workspace Clippy, fixture lint/freshness, remaining gates.
+Actual Make command fixtures pass with parallel/failure barriers; ShellCheck passes.
+
+Preserved the maintainer's Platform 0.6 / Timers 0.30 root edits; aligned independent
+Blob catalogs/locks and selected Backup's required principal feature. Core, Host
+and Backup libraries pass scoped strict Clippy. Blob adapter fails two owned
+Principal assignments against published Blob 0.39 / Platform 0.5.1. Tracked at
+[Blob #95](https://github.com/dragginzgame/ic-blob-storage/issues/95). No shim added.
+Auth protocol types 0.12.1 and Timers 0.30 also retain Platform 0.5 in the normal
+Wasm graph; early adoption admission refuses that split before compilation.
+
+IC Tooling 0.63 adoption selects Build, Host Process and Host Text. Scoped strict
+library Clippy passes for Host, Backup and CLI; root dependency-boundary checks
+and both independent fixture locked metadata checks pass. No fixture lock changes
+are needed for these host-only selections. Full Host adoption awaits
+[Backup #62](https://github.com/dragginzgame/ic-backup/issues/62#issuecomment-6311309760)
+and [Query #92](https://github.com/dragginzgame/ic-query/issues/92); retain matching
+Artifacts/FS/Tools 0.62 public types. Testkit remains 0.62 under the 0.112 codec
+exception because 0.63 removes Candid helpers. Build's separately pinned release
+metadata executable remains unchanged. Evidence: `/tmp/canic-tooling063-*.log`.
+Early admission still refuses the existing Platform 0.5.1/0.6.0 Wasm split.
+The focused Host Candid capture tests cannot compile: retained Testkit 0.62 takes
+Platform 0.5 DecodeLimits while Canic supplies 0.6. Consumer ownership work is
+tracked in [Canic #615](https://github.com/dragginzgame/canic/issues/615); no test
+execution or full-graph qualification is claimed.
+
+Evidence: `/tmp/canic-platform060-{clippy,admission}.log` and
+`/tmp/canic-shared0261-*.log`. Full tests, managed Wasm/install proofs, native macOS
+and release execution were not run. No fixture refresh was attempted against the
+incompatible graph. The complete release batch remains blocked on upstream alignment;
+notes describe the pending adoption rather than claiming deployment qualification.
+
 ## Focused dependency adoption admission — 2026-10-21
 
 Added `bash scripts/dev/check-dependency-adoption.sh PACKAGE...`: locked/offline

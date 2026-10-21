@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Shared companions: scripts/ci/select-tool-evidence.sh scripts/ci/archive-evidence.sh .github/actions/retain-failure-evidence/action.yml scripts/ci/fixture-lifecycle.sh scripts/ci/extract-workflow-step.sh
 set -euo pipefail
-[[ $# == 3 ]] || { echo 'usage: test-tool-evidence.sh CONSUMER host|ic CALLER-PINS' >&2; exit 2; }
+[[ $# == 3 || $# == 4 ]] || { echo 'usage: test-tool-evidence.sh CONSUMER host|ic CALLER-PINS [IC-TOOLS]' >&2; exit 2; }
 ROOT="${BASH_SOURCE[0]}"
 [[ "$ROOT" == /* ]] || ROOT="$PWD/$ROOT"
 ROOT="$(cd -P "${ROOT%/*}/../.." && printf '%s/.' "$PWD")"
 ROOT="${ROOT%/.}"
 consumer="$1"; kind="$2"; pins="$3"
+ic_tools="${4:-didc ic-wasm icp quill wasm-opt}"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/tool-evidence-test.XXXXXX")"
 fixture="$(CDPATH="" cd -P -- "$fixture" && printf '%s/.' "$PWD")"
 fixture="${fixture%/.}"
@@ -29,7 +30,7 @@ choose_evidence() {
     if [[ "$mode" == full ]]; then
         bash "$ROOT/scripts/ci/select-tool-evidence.sh" full "$consumer" "$destination" > "$destination/selections.nul"
     else
-        bash "$ROOT/scripts/ci/select-tool-evidence.sh" compact "$consumer" "$destination" "$pins" "$pins" > "$destination/selections.nul"
+        bash "$ROOT/scripts/ci/select-tool-evidence.sh" compact "$consumer" "$destination" "$pins" "$pins" "$ic_tools" > "$destination/selections.nul"
     fi
 }
 archive() {
@@ -54,13 +55,22 @@ cmp "$candidate/payload" "$fixture/compact-unpacked/.tools/$kind-set.evidenceCan
 [[ -L "$fixture/compact-unpacked/.tools/$kind-set.evidenceCandidate/link" ]] || exit 1
 [[ "$(perl -e 'printf "%o", (stat($ARGV[0]))[2]&0777' "$fixture/compact-unpacked/.tools/$kind-set.evidenceCandidate/payload")" == 640 ]] || exit 1
 if [[ "$kind" == ic ]]; then
-    for receipt in pins.tsv host files.sha256; do cmp "$consumer/.tools/$active/$receipt" "$fixture/compact/ic/$receipt"; done
+    for receipt in pins.tsv tools host files.sha256; do cmp "$consumer/.tools/$active/$receipt" "$fixture/compact/ic/$receipt"; done
+    # Missing or mismatched caller selections must retain the complete bundle.
+    for selected_tools in '' 'didc wasm-opt'; do
+        directory="$(mktemp -d "$fixture/unselected.XXXXXX")"
+        bash "$ROOT/scripts/ci/select-tool-evidence.sh" compact "$consumer" "$directory" "$pins" "$pins" "$selected_tools" > "$directory/selections.nul"
+        archive "$directory" "$directory.tar.gz"
+        mkdir "$directory/unpacked"
+        tar -xzf "$directory.tar.gz" -C "$directory/unpacked"
+        [[ -d "$directory/unpacked/$stored_path" ]] || exit 1
+    done
 fi
 printf 'Synthetic %s archive bytes: full=%s compact=%s\n' "$kind" "$(wc -c < "$fixture/full.tar.gz")" "$(wc -c < "$fixture/compact.tar.gz")"
 
 # A fresh failed check keeps the active set, despite its successful installation.
 payload="$consumer/.tools/$active/bin/"; [[ "$kind" != host ]] || payload+=jq
-[[ "$kind" != ic ]] || payload+=quill
+[[ "$kind" != ic ]] || payload+="${ic_tools%% *}"
 cp -p "$payload" "$fixture/original"
 printf '\nchanged\n' >> "$payload"
 choose_evidence compact "$fixture/corrupt"
@@ -123,7 +133,7 @@ mkdir "$fixture/action-temp"
 printf 'original_status=23\n' > "$fixture/action-temp/portable-regression.log"
 EVIDENCE_TEMP_ROOT="$fixture/action-temp" EVIDENCE_REPOSITORY_ROOT="$consumer" \
     EVIDENCE_ACTION_ROOT="$ROOT/.github/actions/retain-failure-evidence" \
-    EVIDENCE_COMPACT=true EVIDENCE_HOST_VERSIONS="$pins" EVIDENCE_IC_PINS="$pins" \
+    EVIDENCE_COMPACT=true EVIDENCE_HOST_VERSIONS="$pins" EVIDENCE_IC_PINS="$pins" EVIDENCE_IC_TOOLS="$ic_tools" \
     GITHUB_OUTPUT="$fixture/action-output" RUNNER_TEMP="$fixture/action-temp" \
     "$BASH" --noprofile --norc -e -o pipefail "$fixture/collector.sh"
 output="$(sed -n 's/^path=//p' "$fixture/action-output")"
@@ -136,7 +146,7 @@ cp "$pins" "$snapshot/ci/tool-versions.env"
 cp "$pins" "$snapshot/ci/ic-tools.tsv"
 EVIDENCE_TEMP_ROOT="$fixture/default-temp" EVIDENCE_REPOSITORY_ROOT="$consumer" \
     EVIDENCE_ACTION_ROOT="$snapshot/.github/actions/retain-failure-evidence" \
-    EVIDENCE_COMPACT=true EVIDENCE_HOST_VERSIONS='' EVIDENCE_IC_PINS='' \
+    EVIDENCE_COMPACT=true EVIDENCE_HOST_VERSIONS='' EVIDENCE_IC_PINS='' EVIDENCE_IC_TOOLS="$ic_tools" \
     GITHUB_OUTPUT="$fixture/default-output" RUNNER_TEMP="$fixture/default-temp" \
     "$BASH" --noprofile --norc -e -o pipefail "$fixture/collector.sh"
 default_details=("$fixture/default-temp"/tool-evidence.*/"$kind")

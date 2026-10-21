@@ -197,7 +197,7 @@ Preferred format:
 
 ## After dependency updates
 
-Before release validation, finish the authorized dependency updates and fetch the
+Finish the authorized dependency updates and fetch the
 selected packages. With no other Canic build or validation using `target/`, run:
 
 ```sh
@@ -221,6 +221,15 @@ runtime checks. Add meaningful focused tests for behavior changes separately.
 This command never updates locks or refreshes artifacts. A stale embedded peer
 requires the explicit refresh command printed by its verifier, then rechecking.
 The ordinary test runner already verifies that peer before its suites. This is
-an opt-in development check, not full workspace validation, managed Wasm or
+also available as a focused development check, not full workspace validation, managed Wasm or
 installed-IC qualification, or native macOS evidence. Shared generic ownership
 is tracked in [Shared Tooling #295](https://github.com/dragginzgame/shared-tooling/issues/295).
+
+Complete release targets (`release-patch`, `release-minor`, `release-major`) run
+these checks automatically through `release-verify` and `validate`. Cheap
+admission runs after tool preparation and before workspace Clippy. The fixture
+Clippy and freshness phase follows that one workspace lint pass, before the
+remaining invariant, compile and test stages. Sequential Make recipes retain
+these barriers under `-j`. The focused command reuses the same implementation;
+release validation does not substitute a small package selection for full lint.
+The governed fast patch lane retains its existing checks and eligibility rules.

@@ -88,15 +88,15 @@ ic-auth-protocol-types = "0.12"
 ic-backup = { version = "0.36", default-features = false }
 ic-blob-storage = "0.39"
 ic-blob-storage-contracts = "0.39"
-ic-build = { version = "0.62" }
+ic-build = { version = "0.63" }
 ic-host-artifacts = { version = "0.62", default-features = false }
 ic-host-fs = { version = "0.62", default-features = false }
-ic-host-process = { version = "0.62", default-features = false }
-ic-host-text = "0.62"
+ic-host-process = { version = "0.63", default-features = false }
+ic-host-text = "0.63"
 ic-host-tools = "0.62"
 ic-memory = "0.50"
 ic-metrics = "0.15"
-ic-platform = { version = "0.5", default-features = false }
+ic-platform = { version = "0.6", default-features = false }
 ic-query = { version = "0.66", default-features = false, features = [
     "subnet-catalog-host",
 ] }
@@ -104,7 +104,7 @@ ic-query = { version = "0.66", default-features = false, features = [
 ic-stable-structures = "0.7.2"
 ic-storage = "0.50"
 ic-testkit = { version = "0.62" }
-ic-timers = "0.29"
+ic-timers = "0.30"
 proc-macro2 = "1.0"
 prost = "0.14.4"
 quote = "1.0"

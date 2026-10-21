@@ -8,15 +8,21 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
-- Add an opt-in dependency-adoption check across the root and both Blob fixtures,
-  rejecting stale locks and split runtime identities before scoped Clippy and
-  read-only embedded-peer qualification.
+- Adopt IC Tooling 0.63 for Build, Host Process and Host Text while retaining
+  the compatible Backup, Query and Candid testing boundaries.
+
+- Select Platform 0.6 across owned catalogs, explicitly enabling principal support
+  for Backup, and retain Timers 0.30 in all workspace locks.
+
+- Run dependency admission automatically in complete release validation, then
+  workspace and fixture Clippy and read-only embedded-peer qualification.
+  Retain the focused development command.
 
 - Align the dedicated and embedded Blob fixture catalogs with Blob 0.39,
   Platform 0.5 and Memory/Storage 0.50, removing split runtime type identities.
 
-- Adopt Shared Tooling 0.25.9 release-retry safeguards while retaining Clippy
-  before expensive validation, packaging and publication work.
+- Adopt Shared Tooling 0.26.1 with explicit IC executable selection and focused
+  dependency-adoption guidance; retain Clippy-first release barriers.
 
 - Reconcile root and Blob consumer lockfiles with the selected dependencies so
   locked release preparation uses the declared graphs.

@@ -27,7 +27,25 @@ trap finish EXIT
 mkdir -p "$fixture/bin" "$fixture/assets" "$fixture/payload"
 export IC_TOOLS_TEST_FIXTURE="$fixture"
 IC_TOOLS_TEST_REAL_CP="$(command -v cp)"
+IC_TOOLS_TEST_REAL_AWK="$(command -v awk)"
+export IC_TOOLS_TEST_REAL_AWK
 export IC_TOOLS_TEST_REAL_CP
+# macOS awk refuses literal LF bytes in -v assignments. Exercise that
+# boundary even when the native fixture host uses a permissive awk.
+cat > "$fixture/bin/awk" <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+arguments=("$@")
+while [[ $# -gt 0 ]]; do
+    if [[ "$1" == -v ]]; then
+        [[ $# -ge 2 ]] || exit 2
+        case "$2" in *$'\n'*) echo 'awk fixture: newline in assignment' >&2; exit 2 ;; esac
+        shift
+    fi
+    shift
+done
+exec "$IC_TOOLS_TEST_REAL_AWK" "${arguments[@]}"
+SCRIPT
 cat > "$fixture/bin/cp" <<'SCRIPT'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -109,9 +127,22 @@ for tool in quill icp didc ic-wasm wasm-opt; do
     done
 done
 
+for invalid in missing unknown empty; do
+    arguments=()
+    case "$invalid" in
+        unknown) arguments=(--tool unselected) ;;
+        empty) arguments=(--tool '') ;;
+    esac
+    # Even a nonexistent destination must not be observed before CLI admission.
+    status=0
+    bash "$ROOT/scripts/dev/install-ic-tools.sh" --consumer "$fixture/not-created" \
+        ${arguments[@]+"${arguments[@]}"} > "$fixture/invalid-selection.log" 2>&1 || status=$?
+    [[ "$status" == 2 && ! -e "$fixture/not-created" ]] || exit 1
+done
+
 install() {
     export SHARED_TOOLING_STORE="${IC_SHARED_STORE:-$consumer/store}"
-    bash "$ROOT/scripts/dev/install-ic-tools.sh" --consumer "$consumer" --pins "$selected_pins" "$@"
+    bash "$ROOT/scripts/dev/install-ic-tools.sh" --consumer "$consumer" --pins "$selected_pins" --tool quill --tool icp --tool didc --tool ic-wasm --tool wasm-opt "$@"
 }
 expect_failure() {
     if "$@" > "$fixture/refusal.log" 2>&1; then echo 'IC tool rejection failed' >&2; exit 1; fi
@@ -143,15 +174,15 @@ for host in Linux:x86_64 Darwin:x86_64 Darwin:arm64; do
     install --check > /dev/null 2>&1
     mkdir "$consumer/ci"
     printf 'obsolete consumer pins\n' > "$consumer/ci/ic-tools.tsv"
-    bash "$snapshot/scripts/dev/install-ic-tools.sh" --consumer "$consumer" --check > /dev/null
+    bash "$snapshot/scripts/dev/install-ic-tools.sh" --consumer "$consumer" --tool quill --tool icp --tool didc --tool ic-wasm --tool wasm-opt --check > /dev/null
     mv "$snapshot/ci/ic-tools.tsv" "$snapshot/ci/exception.tsv"
-    expect_failure bash "$snapshot/scripts/dev/install-ic-tools.sh" --consumer "$consumer" --check
-    bash "$snapshot/scripts/dev/install-ic-tools.sh" --consumer "$consumer" --pins "$pins" --check > /dev/null
+    expect_failure bash "$snapshot/scripts/dev/install-ic-tools.sh" --consumer "$consumer" --tool quill --tool icp --tool didc --tool ic-wasm --tool wasm-opt --check
+    bash "$snapshot/scripts/dev/install-ic-tools.sh" --consumer "$consumer" --pins "$pins" --tool quill --tool icp --tool didc --tool ic-wasm --tool wasm-opt --check > /dev/null
     mv "$snapshot/ci/exception.tsv" "$snapshot/ci/ic-tools.tsv"
     install > /dev/null 2>&1
     [[ "$(wc -l < "$fixture/downloads")" == "$before" ]] || exit 1
     (cd "$fixture"; CDPATH="$fixture" bash "$ROOT/scripts/dev/install-ic-tools.sh" \
-        --consumer "${consumer#"$fixture/"}" --pins pins.tsv --check) > /dev/null 2>&1
+        --consumer "${consumer#"$fixture/"}" --pins pins.tsv --tool quill --tool icp --tool didc --tool ic-wasm --tool wasm-opt --check) > /dev/null 2>&1
     # Comments and record order do not change selection or rewrite provenance.
     original="$(readlink "$consumer/.tools/ic")"
     cp "$consumer/.tools/ic/files.sha256" "$fixture/original-receipt"
@@ -195,8 +226,62 @@ for host in Linux:x86_64 Darwin:x86_64 Darwin:arm64; do
 done
 (
     cd "$fixture"
-    bash "$ROOT/scripts/dev/install-ic-tools.sh" --consumer "$consumer" --pins pins.tsv --check > /dev/null 2>&1
+    bash "$ROOT/scripts/dev/install-ic-tools.sh" --consumer "$consumer" --pins pins.tsv --tool quill --tool icp --tool didc --tool ic-wasm --tool wasm-opt --check > /dev/null 2>&1
 )
+# A subset has its own immutable selection and authenticates only its payloads.
+# Keep the complete catalog admitted, including pins for unselected executables.
+for host in Linux:x86_64 Darwin:x86_64 Darwin:arm64; do
+    export IC_TOOLS_TEST_OS="${host%:*}" IC_TOOLS_TEST_ARCH="${host#*:}"
+    subset="$fixture/optimizer $host"; mkdir "$subset"
+    export SHARED_TOOLING_STORE="$subset/store"
+    before="$(wc -l < "$fixture/downloads")"
+    bash "$ROOT/scripts/dev/install-ic-tools.sh" --consumer "$subset" --pins "$pins" \
+        --tool wasm-opt > "$fixture/subset.log" 2>&1
+    [[ "$(wc -l < "$fixture/downloads")" == "$((before + 1))" &&
+       -x "$subset/.tools/ic/bin/wasm-opt" && ! -e "$subset/.tools/ic/bin/quill" &&
+       -f "$subset/.tools/ic/lib/libbinaryen.dylib" ]] || exit 1
+    selected="$(readlink "$subset/.tools/ic")"
+    bash "$ROOT/scripts/dev/install-ic-tools.sh" --consumer "$subset" --pins "$pins" \
+        --tool wasm-opt --tool wasm-opt --check > /dev/null 2>&1
+    unselected_pins="$fixture/unselected-pins.tsv"
+    sed 's/^quill	0\.5\.4	/quill	0.5.5	/' "$pins" > "$unselected_pins"
+    bash "$ROOT/scripts/dev/install-ic-tools.sh" --consumer "$subset" --pins "$unselected_pins" \
+        --tool wasm-opt --check > /dev/null 2>&1
+    # Unselected rows still pass full schema admission before any execution.
+    printf 'malformed\n' >> "$unselected_pins"
+    : > "$fixture/executions"
+    expect_failure bash "$ROOT/scripts/dev/install-ic-tools.sh" --consumer "$subset" --pins "$unselected_pins" \
+        --tool wasm-opt --check
+    [[ ! -s "$fixture/executions" ]] || exit 1
+    mv "$subset/.tools/ic/tools" "$fixture/subset-tools"
+    expect_failure bash "$ROOT/scripts/dev/install-ic-tools.sh" --consumer "$subset" --pins "$pins" \
+        --tool wasm-opt --check
+    mv "$fixture/subset-tools" "$subset/.tools/ic/tools"
+    # The actual Make interface forwards the same selection to offline admission.
+    make --no-print-directory -C "$subset" -f "$ROOT/make/tools.mk" \
+        SHARED_TOOLING_ROOT="$ROOT" IC_TOOL_PINS="$pins" IC_TOOLS=wasm-opt ic-tools-check \
+        > "$fixture/subset-make.log" 2>&1
+    expect_failure bash "$ROOT/scripts/dev/install-ic-tools.sh" --consumer "$subset" --pins "$pins" \
+        --tool wasm-opt --tool ic-wasm --check
+    [[ "$(readlink "$subset/.tools/ic")" == "$selected" &&
+       "$(wc -l < "$fixture/downloads")" == "$((before + 1))" ]] || exit 1
+    bash "$ROOT/scripts/ci/test-tool-evidence.sh" "$subset" ic "$pins" wasm-opt
+    # A self-consistent receipt must not admit an unselected executable.
+    cp "$subset/.tools/ic/files.sha256" "$fixture/subset-receipt"
+    cp "$fixture/payload/quill" "$subset/.tools/ic/bin/quill"
+    digest="$(shasum -a 256 "$subset/.tools/ic/bin/quill")"
+    printf '%s  bin/quill\n' "${digest%% *}" >> "$subset/.tools/ic/files.sha256"
+    : > "$fixture/executions"
+    expect_failure bash "$ROOT/scripts/dev/install-ic-tools.sh" --consumer "$subset" --pins "$pins" \
+        --tool wasm-opt --check
+    [[ ! -s "$fixture/executions" ]] || exit 1
+    rm "$subset/.tools/ic/bin/quill"
+    cp "$fixture/subset-receipt" "$subset/.tools/ic/files.sha256"
+    # Failed expansion cannot replace the admitted optimizer selection.
+    IC_TOOLS_TEST_INTERRUPT=1 expect_failure bash "$ROOT/scripts/dev/install-ic-tools.sh" \
+        --consumer "$subset" --pins "$pins" --tool wasm-opt --tool ic-wasm
+    [[ "$(readlink "$subset/.tools/ic")" == "$selected" ]] || exit 1
+done
 # A text file's final record remains a selected tool without a final newline.
 # Put this host's wasm-opt last so both installation and offline admission must
 # consume it, rather than merely accepting the same complete matrix in awk.

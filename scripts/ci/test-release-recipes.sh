@@ -44,7 +44,7 @@ real_make="$(command -v make)"
 run_case() {
     local target="$1" expected="$2" status=0
     : >"$EVENTS"
-    PATH="$fixture/bin:$PATH" "$real_make" --no-print-directory -f "$ROOT/Makefile" \
+    PATH="$fixture/bin:$PATH" "$real_make" -j4 --no-print-directory -f "$ROOT/Makefile" \
         MAKE="$fixture/bin/make" "$target" >"$fixture/output" 2>&1 || status=$?
     if [[ "$expected" == success ]]; then [[ "$status" == 0 ]]; else [[ "$status" != 0 ]]; fi
 }
@@ -68,4 +68,20 @@ printf '%s\n' scripts/ci/check-release-push-ready.sh scripts/ci/push-release.sh 
 cmp "$fixture/expected" "$EVENTS"
 FAIL_AT=scripts/ci/check-release-push-ready.sh run_case release-push failure
 [[ "$(cat "$EVENTS")" == scripts/ci/check-release-push-ready.sh ]]
+# Validate is the complete release-verify path. Sequential recipes must also
+# stop correctly when the caller enables parallel Make.
+run_case validate success
+printf '%s\n' '--no-print-directory tools-check' \
+    'scripts/ci/run-canic-validation-targets.sh dependency-adoption-admission' \
+    'scripts/ci/run-canic-validation-targets.sh clippy' \
+    'scripts/ci/run-canic-validation-targets.sh dependency-adoption-fixtures' \
+    'scripts/ci/run-canic-validation-targets.sh fmt-check check-invariants dependency-risk-gate shellcheck' \
+    'scripts/ci/run-canic-validation-targets.sh check' \
+    'scripts/ci/run-canic-validation-targets.sh control-plane-feature-gate' \
+    'scripts/ci/run-canic-validation-targets.sh test' > "$fixture/expected"
+cmp "$fixture/expected" "$EVENTS"
+for gate in dependency-adoption-admission clippy dependency-adoption-fixtures; do
+    FAIL_AT="scripts/ci/run-canic-validation-targets.sh $gate" run_case validate failure
+    [[ "$(tail -1 "$EVENTS")" == "scripts/ci/run-canic-validation-targets.sh $gate" ]]
+done
 echo 'release Make recipes preserve ordering and failure boundaries (no Git effects)'

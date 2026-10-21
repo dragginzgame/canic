@@ -111,11 +111,12 @@ for target in install-tools tools-check; do
     run_recipe -j8 "$target"
     {
         if [[ "$target" == install-tools ]]; then
+            printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-ic-tools.sh --consumer $fixture --pins $fixture/ci/ic-tools.tsv --tool ic-wasm --tool icp --tool wasm-opt --preflight"
             printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-rust-tools.sh --consumer $fixture --versions $fixture/ci/tool-versions.env --preflight"
         fi
         printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-host-tools.sh --consumer $fixture --versions $fixture/ci/tool-versions.env$suffix"
         printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-rust-tools.sh --consumer $fixture --versions $fixture/ci/tool-versions.env$suffix"
-        printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-ic-tools.sh --consumer $fixture --pins $fixture/ci/ic-tools.tsv$suffix"
+        printf '%s\t%s\n' "$fixture/bin/bash" "$fixture/scripts/dev/install-ic-tools.sh --consumer $fixture --pins $fixture/ci/ic-tools.tsv --tool ic-wasm --tool icp --tool wasm-opt$suffix"
         printf '%s\t%s\n' "$fixture/bin/bash" "scripts/dev/candid-extractor.sh$suffix"
         printf '%s\t%s\n' "$fixture/bin/bash" "scripts/ci/testkit-server.sh$suffix"
         printf '%s\t%s\n' "$fixture/.tools/rust/fixture-testkit/installed/bin/testkit-runner" "$action"
@@ -126,7 +127,7 @@ for target in install-tools tools-check; do
         echo 'aggregate accepted failed host admission' >&2; exit 1
     fi
     expected_prefix=0
-    if [[ "$target" == install-tools ]]; then expected_prefix=1; fi
+    if [[ "$target" == install-tools ]]; then expected_prefix=2; fi
     [[ "$(wc -l < "$EVENTS")" == $((expected_prefix + 1)) ]] || exit 1
     if FAIL_RUST_TOOLS=17 run_recipe -j8 "$target"; then
         echo 'aggregate accepted failed Cargo-tool admission' >&2; exit 1
