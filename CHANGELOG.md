@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Finish the lifecycle and Hub/Shard test canisters’ Storage adoption through
+  the existing governed collection facade, preserving exclusive Memory leases
+  and cell/map encodings while removing imports of the retired raw reexport.
+
 - Pass each disposable repository explicitly to the shared hook installer in
   Canic’s formatter fixture, exercising installation, repeat setup, physical path
   aliases and refusal to replace existing hooks under the maintained interface.

@@ -6,8 +6,15 @@ PR #604’s remaining hosted hook failure reproduces locally: the consumer fixtu
 called the shared installer without its required `--consumer` argument. Every
 installer case now passes its own fixture root, including physical path aliases
 and refusal cases. The canonical Shared Tooling payload remains unchanged.
-The TLS advisory repair remains stacked in #617; unrelated stale Memory fixture
-imports still require separate focused repair before complete native acceptance.
+The TLS advisory repair remains stacked in #617. The managed lifecycle and
+Hub/Shard fixture imports also use the existing governed Storage facade; this
+narrow repair matches the committed local 0.112 correction without publishing its
+unrelated dependency, release or framework work. No schema or byte format changes.
+Native Rust 1.91 checks pass for all targets of the three affected fixture
+packages. The two exact checkpoint cases on #607 pass real installed capture,
+restore and Root-journal recovery with the same managed fixture source. Direct
+MSRV Wasm checking correctly refuses unsupported raw Cargo entry; no admission
+marker is forged. Canonical governed MSRV execution is qualified separately.
 No release, deployment or edits to the normal Canic checkout are included.
 
 ## Focused restore and Build 0.19 qualification — 2026-10-19

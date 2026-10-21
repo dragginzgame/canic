@@ -4,10 +4,7 @@
 //! Does not own: Canic lifecycle or Fleet orchestration.
 //! Boundary: application memory is initialized only after Canic restoration.
 
-use ic_memory::{
-    RuntimeMemory,
-    ic_stable_structures::{BTreeMap, DefaultMemoryImpl},
-};
+use canic::__internal::core::cdk::structures::{DefaultMemoryImpl, StableBTreeMap as BTreeMap};
 use std::cell::RefCell;
 
 const ROWS_KEY: &str = "test.user_rows.v1";
@@ -38,7 +35,7 @@ pub struct UserRow {
 }
 
 thread_local! {
-    static ROWS: RefCell<BTreeMap<u64, u64, RuntimeMemory<DefaultMemoryImpl>>> = RefCell::new(
+    static ROWS: RefCell<BTreeMap<u64, u64, DefaultMemoryImpl>> = RefCell::new(
         BTreeMap::init(canic::memory::open(ROWS_KEY))
     );
 }
