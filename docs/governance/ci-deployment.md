@@ -734,3 +734,23 @@ sufficient.
 - [Read the testing rules](../../TESTING.md)
 - [Browse all documentation](../README.md)
 - [Back to the main README](../../README.md)
+
+## Consumer installer qualification
+
+Shared Tooling owns the generic Host/IC installer matrices. Their substitute
+catalogs and downloads test the producer implementation, while Canic retains
+checks of its actual selections and commands:
+
+| Consumer obligation | Retained proof |
+| --- | --- |
+| Prepared executable and catalog admission | `make tools-check`, including the configured IC tool check |
+| Development install/check recipes and failure propagation | `scripts/ci/test-dev-tool-recipes.sh` |
+| Selected release tool prerequisites | `scripts/ci/test-release-tools.sh` |
+| Pinned CI executable selection | `scripts/ci/test-pinned-ci-tools.sh` |
+| Release routing, integrity, recovery and delivery | Existing release-runner, release-integrity and shared-release-adoption checks |
+| Hook preservation, retained failures and product behavior | Existing hook/evidence checks and native/product gates |
+
+The canonical exporter retires the two unused matrix roots at the unchanged
+snapshot revision. Generic tests required by another selected root remain in its
+closure. Supported Linux/macOS tool and product qualification is unchanged;
+upstream fixtures do not replace native Canic acceptance.

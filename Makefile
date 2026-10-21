@@ -364,8 +364,6 @@ release-integrity-contract-gate:
 	bash scripts/ci/test-release-runner.sh
 	bash scripts/ci/check-release-integrity-contract.sh
 	bash scripts/ci/test-require-jq.sh
-	bash scripts/ci/test-ic-tools.sh
-	bash scripts/ci/test-host-tools.sh
 	bash scripts/ci/test-dev-tool-recipes.sh
 	bash scripts/ci/test-release-tools.sh
 	bash scripts/ci/test-pinned-ci-tools.sh
@@ -408,7 +406,7 @@ dependency-risk-gate:
 	bash scripts/ci/check-dependency-risk-inventory.sh
 
 shellcheck:
-	"$(SHELLCHECK_BIN)" --exclude=SC2001,SC2016 \
+	"$(SHELLCHECK_BIN)" -x --exclude=SC2001,SC2016 \
 		scripts/ci/*.sh scripts/dev/*.sh .githooks/pre-commit
 
 control-plane-feature-gate:
