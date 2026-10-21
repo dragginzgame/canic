@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Reference the reviewed Shared audit contract for common procedure and keep
+  Canic's domain identities, measurement, retention and closeout obligations in
+  its local how-to. Historical reports and method definitions are preserved.
+
 - Route all Host canister Cargo builds through IC Build 0.19's typed invocation
   and observed execution, retaining explicit features, profiles, compiler wrappers,
   declaration environments and primary compiler failures. Share the invocation
