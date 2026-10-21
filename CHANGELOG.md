@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
+- Select IC Timers 0.30 and its matching Metrics dependency without changing
+  timer lifecycle or watchdog policy.
+
 - Align the standalone IcyDB host adapter with Timer 0.27 so consuming
   applications resolve one timer runtime; share Canic's operator-health
   projection between runtime status and metrics.

@@ -2636,9 +2636,23 @@ checksum = "3aa440238acf049dc652b9cd9a932b79b19e5562f8e80d6994d3eb92523221a4"
 
 [[package]]
 name = "ic-metrics"
-version = "0.12.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c30a384477a9783da95cd991e576f6f6a76c5d3691299fffe294f95affae3fd7"
+checksum = "ee8bcc41cde9657498086117ef1cfa826ef7b2e3ff06b4245db1b0b2e96c093f"
+
+[[package]]
+name = "ic-platform"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4469fe3e1e7ea4b8cb57db1e32d9906ca95fdb93df5110e4a289352917dc9c76"
+dependencies = [
+ "crc32fast",
+ "data-encoding",
+ "ic-cdk-executor",
+ "ic0",
+ "ic_principal",
+ "serde",
+]
 
 [[package]]
 name = "ic-query"
@@ -2754,13 +2768,12 @@ dependencies = [
 
 [[package]]
 name = "ic-timers"
-version = "0.27.0"
+version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30c4f24136b7853afbdddd5849b428f22cadb2ac36ca1436933db5e010d735f8"
+checksum = "05a9d0f47406f1ca601e7e1fd0c9064a8c4b7a43af980798747620f10168303a"
 dependencies = [
- "ic-cdk-executor",
- "ic-metrics 0.12.0",
- "ic0",
+ "ic-metrics 0.15.0",
+ "ic-platform",
  "thiserror 2.0.18",
 ]
 
