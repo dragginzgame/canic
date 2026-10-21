@@ -4,15 +4,12 @@
 //! Does not own: provisioning, grants, Canic readiness or production application schemas.
 //! Boundary: one application cell owns imported bytes and the durable completion checkpoint.
 
+use canic::__internal::core::cdk::structures::{DefaultMemoryImpl, StableCell as Cell};
 use canic::{
     api::fixture_provisioning::{FixtureImporter, FixtureProvisioningApi},
     dto::fixture_provisioning::{
         FixtureAssignment, FixtureImportError, FixtureImportProgress, FixtureImportReceipt,
     },
-};
-use ic_memory::{
-    RuntimeMemory,
-    ic_stable_structures::{Cell, DefaultMemoryImpl},
 };
 use std::cell::RefCell;
 
@@ -29,7 +26,7 @@ struct ImportRecord {
 }
 
 thread_local! {
-    static IMPORT: RefCell<Cell<Vec<u8>, RuntimeMemory<DefaultMemoryImpl>>> = RefCell::new(Cell::init(
+    static IMPORT: RefCell<Cell<Vec<u8>, DefaultMemoryImpl>> = RefCell::new(Cell::init(
         canic::memory::open(MEMORY_KEY),
         Vec::new(),
     ));
