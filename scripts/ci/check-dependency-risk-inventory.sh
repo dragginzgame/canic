@@ -62,7 +62,11 @@ case "$#" in
     (
         cd "$ROOT"
         cargo audit "${audit_args[@]}"
-    ) >"$audit_json"
+    ) >"$audit_json" || {
+        audit_status=$?
+        cat "$audit_json" >&2 || :
+        exit "$audit_status"
+    }
     ;;
 2)
     [ "$1" = "--audit-json" ] || fail "usage: $0 [--audit-json <path>]"

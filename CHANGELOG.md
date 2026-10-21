@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   retaining Canic setup, tool admission and release integration checks.
 - Prepare formatter tools and locked graphs before preflight; follow shell
   sources and distinguish upstream CDK APIs from Canic's forbidden API layer.
+- Align both Blob consumer locks with the selected Timers release; show failed
+  dependency audit reports while preserving their evidence and original exit.
 
 - Route all Host canister Cargo builds through IC Build 0.19's typed invocation
   and observed execution, retaining explicit features, profiles, compiler wrappers,

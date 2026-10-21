@@ -80,6 +80,58 @@ printf 'RUSTSEC-2099-0001\tunmaintained\tcanic-risk-transitive-fixture\t1.0.0\t%
     }] }
 }' >"$base"
 
+# Exercise the production audit invocation without network or an advisory clone.
+# A failed audit must expose its report, retain the bytes and preserve its status,
+# even if replaying the report itself fails.
+failure_fixture="$tmp_dir/audit-failure"
+mkdir -p "$failure_fixture/scripts/ci" "$failure_fixture/bin" "$failure_fixture/evidence"
+cp "$GATE" "$fixture/scripts/ci/require-jq.sh" "$failure_fixture/scripts/ci/"
+cp "$fixture/tool-versions.env" "$failure_fixture/tool-versions.env"
+touch "$failure_fixture/scripts/ci/dependency-risk-inventory.tsv"
+printf '#!/usr/bin/env bash\nexit 0\n' >"$failure_fixture/scripts/ci/prepare-rustsec-db.sh"
+printf '%s\n' '{"error":{"kind":"fixture","message":"synthetic audit failure"}}' >"$tmp_dir/audit-error.json"
+export CANIC_AUDIT_TEST_TOOLS="$failure_fixture/tool-versions.env"
+export CANIC_AUDIT_TEST_JSON="$tmp_dir/audit-error.json"
+export CANIC_AUDIT_TEST_CAT
+CANIC_AUDIT_TEST_CAT="$(command -v cat)"
+cat >"$failure_fixture/bin/cargo" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+case "$*" in
+    'audit --version')
+        # shellcheck source=/dev/null
+        source "$CANIC_AUDIT_TEST_TOOLS"
+        printf 'cargo-audit %s\n' "$CANIC_CARGO_AUDIT_VERSION" ;;
+    'fetch --locked') exit 0 ;;
+    'audit --no-fetch --db '*)
+        "$CANIC_AUDIT_TEST_CAT" "$CANIC_AUDIT_TEST_JSON"
+        exit 37 ;;
+    *) exit 99 ;;
+esac
+SH
+cat >"$failure_fixture/bin/cat" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$CANIC_AUDIT_TEST_REPLAY_FAIL" == 1 ]]; then exit 73; fi
+exec "$CANIC_AUDIT_TEST_CAT" "$@"
+SH
+chmod +x "$failure_fixture/bin/cargo" "$failure_fixture/bin/cat"
+for replay_fail in 0 1; do
+    status=0
+    PATH="$failure_fixture/bin:$PATH" TMPDIR="$failure_fixture/evidence" \
+        CANIC_AUDIT_TEST_REPLAY_FAIL="$replay_fail" \
+        bash "$failure_fixture/scripts/ci/check-dependency-risk-inventory.sh" \
+        >"$tmp_dir/audit-failure.stdout" 2>"$tmp_dir/audit-failure.stderr" || status=$?
+    [[ "$status" == 37 ]] || fail "audit failure status was replaced: $status"
+    retained="$(sed -n 's/^Dependency audit evidence retained: //p' "$tmp_dir/audit-failure.stderr")"
+    [[ -n "$retained" ]] || fail "audit failure evidence path was not reported"
+    cmp "$CANIC_AUDIT_TEST_JSON" "$retained/audit.json" || fail "audit failure report was not retained"
+    if [[ "$replay_fail" == 0 ]]; then
+        rg -F -x -f "$CANIC_AUDIT_TEST_JSON" "$tmp_dir/audit-failure.stderr" >/dev/null ||
+            fail "audit failure report was hidden"
+    fi
+done
+
 test_offline_database_isolation() {
     local tracked_advisory="crates/canic-risk-transitive-fixture/RUSTSEC-2099-0001.md"
     mkdir -p "$audit_db/crates/canic-risk-transitive-fixture"
