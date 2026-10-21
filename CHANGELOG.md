@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Pass each disposable repository explicitly to the shared hook installer in
+  Canic’s formatter fixture, exercising installation, repeat setup, physical path
+  aliases and refusal to replace existing hooks under the maintained interface.
 - Patch locked certificate verification and root lists for distrusted emSign
   intermediates
   ([#616 — Repair certificate advisories in the locked TLS graph](https://github.com/dragginzgame/canic/issues/616)).

@@ -1,5 +1,15 @@
 # Current handoff — 2026-10-18
 
+## Consumer hook qualification — 2026-10-21
+
+PR #604’s remaining hosted hook failure reproduces locally: the consumer fixture
+called the shared installer without its required `--consumer` argument. Every
+installer case now passes its own fixture root, including physical path aliases
+and refusal cases. The canonical Shared Tooling payload remains unchanged.
+The TLS advisory repair remains stacked in #617; unrelated stale Memory fixture
+imports still require separate focused repair before complete native acceptance.
+No release, deployment or edits to the normal Canic checkout are included.
+
 ## Focused restore and Build 0.19 qualification — 2026-10-19
 
 Continue 0.112 with the framework Candid protocol unchanged and live coordinated
