@@ -229,8 +229,10 @@ done
 # Execute the maintained preflight fetch body, including its failure boundary.
 yq -o json '.' "$ROOT/.github/workflows/ci.yml" | jq -er \
     '.jobs.preflight.steps[] | select(.name == "Prepare locked preflight dependencies") | .run' > workflow-step
-cat > bin/cargo <<'CARGO'
-#!/usr/bin/env bash
+# PATH includes a recording Bash substitute for Make recipes; this executable
+# must run under the real interpreter rather than that substitute.
+printf '#!%s\n' "$real_bash" > bin/cargo
+cat >> bin/cargo <<'CARGO'
 set -euo pipefail
 printf '%s\n' "$*" >> "$EVENTS"
 [[ "$*" != "${CANIC_PREFLIGHT_FETCH_FAILURE:-}" ]] || exit 37
