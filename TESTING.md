@@ -57,9 +57,10 @@ maintainer selects broad gates such as `make test`, `make test-ordinary` and
 Check for an active build using the shared `target/` before starting another.
 
 Prepare PocketIC explicitly with `make install-testkit-server`, and verify it
-offline with `make testkit-server-check`. Shared Tooling prepares five generic IC
-tools; Testkit 0.27.0 prepares and admits PocketIC 16.1.0 and owns its 16.x protocol
-policy. Each serial command and each worker attempt runs through its published
+offline with `make testkit-server-check`. Shared Tooling prepares the selected `icp`, `ic-wasm` and `wasm-opt` tools.
+The locked Testkit release prepares and admits PocketIC and owns its protocol
+policy. The runner selects the verified repository-local ICP tool by default;
+`CANIC_TEST_ICP_BIN` explicitly overrides that selection and must match the pin. Each serial command and each worker attempt runs through its published
 CLI; complete server streams remain in invocation scratch on failure.
 The fixture borrows `IC_TESTKIT_POCKET_IC_URL`; direct downstream callers can use
 `ic-testkit-server run -- <test-command>`. The managed fixture never starts a hidden

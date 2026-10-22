@@ -494,3 +494,31 @@ fn duplicate_mapping_targets_fail_validation() {
 
     std::assert_matches!(err, RestorePlanError::DuplicateMappingTarget(_));
 }
+
+#[test]
+fn artifact_paths_match_persistence_admission() {
+    let root = std::path::Path::new("backup");
+    for (path, admitted) in [
+        ("/absolute", false),
+        ("../escape", false),
+        ("artifacts/../escape", false),
+        ("./artifacts/root", false),
+        (".", false),
+        ("artifact\0name", false),
+        ("artifacts/root", true),
+        ("nested/資料 snapshot", true),
+    ] {
+        let mut record = RestorePlanner::plan(&valid_manifest(IdentityMode::Fixed), None).unwrap();
+        record.members[0].source_snapshot.artifact_path = path.to_string();
+        let result = record.validate();
+        assert_eq!(result.is_ok(), admitted, "{path:?}");
+        assert_eq!(
+            crate::persistence::resolve_backup_artifact_path(root, path).is_some(),
+            admitted,
+            "{path:?}"
+        );
+        if !admitted {
+            std::assert_matches!(result, Err(RestorePlanError::InvalidArtifactPath { .. }));
+        }
+    }
+}

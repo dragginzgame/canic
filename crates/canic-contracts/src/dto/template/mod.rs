@@ -173,9 +173,13 @@ pub struct WasmStoreTemplateStatusResponse {
 #[candid_path("ic_platform::candid::contract")]
 pub struct WasmStoreGcStatusResponse {
     pub mode: WasmStoreGcMode,
+    /// Whole seconds since the Unix epoch; zero means no transition yet.
     pub changed_at: u64,
+    /// Whole seconds since the Unix epoch, absent until GC is prepared.
     pub prepared_at: Option<u64>,
+    /// Whole seconds since the Unix epoch, absent until GC starts.
     pub started_at: Option<u64>,
+    /// Whole seconds since the Unix epoch, absent until GC completes.
     pub completed_at: Option<u64>,
     pub runs_completed: u32,
 }
@@ -393,6 +397,7 @@ pub enum WasmStorePublicationSlotResponse {
 pub struct WasmStoreOverviewStoreResponse {
     pub binding: WasmStoreBinding,
     pub pid: Principal,
+    /// Whole seconds since the Unix epoch, matching publication and GC timestamps.
     pub created_at: u64,
     pub publication_slot: Option<WasmStorePublicationSlotResponse>,
     pub gc: WasmStoreGcStatusResponse,
@@ -454,7 +459,9 @@ pub struct WasmStorePublicationStateResponse {
     pub detached_binding: Option<WasmStoreBinding>,
     pub retired_binding: Option<WasmStoreBinding>,
     pub generation: u64,
+    /// Whole seconds since the Unix epoch; zero means no transition yet.
     pub changed_at: u64,
+    /// Whole seconds since the Unix epoch; zero means no retired binding.
     pub retired_at: u64,
 }
 

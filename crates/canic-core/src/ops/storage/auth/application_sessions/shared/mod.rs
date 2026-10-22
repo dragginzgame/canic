@@ -5,6 +5,7 @@
 
 mod login;
 mod logout;
+mod maintenance;
 #[cfg(test)]
 mod tests;
 
@@ -92,7 +93,10 @@ impl SessionTransaction for Transaction {
             max_encoded_bytes: MAX_APPLICATION_SESSION_STABLE_BYTES,
         }
     }
-    fn session(&self, caller: ic_platform::Principal) -> Result<Option<Session>, SessionError> {
+    fn session(
+        &self,
+        caller: ic_auth_protocol_types::Principal,
+    ) -> Result<Option<Session>, SessionError> {
         let caller: Principal = caller.into();
         let index = with_indexes(|indexes| indexes.session_by_caller.get(&caller).copied())
             .map_err(|_| SessionError::StorageFailure)?;
@@ -112,7 +116,10 @@ impl SessionTransaction for Transaction {
         with_indexes(|indexes| indexes.replay_by_fingerprint.contains_key(&fingerprint))
             .map_err(|_| SessionError::StorageFailure)
     }
-    fn occupancy(&self, caller: ic_platform::Principal) -> Result<SessionOccupancy, SessionError> {
+    fn occupancy(
+        &self,
+        caller: ic_auth_protocol_types::Principal,
+    ) -> Result<SessionOccupancy, SessionError> {
         let caller: Principal = caller.into();
         LocalApplicationAuthorizationStateOps::application_session_occupancy(caller)
             .map(|counts| SessionOccupancy {
@@ -160,7 +167,7 @@ impl SessionTransaction for Transaction {
         Ok(())
     }
 
-    fn remove(&mut self, caller: ic_platform::Principal) -> Result<(), SessionError> {
+    fn remove(&mut self, caller: ic_auth_protocol_types::Principal) -> Result<(), SessionError> {
         let caller: Principal = caller.into();
         if self.staged.is_some() || self.removed.is_some() {
             return Err(SessionError::InvalidPolicyOrRecord);
@@ -207,30 +214,11 @@ fn commit_pair(
     {
         return Err(SessionError::Capacity);
     }
-    let retained_for_subject = with_indexes(|indexes| {
-        indexes
-            .session_count_by_subject
-            .get(&canonical.subject().into())
-            .copied()
-            .unwrap_or(0)
-    })
-    .map_err(|_| SessionError::StorageFailure)?;
-    if session_index.is_none()
-        && retained_for_subject >= MAX_ACTIVE_APPLICATION_SESSIONS_PER_SUBJECT
-    {
-        return Err(SessionError::Capacity);
-    }
     let previous_bytes = previous_session_bytes(session_index)?;
     let added_bytes = encoded_len(&session).map_err(|_| SessionError::StorageFailure)?
         + encoded_len(&replay).map_err(|_| SessionError::StorageFailure)?
         + login.after_bytes;
     let (encoded_bytes, index_bytes) = with_indexes(|indexes| {
-        let session_subjects = indexes.session_count_by_subject.len()
-            + usize::from(
-                !indexes
-                    .session_count_by_subject
-                    .contains_key(&canonical.subject().into()),
-            );
         let replay_callers = indexes.replay_count_by_caller.len()
             + usize::from(
                 !indexes
@@ -245,7 +233,6 @@ fn commit_pair(
             index_bytes_for_counts(
                 counts.active_global + usize::from(session_index.is_none()),
                 counts.replay_global + 1,
-                session_subjects,
                 replay_callers,
             ),
         )
@@ -304,16 +291,9 @@ fn update_committed_indexes(
         let indexes = slot.as_mut().expect("admitted session indexes");
         indexes.encoded_bytes = encoded_bytes;
         indexes.estimated_bytes = index_bytes;
-        let replaced = indexes
+        indexes
             .session_by_caller
-            .insert(canonical.caller().into(), session_index)
-            .is_some();
-        if !replaced {
-            *indexes
-                .session_count_by_subject
-                .entry(canonical.subject().into())
-                .or_default() += 1;
-        }
+            .insert(canonical.caller().into(), session_index);
         indexes
             .replay_by_fingerprint
             .insert(replay.proof_fingerprint, replay_index);

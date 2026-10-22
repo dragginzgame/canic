@@ -1,7 +1,10 @@
 use super::ListCommandError;
 use crate::support::registry_tree::{RegistryRow, visible_rows};
 use canic_host::registry::RegistryEntry;
-use ic_host_text::table::{self, Alignment, Options};
+use ic_host_text::{
+    escape::terminal_text,
+    table::{self, Alignment, Options},
+};
 use std::collections::{BTreeMap, BTreeSet};
 
 const MODULE_PREFIX_CHARS: usize = 8;
@@ -135,7 +138,7 @@ pub(super) fn render_list_output(
     );
     if !missing_roles.is_empty() {
         output.push_str("\n\nMissing roles: ");
-        output.push_str(&missing_roles.join(", "));
+        output.push_str(&terminal_text(&missing_roles.join(", ")));
     }
     Ok(output)
 }
@@ -160,7 +163,8 @@ fn render_list_title(title: &ListTitle) -> String {
     };
     format!(
         "{label}: {} (environment {})",
-        title.name, title.environment
+        terminal_text(&title.name),
+        terminal_text(&title.environment)
     )
 }
 

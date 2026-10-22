@@ -15,7 +15,6 @@ use canic_contracts::ids::{CanisterRole, FleetKey};
 pub struct LocalApplicationAuthoritySnapshot {
     fleet: FleetKey,
     role: CanisterRole,
-    generation: u64,
 }
 
 impl LocalApplicationAuthoritySnapshot {
@@ -25,12 +24,8 @@ impl LocalApplicationAuthoritySnapshot {
         feature = "auth-local-application-authorization",
         feature = "internal-test-fixtures"
     ))]
-    pub const fn new(fleet: FleetKey, role: CanisterRole, generation: u64) -> Self {
-        Self {
-            fleet,
-            role,
-            generation,
-        }
+    pub const fn new(fleet: FleetKey, role: CanisterRole) -> Self {
+        Self { fleet, role }
     }
 
     #[must_use]
@@ -41,12 +36,6 @@ impl LocalApplicationAuthoritySnapshot {
     #[must_use]
     pub const fn role(&self) -> &CanisterRole {
         &self.role
-    }
-
-    #[cfg(test)]
-    #[must_use]
-    pub const fn generation(&self) -> u64 {
-        self.generation
     }
 }
 

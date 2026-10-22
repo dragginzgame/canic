@@ -97,16 +97,19 @@ pub(super) fn sibling_topups_retain_distinct_receipts_after_both_replies_are_los
         assert_eq!(observed.pending_operations, 0);
         assert_eq!(observed.reserved_cycles, Some(0.into()));
     }
-    let collision: Result<CyclesResponse, Error> = ic_testkit::pic::update_candid_args(
-        &(pic),
-        second,
-        root,
-        "test_topup_collision",
-        (GRANT, operations[0]),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .expect("update Candid harness call");
+    let collision: Result<CyclesResponse, Error> =
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args((GRANT, operations[0]))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).update_call(second, root, "test_topup_collision", request_bytes)
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
+        .map(|(reply,)| reply)
+        .expect("update Candid harness call");
     assert_eq!(
         collision.unwrap_err().code(),
         canic_contracts::diagnostics::codes::CODEC_CONFLICT.raw_code()
@@ -129,14 +132,16 @@ fn request(
     discard: bool,
 ) -> ([u8; 32], Option<CyclesResponse>) {
     let response: Result<([u8; 32], Option<CyclesResponse>), Error> =
-        ic_testkit::pic::update_candid_args(
-            pic,
-            child,
-            root,
-            "test_topup_request",
-            (GRANT, discard),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args((GRANT, discard))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).update_call(child, root, "test_topup_request", request_bytes)
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
         .map(|(reply,)| reply)
         .expect("update Candid harness call");
     response.unwrap()
@@ -144,14 +149,23 @@ fn request(
 
 fn usage(pic: &PocketIc, root: Principal, hub: Principal, child: Principal) -> ChildFundingUsage {
     let response: Result<CanisterObservabilityResponse, Error> =
-        ic_testkit::pic::query_candid_args(
-            pic,
-            hub,
-            root,
-            canic::protocol::CANIC_OBSERVABILITY,
-            (CanisterObservabilityRequest::ChildFunding(child),),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args((
+                CanisterObservabilityRequest::ChildFunding(child),
+            ))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).query_call(
+                    hub,
+                    root,
+                    canic::protocol::CANIC_OBSERVABILITY,
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
         .map(|(reply,)| reply)
         .unwrap();
     let CanisterObservabilityResponse::ChildFunding(usage) = response.unwrap() else {
@@ -163,14 +177,16 @@ fn usage(pic: &PocketIc, root: Principal, hub: Principal, child: Principal) -> C
 
 fn qualify_terminal_diagnostic(pic: &PocketIc, root: Principal, hub: Principal, child: Principal) {
     let exhausted: Result<([u8; 32], Option<CyclesResponse>), Error> =
-        ic_testkit::pic::update_candid_args(
-            pic,
-            child,
-            root,
-            "test_topup_exhaustion",
-            (1_000_000_u128,),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args((1_000_000_u128,))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).update_call(child, root, "test_topup_exhaustion", request_bytes)
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
         .map(|(reply,)| reply)
         .expect("update Candid harness call");
     assert_eq!(
@@ -191,16 +207,19 @@ fn qualify_terminal_diagnostic(pic: &PocketIc, root: Principal, hub: Principal, 
         before.disposition,
         canic::dto::cycles::CycleTopupFailureDisposition::Terminal
     );
-    let burned: Result<u128, Error> = ic_testkit::pic::update_candid_args(
-        pic,
-        child,
-        root,
-        "test_recovery_balance",
-        (1_u128,),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .expect("update Candid harness call");
+    let burned: Result<u128, Error> =
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args((1_u128,))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).update_call(child, root, "test_recovery_balance", request_bytes)
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
+        .map(|(reply,)| reply)
+        .expect("update Candid harness call");
     assert!(burned.unwrap() > 0);
     let rejected = pic
         .update_call(
@@ -239,22 +258,29 @@ fn assert_funding_metrics(pic: &PocketIc, root: Principal, hub: Principal, child
         role::MetricsStatusRequest,
     };
     let response: Result<CanisterObservabilityResponse, Error> =
-        ic_testkit::pic::query_candid_args(
-            pic,
-            hub,
-            root,
-            canic::protocol::CANIC_OBSERVABILITY,
-            (CanisterObservabilityRequest::Metrics(
-                MetricsStatusRequest {
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args((
+                CanisterObservabilityRequest::Metrics(MetricsStatusRequest {
                     kind: MetricsKind::Core,
                     page: PageRequest {
                         offset: 0,
                         limit: 100,
                     },
-                },
-            ),),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
+                }),
+            ))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).query_call(
+                    hub,
+                    root,
+                    canic::protocol::CANIC_OBSERVABILITY,
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
         .map(|(reply,)| reply)
         .unwrap();
     let CanisterObservabilityResponse::Metrics(page) = response.unwrap() else {
@@ -289,16 +315,20 @@ fn qualify_automatic_siblings(
     children: [Principal; 2],
 ) {
     for child in children {
-        let response: Result<(), Error> = ic_testkit::pic::update_candid_args(
-            pic,
-            child,
-            root,
-            "test_topup_demand",
-            (1_900_000_000_000_u128,),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .map(|(reply,)| reply)
-        .expect("update Candid harness call");
+        let response: Result<(), Error> =
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes =
+                    ic_platform::candid::contract::encode_args((1_900_000_000_000_u128,))?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (pic).update_call(child, root, "test_topup_demand", request_bytes)
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
+            .map(|(reply,)| reply)
+            .expect("update Candid harness call");
         response.unwrap();
     }
     for _ in 0..120 {

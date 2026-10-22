@@ -15,7 +15,6 @@ pub fn init_root_canister_before_bootstrap(
     runtime_authority: RoleRuntimeAuthority,
     config: ConfigModel,
     config_source: &str,
-    config_path: &str,
 ) {
     crate::api::timer::TimerApi::initialize_root_runtime_required();
     LifecycleMetricsApi::record_runtime(
@@ -32,7 +31,7 @@ pub fn init_root_canister_before_bootstrap(
         );
         lifecycle_trap(
             LifecyclePhase::Init,
-            format!("config init failed (config_path={config_path}): {err}"),
+            format!("embedded config init failed: {err}"),
         );
     }
     if let Err(err) =

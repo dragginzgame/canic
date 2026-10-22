@@ -264,7 +264,7 @@ host authorities.
 
 A release boundary discards the predecessor's application/framework state and
 completed execution authority. The new host does not resume an old journal with
-substituted desired input or silently fill omitted durable fields. Cycle
+substituted desired input or silently fill omitted required authority fields. Cycle
 conservation must be established before controlled infrastructure is erased.
 Unfinished issued effects require exact accounting and cycle-safe disposition
 before reset; they do not require repairing predecessor state or restoring an old
@@ -285,6 +285,12 @@ content objects, release artifacts, desired inputs, estate seed and paid-effect
 receipts. Do not insert null fields, recalculate the plan digest or delete the
 journal. The current decoder cannot determine whether omission reflects a
 different source contract or damaged evidence.
+
+The journal's optional `release` field has one neutral absence value: omission
+and explicit `null` both mean no release authority. Current record decoding
+normalizes that value without rewriting files during status discovery. Non-null
+release payloads and every required authority field retain their validation;
+this normalization supplies no authority to continue predecessor work.
 
 Explicit `--reinstall` selects current-build reset before predecessor executable
 plan decoding. It does not require completion identities or a readable application

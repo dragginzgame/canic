@@ -26,14 +26,21 @@ pub(super) fn assert_fresh_reinstall_rejection(
         })
     };
     let before = snapshot();
-    let withdrawals: u64 = ic_testkit::pic::query_candid_args(
-        input.pic,
-        ledger,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        "withdrawal_count",
-        (),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+    let withdrawals: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes = ic_platform::candid::contract::encode_args(())?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (input.pic).query_call(
+                ledger,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                "withdrawal_count",
+                request_bytes,
+            )
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .unwrap();
     assert!(plan.conservation.maximum_operator_debit_cycles > 0);
@@ -69,14 +76,21 @@ pub(super) fn assert_fresh_reinstall_rejection(
     );
     assert_eq!(snapshot(), before);
     assert_eq!(
-        ic_testkit::pic::query_candid_args::<(u64,), _>(
-            input.pic,
-            ledger,
-            ic_platform::principal::ExternalPrincipal::anonymous(),
-            "withdrawal_count",
-            (),
-            canic::testing::CANDID_REPLY_LIMITS
-        )
+        (|| -> Result<(u64,), Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args(())?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (input.pic).query_call(
+                    ledger,
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
+                    "withdrawal_count",
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
         .map(|(reply,)| reply)
         .unwrap(),
         withdrawals
@@ -94,46 +108,63 @@ fn move_fixture_balance(
 ) {
     // The fixture-only override makes the out-and-back setup conserve the exact
     // original balance. Restore the reviewed fee before production admission.
-    let _: () = ic_testkit::pic::update_candid_args(
-        pic,
-        ledger,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        "set_transfer_fee_override",
-        (Some(Nat::from(0_u8)),),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+    let _: () = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes = ic_platform::candid::contract::encode_args((Some(Nat::from(0_u8)),))?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (pic).update_call(
+                ledger,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                "set_transfer_fee_override",
+                request_bytes,
+            )
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .unwrap();
     let receipt: Result<Nat, QualificationIcrc1TransferError> =
-        ic_testkit::pic::update_candid_args(
-            pic,
-            ledger,
-            from,
-            "icrc1_transfer",
-            (QualificationIcrc1TransferArg {
-                from_subaccount: None,
-                to: QualificationIcrc1Account {
-                    owner: to,
-                    subaccount: None,
-                },
-                fee: Some(Nat::from(0_u8)),
-                created_at_time: Some(1_800_000_000_000_000_099),
-                memo: Some(b"fresh funding admission fixture".to_vec()),
-                amount,
-            },),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes =
+                ic_platform::candid::contract::encode_args((QualificationIcrc1TransferArg {
+                    from_subaccount: None,
+                    to: QualificationIcrc1Account {
+                        owner: to,
+                        subaccount: None,
+                    },
+                    fee: Some(Nat::from(0_u8)),
+                    created_at_time: Some(1_800_000_000_000_000_099),
+                    memo: Some(b"fresh funding admission fixture".to_vec()),
+                    amount,
+                },))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).update_call(ledger, from, "icrc1_transfer", request_bytes)
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
         .map(|(reply,)| reply)
         .unwrap();
     receipt.unwrap();
-    let _: () = ic_testkit::pic::update_candid_args(
-        pic,
-        ledger,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        "set_transfer_fee_override",
-        (None::<Nat>,),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+    let _: () = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes = ic_platform::candid::contract::encode_args((None::<Nat>,))?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (pic).update_call(
+                ledger,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                "set_transfer_fee_override",
+                request_bytes,
+            )
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .unwrap();
 }

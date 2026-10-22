@@ -19,8 +19,6 @@ pub use scope::{
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
 pub const MAX_ACTIVE_APPLICATION_SESSIONS: usize = 2_048;
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
-pub const MAX_ACTIVE_APPLICATION_SESSIONS_PER_SUBJECT: usize = 128;
-#[cfg(any(test, feature = "auth-local-application-authorization"))]
 pub const MAX_APPLICATION_REPLAY_RECORDS: usize = 4_096;
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
 pub const MAX_APPLICATION_REPLAY_RECORDS_PER_CALLER: usize = 256;

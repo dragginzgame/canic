@@ -456,6 +456,20 @@ fn renders_list_output_with_wasm_size_and_missing_roles() {
     assert!(output.contains("811.20 KiB"));
     assert!(output.contains("12.35 TC"));
     assert!(output.contains("Missing roles: audit"));
+
+    let expected_lines = output.lines().count();
+    let untrusted_versions =
+        BTreeMap::from([(APP.to_string(), "\x1b[31m0.33.6\nforged".to_string())]);
+    let columns = RegistryColumnData {
+        canic_versions: &untrusted_versions,
+        ..columns
+    };
+    let output = render_list_output(&title, &registry, None, &columns, &["audit\nforged".into()])
+        .expect("render untrusted version");
+    assert_eq!(output.lines().count(), expected_lines);
+    assert!(!output.contains('\x1b'));
+    assert!(output.contains(r"\u{1b}[31m0.33.6\nforged"));
+    assert!(output.contains(r"Missing roles: audit\nforged"));
 }
 
 // Ensure config-only Apps render their declared roles instead of deployed inventory.
@@ -563,8 +577,8 @@ fn module_hash_map() -> BTreeMap<String, String> {
 fn config_cells_align_wide_unicode_and_escape_control_characters() {
     let title = ListTitle {
         source: ListTitleSource::App,
-        name: "test".into(),
-        environment: "local".into(),
+        name: "test\nforged\x1b]52;c;dGVzdA==\x07".into(),
+        environment: "local\u{202e}".into(),
     };
     let rows = vec![ConfigRoleRow {
         role: "界界".into(),
@@ -579,4 +593,9 @@ fn config_cells_align_wide_unicode_and_escape_control_characters() {
     assert!(output.lines().any(|line| line.starts_with("界界   app")));
     assert_eq!(output.lines().count(), 5);
     assert!(!output.contains("read\nwrite"));
+    assert!(!output.contains(['\x1b', '\x07', '\u{202e}']));
+    assert!(
+        output
+            .starts_with(r"App: test\nforged\u{1b}]52;c;dGVzdA==\u{7} (environment local\u{202e})")
+    );
 }

@@ -78,12 +78,14 @@ use canic_core::{
         compile_fleet_admission_projection, compile_installed_fleet_admission_policy,
     },
 };
+use ic_platform::candid::decode_args;
 use ic_platform::{
-    candid::contract::{CandidType, encode_args, encode_one},
+    candid::contract::{ArgumentEncoder, CandidType, encode_args, encode_one},
     principal::ExternalPrincipal as Principal,
 };
+use ic_testkit::pic::try_pocket_ic_operation;
 use ic_testkit::{
-    pic::{CandidCallError, CanisterInstallExt, PocketIc},
+    pic::{CanisterInstallExt, PocketIc, PocketIcCallFailure},
     pocket_ic::common::rest::RawMessageId,
 };
 use serde::Deserialize;
@@ -207,6 +209,42 @@ impl ManagedComponentGroupFixture {
         })
     }
 
+    /// Submit one Candid update, settle its children, and decode its single reply.
+    ///
+    /// Arguments use Candid tuples; application-level results remain intact in `R`.
+    /// Settlement uses `maximum_ticks` and decoding uses `CANDID_REPLY_LIMITS`.
+    /// A progress-limit error does not cancel or resubmit the update. Use
+    /// `pic().submit_call` and `settle_submitted_call` to retain its ingress ID.
+    pub fn update_settled<R, A>(
+        &mut self,
+        target: Principal,
+        caller: Principal,
+        method: &str,
+        args: A,
+        maximum_ticks: usize,
+    ) -> Result<R, ManagedComponentGroupQualificationError>
+    where
+        R: CandidType + for<'de> Deserialize<'de>,
+        A: ArgumentEncoder,
+    {
+        let bytes = encode_args(args)
+            .map_err(|error| ManagedComponentGroupQualificationError::Candid(error.to_string()))?;
+        let message_id =
+            try_pocket_ic_operation(|| self.pic.submit_call(target, caller, method, bytes))
+                .map_err(PocketIcCallFailure::Operation)?
+                .map_err(PocketIcCallFailure::Rejected)?;
+        self.settle_submitted_call(&message_id, maximum_ticks)?;
+        let reply = try_pocket_ic_operation(|| self.pic.ingress_status(message_id))
+            .map_err(PocketIcCallFailure::Operation)?
+            .ok_or(ManagedComponentGroupQualificationError::UnexpectedResponse(
+                "settled application update",
+            ))?
+            .map_err(PocketIcCallFailure::Rejected)?;
+        let (reply,) = decode_args(&reply, crate::testing::CANDID_REPLY_LIMITS)
+            .map_err(ManagedComponentGroupQualificationError::Decode)?;
+        Ok(reply)
+    }
+
     fn settle_children(
         &mut self,
         maximum_ticks: usize,
@@ -256,17 +294,21 @@ impl ManagedComponentGroupFixture {
         target: Principal,
     ) -> Result<FleetAdmissionProjectionStatusResponse, ManagedComponentGroupQualificationError>
     {
-        let response: Result<ManagedStatusResponse, Error> = ic_testkit::pic::query_candid_args(
-            &self.pic,
-            target,
-            self.root(),
-            CANIC_ADMISSION_STATUS,
-            (ManagedStatusRequest::Admission(PageRequest {
+        let response: Result<ManagedStatusResponse, Error> = {
+            let bytes = encode_args((ManagedStatusRequest::Admission(PageRequest {
                 limit: DEFAULT_STATUS_PAGE_LIMIT,
                 offset: 0,
-            }),),
-            crate::testing::CANDID_REPLY_LIMITS,
-        )
+            }),))
+            .map_err(|error| ManagedComponentGroupQualificationError::Candid(error.to_string()))?;
+            let reply = try_pocket_ic_operation(|| {
+                self.pic
+                    .query_call(target, self.root(), CANIC_ADMISSION_STATUS, bytes)
+            })
+            .map_err(PocketIcCallFailure::Operation)?
+            .map_err(PocketIcCallFailure::Rejected)?;
+            decode_args(&reply, crate::testing::CANDID_REPLY_LIMITS)
+                .map_err(ManagedComponentGroupQualificationError::Decode)
+        }
         .map(|(reply,)| reply)?;
         let response = response.map_err(ManagedComponentGroupQualificationError::Canic)?;
         let ManagedStatusResponse::Admission(status) = response else {
@@ -309,14 +351,20 @@ impl ManagedComponentGroupFixture {
             expected_policy_digest: current.policy_digest,
             successor,
         };
-        let response: Result<ManagedCommandResponse, Error> = ic_testkit::pic::update_candid_args(
-            &self.pic,
-            target,
-            self.root(),
-            CANIC_COMMAND,
-            (ManagedCommand::PrepareFleetAdmission(Box::new(request)),),
-            crate::testing::CANDID_REPLY_LIMITS,
-        )
+        let response: Result<ManagedCommandResponse, Error> = {
+            let bytes = encode_args((ManagedCommand::PrepareFleetAdmission(Box::new(request)),))
+                .map_err(|error| {
+                    ManagedComponentGroupQualificationError::Candid(error.to_string())
+                })?;
+            let reply = try_pocket_ic_operation(|| {
+                self.pic
+                    .update_call(target, self.root(), CANIC_COMMAND, bytes)
+            })
+            .map_err(PocketIcCallFailure::Operation)?
+            .map_err(PocketIcCallFailure::Rejected)?;
+            decode_args(&reply, crate::testing::CANDID_REPLY_LIMITS)
+                .map_err(ManagedComponentGroupQualificationError::Decode)
+        }
         .map(|(reply,)| reply)?;
         let response = response.map_err(ManagedComponentGroupQualificationError::Canic)?;
         let ManagedCommandResponse::PrepareFleetAdmission(receipt) = response else {
@@ -332,14 +380,19 @@ impl ManagedComponentGroupFixture {
         &self,
         target: Principal,
     ) -> Result<ManagedCanisterBinding, ManagedComponentGroupQualificationError> {
-        let response: Result<ManagedStatusResponse, Error> = ic_testkit::pic::query_candid_args(
-            &self.pic,
-            target,
-            self.root(),
-            CANIC_OBSERVABILITY,
-            (ManagedStatusRequest::Binding,),
-            crate::testing::CANDID_REPLY_LIMITS,
-        )
+        let response: Result<ManagedStatusResponse, Error> = {
+            let bytes = encode_args((ManagedStatusRequest::Binding,)).map_err(|error| {
+                ManagedComponentGroupQualificationError::Candid(error.to_string())
+            })?;
+            let reply = try_pocket_ic_operation(|| {
+                self.pic
+                    .query_call(target, self.root(), CANIC_OBSERVABILITY, bytes)
+            })
+            .map_err(PocketIcCallFailure::Operation)?
+            .map_err(PocketIcCallFailure::Rejected)?;
+            decode_args(&reply, crate::testing::CANDID_REPLY_LIMITS)
+                .map_err(ManagedComponentGroupQualificationError::Decode)
+        }
         .map(|(reply,)| reply)?;
         let response = response.map_err(ManagedComponentGroupQualificationError::Canic)?;
         let ManagedStatusResponse::Binding(binding) = response else {
@@ -356,16 +409,20 @@ impl ManagedComponentGroupFixture {
         target: Principal,
     ) -> Result<ComponentRuntimeOperationStatus, ManagedComponentGroupQualificationError> {
         let node = self.node(target)?;
-        let response: Result<ManagedStatusResponse, Error> = ic_testkit::pic::query_candid_args(
-            &self.pic,
-            target,
-            self.root(),
-            CANIC_CONTROL_STATUS,
-            (ManagedStatusRequest::Operation(OperationStatusRequest {
+        let response: Result<ManagedStatusResponse, Error> = {
+            let bytes = encode_args((ManagedStatusRequest::Operation(OperationStatusRequest {
                 operation_id: node.directory.operation_id,
-            }),),
-            crate::testing::CANDID_REPLY_LIMITS,
-        )
+            }),))
+            .map_err(|error| ManagedComponentGroupQualificationError::Candid(error.to_string()))?;
+            let reply = try_pocket_ic_operation(|| {
+                self.pic
+                    .query_call(target, self.root(), CANIC_CONTROL_STATUS, bytes)
+            })
+            .map_err(PocketIcCallFailure::Operation)?
+            .map_err(PocketIcCallFailure::Rejected)?;
+            decode_args(&reply, crate::testing::CANDID_REPLY_LIMITS)
+                .map_err(ManagedComponentGroupQualificationError::Decode)
+        }
         .map(|(reply,)| reply)?;
         let response = response.map_err(ManagedComponentGroupQualificationError::Canic)?;
         let ManagedStatusResponse::Operation(status) = response else {
@@ -382,14 +439,19 @@ impl ManagedComponentGroupFixture {
         &self,
         target: Principal,
     ) -> Result<CanicRuntimeStatus, ManagedComponentGroupQualificationError> {
-        let response: Result<ManagedStatusResponse, Error> = ic_testkit::pic::query_candid_args(
-            &self.pic,
-            target,
-            self.root(),
-            CANIC_OBSERVABILITY,
-            (ManagedStatusRequest::Runtime,),
-            crate::testing::CANDID_REPLY_LIMITS,
-        )
+        let response: Result<ManagedStatusResponse, Error> = {
+            let bytes = encode_args((ManagedStatusRequest::Runtime,)).map_err(|error| {
+                ManagedComponentGroupQualificationError::Candid(error.to_string())
+            })?;
+            let reply = try_pocket_ic_operation(|| {
+                self.pic
+                    .query_call(target, self.root(), CANIC_OBSERVABILITY, bytes)
+            })
+            .map_err(PocketIcCallFailure::Operation)?
+            .map_err(PocketIcCallFailure::Rejected)?;
+            decode_args(&reply, crate::testing::CANDID_REPLY_LIMITS)
+                .map_err(ManagedComponentGroupQualificationError::Decode)
+        }
         .map(|(reply,)| reply)?;
         let response = response.map_err(ManagedComponentGroupQualificationError::Canic)?;
         let ManagedStatusResponse::Runtime(status) = response else {
@@ -429,14 +491,23 @@ impl ManagedComponentGroupFixture {
     fn install_unsettled_allocations(
         &mut self,
     ) -> Result<usize, ManagedComponentGroupQualificationError> {
-        let allocations: Vec<FixtureChildAllocation> = ic_testkit::pic::query_candid_args(
-            &self.pic,
-            self.root(),
-            ic_platform::principal::ExternalPrincipal::anonymous(),
-            "testing_component_child_allocations",
-            (),
-            crate::testing::CANDID_REPLY_LIMITS,
-        )
+        let allocations: Vec<FixtureChildAllocation> = {
+            let bytes = encode_args(()).map_err(|error| {
+                ManagedComponentGroupQualificationError::Candid(error.to_string())
+            })?;
+            let reply = try_pocket_ic_operation(|| {
+                self.pic.query_call(
+                    self.root(),
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
+                    "testing_component_child_allocations",
+                    bytes,
+                )
+            })
+            .map_err(PocketIcCallFailure::Operation)?
+            .map_err(PocketIcCallFailure::Rejected)?;
+            decode_args(&reply, crate::testing::CANDID_REPLY_LIMITS)
+                .map_err(ManagedComponentGroupQualificationError::Decode)
+        }
         .map(|(reply,)| reply)?;
         let allocation_count = allocations.len();
         for allocation in allocations {
@@ -592,14 +663,23 @@ impl ManagedComponentGroupFixture {
         &self,
         request_id: [u8; 32],
     ) -> Result<(), ManagedComponentGroupQualificationError> {
-        let settled: Result<(), Error> = ic_testkit::pic::update_candid_args(
-            &self.pic,
-            self.root(),
-            ic_platform::principal::ExternalPrincipal::anonymous(),
-            "testing_settle_component_child",
-            (request_id,),
-            crate::testing::CANDID_REPLY_LIMITS,
-        )
+        let settled: Result<(), Error> = {
+            let bytes = encode_args((request_id,)).map_err(|error| {
+                ManagedComponentGroupQualificationError::Candid(error.to_string())
+            })?;
+            let reply = try_pocket_ic_operation(|| {
+                self.pic.update_call(
+                    self.root(),
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
+                    "testing_settle_component_child",
+                    bytes,
+                )
+            })
+            .map_err(PocketIcCallFailure::Operation)?
+            .map_err(PocketIcCallFailure::Rejected)?;
+            decode_args(&reply, crate::testing::CANDID_REPLY_LIMITS)
+                .map_err(ManagedComponentGroupQualificationError::Decode)
+        }
         .map(|(reply,)| reply)?;
         settled.map_err(ManagedComponentGroupQualificationError::Canic)
     }
@@ -1386,16 +1466,17 @@ fn configure_runtime(
     target: Principal,
     directory: &ComponentRuntimeDirectoryPreparationRequest,
 ) -> Result<OperationReceipt, ManagedComponentGroupQualificationError> {
-    let response: Result<ManagedCommandResponse, Error> = ic_testkit::pic::update_candid_args(
-        pic,
-        target,
-        root,
-        CANIC_COMMAND,
-        (ManagedCommand::ConfigureRuntime(Box::new(
+    let response: Result<ManagedCommandResponse, Error> = {
+        let bytes = encode_args((ManagedCommand::ConfigureRuntime(Box::new(
             directory.clone(),
-        )),),
-        crate::testing::CANDID_REPLY_LIMITS,
-    )
+        )),))
+        .map_err(|error| ManagedComponentGroupQualificationError::Candid(error.to_string()))?;
+        let reply = try_pocket_ic_operation(|| pic.update_call(target, root, CANIC_COMMAND, bytes))
+            .map_err(PocketIcCallFailure::Operation)?
+            .map_err(PocketIcCallFailure::Rejected)?;
+        decode_args(&reply, crate::testing::CANDID_REPLY_LIMITS)
+            .map_err(ManagedComponentGroupQualificationError::Decode)
+    }
     .map(|(reply,)| reply)?;
     let response = response.map_err(ManagedComponentGroupQualificationError::Canic)?;
     let ManagedCommandResponse::OperationAccepted(receipt) = response else {
@@ -1415,14 +1496,22 @@ fn overview(
     pic: &PocketIc,
     target: Principal,
 ) -> Result<RoleOverviewResponse, ManagedComponentGroupQualificationError> {
-    let response: Result<ManagedStatusResponse, Error> = ic_testkit::pic::query_candid_args(
-        pic,
-        target,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        CANIC_PUBLIC_STATUS,
-        (ManagedStatusRequest::Overview,),
-        crate::testing::CANDID_REPLY_LIMITS,
-    )
+    let response: Result<ManagedStatusResponse, Error> = {
+        let bytes = encode_args((ManagedStatusRequest::Overview,))
+            .map_err(|error| ManagedComponentGroupQualificationError::Candid(error.to_string()))?;
+        let reply = try_pocket_ic_operation(|| {
+            pic.query_call(
+                target,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                CANIC_PUBLIC_STATUS,
+                bytes,
+            )
+        })
+        .map_err(PocketIcCallFailure::Operation)?
+        .map_err(PocketIcCallFailure::Rejected)?;
+        decode_args(&reply, crate::testing::CANDID_REPLY_LIMITS)
+            .map_err(ManagedComponentGroupQualificationError::Decode)
+    }
     .map(|(reply,)| reply)?;
     let response = response.map_err(ManagedComponentGroupQualificationError::Canic)?;
     let ManagedStatusResponse::Overview(status) = response else {
@@ -1556,14 +1645,16 @@ pub enum ManagedComponentGroupQualificationError {
         /// Exact caller-selected bound.
         maximum_ticks: usize,
     },
-    /// PocketIC transport or Candid decoding failed.
-    Transport(CandidCallError),
+    /// PocketIC rejected the call or its transport failed.
+    Transport(PocketIcCallFailure),
+    /// The reply exceeded its decoder limits or had an invalid Candid shape.
+    Decode(ic_platform::candid::DecodeError),
     /// The generated Canic endpoint returned another valid variant.
     UnexpectedResponse(&'static str),
 }
 
-impl From<CandidCallError> for ManagedComponentGroupQualificationError {
-    fn from(value: CandidCallError) -> Self {
+impl From<PocketIcCallFailure> for ManagedComponentGroupQualificationError {
+    fn from(value: PocketIcCallFailure) -> Self {
         Self::Transport(value)
     }
 }
@@ -1587,6 +1678,7 @@ impl From<super::managed_app::ManagedAppQualificationError>
                 maximum_ticks,
             },
             App::Transport(error) => Self::Transport(error),
+            App::Decode(error) => Self::Decode(error),
             App::UnexpectedResponse(operation) => Self::UnexpectedResponse(operation),
         }
     }
@@ -1628,6 +1720,9 @@ impl fmt::Display for ManagedComponentGroupQualificationError {
                 formatter,
                 "{operation} did not complete within {maximum_ticks} PocketIC ticks"
             ),
+            Self::Decode(error) => {
+                write!(formatter, "managed fixture reply decoding failed: {error}")
+            }
             Self::Transport(error) => {
                 write!(formatter, "managed Component Group call failed: {error}")
             }

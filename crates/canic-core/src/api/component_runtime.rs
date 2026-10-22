@@ -1,6 +1,6 @@
 //! Module: api::component_runtime
 //!
-//! Responsibility: expose managed Component Directory preparation and runtime activation.
+//! Responsibility: expose managed Component Directory lookup, preparation and activation.
 //! Does not own: validation, stable mutation, endpoint authorization, or root distribution.
 //! Boundary: maps typed internal failures into Canic's public error contract.
 
@@ -15,6 +15,8 @@ use crate::{
     },
     workflow::{component_runtime, runtime::fleet_activation::FleetActivationWorkflow},
 };
+use canic_contracts::ids::CanisterRole;
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 ///
 /// ComponentRuntimeApi
@@ -38,6 +40,15 @@ impl ComponentRuntimeApi {
 
     pub fn status() -> Result<ComponentRuntimeStatusResponse, Error> {
         component_runtime::status().map_err(Error::from)
+    }
+
+    /// Return every matching Component canister from this runtime's validated Group Directory.
+    ///
+    /// Results follow member-path order; the owning Component is included if its role matches.
+    /// No Group Directory or matching role yields an empty vector. Runtime binding and
+    /// Directory validation failures propagate; discovery does not grant authorization.
+    pub fn members_by_role(role: &CanisterRole) -> Result<Vec<Principal>, Error> {
+        component_runtime::members_by_role(role).map_err(Error::from)
     }
 
     /// Return the complete target-local runtime configuration operation projection.

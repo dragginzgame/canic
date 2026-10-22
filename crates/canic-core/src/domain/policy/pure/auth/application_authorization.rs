@@ -81,9 +81,10 @@ pub fn decide_application_authority_binding_transition(
     }
 }
 
-/// Successful local application identity and its strict session expiry.
+/// Successful issuer-scoped application identity and its strict session expiry.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct AuthorizedApplicationSubject {
+    pub issuer: Principal,
     pub subject: Principal,
     pub expires_at_ns: u64,
 }
@@ -105,7 +106,6 @@ pub enum LocalApplicationAuthorizationDenial {
     MissingSession,
     Expired,
     StaleAuthority,
-    InadmissibleSubject,
     MissingScope,
 }
 

@@ -41,6 +41,7 @@ use ic_timers::{
 use std::cell::RefCell;
 
 const CLEANUP_BATCH_SIZE: usize = 32;
+const CLEANUP_FAILURE_RETRY_NS: u64 = 1_000_000_000;
 const NANOS_PER_SECOND: u64 = 1_000_000_000;
 
 thread_local! {
@@ -347,7 +348,6 @@ impl IntentCleanupWorkflow {
         let batch = match result {
             Ok(batch) => batch,
             Err(err) => {
-                record_cleanup_failure(&err);
                 record_cleanup_intent(
                     IntentMetricOperation::Cleanup,
                     IntentMetricOutcome::Failed,
@@ -355,8 +355,8 @@ impl IntentCleanupWorkflow {
                 );
                 log!(Topic::Memory, Warn, "intent cleanup batch failed: {err}");
                 return OnceRunResult::new(
-                    TimerCompletion::invariant_failure(0),
-                    OnceDecision::Stop,
+                    TimerCompletion::retryable_failure(0),
+                    OnceDecision::ScheduleAt(now_ns.saturating_add(CLEANUP_FAILURE_RETRY_NS)),
                 );
             }
         };
@@ -371,8 +371,8 @@ impl IntentCleanupWorkflow {
                     "intent cleanup deadline reconciliation failed: {err}"
                 );
                 return OnceRunResult::new(
-                    TimerCompletion::invariant_failure(batch.work_count().unwrap_or(u64::MAX)),
-                    OnceDecision::Stop,
+                    TimerCompletion::retryable_failure(batch.work_count().unwrap_or(u64::MAX)),
+                    OnceDecision::ScheduleAt(now_ns.saturating_add(CLEANUP_FAILURE_RETRY_NS)),
                 );
             }
         };
@@ -414,6 +414,23 @@ impl IntentCleanupWorkflow {
     }
 
     fn cleanup_due_batch(now_ns: u64) -> Result<IntentCleanupBatch, InternalError> {
+        let intents = Self::cleanup_intents(now_ns);
+        #[cfg(any(test, feature = "auth-local-application-authorization"))]
+        let sessions = Self::cleanup_sessions(now_ns);
+        #[cfg(not(any(test, feature = "auth-local-application-authorization")))]
+        let sessions: Result<usize, InternalError> = Ok(0);
+        for error in [intents.as_ref().err(), sessions.as_ref().err()]
+            .into_iter()
+            .flatten()
+        {
+            record_cleanup_failure(error);
+        }
+        let mut batch = intents?;
+        batch.application_sessions_removed = sessions?;
+        Ok(batch)
+    }
+
+    fn cleanup_intents(now_ns: u64) -> Result<IntentCleanupBatch, InternalError> {
         let application =
             ReceiptBackedIntentOps::reclaim_due_application_receipts(now_ns, CLEANUP_BATCH_SIZE)?;
         let application_receipts_removed =
@@ -447,28 +464,26 @@ impl IntentCleanupWorkflow {
                 }
             }
         }
-        #[cfg(any(test, feature = "auth-local-application-authorization"))]
-        let application_sessions_removed = {
-            let application_session_cleanup_start = crate::perf::perf_counter();
-            let application_sessions =
-                LocalApplicationAuthorizationStateOps::cleanup_application_sessions(now_ns)
-                    .map_err(|_| InternalError::invariant())?;
-            crate::perf::record_checkpoint(
-                module_path!(),
-                "application_session_cleanup",
-                crate::perf::perf_counter().saturating_sub(application_session_cleanup_start),
-            );
-            let removed = application_sessions.total_removed();
-            record_application_session_cleanup(removed);
-            removed
-        };
-        #[cfg(not(any(test, feature = "auth-local-application-authorization")))]
-        let application_sessions_removed = 0;
         Ok(IntentCleanupBatch {
             application_receipts_removed,
-            application_sessions_removed,
+            application_sessions_removed: 0,
             local_intents_aborted: aborted,
         })
+    }
+
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
+    fn cleanup_sessions(now_ns: u64) -> Result<usize, InternalError> {
+        let start = crate::perf::perf_counter();
+        let sessions = LocalApplicationAuthorizationStateOps::cleanup_application_sessions(now_ns)
+            .map_err(|_| InternalError::invariant())?;
+        crate::perf::record_checkpoint(
+            module_path!(),
+            "application_session_cleanup",
+            crate::perf::perf_counter().saturating_sub(start),
+        );
+        let removed = sessions.total_removed();
+        record_application_session_cleanup(removed);
+        Ok(removed)
     }
 
     pub(crate) fn schedule_intent(intent_id: IntentId) -> Result<(), InternalError> {
@@ -896,6 +911,9 @@ mod tests {
         let _guard = seams::lock();
         IntentStoreOps::reset_for_tests();
         RecentFailureOps::reset();
+        let auth_state = ApplicationSessionTestStateGuard::empty();
+        let caller = Principal::from_slice(&[7; 29]);
+        auth_state.install_replay([8; 32], caller, 11 * NANOS_PER_SECOND);
         let intent_id = IntentId(41);
         IntentStoreOps::try_reserve(
             intent_id,
@@ -918,12 +936,26 @@ mod tests {
             vec![intent_id]
         );
 
+        assert_eq!(
+            LocalApplicationAuthorizationStateOps::application_session_cleanup_due_at_ns()
+                .expect("expired replay reclaimed despite intent failure"),
+            None
+        );
+        auth_state.install_replay([9; 32], caller, 12 * NANOS_PER_SECOND);
         let result = IntentCleanupWorkflow::run_due_batch_at(11 * NANOS_PER_SECOND);
         assert_eq!(
             result.completion().outcome(),
-            ic_timers::TimerCompletionOutcome::InvariantFailure
+            ic_timers::TimerCompletionOutcome::RetryableFailure
         );
-        assert_eq!(result.decision(), OnceDecision::Stop);
+        assert_eq!(
+            result.decision(),
+            OnceDecision::ScheduleAt(11 * NANOS_PER_SECOND + CLEANUP_FAILURE_RETRY_NS)
+        );
+        assert_eq!(
+            LocalApplicationAuthorizationStateOps::application_session_cleanup_due_at_ns()
+                .expect("unexpired replay remains"),
+            Some(12 * NANOS_PER_SECOND)
+        );
         let failure = RecentFailureOps::snapshot()
             .into_iter()
             .next()

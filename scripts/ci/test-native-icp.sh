@@ -16,6 +16,13 @@ required_version="$(
 fixture="$(mktemp -d)"
 trap 'rm -rf "$fixture"' EXIT
 original_path="$PATH"
+mkdir -p "$fixture/.tools/ic/bin"
+cat > "$fixture/Makefile" <<'MAKE'
+.PHONY: ic-tools-check
+ic-tools-check:
+	@test -f verified
+MAKE
+touch "$fixture/verified"
 mkdir -p "$fixture/cargo/bin" "$fixture/launcher" "$fixture/alternate path" "$fixture/scratch"
 cat > "$fixture/native.rs" <<'RUST'
 fn main() {
@@ -25,6 +32,7 @@ fn main() {
 RUST
 rustc --edition 2024 --crate-name native_icp_fixture "$fixture/native.rs" -o "$fixture/cargo/bin/icp"
 cp "$fixture/cargo/bin/icp" "$fixture/alternate path/icp"
+cp "$fixture/cargo/bin/icp" "$fixture/.tools/ic/bin/icp"
 cat > "$fixture/launcher/icp" <<'SH'
 #!/bin/sh
 printf 'launcher must not run\n' >&2
@@ -33,29 +41,29 @@ SH
 chmod +x "$fixture/launcher/icp"
 export NATIVE_ICP_FIXTURE_VERSION="$required_version"
 
-# A launcher on PATH resolves to the native installation for this invocation only.
+# PATH launchers cannot override the prepared repository tool.
 (
     unset CANIC_TEST_ICP_BIN ICP_CLI_INSTALL_DIR
     export CARGO_HOME="$fixture/cargo" PATH="$fixture/launcher:$original_path"
-    use_native_test_icp "$fixture/scratch" "$required_version"
+    use_native_test_icp "$fixture/scratch" "$required_version" "$fixture"
     selected="$(command -v icp)"
     [[ "$selected" == "$fixture/scratch/"*/icp && -L "$selected" ]]
-    [[ "$(readlink "$selected")" == "$fixture/cargo/bin/icp" ]]
+    [[ "$(readlink "$selected")" == "$fixture/.tools/ic/bin/icp" ]]
     [[ "$(icp --version)" == "icp $required_version" ]]
     [[ "$(command -v rustc)" == "$(PATH="$original_path" command -v rustc)" ]]
 )
 [[ "$PATH" == "$original_path" ]]
 
-# An already selected native tool and an explicit tool path retain authority.
+# Even a native PATH tool cannot override the prepared selection; an explicit override can.
 (
     unset CANIC_TEST_ICP_BIN ICP_CLI_INSTALL_DIR
     export CARGO_HOME="$fixture/missing" PATH="$fixture/alternate path:$original_path"
-    use_native_test_icp "$fixture/scratch" "$required_version"
-    [[ "$(readlink "$(command -v icp)")" == "$fixture/alternate path/icp" ]]
+    use_native_test_icp "$fixture/scratch" "$required_version" "$fixture"
+    [[ "$(readlink "$(command -v icp)")" == "$fixture/.tools/ic/bin/icp" ]]
 )
 (
     export CANIC_TEST_ICP_BIN="$fixture/alternate path/icp"
-    use_native_test_icp "$fixture/scratch" "$required_version"
+    use_native_test_icp "$fixture/scratch" "$required_version" "$fixture"
     [[ "$(readlink "$(command -v icp)")" == "$CANIC_TEST_ICP_BIN" ]]
 )
 
@@ -65,7 +73,7 @@ expect_refusal() {
     local before_path="$PATH" before after
     before="$(find "$fixture/scratch" -mindepth 1 -maxdepth 1 -type d | sort)"
     if CANIC_TEST_ICP_BIN="$tool" NATIVE_ICP_FIXTURE_VERSION="$version" \
-        use_native_test_icp "$scratch" "$required_version" > "$fixture/refusal.log" 2>&1; then
+        use_native_test_icp "$scratch" "$required_version" "$fixture" > "$fixture/refusal.log" 2>&1; then
         echo "native ICP selection unexpectedly accepted $tool" >&2
         exit 1
     fi
@@ -78,6 +86,20 @@ expect_refusal "$fixture/cargo/bin/icp" '0.0.0' "$fixture/scratch"
 expect_refusal "$fixture/cargo/bin/icp" "$required_version" "$fixture/missing"
 ln -s "$fixture/scratch" "$fixture/scratch-link"
 expect_refusal "$fixture/cargo/bin/icp" "$required_version" "$fixture/scratch-link"
+
+# An unverified prepared selection cannot silently fall back to PATH.
+(
+    unset CANIC_TEST_ICP_BIN
+    rm "$fixture/verified"
+    export PATH="$fixture/alternate path:$original_path"
+    before="$(find "$fixture/scratch" -mindepth 1 -maxdepth 1 -type d | sort)"
+    if use_native_test_icp "$fixture/scratch" "$required_version" "$fixture"; then
+        echo 'unverified repository tool unexpectedly admitted' >&2
+        exit 1
+    fi
+    [[ "$before" == "$(find "$fixture/scratch" -mindepth 1 -maxdepth 1 -type d | sort)" ]]
+    [[ "$PATH" == "$fixture/alternate path:$original_path" ]]
+)
 
 # Plan-only selection remains effect-free even when the configured binary is absent.
 CANIC_TEST_ICP_BIN="$fixture/missing" CANIC_TEST_PLAN_ONLY=1 \

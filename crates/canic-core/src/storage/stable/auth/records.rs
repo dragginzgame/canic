@@ -57,6 +57,7 @@ pub struct LocalApplicationAuthorizationStateData {
     pub authority_binding: Option<LocalApplicationAuthorityBindingRecord>,
     pub logins: Vec<(Principal, LocalApplicationLoginRecord)>,
     pub login_totals: LocalApplicationLoginTotalsRecord,
+    pub observed_at_ns: u64,
 }
 
 /// Canonical IC Auth login reservation or logout tombstone, keyed by caller.
@@ -372,6 +373,7 @@ pub struct LocalApplicationAuthorizationStateRecord {
 
     pub application_authority_binding: Option<LocalApplicationAuthorityBindingRecord>,
     pub login_totals: LocalApplicationLoginTotalsRecord,
+    pub observed_at_ns: u64,
 }
 
 impl LocalApplicationAuthorizationStateRecord {

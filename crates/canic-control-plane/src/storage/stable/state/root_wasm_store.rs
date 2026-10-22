@@ -58,6 +58,7 @@ pub struct WasmStoreGcRecord {
 pub struct WasmStoreRecord {
     pub binding: WasmStoreBinding,
     pub pid: Principal,
+    /// Whole seconds since the Unix epoch, matching publication and GC timestamps.
     pub created_at: u64,
     pub gc: WasmStoreGcRecord,
 }
@@ -398,7 +399,7 @@ impl RootWasmStoreState {
             data.wasm_stores.push(WasmStoreRecord {
                 binding,
                 pid: adoption.wasm_store,
-                created_at: adopted_at_ns,
+                created_at: std::time::Duration::from_nanos(adopted_at_ns).as_secs(),
                 gc: WasmStoreGcRecord::default(),
             });
             let committed = adoption.clone();

@@ -5,13 +5,11 @@
 //! Boundary: access expressions call auth predicates before endpoint workflow execution.
 
 mod attestation;
-mod identity;
 #[cfg(feature = "internal-test-fixtures")]
 mod measurement;
 mod predicates;
 
 use crate::{access::AccessError, cdk::types::Principal, ops::ic::IcOps};
-use std::fmt;
 
 pub use crate::{
     domain::policy::pure::auth::application_authorization::AuthorizedApplicationSubject,
@@ -57,48 +55,6 @@ fn authorize_with_values(
         LocalApplicationAuthorizationDenial::AuthorityUnavailable
     };
     LocalApplicationAuthorizationDecision::Deny(denial)
-}
-
-///
-/// ApplicationSubjectRejection
-///
-/// Reason an application subject cannot be accepted as a user identity.
-/// Owned by access auth and used to reject infrastructure principals.
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ApplicationSubjectRejection {
-    Anonymous,
-    ManagementCanister,
-    LocalCanister,
-    RootCanister,
-    ParentCanister,
-    SubnetCanister,
-    FleetSubnetRootCanister,
-    DirectChildCanister,
-}
-
-impl fmt::Display for ApplicationSubjectRejection {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let reason = match self {
-            Self::Anonymous => "anonymous principals are not allowed",
-            Self::ManagementCanister => "management canister principal is not allowed",
-            Self::LocalCanister => "current canister principal is not allowed",
-            Self::RootCanister => "root canister principal is not allowed",
-            Self::ParentCanister => "parent canister principal is not allowed",
-            Self::SubnetCanister => "subnet principal is not allowed",
-            Self::FleetSubnetRootCanister => "Fleet Subnet Root principal is not allowed",
-            Self::DirectChildCanister => "direct child canister principal is not allowed",
-        };
-        f.write_str(reason)
-    }
-}
-
-/// validate_application_subject
-///
-/// Reject obvious canister and infrastructure identities for local application sessions.
-pub fn validate_application_subject(subject: Principal) -> Result<(), ApplicationSubjectRejection> {
-    identity::validate_application_subject(subject)
 }
 
 // -----------------------------------------------------------------------------
@@ -172,43 +128,9 @@ const fn dependency_unavailable(error: crate::InternalError) -> AccessError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test::seams;
-    use canic_contracts::ids::CanisterRole;
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
-    }
-
-    #[test]
-    fn validate_application_subject_rejects_anonymous() {
-        let _guard = seams::lock();
-        let err = validate_application_subject(Principal::anonymous())
-            .expect_err("anonymous must be rejected");
-        assert_eq!(err, ApplicationSubjectRejection::Anonymous);
-    }
-
-    #[test]
-    fn validate_application_subject_rejects_management_canister() {
-        let _guard = seams::lock();
-        let err = validate_application_subject(Principal::management_canister())
-            .expect_err("management canister must be rejected");
-        assert_eq!(err, ApplicationSubjectRejection::ManagementCanister);
-    }
-
-    #[test]
-    fn validate_application_subject_rejects_direct_child() {
-        let _guard = seams::lock();
-        let child = p(31);
-        crate::ops::storage::children::CanisterChildrenOps::import_topology_children(
-            p(30),
-            vec![(child, CanisterRole::new("session_subject_child"))],
-        );
-
-        let err = validate_application_subject(child)
-            .expect_err("direct child canister must be rejected");
-        assert_eq!(err, ApplicationSubjectRejection::DirectChildCanister);
-
-        crate::ops::storage::children::CanisterChildrenOps::import_topology_children(p(30), vec![]);
     }
 
     #[test]

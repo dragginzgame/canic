@@ -174,7 +174,8 @@ where
         return Ok(None);
     };
     let signing =
-        sign_chain_key_root_delegation_batch(signing_policy, batch_id, now_ns, signer).await?;
+        sign_chain_key_root_delegation_batch(signing_policy, batch_id, now_ns, signer, || now_ns)
+            .await?;
     if signing.signing_in_flight {
         return Ok(None);
     }
@@ -296,6 +297,7 @@ impl ChainKeySigner for DynamicMockSigner {
 
 struct StaleDuringSignSigner {
     batch_id: [u8; 32],
+    invalid_signature: bool,
     sign_calls: usize,
 }
 
@@ -317,7 +319,11 @@ impl ChainKeySigner for StaleDuringSignSigner {
                 .sign_prehash(&args.message_hash)
                 .expect("test prehash signature should sign");
             Ok(SignWithEcdsaResult {
-                signature: signature.to_bytes().to_vec(),
+                signature: if self.invalid_signature {
+                    vec![]
+                } else {
+                    signature.to_bytes().to_vec()
+                },
             })
         })
     }
@@ -556,6 +562,7 @@ fn chain_key_batch_signing_signs_prepared_batch_once_and_reuses_signed_state() {
         &signing_policy,
         2_000,
         &mut signer,
+        || 2_000,
     ))
     .expect("signing should succeed");
 
@@ -576,6 +583,7 @@ fn chain_key_batch_signing_signs_prepared_batch_once_and_reuses_signed_state() {
         &signing_policy,
         3_000,
         &mut second_signer,
+        || 3_000,
     ))
     .expect("signed batch should be reused");
 
@@ -608,6 +616,7 @@ fn chain_key_batch_signing_covers_multiple_issuers_with_one_signature() {
         &signing_policy,
         2_000,
         &mut signer,
+        || 2_000,
     ))
     .expect("multi-issuer batch signing should succeed");
 
@@ -643,6 +652,7 @@ fn chain_key_batch_signing_covers_multiple_issuers_with_one_signature() {
         &signing_policy,
         4_000,
         &mut reused_signer,
+        || 4_000,
     ))
     .expect("signed multi-issuer batch should be reused");
 
@@ -656,9 +666,11 @@ fn chain_key_batch_signing_failure_marks_same_batch_retryable() {
     let signing_policy = signing_policy();
     let issuer = p(52);
     RootDelegationStateOps::upsert_root_issuer_policy(policy(issuer));
-    RootDelegationStateOps::upsert_root_issuer_renewal_template(template(issuer, 60_000_000_000));
-    let prepared = prepare_due_batch_with_test_approvals(input(&signing_policy))
-        .expect("prepare should build a batch");
+    RootDelegationStateOps::upsert_root_issuer_renewal_template(template(issuer, 120_000_000_000));
+    let mut preparation = input(&signing_policy);
+    preparation.max_revocation_latency_ns = 120_000_000_000;
+    let prepared =
+        prepare_due_batch_with_test_approvals(preparation).expect("prepare should build a batch");
     let batch = RootDelegationStateOps::chain_key_root_delegation_batch(prepared.batch_id.unwrap())
         .expect("prepared batch should be stored");
     let mut signer = MockSigner::valid_for(&batch.header);
@@ -668,6 +680,7 @@ fn chain_key_batch_signing_failure_marks_same_batch_retryable() {
         &signing_policy,
         2_000,
         &mut signer,
+        || 10_000_000_000,
     ))
     .expect_err("invalid signature should fail signing");
     assert_eq!(signer.sign_calls, 1);
@@ -679,15 +692,19 @@ fn chain_key_batch_signing_failure_marks_same_batch_retryable() {
         ChainKeyRootDelegationBatchStatus::FailedRetryable
     );
     let retry_after_ns = stored.retry_after_ns.expect("failed batch retry time");
-    assert!(retry_after_ns >= 2_000);
+    assert_eq!(
+        retry_after_ns,
+        10_000_000_000 + CHAIN_KEY_SIGNING_RETRY_BACKOFF_NS
+    );
     assert!(retry_after_ns < stored.header.expires_at_ns);
     assert!(stored.signature.is_none());
 
     let mut blocked_signer = MockSigner::valid_for(&stored.header);
     let blocked = block_on(sign_next_chain_key_root_delegation_batch(
         &signing_policy,
-        3_000,
+        retry_after_ns - 1,
         &mut blocked_signer,
+        || retry_after_ns - 1,
     ))
     .expect("retry delay should skip signing");
 
@@ -699,6 +716,7 @@ fn chain_key_batch_signing_failure_marks_same_batch_retryable() {
         &signing_policy,
         retry_after_ns,
         &mut retry_signer,
+        || retry_after_ns,
     ))
     .expect("retry delay expiry should allow the same batch to sign");
 
@@ -737,6 +755,7 @@ fn chain_key_batch_duplicate_signing_tick_observes_in_flight_without_management_
         &signing_policy,
         2_000,
         &mut signer,
+        || 2_000,
     ))
     .expect("duplicate signing tick should be a no-op");
 
@@ -752,42 +771,50 @@ fn chain_key_batch_duplicate_signing_tick_observes_in_flight_without_management_
 
 #[test]
 fn chain_key_batch_discards_signature_returning_after_batch_became_stale() {
-    let signing_policy = signing_policy();
-    let issuer = p(66);
-    RootDelegationStateOps::upsert_root_issuer_policy(policy(issuer));
-    RootDelegationStateOps::upsert_root_issuer_renewal_template(template(issuer, 60_000_000_000));
-    let prepared = prepare_due_batch_with_test_approvals(input(&signing_policy))
-        .expect("prepare should build a batch");
-    let batch_id = prepared.batch_id.expect("prepare should return a batch id");
-    let mut signer = StaleDuringSignSigner {
-        batch_id,
-        sign_calls: 0,
-    };
+    for invalid_signature in [false, true] {
+        RootDelegationStateOps::prune_chain_key_root_delegation_batches(u64::MAX);
+        let signing_policy = signing_policy();
+        let issuer = p(66);
+        RootDelegationStateOps::upsert_root_issuer_policy(policy(issuer));
+        RootDelegationStateOps::upsert_root_issuer_renewal_template(template(
+            issuer,
+            60_000_000_000,
+        ));
+        let prepared = prepare_due_batch_with_test_approvals(input(&signing_policy))
+            .expect("prepare should build a batch");
+        let batch_id = prepared.batch_id.expect("prepare should return a batch id");
+        let mut signer = StaleDuringSignSigner {
+            batch_id,
+            sign_calls: 0,
+            invalid_signature,
+        };
 
-    let result = block_on(sign_chain_key_root_delegation_batch(
-        &signing_policy,
-        batch_id,
-        2_000,
-        &mut signer,
-    ))
-    .expect("stale callback should be discarded without failing sweep");
+        let result = block_on(sign_chain_key_root_delegation_batch(
+            &signing_policy,
+            batch_id,
+            2_000,
+            &mut signer,
+            || 2_000,
+        ))
+        .expect("stale callback should be discarded without failing sweep");
 
-    assert_eq!(result.batch_id, Some(batch_id));
-    assert!(!result.signed);
-    assert!(!result.reused_signed);
-    assert!(!result.signing_in_flight);
-    assert_eq!(signer.sign_calls, 1);
-    let stored = RootDelegationStateOps::chain_key_root_delegation_batch(batch_id)
-        .expect("stale batch should remain until expiry pruning");
-    assert_eq!(
-        stored.status,
-        ChainKeyRootDelegationBatchStatus::FailedRetryable
-    );
-    assert!(stored.signature.is_none());
-    assert_eq!(
-        stored.failure.as_deref(),
-        Some("stale registry epoch or hash")
-    );
+        assert_eq!(result.batch_id, Some(batch_id));
+        assert!(!result.signed);
+        assert!(!result.reused_signed);
+        assert!(!result.signing_in_flight);
+        assert_eq!(signer.sign_calls, 1);
+        let stored = RootDelegationStateOps::chain_key_root_delegation_batch(batch_id)
+            .expect("stale batch should remain until expiry pruning");
+        assert_eq!(
+            stored.status,
+            ChainKeyRootDelegationBatchStatus::FailedRetryable
+        );
+        assert!(stored.signature.is_none());
+        assert_eq!(
+            stored.failure.as_deref(),
+            Some("stale registry epoch or hash")
+        );
+    }
 }
 
 #[test]
@@ -838,6 +865,7 @@ fn chain_key_batch_registry_change_discards_stale_preinstall_batch() {
         &signing_policy,
         2_000,
         &mut signer,
+        || 2_000,
     ))
     .expect("fresh registry batch should sign");
 
@@ -863,6 +891,7 @@ fn chain_key_batch_expired_preinstall_batch_is_pruned_before_signing() {
         &signing_policy,
         batch.header.expires_at_ns,
         &mut signer,
+        || batch.header.expires_at_ns,
     ))
     .expect("expired batch should be pruned without signing");
 
@@ -918,7 +947,7 @@ fn chain_key_batch_install_plan_materializes_signed_proof_and_records_success() 
     assert!(record_chain_key_root_delegation_install_success(
         batch_id,
         proof.issuer_pid,
-        proof.cert_hash,
+        &installed_response(proof),
         4_000,
     ));
     let installed = RootDelegationStateOps::chain_key_root_delegation_batch(batch_id)
@@ -982,7 +1011,7 @@ fn chain_key_batch_partial_install_failure_retries_only_remaining_issuer() {
     assert!(record_chain_key_root_delegation_install_success(
         batch_id,
         installed.issuer_pid,
-        installed.cert_hash,
+        &installed_response(&installed),
         4_000,
     ));
     assert!(record_chain_key_root_delegation_install_failure(
@@ -1024,7 +1053,7 @@ fn chain_key_batch_partial_install_failure_retries_only_remaining_issuer() {
     assert!(record_chain_key_root_delegation_install_success(
         batch_id,
         failed.issuer_pid,
-        failed.cert_hash,
+        &installed_response(&failed),
         6_000,
     ));
 
@@ -1072,7 +1101,7 @@ fn chain_key_batch_ignores_stale_install_failure_after_success() {
     assert!(record_chain_key_root_delegation_install_success(
         batch_id,
         proof.issuer_pid,
-        proof.cert_hash,
+        &installed_response(proof),
         4_000,
     ));
     assert!(!record_chain_key_root_delegation_install_failure(
@@ -1141,7 +1170,7 @@ fn chain_key_lazy_repair_get_or_create_signs_once_then_reuses_cached_proof() {
     assert!(record_chain_key_root_delegation_install_success(
         batch.batch_id,
         issuer,
-        proof.cert_hash,
+        &installed_response(&proof),
         3_000,
     ));
     let retained = RootDelegationStateOps::chain_key_root_delegation_batches();
@@ -1395,4 +1424,198 @@ fn chain_key_batch_builder_rejects_more_than_its_issuer_budget() {
         build_test_chain_key_root_delegation_batch(input(&signing_policy), &due_templates, 10)
             .expect_err("construction must refuse an over-budget plan even before selection");
     assert_eq!(error.code(), InternalError::invalid_input().code());
+}
+
+fn installed_response(
+    proof: &crate::dto::auth::RootDelegationProofBatchProof,
+) -> crate::dto::auth::ActiveDelegationProof {
+    crate::dto::auth::ActiveDelegationProof {
+        proof: proof.proof.clone(),
+        cert_hash: proof.cert_hash,
+        not_before_ns: proof.proof.cert.not_before_ns,
+        expires_at_ns: proof.proof.cert.expires_at_ns,
+        refresh_after_ns: proof.proof.cert.expires_at_ns - 1,
+        installed_at_ns: 2_000,
+        installed_by: proof.proof.cert.root_pid,
+    }
+}
+
+fn installation_fixture(
+    issuer: Principal,
+    epoch: u64,
+) -> ([u8; 32], crate::dto::auth::ActiveDelegationProof) {
+    let signing_policy = signing_policy();
+    RootDelegationStateOps::upsert_root_issuer_policy(policy(issuer));
+    RootDelegationStateOps::upsert_root_issuer_renewal_template(template(issuer, 60_000_000_000));
+    let mut prepared = input(&signing_policy);
+    prepared.now_ns += epoch;
+    let mut batch = build_test_chain_key_root_delegation_batch(
+        prepared,
+        &[DueChainKeyTemplate {
+            template: template(issuer, 60_000_000_000),
+        }],
+        epoch,
+    )
+    .unwrap();
+    batch.status = ChainKeyRootDelegationBatchStatus::Signed;
+    batch.signature = Some(sign_header(&batch.header));
+    let batch_id = batch.batch_id;
+    RootDelegationStateOps::upsert_chain_key_root_delegation_batch(batch);
+    let plan = start_chain_key_root_delegation_batch_install(batch_id, 3_000)
+        .unwrap()
+        .unwrap();
+    (batch_id, installed_response(&plan.proofs[0]))
+}
+
+#[test]
+fn installed_effective_deadlines_drive_renewal() {
+    let issuer = p(81);
+    let (batch_id, mut active) = installation_fixture(issuer, 100);
+    active.expires_at_ns = 10_000;
+    active.refresh_after_ns = 8_000;
+    assert!(record_chain_key_root_delegation_install_success(
+        batch_id, issuer, &active, 4_000
+    ));
+    let state = RootDelegationStateOps::root_issuer_renewal_state(issuer).unwrap();
+    assert_eq!(state.last_installed_expires_at_ns, Some(10_000));
+    assert_eq!(state.last_installed_refresh_after_ns, Some(8_000));
+    assert_eq!(state.next_attempt_after_ns, 8_000);
+    assert_eq!(state.updated_at_ns, 4_000);
+    assert_eq!(state.last_installed_cert_hash, Some(active.cert_hash));
+}
+
+#[test]
+fn invalid_installation_evidence_cannot_advance_renewal() {
+    let issuer = p(82);
+    let (batch_id, active) = installation_fixture(issuer, 101);
+    let mut variants = vec![active.clone(); 7];
+    variants[0].cert_hash = [0; 32];
+    variants[1].proof.cert.issuer_pid = p(83);
+    variants[2].installed_by = p(83);
+    variants[3].expires_at_ns += 1;
+    variants[4].expires_at_ns = 4_000;
+    variants[5].refresh_after_ns = active.expires_at_ns;
+    variants[6].not_before_ns = 4_001;
+    let before = RootDelegationStateOps::root_issuer_renewal_state(issuer);
+    for changed in variants {
+        assert!(!record_chain_key_root_delegation_install_success(
+            batch_id, issuer, &changed, 4_000
+        ));
+        assert_eq!(
+            RootDelegationStateOps::root_issuer_renewal_state(issuer),
+            before
+        );
+        assert!(
+            RootDelegationStateOps::chain_key_root_delegation_batch(batch_id)
+                .unwrap()
+                .issuers[0]
+                .installed_at_ns
+                .is_none()
+        );
+    }
+}
+
+#[test]
+fn older_install_completion_cannot_replace_newer_authority() {
+    let issuer = p(84);
+    let (old_batch, old_active) = installation_fixture(issuer, 102);
+    let (new_batch, new_active) = installation_fixture(issuer, 103);
+    assert!(record_chain_key_root_delegation_install_success(
+        new_batch,
+        issuer,
+        &new_active,
+        4_000
+    ));
+    let before = RootDelegationStateOps::root_issuer_renewal_state(issuer);
+    assert!(!record_chain_key_root_delegation_install_success(
+        old_batch,
+        issuer,
+        &old_active,
+        5_000
+    ));
+    assert_eq!(
+        RootDelegationStateOps::root_issuer_renewal_state(issuer),
+        before
+    );
+}
+
+#[test]
+fn signed_proof_lookup_rejects_completion_at_or_after_expiry() {
+    let issuer = p(89);
+    let (batch_id, active) = installation_fixture(issuer, 100);
+    let batch = RootDelegationStateOps::chain_key_root_delegation_batch(batch_id).unwrap();
+    let find = |now_ns| {
+        signed_chain_key_delegation_proof_for_issuer(
+            issuer,
+            now_ns,
+            batch.header.registry_epoch,
+            batch.header.registry_hash,
+        )
+    };
+    let before = find(batch.header.expires_at_ns - 1).unwrap();
+    assert_eq!(before.proof, active.proof);
+    assert_eq!(before.cert_hash, active.cert_hash);
+    assert!(find(batch.header.expires_at_ns).is_none());
+    assert!(find(batch.header.expires_at_ns + 1).is_none());
+    let retained = RootDelegationStateOps::chain_key_root_delegation_batch(batch_id).unwrap();
+    assert_eq!(retained.header, batch.header);
+    assert_eq!(retained.signature, batch.signature);
+    assert_eq!(retained.status, batch.status);
+    assert!(
+        retained
+            .issuers
+            .iter()
+            .all(|issuer| issuer.installed_at_ns.is_none())
+    );
+    assert!(
+        start_chain_key_root_delegation_batch_install(batch_id, batch.header.expires_at_ns)
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[test]
+fn signing_completion_uses_current_time_and_discards_expired_results() {
+    for (expires_during_signing, invalid_signature) in [(false, false), (true, false), (true, true)]
+    {
+        RootDelegationStateOps::prune_chain_key_root_delegation_batches(u64::MAX);
+        let signing_policy = signing_policy();
+        let issuer = p(90);
+        RootDelegationStateOps::upsert_root_issuer_policy(policy(issuer));
+        RootDelegationStateOps::upsert_root_issuer_renewal_template(template(
+            issuer,
+            60_000_000_000,
+        ));
+        let prepared = prepare_due_batch_with_test_approvals(input(&signing_policy)).unwrap();
+        let batch_id = prepared.batch_id.unwrap();
+        let batch = RootDelegationStateOps::chain_key_root_delegation_batch(batch_id).unwrap();
+        let completed = if expires_during_signing {
+            batch.header.expires_at_ns
+        } else {
+            10_000
+        };
+        let mut signer = MockSigner::valid_for(&batch.header);
+        if invalid_signature {
+            signer.signature.clear();
+        }
+        let result = block_on(sign_chain_key_root_delegation_batch(
+            &signing_policy,
+            batch_id,
+            2_000,
+            &mut signer,
+            || completed,
+        ))
+        .unwrap();
+        assert_eq!(signer.sign_calls, 1);
+        assert_eq!(result.signed, !expires_during_signing);
+        let retained = RootDelegationStateOps::chain_key_root_delegation_batch(batch_id);
+        if expires_during_signing {
+            assert!(retained.is_none());
+            assert_eq!(result.batch_id, None);
+        } else {
+            let retained = retained.unwrap();
+            assert_eq!(retained.signed_at_ns, Some(completed));
+            assert_eq!(retained.header, batch.header);
+        }
+    }
 }

@@ -42,8 +42,8 @@ pub mod testing;
 pub mod __internal {
     pub use canic_macros::__canic_lifecycle;
     // NOTE:
-    // This module exists ONLY for macro expansion.
-    // Do NOT re-export canic_core publicly.
+    // Public only to support macro expansion in consuming crates.
+    // These implementation dependencies are not the supported application API.
     pub use canic_contracts as contracts;
     #[cfg(any(
         feature = "control-plane",
@@ -83,10 +83,8 @@ pub mod __build {
         CANIC_CUSTOM_CFG_NAMES, METRICS_TIER_CORE, METRICS_TIER_PLACEMENT, METRICS_TIER_PLATFORM,
         METRICS_TIER_RUNTIME, METRICS_TIER_SECURITY, METRICS_TIER_STORAGE,
         assert_canonical_role_contract_build, compile_role_build_sources, config_app_id,
-        config_contains_role, config_declares_role, configured_role_metrics_tier_mask,
-        declared_package_metadata, declared_package_role, metrics_profile_tier_mask,
-        read_config_source_or_default, required_package_metadata, required_package_role,
-        write_build_source_if_changed,
+        config_declares_role, configured_role_metrics_tier_mask, read_config_source_or_default,
+        required_package_metadata, write_build_source_if_changed,
     };
 }
 

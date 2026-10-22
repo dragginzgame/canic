@@ -108,8 +108,8 @@ impl RootConfigOps {
         .map_err(|_| InternalError::invariant())
     }
 
-    /// Export the full current configuration as TOML.
-    /// Intended for diagnostics and tooling only.
+    /// Export the compiled configuration snapshot as TOML for diagnostics.
+    /// Includes host-resolved values and defaults, not runtime-injected trust data.
     pub fn export_toml() -> Result<String, InternalError> {
         let toml = Config::to_toml()?;
 

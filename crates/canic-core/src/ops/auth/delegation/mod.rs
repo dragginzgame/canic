@@ -199,6 +199,7 @@ impl AuthOps {
             &signing_policy,
             now_ns,
             &mut signer,
+            IcOps::now_nanos,
         )
         .await?;
 
@@ -224,6 +225,7 @@ impl AuthOps {
             batch_id,
             now_ns,
             &mut signer,
+            IcOps::now_nanos,
         )
         .await?;
 
@@ -269,11 +271,11 @@ impl AuthOps {
     pub(crate) fn record_chain_key_root_delegation_install_success(
         batch_id: [u8; 32],
         issuer_pid: Principal,
-        cert_hash: [u8; 32],
+        active: &ActiveDelegationProof,
         now_ns: u64,
     ) -> bool {
         chain_key_batch::record_chain_key_root_delegation_install_success(
-            batch_id, issuer_pid, cert_hash, now_ns,
+            batch_id, issuer_pid, active, now_ns,
         )
     }
 

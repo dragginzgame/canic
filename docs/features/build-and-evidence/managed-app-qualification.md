@@ -121,14 +121,23 @@ Root restart or management-install reconciliation; those require the actual Root
 workflow. See the [blob integration boundary](../blob-storage/README.md).
 
 Configured initial sharding and scaling children are installed before the
-constructor returns. Submit an on-demand indexed, sharded or scaled child request
-with `fixture.pic().submit_call(...)`, then call
-`fixture.settle_submitted_call(&message_id, maximum_ticks)` before reading the ingress
-reply with `fixture.pic().await_call(message_id)`. Allocation replies remain
-pending until the fixture installs and activates the exact child and publishes
-its allocation identity in the parent's Directory. Settlement also waits for the
-submitted request's terminal result, including when application work precedes its
-allocation. A synchronous update call cannot drive this host-owned settlement.
+constructor returns. For an on-demand indexed, sharded or scaled child request,
+use `fixture.update_settled::<Reply, _>(target, caller, method, args, maximum_ticks)`.
+Pass Candid tuple arguments, including `()` for no arguments. The helper submits
+once, settles the request and its children, then decodes one reply value using
+`CANDID_REPLY_LIMITS`. Application-level results remain intact in `Reply`;
+transport rejections, bounded decoding failures and exhausted settlement ticks
+return typed fixture errors.
+
+Allocation replies remain pending until the fixture installs and activates the
+exact child and publishes its allocation identity in the parent's Directory.
+Settlement also waits for the submitted request's terminal result, including
+when application work precedes its allocation. A synchronous update call cannot
+drive this host-owned settlement. If a test needs the ingress ID for recovery
+across a settlement limit, submit with `fixture.pic().submit_call(...)`, call
+`fixture.settle_submitted_call(&message_id, maximum_ticks)`, and read the terminal
+reply with `fixture.pic().ingress_status(message_id)`. A settlement limit does not
+cancel an update; submitting again would be a separate application request.
 `fixture.nodes()` exposes the resulting read-only tree;
 `binding`, `runtime_status`, `admission_status`, `upgrade_same_release` and
 `prepare_admission_successor` exercise its protected lifecycle without asking

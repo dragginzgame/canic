@@ -34,6 +34,7 @@ auth-delegated-token-verify = ["auth-chain-key-ecdsa", "auth-issuer-canister-sig
 auth-local-application-authorization = [
     "auth-delegated-token-verify",
     "ic-auth/session-restore",
+    "ic-auth/certified-proof-verification",
     "ic-auth/portable-signature-verification",
 ]
 auth-root-delegation-state = []

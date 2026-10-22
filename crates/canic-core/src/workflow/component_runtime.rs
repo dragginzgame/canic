@@ -27,8 +27,9 @@ use crate::{
     },
 };
 use canic_contracts::ids::{
-    ComponentBinding, FleetRegistryAuthority, FleetServiceId, ManagedCanisterBinding,
+    CanisterRole, ComponentBinding, FleetRegistryAuthority, FleetServiceId, ManagedCanisterBinding,
 };
+use ic_platform::principal::ExternalPrincipal as Principal;
 
 #[derive(Debug, Eq, PartialEq)]
 struct ComponentDirectoryIdentity<'a> {
@@ -222,6 +223,16 @@ pub fn status() -> Result<ComponentRuntimeStatusResponse, InternalError> {
         }
     }
     Ok(status)
+}
+
+/// Resolve the current validated runtime before projecting its Group Directory members.
+pub fn members_by_role(role: &CanisterRole) -> Result<Vec<Principal>, InternalError> {
+    let current = status()?;
+    let directory = current
+        .authority
+        .as_ref()
+        .and_then(|authority| authority.component_group.as_ref());
+    Ok(ComponentRuntimeOps::group_members_by_role(directory, role))
 }
 
 /// Require this exact active Component tree to own one service's protected write authority.
@@ -711,6 +722,72 @@ mod tests {
         SubnetId,
     };
     use ic_platform::principal::ExternalPrincipal as Principal;
+
+    #[test]
+    fn group_member_lookup_keeps_all_exact_role_matches_in_directory_order() {
+        let component = directory_authority().component.provenance.component;
+        let members = [
+            ("treasury", "a", 9),
+            ("worker", "b", 10),
+            ("treasury", "c", 11),
+        ]
+        .into_iter()
+        .map(|(role, path, seed)| {
+            let mut binding = component.clone();
+            binding.component = ComponentInstanceId::from_generated_bytes([seed; 32]);
+            binding.canister_id = Principal::from_slice(&[seed; 29]);
+            binding.role = CanisterRole::new(role);
+            ComponentGroupDirectoryMember {
+                member_path: ComponentGroupMemberPath::try_from(vec![path.parse().unwrap()])
+                    .unwrap(),
+                component_spec: binding.component_spec.clone(),
+                purpose: ComponentDeploymentPurpose::Ordinary,
+                labels: vec![],
+                binding,
+            }
+        })
+        .collect();
+        let mut directory = ComponentGroupDirectory {
+            provenance: ComponentGroupDirectoryProvenance {
+                authority: component.authority,
+                fleet_subnet_root: component.fleet_subnet_root,
+                group_placement: ComponentGroupPlacementId {
+                    deployment: "group".parse().unwrap(),
+                    ordinal: 0,
+                },
+                component_group: "group".parse().unwrap(),
+                operation_id: [12; 32],
+                plan_hash: [13; 32],
+                placement_receipt_content_hash: [14; 32],
+            },
+            members,
+        };
+        let treasury = CanisterRole::new("treasury");
+        assert_eq!(
+            ComponentRuntimeOps::group_members_by_role(Some(&directory), &treasury),
+            [
+                Principal::from_slice(&[9; 29]),
+                Principal::from_slice(&[11; 29])
+            ]
+        );
+        assert_eq!(
+            ComponentRuntimeOps::group_members_by_role(
+                Some(&directory),
+                &CanisterRole::new("worker")
+            ),
+            [Principal::from_slice(&[10; 29])]
+        );
+        assert!(
+            ComponentRuntimeOps::group_members_by_role(
+                Some(&directory),
+                &CanisterRole::new("treasury_backup")
+            )
+            .is_empty()
+        );
+        assert!(ComponentRuntimeOps::group_members_by_role(None, &treasury).is_empty());
+        directory.members.clear();
+        assert!(ComponentRuntimeOps::group_members_by_role(Some(&directory), &treasury).is_empty());
+    }
 
     #[test]
     fn directory_progression_accepts_exact_replay_and_skipped_revisions() {

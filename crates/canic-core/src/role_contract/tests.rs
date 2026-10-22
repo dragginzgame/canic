@@ -410,7 +410,6 @@ fn capability_derivation_is_centralized_for_auth_and_sharding() {
     app.auth = CanisterAuthConfig {
         delegated_token_issuer: false,
         delegated_token_verifier: true,
-        allowed_token_scopes: Vec::new(),
         local_application_authorization: None,
         role_attestation_cache: true,
     };
@@ -635,8 +634,6 @@ fn child_provisioning_is_derived_only_for_roles_with_spawn_grants() {
 #[test]
 fn local_application_authorization_capability_is_exactly_role_pruned() {
     let mut enabled = ConfigTestBuilder::canister_config(CanisterKind::Service);
-    enabled.auth.delegated_token_verifier = true;
-    enabled.auth.allowed_token_scopes = vec!["app:read".to_owned()];
     enabled.auth.local_application_authorization = Some(LocalApplicationAuthorizationConfig {
         allowed_scopes: vec!["app:read".to_string()],
         default_session_ttl_secs: 900,
@@ -652,7 +649,7 @@ fn local_application_authorization_capability_is_exactly_role_pruned() {
     let enabled = derive_role_capabilities(&config, &CanisterRole::new("enabled")).unwrap();
     let disabled = derive_role_capabilities(&config, &CanisterRole::new("disabled")).unwrap();
     assert!(enabled.contains(&RoleCapabilityKey::LocalApplicationAuthorization));
-    assert!(enabled.contains(&RoleCapabilityKey::DelegatedTokenVerifier));
+    assert!(!enabled.contains(&RoleCapabilityKey::DelegatedTokenVerifier));
     assert!(enabled.contains(&RoleCapabilityKey::FleetAdmissionProjection));
     assert!(!disabled.contains(&RoleCapabilityKey::FleetAdmissionProjection));
     assert!(!disabled.contains(&RoleCapabilityKey::LocalApplicationAuthorization));
@@ -671,8 +668,7 @@ fn auth_capabilities_select_only_their_owned_persistence() {
     let mut verifier = ConfigTestBuilder::canister_config(CanisterKind::Service);
     verifier.auth.delegated_token_verifier = true;
 
-    let mut local = verifier.clone();
-    local.auth.allowed_token_scopes = vec!["app:read".to_owned()];
+    let mut local = ConfigTestBuilder::canister_config(CanisterKind::Service);
     local.auth.local_application_authorization = Some(LocalApplicationAuthorizationConfig {
         allowed_scopes: vec!["app:read".to_string()],
         default_session_ttl_secs: 900,
@@ -740,7 +736,6 @@ fn auth_capabilities_select_only_their_owned_persistence() {
 fn local_application_authorization_rejects_the_verifier_only_feature_set() {
     let mut canister = ConfigTestBuilder::canister_config(CanisterKind::Service);
     canister.auth.delegated_token_verifier = true;
-    canister.auth.allowed_token_scopes = vec!["app:read".to_owned()];
     canister.auth.local_application_authorization = Some(LocalApplicationAuthorizationConfig {
         allowed_scopes: vec!["app:read".to_string()],
         default_session_ttl_secs: 900,

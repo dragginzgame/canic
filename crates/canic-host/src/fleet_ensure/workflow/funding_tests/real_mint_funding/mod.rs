@@ -20,7 +20,10 @@ use crate::{
 };
 use canic_core::cdk::utils::hash::{decode_hex, hex_bytes, sha256_hex};
 use ic_platform::{
-    candid::contract::{CandidType, Nat},
+    candid::{
+        contract::{CandidType, Nat, encode_args},
+        decode_args,
+    },
     principal::ExternalPrincipal as Principal,
 };
 use ic_testkit::pocket_ic::{CanisterSettings, CreateCanisterParams, PocketIc};
@@ -193,21 +196,23 @@ impl EnsurePlatform for FundedCanister {
         };
         assert_eq!(principal, &self.destination.to_text());
         self.calls += 1;
-        let reply: Result<Nat, WithdrawError> = ic_testkit::pic::update_candid_args(
-            &(self.pic),
-            Principal::from_text(ledger).unwrap(),
-            self.transport.operator().unwrap(),
-            "withdraw",
-            (WithdrawArgs {
-                amount: Nat::from(*amount),
-                created_at_time: Some(*created_at_time),
-                from_subaccount: None,
-                to: self.destination,
-            },),
-            crate::test_support::CANDID_REPLY_LIMITS,
-        )
-        .map(|(reply,)| reply)
-        .unwrap();
+        let bytes = self
+            .pic
+            .update_call(
+                Principal::from_text(ledger).unwrap(),
+                self.transport.operator().unwrap(),
+                "withdraw",
+                encode_args((WithdrawArgs {
+                    amount: Nat::from(*amount),
+                    created_at_time: Some(*created_at_time),
+                    from_subaccount: None,
+                    to: self.destination,
+                },))
+                .unwrap(),
+            )
+            .unwrap();
+        let (reply,): (Result<Nat, WithdrawError>,) =
+            decode_args(&bytes, crate::test_support::CANDID_REPLY_LIMITS).unwrap();
         let block = match reply {
             Ok(_) => {
                 assert_eq!(self.calls, 1, "a retry must not pay again");
@@ -239,16 +244,15 @@ fn governed_pocketic_mint_credit_resumes_original_native_withdrawal() {
     let (pic, transport) = funded_operator();
     let operator = transport.operator().unwrap();
     let ledger = Principal::from_text(LEDGER).unwrap();
-    let fee: Nat = ic_testkit::pic::query_candid_args(
-        &(pic),
-        ledger,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        "icrc1_fee",
-        (),
-        crate::test_support::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .unwrap();
+    let bytes = pic
+        .query_call(
+            ledger,
+            ic_platform::principal::ExternalPrincipal::anonymous(),
+            "icrc1_fee",
+            encode_args(()).unwrap(),
+        )
+        .unwrap();
+    let (fee,): (Nat,) = decode_args(&bytes, crate::test_support::CANDID_REPLY_LIMITS).unwrap();
     let fee: u128 = fee.0.try_into().unwrap();
     let destination = pic
         .create_canister_with_params(

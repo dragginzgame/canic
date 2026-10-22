@@ -12,10 +12,7 @@ use std::time::Duration;
 
 use ic_testkit::pic::PocketIcStartupConfig;
 
-pub use ic_testkit::pic::{
-    CandidCallError, CanisterInstallExt, PocketIc, PocketIcBuilder, query_candid_args,
-    update_candid_args,
-};
+pub use ic_testkit::pic::{CanisterInstallExt, PocketIc, PocketIcBuilder};
 pub use managed_app::{
     ManagedAppFixture, ManagedAppQualificationError, ManagedAppQualificationInput,
     StandaloneAppFixture, install_managed_app, install_standalone_app,

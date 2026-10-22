@@ -9,10 +9,10 @@ use crate::{
     cdk::types::Principal,
     model::auth::application_authorization::{
         ApplicationScope, CanonicalApplicationScopes, LocalApplicationAuthorityBinding,
-        MAX_ACTIVE_APPLICATION_SESSIONS, MAX_ACTIVE_APPLICATION_SESSIONS_PER_SUBJECT,
-        MAX_APPLICATION_REPLAY_RECORDS, MAX_APPLICATION_REPLAY_RECORDS_PER_CALLER,
-        MAX_APPLICATION_SESSION_INDEX_BYTES, MAX_APPLICATION_SESSION_RECORD_BYTES,
-        MAX_APPLICATION_SESSION_STABLE_BYTES, MAX_LOCAL_APPLICATION_SESSION_TTL_NS,
+        MAX_ACTIVE_APPLICATION_SESSIONS, MAX_APPLICATION_REPLAY_RECORDS,
+        MAX_APPLICATION_REPLAY_RECORDS_PER_CALLER, MAX_APPLICATION_SESSION_INDEX_BYTES,
+        MAX_APPLICATION_SESSION_RECORD_BYTES, MAX_APPLICATION_SESSION_STABLE_BYTES,
+        MAX_LOCAL_APPLICATION_SESSION_TTL_NS,
     },
     storage::stable::auth::{
         LocalApplicationAuthorityBindingRecord, LocalApplicationAuthorizationState,
@@ -48,7 +48,6 @@ use login_restore::validate_login_records;
 struct ApplicationSessionIndexes {
     session_by_caller: BTreeMap<Principal, usize>,
     replay_by_fingerprint: BTreeMap<[u8; 32], usize>,
-    session_count_by_subject: BTreeMap<Principal, usize>,
     replay_count_by_caller: BTreeMap<Principal, usize>,
     estimated_bytes: usize,
     encoded_bytes: usize,
@@ -75,7 +74,6 @@ impl ApplicationSessionCleanupResult {
 pub struct ApplicationSessionRestoreStats {
     pub sessions: usize,
     pub replays: usize,
-    pub session_subjects: usize,
     pub replay_callers: usize,
     pub stable_bytes: usize,
     pub estimated_index_bytes: usize,
@@ -94,15 +92,15 @@ pub struct ApplicationSessionOccupancy {
 /// Closed corruption, capacity and atomic-commit failures for application-session state.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 pub enum ApplicationSessionStateError {
+    #[error("application-session trusted clock moved backwards")]
+    ClockRollback,
+
     #[error("application-session derived indexes are unavailable")]
     #[cfg(test)]
     IndexesUnavailable,
 
     #[error("application-session state exceeds the active global bound")]
     ActiveGlobalCapacity,
-
-    #[error("application-session state exceeds the active per-subject bound")]
-    ActiveSubjectCapacity,
 
     #[error("application-session state exceeds the replay global bound")]
     ReplayGlobalCapacity,
@@ -155,17 +153,15 @@ pub enum ApplicationSessionStateError {
 impl LocalApplicationAuthorizationStateOps {
     /// Validate canonical records and synchronously reconstruct every derived index.
     #[cfg(any(test, feature = "auth-local-application-authorization"))]
-    pub fn restore_application_session_state()
-    -> Result<ApplicationSessionRestoreStats, ApplicationSessionStateError> {
-        let state = LocalApplicationAuthorizationState::application_authorization_state();
-        invalidate_indexes();
-        let (indexes, restore_report) = build_indexes(&state)?;
-        install_indexes(indexes);
-        Ok(restore_report)
+    pub fn restore_application_session_state(
+        now_ns: u64,
+    ) -> Result<ApplicationSessionRestoreStats, ApplicationSessionStateError> {
+        prepare_maintenance_state(now_ns).map(|(_, report)| report)
     }
 
     /// Return the current target-local application authority generation.
     #[must_use]
+    #[cfg(test)]
     pub fn application_authority_generation() -> u64 {
         LocalApplicationAuthorizationState::application_authority_generation()
     }
@@ -228,7 +224,7 @@ impl LocalApplicationAuthorizationStateOps {
     pub fn cleanup_application_sessions(
         now_ns: u64,
     ) -> Result<ApplicationSessionCleanupResult, ApplicationSessionStateError> {
-        let mut state = LocalApplicationAuthorizationState::application_authorization_state();
+        let (mut state, _) = prepare_maintenance_state(now_ns)?;
         let mut remaining = MAX_APPLICATION_SESSION_CLEANUP_REMOVALS;
         let sessions_before = state.sessions.len();
         let mut index = 0;
@@ -280,6 +276,27 @@ struct ApplicationSessionReplayAuthority {
     proof_fingerprint: [u8; 32],
     transport_caller: Principal,
     authority_generation: u64,
+}
+
+// Persist trusted time even when validation refuses the following maintenance.
+fn prepare_maintenance_state(
+    now_ns: u64,
+) -> Result<
+    (
+        LocalApplicationAuthorizationStateData,
+        ApplicationSessionRestoreStats,
+    ),
+    ApplicationSessionStateError,
+> {
+    // Startup and maintenance both close derived access before any refusal.
+    invalidate_indexes();
+    if !LocalApplicationAuthorizationState::observe_application_time(now_ns) {
+        return Err(ApplicationSessionStateError::ClockRollback);
+    }
+    let state = LocalApplicationAuthorizationState::application_authorization_state();
+    let (indexes, report) = build_indexes(&state)?;
+    install_indexes(indexes);
+    Ok((state, report))
 }
 
 fn commit_validated_state(
@@ -339,7 +356,6 @@ fn build_indexes(
     let restore_report = ApplicationSessionRestoreStats {
         sessions: indexes.session_by_caller.len(),
         replays: indexes.replay_by_fingerprint.len(),
-        session_subjects: indexes.session_count_by_subject.len(),
         replay_callers: indexes.replay_count_by_caller.len(),
         stable_bytes: indexes.encoded_bytes,
         estimated_index_bytes: indexes.estimated_bytes,
@@ -369,14 +385,6 @@ fn index_session_records(
         }
         if !proof_fingerprints.insert(session.fingerprint()) {
             return Err(ApplicationSessionStateError::DuplicateProofFingerprint);
-        }
-        let count = indexes
-            .session_count_by_subject
-            .entry(session.subject().into())
-            .or_default();
-        *count += 1;
-        if *count > MAX_ACTIVE_APPLICATION_SESSIONS_PER_SUBJECT {
-            return Err(ApplicationSessionStateError::ActiveSubjectCapacity);
         }
     }
     Ok(())
@@ -557,6 +565,7 @@ fn encoded_state_len(
         state.authority_generation,
         &state.authority_binding,
         state.login_totals,
+        state.observed_at_ns,
     ))?;
     state
         .sessions
@@ -582,20 +591,13 @@ fn estimate_index_bytes(indexes: &ApplicationSessionIndexes) -> usize {
     index_bytes_for_counts(
         indexes.session_by_caller.len(),
         indexes.replay_by_fingerprint.len(),
-        indexes.session_count_by_subject.len(),
         indexes.replay_count_by_caller.len(),
     )
 }
 
-const fn index_bytes_for_counts(
-    sessions: usize,
-    replays: usize,
-    session_subjects: usize,
-    replay_callers: usize,
-) -> usize {
+const fn index_bytes_for_counts(sessions: usize, replays: usize, replay_callers: usize) -> usize {
     const BTREE_ENTRY_OVERHEAD: usize = 128;
-    (sessions + session_subjects + replay_callers)
-        * (29 + size_of::<usize>() + BTREE_ENTRY_OVERHEAD)
+    (sessions + replay_callers) * (29 + size_of::<usize>() + BTREE_ENTRY_OVERHEAD)
         + replays * (32 + size_of::<usize>() + BTREE_ENTRY_OVERHEAD)
 }
 
@@ -614,7 +616,10 @@ impl ApplicationSessionTestStateGuard {
             crate::storage::stable::auth::LocalApplicationAuthorizationStateData::default(),
         );
         invalidate_indexes();
-        LocalApplicationAuthorizationStateOps::restore_application_session_state().unwrap();
+        LocalApplicationAuthorizationStateOps::restore_application_session_state(
+            LocalApplicationAuthorizationState::export().observed_at_ns,
+        )
+        .unwrap();
         Self(original)
     }
 
@@ -641,7 +646,10 @@ impl ApplicationSessionTestStateGuard {
             },
         );
         invalidate_indexes();
-        LocalApplicationAuthorizationStateOps::restore_application_session_state().unwrap();
+        LocalApplicationAuthorizationStateOps::restore_application_session_state(
+            LocalApplicationAuthorizationState::export().observed_at_ns,
+        )
+        .unwrap();
     }
 }
 
@@ -650,7 +658,10 @@ impl Drop for ApplicationSessionTestStateGuard {
     fn drop(&mut self) {
         LocalApplicationAuthorizationState::import(self.0.clone());
         invalidate_indexes();
-        LocalApplicationAuthorizationStateOps::restore_application_session_state().unwrap();
+        LocalApplicationAuthorizationStateOps::restore_application_session_state(
+            LocalApplicationAuthorizationState::export().observed_at_ns,
+        )
+        .unwrap();
     }
 }
 
@@ -737,7 +748,10 @@ mod tests {
             },
         );
         invalidate_indexes();
-        LocalApplicationAuthorizationStateOps::restore_application_session_state().unwrap();
+        LocalApplicationAuthorizationStateOps::restore_application_session_state(
+            LocalApplicationAuthorizationState::export().observed_at_ns,
+        )
+        .unwrap();
 
         assert_eq!(
             LocalApplicationAuthorizationStateOps::advance_application_authority_binding_generation(

@@ -565,7 +565,6 @@ async fn handoff(
             controllers: Some(handoff_controllers(root, recipient)?),
             ..CanisterSettings::default()
         },
-        sender_canister_version: None,
     })
     .await?;
     CanisterPoolOps::complete_handoff(canister_id, recipient, IcOps::now_nanos())?;
@@ -699,7 +698,6 @@ async fn observe_reset_asset_cycles(
             controllers: Some(root_controllers(root)?),
             ..CanisterSettings::default()
         },
-        sender_canister_version: None,
     })
     .await?;
     if let Some(claim) = &recycling {

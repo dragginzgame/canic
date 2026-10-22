@@ -131,7 +131,7 @@ pub(super) fn rebuild_derived_storage_indexes() -> Result<(), InternalError> {
     #[cfg(any(test, feature = "auth-local-application-authorization"))]
     {
         let application_session_restore_start = crate::perf::perf_counter();
-        LocalApplicationAuthorizationStateOps::restore_application_session_state()
+        LocalApplicationAuthorizationStateOps::restore_application_session_state(IcOps::now_nanos())
             .map_err(|_| InternalError::invariant())?;
         crate::perf::record_checkpoint(
             module_path!(),

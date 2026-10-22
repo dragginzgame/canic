@@ -1,10 +1,11 @@
 //! Exact replicated read identity and authenticated protobuf receipt regressions.
 
 mod archive;
+mod protobuf;
 
 use super::{
     EncodedBlocksReply, IcpReadError as Error, IcpReadLimits, IcpReadOutcome, IcpTransferRead,
-    prepare_read, protobuf, verify_read,
+    prepare_read, verify_read,
 };
 use crate::fleet_ensure::{
     model::operator_mint::{OperatorMintAuthority, OperatorMintIntentRecord},

@@ -133,14 +133,21 @@ fn installed_package_build_deploy_recover_and_replay() {
     verify_installed_artifacts(&consumer, &pic, operator, &desired, &infrastructure);
     verify_workload(&consumer, &pic, root, operator, &desired);
     let ledger = Principal::from_text(&desired.cycles_ledger).unwrap();
-    let requests: u64 = ic_testkit::pic::query_candid_args(
-        &(pic),
-        ledger,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        "request_count",
-        (),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+    let requests: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes = ic_platform::candid::contract::encode_args(())?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (pic).query_call(
+                ledger,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                "request_count",
+                request_bytes,
+            )
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .unwrap();
     let mutations = mutation_counts(&consumer.root);
@@ -151,14 +158,21 @@ fn installed_package_build_deploy_recover_and_replay() {
     assert_eq!(replay["effects_applied"], 0);
     assert_eq!(mutation_counts(&consumer.root), mutations);
     assert_eq!(
-        ic_testkit::pic::query_candid_args::<(u64,), ()>(
-            &(pic),
-            ledger,
-            ic_platform::principal::ExternalPrincipal::anonymous(),
-            "request_count",
-            (),
-            canic::testing::CANDID_REPLY_LIMITS
-        )
+        (|| -> Result<(u64,), Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args(())?;
+            let response_bytes = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).query_call(
+                    ledger,
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
+                    "request_count",
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&response_bytes, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
         .map(|(reply,)| reply)
         .unwrap(),
         requests
@@ -474,14 +488,16 @@ fn verify_workload(
         hex_bytes(status.module_hash.unwrap()),
         artifact.wasm_gz_sha256_hex
     );
-    let reply: Result<u64, Error> = ic_testkit::pic::query_candid_args(
-        pic,
-        workload.canister_id,
-        root,
-        "packaged_probe",
-        (),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+    let reply: Result<u64, Error> = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes = ic_platform::candid::contract::encode_args(())?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (pic).query_call(workload.canister_id, root, "packaged_probe", request_bytes)
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .unwrap();
     assert_eq!(reply.unwrap(), 7);

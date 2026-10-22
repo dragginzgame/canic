@@ -115,7 +115,7 @@ fn history_ring_has_exact_retention_and_expiration_releases_budget() {
 
 #[test]
 fn history_caps_total_series_bytes_and_preserves_latest_snapshot() {
-    let rows = (0..256).map(|index| {
+    let rows = (0..MAX_HISTORY_SERIES).map(|index| {
         let mut row = sample(1, 7);
         row.name = format!("series_{index}");
         row
@@ -129,10 +129,73 @@ fn history_caps_total_series_bytes_and_preserves_latest_snapshot() {
     let mut extra = sample(2, 9);
     extra.name = "extra".into();
     PublicMetricsCache::replace(PublicMetricFamily::Cycles, extra.observed_at_ns, [extra]).unwrap();
-    assert!(PublicHistoryCache::truncated());
+    assert!(PublicHistoryCache::truncated(PublicMetricFamily::Cycles));
     assert!(PublicHistoryCache::reserved_bytes() <= MAX_HISTORY_BYTES);
     assert!(PublicMetricsCache::snapshot(PublicMetricFamily::Cycles).is_some());
     HISTORY.with_borrow(|history| assert!(history.series.len() <= MAX_HISTORY_SERIES));
+}
+
+#[test]
+fn history_truncation_is_scoped_to_the_latest_admission_pass_per_family() {
+    let families = [
+        PublicMetricFamily::Application,
+        PublicMetricFamily::Cycles,
+        PublicMetricFamily::Operations,
+        PublicMetricFamily::Performance,
+        PublicMetricFamily::ShardOccupancy,
+    ];
+    PublicMetricsCache::replace(
+        PublicMetricFamily::Application,
+        sample(1, 1).observed_at_ns,
+        (0..MAX_HISTORY_SERIES).map(|index| {
+            let mut row = sample(1, 1);
+            row.name = format!("series_{index}");
+            row
+        }),
+    )
+    .unwrap();
+    for family in families {
+        PublicMetricsCache::replace(family, sample(2, 2).observed_at_ns, [sample(2, 2)]).unwrap();
+        assert!(PublicHistoryCache::truncated(family));
+    }
+    let mut existing = sample(3, 3);
+    existing.name = "series_0".into();
+    publish(existing);
+    assert!(!PublicHistoryCache::truncated(
+        PublicMetricFamily::Application
+    ));
+    for family in &families[1..] {
+        assert!(PublicHistoryCache::truncated(*family));
+    }
+
+    let mut invalid = sample(3, 3);
+    invalid.name.clear();
+    let error = PublicMetricsCache::replace(
+        PublicMetricFamily::Cycles,
+        invalid.observed_at_ns,
+        [invalid],
+    )
+    .unwrap_err();
+    assert_eq!(error.code(), crate::diagnostics::codes::REQUEST_INVALID);
+    assert!(PublicHistoryCache::truncated(PublicMetricFamily::Cycles));
+
+    let now = (PUBLIC_HISTORY_SLOTS as u64 + 3) * PUBLIC_METRICS_CADENCE_NS;
+    PublicHistoryCache::expire(now);
+    assert_eq!(PublicHistoryCache::reserved_bytes(), 0);
+    let mut recovered = sample(PUBLIC_HISTORY_SLOTS as u64 + 3, 4);
+    recovered.name = "entities".into();
+    PublicMetricsCache::replace(
+        PublicMetricFamily::Cycles,
+        recovered.observed_at_ns,
+        [recovered],
+    )
+    .unwrap();
+    assert!(!PublicHistoryCache::truncated(PublicMetricFamily::Cycles));
+    for family in &families[2..] {
+        assert!(PublicHistoryCache::truncated(*family));
+        PublicMetricsCache::replace(*family, now, []).unwrap();
+        assert!(!PublicHistoryCache::truncated(*family));
+    }
 }
 
 #[test]

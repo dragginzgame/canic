@@ -11,13 +11,27 @@ mod tests;
 
 #[cfg(test)]
 use std::io::Read;
-use std::{io, path::Path};
+use std::{
+    io,
+    path::{Component, Path},
+};
 
 use ic_backup::{
     model::artifacts::{ArtifactChecksumRecord, ChecksumError},
     ops::artifacts::ArtifactError,
 };
 use thiserror::Error as ThisError;
+
+/// Admit one nonempty relative artifact identity using only normal path components.
+pub(crate) fn relative_artifact_path(value: &str) -> Option<&Path> {
+    let path = Path::new(value);
+    (!value.is_empty()
+        && !value.contains('\0')
+        && path
+            .components()
+            .all(|part| matches!(part, Component::Normal(_))))
+    .then_some(path)
+}
 
 /// Hash one file without following its final symlink.
 pub fn checksum_file(path: &Path) -> Result<ArtifactChecksumRecord, ArtifactChecksumError> {

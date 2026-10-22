@@ -64,14 +64,21 @@ mod tests {
         coordinator: Principal,
         command: CoordinatorCommand,
     ) -> Result<CoordinatorCommandResponse, Error> {
-        ic_testkit::pic::update_candid_args(
-            pic,
-            coordinator,
-            ic_platform::principal::ExternalPrincipal::anonymous(),
-            protocol::CANIC_COORDINATOR_COMMAND,
-            (command,),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args((command,))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).update_call(
+                    coordinator,
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
+                    protocol::CANIC_COORDINATOR_COMMAND,
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
         .map(|(reply,)| reply)
         .expect("Coordinator command transport")
     }
@@ -82,14 +89,21 @@ mod tests {
         caller: Principal,
         command: CoordinatorCommand,
     ) -> Result<CoordinatorCommandResponse, Error> {
-        ic_testkit::pic::update_candid_args(
-            pic,
-            coordinator,
-            caller,
-            protocol::CANIC_COORDINATOR_COMMAND,
-            (command,),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args((command,))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).update_call(
+                    coordinator,
+                    caller,
+                    protocol::CANIC_COORDINATOR_COMMAND,
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
         .map(|(reply,)| reply)
         .expect("Coordinator command transport")
     }
@@ -99,14 +113,21 @@ mod tests {
         coordinator: Principal,
         request: R,
     ) -> Result<R::Response, Error> {
-        ic_testkit::pic::query_candid_args(
-            pic,
-            coordinator,
-            ic_platform::principal::ExternalPrincipal::anonymous(),
-            R::METHOD,
-            (request,),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args((request,))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).query_call(
+                    coordinator,
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
+                    R::METHOD,
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
         .map(|(reply,)| reply)
         .expect("Coordinator status transport")
     }
@@ -117,14 +138,16 @@ mod tests {
         caller: Principal,
         request: R,
     ) -> Result<R::Response, Error> {
-        ic_testkit::pic::query_candid_args(
-            pic,
-            coordinator,
-            caller,
-            R::METHOD,
-            (request,),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args((request,))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).query_call(coordinator, caller, R::METHOD, request_bytes)
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
         .map(|(reply,)| reply)
         .expect("Coordinator status transport")
     }
@@ -180,6 +203,28 @@ placement.maximum_members_per_root = 1
 placement.minimum_distinct_roots = 2
 "#;
 
+    fn assert_supported_standards(pic: &PocketIc, coordinator: Principal) {
+        let reply = pic
+            .query_call(
+                coordinator,
+                principal(99),
+                "icrc10_supported_standards",
+                ic_platform::candid::contract::encode_args(()).expect("empty standards arguments"),
+            )
+            .expect("standards query is public for non-controllers");
+        let (standards,): (Vec<(String, String)>,) =
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .expect("bounded standards reply");
+        assert_eq!(
+            standards,
+            vec![(
+                "ICRC-10".to_string(),
+                "https://github.com/dfinity/ICRC/blob/main/ICRCs/ICRC-10".to_string(),
+            )],
+            "Coordinator must advertise its implemented standards only"
+        );
+    }
+
     #[test]
     fn coordinator_commits_joining_roots_and_replays_original_receipts() {
         let _unit_test_serial = super::super::acquire_pic_unit_test_serial_guard();
@@ -200,6 +245,8 @@ placement.minimum_distinct_roots = 2
             encode_one(args).expect("encode Coordinator init"),
             None,
         );
+
+        assert_supported_standards(&pic, coordinator);
 
         let CoordinatorObservabilityResponse::RegistryVersion(genesis) = status(
             &pic,

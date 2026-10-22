@@ -128,6 +128,12 @@ fn validate_member_snapshot(member: &RestorePlanMember) -> Result<(), RestorePla
         "members[].source_snapshot.artifact_path",
         &member.source_snapshot.artifact_path,
     )?;
+    if crate::artifacts::relative_artifact_path(&member.source_snapshot.artifact_path).is_none() {
+        return Err(RestorePlanError::InvalidArtifactPath {
+            field: "members[].source_snapshot.artifact_path",
+            value: member.source_snapshot.artifact_path.clone(),
+        });
+    }
     if member.source_snapshot.checksum_algorithm != SHA256_ALGORITHM {
         return Err(RestorePlanError::ProjectionMismatch(
             "members[].source_snapshot.checksum_algorithm",

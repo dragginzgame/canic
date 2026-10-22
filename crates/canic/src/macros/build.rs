@@ -6,7 +6,7 @@
 ///
 /// Reads the provided TOML file (relative to the crate manifest dir), validates it
 /// using the shared config schema, and emits the exact role runtime authority.
-/// Root additionally receives the compact source and complete generated model it
+/// Root additionally receives serialized TOML and the complete generated model it
 /// owns for control-plane bootstrap. Canister crates typically invoke this from
 /// `build.rs`.
 #[macro_export]
@@ -126,14 +126,18 @@ macro_rules! __canic_build_internal {
         }
         let role_name = __canic_role_name.as_str();
         let role_id: $crate::__internal::contracts::ids::CanisterRole = role_name.to_string().into();
-        let mut app_name = __canic_app_name.as_str();
+        let app_name = __canic_app_name.as_str();
         let __canic_wasm_store_special = role_name == "wasm_store";
         let __canic_infrastructure = __canic_wasm_store_special || role_name == "root";
-        if __canic_infrastructure
-            && !$crate::__build::config_declares_role($cfg.as_ref(), app_name, role_name)
-        {
-            app_name = $crate::__build::config_app_id($cfg.as_ref());
-        }
+        assert_eq!(
+            app_name,
+            if __canic_wasm_store_special {
+                "wasm_store"
+            } else {
+                $crate::__build::config_app_id($cfg.as_ref())
+            },
+            "[package.metadata.canic] App must match its role package contract"
+        );
         if !__canic_infrastructure
             && !$crate::__build::config_declares_role($cfg.as_ref(), app_name, role_name)
         {
@@ -146,7 +150,6 @@ macro_rules! __canic_build_internal {
         }
         let __canic_build_sources = $crate::__build::compile_role_build_sources(
             $cfg.as_ref(),
-            &$cfg_str,
             &role_id,
             __canic_wasm_store_special,
         )
@@ -312,36 +315,28 @@ macro_rules! __canic_build_internal {
         );
 
         if let Some(root_sources) = __canic_build_sources.root {
-            let compact_cfg_path = out_dir.join("canic.compact.toml");
+            let config_toml_path = out_dir.join("canic.config.toml");
             let compiled_cfg_path = out_dir.join("canic.compiled.rs");
-            $crate::__build::write_build_source_if_changed(&compact_cfg_path, &root_sources.compact_config)
-                .expect("write compact Root config");
+            $crate::__build::write_build_source_if_changed(&config_toml_path, &root_sources.config_toml)
+                .expect("write serialized Root config");
             $crate::__build::write_build_source_if_changed(&compiled_cfg_path, &root_sources.config_model)
                 .expect("write compiled Root config");
 
-            let compact_abs = compact_cfg_path
+            let config_toml_abs = config_toml_path
                 .canonicalize()
-                .expect("canonicalize compact Root config path");
+                .expect("canonicalize serialized Root config path");
             let compiled_abs = compiled_cfg_path
                 .canonicalize()
                 .expect("canonicalize compiled Root config path");
-            let source_abs = $cfg_path
-                .canonicalize()
-                .expect("canonicalize source Root config path");
-
-            println!(
-                "cargo:rustc-env=CANIC_CONFIG_ORIGIN_PATH={}",
-                source_abs.display()
-            );
             println!(
                 "cargo:rustc-env=CANIC_CONFIG_SOURCE_PATH={}",
-                compact_abs.display()
+                config_toml_abs.display()
             );
             println!(
                 "cargo:rustc-env=CANIC_CONFIG_MODEL_PATH={}",
                 compiled_abs.display()
             );
-            println!("cargo:rerun-if-changed={}", compact_abs.display());
+            println!("cargo:rerun-if-changed={}", config_toml_abs.display());
             println!("cargo:rerun-if-changed={}", compiled_abs.display());
         }
     }};

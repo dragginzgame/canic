@@ -75,7 +75,7 @@ impl LogRetentionWorkflow {
 
     fn reconcile(config: &LogConfig) -> Result<(), InternalError> {
         let deadline = match config.max_age_secs {
-            Some(max_age_secs) => Self::next_deadline_ns(max_age_secs)?,
+            Some(max_age_secs) => Self::next_deadline_ns(max_age_secs),
             None => None,
         };
         Self::ensure_declared()?;
@@ -147,7 +147,7 @@ impl LogRetentionWorkflow {
     }
 
     fn next_directive(max_age_secs: u64, now_secs: u64) -> Result<OnceDecision, InternalError> {
-        let Some(deadline_ns) = Self::next_deadline_ns(max_age_secs)? else {
+        let Some(deadline_ns) = Self::next_deadline_ns(max_age_secs) else {
             return Ok(OnceDecision::Stop);
         };
         let now_ns = seconds_to_nanos(now_secs)?;
@@ -158,13 +158,12 @@ impl LogRetentionWorkflow {
         }
     }
 
-    fn next_deadline_ns(max_age_secs: u64) -> Result<Option<u64>, InternalError> {
-        let Some(created_at) = LogOps::oldest_created_at() else {
-            return Ok(None);
-        };
-        let deadline_secs = policy::log::age_expiry_at(created_at, max_age_secs)
-            .ok_or_else(InternalError::invariant)?;
-        seconds_to_nanos(deadline_secs).map(Some)
+    fn next_deadline_ns(max_age_secs: u64) -> Option<u64> {
+        let created_at = LogOps::oldest_created_at()?;
+        // An expiry beyond the IC clock's range cannot become due. Keep the
+        // entry under count retention without scheduling an earlier deadline.
+        let deadline_secs = policy::log::age_expiry_at(created_at, max_age_secs)?;
+        deadline_secs.checked_mul(NANOS_PER_SECOND)
     }
 }
 
@@ -173,6 +172,10 @@ fn seconds_to_nanos(seconds: u64) -> Result<u64, InternalError> {
         .checked_mul(NANOS_PER_SECOND)
         .ok_or_else(InternalError::invariant)
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -203,14 +206,35 @@ mod tests {
     }
 
     #[test]
-    fn age_deadline_overflow_fails_closed() {
+    fn unreachable_age_deadline_stops_without_dropping_entries() {
         LogOps::reset_for_tests();
-        append(u64::MAX / NANOS_PER_SECOND);
+        append(100);
 
-        let err = LogRetentionWorkflow::next_deadline_ns(0)
-            .expect_err("unrepresentable nanosecond deadline must reject");
+        for max_age_secs in [u64::MAX / NANOS_PER_SECOND, u64::MAX] {
+            assert_eq!(LogRetentionWorkflow::next_deadline_ns(max_age_secs), None);
+            assert_eq!(
+                LogRetentionWorkflow::next_directive(max_age_secs, 100)
+                    .expect("unreachable deadline must stop"),
+                OnceDecision::Stop
+            );
+            let cutoff = policy::log::age_cutoff(100, max_age_secs);
+            let batch = LogOps::retain_created_before(cutoff, RETENTION_BATCH_SIZE);
+            assert_eq!(batch.dropped, 0);
+            assert_eq!(batch.retained, 1);
+        }
+    }
 
-        assert_eq!(err.code(), crate::diagnostics::codes::STATE_INVALID);
+    #[test]
+    fn age_deadline_respects_the_last_representable_whole_second() {
+        LogOps::reset_for_tests();
+        let final_second = u64::MAX / NANOS_PER_SECOND;
+        append(final_second - 1);
+
+        assert_eq!(
+            LogRetentionWorkflow::next_deadline_ns(0),
+            Some(final_second * NANOS_PER_SECOND)
+        );
+        assert_eq!(LogRetentionWorkflow::next_deadline_ns(1), None);
     }
 
     #[test]

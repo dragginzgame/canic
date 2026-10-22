@@ -195,6 +195,8 @@ where
 /// not
 ///
 /// Build an expression that denies access when the nested predicate passes.
+/// Reached internal errors and unavailable build-network configuration propagate
+/// as evaluation failures through negation and alternative branches.
 #[must_use]
 pub fn not(expr: AccessExpr) -> AccessExpr {
     AccessExpr::Not(Box::new(expr))
@@ -462,11 +464,14 @@ struct AccessFailure {
 impl AccessFailure {
     const fn from_builtin(pred: &BuiltinPredicate, error: AccessError) -> Self {
         Self {
+            terminal: matches!(
+                error,
+                AccessError::Internal(_) | AccessError::BuildNetworkUnavailable
+            ),
             error,
             metric_kind: pred.metric_kind(),
             predicate: pred.name(),
             context: None,
-            terminal: false,
         }
     }
 
@@ -479,11 +484,14 @@ impl AccessFailure {
 
     const fn from_custom(name: &'static str, error: AccessError) -> Self {
         Self {
+            terminal: matches!(
+                error,
+                AccessError::Internal(_) | AccessError::BuildNetworkUnavailable
+            ),
             error,
             metric_kind: AccessMetricKind::Custom,
             predicate: name,
             context: None,
-            terminal: false,
         }
     }
 
@@ -735,6 +743,53 @@ mod tests {
         ] {
             let result = eval_access_selected::<false>(&expr, &ctx);
             std::assert_matches!(result, Err(AccessError::ExpressionRuleRequired));
+        }
+    }
+
+    #[test]
+    fn evaluation_failures_cannot_be_negated_or_bypassed() {
+        struct Check(fn() -> Result<(), AccessError>);
+
+        impl AccessCheck for Check {
+            fn eval(&self, _: &AccessContext) -> Result<(), AccessError> {
+                (self.0)()
+            }
+
+            fn name(&self) -> &'static str {
+                "evaluation_failure"
+            }
+        }
+
+        let ctx = AccessContext {
+            caller: seams::p(1),
+            call: test_call(),
+        };
+        let errors: [fn() -> Result<(), AccessError>; 2] = [
+            || Err(AccessError::Internal(crate::InternalError::invariant())),
+            || Err(AccessError::BuildNetworkUnavailable),
+        ];
+        for (index, error) in errors.into_iter().enumerate() {
+            let failure = || custom(Check(error));
+            let unreachable = || custom(Check(|| panic!("evaluation must stop on failure")));
+            for expression in [
+                not(failure()),
+                not(all([failure(), unreachable()])),
+                not(any([failure(), unreachable()])),
+                any([not(failure()), unreachable()]),
+                not(not(failure())),
+            ] {
+                for result in [
+                    eval_access(&expression, &ctx),
+                    eval_access_selected::<false>(&expression, &ctx),
+                ] {
+                    match index {
+                        0 => std::assert_matches!(result, Err(AccessError::Internal(_))),
+                        _ => {
+                            std::assert_matches!(result, Err(AccessError::BuildNetworkUnavailable));
+                        }
+                    }
+                }
+            }
         }
     }
 

@@ -410,11 +410,6 @@ pub struct CanisterAuthConfig {
     #[serde(default)]
     pub delegated_token_verifier: bool,
 
-    /// Protected role-local ceiling for all delegated-token verification.
-    /// Empty permits no token scopes; submitted grants never supply this policy.
-    #[serde(default, deserialize_with = "deserialize_token_scopes")]
-    pub allowed_token_scopes: Vec<String>,
-
     /// Protected role-local policy for scoped application sessions.
     #[serde(default)]
     pub local_application_authorization: Option<LocalApplicationAuthorizationConfig>,
@@ -430,15 +425,6 @@ pub struct LocalApplicationAuthorizationConfig {
     pub allowed_scopes: Vec<String>,
     pub default_session_ttl_secs: u64,
     pub maximum_session_ttl_secs: u64,
-}
-
-fn deserialize_token_scopes<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let mut scopes = Vec::<String>::deserialize(deserializer)?;
-    scopes.sort_unstable();
-    Ok(scopes)
 }
 
 impl<'de> Deserialize<'de> for LocalApplicationAuthorizationConfig {

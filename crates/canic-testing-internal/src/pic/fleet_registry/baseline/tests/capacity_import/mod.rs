@@ -451,30 +451,48 @@ pub(super) fn command(
     caller: Principal,
     action: PoolImportCommand,
 ) -> Result<PoolImportStatus, Error> {
-    let response: Result<Response, Error> = ic_testkit::pic::update_candid_args(
-        pic,
-        root,
-        caller,
-        canic::protocol::CANIC_ROOT_COMMAND,
-        (Command::ImportPoolCapacity(action),),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .unwrap();
+    let response: Result<Response, Error> =
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes =
+                ic_platform::candid::contract::encode_args((Command::ImportPoolCapacity(action),))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).update_call(
+                    root,
+                    caller,
+                    canic::protocol::CANIC_ROOT_COMMAND,
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
+        .map(|(reply,)| reply)
+        .unwrap();
     response.map(|Response::ImportPoolCapacity(status)| status)
 }
 
 pub(super) fn context(pic: &PocketIc, root: Principal, caller: Principal) -> PoolImportContext {
-    let response: Result<StatusResponse, Error> = ic_testkit::pic::query_candid_args(
-        pic,
-        root,
-        caller,
-        canic::protocol::CANIC_ROOT_STATUS,
-        (StatusRequest::PoolImportContext,),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .unwrap();
+    let response: Result<StatusResponse, Error> =
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes =
+                ic_platform::candid::contract::encode_args((StatusRequest::PoolImportContext,))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).query_call(
+                    root,
+                    caller,
+                    canic::protocol::CANIC_ROOT_STATUS,
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
+        .map(|(reply,)| reply)
+        .unwrap();
     let StatusResponse::PoolImportContext(context) = response.unwrap() else {
         panic!("Root import context response");
     };
@@ -487,16 +505,25 @@ pub(super) fn status(
     caller: Principal,
     identity: PoolImportIdentity,
 ) -> PoolImportStatus {
-    let response: Result<StatusResponse, Error> = ic_testkit::pic::query_candid_args(
-        pic,
-        root,
-        caller,
-        canic::protocol::CANIC_ROOT_STATUS,
-        (StatusRequest::PoolImport(identity),),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .unwrap();
+    let response: Result<StatusResponse, Error> =
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes =
+                ic_platform::candid::contract::encode_args((StatusRequest::PoolImport(identity),))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).query_call(
+                    root,
+                    caller,
+                    canic::protocol::CANIC_ROOT_STATUS,
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
+        .map(|(reply,)| reply)
+        .unwrap();
     let StatusResponse::PoolImport(status) = response.unwrap() else {
         panic!("Root import status response");
     };

@@ -12,8 +12,8 @@ use crate::{
     InternalError,
     cdk::types::Principal,
     dto::auth::{
-        ChainKeyRootSignatureV1, DelegationProof, IcChainKeyBatchSignatureProofV1,
-        RootDelegationProofBatchProof, RootProof,
+        ActiveDelegationProof, ChainKeyRootSignatureV1, DelegationProof,
+        IcChainKeyBatchSignatureProofV1, RootDelegationProofBatchProof, RootProof,
     },
     model::auth::{ChainKeyRootDelegationInstallFailure, RootIssuerRenewalState},
     ops::storage::auth::{
@@ -149,7 +149,7 @@ pub(super) fn start_chain_key_root_delegation_batch_install(
 pub(in crate::ops::auth) fn record_chain_key_root_delegation_install_success(
     batch_id: [u8; 32],
     issuer_pid: Principal,
-    cert_hash: [u8; 32],
+    active: &ActiveDelegationProof,
     now_ns: u64,
 ) -> bool {
     let Some(mut batch) = RootDelegationStateOps::chain_key_root_delegation_batch(batch_id) else {
@@ -167,10 +167,19 @@ pub(in crate::ops::auth) fn record_chain_key_root_delegation_install_success(
     let Some(index) = batch
         .issuers
         .iter()
-        .position(|issuer| issuer.issuer_pid == issuer_pid && issuer.cert_hash == cert_hash)
+        .position(|issuer| issuer.issuer_pid == issuer_pid && issuer.cert_hash == active.cert_hash)
     else {
         return false;
     };
+    let Some(signature) = batch.signature.as_ref() else {
+        return false;
+    };
+    let expected = materialize_chain_key_delegation_proof(&batch, &batch.issuers[index], signature);
+    if !valid_installation_evidence(&expected, active, now_ns)
+        || superseded_installation(&batch, issuer_pid)
+    {
+        return false;
+    }
     if batch.issuers[index].installed_at_ns.is_some() {
         return true;
     }
@@ -178,7 +187,7 @@ pub(in crate::ops::auth) fn record_chain_key_root_delegation_install_success(
     batch.issuers[index].installed_at_ns = Some(now_ns);
     batch.issuers[index].last_failure = None;
     let installed_issuer = batch.issuers[index].clone();
-    upsert_chain_key_issuer_installed_state(&installed_issuer, now_ns);
+    upsert_chain_key_issuer_installed_state(&installed_issuer, active, now_ns);
 
     if batch
         .issuers
@@ -256,6 +265,7 @@ fn next_chain_key_batch_for_install(now_ns: u64) -> Option<ChainKeyRootDelegatio
 
 fn upsert_chain_key_issuer_installed_state(
     issuer: &ChainKeyRootDelegationBatchIssuer,
+    active: &ActiveDelegationProof,
     now_ns: u64,
 ) {
     let template_fingerprint =
@@ -270,9 +280,40 @@ fn upsert_chain_key_issuer_installed_state(
         issuer_pid: issuer.issuer_pid,
         template_fingerprint,
         last_installed_cert_hash: Some(issuer.cert_hash),
-        last_installed_expires_at_ns: Some(issuer.delegation_cert.expires_at_ns),
-        last_installed_refresh_after_ns: Some(issuer.refresh_after_ns),
-        next_attempt_after_ns: issuer.refresh_after_ns,
+        last_installed_expires_at_ns: Some(active.expires_at_ns),
+        last_installed_refresh_after_ns: Some(active.refresh_after_ns),
+        next_attempt_after_ns: active.refresh_after_ns,
         updated_at_ns: now_ns,
     });
+}
+
+fn valid_installation_evidence(
+    expected: &RootDelegationProofBatchProof,
+    active: &ActiveDelegationProof,
+    now_ns: u64,
+) -> bool {
+    let exact_identity = active.proof == expected.proof
+        && active.cert_hash == expected.cert_hash
+        && active.proof.cert.issuer_pid == expected.issuer_pid
+        && active.installed_by == expected.proof.cert.root_pid;
+    let bounded_validity = active.not_before_ns >= expected.proof.cert.not_before_ns
+        && active.not_before_ns <= now_ns
+        && now_ns < active.expires_at_ns
+        && active.expires_at_ns <= expected.proof.cert.expires_at_ns;
+    let safe_refresh = active.not_before_ns <= active.refresh_after_ns
+        && active.refresh_after_ns < active.expires_at_ns;
+    exact_identity && bounded_validity && safe_refresh
+}
+
+fn superseded_installation(batch: &ChainKeyRootDelegationBatch, issuer_pid: Principal) -> bool {
+    // Completion-clock ordering is not proof ordering. Equal certificate hashes
+    // can still belong to different signed batches, so compare the proof epoch.
+    RootDelegationStateOps::chain_key_root_delegation_batches()
+        .iter()
+        .any(|other| {
+            other.header.proof_epoch > batch.header.proof_epoch
+                && other.issuers.iter().any(|issuer| {
+                    issuer.issuer_pid == issuer_pid && issuer.installed_at_ns.is_some()
+                })
+        })
 }

@@ -113,7 +113,11 @@ fn metrics_command_with_bin_name(bin_name: &'static str) -> ClapCommand {
                 .value_parser(clap::builder::ValueParser::new(parse_positive_u64))
                 .help("Maximum metric rows to fetch per canister; defaults to 1000"),
         )
-        .arg(flag_arg("nonzero").long("nonzero"))
+        .arg(
+            flag_arg("nonzero")
+                .long("nonzero")
+                .help("Hide zero-valued rows after fetching up to --limit rows"),
+        )
         .arg(flag_arg("json").long("json"))
         .arg(
             flag_arg("verbose")

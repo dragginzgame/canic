@@ -339,12 +339,20 @@ fn plan_scaffold_app_at(
 
     let app_dir = app_root.join("app");
     let config_path = app_root.join("canic.toml");
-    let files = vec![
+    let mut files = vec![
         config_path.clone(),
         app_dir.join("Cargo.toml"),
         app_dir.join("build.rs"),
         app_dir.join("src/lib.rs"),
     ];
+
+    validate_workspace_member_update(
+        workspace_root,
+        &display_workspace_path(workspace_root, &app_dir),
+    )?;
+    if let Some(manifest) = workspace_manifest_path(workspace_root) {
+        files.push(manifest);
+    }
 
     Ok(ScaffoldAppPlan {
         result: ScaffoldResult {
@@ -364,6 +372,11 @@ fn scaffold_app_at(
     let result = &plan.result;
     let app_src_dir = result.app_dir.join("src");
 
+    let originals = workspace_manifest_path(workspace_root)
+        .map(|path| fs::read(&path).map(|bytes| vec![(path, bytes)]))
+        .transpose()?
+        .unwrap_or_default();
+
     let write_result = (|| {
         write_new_file(&result.config_path, &canic_toml(&options.name))?;
         write_new_file(
@@ -372,11 +385,15 @@ fn scaffold_app_at(
         )?;
         write_new_file(&result.app_dir.join("build.rs"), APP_BUILD_RS)?;
         write_new_file(&app_src_dir.join("lib.rs"), APP_LIB_RS)?;
+        append_workspace_member(
+            workspace_root,
+            &display_workspace_path(workspace_root, &result.app_dir),
+        )?;
         Ok::<(), ScaffoldCommandError>(())
     })();
 
     if let Err(operation) = write_result {
-        return match rollback_scaffold(&result.app_root, &[]) {
+        return match rollback_scaffold(&result.app_root, &originals) {
             Ok(()) => Err(operation),
             Err(rollback) => Err(ScaffoldCommandError::Rollback {
                 operation: Box::new(operation),

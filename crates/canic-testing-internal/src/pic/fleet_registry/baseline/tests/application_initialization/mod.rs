@@ -111,18 +111,25 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
     let before = allocation(&pic, fixture.root_id, member_operation);
     assert!(before.application_initialization.is_none());
     let status_refused: Result<RootStatusResponseFragment, Error> =
-        ic_testkit::pic::query_candid_args(
-            &(pic),
-            fixture.root_id,
-            target,
-            canic::protocol::CANIC_ROOT_OPERATION_STATUS,
-            (RootStatusRequestFragment::Operation(
-                OperationStatusRequest {
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args((
+                RootStatusRequestFragment::Operation(OperationStatusRequest {
                     operation_id: member_operation,
-                },
-            ),),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
+                }),
+            ))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).query_call(
+                    fixture.root_id,
+                    target,
+                    canic::protocol::CANIC_ROOT_OPERATION_STATUS,
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
         .map(|(reply,)| reply)
         .unwrap();
     assert_eq!(
@@ -134,30 +141,50 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
     );
     let mut wrong = request.clone();
     wrong.initialization.target_canister = coordinator;
-    let rejected: Result<RootCommandResponseFragment, Error> = ic_testkit::pic::update_candid_args(
-        &(pic),
-        fixture.root_id,
-        Principal::anonymous(),
-        canic::protocol::CANIC_ROOT_COMMAND,
-        (Command::BindComponentInitialization(wrong),),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .unwrap();
+    let rejected: Result<RootCommandResponseFragment, Error> =
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args((
+                Command::BindComponentInitialization(wrong),
+            ))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).update_call(
+                    fixture.root_id,
+                    Principal::anonymous(),
+                    canic::protocol::CANIC_ROOT_COMMAND,
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
+        .map(|(reply,)| reply)
+        .unwrap();
     assert_eq!(
         rejected.err().expect("target mismatch refusal").code(),
         canic::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
-    let refused: Result<RootCommandResponseFragment, Error> = ic_testkit::pic::update_candid_args(
-        &(pic),
-        fixture.root_id,
-        target,
-        canic::protocol::CANIC_ROOT_COMMAND,
-        (Command::BindComponentInitialization(request.clone()),),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .unwrap();
+    let refused: Result<RootCommandResponseFragment, Error> =
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args((
+                Command::BindComponentInitialization(request.clone()),
+            ))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).update_call(
+                    fixture.root_id,
+                    target,
+                    canic::protocol::CANIC_ROOT_COMMAND,
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
+        .map(|(reply,)| reply)
+        .unwrap();
     assert_eq!(
         refused.err().expect("controller refusal").code(),
         canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
@@ -198,16 +225,26 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
         bound.application_initialization,
         Some(request.initialization.clone())
     );
-    let replay: Result<RootCommandResponseFragment, Error> = ic_testkit::pic::update_candid_args(
-        &(pic),
-        fixture.root_id,
-        Principal::anonymous(),
-        canic::protocol::CANIC_ROOT_COMMAND,
-        (Command::BindComponentInitialization(request.clone()),),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .unwrap();
+    let replay: Result<RootCommandResponseFragment, Error> =
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args((
+                Command::BindComponentInitialization(request.clone()),
+            ))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).update_call(
+                    fixture.root_id,
+                    Principal::anonymous(),
+                    canic::protocol::CANIC_ROOT_COMMAND,
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
+        .map(|(reply,)| reply)
+        .unwrap();
     replay.unwrap();
     restart_root_during_installation(
         &pic,
@@ -220,31 +257,49 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
     await_root_provisioning(&pic, fixture.root_id, operation, |status| {
         status.root_runtime_active
     });
-    let delivered: Result<Vec<u8>, Error> = ic_testkit::pic::query_candid_args(
-        &(pic),
-        target,
-        Principal::anonymous(),
-        "managed_initialization_bytes",
-        (),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .unwrap();
+    let delivered: Result<Vec<u8>, Error> =
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args(())?;
+            let response_bytes = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).query_call(
+                    target,
+                    Principal::anonymous(),
+                    "managed_initialization_bytes",
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&response_bytes, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
+        .map(|(reply,)| reply)
+        .unwrap();
     assert_eq!(delivered.unwrap(), request.initialization.arguments);
     let installation_version = pic
         .canister_status(target, Some(fixture.root_id))
         .unwrap()
         .version;
-    let replay: Result<RootCommandResponseFragment, Error> = ic_testkit::pic::update_candid_args(
-        &(pic),
-        fixture.root_id,
-        Principal::anonymous(),
-        canic::protocol::CANIC_ROOT_COMMAND,
-        (Command::BindComponentInitialization(request.clone()),),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .unwrap();
+    let replay: Result<RootCommandResponseFragment, Error> =
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args((
+                Command::BindComponentInitialization(request.clone()),
+            ))?;
+            let response_bytes = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).update_call(
+                    fixture.root_id,
+                    Principal::anonymous(),
+                    canic::protocol::CANIC_ROOT_COMMAND,
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&response_bytes, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
+        .map(|(reply,)| reply)
+        .unwrap();
     replay.unwrap();
     assert_eq!(
         pic.canister_status(target, Some(fixture.root_id))
@@ -259,16 +314,24 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
         Some(fixture.root_id),
     )
     .unwrap();
-    let restored: Result<Vec<u8>, Error> = ic_testkit::pic::query_candid_args(
-        &(pic),
-        target,
-        Principal::anonymous(),
-        "managed_initialization_bytes",
-        (),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .unwrap();
+    let restored: Result<Vec<u8>, Error> =
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args(())?;
+            let response_bytes = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).query_call(
+                    target,
+                    Principal::anonymous(),
+                    "managed_initialization_bytes",
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&response_bytes, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
+        .map(|(reply,)| reply)
+        .unwrap();
     assert_eq!(restored.unwrap(), request.initialization.arguments);
 }
 

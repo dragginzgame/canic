@@ -20,6 +20,7 @@ use canic_core::{
     control_plane_support::{error::InternalError, format::byte_size, ops::ic::mgmt::MgmtOps},
 };
 use ic_platform::cdk::api::canister_self;
+use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
 ///
@@ -117,10 +118,24 @@ impl TemplateChunkedOps {
         let expected_chunk_hashes = chunk_set
             .as_ref()
             .map_or_else(Vec::new, |record| record.chunk_hashes.clone());
+        let mut payload_hasher = Sha256::new();
+        let mut observed_payload_bytes = Some(0_u64);
+        let mut matching_chunks = expected_chunk_count != 0
+            && expected_chunk_hashes.len() == expected_chunk_count as usize;
         let stored_chunk_hashes = (0..expected_chunk_count)
             .map(|chunk_index| {
-                TemplateChunkStore::get(&TemplateChunkKey::new(release.clone(), chunk_index))
-                    .map(|record| wasm_hash(&record.bytes))
+                let Some(chunk) =
+                    TemplateChunkStore::get(&TemplateChunkKey::new(release.clone(), chunk_index))
+                else {
+                    matching_chunks = false;
+                    return None;
+                };
+                let hash = wasm_hash(&chunk.bytes);
+                matching_chunks &= expected_chunk_hashes.get(chunk_index as usize) == Some(&hash);
+                observed_payload_bytes = observed_payload_bytes
+                    .and_then(|size| size.checked_add(chunk.bytes.len() as u64));
+                payload_hasher.update(&chunk.bytes);
+                Some(hash)
             })
             .collect::<Vec<_>>();
         let stored_chunk_count = u32::try_from(
@@ -130,27 +145,11 @@ impl TemplateChunkedOps {
                 .count(),
         )
         .unwrap_or(u32::MAX);
+        let payload_hash: [u8; 32] = payload_hasher.finalize().into();
         let complete = chunk_set.as_ref().is_some_and(|record| {
-            let Ok(payload_capacity) = usize::try_from(record.payload_size_bytes) else {
-                return false;
-            };
-            let mut payload = Vec::with_capacity(payload_capacity);
-            for (index, expected_hash) in record.chunk_hashes.iter().enumerate() {
-                let Ok(chunk_index) = u32::try_from(index) else {
-                    return false;
-                };
-                let Some(chunk) =
-                    TemplateChunkStore::get(&TemplateChunkKey::new(release.clone(), chunk_index))
-                else {
-                    return false;
-                };
-                if wasm_hash(&chunk.bytes) != *expected_hash {
-                    return false;
-                }
-                payload.extend_from_slice(&chunk.bytes);
-            }
-            payload.len() as u64 == record.payload_size_bytes
-                && wasm_hash(&payload) == record.payload_hash
+            matching_chunks
+                && observed_payload_bytes == Some(record.payload_size_bytes)
+                && payload_hash.as_slice() == record.payload_hash.as_slice()
         });
 
         TemplateStagingStatusResponse {
@@ -209,6 +208,13 @@ impl TemplateChunkedOps {
             validate_prepared_manifest(manifest, &input)?;
         }
         let (release, mut info_record) = chunk_set_record_from_input(input, created_at)?;
+        if info_record.payload_size_bytes > limits.max_store_bytes {
+            return Err(TemplateManifestOpsError::WasmStoreCapacityExceeded {
+                projected_bytes: info_record.payload_size_bytes,
+                max_store_bytes: limits.max_store_bytes,
+            }
+            .into());
+        }
         if let Some(existing) = TemplateChunkSetStateStore::get(&release) {
             // Exact retries retain the original timestamp and all uploaded chunks.
             info_record.created_at = existing.created_at;
@@ -417,6 +423,10 @@ fn chunk_set_record_from_input(
 
     let chunk_count = u32::try_from(input.chunk_hashes.len())
         .map_err(|_| TemplateManifestOpsError::ChunkIndexOverflow(release.clone()))?;
+    let maximum_payload_bytes = u64::from(chunk_count) * canic_core::CANIC_WASM_CHUNK_BYTES as u64;
+    if input.payload_size_bytes > maximum_payload_bytes {
+        return Err(InternalError::invalid_input());
+    }
     let record = TemplateChunkSetRecord {
         payload_hash: input.payload_hash,
         payload_size_bytes: input.payload_size_bytes,
@@ -602,6 +612,10 @@ fn chunk_entry_store_bytes(chunk_key: &TemplateChunkKey, record: &TemplateChunkR
         + record.bytes.len()) as u64
 }
 
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -649,6 +663,168 @@ mod tests {
                 max_template_versions_per_template: Some(1),
             },
         )
+    }
+
+    #[test]
+    fn staging_status_streams_complete_payload_and_preserves_partial_progress() {
+        reset_store();
+        let (mut request, mut limits) = combined_preparation();
+        let chunks = [vec![1; canic_core::CANIC_WASM_CHUNK_BYTES], vec![2; 17]];
+        request.manifest = None;
+        request.payload_size_bytes = chunks.iter().map(|chunk| chunk.len() as u64).sum();
+        request.payload_hash = wasm_hash(&chunks.concat());
+        request.chunk_hashes = chunks.iter().map(|chunk| wasm_hash(chunk)).collect();
+        limits.max_store_bytes = request.payload_size_bytes * 2;
+        let absent =
+            TemplateChunkedOps::staging_status_response(&request.template_id, &request.version);
+        assert!(!absent.chunk_set_present);
+        assert!(!absent.complete);
+        assert!(absent.stored_chunk_hashes.is_empty());
+        TemplateChunkedOps::prepare_chunk_set_in_store_from_input(request.clone(), 10, limits)
+            .unwrap();
+        for (index, bytes) in chunks.into_iter().enumerate() {
+            let chunk_index = u32::try_from(index).unwrap();
+            let partial =
+                TemplateChunkedOps::staging_status_response(&request.template_id, &request.version);
+            assert!(!partial.complete);
+            assert_eq!(partial.stored_chunk_count, chunk_index);
+            assert_eq!(partial.stored_chunk_hashes[index], None);
+            TemplateChunkedOps::publish_chunk_in_store_from_input(
+                TemplateChunkInput {
+                    preparation: None,
+                    template_id: request.template_id.clone(),
+                    version: request.version.clone(),
+                    chunk_index,
+                    bytes,
+                },
+                20,
+                limits,
+            )
+            .unwrap();
+        }
+        let complete =
+            TemplateChunkedOps::staging_status_response(&request.template_id, &request.version);
+        assert!(complete.complete);
+        assert_eq!(complete.stored_chunk_count, 2);
+        assert_eq!(complete.expected_chunk_hashes, request.chunk_hashes);
+        assert_eq!(
+            complete.stored_chunk_hashes,
+            request
+                .chunk_hashes
+                .into_iter()
+                .map(Some)
+                .collect::<Vec<_>>(),
+        );
+        assert_eq!(
+            complete.payload_size_bytes,
+            Some(request.payload_size_bytes)
+        );
+        assert_eq!(complete.payload_hash, Some(request.payload_hash));
+    }
+
+    #[test]
+    fn staging_status_refuses_inconsistent_evidence_without_declared_size_allocation() {
+        reset_store();
+        let (request, limits) = combined_preparation();
+        TemplateChunkedOps::publish_chunk_in_store_from_input(
+            TemplateChunkInput {
+                preparation: Some(request.clone()),
+                template_id: request.template_id.clone(),
+                version: request.version.clone(),
+                chunk_index: 0,
+                bytes: vec![9; 32],
+            },
+            10,
+            limits,
+        )
+        .unwrap();
+        let release = TemplateReleaseKey::new(request.template_id.clone(), request.version.clone());
+        let original = TemplateChunkSetStateStore::get(&release).unwrap();
+        for candidate in [
+            TemplateChunkSetRecord {
+                payload_size_bytes: u64::MAX,
+                ..original.clone()
+            },
+            TemplateChunkSetRecord {
+                payload_size_bytes: 33,
+                ..original.clone()
+            },
+            TemplateChunkSetRecord {
+                payload_hash: vec![0; 32],
+                ..original.clone()
+            },
+            TemplateChunkSetRecord {
+                chunk_hashes: vec![vec![0; 32]],
+                ..original.clone()
+            },
+            TemplateChunkSetRecord {
+                chunk_count: 0,
+                ..original.clone()
+            },
+        ] {
+            TemplateChunkSetStateStore::upsert(release.clone(), candidate);
+            let status =
+                TemplateChunkedOps::staging_status_response(&request.template_id, &request.version);
+            assert!(!status.complete);
+        }
+        TemplateChunkSetStateStore::upsert(release.clone(), original);
+        let bytes = vec![8; 32];
+        TemplateChunkStore::upsert(
+            TemplateChunkKey::new(release, 0),
+            TemplateChunkRecord {
+                bytes: bytes.clone(),
+            },
+        );
+        let status =
+            TemplateChunkedOps::staging_status_response(&request.template_id, &request.version);
+        assert!(!status.complete);
+        assert_eq!(status.stored_chunk_count, 1);
+        assert_eq!(status.stored_chunk_hashes, vec![Some(wasm_hash(&bytes))]);
+    }
+
+    #[test]
+    fn preparation_rejects_unrepresentable_payload_sizes_before_any_write() {
+        let chunk_ceiling = canic_core::CANIC_WASM_CHUNK_BYTES as u64;
+        let invalid_code = InternalError::invalid_input().public_error().code();
+        let capacity_code = canic_contracts::diagnostics::codes::CAPACITY_LIMIT.raw_code();
+        for first_chunk in [false, true] {
+            for (size, store_limit, expected_code) in [
+                (chunk_ceiling + 1, u64::MAX, invalid_code),
+                (u64::MAX, u64::MAX, invalid_code),
+                (chunk_ceiling, 10_000, capacity_code),
+            ] {
+                reset_store();
+                let (mut request, mut limits) = combined_preparation();
+                request.payload_size_bytes = size;
+                request.manifest.as_mut().unwrap().payload_size_bytes = size;
+                limits.max_store_bytes = store_limit;
+                let result = if first_chunk {
+                    TemplateChunkedOps::publish_chunk_in_store_from_input(
+                        TemplateChunkInput {
+                            template_id: request.template_id.clone(),
+                            version: request.version.clone(),
+                            preparation: Some(request),
+                            chunk_index: 0,
+                            bytes: vec![9; 32],
+                        },
+                        10,
+                        limits,
+                    )
+                } else {
+                    TemplateChunkedOps::prepare_chunk_set_in_store_from_input(request, 10, limits)
+                        .map(|_| ())
+                };
+                assert_eq!(result.unwrap_err().public_error().code(), expected_code);
+                assert!(TemplateManifestStateStore::export().entries.is_empty());
+                assert!(TemplateChunkSetStateStore::export().entries.is_empty());
+                assert_eq!(TemplateChunkStore::count(), 0);
+            }
+        }
+        let (mut request, mut limits) = combined_preparation();
+        request.manifest = None;
+        request.payload_size_bytes = chunk_ceiling;
+        limits.max_store_bytes = chunk_ceiling;
+        TemplateChunkedOps::prepare_chunk_set_in_store_from_input(request, 10, limits).unwrap();
     }
 
     #[test]

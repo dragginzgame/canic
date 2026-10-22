@@ -50,7 +50,7 @@ impl RuntimeAuthWorkflow {
         let result = install_chain_key_delegation_proofs(
             root_proof.header.batch_id,
             vec![proof],
-            IcOps::now_nanos(),
+            IcOps::now_nanos,
             install_delegation_proof_on_issuer,
         )
         .await;
@@ -90,8 +90,9 @@ impl RuntimeAuthWorkflow {
             return Err(InternalError::auth_proof_pending());
         }
 
-        let proof = AuthOps::signed_chain_key_delegation_proof_for_issuer(issuer_pid, now_ns)?
-            .ok_or_else(InternalError::auth_proof_pending)?;
+        let proof =
+            AuthOps::signed_chain_key_delegation_proof_for_issuer(issuer_pid, IcOps::now_nanos())?
+                .ok_or_else(InternalError::auth_proof_pending)?;
         crate::perf!("root_proof_load_issuer");
         Ok(proof)
     }
@@ -99,12 +100,11 @@ impl RuntimeAuthWorkflow {
 
 pub(super) async fn install_chain_key_delegation_proof_batch(
     plan: ChainKeyRootDelegationBatchInstallPlan,
-    now_ns: u64,
 ) -> ChainKeyDelegationProofBatchInstallOutcome {
     let result = install_chain_key_delegation_proofs(
         plan.batch_id,
         plan.proofs,
-        now_ns,
+        IcOps::now_nanos,
         install_delegation_proof_on_issuer,
     )
     .await;
@@ -119,12 +119,12 @@ pub(super) async fn install_chain_key_delegation_proof_batch(
 async fn install_chain_key_delegation_proofs<F, Fut>(
     batch_id: [u8; 32],
     proofs: Vec<RootDelegationProofBatchProof>,
-    now_ns: u64,
+    completion_clock: impl Fn() -> u64,
     mut install_issuer: F,
 ) -> ChainKeyDelegationProofBatchInstallResult
 where
     F: FnMut(Principal, InstallActiveDelegationProofRequest) -> Fut,
-    Fut: Future<Output = Result<(), IssuerProofInstallError>>,
+    Fut: Future<Output = Result<InstallActiveDelegationProofResponse, IssuerProofInstallError>>,
 {
     let mut installed_count = 0u64;
     let mut first_failure = None;
@@ -136,14 +136,20 @@ where
             InstallActiveDelegationProofRequest { proof: proof.proof },
         )
         .await;
-        match result {
-            Ok(()) => {
-                if AuthOps::record_chain_key_root_delegation_install_success(
-                    batch_id, issuer_pid, cert_hash, now_ns,
-                ) {
-                    installed_count = installed_count.saturating_add(1);
-                }
+        let result = result.and_then(|response| {
+            if AuthOps::record_chain_key_root_delegation_install_success(
+                batch_id,
+                issuer_pid,
+                &response.active_proof,
+                completion_clock(),
+            ) {
+                Ok(())
+            } else {
+                Err(IssuerProofInstallError::InvalidResponse)
             }
+        });
+        match result {
+            Ok(()) => installed_count = installed_count.saturating_add(1),
             Err(failure) => {
                 AuthOps::record_chain_key_root_delegation_install_failure(
                     batch_id,
@@ -166,7 +172,7 @@ where
 async fn install_delegation_proof_on_issuer(
     issuer_pid: Principal,
     request: InstallActiveDelegationProofRequest,
-) -> Result<(), IssuerProofInstallError> {
+) -> Result<InstallActiveDelegationProofResponse, IssuerProofInstallError> {
     let builder = CallOps::unbounded_wait(issuer_pid, protocol::CANIC_COMMAND)
         .with_arg(IssuerCommandFragment::InstallDelegationProof(request))
         .map_err(|_| IssuerProofInstallError::RequestEncoding)?;
@@ -177,7 +183,9 @@ async fn install_delegation_proof_on_issuer(
     issuer_install_outcome(call)
 }
 
-fn issuer_install_outcome(call: CallResult) -> Result<(), IssuerProofInstallError> {
+fn issuer_install_outcome(
+    call: CallResult,
+) -> Result<InstallActiveDelegationProofResponse, IssuerProofInstallError> {
     let result: Result<IssuerCommandResponseFragment, Error> = call
         .candid()
         .map_err(|_| IssuerProofInstallError::InvalidResponse)?;
@@ -188,9 +196,9 @@ fn issuer_install_outcome(call: CallResult) -> Result<(), IssuerProofInstallErro
 
 fn issuer_install_response(
     result: Result<InstallActiveDelegationProofResponse, Error>,
-) -> Result<(), IssuerProofInstallError> {
+) -> Result<InstallActiveDelegationProofResponse, IssuerProofInstallError> {
     match result {
-        Ok(_) => Ok(()),
+        Ok(response) => Ok(response),
         Err(err) => Err(IssuerProofInstallError::RejectedByIssuer(err)),
     }
 }
@@ -341,8 +349,8 @@ mod tests {
         let result = block_on(install_chain_key_delegation_proofs(
             [1; 32],
             vec![],
-            20,
-            |_issuer_pid, _request| async { Ok(()) },
+            || 20,
+            |_issuer_pid, _request| async { Err(IssuerProofInstallError::InvalidResponse) },
         ));
 
         assert_eq!(result.installed_count, 0);
@@ -355,7 +363,7 @@ mod tests {
         let result = block_on(install_chain_key_delegation_proofs(
             [2; 32],
             vec![proof()],
-            20,
+            || 20,
             |issuer_pid, _request| {
                 assert_eq!(issuer_pid, p(2));
                 calls.set(calls.get() + 1);
@@ -370,6 +378,110 @@ mod tests {
         assert_eq!(calls.get(), 1);
         assert_eq!(result.installed_count, 0);
         assert!(result.first_failure.is_some());
+    }
+
+    fn retain_installation(proof: &RootDelegationProofBatchProof) -> [u8; 32] {
+        use crate::ops::storage::auth::{
+            ChainKeyRootDelegationBatch, ChainKeyRootDelegationBatchIssuer,
+            ChainKeyRootDelegationBatchStatus, RootDelegationStateOps,
+        };
+        let RootProof::IcChainKeyBatchSignatureV1(root) = &proof.proof.root_proof;
+        let batch_id = root.header.batch_id;
+        RootDelegationStateOps::upsert_chain_key_root_delegation_batch(
+            ChainKeyRootDelegationBatch {
+                batch_id,
+                status: ChainKeyRootDelegationBatchStatus::Installing,
+                header_hash: [0; 32],
+                header: root.header.clone(),
+                signature: Some(root.signature.clone()),
+                issuers: vec![ChainKeyRootDelegationBatchIssuer {
+                    issuer_pid: proof.issuer_pid,
+                    cert_hash: proof.cert_hash,
+                    delegation_cert: proof.proof.cert.clone(),
+                    chain_key_delegation_cert: root.delegation_cert.clone(),
+                    issuer_witness: root.issuer_witness.clone(),
+                    refresh_after_ns: 90,
+                    installed_at_ns: None,
+                    last_failure: None,
+                }],
+                prepared_at_ns: 10,
+                signed_at_ns: Some(11),
+                install_started_at_ns: Some(20),
+                installed_at_ns: None,
+                retry_after_ns: None,
+                failure: None,
+            },
+        );
+        batch_id
+    }
+
+    #[test]
+    fn installer_preserves_effective_deadlines_through_typed_callback() {
+        use crate::ops::storage::auth::RootDelegationStateOps;
+        let requested = proof();
+        let batch_id = retain_installation(&requested);
+        let result = block_on(install_chain_key_delegation_proofs(
+            batch_id,
+            vec![requested],
+            || 30,
+            |_issuer, request| async move {
+                Ok(InstallActiveDelegationProofResponse {
+                    active_proof: crate::dto::auth::ActiveDelegationProof {
+                        proof: request.proof,
+                        cert_hash: [3; 32],
+                        not_before_ns: 10,
+                        expires_at_ns: 60,
+                        refresh_after_ns: 50,
+                        installed_at_ns: 21,
+                        installed_by: p(1),
+                    },
+                })
+            },
+        ));
+        assert_eq!(result.installed_count, 1);
+        assert!(result.first_failure.is_none());
+        let state = RootDelegationStateOps::root_issuer_renewal_state(p(2)).unwrap();
+        assert_eq!(state.last_installed_expires_at_ns, Some(60));
+        assert_eq!(state.last_installed_refresh_after_ns, Some(50));
+        assert_eq!(state.next_attempt_after_ns, 50);
+        assert_eq!(state.updated_at_ns, 30);
+    }
+
+    #[test]
+    fn installer_reads_completion_clock_after_await_and_rejects_expired_reply() {
+        let batch_id = retain_installation(&proof());
+        let clock = Cell::new(20);
+        let observed = Cell::new(0);
+        let result = block_on(install_chain_key_delegation_proofs(
+            batch_id,
+            vec![proof()],
+            || {
+                observed.set(clock.get());
+                clock.get()
+            },
+            |_issuer, request| {
+                clock.set(100);
+                async move {
+                    Ok(InstallActiveDelegationProofResponse {
+                        active_proof: crate::dto::auth::ActiveDelegationProof {
+                            proof: request.proof,
+                            cert_hash: [3; 32],
+                            not_before_ns: 10,
+                            expires_at_ns: 100,
+                            refresh_after_ns: 80,
+                            installed_at_ns: 20,
+                            installed_by: p(1),
+                        },
+                    })
+                }
+            },
+        ));
+        assert_eq!(observed.get(), 100);
+        assert_eq!(result.installed_count, 0);
+        assert!(matches!(
+            result.first_failure,
+            Some(IssuerProofInstallError::InvalidResponse)
+        ));
     }
 
     #[test]

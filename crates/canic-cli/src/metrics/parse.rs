@@ -4,14 +4,17 @@
 //! Does not own: ICP command execution, metric collection, or report rendering.
 //! Boundary: projects typed pages received by the current observability transport.
 
-use crate::metrics::model::{MetricEntry, MetricValue};
+use crate::metrics::model::{MetricEntry, MetricValue, MetricsPage};
 use canic_contracts::dto::{
     metrics::{MetricEntry as MetricEntryDto, MetricValue as MetricValueDto},
     page::Page,
 };
 
-pub(super) fn metric_page(page: Page<MetricEntryDto>) -> Vec<MetricEntry> {
-    page.entries.into_iter().map(metric_entry).collect()
+pub(super) fn metric_page(page: Page<MetricEntryDto>) -> MetricsPage {
+    MetricsPage {
+        entries: page.entries.into_iter().map(metric_entry).collect(),
+        total: page.total,
+    }
 }
 
 fn metric_entry(entry: MetricEntryDto) -> MetricEntry {

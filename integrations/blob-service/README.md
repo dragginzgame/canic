@@ -4,22 +4,18 @@ Endpoint, lifecycle and metrics composition for the independent IC Blob service.
 Applications own their Canic App configuration and canister artifacts. IC Blob
 owns storage, tenant policy, accounting and provider behavior.
 
-This package is published at 0.111.0 with the coherent Canic family
-([#33](https://github.com/dragginzgame/canic/issues/33)). It belongs to the main
-Canic workspace and inherits its package version, Canic dependency and published
-Blob runtime/contracts `0.35` from the root catalog. The upstream
-contracts macro owns service method signatures; the adapter supplies Canic
-authentication, bounded decoding, caller context and lifecycle composition.
-Local paths support
-qualification in this checkout; Cargo removes them from the packaged manifest.
-Application installation and provider acceptance remain tracked under
-[#444](https://github.com/dragginzgame/canic/issues/444).
+This package belongs to the main Canic workspace and inherits its package
+version, Canic dependency and published Blob runtime/contracts requirement from
+the [root catalog](../../Cargo.toml). See the [current handoff](../../docs/status/current.md)
+for qualified versions; pending checkout changes do not describe older published adapters.
+The upstream contracts macro owns service method signatures; the adapter supplies
+Canic authentication, bounded decoding, caller context and lifecycle composition.
+Local paths support qualification in this checkout; Cargo removes them from the
+packaged manifest. Application installation and provider acceptance remain tracked
+under [#444](https://github.com/dragginzgame/canic/issues/444).
 
-The coordinated release is owned by
-[#459](https://github.com/dragginzgame/canic/issues/459) and
-[#444](https://github.com/dragginzgame/canic/issues/444). The adapter shares the
-approved Canic release version. The workspace publisher publishes and observes
-its Canic dependency before publishing the adapter in the same family:
+The workspace publisher publishes and observes the matching Canic dependency
+before publishing the adapter in the same family:
 
 ```sh
 make publish

@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+bash "$ROOT/scripts/ci/test-current-document-semantics.sh"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/canic-document-guards.XXXXXX")"
 trap 'rm -rf "$fixture"' EXIT
 

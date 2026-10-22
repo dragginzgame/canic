@@ -30,18 +30,7 @@ pub(super) fn qualify(fixture: &super::ManagedLifecycleFixture, target: Principa
     let pic = &fixture.pic;
     pic.add_cycles(target, super::SNAPSHOT_RESTORE_MINIMUM_CYCLES);
     let root = fixture.root;
-    let response: Result<StatusResponse, Error> = ic_testkit::pic::query_candid_args(
-        pic,
-        target,
-        root,
-        canic::protocol::CANIC_CONTROL_STATUS,
-        (StatusRequest::CallerAuthority(OperationStatusRequest {
-            operation_id: [0; 32],
-        }),),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .unwrap();
+    let response: Result<StatusResponse, Error> = caller_authority_status(pic, target, root);
     let StatusResponse::CallerAuthority(status) = response.unwrap();
     let first = Binding {
         authority: status.authority,
@@ -177,28 +166,42 @@ fn verify_restore_release(
 }
 
 fn view(pic: &PocketIc, target: Principal) -> CheckpointView {
-    ic_testkit::pic::query_candid_args::<(Result<CheckpointView, Error>,), _>(
-        pic,
-        target,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        "checkpoint_view",
-        (),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+    (|| -> Result<(Result<CheckpointView, Error>,), Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes = ic_platform::candid::contract::encode_args(())?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (pic).query_call(
+                target,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                "checkpoint_view",
+                request_bytes,
+            )
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .unwrap()
     .unwrap()
 }
 
 fn increment(pic: &PocketIc, target: Principal) -> Result<u64, Error> {
-    ic_testkit::pic::update_candid_args(
-        pic,
-        target,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        "checkpoint_increment",
-        (),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes = ic_platform::candid::contract::encode_args(())?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (pic).update_call(
+                target,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                "checkpoint_increment",
+                request_bytes,
+            )
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .unwrap()
 }
@@ -210,14 +213,16 @@ fn transition(
     binding: &Binding,
     phase: Phase,
 ) -> Result<Phase, Error> {
-    ic_testkit::pic::update_candid_args(
-        pic,
-        target,
-        root,
-        "checkpoint_transition",
-        (binding, phase),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes = ic_platform::candid::contract::encode_args((binding, phase))?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (pic).update_call(target, root, "checkpoint_transition", request_bytes)
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .unwrap()
 }
@@ -240,14 +245,44 @@ fn restore(
     captured: &Binding,
     fresh: &Binding,
 ) -> Result<Phase, Error> {
-    ic_testkit::pic::update_candid_args(
-        pic,
-        target,
-        root,
-        "checkpoint_restore",
-        (captured, fresh),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes = ic_platform::candid::contract::encode_args((captured, fresh))?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (pic).update_call(target, root, "checkpoint_restore", request_bytes)
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
+    .map(|(reply,)| reply)
+    .unwrap()
+}
+
+fn caller_authority_status(
+    pic: &PocketIc,
+    target: Principal,
+    root: Principal,
+) -> Result<StatusResponse, Error> {
+    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes = ic_platform::candid::contract::encode_args((
+            StatusRequest::CallerAuthority(OperationStatusRequest {
+                operation_id: [0; 32],
+            }),
+        ))?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (pic).query_call(
+                target,
+                root,
+                canic::protocol::CANIC_CONTROL_STATUS,
+                request_bytes,
+            )
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .unwrap()
 }

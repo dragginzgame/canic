@@ -214,7 +214,6 @@ impl LifecycleApi {
         runtime_authority: RoleRuntimeAuthority,
         config: ConfigModel,
         config_source: &str,
-        config_path: &str,
     ) {
         let bootstrap_initialization = args
             .capacity_import_bootstrap
@@ -231,7 +230,6 @@ impl LifecycleApi {
             runtime_authority,
             config,
             config_source,
-            config_path,
         );
         if let Some(args) = bootstrap_initialization {
             crate::ops::canister_pool::capacity_import::bootstrap::initialize(&args)
@@ -611,7 +609,6 @@ impl LifecycleApi {
         runtime_authority: RoleRuntimeAuthority,
         config: ConfigModel,
         config_source: &str,
-        config_path: &str,
     ) -> bool {
         crate::runtime::root_funding::register();
         let active =
@@ -620,7 +617,6 @@ impl LifecycleApi {
                 runtime_authority,
                 config,
                 config_source,
-                config_path,
             );
         crate::workflow::component_registry::caller_authority::restore().unwrap_or_else(|error| {
             IcOps::trap(format!("Root caller publication restore failed: {error}"))

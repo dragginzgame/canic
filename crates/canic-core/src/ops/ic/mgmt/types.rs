@@ -54,13 +54,14 @@ pub struct CanisterSettings {
 /// UpdateSettingsArgs
 ///
 /// Operations-layer arguments for management canister settings updates.
+/// The management request binds the sender version to the current execution
+/// when these arguments are converted; callers cannot override that binding.
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UpdateSettingsArgs {
     pub canister_id: Principal,
     pub settings: CanisterSettings,
-    pub sender_canister_version: Option<u64>,
 }
 
 ///

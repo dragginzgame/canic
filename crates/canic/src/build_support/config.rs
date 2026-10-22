@@ -1,6 +1,5 @@
 use canic_contracts::ids::CanisterRole;
 use canic_core::bootstrap::{
-    compact_config_source,
     compiled::{ConfigModel, validate_canister_role_name},
     emit_config_model_source, emit_role_runtime_authority_source,
 };
@@ -11,7 +10,7 @@ use toml::Value as TomlValue;
 
 #[derive(Clone, Debug)]
 pub struct RootBuildSources {
-    pub compact_config: String,
+    pub config_toml: String,
     pub config_model: String,
 }
 
@@ -48,7 +47,6 @@ pub struct PackageCanicMetadata {
 /// Compile only the generated sources owned by one exact role artifact.
 pub fn compile_role_build_sources(
     config: &ConfigModel,
-    config_source: &str,
     role: &CanisterRole,
     wasm_store: bool,
 ) -> Result<RoleBuildSources, RoleBuildSourcesError> {
@@ -56,10 +54,16 @@ pub fn compile_role_build_sources(
         .map_err(|error| RoleBuildSourcesError {
             detail: error.to_string(),
         })?;
-    let root = role.is_root().then(|| RootBuildSources {
-        compact_config: compact_config_source(config_source),
-        config_model: emit_config_model_source(config),
-    });
+    let root = if role.is_root() {
+        Some(RootBuildSources {
+            config_toml: toml::to_string(config).map_err(|error| RoleBuildSourcesError {
+                detail: error.to_string(),
+            })?,
+            config_model: emit_config_model_source(config),
+        })
+    } else {
+        None
+    };
 
     Ok(RoleBuildSources {
         role_runtime_authority,
@@ -142,7 +146,7 @@ pub fn read_config_source_or_default(
 
 /// Read optional Canic metadata declared in the package manifest.
 #[must_use]
-pub fn declared_package_metadata(manifest_dir: &Path) -> Option<PackageCanicMetadata> {
+fn declared_package_metadata(manifest_dir: &Path) -> Option<PackageCanicMetadata> {
     let manifest = fs::read_to_string(manifest_dir.join("Cargo.toml")).ok()?;
     let canic = toml::from_str::<TomlValue>(&manifest)
         .ok()?
@@ -154,12 +158,6 @@ pub fn declared_package_metadata(manifest_dir: &Path) -> Option<PackageCanicMeta
     let role = canic.get("role")?.as_str()?.to_string();
 
     Some(PackageCanicMetadata { app, role })
-}
-
-/// Read an optional Canic role declared in the package manifest metadata.
-#[must_use]
-pub fn declared_package_role(manifest_dir: &Path) -> Option<String> {
-    declared_package_metadata(manifest_dir).map(|metadata| metadata.role)
 }
 
 /// Read the required Canic metadata declared in package manifest metadata.
@@ -179,12 +177,6 @@ pub fn required_package_metadata(manifest_dir: &Path) -> PackageCanicMetadata {
     })
 }
 
-/// Read the required Canic role declared in package manifest metadata.
-#[must_use]
-pub fn required_package_role(manifest_dir: &Path) -> String {
-    required_package_metadata(manifest_dir).role
-}
-
 /// Return whether a validated config declares the requested App role.
 #[must_use]
 pub fn config_declares_role(config: &ConfigModel, app_id: &str, role_name: &str) -> bool {
@@ -198,12 +190,6 @@ pub fn config_declares_role(config: &ConfigModel, app_id: &str, role_name: &str)
 #[must_use]
 pub const fn config_app_id(config: &ConfigModel) -> &str {
     config.app_id().as_str()
-}
-
-/// Return whether a validated config contains the requested canister role.
-#[must_use]
-pub fn config_contains_role(config: &ConfigModel, role_name: &str) -> bool {
-    config_declares_role(config, config.app_id().as_str(), role_name)
 }
 
 /// Render the minimal declared-only config needed by a standalone non-root canister.
@@ -319,13 +305,8 @@ maximum_instances = 1
     fn role_build_sources_retain_full_configuration_only_for_root() {
         let config = parse_config_model(ROLE_BUILD_CONFIG).expect("build config parses");
 
-        let ordinary = compile_role_build_sources(
-            &config,
-            ROLE_BUILD_CONFIG,
-            &CanisterRole::from("app"),
-            false,
-        )
-        .expect("ordinary build sources compile");
+        let ordinary = compile_role_build_sources(&config, &CanisterRole::from("app"), false)
+            .expect("ordinary build sources compile");
         assert!(ordinary.root.is_none());
         assert!(
             ordinary
@@ -333,9 +314,8 @@ maximum_instances = 1
                 .contains("RoleRuntimeAuthority")
         );
 
-        let wasm_store =
-            compile_role_build_sources(&config, ROLE_BUILD_CONFIG, &CanisterRole::WASM_STORE, true)
-                .expect("Store build sources compile");
+        let wasm_store = compile_role_build_sources(&config, &CanisterRole::WASM_STORE, true)
+            .expect("Store build sources compile");
         assert!(wasm_store.root.is_none());
         assert!(
             wasm_store
@@ -343,12 +323,69 @@ maximum_instances = 1
                 .contains("RuntimeCanisterConfig")
         );
 
-        let root =
-            compile_role_build_sources(&config, ROLE_BUILD_CONFIG, &CanisterRole::ROOT, false)
-                .expect("Root build sources compile");
+        let root = compile_role_build_sources(&config, &CanisterRole::ROOT, false)
+            .expect("Root build sources compile");
         let root_sources = root.root.expect("Root owns full configuration outputs");
         assert!(root_sources.config_model.contains("ConfigModel"));
-        assert!(root_sources.compact_config.contains("[roles.root]"));
+        let reported: TomlValue = toml::from_str(&root_sources.config_toml).unwrap();
+        assert_eq!(reported["roles"]["root"]["kind"].as_str(), Some("root"));
+    }
+
+    #[test]
+    fn root_config_toml_preserves_multiline_values_and_defaults() {
+        let package = "  app\n# part of the package path\n\n  directory\n";
+        let source =
+            ROLE_BUILD_CONFIG.replace("package = \"app\"", &format!("package = '''\n{package}'''"));
+        let config = parse_config_model(&source).unwrap();
+        let sources = compile_role_build_sources(&config, &CanisterRole::ROOT, false)
+            .unwrap()
+            .root
+            .unwrap();
+        let reported: TomlValue = toml::from_str(&sources.config_toml).unwrap();
+        assert_eq!(reported["roles"]["app"]["package"].as_str(), Some(package));
+        assert_eq!(
+            reported["log"]["max_entries"].as_integer(),
+            Some(i64::try_from(config.log.max_entries).unwrap()),
+        );
+        assert_eq!(reported, TomlValue::try_from(&config).unwrap());
+    }
+
+    #[test]
+    fn root_config_toml_includes_resolved_public_verification_data() {
+        let source = include_str!("../../../../canisters/test/delegation_root_stub/canic.toml")
+            .lines()
+            .filter(|line| {
+                !line.starts_with("public_key_hex =")
+                    && !line.starts_with("derivation_path_hash_hex =")
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+            .replace(
+                "enabled = true",
+                "enabled = true\nroot_canister_id = \"5lnwm-ziaaa-aaaae-agtqa-cai\"",
+            )
+            .replace(
+                "key_id = \"key_1\"",
+                "key_id = \"key_1\"\npublic_key_derivation = \"pocketic\"",
+            );
+        let config = parse_config_model(&source).unwrap();
+        let sources = compile_role_build_sources(&config, &CanisterRole::ROOT, false)
+            .unwrap()
+            .root
+            .unwrap();
+        let reported: TomlValue = toml::from_str(&sources.config_toml).unwrap();
+        let expected = &config.auth.delegated_tokens.chain_key_root_proof;
+        assert!(expected.public_key_hex.is_some());
+        assert!(expected.derivation_path_hash_hex.is_some());
+        let proof = &reported["auth"]["delegated_tokens"]["chain_key_root_proof"];
+        assert_eq!(
+            proof["public_key_hex"].as_str(),
+            expected.public_key_hex.as_deref()
+        );
+        assert_eq!(
+            proof["derivation_path_hash_hex"].as_str(),
+            expected.derivation_path_hash_hex.as_deref(),
+        );
     }
 
     #[test]
@@ -420,7 +457,7 @@ kind = "root"
     }
 
     #[test]
-    fn declared_package_role_reads_canic_metadata() {
+    fn declared_package_metadata_reads_canic_metadata() {
         let dir = std::env::temp_dir().join(format!("canic-role-metadata-{}", std::process::id()));
         fs::create_dir_all(&dir).expect("create temp manifest dir");
         fs::write(
@@ -437,15 +474,14 @@ role = "scale_replica"
         )
         .expect("write manifest");
 
-        assert_eq!(
-            declared_package_role(&dir).as_deref(),
-            Some("scale_replica")
-        );
+        let metadata = declared_package_metadata(&dir).unwrap();
+        assert_eq!(metadata.app, "test");
+        assert_eq!(metadata.role, "scale_replica");
         fs::remove_dir_all(&dir).expect("remove temp manifest dir");
     }
 
     #[test]
-    fn required_package_role_rejects_missing_canic_metadata() {
+    fn required_package_metadata_rejects_missing_canic_metadata() {
         let dir = std::env::temp_dir().join(format!(
             "canic-missing-role-metadata-{}",
             std::process::id()
@@ -461,20 +497,12 @@ edition = "2024"
         )
         .expect("write manifest");
 
-        let panic = std::panic::catch_unwind(|| required_package_role(&dir))
-            .expect_err("missing metadata should panic");
-        let message = panic
-            .downcast_ref::<String>()
-            .map(String::as_str)
-            .or_else(|| panic.downcast_ref::<&str>().copied())
-            .expect("panic should include a message");
-
-        assert!(message.contains("missing Canic package metadata"));
+        assert!(std::panic::catch_unwind(|| required_package_metadata(&dir)).is_err());
         fs::remove_dir_all(&dir).expect("remove temp manifest dir");
     }
 
     #[test]
-    fn config_contains_role_accepts_exact_metadata_role() {
+    fn config_declares_role_accepts_exact_metadata_role() {
         let cfg = parse_config_model(
             r#"
 
@@ -499,12 +527,14 @@ maximum_instances = 1
         )
         .expect("config parses");
 
-        assert!(config_contains_role(&cfg, "root"));
-        assert!(config_contains_role(&cfg, "app"));
+        assert!(config_declares_role(&cfg, "test", "root"));
+        assert!(config_declares_role(&cfg, "test", "app"));
+        assert!(!config_declares_role(&cfg, "other", "root"));
+        assert!(!config_declares_role(&cfg, "other", "app"));
     }
 
     #[test]
-    fn config_contains_role_rejects_role_typos() {
+    fn config_declares_role_rejects_role_typos() {
         let cfg = parse_config_model(
             r#"
 
@@ -529,8 +559,8 @@ maximum_instances = 1
         )
         .expect("config parses");
 
-        assert!(!config_contains_role(&cfg, "Root"));
-        assert!(!config_contains_role(&cfg, "roots"));
-        assert!(!config_contains_role(&cfg, "missing"));
+        assert!(!config_declares_role(&cfg, "test", "Root"));
+        assert!(!config_declares_role(&cfg, "test", "roots"));
+        assert!(!config_declares_role(&cfg, "test", "missing"));
     }
 }

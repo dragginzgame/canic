@@ -30,6 +30,13 @@ session admission is unavailable. Bounded storage and restoration fixtures are
 implementation evidence, not a live login service. Track completion in
 [#491](https://github.com/dragginzgame/canic/issues/491).
 
+Application account identity is the pair (issuer, subject). The
+AuthorizedApplicationSubject result retains both fields; applications must not
+key accounts by subject alone or substitute the browser's transport caller.
+Session and replay capacity are accounted by browser caller, within receiver-wide
+bounds. Logout targets that browser caller; it does not log out another device
+or merge accounts that share a subject.
+
 Custom guards implement synchronous `canic::access::AccessCheck`. Admission uses
 local state and supplied proofs; issuance and renewal may perform asynchronous
 calls outside admission.

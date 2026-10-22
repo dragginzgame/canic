@@ -91,6 +91,11 @@ diagnostics, authority restoration or Fleet readiness. Present it as
 Fleet convergence evidence for readiness decisions. Regenerate bindings for the
 current public enum; protected diagnostic health retains its own contract.
 
+The Coordinator, Root, Wasm Store and managed roles expose the public
+`icrc10_supported_standards` query through the shared standards endpoint bundle.
+It advertises ICRC-10; ICRC-21 is included only when that profile enables its
+consent endpoint. Standards discovery does not grant protected inspection access.
+
 Canonical Store and Coordinator Candid must be generated with the host's
 `build_artifact --refresh-canonical-did` flow after changing shared public DTOs or
 endpoint macros. Structural Candid equality does not establish the exact bytes
@@ -354,6 +359,13 @@ The response reports limits, reserved bytes, coverage, cadence and staleness.
 Replies contain at most 288 points, regardless of the requested limit. The history
 budget excludes the independently bounded latest snapshots, query reply buffers
 and application-owned input allocation.
+
+History `truncated` describes admission during the selected family's latest
+accepted sampling pass. A pass with no history rejection, including an empty
+pass, clears that family's flag. Sampling another family preserves its result;
+failed snapshot validation preserves the prior result. Queries only read it.
+Missing retained slots remain gaps; coverage and points describe that history.
+The latest snapshot's independent row-cap flag belongs to its own response.
 
 Every point carries the original `observed_at_ns`, unit (on the series) and a
 `Gauge`, `Counter { window_id, saturated }` or `TimerCounter` interpretation. A counter producer

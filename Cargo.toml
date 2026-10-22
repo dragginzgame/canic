@@ -83,30 +83,29 @@ flate2 = { version = "1.1", default-features = false, features = [
 futures = "0.3"
 getrandom = "0.4"
 hmac = "0.13.0"
-ic-auth = { version = "0.12", default-features = false }
-ic-auth-protocol-types = "0.12"
-ic-backup = { version = "0.36", default-features = false }
-ic-blob-storage = "0.39"
-ic-blob-storage-contracts = "0.39"
-ic-build = { version = "0.63" }
-ic-host-artifacts = { version = "0.62", default-features = false }
-ic-host-fs = { version = "0.62", default-features = false }
-ic-host-process = { version = "0.63", default-features = false }
-ic-host-text = "0.63"
-ic-host-tools = "0.62"
+ic-auth = { version = "0.14.1", default-features = false }
+ic-auth-protocol-types = "0.14.1"
+ic-backup = { version = "0.37", default-features = false }
+ic-blob-storage = "0.40.4"
+ic-blob-storage-contracts = "0.40.4"
+ic-build = { version = "0.63.2" }
+ic-host-artifacts = { version = "0.63.2", default-features = false }
+ic-host-fs = { version = "0.63.2", default-features = false }
+ic-host-process = { version = "0.63.2", default-features = false }
+ic-host-text = "0.63.2"
+ic-host-tools = "0.63.2"
 ic-memory = "0.50"
 ic-metrics = "0.15"
 ic-platform = { version = "0.6", default-features = false }
-ic-query = { version = "0.66", default-features = false, features = [
+ic-query = { version = "0.67", default-features = false, features = [
     "subnet-catalog-host",
 ] }
 # Direct use is limited to corruption fixtures; IC Storage also uses it in production.
 ic-stable-structures = "0.7.2"
 ic-storage = "0.50"
-ic-testkit = { version = "0.62" }
+ic-testkit = { version = "0.63.2" }
 ic-timers = "0.30"
 proc-macro2 = "1.0"
-prost = "0.14.4"
 quote = "1.0"
 remain = "0.2"
 reqwest = { version = "0.13.5", default-features = false, features = [
@@ -134,6 +133,7 @@ canic-blob-service = { version = "0.111.0", path = "integrations/blob-service" }
 canic-cli = { version = "0.111.0", path = "crates/canic-cli" }
 canic-testing-internal = { version = "0.111.0", path = "crates/canic-testing-internal" }
 criterion = "0.8"
+prost = "0.14.4"
 
 # Rust lint hygiene
 [workspace.lints.rust]

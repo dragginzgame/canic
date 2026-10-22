@@ -8,8 +8,225 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
-- Adopt IC Tooling 0.63 for Build, Host Process and Host Text while retaining
-  the compatible Backup, Query and Candid testing boundaries.
+- Export the shared ICRC-10 standards query from the Fleet Coordinator
+  ([#536](https://github.com/dragginzgame/canic/issues/536)).
+
+- Accept the ICP amount in `cycles mint --icp`, independently of the global
+  ICP executable selection
+  ([#578](https://github.com/dragginzgame/canic/issues/578)).
+
+- Add a managed fixture update helper that settles newly created children before
+  decoding the bounded application reply
+  ([#585](https://github.com/dragginzgame/canic/issues/585)).
+
+- Make pool-child cycle allocations explicit in index/sharding examples and
+  document admission limits for application-driven creation
+  ([#586](https://github.com/dragginzgame/canic/issues/586)).
+
+- Add validated Component Group member lookup by role, returning all matching
+  Component canisters in directory order
+  ([#584](https://github.com/dragginzgame/canic/issues/584)).
+
+- Keep Blob public fence metrics consistent with the shared installation owner
+  after background framework activity and same-release restoration. Qualify mounted
+  upload recovery, bounded certificate decoding and permission withdrawal.
+
+- Align Blob Storage 0.40.4 across both managed consumer graphs and preserve the
+  canonical Wasm-store package identity when building an App.
+
+- **Breaking:** remove unused delegated-token error producers. E159 remains
+  identifiable as a retired diagnostic; portable admission uses shared Auth's
+  typed refusals, while active proof and attestation diagnostics remain available.
+
+- Keep Fleet status discovery usable when the optional journal `release` field
+  is omitted; preserve strict release payload and plan-authority checks
+  ([#543](https://github.com/dragginzgame/canic/issues/543)).
+
+- **Breaking:** remove the unused topology-based application subject validator and
+  its denial surface. Account authentication belongs to the issuer; portable
+  admission binds the browser caller through IC Auth.
+
+- Keep replica-stop fallback inspection read-only and bound to the selected ICP
+  root, refusing an unidentified reachable gateway
+  ([#298](https://github.com/dragginzgame/canic/issues/298)).
+
+- Close application-session indexes on maintenance clock rollback, preserving
+  saved leases and requiring valid restoration before local authorization resumes.
+
+- Clarify that Root's funding timer uses Root funding configuration independently
+  of the child `AutomaticTopup` capability
+  ([#568](https://github.com/dragginzgame/canic/issues/568)).
+
+- Bound standalone backup-manifest validation by the shared 64 MiB record reader
+  before JSON parsing, retaining typed I/O and schema errors
+  ([#562](https://github.com/dragginzgame/canic/issues/562)).
+
+- Qualify restored Auth sessions against refreshed authority: changed issuer/key,
+  expired or shortened authority and newer reset floors refuse access without
+  rewriting the original lease.
+
+- Keep workspace membership in sync with App creation/deletion, preview affected
+  entries and preserve the App if the manifest update fails
+  ([#295](https://github.com/dragginzgame/canic/issues/295)).
+
+- Reject invalid artifact paths consistently in backup manifests, journals and
+  saved restore plans before persistence or file access
+  ([#317](https://github.com/dragginzgame/canic/issues/317)).
+
+- Qualify portable admission against independent receiver authority; reject
+  credential-selected issuers, excess grants, foreign audiences and key bindings.
+
+- Recheck time after Auth signing before returning or installing proofs. Ignore
+  stale failed callbacks as well as successful ones, preserving newer batch state.
+  Timestamp signing and retry backoff at completion; discard results after expiry.
+  Schedule renewal from sweep completion and use normal backoff once proofs expire.
+
+- Reject local application authority whose configured Root differs from the
+  installed Root, before retaining or changing authority.
+
+- **Breaking:** remove unused `auth.allowed_token_scopes` from configuration,
+  generated runtime data and fixtures. Local application policy no longer requires
+  the token-verifier flag; protected Root enrollment must independently constrain
+  issuer grants before portable activation.
+
+- **Breaking:** pass a family to history cache truncation reads. The flag now
+  describes that family's latest admission pass and recovers after capacity
+  is released ([#105](https://github.com/dragginzgame/canic/issues/105)).
+
+- Adopt published Auth and protocol types 0.14.1 across framework and Blob
+  consumer locks. Qualify typed future-start, expiry and caller-mismatch refusals;
+  portable production activation remains closed.
+
+- Escape terminal controls in plain inspection, status and admission reports and
+  list headings while preserving raw JSON values
+  ([#301](https://github.com/dragginzgame/canic/issues/301)).
+
+- **Breaking:** reject zero top-up amounts and enforce the half-threshold limit
+  across the full cycle range. Clarify startup funding and lifetime child caps
+  ([#72](https://github.com/dragginzgame/canic/issues/72)).
+
+- Qualify portable admission with an independently supplied receiver caller:
+  reject the account principal and another browser device without storage changes,
+  and preserve issuer/subject identity for the admitted browser.
+
+- **Breaking:** remove the diagnostic-only config-path argument from Root
+  lifecycle helpers and stop embedding that absolute builder path at runtime
+  ([#330](https://github.com/dragginzgame/canic/issues/330)).
+
+- **Breaking:** include fetched/total counts and truncation in metrics JSON;
+  follow pages within `--limit` and show incomplete coverage in text, including
+  empty `--nonzero` results ([#284](https://github.com/dragginzgame/canic/issues/284)).
+
+- Check trusted IC time against the persisted Auth clock during synchronous
+  restoration. Refuse rollback with indexes unavailable; retain original session
+  leases and replay/login records when restoration succeeds.
+
+- Qualify shared Auth admission retries with one retained signed credential:
+  future-start refusal writes no session, an exact retry recovers its original
+  live session, and a fresh receiver rejects the closed admission window.
+
+- Stream Store staging-status payload verification, read each chunk once and
+  reject oversized preparation declarations before writing records
+  ([#149](https://github.com/dragginzgame/canic/issues/149)).
+
+- Add shared-engine login pruning to the test-gated durable Auth adapter: commit
+  expired rows and pool counts atomically, retain clock observations on failure,
+  and refuse incomplete ledgers or orphaned sessions. Production timer and
+  endpoint integration remain unavailable.
+
+- Preserve multiline values, defaults and host-resolved fields in Root's diagnostic
+  TOML by serializing the validated model
+  ([#75](https://github.com/dragginzgame/canic/issues/75)).
+
+- **Breaking:** require Root/Store package metadata to name the selected App and
+  remove unused build-helper exports
+  ([#329](https://github.com/dragginzgame/canic/issues/329)).
+
+- **Breaking:** retain the application Auth cleanup clock in its stable header.
+  Refuse backward time and preserve accepted observations through empty or failed
+  cleanup; reinstall the current pre-1.0 state contract. This does not activate
+  portable Auth or qualify a production clock-skew bound.
+
+- Reject inconsistent session/login state before expiry cleanup can erase the
+  broken association; preserve the original records on refusal.
+
+- **Breaking:** report Store creation time in epoch seconds, matching publication,
+  GC and retirement times; retain nanoseconds on the adoption receipt
+  ([#538](https://github.com/dragginzgame/canic/issues/538)).
+
+- Report the Coordinator's Observatory subnet from its exact validated Fleet
+  binding, preserving Root-based placement for other canisters
+  ([#541](https://github.com/dragginzgame/canic/issues/541)).
+
+- **Breaking:** cap configured log messages at 64 KiB; reduce larger
+  `max_entry_bytes` values before rebuilding. Keep unreachable retention deadlines
+  from failing runtime startup
+  ([#73 — Bound log entry sizes](https://github.com/dragginzgame/canic/issues/73),
+  [#102 — Prevent log retention deadline overflow](https://github.com/dragginzgame/canic/issues/102)).
+
+- Record issuer-effective delegation expiry and refresh deadlines in Root renewal
+  state. Validate returned proof identity and read completion time after each
+  installation call; reject invalid evidence and superseded batch responses.
+  Select the complete certified portable verifier in the production Auth feature.
+
+- **Breaking:** include the issuer in application authorization results and scope
+  preserve issuer/subject account identity while accounting session and replay
+  capacity by browser caller. Distinct issuers naming one subject remain separate
+  accounts; independent devices retain independent logout state.
+
+- Adopt IC Tooling 0.63.2 and Shared Tooling 0.26.2. Use Host Tools' bounded ICP
+  transfer decoder while retaining Canic's certificate and payment checks;
+  move the local protobuf projection and direct dependency to test fixtures.
+
+- Align private fixtures with Auth 0.13.3 and remove unused session-policy/error
+  adapters and the unused authority-snapshot generation copy. Retain the atomic
+  session backend and closed application-admission boundary. Qualify direct signed
+  admission, exact retries and commit refusal against Canic’s durable storage.
+  Reject restored login records from a different Fleet or mixed audiences.
+
+- Adopt Blob 0.40.3 across the managed consumers and source endpoint ingress
+  limits directly from its published contracts, removing the duplicated table.
+
+- Reject ineffective Auth revocation-floor role names, signing versions below
+  their acceptance floor, oversized derivation paths and overflowing TTLs during
+  configuration validation ([#63](https://github.com/dragginzgame/canic/issues/63),
+  [#70](https://github.com/dragginzgame/canic/issues/70)).
+
+- Discover all framework endpoint modules for exact replay-policy coverage;
+  check both manifests for duplicates and classify existing standards queries.
+
+- **Breaking:** remove the Blob adapter’s obsolete Candid configuration-limit
+  export. Blob owns its Wire installation limit; embedded applications own their
+  outer configuration decoder.
+
+- Keep bounded session cleanup running when intent maintenance fails, retaining
+  diagnostics and a delayed retry. Remove GNU-only document inventory formatting.
+
+- Keep internal access-evaluation errors from granting permission through negation
+  or alternative branches; seek cycle-event sequences within their timestamp.
+  **Breaking:** remove the ignored settings-update sender-version argument;
+  management calls retain the current execution's version binding.
+
+- Make the Backup writerless-FIFO regression portable across Unix hosts while
+  preserving private permissions and rejection before reading.
+
+- Restore explicit Candid service registration for the bare payload-limit probe
+  endpoint after Platform separated export and codec ownership.
+
+- Select the verified repository-local ICP tool in PocketIC runs, preventing
+  an older global installation from blocking the pinned test environment.
+
+- Move managed fixture calls to Platform's explicit bounded codecs and Testkit's
+  raw transport handling; remove obsolete Candid helper reexports.
+
+- Align fixture locks with Platform 0.6, Timers 0.30.1, Memory/Storage 0.50
+  and Metrics 0.15.1; use explicit bounded Platform codecs for external-ledger
+  funding probes instead of Testkit's version-coupled Candid helpers. Bind
+  session-store method signatures to Auth's canonical principal type.
+
+- Align all IC Tooling libraries on 0.63, Backup on 0.37, Query on 0.67 and
+  Auth on 0.13. Move internal/runtime fixtures to explicit bounded Platform
+  codecs and raw Testkit transport, retaining the existing Candid protocols.
 
 - Select Platform 0.6 across owned catalogs, explicitly enabling principal support
   for Backup, and retain Timers 0.30 in all workspace locks.
@@ -18,8 +235,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   workspace and fixture Clippy and read-only embedded-peer qualification.
   Retain the focused development command.
 
-- Align the dedicated and embedded Blob fixture catalogs with Blob 0.39,
-  Platform 0.5 and Memory/Storage 0.50, removing split runtime type identities.
+- Align the dedicated and embedded Blob fixture locks with published Blob 0.40,
+  Platform 0.6 and Memory/Storage 0.50, removing split runtime type identities.
 
 - Adopt Shared Tooling 0.26.1 with explicit IC executable selection and focused
   dependency-adoption guidance; retain Clippy-first release barriers.

@@ -178,19 +178,29 @@ fn fetch_root_children(pic: &PocketIc, root_id: Principal) -> Vec<CanisterInfo> 
     let mut entries = Vec::new();
     let mut offset = 0;
     loop {
-        let page: Result<RootStatusResponse, Error> = ic_testkit::pic::query_candid_args(
-            pic,
-            root_id,
-            ic_platform::principal::ExternalPrincipal::anonymous(),
-            protocol::CANIC_PUBLIC_STATUS,
-            (RootStatusRequest::Children(PageRequest {
-                limit: PAGE_LIMIT,
-                offset,
-            }),),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .map(|(reply,)| reply)
-        .expect("query root children transport");
+        let page: Result<RootStatusResponse, Error> =
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args((
+                    RootStatusRequest::Children(PageRequest {
+                        limit: PAGE_LIMIT,
+                        offset,
+                    }),
+                ))?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (pic).query_call(
+                        root_id,
+                        ic_platform::principal::ExternalPrincipal::anonymous(),
+                        protocol::CANIC_PUBLIC_STATUS,
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
+            .map(|(reply,)| reply)
+            .expect("query root children transport");
         let page = match page.expect("query root children application") {
             RootStatusResponse::Children(page) => page,
             RootStatusResponse::StoreOverview(_) => panic!("unexpected Root status response"),
@@ -209,16 +219,25 @@ fn fetch_root_children(pic: &PocketIc, root_id: Principal) -> Vec<CanisterInfo> 
 
 // Fetch the currently tracked managed wasm_store canister ids from root-owned state.
 fn fetch_managed_store_pids(pic: &PocketIc, root_id: Principal) -> Vec<Principal> {
-    let overview: Result<RootStatusResponse, canic::Error> = ic_testkit::pic::query_candid_args(
-        pic,
-        root_id,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        canic::protocol::CANIC_ROOT_STATUS,
-        (RootStatusRequest::StoreOverview,),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .expect("query wasm_store overview transport");
+    let overview: Result<RootStatusResponse, canic::Error> =
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes =
+                ic_platform::candid::contract::encode_args((RootStatusRequest::StoreOverview,))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).query_call(
+                    root_id,
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
+                    canic::protocol::CANIC_ROOT_STATUS,
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
+        .map(|(reply,)| reply)
+        .expect("query wasm_store overview transport");
 
     match overview.expect("query wasm_store overview application") {
         RootStatusResponse::StoreOverview(overview) => overview,

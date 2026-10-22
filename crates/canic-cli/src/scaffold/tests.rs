@@ -125,6 +125,8 @@ fn rejects_invalid_canister_scaffold_role_names() {
 #[test]
 fn scaffold_app_writes_application_files_with_canonical_root() {
     let root = TempDir::new("canic-cli-scaffold");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("Cargo.toml"), "[workspace]\nmembers = []\n").unwrap();
     let options = ScaffoldOptions {
         name: "my_app".to_string(),
         yes: true,
@@ -132,6 +134,12 @@ fn scaffold_app_writes_application_files_with_canonical_root() {
     };
 
     let result = scaffold_app_at(&root, &options).expect("scaffold app");
+    let workspace: TomlValue =
+        toml::from_str(&fs::read_to_string(root.join("Cargo.toml")).unwrap()).unwrap();
+    assert_eq!(
+        workspace["workspace"]["members"][0].as_str(),
+        Some("apps/my_app/app")
+    );
     let config = fs::read_to_string(&result.config_path).expect("read config");
     let app_lib = fs::read_to_string(result.app_dir.join("src/lib.rs")).expect("read app lib");
     let app_manifest =
@@ -171,6 +179,9 @@ fn scaffold_app_writes_application_files_with_canonical_root() {
 #[test]
 fn scaffold_app_plan_does_not_write_files() {
     let root = TempDir::new("canic-cli-scaffold-plan");
+    fs::create_dir_all(&root).unwrap();
+    let original = "[workspace]\nmembers = []\n";
+    fs::write(root.join("Cargo.toml"), original).unwrap();
     let options = ScaffoldOptions {
         name: "my_app".to_string(),
         yes: false,
@@ -184,6 +195,11 @@ fn scaffold_app_plan_does_not_write_files() {
     assert!(text.contains("dry_run: true"));
     assert!(text.contains("files_changed: 0"));
     assert!(text.contains("canic.toml"));
+    assert!(plan.files.contains(&root.join("Cargo.toml")));
+    assert_eq!(
+        fs::read_to_string(root.join("Cargo.toml")).unwrap(),
+        original
+    );
     assert!(!plan.result.app_root.exists());
 }
 
@@ -463,4 +479,26 @@ fn scaffold_app_rejects_existing_target() {
     let err = scaffold_app_at(&root, &options).expect_err("existing scaffold should fail");
 
     std::assert_matches!(err, ScaffoldCommandError::TargetExists(_));
+}
+
+#[test]
+fn scaffold_app_rejects_invalid_workspace_before_creating_files() {
+    let root = TempDir::new("canic-cli-scaffold-invalid-workspace");
+    fs::create_dir_all(&root).unwrap();
+    let original = "[workspace]\nmembers = 12\n";
+    fs::write(root.join("Cargo.toml"), original).unwrap();
+    let options = ScaffoldOptions {
+        name: "demo".to_string(),
+        yes: true,
+        dry_run: false,
+    };
+    std::assert_matches!(
+        scaffold_app_at(&root, &options),
+        Err(ScaffoldCommandError::Usage(_))
+    );
+    assert!(!root.join("apps/demo").exists());
+    assert_eq!(
+        fs::read_to_string(root.join("Cargo.toml")).unwrap(),
+        original
+    );
 }

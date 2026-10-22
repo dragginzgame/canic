@@ -11,19 +11,26 @@ use canic_contracts::dto::wire::projection::fixture_baseline_root_public_key::Re
 
 pub(super) fn assert_controller_key_discovery(pic: &PocketIc, root: Principal) {
     let key = |caller, path: Vec<Vec<u8>>| {
-        ic_testkit::pic::update_candid_args::<(Result<Response, Error>,), _>(
-            pic,
-            root,
-            caller,
-            canic::protocol::CANIC_ROOT_COMMAND,
-            (Command::GetChainKeyPublicKey(
-                RootChainKeyPublicKeyRequest {
+        (|| -> Result<(Result<Response, Error>,), Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args((
+                Command::GetChainKeyPublicKey(RootChainKeyPublicKeyRequest {
                     key_id: "key_1".into(),
                     derivation_path: path,
-                },
-            ),),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
+                }),
+            ))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).update_call(
+                    root,
+                    caller,
+                    canic::protocol::CANIC_ROOT_COMMAND,
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
         .map(|(reply,)| reply)
         .expect("Root public-key command transport")
     };

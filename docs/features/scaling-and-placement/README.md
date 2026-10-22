@@ -35,6 +35,25 @@ Fleet-wide service publication. Each Fleet Subnet Root owns concrete identity
 allocation and lifecycle effects. Application Components may request admitted
 children, but they do not acquire management-canister or root authority.
 
+## Find Group Members
+
+A managed Component or child can look up Component canisters in its retained Group
+Directory by role:
+
+```rust
+use canic::api::canister::{CanisterRole, deployment::ComponentRuntimeApi};
+
+let treasuries = ComponentRuntimeApi::members_by_role(&CanisterRole::new("treasury"))?;
+```
+
+The local lookup uses the same runtime binding and Directory validation as
+`ComponentRuntimeApi::status()`. It returns every exact role match in canonical
+member-path order, including repeated instances and the owning Component when its
+role matches. Results identify Components; application policy still owns access.
+An absent Group Directory or unmatched role returns an empty vector. Invalid or
+uninitialized runtime state returns the existing typed error. The lookup makes
+no network call.
+
 ## Allocation And Recovery
 
 Routing follows the allocation that owns a canister ID. Directory synchronization

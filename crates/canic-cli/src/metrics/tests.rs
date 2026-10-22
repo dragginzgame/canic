@@ -107,7 +107,7 @@ fn missing_metrics_fleet_preserves_canonical_typed_error() {
 
 #[test]
 fn parses_typed_metrics_page() {
-    let entries = metric_page(Page {
+    let page = metric_page(Page {
         entries: vec![
             MetricEntryDto {
                 labels: vec!["lifecycle".into(), "init".into(), "started".into()],
@@ -128,9 +128,11 @@ fn parses_typed_metrics_page() {
                 },
             },
         ],
-        total: 3,
+        total: 1500,
     });
 
+    assert_eq!(page.total, 1500);
+    let entries = page.entries;
     assert_eq!(entries.len(), 3);
     assert_eq!(entries[0].labels, ["lifecycle", "init", "started"]);
     assert_eq!(entries[0].value, MetricValue::Count { count: 2 });

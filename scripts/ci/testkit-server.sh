@@ -8,4 +8,4 @@ fi
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 exec bash "$ROOT/scripts/dev/install-rust-tools.sh" --consumer "$ROOT" \
     --package ic-testkit --lockfile "$ROOT/Cargo.lock" \
-    --bin ic-testkit-server --profile release "$@"
+    --bin ic-testkit-server --profile release --features cli "$@"

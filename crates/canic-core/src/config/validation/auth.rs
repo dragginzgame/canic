@@ -7,11 +7,12 @@
 use crate::{
     cdk::{types::Principal, utils::hash::decode_hex},
     config::schema::{
-        AuthConfig, ConfigSchemaError, DelegatedTokenConfig, RoleAttestationConfig, Validate,
+        AuthConfig, ChainKeyRootProofConfig, ConfigSchemaError, DelegatedTokenConfig,
+        RoleAttestationConfig, Validate,
     },
     domain::auth::{IC_ROOT_PUBLIC_KEY_RAW_LENGTH, is_mainnet_ic_root_public_key_raw},
 };
-use canic_contracts::ids::BuildNetwork;
+use canic_contracts::ids::{BuildNetwork, CanisterRole};
 use ic_auth::canonical::chain_key_derivation_path_hash;
 
 impl Validate for AuthConfig {
@@ -23,12 +24,8 @@ impl Validate for AuthConfig {
 
 impl Validate for DelegatedTokenConfig {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
-        if let Some(max_ttl_secs) = self.max_ttl_secs
-            && max_ttl_secs == 0
-        {
-            return Err(ConfigSchemaError::ValidationError(
-                "auth.delegated_tokens.max_ttl_secs must be greater than zero".into(),
-            ));
+        if let Some(max_ttl_secs) = self.max_ttl_secs {
+            validate_ttl_secs(max_ttl_secs, "auth.delegated_tokens.max_ttl_secs")?;
         }
 
         if !self.enabled {
@@ -123,14 +120,7 @@ fn validate_chain_key_root_proof_config(
     )?;
     validate_chain_key_public_key_hex(public_key)?;
 
-    validate_required_u64(
-        chain_key.key_version,
-        "auth.delegated_tokens.chain_key_root_proof.key_version",
-    )?;
-    validate_required_u64(
-        chain_key.min_accepted_key_version,
-        "auth.delegated_tokens.chain_key_root_proof.min_accepted_key_version",
-    )?;
+    validate_chain_key_versions(chain_key)?;
     validate_required_u64(
         chain_key.min_accepted_proof_epoch,
         "auth.delegated_tokens.chain_key_root_proof.min_accepted_proof_epoch",
@@ -197,6 +187,33 @@ fn required_chain_key_string<'a>(
     Ok(value)
 }
 
+fn validate_chain_key_versions(config: &ChainKeyRootProofConfig) -> Result<(), ConfigSchemaError> {
+    let version = validate_required_u64(
+        config.key_version,
+        "auth.delegated_tokens.chain_key_root_proof.key_version",
+    )?;
+    let minimum = validate_required_u64(
+        config.min_accepted_key_version,
+        "auth.delegated_tokens.chain_key_root_proof.min_accepted_key_version",
+    )?;
+    if version < minimum {
+        return Err(ConfigSchemaError::ValidationError(
+            "auth.delegated_tokens.chain_key_root_proof.key_version must be at least min_accepted_key_version"
+                .into(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_ttl_secs(value: u64, field: &str) -> Result<(), ConfigSchemaError> {
+    if value == 0 || value.checked_mul(1_000_000_000).is_none() {
+        return Err(ConfigSchemaError::ValidationError(format!(
+            "{field} must be positive and representable as u64 nanoseconds"
+        )));
+    }
+    Ok(())
+}
+
 fn validate_chain_key_public_key_hex(value: &str) -> Result<(), ConfigSchemaError> {
     let public_key = decode_hex(value).map_err(|err| {
         ConfigSchemaError::ValidationError(format!(
@@ -254,6 +271,11 @@ fn validate_chain_key_derivation_path_hex(
             "{field} is required for delegated-token chain-key root proofs"
         )));
     };
+    if path.len() > 255 {
+        return Err(ConfigSchemaError::ValidationError(format!(
+            "{field} must contain at most 255 components"
+        )));
+    }
     path.iter()
         .enumerate()
         .map(|(index, component)| {
@@ -279,19 +301,13 @@ fn validate_required_u64(
 
 impl Validate for RoleAttestationConfig {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
-        if self.max_ttl_secs == 0 {
-            return Err(ConfigSchemaError::ValidationError(
-                "auth.role_attestation.max_ttl_secs must be greater than zero".into(),
-            ));
-        }
+        validate_ttl_secs(self.max_ttl_secs, "auth.role_attestation.max_ttl_secs")?;
 
         for role in self.min_accepted_epoch_by_role.keys() {
-            if role.trim().is_empty() {
-                return Err(ConfigSchemaError::ValidationError(
-                    "auth.role_attestation.min_accepted_epoch_by_role keys must not be empty"
-                        .into(),
-                ));
-            }
+            super::validate_canister_role(
+                &CanisterRole::owned(role.clone()),
+                "auth.role_attestation.min_accepted_epoch_by_role",
+            )?;
         }
 
         Ok(())

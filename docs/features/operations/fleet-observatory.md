@@ -51,6 +51,10 @@ same authority after collection. Concurrent changes reject the result. A missing
 or nonterminal authority produces an unavailable authority field and no remote
 discovery; it does not produce an empty healthy Fleet.
 
+The exact Coordinator's `subnet_id` comes from `coordinator_subnet` in that
+validated Fleet binding. Other rows resolve placement through their parent chain
+to a Fleet Subnet Root; an unresolved chain keeps `subnet_id` null.
+
 Local journal progress remains separately visible during interrupted operations:
 completion class, applied and pending effect counts, funding-review requirement
 and stalled-observation count. Reading this evidence does not authorize a retry
@@ -227,6 +231,13 @@ grant-adjusted decrease is a result for the recorded terms, not proof of zero
 consumption. Complete transfer attribution and callback frequency remain open.
 
 ## Store inventory
+
+Root's protected `StoreOverview` reports `stores[].created_at`, publication
+`changed_at`/`retired_at`, and GC `changed_at`/`prepared_at`/`started_at`/`completed_at`
+in whole seconds since the Unix epoch. Zero means no publication/GC transition
+or no retired binding; optional GC timestamps remain absent until that phase.
+The separate adoption receipt's explicitly named `adopted_at_ns` retains
+nanosecond precision.
 
 The existing protected Store status now includes approved catalog-entry count,
 expected and retained template-chunk counts, and separate fixture-source,

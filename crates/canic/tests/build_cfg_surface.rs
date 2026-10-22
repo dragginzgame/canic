@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     env, fs,
     path::{Path, PathBuf},
     process::{Command, Output},
@@ -119,6 +119,149 @@ fn run_build_macro_probe(root: &Path) -> Output {
         .env("CANIC_BUILD_FRESHNESS_OUTPUT", root.join("generated-path"))
         .output()
         .unwrap()
+}
+
+#[test]
+fn infrastructure_builds_require_the_declared_app_identity() {
+    let root = env::temp_dir().join(format!(
+        "canic-build-app-identity-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos(),
+    ));
+    fs::create_dir_all(&root).unwrap();
+    let config = root.join("canic.toml");
+    fs::write(
+        &config,
+        "[app]\nname = \"selected\"\n[roles.root]\nkind = \"root\"\n[auth.delegated_tokens]\nenabled = false\n",
+    )
+    .unwrap();
+    for role in ["root", "wasm_store"] {
+        for app in ["selected", "wasm_store", "other"] {
+            fs::write(
+                root.join("Cargo.toml"),
+                format!("[package.metadata.canic]\napp = {app:?}\nrole = {role:?}\n"),
+            )
+            .unwrap();
+            let output_dir = root.join(format!("{role}-{app}"));
+            fs::create_dir_all(&output_dir).unwrap();
+            let output = Command::new(env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "build_macro_tracks_config_without_tracking_neighboring_artifacts",
+                    "--nocapture",
+                ])
+                .env("CANIC_BUILD_FRESHNESS_CHILD", "1")
+                .env("CARGO_MANIFEST_DIR", &root)
+                .env("CANIC_INTERNAL_BUILD_CONFIG_PATH", &config)
+                .env_remove("CANIC_PROTOCOL_BUILD_CONTEXT")
+                .env_remove("CANIC_PROTOCOL_PROFILE_DIGEST")
+                .env_remove("CANIC_RELEASE_BUILD_ID")
+                .env("TARGET", "native-test")
+                .env("OUT_DIR", &output_dir)
+                .output()
+                .unwrap();
+            assert_eq!(
+                output.status.success(),
+                app == if role == "wasm_store" {
+                    "wasm_store"
+                } else {
+                    "selected"
+                },
+                "role={role}, app={app}: {}",
+                String::from_utf8_lossy(&output.stderr),
+            );
+            assert_eq!(
+                output_dir.join("canic.role-runtime-authority.rs").exists(),
+                output.status.success(),
+            );
+        }
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn root_generated_config_is_independent_of_checkout_location() {
+    let root = env::temp_dir().join(format!(
+        "canic-root-config-location-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos(),
+    ));
+    let mut snapshots = Vec::new();
+    for checkout in ["alice/workspace", "bob/relocated"] {
+        let checkout = root.join(checkout);
+        let output_dir = checkout.join("generated");
+        fs::create_dir_all(&output_dir).unwrap();
+        fs::write(
+            checkout.join("Cargo.toml"),
+            "[package.metadata.canic]\napp = \"selected\"\nrole = \"root\"\n",
+        )
+        .unwrap();
+        let config = checkout.join("canic.toml");
+        fs::write(
+            &config,
+            "[app]\nname = \"selected\"\n[roles.root]\nkind = \"root\"\n[auth.delegated_tokens]\nenabled = false\n",
+        )
+        .unwrap();
+        let output = Command::new(env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "build_macro_tracks_config_without_tracking_neighboring_artifacts",
+                "--nocapture",
+            ])
+            .env("CANIC_BUILD_FRESHNESS_CHILD", "1")
+            .env("CARGO_MANIFEST_DIR", &checkout)
+            .env("CANIC_INTERNAL_BUILD_CONFIG_PATH", &config)
+            .env_remove("CANIC_PROTOCOL_BUILD_CONTEXT")
+            .env_remove("CANIC_PROTOCOL_PROFILE_DIGEST")
+            .env_remove("CANIC_RELEASE_BUILD_ID")
+            .env("TARGET", "native-test")
+            .env("OUT_DIR", &output_dir)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let mut snapshot = BTreeMap::new();
+        for line in String::from_utf8(output.stdout).unwrap().lines() {
+            let Some(emission) = line.strip_prefix("cargo:rustc-env=") else {
+                continue;
+            };
+            let (name, value) = emission.split_once('=').unwrap();
+            let value = match name {
+                "CANIC_CANISTER_ROLE" | "CANIC_CALLER_PERMISSION_NAMES" => value.to_string(),
+                "CANIC_ROLE_RUNTIME_AUTHORITY_PATH"
+                | "CANIC_CONFIG_SOURCE_PATH"
+                | "CANIC_CONFIG_MODEL_PATH" => {
+                    assert!(Path::new(value).starts_with(&output_dir));
+                    fs::read_to_string(value).unwrap()
+                }
+                other => panic!("unexpected Root compiler environment value: {other}"),
+            };
+            assert!(!value.contains(checkout.to_str().unwrap()));
+            assert!(snapshot.insert(name.to_string(), value).is_none());
+        }
+        assert_eq!(
+            snapshot.keys().map(String::as_str).collect::<Vec<_>>(),
+            [
+                "CANIC_CALLER_PERMISSION_NAMES",
+                "CANIC_CANISTER_ROLE",
+                "CANIC_CONFIG_MODEL_PATH",
+                "CANIC_CONFIG_SOURCE_PATH",
+                "CANIC_ROLE_RUNTIME_AUTHORITY_PATH",
+            ]
+        );
+        snapshots.push(snapshot);
+    }
+    assert_eq!(snapshots[0], snapshots[1]);
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[track_caller]

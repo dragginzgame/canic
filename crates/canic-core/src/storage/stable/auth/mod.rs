@@ -144,7 +144,24 @@ impl LocalApplicationAuthorizationState {
                     logins
                 }),
                 login_totals: data.login_totals,
+                observed_at_ns: data.observed_at_ns,
             }
+        })
+    }
+
+    // Retain trusted time independently of a later returned transaction failure.
+    // A backward clock never mutates the protected header.
+    pub(crate) fn observe_application_time(now_ns: u64) -> bool {
+        LOCAL_APPLICATION_AUTHORIZATION_STATE.with_borrow_mut(|cell| {
+            if now_ns < cell.get().observed_at_ns {
+                return false;
+            }
+            if now_ns > cell.get().observed_at_ns {
+                let mut header = cell.get().clone();
+                header.observed_at_ns = now_ns;
+                cell.set(header);
+            }
+            true
         })
     }
 
@@ -168,6 +185,7 @@ impl LocalApplicationAuthorizationState {
             data.application_authority_generation = state.authority_generation;
             data.application_authority_binding = state.authority_binding;
             data.login_totals = state.login_totals;
+            data.observed_at_ns = state.observed_at_ns;
             cell.set(data);
         });
         APPLICATION_LOGINS.with_borrow_mut(|rows| {
@@ -282,7 +300,7 @@ impl LocalApplicationAuthorizationState {
 
     // Return the current target-local application authority generation.
     #[must_use]
-    #[cfg(any(test, feature = "auth-local-application-authorization"))]
+    #[cfg(test)]
     pub(crate) fn application_authority_generation() -> u64 {
         LOCAL_APPLICATION_AUTHORIZATION_STATE
             .with_borrow(|cell| cell.get().application_authority_generation)

@@ -4,7 +4,7 @@ use super::*;
 use canic::dto::component_registry::{RootMembershipRequest, RootMembershipResponse};
 use ic_platform::candid::contract::types::TypeInner;
 use ic_platform::candid::contract::types::{Function, internal::TypeContainer, subtype};
-use ic_testkit::{pic::CandidCallError, pocket_ic::ErrorCode};
+use ic_testkit::pocket_ic::ErrorCode;
 
 pub(super) fn assert_candid_contract(candid: &[u8]) {
     let source = std::str::from_utf8(candid).expect("Root Candid UTF-8");
@@ -39,19 +39,21 @@ pub(super) fn assert_candid_contract(candid: &[u8]) {
 pub(super) fn assert_prepared_root_refuses_discovery(pic: &PocketIc, root: Principal) {
     // The ordinary Fleet fence runs before the lookup's endpoint guard and handler.
     let rejected =
-        ic_testkit::pic::update_candid_args::<(Result<RootMembershipResponse, Error>,), _>(
-            pic,
-            root,
-            Principal::anonymous(),
-            canic::protocol::CANIC_ROOT_MEMBERSHIP,
-            (RootMembershipRequest {
+        (|| -> Result<(Result<RootMembershipResponse, Error>,), Box<dyn std::error::Error + Send + Sync>> {
+
+       let request_bytes = ic_platform::candid::contract::encode_args((RootMembershipRequest {
                 subject: Principal::management_canister(),
-            },),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
+            },))?;
+       let reply = ic_testkit::pic::try_pocket_ic_operation(|| (pic).update_call(root, Principal::anonymous(), canic::protocol::CANIC_ROOT_MEMBERSHIP, request_bytes))
+           .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+           .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+       ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS).map_err(Into::into)
+   })()
         .map(|(reply,)| reply)
         .expect_err("Prepared Root must keep the lookup behind its Fleet fence");
-    let CandidCallError::CanisterReject { response, .. } = rejected else {
+    let Some(ic_testkit::pic::PocketIcCallFailure::Rejected(response)) =
+        rejected.downcast_ref::<ic_testkit::pic::PocketIcCallFailure>()
+    else {
         panic!("expected canister rejection");
     };
     assert_eq!(response.error_code, ErrorCode::CanisterCalledTrap,);
@@ -89,14 +91,22 @@ fn lookup(
     caller: Principal,
     subject: Principal,
 ) -> Result<RootMembershipResponse, Error> {
-    ic_testkit::pic::update_candid_args(
-        pic,
-        root,
-        caller,
-        canic::protocol::CANIC_ROOT_MEMBERSHIP,
-        (RootMembershipRequest { subject },),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes =
+            ic_platform::candid::contract::encode_args((RootMembershipRequest { subject },))?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (pic).update_call(
+                root,
+                caller,
+                canic::protocol::CANIC_ROOT_MEMBERSHIP,
+                request_bytes,
+            )
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .expect("membership lookup transport")
 }

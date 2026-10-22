@@ -4,6 +4,8 @@ pub mod comparison;
 mod cost;
 mod metrics;
 pub mod presentation;
+#[cfg(test)]
+mod tests;
 pub mod transport;
 
 use crate::{
@@ -12,7 +14,7 @@ use crate::{
     observatory::{ObservatoryError, model::ObservatoryOptions, view::*},
     registry::RegistryEntry,
 };
-use canic_contracts::dto::public_status::PublicMetricFamily;
+use canic_contracts::dto::{fleet_registry::FleetRegistry, public_status::PublicMetricFamily};
 use std::{
     path::Path,
     time::{Instant, SystemTime, UNIX_EPOCH},
@@ -90,7 +92,7 @@ pub fn collect(
             );
             for entry in &source.registry.entries {
                 let mut role = collect_role(entry, transport, options.collect_costs);
-                role.subnet_id = placement(source, entry);
+                role.subnet_id = placement(registry, &source.registry.entries, entry);
                 snapshot.roles.push(role);
             }
         }
@@ -141,8 +143,15 @@ pub(super) fn collect_role(
     }
 }
 
-fn placement(source: &CurrentFleetResolution, entry: &RegistryEntry) -> Option<String> {
-    let registry = source.active_registry.as_ref()?;
+fn placement(
+    registry: &FleetRegistry,
+    entries: &[RegistryEntry],
+    entry: &RegistryEntry,
+) -> Option<String> {
+    let binding = &registry.authority.binding;
+    if entry.pid == binding.coordinator.to_text() {
+        return Some(binding.coordinator_subnet.to_string());
+    }
     let mut current = entry;
     let mut visited = std::collections::BTreeSet::new();
     while visited.insert(current.pid.as_str()) {
@@ -153,9 +162,7 @@ fn placement(source: &CurrentFleetResolution, entry: &RegistryEntry) -> Option<S
         {
             return Some(root.placement_subnet.to_string());
         }
-        current = source
-            .registry
-            .entries
+        current = entries
             .iter()
             .find(|candidate| Some(&candidate.pid) == current.parent_pid.as_ref())?;
     }

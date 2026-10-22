@@ -216,11 +216,6 @@ impl InternalError {
     }
 
     #[must_use]
-    pub const fn auth_token_expired() -> Self {
-        Self::public(crate::diagnostics::codes::AUTH_TOKEN_EXPIRED)
-    }
-
-    #[must_use]
     pub const fn auth_proof_pending() -> Self {
         Self::public(crate::diagnostics::codes::SECURITY_UNAVAILABLE)
     }

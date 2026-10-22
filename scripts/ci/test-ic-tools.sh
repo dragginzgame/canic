@@ -28,8 +28,21 @@ mkdir -p "$fixture/bin" "$fixture/assets" "$fixture/payload"
 export IC_TOOLS_TEST_FIXTURE="$fixture"
 IC_TOOLS_TEST_REAL_CP="$(command -v cp)"
 IC_TOOLS_TEST_REAL_AWK="$(command -v awk)"
+IC_TOOLS_TEST_REAL_WC="$(command -v wc)"
 export IC_TOOLS_TEST_REAL_AWK
+export IC_TOOLS_TEST_REAL_WC
 export IC_TOOLS_TEST_REAL_CP
+# BSD wc pads counts. Keep that native contract exercised on Linux too.
+cat > "$fixture/bin/wc" <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ $# == 1 && "$1" == -l ]]; then
+    count="$("$IC_TOOLS_TEST_REAL_WC" "$@")"
+    printf '%8d\n' "$count"
+else
+    exec "$IC_TOOLS_TEST_REAL_WC" "$@"
+fi
+SCRIPT
 # macOS awk refuses literal LF bytes in -v assignments. Exercise that
 # boundary even when the native fixture host uses a permissive awk.
 cat > "$fixture/bin/awk" <<'SCRIPT'
@@ -237,7 +250,7 @@ for host in Linux:x86_64 Darwin:x86_64 Darwin:arm64; do
     before="$(wc -l < "$fixture/downloads")"
     bash "$ROOT/scripts/dev/install-ic-tools.sh" --consumer "$subset" --pins "$pins" \
         --tool wasm-opt > "$fixture/subset.log" 2>&1
-    [[ "$(wc -l < "$fixture/downloads")" == "$((before + 1))" &&
+    [[ "$(wc -l < "$fixture/downloads")" -eq "$((before + 1))" &&
        -x "$subset/.tools/ic/bin/wasm-opt" && ! -e "$subset/.tools/ic/bin/quill" &&
        -f "$subset/.tools/ic/lib/libbinaryen.dylib" ]] || exit 1
     selected="$(readlink "$subset/.tools/ic")"
@@ -264,7 +277,7 @@ for host in Linux:x86_64 Darwin:x86_64 Darwin:arm64; do
     expect_failure bash "$ROOT/scripts/dev/install-ic-tools.sh" --consumer "$subset" --pins "$pins" \
         --tool wasm-opt --tool ic-wasm --check
     [[ "$(readlink "$subset/.tools/ic")" == "$selected" &&
-       "$(wc -l < "$fixture/downloads")" == "$((before + 1))" ]] || exit 1
+       "$(wc -l < "$fixture/downloads")" -eq "$((before + 1))" ]] || exit 1
     bash "$ROOT/scripts/ci/test-tool-evidence.sh" "$subset" ic "$pins" wasm-opt
     # A self-consistent receipt must not admit an unselected executable.
     cp "$subset/.tools/ic/files.sha256" "$fixture/subset-receipt"

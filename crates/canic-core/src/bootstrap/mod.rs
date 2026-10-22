@@ -139,28 +139,6 @@ pub fn parse_config_model(toml: &str) -> Result<ConfigModel, ConfigError> {
     Config::parse_toml(toml)
 }
 
-/// compact_config_source
-///
-/// Compact a validated Canic TOML source without changing value encodings.
-#[cfg(any(not(target_arch = "wasm32"), test))]
-#[must_use]
-pub fn compact_config_source(toml: &str) -> String {
-    let mut compact = String::new();
-
-    for line in toml.lines() {
-        let trimmed = line.trim();
-
-        if trimmed.is_empty() || trimmed.starts_with('#') {
-            continue;
-        }
-
-        compact.push_str(trimmed);
-        compact.push('\n');
-    }
-
-    compact
-}
-
 /// emit_config_model_source
 ///
 /// Render the validated configuration model as Rust source for `include!` at runtime.

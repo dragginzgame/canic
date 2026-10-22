@@ -30,18 +30,25 @@ pub(in crate::pic::fleet_registry::baseline) fn running_application_import_clear
     let root_before = pic.cycle_balance(root);
     let import = || {
         let response: Result<RootCommandResponseFragment, Error> =
-            ic_testkit::pic::update_candid_args(
-                &(pic),
-                root,
-                Principal::anonymous(),
-                canic_contracts::protocol::CANIC_ROOT_COMMAND,
-                (RootCommandFragment::ImportPoolCanister(
-                    PoolCanisterRequest {
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args((
+                    RootCommandFragment::ImportPoolCanister(PoolCanisterRequest {
                         canister_id: source,
-                    },
-                ),),
-                canic::testing::CANDID_REPLY_LIMITS,
-            )
+                    }),
+                ))?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (pic).update_call(
+                        root,
+                        Principal::anonymous(),
+                        canic_contracts::protocol::CANIC_ROOT_COMMAND,
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
             .map(|(reply,)| reply)
             .unwrap();
         assert!(

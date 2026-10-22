@@ -233,7 +233,6 @@ async fn issue_controllers(
             controllers: Some(reservation.final_controllers.clone()),
             ..CanisterSettings::default()
         },
-        sender_canister_version: None,
     };
     let budget = budget(MgmtOps::update_settings_call_cost(&args)?);
     let paid =

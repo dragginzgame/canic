@@ -37,6 +37,7 @@ impl Validate for ConfigModel {
         self.app.validate()?;
 
         validate_role_declarations(self)?;
+        validate_attestation_epoch_roles(self)?;
 
         for (role, declaration) in &self.roles {
             if let Some(policy) = &declaration.caller_authority {
@@ -92,6 +93,24 @@ impl Validate for ConfigModel {
 
         Ok(())
     }
+}
+
+fn validate_attestation_epoch_roles(config: &ConfigModel) -> Result<(), ConfigSchemaError> {
+    for role in config
+        .auth
+        .role_attestation
+        .min_accepted_epoch_by_role
+        .keys()
+    {
+        let role = CanisterRole::owned(role.clone());
+        let infrastructure = role.is_root() || role.is_fleet_coordinator() || role.is_wasm_store();
+        if !infrastructure && !config.roles.contains_key(&role) {
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "auth.role_attestation.min_accepted_epoch_by_role references undeclared role '{role}'"
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn validate_component_provisioning_grants(config: &ConfigModel) -> Result<(), ConfigSchemaError> {

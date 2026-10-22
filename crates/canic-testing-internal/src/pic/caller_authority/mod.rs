@@ -236,16 +236,20 @@ fn command(
     hub: Principal,
     request: CallerAuthorityCommand,
 ) -> Result<CallerAuthorityReceipt, Error> {
-    let response: Result<Response, Error> = ic_testkit::pic::update_candid_args(
-        pic,
-        hub,
-        caller,
-        canic::protocol::CANIC_COMMAND,
-        (Command::CallerAuthority(request),),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .unwrap();
+    let response: Result<Response, Error> =
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes =
+                ic_platform::candid::contract::encode_args((Command::CallerAuthority(request),))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).update_call(hub, caller, canic::protocol::CANIC_COMMAND, request_bytes)
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
+        .map(|(reply,)| reply)
+        .unwrap();
     response.map(|Response::CallerAuthority(receipt)| receipt)
 }
 
@@ -255,31 +259,41 @@ fn status(
     target: Principal,
     operation_id: [u8; 32],
 ) -> CallerAuthorityStatus {
-    let response: Result<StatusResponse, Error> = ic_testkit::pic::query_candid_args(
-        pic,
-        target,
-        root,
-        canic::protocol::CANIC_CONTROL_STATUS,
-        (StatusRequest::CallerAuthority(OperationStatusRequest {
-            operation_id,
-        }),),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .unwrap();
+    let response: Result<StatusResponse, Error> =
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args((
+                StatusRequest::CallerAuthority(OperationStatusRequest { operation_id }),
+            ))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).query_call(
+                    target,
+                    root,
+                    canic::protocol::CANIC_CONTROL_STATUS,
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
+        .map(|(reply,)| reply)
+        .unwrap();
     let StatusResponse::CallerAuthority(status) = response.unwrap();
     status
 }
 
 fn probe(pic: &PocketIc, hub: Principal, shard: Principal) -> Result<Principal, Error> {
-    ic_testkit::pic::update_candid_args(
-        pic,
-        hub,
-        shard,
-        "test_caller_probe",
-        (),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes = ic_platform::candid::contract::encode_args(())?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (pic).update_call(hub, shard, "test_caller_probe", request_bytes)
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .unwrap()
 }

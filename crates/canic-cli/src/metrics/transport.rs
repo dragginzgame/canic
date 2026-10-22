@@ -7,7 +7,7 @@
 use crate::metrics::{
     MetricsCommandError,
     model::{
-        MetricEntry, MetricValue, MetricsCanisterReport, MetricsCanisterStatus, MetricsKind,
+        MetricValue, MetricsCanisterReport, MetricsCanisterStatus, MetricsKind, MetricsPage,
         MetricsReport,
     },
     options::MetricsOptions,
@@ -31,8 +31,7 @@ const METRICS_UNAVAILABLE_HINT: &str =
     "role-owned Metrics status unavailable; check deployed Wasm and metrics profile";
 const METRICS_EMPTY_HINT: &str =
     "no metrics rows; check whether this tier is enabled by the deployed role profile";
-const METRICS_NONZERO_EMPTY_HINT: &str =
-    "no nonzero metrics rows; rerun without --nonzero or check the deployed role profile";
+const METRICS_NONZERO_EMPTY_HINT: &str = "no nonzero rows among fetched metrics; rerun without --nonzero or check the deployed role profile";
 const METRICS_WORKER_PANIC: &str = "metrics query worker panicked";
 
 #[derive(Debug, ThisError)]
@@ -122,39 +121,42 @@ fn metrics_canister_report(
     entry: &RegistryEntry,
 ) -> MetricsCanisterReport {
     match query_metrics(options, fleet, icp_root, entry) {
-        Ok(mut entries) => {
-            if options.nonzero {
-                entries.retain(|entry| !metric_value_is_zero(&entry.value));
-            }
-            if entries.is_empty() {
-                return metrics_empty_report(entry, options.nonzero);
-            }
-            MetricsCanisterReport {
-                role: entry.role.clone().unwrap_or_else(|| "-".to_string()),
-                canister_id: entry.pid.clone(),
-                status: MetricsCanisterStatus::Ok,
-                entries,
-                error: None,
-            }
-        }
+        Ok(page) => metrics_success_report(entry, page, options.nonzero),
         Err(error) => metrics_query_error_report(entry, &error),
     }
 }
 
-fn metrics_empty_report(entry: &RegistryEntry, nonzero: bool) -> MetricsCanisterReport {
+fn metrics_success_report(
+    entry: &RegistryEntry,
+    page: MetricsPage,
+    nonzero: bool,
+) -> MetricsCanisterReport {
+    let mut entries = page.entries;
+    let fetched = entries.len() as u64;
+    if nonzero {
+        entries.retain(|entry| !metric_value_is_zero(&entry.value));
+    }
+    let empty = entries.is_empty();
     MetricsCanisterReport {
         role: entry.role.clone().unwrap_or_else(|| "-".to_string()),
         canister_id: entry.pid.clone(),
-        status: MetricsCanisterStatus::Empty,
-        entries: Vec::new(),
-        error: Some(
+        status: if empty {
+            MetricsCanisterStatus::Empty
+        } else {
+            MetricsCanisterStatus::Ok
+        },
+        total: Some(page.total),
+        fetched,
+        truncated: fetched < page.total,
+        entries,
+        error: empty.then(|| {
             if nonzero {
                 METRICS_NONZERO_EMPTY_HINT
             } else {
                 METRICS_EMPTY_HINT
             }
-            .to_string(),
-        ),
+            .to_string()
+        }),
     }
 }
 
@@ -200,6 +202,9 @@ fn metrics_failure_report(
         role: entry.role.clone().unwrap_or_else(|| "-".to_string()),
         canister_id: entry.pid.clone(),
         status,
+        total: None,
+        fetched: 0,
+        truncated: false,
         entries: Vec::new(),
         error: Some(error.to_string()),
     }
@@ -229,28 +234,56 @@ fn query_metrics(
     fleet: &CurrentFleetResolution,
     icp_root: &Path,
     entry: &RegistryEntry,
-) -> Result<Vec<MetricEntry>, MetricsQueryError> {
+) -> Result<MetricsPage, MetricsQueryError> {
     let mut icp = IcpCli::new(&options.icp, Some(options.environment.clone()));
     icp = icp.with_cwd(icp_root);
-    let request = canic_contracts::dto::role::MetricsStatusRequest {
-        kind: metrics_kind_dto(options.kind),
-        page: canic_contracts::dto::page::PageRequest {
-            offset: 0,
-            limit: options.limit,
-        },
-    };
-    let response = observe_fleet_canister(
-        &icp,
-        icp_root,
-        &options.environment,
-        fleet,
-        entry,
-        CanisterObservabilityRequest::Metrics(request),
-    )?;
-    let CanisterObservabilityResponse::Metrics(page) = response else {
-        unreachable!("Metrics request returned a different observability response");
-    };
-    Ok(metric_page(page))
+    collect_metric_pages(options.limit, |page| {
+        let request = canic_contracts::dto::role::MetricsStatusRequest {
+            kind: metrics_kind_dto(options.kind),
+            page,
+        };
+        let response = observe_fleet_canister(
+            &icp,
+            icp_root,
+            &options.environment,
+            fleet,
+            entry,
+            CanisterObservabilityRequest::Metrics(request),
+        )?;
+        let CanisterObservabilityResponse::Metrics(page) = response else {
+            unreachable!("Metrics request returned a different observability response");
+        };
+        Ok(metric_page(page))
+    })
+}
+
+/// Bound total fetched rows by the selected limit, including server-clamped pages.
+fn collect_metric_pages(
+    limit: u64,
+    mut query: impl FnMut(
+        canic_contracts::dto::page::PageRequest,
+    ) -> Result<MetricsPage, MetricsQueryError>,
+) -> Result<MetricsPage, MetricsQueryError> {
+    let mut entries = Vec::new();
+    loop {
+        let offset = entries.len() as u64;
+        let remaining = limit.saturating_sub(offset);
+        let mut page = query(canic_contracts::dto::page::PageRequest {
+            offset,
+            limit: remaining,
+        })?;
+        let received = page.entries.len() as u64;
+        page.entries
+            .truncate(usize::try_from(remaining).unwrap_or(usize::MAX));
+        entries.extend(page.entries);
+        let fetched = entries.len() as u64;
+        if received == 0 || fetched >= limit || fetched >= page.total {
+            return Ok(MetricsPage {
+                entries,
+                total: page.total,
+            });
+        }
+    }
 }
 
 fn resolve_metrics_fleet(
@@ -260,6 +293,10 @@ fn resolve_metrics_fleet(
     resolve_current_fleet(&root, &options.environment, &options.fleet)
         .map_err(MetricsCommandError::from)
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -302,7 +339,14 @@ mod tests {
     // Ensure empty successful metric tiers point operators at profile/deployed-Wasm checks.
     #[test]
     fn empty_metrics_reports_carry_profile_hint() {
-        let report = metrics_empty_report(&registry_entry(), false);
+        let report = metrics_success_report(
+            &registry_entry(),
+            MetricsPage {
+                entries: Vec::new(),
+                total: 0,
+            },
+            false,
+        );
 
         assert_eq!(report.status, MetricsCanisterStatus::Empty);
         assert_eq!(
@@ -311,7 +355,14 @@ mod tests {
         );
         assert_eq!(report.error.as_deref(), Some(METRICS_EMPTY_HINT));
 
-        let filtered = metrics_empty_report(&registry_entry(), true);
+        let filtered = metrics_success_report(
+            &registry_entry(),
+            MetricsPage {
+                entries: Vec::new(),
+                total: 0,
+            },
+            true,
+        );
         assert_eq!(filtered.status, MetricsCanisterStatus::Empty);
         assert_eq!(filtered.error.as_deref(), Some(METRICS_NONZERO_EMPTY_HINT));
     }
@@ -373,5 +424,123 @@ mod tests {
         }
 
         assert!(preserved, "typed response cause must remain in the chain");
+    }
+
+    fn count_page(counts: &[u64], total: u64) -> MetricsPage {
+        MetricsPage {
+            entries: counts
+                .iter()
+                .map(|&count| crate::metrics::model::MetricEntry {
+                    labels: vec!["sample".into()],
+                    principal: None,
+                    value: MetricValue::Count { count },
+                })
+                .collect(),
+            total,
+        }
+    }
+
+    #[test]
+    fn metrics_pagination_follows_short_pages_within_the_selected_cap() {
+        for limit in [3, 5, 10] {
+            let mut requests = Vec::new();
+            let page = collect_metric_pages(limit, |request| {
+                requests.push(request);
+                let remaining = 5_u64.saturating_sub(request.offset);
+                let count = request.limit.min(remaining).min(2);
+                Ok(count_page(
+                    &vec![1; usize::try_from(count).expect("small count")],
+                    5,
+                ))
+            })
+            .expect("collect pages");
+            assert_eq!(page.total, 5);
+            assert_eq!(page.entries.len() as u64, limit.min(5));
+            assert_eq!(requests[0].offset, 0);
+            for (index, request) in requests.iter().enumerate() {
+                assert_eq!(request.offset, index as u64 * 2);
+                assert_eq!(request.limit, limit - request.offset);
+            }
+            let report = metrics_success_report(&registry_entry(), page, false);
+            assert_eq!(report.truncated, limit < 5);
+            assert_eq!(report.fetched, limit.min(5));
+        }
+    }
+
+    #[test]
+    fn nonzero_filter_preserves_pre_filter_coverage_in_json() {
+        let report = metrics_success_report(&registry_entry(), count_page(&[0, 0], 1500), true);
+        assert_eq!(report.status, MetricsCanisterStatus::Empty);
+        assert!(report.entries.is_empty());
+        let json = serde_json::to_value(report).expect("serialize report");
+        assert_eq!(json["total"], 1500);
+        assert_eq!(json["fetched"], 2);
+        assert_eq!(json["truncated"], true);
+
+        let complete = metrics_success_report(&registry_entry(), count_page(&[0, 7], 2), true);
+        assert_eq!(complete.entries.len(), 1);
+        assert_eq!(complete.fetched, 2);
+        assert!(!complete.truncated);
+        let failure = metrics_message_error_report(&registry_entry(), "unavailable");
+        assert_eq!(failure.total, None);
+        assert_eq!(failure.fetched, 0);
+        assert!(!failure.truncated);
+    }
+
+    #[test]
+    fn nonzero_rows_after_the_first_page_are_collected() {
+        let page = collect_metric_pages(3, |request| {
+            Ok(if request.offset == 0 {
+                count_page(&[0, 0], 3)
+            } else {
+                count_page(&[7], 3)
+            })
+        })
+        .expect("collect nonzero row from the later page");
+        let report = metrics_success_report(&registry_entry(), page, true);
+        assert_eq!(report.status, MetricsCanisterStatus::Ok);
+        assert_eq!(report.entries.len(), 1);
+        assert_eq!(report.entries[0].value, MetricValue::Count { count: 7 });
+        assert_eq!(report.fetched, 3);
+        assert!(!report.truncated);
+    }
+
+    #[test]
+    fn metrics_pagination_stops_on_empty_pages_and_keeps_latest_total() {
+        let mut calls = 0;
+        let page = collect_metric_pages(10, |_| {
+            calls += 1;
+            Ok(if calls == 1 {
+                count_page(&[0, 1], 5)
+            } else {
+                count_page(&[], 4)
+            })
+        })
+        .expect("empty page ends pagination");
+        assert_eq!(calls, 2);
+        assert_eq!(page.total, 4);
+        assert_eq!(page.entries.len(), 2);
+        assert!(metrics_success_report(&registry_entry(), page, false).truncated);
+    }
+
+    #[test]
+    fn metrics_pagination_preserves_typed_failures_and_enforces_cap() {
+        let error = collect_metric_pages(4, |_| {
+            Err(MetricsQueryError::Observability(
+                FleetObservabilityError::Protocol(CanisterProtocolError::Invocation {
+                    canister: ic_platform::principal::ExternalPrincipal::management_canister(),
+                    method: canic_contracts::protocol::CANIC_ROOT_COMMAND,
+                    source: IcpCommandError::Failed {
+                        command: "query".into(),
+                        stderr: String::new(),
+                    },
+                }),
+            ))
+        });
+        std::assert_matches!(error, Err(MetricsQueryError::Observability(_)));
+        let page = collect_metric_pages(1, |_| Ok(count_page(&[1, 2], 2)))
+            .expect("bound a page exceeding its requested limit");
+        assert_eq!(page.entries.len(), 1);
+        assert!(metrics_success_report(&registry_entry(), page, false).truncated);
     }
 }

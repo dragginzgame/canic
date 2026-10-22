@@ -234,7 +234,7 @@ impl PublicMetricsOps {
             cadence_ns: PUBLIC_METRICS_CADENCE_NS,
             retention_ns: PUBLIC_HISTORY_RETENTION_NS,
             stale_after_ns: PUBLIC_METRICS_STALE_AFTER_NS,
-            truncated: selected && PublicHistoryCache::truncated(),
+            truncated: selected && PublicHistoryCache::truncated(request.family),
             series_limit: MAX_HISTORY_SERIES as u64,
             byte_limit: MAX_HISTORY_BYTES as u64,
             reserved_bytes: if selected {
@@ -700,6 +700,49 @@ mod tests {
         assert_eq!(refreshed.metrics.entries[0].value, 1);
         assert_eq!(refreshed.sampled_at_ns, Some(12));
         ShardingRegistryOps::clear_for_test();
+    }
+
+    #[test]
+    fn history_projection_reports_only_the_selected_familys_latest_admission() {
+        let application = PublicMetricFamily::Application;
+        let cycles = PublicMetricFamily::Cycles;
+        publish(
+            application,
+            10,
+            (0..MAX_HISTORY_SERIES).map(|index| sample(index as u128)),
+        )
+        .unwrap();
+        let mut extra = sample(9);
+        extra.name = "extra".into();
+        publish(cycles, 20, [extra.clone()]).unwrap();
+        let enabled = BTreeSet::from([application, cycles]);
+        let request = |family, name: &str| PublicHistoryRequest {
+            family,
+            name: name.into(),
+            canister_id: None,
+            page: PageRequest {
+                offset: 0,
+                limit: 10,
+            },
+        };
+        let complete =
+            PublicMetricsOps::project_history(request(application, "assigned.0000"), &enabled, 20);
+        assert!(!complete.truncated);
+        assert_eq!(complete.state, PublicSnapshotState::Fresh);
+        let refused = PublicMetricsOps::project_history(request(cycles, "extra"), &enabled, 20);
+        assert!(refused.truncated);
+        assert_eq!(refused.state, PublicSnapshotState::Unavailable);
+        let disabled =
+            PublicMetricsOps::project_history(request(cycles, "extra"), &BTreeSet::new(), 20);
+        assert!(!disabled.truncated);
+        assert_eq!(disabled.state, PublicSnapshotState::Disabled);
+
+        let now = PUBLIC_HISTORY_SLOTS as u64 * PUBLIC_METRICS_CADENCE_NS;
+        publish(cycles, now, [extra]).unwrap();
+        let recovered = PublicMetricsOps::project_history(request(cycles, "extra"), &enabled, now);
+        assert!(!recovered.truncated);
+        assert_eq!(recovered.state, PublicSnapshotState::Fresh);
+        assert_eq!(recovered.points.entries.len(), 1);
     }
 
     #[test]

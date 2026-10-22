@@ -108,12 +108,6 @@ pub enum AuthSignatureError {
 
 #[derive(Debug, ThisError)]
 pub enum AuthScopeError {
-    #[error("token issuer pid mismatch (expected {expected}, found {found})")]
-    IssuerPidMismatch {
-        expected: Principal,
-        found: Principal,
-    },
-
     #[error("attestation subject mismatch (expected caller {expected}, found {found})")]
     AttestationSubjectMismatch {
         expected: Principal,
@@ -136,22 +130,13 @@ pub enum AuthScopeError {
 ///
 /// AuthExpiryError
 ///
-/// Typed failure surface for auth proof and token time-window checks.
+/// Typed failure surface for delegation proof and attestation time-window checks.
 ///
 
 #[derive(Debug, ThisError)]
 pub enum AuthExpiryError {
     #[error("delegation cert expired at {expires_at}")]
     CertExpired { expires_at: u64 },
-
-    #[error("token expired at {exp}")]
-    TokenExpired { exp: u64 },
-
-    #[error("token not yet valid (iat {iat})")]
-    TokenNotYetValid { iat: u64 },
-
-    #[error("delegated token ttl exceeds max {max_ttl_secs}s (ttl {ttl_secs}s)")]
-    TokenTtlExceeded { ttl_secs: u64, max_ttl_secs: u64 },
 
     #[error("attestation expired at {expires_at_ns} (now {now_ns})")]
     AttestationExpired { expires_at_ns: u64, now_ns: u64 },
@@ -224,10 +209,7 @@ impl From<AuthExpiryError> for InternalError {
 
         let code = match err {
             AuthExpiryError::CertExpired { .. } => codes::AUTH_CERT_EXPIRED,
-            AuthExpiryError::TokenExpired { .. } => codes::AUTH_TOKEN_EXPIRED,
-            AuthExpiryError::TokenNotYetValid { .. }
-            | AuthExpiryError::AttestationNotYetValid { .. } => codes::SECURITY_INVALID_STATE,
-            AuthExpiryError::TokenTtlExceeded { .. } => codes::TIME_CAPACITY,
+            AuthExpiryError::AttestationNotYetValid { .. } => codes::SECURITY_INVALID_STATE,
             AuthExpiryError::AttestationExpired { .. } => codes::SECURITY_EXPIRED,
             AuthExpiryError::AttestationEpochRejected { .. } => codes::VERSION_INACTIVE,
         };

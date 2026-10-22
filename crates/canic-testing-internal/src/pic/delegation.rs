@@ -15,16 +15,24 @@ pub fn create_user_shard(
     user_hub_pid: Principal,
     user_pid: Principal,
 ) -> Principal {
-    let created: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
-        pic,
-        user_hub_pid,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        "create_account",
-        (user_pid,),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .expect("update Candid harness call");
+    let created: Result<Principal, Error> =
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args((user_pid,))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).update_call(
+                    user_hub_pid,
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
+                    "create_account",
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
+        .map(|(reply,)| reply)
+        .expect("update Candid harness call");
     created.expect("create_account application failed")
 }
 

@@ -68,10 +68,15 @@ pub fn misplaced_global_option(args: &[OsString]) -> Option<&'static str> {
     while index < args.len() {
         let arg = args[index].to_str()?;
         if COMMAND_SPECS.iter().any(|spec| spec.name == arg) {
-            return args[index + 1..]
+            let tail = &args[index + 1..];
+            // Mint owns --icp as an amount; its Clap parser validates the value.
+            let mint_amount =
+                arg == "cycles" && tail.first().and_then(|arg| arg.to_str()) == Some("mint");
+            return tail
                 .iter()
                 .filter_map(|arg| arg.to_str())
-                .find_map(global_option_name);
+                .filter_map(global_option_name)
+                .find(|option| *option != "--icp" || !mint_amount);
         }
         index += if matches!(arg, "--icp" | "--environment") {
             2

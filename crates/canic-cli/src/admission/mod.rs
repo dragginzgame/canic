@@ -16,6 +16,7 @@ use crate::{
         globals::{internal_environment_arg, internal_icp_arg},
         help::print_help_or_version,
     },
+    output,
     support::icp_target::IcpTargetOptions,
     version_text,
 };
@@ -310,7 +311,7 @@ fn render_status(report: &AdmissionStatusReport) -> String {
                 .unwrap_or_default(),
         ));
     }
-    lines.join("\n")
+    output::render_terminal_lines(&lines)
 }
 
 fn admission_command() -> ClapCommand {

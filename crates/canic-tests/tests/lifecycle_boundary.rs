@@ -283,18 +283,28 @@ fn missing_selected_admission_rejects_install_then_accepts_corrected_retry() {
 }
 
 fn assert_prepared_and_not_ready(pic: &PocketIc, canister_id: Principal, root: Principal) {
-    let status: Result<CanisterStatusResponse, Error> = ic_testkit::pic::query_candid_args(
-        pic,
-        canister_id,
-        root,
-        canic_contracts::protocol::CANIC_CONTROL_STATUS,
-        (CanisterStatusRequest::Operation(OperationStatusRequest {
-            operation_id: [0x43; 32],
-        }),),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .expect("query Prepared Fleet activation status");
+    let status: Result<CanisterStatusResponse, Error> =
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args((
+                CanisterStatusRequest::Operation(OperationStatusRequest {
+                    operation_id: [0x43; 32],
+                }),
+            ))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).query_call(
+                    canister_id,
+                    root,
+                    canic_contracts::protocol::CANIC_CONTROL_STATUS,
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
+        .map(|(reply,)| reply)
+        .expect("query Prepared Fleet activation status");
     let CanisterStatusResponse::Operation(operation) = status.expect("Prepared activation status")
     else {
         panic!("managed Canister returned a differently correlated operation status");
@@ -304,16 +314,25 @@ fn assert_prepared_and_not_ready(pic: &PocketIc, canister_id: Principal, root: P
         status.fleet_activation.phase,
         FleetActivationPhase::Prepared
     );
-    let readiness: Result<CanisterStatusResponse, Error> = ic_testkit::pic::query_candid_args(
-        pic,
-        canister_id,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        canic_contracts::protocol::CANIC_OBSERVABILITY,
-        (CanisterStatusRequest::Readiness,),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .expect("query managed Canister readiness");
+    let readiness: Result<CanisterStatusResponse, Error> =
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes =
+                ic_platform::candid::contract::encode_args((CanisterStatusRequest::Readiness,))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).query_call(
+                    canister_id,
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
+                    canic_contracts::protocol::CANIC_OBSERVABILITY,
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
+        .map(|(reply,)| reply)
+        .expect("query managed Canister readiness");
     let CanisterStatusResponse::Readiness(readiness) =
         readiness.expect("Prepared readiness status")
     else {

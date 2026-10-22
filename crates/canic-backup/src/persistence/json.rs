@@ -246,12 +246,14 @@ mod tests {
         let root = temp_dir("canic-backup-json-read-fifo");
         fs::create_dir_all(&root).unwrap();
         let path = root.join("record.json");
-        rustix::fs::mkfifoat(
-            rustix::fs::CWD,
-            &path,
-            rustix::fs::Mode::RUSR | rustix::fs::Mode::WUSR,
-        )
-        .unwrap();
+        assert!(
+            std::process::Command::new("/usr/bin/mkfifo")
+                .args(["-m", "600"])
+                .arg(&path)
+                .status()
+                .expect("create writerless FIFO")
+                .success()
+        );
         let PersistenceError::Io(error) = read_json::<serde_json::Value>(&path).unwrap_err() else {
             panic!("expected descriptor admission failure");
         };

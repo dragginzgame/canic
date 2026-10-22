@@ -1,42 +1,1058 @@
-# Current handoff — 2026-10-20
+# Current handoff — 2026-10-21
 
-## Tooling 0.63 / Platform 0.6 / Shared Tooling 0.26.1 — 2026-10-21
 
-Adopted reviewed Shared 67d4f25d1a613a27d7dfd7b5a4ae119e0e529fc7 through its
-canonical exporter. All 132 snapshot files verify. Canic explicitly selects
-ic-wasm/icp/wasm-opt; installation and checks pass on Linux. No sibling source edits.
-The previously prepared automatic release adoption phases are now applied:
-cheap admission, existing workspace Clippy, fixture lint/freshness, remaining gates.
-Actual Make command fixtures pass with parallel/failure barriers; ShellCheck passes.
+## Blob mounted recovery acceptance — 2026-10-21
 
-Preserved the maintainer's Platform 0.6 / Timers 0.30 root edits; aligned independent
-Blob catalogs/locks and selected Backup's required principal feature. Core, Host
-and Backup libraries pass scoped strict Clippy. Blob adapter fails two owned
-Principal assignments against published Blob 0.39 / Platform 0.5.1. Tracked at
-[Blob #95](https://github.com/dragginzgame/ic-blob-storage/issues/95). No shim added.
-Auth protocol types 0.12.1 and Timers 0.30 also retain Platform 0.5 in the normal
-Wasm graph; early adoption admission refuses that split before compilation.
+#620's Canic-owned mounted acceptance is locally qualified, alongside #621's
+metrics fix. Both final dedicated/embedded PocketIC cases and strict internal
+feature-enabled Clippy pass. Added original-operation inspection after an
+uncollected certificate reply; restoration after preparation/exposure; complete
+attestation receipt equality; crossed service/namespace and caller refusals;
+expired admission/preparation; pre-exposure and confirmed-upload revocation;
+and malformed versus oversized certificate rejection. No production contract,
+dependency, sibling, publication or deployment changed in this slice.
 
-IC Tooling 0.63 adoption selects Build, Host Process and Host Text. Scoped strict
-library Clippy passes for Host, Backup and CLI; root dependency-boundary checks
-and both independent fixture locked metadata checks pass. No fixture lock changes
-are needed for these host-only selections. Full Host adoption awaits
-[Backup #62](https://github.com/dragginzgame/ic-backup/issues/62#issuecomment-6311309760)
-and [Query #92](https://github.com/dragginzgame/ic-query/issues/92); retain matching
-Artifacts/FS/Tools 0.62 public types. Testkit remains 0.62 under the 0.112 codec
-exception because 0.63 removes Candid helpers. Build's separately pinned release
-metadata executable remains unchanged. Evidence: `/tmp/canic-tooling063-*.log`.
-Early admission still refuses the existing Platform 0.5.1/0.6.0 Wasm split.
-The focused Host Candid capture tests cannot compile: retained Testkit 0.62 takes
-Platform 0.5 DecodeLimits while Canic supplies 0.6. Consumer ownership work is
-tracked in [Canic #615](https://github.com/dragginzgame/canic/issues/615); no test
-execution or full-graph qualification is claimed.
+Evidence: `/tmp/canic-blob-recovery/`, final `*-qualified.log` and
+`clippy-complete.log`; earlier failed decoder expectation and sandbox socket
+failure are retained separately. Keep #620/#621 open pending default-branch delivery.
+Published Blob/contracts remain 0.40.4. The guide and both changelogs are updated.
 
-Evidence: `/tmp/canic-platform060-{clippy,admission}.log` and
-`/tmp/canic-shared0261-*.log`. Full tests, managed Wasm/install proofs, native macOS
-and release execution were not run. No fixture refresh was attempted against the
-incompatible graph. The complete release batch remains blocked on upstream alignment;
-notes describe the pending adoption rather than claiming deployment qualification.
+End-to-end Blob is still not 100%: upstream #32 needs authoritative provider GC
+caller/failure and deletion/billing evidence and shared handlers; #33 needs the
+operated verifier/provider acceptance. Serving/multi-user evidence remains #5/#6/#31.
+No live-provider, installed-IC or native macOS qualification is claimed. The complete
+0.112 batch is not push/publish-ready based on these local checks alone.
+
+## Blob mounted journey and fence metrics — 2026-10-21
+
+Fixed a reproduced stale public metric: Blob capacity inspection reported a recovery
+fence after background platform-version changes while `blob.fenced` still reported
+active. Sampling now observes the version through Blob's shared installation owner;
+it never clears fences or adds a continuity/timer owner.
+
+Pass: strict feature-enabled internal Clippy and both exact managed PocketIC cases.
+They now check public accounting/cache/timestamp/visibility and embedded metrics,
+plus two successful mounted preparation/certificate/verifier-attestation/reference
+journeys, reference replay, released-reference download refusal and retained
+attestation statements across restoration. Evidence: `/tmp/canic-blob-metrics/`.
+The verifier and bytes are controlled fixtures, not an external provider read.
+
+#621 is locally resolved pending delivery. #620 remains open for crossed bindings,
+revoked/expired permissions, lost-certificate-reply reconciliation and interruption
+at intermediate operation stages. Upstream provider/GC/billing acceptance remains
+separate. Blob is not 100% qualified; complete 0.112 is not push/publish-ready.
+Both changelogs and the guide are updated. No dependencies, sibling files, Git
+publication, deployment or paid provider effects changed.
+
+## Blob framework qualification checkpoint — 2026-10-21
+
+Adopted published Blob Storage/contracts 0.40.4 locally; qualification is incomplete. Both private consumer locks align with Platform 0.6.6, Memory/Storage
+0.50.10 and Wire 0.5.19. Fixed the build macro's conflicting Store App check;
+canonical Store identity and selected-App Root identity are both enforced.
+Added malformed/wrong-method/trailing/oversized tenant-ingress refusal coverage.
+
+Pass: three-workspace dependency admission, dedicated and embedded managed
+PocketIC compositions, production Root target-binding/recovery, the build-identity
+regression, strict scoped Clippy, formatting and both complete managed Wasm builds
+on Rust 1.91. MSRV evidence is build-only; endpoint acceptance used the normal
+local toolchain. Evidence/before-images: `/tmp/canic-blob-closeout/`.
+
+No remaining Blob/Cashier engine was found in Core. Adapter composition remains
+Canic-owned. No live provider, native macOS or installed-IC acceptance is claimed;
+optional funding #494, dynamic provisioning #493 and downstream Apps are separate.
+Both changelogs and the composition guide are updated. Keep #444 open for delivery.
+No Git publication or deployment ran. The prior closeout claim was too broad:
+Canic #620 still needs the successful mounted upload/certificate/attestation/reference
+journey, and #621 needs public metrics composition/restoration acceptance. Passing
+admission/recovery tests do not prove those paths. Upstream provider acceptance
+remains open under Blob #5/#6/#31/#32/#33; funding is #34 / Canic #494.
+Do not describe Blob as 100% qualified. The overall 0.112 batch also remains blocked
+by unfinished Auth production integration.
+
+## Retired token diagnostic producers — 2026-10-21
+
+Removed unused delegated-token errors and the token-expiry constructor after
+checking current and sibling source consumers. E159 is retired in the canonical
+ledger/host catalogue, with no runtime producer constant or numeric reassignment.
+Preserved active proof/attestation errors and corrected generated retired-row
+formatting so the existing catalogue equality guard remains exact.
+
+Pass: all four diagnostic-register tests, strict all-feature Core/Host library
+and test Clippy, consuming Canic receiver-feature Wasm compilation and scoped
+formatting/whitespace. Evidence/before-images: `/tmp/canic-auth-error-cut/`.
+Both changelogs are updated. No Auth crate change, dependency update, sibling edit
+or Git publication ran. This cleanup does not add production portable endpoints.
+Root enrollment, retained receiver runtime and endpoint integration still block
+the complete 0.112 batch. Activation remains closed pending qualified skew inputs;
+TEE hardware and installed-IC acceptance remain unavailable. Not push/publish-ready.
+
+## Retired subject-validator removal — 2026-10-21
+
+Removed the unused topology-based application account validator and its unused
+denial surface. Source searches found no production or sibling consumers; only
+its own tests depended on it. The selected portable flow authenticates the account
+at the issuer and binds the separate browser caller through shared Auth. Active
+transport/topology guards and the closed application facade remain intact.
+
+Pass: five focused access-auth tests, strict all-feature Core library/test Clippy,
+the consuming Canic receiver-feature Wasm build and scoped formatting. Evidence
+and before-images: `/tmp/canic-auth-subject-cut/`. Both changelogs and active Auth
+documentation are updated. No upstream Auth change is needed for this removal.
+Production enrollment, retained receiver runtime and portable endpoints under
+#491/#507 still block the complete 0.112 batch; it is not push/publish-ready.
+Skew activation remains closed and TEE qualification unavailable. No dependencies,
+sibling source, Git publication, deployment or installed-IC qualification changed.
+
+## Maintenance clock refusal — 2026-10-21
+
+Session maintenance now closes derived indexes before checking the retained clock,
+matching startup's fail-closed behavior. A native shared-engine admission case
+proves subsequent authorization fails after rollback, preserves the complete
+checkpoint and login occupancy, and succeeds after valid restoration with the
+original lease. No Auth 0.14.1 API change is needed for this correction.
+
+Pass: 34 focused session-storage tests, strict all-feature Core library/test Clippy,
+receiver-feature Wasm compilation and scoped formatting. Evidence/before-images:
+`/tmp/canic-auth-maintenance-clock/`. No installed-IC or TEE qualification ran.
+Root enrollment, retained receiver runtime and portable production endpoints remain
+unfinished under #491/#507; the unqualified skew activation gate remains closed.
+The complete 0.112 batch is not push/publish-ready. Both changelogs are updated;
+no dependencies, sibling source, Git publication or deployment changed.
+
+## Bounded standalone manifest validation — 2026-10-21
+
+Locally repaired the remaining reader in [#562](https://github.com/dragginzgame/canic/issues/562).
+`backup manifest validate` now uses Backup's canonical 64 MiB regular-descriptor
+reader before JSON decoding. Native I/O, JSON and schema failures retain their
+categories; explicit path aliases remain supported. Snapshot streaming is separate.
+
+Pass: all seven manifest-command tests, including exact/over-limit acquisition,
+writerless FIFO refusal, aliases and typed failures; strict CLI library/test Clippy
+and scoped formatting/whitespace. Evidence: `/tmp/canic-bounded-manifest-20261021/`.
+No dependency, version, Git publication, broad gate or live restore effects ran.
+
+The fix and both changelog entries are ready for integration. Keep #562 open for
+delivery and owning acceptance. The complete 0.112 batch remains unready to
+push/publish while Auth production work under #491/#507 is unfinished.
+
+## Renewal completion clock — 2026-10-21
+
+Renewal now reads time after its asynchronous sweep when computing success and
+failure schedules. An already-expired proof, including exact expiry, no longer
+constrains retry to one nanosecond; normal bounded backoff applies. Signed proof
+deadlines remain unchanged. This fixes active Root renewal, not portable issuance.
+
+Pass: five focused renewal tests (including before/at/after expiry), strict Core
+all-feature library/test Clippy, Root-signing-feature Wasm compilation and scoped
+formatting. Evidence and before-images: `/tmp/canic-auth-renewal-completion/`.
+No installed-IC or TEE qualification, dependency update or Git publication ran.
+Production enrollment, retained receiver runtime and portable endpoints remain
+unfinished under #491/#507. The unqualified skew activation gate stays closed;
+the complete 0.112 batch is not push/publish-ready. Both changelogs are updated.
+
+## App workspace membership and backup path admission — 2026-10-21
+
+Locally repaired [#295](https://github.com/dragginzgame/canic/issues/295) and
+[#317](https://github.com/dragginzgame/canic/issues/317). App creation validates and
+adds its initial workspace member with existing scaffold rollback. Deletion previews
+member/default-member removals, checks the reviewed manifest and publishes before
+removing files. A failed publication preserves the App; partial removal reports the
+remaining path and keeps membership updated. Other Apps/shared globs are preserved.
+
+Backup manifests, download journals, saved restore plans and persistence now use one
+relative-path rule, with typed refusals before file access. Nested/Unicode identities
+remain supported; descriptor confinement stays at use.
+
+Pass: 55 app/scaffold and 58 manifest/journal/restore-plan native cases, strict Backup
+and CLI library/test Clippy, scoped formatting and whitespace. Evidence and task
+before-images: `/tmp/canic-input-fixes-20261021/`. Checks used the incoming published
+Host/Build 0.63.2, Platform 0.6.6 and Memory/Storage 0.50.10 graph. No dependency,
+version, Git publication, broad gate, live restore or deployment ran in this task.
+
+These fixes and both changelog entries are ready for integration; the complete
+0.112 batch remains unready to push/publish while Auth production work under
+#491/#507 is unfinished. Keep these issues open until delivery and owning acceptance.
+
+
+## Restored receiver authority qualification — 2026-10-21
+
+Added native Ed25519 acceptance through shared-engine admission into Canic's
+stable backend, index reconstruction and login-ledger restoration. Matching
+current authority succeeds. Changed issuer/key, expired enrollment, a newer login
+reset floor and authority shorter than the original lease refuse access with
+StaleAuthority. All cases preserve the complete checkpoint and login occupancy.
+The fixture's protected authority is independently controlled, not credential-led.
+
+Pass: 31 shared session tests; the final admission-based regression also passed
+separately, along with strict all-feature Core library/test Clippy and formatting.
+Evidence: `/tmp/canic-auth-restored-authority/`. Only native test code changed;
+this supplies no production Root-refresh, endpoint, installed-IC or TEE evidence.
+Production enrollment/runtime/endpoints remain incomplete under #491/#507 and the
+skew activation gate stays closed. The complete 0.112 batch is not push/publish-ready.
+Both changelogs are updated. No dependencies, sibling files or Git publication changed.
+
+
+## Independent receiver authority in Auth qualification — 2026-10-21
+
+Corrected the durable admission fixture: submitted claims no longer supply the
+protected issuer/key, audience, mechanism or grants. Authority comes from an
+independent approved set; removed the credential-carried verification key.
+Signed unapproved-issuer, excessive-grant, foreign-audience and substituted-key
+cases return typed refusals without session/login writes, followed by a successful
+approved admission. This strengthens evidence; it does not add production enrollment.
+
+Pass: 30 shared session-store tests, strict all-feature Core library/test Clippy,
+scoped formatting and whitespace. Evidence: `/tmp/canic-auth-protected-fixture/`.
+Checks used Auth 0.14.1 and incoming Platform 0.6.6/Memory-Storage 0.50.10 selections;
+this slice did not change dependencies. No installed-IC or TEE qualification ran.
+Production enrollment/runtime/endpoints remain unfinished under #491/#507 and the
+skew activation gate stays closed. The complete 0.112 batch remains unready to
+push/publish; both changelogs are updated. No Git publication or sibling edits ran.
+
+
+## Published Auth 0.14.1 and signing completion — 2026-10-21
+
+Adopted crates.io Auth/protocol types 0.14.1 in the catalog and all three maintained
+locks; no unrelated package selections changed. Published source revision is
+`5d7da698d3e4d297f32445fb88adbc66a79c5520`. Both Rust source trees match 0.14.0;
+upstream SDK/receiver qualification and guides changed. Current contract links
+and both changelogs now select this release. Upstream fixture acceptance does not
+complete Canic production integration.
+
+Signing now timestamps successful results and computes bounded retry backoff
+using the completion clock, supplied by production IcOps. Results arriving at or
+after expiry are discarded. Root retrieval/renewal also recheck completion time;
+both successful and failed callbacks respect current batch identity/status.
+Original signed bytes/deadlines and the existing retry cap remain unchanged.
+
+Pass: 29 batch tests, 29 shared session-store tests, seven provisioning tests,
+strict all-feature Core library/test Clippy, receiver-feature Core Wasm compilation
+and dependency admission for all three workspaces. Receiver-feature Wasm also
+passes on Rust 1.91.0. Evidence: `/tmp/canic-auth-signing-deadlines/`. These are
+local checks, not native macOS, installed-IC or TEE evidence.
+
+Production Root enrollment, retained receiver runtime/budgets, portable issuer,
+admission/logout endpoints and successful authorization remain unfinished under
+#491/#507. Production skew activation stays closed; #506 also remains open pending
+delivery. The complete 0.112 batch is not push/publish-ready. No sibling edits,
+Git publication, release or deployment ran.
+
+## Local application Root binding — 2026-10-21
+
+Startup now requires the configured local application proof Root to equal the
+installed Root before retaining authority. Missing and mismatched Roots return
+typed refusals without changing the prior binding or authority generation.
+The global proof configuration remains unchanged for other consumers.
+
+Pass: both local-authority tests, strict all-feature Core library/test Clippy,
+and receiver-feature Core Wasm compilation. Evidence:
+`/tmp/canic-auth-root-binding/`. This qualifies the production startup path with
+native state fixtures and cross-compilation, not installed endpoint admission.
+
+Root enrollment delivery, retained receiver runtime/budgets and production
+issuer/admission/logout are still unfinished under #491/#507. The facade remains
+closed; production skew is unqualified and TEE hardware evidence unavailable.
+The complete 0.112 batch remains unready to push/publish. Both changelogs are
+updated; no dependency, Git publication, release or sibling changes were made.
+
+
+## Unused token-scope policy removal — 2026-10-21
+
+Removed `auth.allowed_token_scopes` from the maintained schema, parser/validation,
+generated runtime configuration, constructors and five Canic fixtures. It had no
+authorization consumer. Consuming TOML must remove that setting before rebuilding;
+there is no compatibility alias. Local application scope/TTL validation and
+retained Root/issuer proof support remain. CONFIG.md and both changelogs now
+state the current ownership boundary and required consumer action.
+
+Pass: 49 schema tests, both renderer tests, the Auth allocation regression and
+12 runtime Auth tests; the existing chain-key fixture check now also includes
+both alternate Root configurations. Strict all-feature Core library/test Clippy,
+receiver-feature Core Wasm compilation and native compilation of the actual
+Root, issuer and local-authorization probes passed, as did scoped formatting.
+Evidence: `/tmp/canic-auth-token-policy-cut/`. Checks used the incoming Auth 0.14.0,
+Platform 0.6.5 and Memory/Storage 0.50.9 graph; only missing locked packages were
+fetched, with no dependency changes in this slice.
+
+This removes configuration residue; it does not implement protected enrollment
+or open the denial-only facade. Root enrollment delivery, retained receiver
+runtime/budgets and production issuer/admission/logout remain next under #491/#507.
+Production skew activation stays closed; no installed-IC or TEE evidence is claimed.
+The complete 0.112 batch remains unready to push/publish. No Git publication,
+release, deployment or sibling edits ran.
+
+## Family history truncation — 2026-10-21
+
+Locally repaired [#105](https://github.com/dragginzgame/canic/issues/105): public
+history truncation now records rejection in each family's latest admission pass.
+Sampling another family preserves its result; a pass without history rejection
+clears its own flag, including after expiry releases capacity. Failed snapshot
+validation preserves the prior result. An exhaustive allocation-free mask keeps
+the flags bounded. Direct `PublicHistoryCache::truncated` callers supply a family.
+Reply shapes, stable schemas, retention, gap semantics and query purity are retained.
+
+Pass: 35 targeted history/public-metrics tests with all features, strict Core
+library/test Clippy with all features, a no-default-feature Core Wasm check,
+scoped formatting and whitespace. Evidence:
+`/tmp/canic-history-truncation-20261021/`. Regressions cover all five families,
+rejection, independent recovery, invalid replacement, empty passes, expiry and
+selected/disabled public response projection. This is native backend and
+cross-compilation evidence, not installed-IC or instruction-budget qualification.
+
+This slice and both changelog surfaces are ready for integration. Keep #105 open
+until delivery on default main. The complete 0.112 batch remains unfinished on
+Auth and is not push/publish-ready. No dependency/version change, commit or push ran.
+
+
+## Published Auth 0.14 adoption — 2026-10-21
+
+Selected crates.io `ic-auth` and `ic-auth-protocol-types` 0.14.0 after inspecting
+the published sources (revision `39a572404374388117b01eb1518321526fe8cee5`).
+Updated the framework catalog and all three maintained lockfiles; unrelated
+package selections are unchanged. This supersedes the earlier unadopted-draft note.
+
+Canic's real shared-engine admission regressions now project typed future-start,
+expiry and caller-substitution refusals, retaining exact original credential retries
+and deadlines. Auth's Wire reply and explicit account/browser coordinator changed
+upstream; Canic still has no production endpoint/client using those surfaces.
+No local codec, text-error fallback or replacement auth flow was introduced.
+
+Pass: 31 session-storage tests, 49 selected batch/delegation tests and seven
+provisioning tests (including #506), strict all-feature Core library/test Clippy,
+Core receiver-feature Wasm checks on the active compiler and Rust 1.91.0,
+scoped formatting/whitespace and dependency admission for the framework and both
+independent Blob consumers. Evidence: `/tmp/canic-auth-014-adoption/`.
+The receiver's normal dependency graph selects both Auth verifiers and restoration
+without Auth signature preparation. Platform verification still shares its
+`canister-sig-creation` feature; no whole-artifact signing-code exclusion is claimed.
+
+No new upstream adoption blocker was found. #418/#491/#507 remain open: protected
+Root enrollment, retained receiver state/budgets, production issuer/admission/logout,
+successful scoped authorization and installed acceptance are still unfinished.
+Production clock-skew activation remains closed; no native macOS, installed-IC or
+TEE hardware qualification ran. Both changelogs are updated for this adoption;
+the complete 0.112 batch is not push/publish-ready. No Git publication or deployment.
+
+## CLI text escaping — 2026-10-21
+
+Locally repaired [#301](https://github.com/dragginzgame/canic/issues/301): runtime
+and management inspection, quick-status headers and admission-status lines use
+the shared terminal escaping owner before report separators are joined. List
+headings and missing-role hints are escaped alongside existing table-cell handling.
+Control characters, line separators and bidirectional controls become visible
+text; printable Unicode, trusted layout/colours and original JSON values remain.
+No transport, endpoint or report schema changed.
+
+Pass: 54 tests in the affected CLI renderer/output modules (74 selected tests
+including incidental substring matches), strict CLI library/test Clippy with all
+features, scoped formatting and whitespace. Evidence:
+`/tmp/canic-terminal-text-20261021/`. Regressions inject OSC/ANSI sequences,
+newlines, C1 and Unicode controls into runtime fields, management data, phases,
+versions and headings; they verify line boundaries and raw decoded JSON values.
+This is native Linux rendering evidence; no live Fleet or macOS run is claimed.
+
+This slice and both changelog surfaces are ready for integration. Keep #301 open
+until delivery on default main. The complete 0.112 batch remains unfinished on
+Auth and is not push/publish-ready. No dependency/version change, commit or push ran.
+
+
+## Independent local application Auth policy — 2026-10-21
+
+Removed the local-session configuration dependency on the token-verifier flag
+and duplicate token-scope ceiling. Local scopes remain sorted, unique and bounded;
+TTL validation and protected Root/registry generation tracking remain intact.
+The runtime projection now resolves configured local policy and managed Fleet/role
+identity without silently treating it as disabled when that flag is absent.
+
+Pass: seven focused policy/projection/role-allocation tests, strict Core library
+and test Clippy, production-feature Core Wasm compilation, scoped formatting and
+whitespace. Evidence: `/tmp/canic-auth-policy-decoupling/`. The normal/build Wasm
+feature graph was inspected separately from native dev-dependency unification.
+It selects both Auth verifiers and restoration without Auth signature preparation.
+Platform's `signature-verification` still selects its `canister-sig-creation`
+feature (shared public-key/verification primitives); this inspection does not
+prove artifact-level signing-code exclusion.
+
+This is configuration/runtime-projection cleanup, not completed Auth integration.
+The shared session adapter remains test-gated; promoting it alone would leave
+unused code without the protected receiver runtime owner. Root enrollment is
+still DTO-only. Next: connect protected enrollment delivery, retained ledger and
+budgets, admission/logout and successful scoped authorization. Production skew
+activation remains closed; TEE and installed endpoint qualification remain absent.
+The Auth 0.14 sibling draft remains read-only and unadopted. #491/#507 stay open.
+The complete 0.112 batch is not push/publish-ready; both changelogs reflect this
+slice. No dependencies, versions, Git refs or deployed state changed.
+
+## Positive bounded top-up configuration — 2026-10-21
+
+Corrected the validation slice of [#72](https://github.com/dragginzgame/canic/issues/72):
+Component and child top-up amounts must be positive and at most half the threshold.
+Division avoids the former saturating-multiplication hole at `u128::MAX`.
+Omit `topup` to disable it. Configuration docs explain that default initial cycles
+start below the default threshold, give the examples explicit initial headroom,
+and document the lifetime child budget and existing typed exhaustion warning/stop.
+No initial-balance restriction, new runtime warning or funding-cap reset was added.
+
+Pass: both targeted validation regressions, strict Core library/test Clippy with
+all features, scoped formatting and whitespace. Evidence:
+`/tmp/canic-topup-validation-20261021/`. Cases cover omitted/default policies,
+zero amounts, exact/odd thresholds, full-width bounds and both TOML ownership
+locations. Validation is host/test-only; no new installed-IC evidence is claimed.
+
+This slice and both changelog surfaces are ready for integration. Keep #72 open
+for default-main delivery and final disposition of its startup-warning recommendation.
+The complete 0.112 batch remains unfinished on Auth and is not push/publish-ready.
+No dependency/version change, commit or push ran.
+
+
+## Root config diagnostic path removal — 2026-10-21
+
+Locally repaired [#330](https://github.com/dragginzgame/canic/issues/330): the build
+macro no longer emits the absolute source config path as a runtime string.
+Root startup and both lifecycle forwarding layers no longer carry its redundant
+argument. Configuration traps identify embedded config and retain the cause.
+Direct helper callers must remove the final path argument; generated sources,
+runtime authority, typed configuration and diagnostic TOML are otherwise retained.
+
+Pass: all four build-config surface tests, strict facade/Core/Control Plane
+library/test Clippy with all features, a Wasm check of the actual `root_probe`
+startup macro, scoped formatting and whitespace. Evidence:
+`/tmp/canic-root-config-path-20261021/`. The new subprocess regression compares
+current compiler values and generated file contents across two checkout locations.
+This is generated-source and cross-compilation evidence, not whole-Wasm
+reproducibility or installed-IC lifecycle qualification.
+
+This slice and both changelog surfaces are ready for integration. Keep #330 open
+until delivery on default main. The complete 0.112 batch remains unfinished on
+Auth and is not push/publish-ready. No dependency/version change, commit or push ran.
+
+
+## Independent account/browser caller qualification — 2026-10-21
+
+The local read-only Auth 0.14 draft now passes explicit `{ browser, account }`
+identities to the private coordinator: account signing is confined to issuer
+issue/lookup, while browser signing serves receiver admission. The owner reports
+separate SDK qualification; Canic has not adopted or rerun that unpublished code.
+No new upstream blocker or alternate flow was introduced.
+
+Canic's credential fixture now takes the observed receiver caller independently
+of claims instead of deriving a necessarily matching caller. The new regression
+tries the authenticated account principal and another device against the same
+credential, requires typed caller mismatch with unchanged storage/ledger, then
+admits only the bound browser and checks separate issuer/subject identity.
+Pass: 31 focused storage tests, strict Core library/test Clippy and scoped
+formatting/whitespace checks. Evidence: `/tmp/canic-auth-caller/`. The incoming
+lock selects Metrics 0.15.4; no dependency version was edited by this task.
+
+This is native storage/shared-engine qualification, not production caller capture
+or endpoint acceptance. No production code or activation policy changed. Runtime
+ownership, protected enrollment, successful receiver/issuer endpoints and browser
+integration remain unfinished. Production skew and TEE evidence remain unqualified;
+the full Auth/0.112 batch is not push/publish-ready. Changelogs are updated; no
+sibling edit, commit, publication, deployment or state reset occurred.
+
+
+## CLI metrics coverage — 2026-10-21
+
+Locally repaired [#284](https://github.com/dragginzgame/canic/issues/284): metrics
+queries follow short pages within the selected per-canister row cap. JSON retains
+the latest server `total`, pre-filter `fetched` count and `truncated` flag; text
+warns about omitted rows even when `--nonzero` leaves no displayed entries.
+Empty pages stop pagination; typed query failures retain error/unavailable status
+with an unknown total. Runtime endpoint contracts and dependencies are unchanged.
+Strict JSON consumers must accept the three new report fields. Metrics pages
+remain live observations, not an atomic snapshot across calls.
+
+Pass: 21 targeted CLI metrics tests, strict CLI library/test Clippy with all
+features, the recursive command-help ordering/size regression, scoped formatting
+and whitespace. Evidence: `/tmp/canic-metrics-pagination-20261021/`. Regressions
+cover short pages, exact caps, later nonzero rows, empty pages, typed failures and
+JSON/text coverage. This is native CLI evidence, not installed-Fleet qualification.
+
+This slice and its changelog surfaces are ready for integration. Keep #284 open
+until delivery on default main. The complete 0.112 batch remains unfinished on
+Auth and is not push/publish-ready; no version change, commit or push ran.
+
+
+## Production Auth restoration clock boundary — 2026-10-21
+
+The production synchronous startup owner now supplies `IcOps::now_nanos()` to
+application-session restoration. Restoration invalidates derived indexes before
+checking the persisted clock; rollback refuses with indexes unavailable and no
+record changes. Successful restoration advances the protected observation,
+rebuilds byte accounting, and leaves session leases/replay/login records unchanged.
+Cleanup and login maintenance reuse the same clock/snapshot validation owner.
+No activation, enrollment substitution, timer or compatibility path was added.
+
+Pass: 30 targeted session-storage tests, strict Core library/test Clippy and
+normal Auth-enabled Wasm checking. Evidence: `/tmp/canic-auth-boot-clock/`.
+The regression directly tests the storage boundary with a retained session,
+backward time and later successful restoration. This is native backend evidence;
+production startup wiring is inspected and cross-compiled, not installed-IC
+lifecycle qualification. Existing #506 renewal work is preserved.
+
+Production runtime ledger/budgets, protected Root enrollment/reset metadata,
+successful issuer/reconciliation and receiver/browser endpoints remain unfinished.
+The 0.14 refusal draft remains separate; no dependency selection changed here.
+Production skew and TEE evidence remain unqualified; activation stays closed.
+The complete Auth/0.112 batch is not push/publish-ready. Changelogs are updated;
+no sibling edit, commit, release, publication, deployment or state reset ran.
+
+
+## Local Auth 0.14 review and immutable retry fixture — 2026-10-21
+
+Inspected the read-only sibling's dirty 0.14 draft atop delivered commit
+`7a1183ba8556ab7c6e7880332a8695af2b86c44f`; its package version remains 0.13.3.
+The draft replaces admission error text with the bounded `AdmissionRefusal`,
+projects core errors via `SessionError::admission_refusal()` and preserves the tag
+in the browser adapter. Receiver encoders/generated clients must move together;
+no fallback or downstream copy is needed. Requests, successful replies, credential
+bytes, stored records and read/logout contracts are unchanged. No new upstream
+blocker was established. Canic remains on published Auth 0.13.3 with no path override.
+
+Refactored the native credential fixture to retain one signed issuance separately
+from admission attempts. The regression checks typed future-start refusal without
+writes, later creation, exact recovery of the original live session after the
+admission window closes, and expired refusal at fresh receiver state. No retry
+reissues or changes bytes/deadlines. These are Canic storage/shared-engine cases,
+not real receiver endpoints, an issuer service or installed browser qualification.
+Pass: 29 storage tests and strict Core library/test Clippy; evidence:
+`/tmp/canic-auth-014-review/`. No production source changed; no fresh Wasm or
+installed endpoint qualification is claimed.
+
+Pending 0.14's refusal projection does not implement Canic's missing runtime,
+enrollment, issuer/lookup or receiver/browser endpoints. Adopt matching published
+Auth packages and generated Wire clients together when available; do not reproduce
+the draft enum locally. Production skew and TEE evidence remain unqualified and
+activation stays closed. The complete 0.112 batch is not push/publish-ready. No
+sibling edit, dependency update, Git publication or deployment occurred.
+
+
+## Store staging-status allocation and hashing — 2026-10-21
+
+Locally repaired [#149](https://github.com/dragginzgame/canic/issues/149): staging
+status reads each chunk once, retains observed progress hashes and streams the
+payload SHA-256. It no longer concatenates payload bytes or allocates from the
+declared size. Inconsistent lengths, hashes or chunk counts report incomplete.
+Preparation rejects sizes above the chunk-count ceiling or Store byte limit
+before any manifest, metadata or combined-first-chunk write. Stable records,
+endpoint shapes, chunk size and digest identities are unchanged.
+
+Pass: all 25 targeted Store template tests with only `wasm-store-canister`, strict
+Control Plane library/test Clippy with all features, Store-only Wasm checking,
+scoped formatting and whitespace. Regressions cover full-sized chunks, partial
+progress, inconsistent retained evidence, huge declared sizes, typed atomic
+refusal, exact ceilings and existing same-operation replay. Evidence:
+`/tmp/canic-store-staging-fix-20261021/`. This is native Linux and cross-compilation
+evidence; installed query instruction budgets, PocketIC and native macOS were
+not measured. Both changelog views and the publication guide are updated.
+The code repair is ready for integration and remains uncommitted; #149 stays open
+pending default-main delivery. The complete 0.112 batch still has outstanding Auth
+work and is not push/publish-ready. No release or Git publication ran.
+
+## Shared Auth login pruning adapter — 2026-10-21
+
+Implemented bounded login maintenance in the existing test-gated session adapter.
+Auth 0.13.3 `prune_with_commit` selects expired callers and resulting pool counts;
+Canic commits the complete candidate before heap deletion. The adapter checks the
+ledger's exact records/counts and Fleet binding, preserves trusted time on empty
+or failed work, and refuses removal while a retained session requires the login.
+No parallel retention algorithm or new timer was added. Cleanup's existing clock
+and snapshot validation are shared by both maintenance paths.
+
+Pass: 28 storage tests, followed by all three pruning cases with the final
+foreign-Fleet assertion, strict Core library/test Clippy and Auth-enabled Wasm.
+Evidence: `/tmp/canic-auth-prune/`. Cases exercise 256 unknown logouts in two bounded
+batches, pre-expiry retention, pool reuse, exact stable accounting, rollback,
+atomic commit refusal, subsequent successful cleanup and incomplete-ledger refusal.
+
+The adapter remains test-gated; this is backend qualification, not production
+pruning or endpoint acceptance. Production wiring requires the retained runtime
+ledger/budgets and protected skew/enrollment metadata. Production activation stays
+closed under the maintainer's unqualified-skew decision; TEE hardware qualification
+is unavailable and remains separate from non-TEE custody. The complete Auth/0.112
+batch is not push/publish-ready. Both changelog views are updated. No sibling edits,
+commits, publication, deployment or state reset occurred.
+
+
+## Build configuration reporting and App binding — 2026-10-21
+
+Locally repaired [#75](https://github.com/dragginzgame/canic/issues/75): Root's
+diagnostic TOML serializes the validated, host-resolved model, preserving multiline
+values and reporting defaults and derived public fields. Cycle values retain the
+model's decimal-count representation; runtime-injected trust data is excluded.
+Removed the line-trimming helper and raw-source argument; no TOML parser was added
+to canister Wasm.
+Locally repaired [#329](https://github.com/dragginzgame/canic/issues/329): Root/Store
+metadata must name the selected App before output generation. Removed unused
+build-helper exports and role-only adapters; maintained metadata and role checks
+remain. Both hard cuts are described in the existing 0.112 notes and CONFIG.md.
+
+Pass: 16 default-feature build-support tests, all three real build-macro surface
+tests, strict facade/Core library/test Clippy with all features, control-plane
+facade Wasm checking and scoped formatting/whitespace. Evidence:
+`/tmp/canic-build-config-fixes-20261021/`. This is Linux/native and cross-compile
+evidence, not installed-IC, PocketIC or native macOS qualification.
+These fixes are ready for integration and remain uncommitted; both issues stay
+open pending default-main delivery. The complete 0.112 batch still has outstanding
+Auth work and is not ready to push or publish. No release or Git publication ran.
+
+## Auth protected cleanup clock — 2026-10-21
+
+Continue software integration while TEE hardware qualification is unavailable.
+The maintainer's no-qualified-production-skew decision still keeps activation
+closed; TEE evidence and ordinary non-TEE custody remain independent choices.
+
+The existing stable Auth header and atomic state projection now retain
+`observed_at_ns`. Cleanup persists accepted time before validation, refuses
+backward time, retains observations on empty/failed work, invalidates indexes on
+corrupt state, and rebuilds encoded-byte accounting after header changes. Rows
+remain unchanged on refusal. This is the current 0.112 reinstall-only contract;
+there is no migration, compatibility reader or new state generation.
+
+Pass: 25 session-storage tests, eight runtime/intent tests and the stable record
+footprint check. Formatting, whitespace and locked input stability also pass.
+Coverage includes empty cleanup, restore rollback, failure clock retention,
+accounting, and the actual shared ledger rejecting an older restore clock without
+extending login retention. Strict Core library/test Clippy and normal Auth-enabled Wasm checking pass; evidence:
+`/tmp/canic-auth-clock/`. The incoming lock selected Metrics 0.15.3; fetched that
+exact release after offline cache refusal without updating dependency selections.
+
+This does not complete protected runtime metadata: production admission/logout
+must retain observations too, and retained ledger/budgets, Root enrollment/reset
+floors, endpoint success paths and issuer/browser integration remain unfinished.
+No login/tombstone deletion or admission activation was added. Existing #506
+renewal behavior and unrelated pending work remain intact. The complete Auth and
+0.112 batch remains not push/publish-ready; notes are updated, no Git publication,
+deployment, sibling edit, installed-IC or TEE qualification occurred.
+
+
+## Store and Observatory reporting fixes — 2026-10-21
+
+Locally repaired [#538](https://github.com/dragginzgame/canic/issues/538): Store
+creation now stores epoch seconds, matching publication, GC and retirement.
+The separately named adoption receipt retains exact nanoseconds and retry identity.
+This is a 0.112 hard cut; no predecessor-state conversion was added.
+Locally repaired [#541](https://github.com/dragginzgame/canic/issues/541): the exact
+Coordinator row resolves its Observatory subnet from the validated Fleet binding;
+Root descendants retain parent-chain placement and unresolved rows remain null.
+
+Pass: 39 Observatory tests, the Root-only overview timestamp regression, eight
+owning Store state tests, strict Host/Control Plane/Contracts library/test Clippy
+with all features, Root-only Wasm checking and scoped formatting/whitespace.
+Evidence: `/tmp/canic-reporting-fixes-20261021/`. This is native Linux and Wasm
+cross-compilation evidence; no PocketIC, installed-IC or native macOS run occurred.
+Both changelog views and the operator timestamp/placement guidance are updated.
+These two fixes are ready for integration; the complete 0.112 batch still has
+outstanding Auth work and is not push/publish-ready. Changes remain uncommitted;
+both issues stay open pending default-main delivery. No release or Git publication ran.
+
+## Auth activation decision and cleanup validation — 2026-10-21
+
+The maintainer confirmed no maximum issuer/receiver clock-skew bound is qualified
+for the intended live Fleet: keep production activation closed. Controlled-clock
+fixtures remain allowed; their values are not production evidence. The existing
+closed authorization facade remains unchanged. No production configuration flag
+or activation mechanism is implied by this decision.
+
+Fixed cleanup accepting inconsistent session/login state after deleting its
+expired session: validate the original complete snapshot before candidate expiry
+removal. The focused regression preserves mismatched account records on typed
+refusal and still cleans a valid expired session without deleting its reservation.
+The planned login/tombstone deletion was not implemented: shared ledger pruning
+also requires persisted trusted clock observations, including empty/failed work;
+Canic's production metadata/runtime ownership is still missing. Do not add a
+standalone expiry loop that bypasses that contract.
+
+Pass: 23 focused storage tests, strict Core library/test Clippy with Auth enabled,
+and normal Auth-enabled wasm32 checking. Evidence:
+`/tmp/canic-auth-cleanup-validation/`. These are backend/native and cross-compile
+checks, not real endpoint acceptance. Tracker updates: [#491](https://github.com/dragginzgame/canic/issues/491#issuecomment-6317804220)
+and [#507](https://github.com/dragginzgame/canic/issues/507#issuecomment-6317804874). No sibling edits or Git publication occurred. Both
+changelog views are updated. #491/#507 and the complete Auth/0.112 batch remain
+unfinished and not push-ready: Root enrollment, runtime metadata, portable
+issuer/reconciliation, successful receiver endpoints, browser logout transport and
+installed acceptance still need implementation and qualification. The missing
+production clock bound is an additional deployment requirement, not the reason
+those implementation tasks are unfinished.
+
+
+## Current Auth contract reconciliation — 2026-10-21
+
+Read all five requested IC Auth contracts and inspected source at
+`7a1183ba8556ab7c6e7880332a8695af2b86c44f` (0.13.3; sibling lockfile dirty,
+left untouched). Canic uses published Auth 0.13.3. Active authentication docs and
+#491/#507 now distinguish current supported shared APIs, historical token/client
+flows and missing Canic production integration. No sibling source was changed.
+
+Removed Canic's competing per-account session quota and its derived account
+index. Session/replay occupancy follows browser callers; `(issuer, subject)`
+remains account identity. The maximum-capacity regression now uses independent
+browser devices for one account, and the two-issuer identity/logout regression
+retains separate accounts after restoration. No stable encoding changed.
+
+Pass: 22 focused session-storage tests, strict Core library/test Clippy with
+local Auth enabled, normal Auth-enabled Wasm checking, formatting and whitespace.
+Evidence: `/tmp/canic-auth-production/`. These are backend/native and
+cross-compilation checks, not successful production endpoint acceptance. The
+incoming #506 renewal fix was preserved; this pass did not re-run its tests.
+
+The requested production integration is NOT finished. The facade remains denial
+only and the transaction adapter remains test-gated. Root registration/enrollment,
+retained runtime metadata/budgets, issue/lookup, admission/read/logout exports,
+volatile reset profile, complete persistent restore and the browser adapter all
+remain implementation work. No missing shared session-engine API was established.
+Do not describe those Canic gaps as an upstream block. The private/unpublished
+browser package needs a real consumer/distribution boundary; no production client
+was added. TEE evidence and a qualified production volatile-reset clock bound
+remain external deployment requirements, separate from local software testing.
+
+The complete 0.112/Auth batch is not push-ready or publish-ready. Trackers remain
+open; no commits, pushes, publication, deployment or state reset occurred.
+
+
+## Log retention and backlog disposition — 2026-10-21
+
+Locally repaired [#73](https://github.com/dragginzgame/canic/issues/73) and
+[#102](https://github.com/dragginzgame/canic/issues/102): configuration rejects
+log messages above 64 KiB, and age expiry beyond the IC clock's range schedules
+no deadline instead of failing runtime startup. Count retention and the exact
+requested age remain unchanged; no stable encoding or lifecycle owner changed.
+The 0.112 notes mark the new configuration bound as breaking; CONFIG.md agrees.
+
+Pass: all 15 targeted log tests, strict Core library/test Clippy with all
+features, scoped formatting and whitespace checks. Evidence:
+`/tmp/canic-issue-log-fixes-20261021/`. This is native Linux evidence, not
+PocketIC startup or installed-IC qualification. Both fixes remain uncommitted
+and their issues stay open pending default-main delivery.
+
+Closed [#130](https://github.com/dragginzgame/canic/issues/130) as not planned
+after reviewing default main's byte-based replay identity and canonical display
+against the current input-normalization policy. The existing Auth integration
+acceptance below still prevents the complete 0.112 batch from being push-ready.
+No version, Git publication, release or deployment action ran.
+
+## Auth issues #491, #506 and #507 — 2026-10-21
+
+Local #506 repair preserves the typed issuer response through installation,
+validates exact proof/hash/issuer/Root and effective deadlines, reads fresh Root
+completion time, and stores effective expiry/refresh through the existing renewal
+writer. Newer installed retained proof epochs fence late older responses. No
+stable record/schema change or second renewal writer was introduced.
+
+Pass: 27 chain-key batch tests, seven provisioning tests, strict Core library/test
+Clippy and normal Auth-enabled wasm32 checking. Logs: `/tmp/canic-auth-complete/`.
+The production local-authorization feature now explicitly selects the complete
+certified verifier, addressing the dev-feature masking gap under #491.
+
+#491 remains unfinished: protected Root enrollment, retained clock/ledger/budget
+runtime ownership and successful establish/authorize/logout endpoints still need
+implementation and installed qualification. #507 has no portable issuer/lookup
+endpoint yet; do not restore the retired delegated-token endpoints. The maintainer
+selected the authenticated IC caller as the account subject. Standard IC identity
+delegation preserves that caller identity; the portable browser key is a separate
+transport principal and must never replace the verified account subject. An
+intermediary issuing for another subject requires separately explicit authority.
+The maintainer requested a detailed explanation of these options after the fix.
+
+Both changelog views are updated. Changes remain uncommitted and issues stay open
+pending delivery/remaining acceptance. The complete Auth/0.112 batch is not ready
+to push or publish. No live IC, macOS or full-suite qualification is claimed.
+
+
+## Upstream adoption and Auth configuration fixes — 2026-10-21
+
+Verified published Auth/protocol-types 0.13.3, Blob/contracts 0.40.3, Query 0.67.3
+and Wire 0.5.16. Preserved the root's incoming updates and aligned both private
+Blob consumer locks, including Platform 0.6.4, Memory/Storage 0.50.8 and Metrics
+0.15.2. The Blob catalog floor is 0.40.3. IC Tooling 0.63.2 and Shared Tooling
+0.26.2 were already current at inspection. No sibling source or Git refs changed.
+
+Fixed #63 locally: attestation epoch floors reject noncanonical and undeclared
+application roles while accepting declared and built-in infrastructure roles.
+Fixed three #70 gaps: signing version below its acceptance floor, explicit
+paths longer than 255 components and delegation/attestation TTL overflow.
+Network key-ID policy and host curve-validation coverage remain separate #70
+questions. No endpoint bytes, stable schema or runtime lifecycle changed.
+
+Pass on the final graph: 50 configuration tests, 21 durable Auth session tests,
+strict Core and both private Blob consumer Clippy, Auth-enabled Wasm compilation,
+three-workspace dependency admission and both exact managed Blob composition
+cases. Lock hashes remained fixed during the final qualification. Evidence:
+`/tmp/canic-upstream-next/latest-*`. Earlier proofs use older selections; an
+intermediate managed run correctly refused a changed root lock and is not a
+runtime failure or final-graph acceptance. Its logs and failed scratch are retained.
+
+This is Linux/native and local PocketIC evidence, not native macOS, fresh MSRV,
+installed-IC Auth or external Blob provider qualification. Both changelog views
+and CONFIG.md are updated. #63/#70/#444 stay open pending default-main delivery
+and remaining acceptance. Auth's production admission is still fail-closed:
+protected Root enrollment, retained clock/ledger/budget ownership, complete
+verifier selection and endpoint success/logout wiring remain under #491.
+The complete 0.112 batch is not push-ready; no commit, push or release ran.
+
+## Auth integration and tooling adoption — 2026-10-21
+
+Adopted published IC Tooling 0.63.2 for all seven existing root dependencies;
+the lock update changes only that package family. Shared Tooling 0.26.2 is pinned
+to remote-main revision `1959ef75d0b86ed7725d41ae5056303d35eb633d` through its
+canonical exporter (no matching GitHub Release/tag was found).
+Host receipt verification now uses the published bounded ICP decoder. Certificate
+and exact-payment authority stay local; the protobuf projection and direct Prost
+edge are test-only. Testkit's 0.63.2 server is prepared and passes offline admission
+with `cli`. Both private consumers have no IC Tooling dependencies to update.
+
+Pass: snapshot verification, three-workspace dependency admission, shared IC-tool
+installer fixtures, ShellCheck with sourced companions, 15 authenticated ICP
+receipt cases, ten Build cache cases, strict Host library/test Clippy, and
+CLI/Backup/internal-testing/runtime-test library and test compilation. Scoped
+manifest/Rust formatting and diff hygiene pass. Evidence: `/tmp/canic-tooling-adopt/`.
+This is native Linux and synthetic host-fixture evidence, not native macOS,
+PocketIC execution or installed-IC qualification. No publication, release or sibling
+edit ran. Both 0.112 changelog drafts include the adoption; Auth remains incomplete.
+
+Verified published Auth/protocol-types 0.13.2; the root already selects it and both
+private Blob fixture locks now match. Scope is Canic only, with no downstream
+application work. Preserve the other pending dependency and source changes.
+
+Removed unused test-only session-policy/error adapters and their self-tests.
+The authority snapshot no longer copies an unused generation; the tested atomic
+backend reads storage generation at transaction and commit time. Its generation
+read helpers are compiled with their current test-only backend consumers. Retain
+Root enrollment/proof authority, certification composition, canonical conversions,
+stable records and the real session backend. No stable schema or wire change.
+
+Current Auth follow-through preserves issuer-scoped account identity. The public
+authorization result now includes issuer, and derived capacity indexes, logout,
+restoration and heap estimates key accounts by issuer plus subject. A signed
+regression fills one issuer's account capacity, admits an equal subject under
+another issuer, restores both and logs out the second without changing the first.
+The prior Fleet-binding restoration check remains: logout-only rows must match
+enabled Fleet authority; disabled authority retains denials but rejects mixed
+audiences. Failed restoration preserves records and installs no indexes.
+No stable schema or canonical session encoding changed.
+
+Pass: 23 targeted session-storage tests, strict Core library/test Clippy and the
+auth-local-application-authorization Wasm graph on Auth 0.13.2, Memory/Storage
+0.50.7 and the maintainer-selected Platform 0.6.4. Evidence:
+/tmp/canic-auth-account/; prior Fleet restoration evidence remains in
+/tmp/canic-auth-fleet-restore/. Public guidance and both 0.112 notes describe
+the issuer field's source-level hard cut. Admission remains closed; these native
+and cross-compilation checks do not establish an installed successful login.
+
+Prior direct signed admission, exact retry with exhausted credit, restore/access/
+logout and real commit-refusal evidence remains in `/tmp/canic-auth-admission/`.
+Earlier private-consumer/dependency-admission checks in `/tmp/canic-auth0132/`
+were not rerun for Memory/Storage 0.50.7. This is native Linux and Wasm
+cross-compilation evidence, not installed login, PocketIC admission or native macOS.
+
+Auth adoption is not complete: application authorization still deliberately denies
+access, and the production shared session store/admission/logout wiring remains
+unfinished under #491. Published APIs exist. Next integrate the protected Root
+approval/caller/clock with the canonical engine and prove successful admission,
+scoped access, logout, authority changes and failed atomic commits through the
+actual endpoint path. Do not treat backend tests or this cleanup as a live login
+service. The wider 0.112 batch is not push-ready from this slice alone. Both
+changelog drafts are updated; no commit, push, release or sibling edit ran.
+
+## Focused Core fixes — 2026-10-21
+
+Implemented locally: #108 propagates reached internal and unavailable-network
+access evaluation errors through negation/alternatives; #95 seeks the final
+cycle-event key within its timestamp range; #87 removes the ignored ops settings
+sender-version field and all five callers while retaining the management request's
+current-execution version binding. No storage encoding or lifecycle change.
+
+Pass: eight access-expression tests, five cycle-storage tests, strict Core and
+Control Plane library/test Clippy, scoped Rust formatting and diff whitespace.
+Checks use the maintainer's current locked Auth 0.13.1/Metrics 0.15.2 selections;
+missing locked packages were fetched without updating dependency selections.
+Evidence: `/tmp/canic-followup-fixes/`. No broad suite, native macOS or installed-IC
+qualification was run. These three issues stay open until default-main integration.
+Both 0.112 changelog drafts include this slice. The complete integration batch
+is still pending; this result does not resolve the PR/release blockers below.
+No commits, pushes, merges, release or deployment ran; unrelated work is preserved.
+
+Continued #419 locally: session cleanup now runs despite an intent-cleanup error,
+records both owners' failures, and retains a one-second retry. Timers deliberately
+forces invariant completions to Stop, so the coordinator reports retryable failure
+while preserving the original storage diagnostic. The local-intent failure test
+checks expired replay removal, live replay retention, intent preservation and the
+retry decision. Full-capacity, receipt/session-failure injection and same-release
+PocketIC recovery acceptance remain outstanding; do not close #419 yet.
+
+#463 locally replaces GNU find formatting with portable basename execution.
+Its independently runnable inventory regression covers empty/populated topics,
+spaces, hidden directories, advisory mismatch and genuine find failure. Linux
+execution and targeted ShellCheck pass; native macOS remains unqualified. The
+existing combined document tests stop on a stale capability-surface audit
+fingerprint before their other cases; this change does not refresh audit authority.
+Eight focused intent-workflow tests and strict Core library/test Clippy pass.
+Evidence for both repairs: `/tmp/canic-portable-guard/`. Neither issue is integrated
+into default main. Next: complete #419's owner-failure and capacity/restart proofs,
+then reconcile the stale audit fingerprint with its actual changed authority.
+
+## Verified issue closeout
+
+Blob follow-through: closed #524 as completed and PR #603 as superseded after
+comparing implementation/tests against remote main `4caeec25db7d81f6121db1c95ba7a2d91d319c60`.
+Main already owns shared Blob dispatch, async raw admission and exact installation
+refusals; current Blob 0.40 delivery remains pending under #444. No PR was merged.
+Upstream Blob PR #97 changes CI compiler selection only and has pending checks;
+it supplies no missing Canic consumer API. Keep #123 (fixture-import trap recovery),
+#493 (future parent authority), #494 and provider/application acceptance open.
+
+Locally repaired #410's endpoint inventory: recursive source discovery, raw
+entrypoints, exact query/update membership, both-manifest uniqueness and exact
+command-enum selection. Existing standards queries now have read-only rows.
+All 33 replay-policy tests, strict Core library/test Clippy, scoped formatting
+and diff hygiene pass with the maintainer's newly selected Auth 0.13.2;
+this does not requalify Blob PocketIC against that new Auth selection. Keep #410
+open until default-main integration. Evidence: `/tmp/canic-blob-triage/`.
+Both changelog drafts include this focused guard repair; no broad suite or release
+ran and the complete 0.112 batch remains pending.
+
+Closed #512 and #71 as completed on default main; closed #27, #114–#122,
+#124 and #125 as superseded after preserving unique requirements on #444/#494.
+Evidence remains on those issues and in `/tmp/canic-closeout-20261021-evidence/`;
+the exact main export is `/tmp/canic-closeout-20261021/`. Open count was 438.
+This was a selected-candidate review, not a complete backlog audit. Keep #123,
+#419, #463, #499 and outstanding native/integration acceptance open.
+
+## Blob 0.40.1 adapter qualification — 2026-10-21
+
+The maintainer scoped this work to Canic's published Blob adoption and repository
+cleanup. Toko Miner and other downstream application integration are excluded.
+Dynamic parent provisioning (#493), provider qualification and optional guarded
+funding (#494) remain separate work; they are not completion criteria for this
+Canic adapter cleanup.
+
+Verified published Blob/contracts 0.40.1 and aligned both private consumer locks
+with the root's selected 0.40.1. Root retains Platform 0.6.3, Memory/Storage 0.50.6,
+Auth 0.13.2 and Wire 0.5.11; private consumers retain their independent Platform
+0.6.1, Memory/Storage 0.50.4, Auth 0.13.0 and Wire 0.5.9 selections. No runtime
+handle bridge or sibling source dependency was introduced.
+
+Removed the adapter's duplicated category-based request-limit table. Published
+Blob's per-method ceiling now controls ingress registration, bounded raw argument
+reads and Wire decoding. Numeric limits, provider Candid replies, caller binding,
+shared memory ownership and lifecycle behavior are preserved. The previous
+CONFIGURATION_LIMITS removal leaves application-envelope ownership with the
+consumer. Active usage guidance is application-neutral. No Canic-owned Blob
+runtime or Cashier implementation remains to extract.
+
+Pass: three-workspace dependency admission; strict native Clippy for dedicated
+and embedded consumers; both exact managed PocketIC composition cases, including
+fresh Wasm builds, endpoint parity, malformed installation refusal, tenant/uploader
+permissions, fencing and same-release restoration. The embedded application state
+is retained. Evidence: `/tmp/canic-blob0401/` (dedicated 132s, embedded 50s, excluding
+runner preflight). An initial competing lint was stopped after detecting an
+independent workspace check; subsequent validation ran after the target was idle.
+Earlier Root target-binding proof remains recorded on Blob 0.40.0 in
+`/tmp/canic-blob-followthrough/`; it was not rerun in this endpoint-limit slice.
+
+This Canic-only adoption/cleanup slice is ready for integration and both 0.112
+changelog drafts are updated. #444 remains open for default-main delivery and its
+separately tracked acceptance. The complete 0.112 batch still contains other
+pending work; no full suite, native macOS, installed IC, commit, push or release
+was performed. Historical blocker statements below do not supersede this scope.
+
+## Backlog closeout and portable Backup fixture — 2026-10-21
+
+Verified remote default main remains `4caeec25db7d81f6121db1c95ba7a2d91d319c60`;
+local 0.112 integration is ahead and dirty. Closed #533 and #482 as not planned,
+explicitly superseded by the reinstall-only pre-1.0 policy already on main. This
+is not implementation of data-preserving upgrades or permission to erase data.
+Same-release recovery, backup/restore and cycle conservation remain required.
+
+Corrected #515's remaining writerless-FIFO fixture in `persistence/json.rs` to
+use native `mkfifo -m 600`, avoiding a Rustix export excluded on Apple targets.
+The exact Linux regression and strict Backup library/test Clippy pass on the
+current lock selecting Platform 0.6.2, retaining typed `NotRegularFile` refusal.
+The concurrent dependency update was preserved; it is not attributed to this fix.
+Native macOS and default-branch integration remain outstanding; keep #515 open.
+Evidence: `/tmp/canic-issue-closeout/`. Preserve prior pending integration work.
+
+PR #617 has passed preflight/security but its combined native/build acceptance
+was still running at review; #604 awaits that stacked repair. #605 and #606
+have conflicts and failed checks. None was merged or closed merely for age or
+because a similar local change exists. The broader Blob Platform blocker remains.
+
+## Focused integration follow-up — 2026-10-21
+
+The governed ingress target exposed two local defects after dependency adoption:
+PocketIC selected ambient ICP 1.6.0 instead of the verified repository-local 1.7.0,
+and the bare payload probe endpoint was absent from its generated Candid service.
+The runner now uses the owning `ic-tools-check` selection before choosing the
+prepared executable, preserving explicit overrides, native/version checks and
+invocation-only PATH changes. The probe explicitly registers its existing Candid
+contract; endpoint bytes and admission limits are unchanged.
+
+Pass: native ICP selector regressions (PATH shadowing, explicit override, refusal
+without scratch/PATH effects, and plan-only operation); scoped ShellCheck;
+warning-denied payload probe Clippy; governed `pic_ingress_payload_limits`
+(all six cases), `pic_receipt_backed_intent` conformance (one composite case),
+and `pic_root_funding_recovery` (all four cases, including lost responses, replay
+and measured recovery floors); and `timer_authority` (all ten cases covering
+registration, lifecycle, restoration, observation authority and bounded history).
+These execute through Testkit 0.63's prepared PocketIC 16.1 server. This is local
+Linux PocketIC evidence, not native macOS or installed-IC qualification.
+Logs: `/tmp/canic-followup/`. Preserve all preceding pending dependency work.
+
+Blob/contracts 0.39.0 remains the latest published selection and still retains
+Platform 0.5.1; Blob integration and governed internal compilation remain blocked
+by [Blob #95](https://github.com/dragginzgame/ic-blob-storage/issues/95). The full
+release batch remains unqualified; no Git or release operations were performed.
+
+## Dependency qualification — 2026-10-21
+
+Root and both independent Blob fixture locks select Platform/macros 0.6.1,
+Timers 0.30.1, Memory/Storage 0.50.4, Metrics 0.15.1 and Auth/protocol types
+0.13.0. All IC Tooling libraries now select published 0.63.0: Build, Host
+Artifacts/FS/Process/Text/Tools and Testkit. Backup 0.37.0 and Query 0.67.0
+align their public Host types with that family. No sibling patches or unpublished
+overrides were used. The release-metadata executable recipe remains unchanged.
+
+The published testing facade and 327 internal/runtime fixture calls now use
+explicit Platform Candid encoding, the existing bounded decoders and raw Testkit
+transport. Removed Testkit Candid helper/error consumers and facade reexports;
+no replacement generic codec helper. Existing caller identities, methods and
+argument/result tuple shapes remain. Baseline recovery recognizes typed transport
+failures without classifying decoder/rejection text as dead transport. Exact
+relay/sampling/publication scenarios share their repeated protocol calls locally.
+Track integration at [Canic #615](https://github.com/dragginzgame/canic/issues/615);
+these changes are pending locally, so the issue is not closed.
+
+Testkit's governed server installer now selects the required `cli` feature.
+The recipe regression passes with installer effects substituted; ShellCheck and
+focused formatting pass. Explicit `testkit-server.sh` setup installed the published
+0.63 executable;
+its receipt check passes with the `cli` feature selected. No managed runtime
+scenario was executed.
+
+Pass on Linux/Rust 1.99.1: strict Core library/test Clippy with all features on
+Auth 0.13; strict canic-tests library/integration-test Clippy on the aligned
+Tooling/Query/Auth graph; strict internal fixture library Clippy; Backup library/test
+Clippy on Backup 0.37/Host 0.63;
+all three dependency-boundary checks and locked fixture metadata; 16 Auth session
+transaction/replay/logout/restoration regressions; Core Wasm compilation with local
+application authorization. Governed internal test compilation is blocked by two
+Blob adapter Principal mismatches (Platform 0.5.1 versus 0.6.1). Earlier focused
+Core/Host/facade regressions remain documented below; they are not newly rerun
+runtime evidence. Current logs: `/tmp/canic-tooling-complete/`.
+
+Release admission still fails on Blob/contracts 0.39.0 retaining Platform 0.5.1
+alongside 0.6.1. Auth 0.13.0 resolves its part of the split. Remaining published
+alignment: [Blob #95](https://github.com/dragginzgame/ic-blob-storage/issues/95).
+Do not bridge runtime handles or weaken the gate. No embedded-fixture refresh,
+managed runtime execution, full suite, MSRV build, native macOS qualification,
+commit, release or deployment ran in this continuation. The complete dependency
+adoption batch is not ready to push as a qualified release.
+
+Shared Tooling remains reviewed 0.26.1 (67d4f25d1a613a27d7dfd7b5a4ae119e0e529fc7).
+Its 132 snapshot files, selected ic-wasm/icp/wasm-opt tools and the automatic
+adoption-before-Clippy / fixture-freshness release barriers were qualified in the
+prior slice. Evidence remains in `/tmp/canic-shared0261-*.log`.
 
 ## Focused dependency adoption admission — 2026-10-21
 

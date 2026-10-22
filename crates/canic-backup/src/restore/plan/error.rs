@@ -23,6 +23,9 @@ pub enum RestorePlanError {
     #[error("field {0} must not be empty")]
     EmptyField(&'static str),
 
+    #[error("field {field} must be a nonempty relative artifact path: {value}")]
+    InvalidArtifactPath { field: &'static str, value: String },
+
     #[error("field {field} must be a valid principal: {value}")]
     InvalidPrincipal { field: &'static str, value: String },
 

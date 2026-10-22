@@ -199,16 +199,29 @@ fn confirm_delete_app_requires_exact_name() {
     let target = Path::new("/tmp/canic/apps/demo");
     let mut output = Vec::new();
 
-    confirm_delete_app("demo", target, io::Cursor::new(b"demo\n"), &mut output)
-        .expect("confirm delete");
+    confirm_delete_app(
+        "demo",
+        target,
+        &["apps/demo/app".to_string()],
+        io::Cursor::new(b"demo\n"),
+        &mut output,
+    )
+    .expect("confirm delete");
 
     let output = String::from_utf8(output).expect("utf8 prompt");
     assert!(output.contains("Delete Canic app?"));
     assert!(output.contains("app: demo"));
     assert!(output.contains("Type the app name to confirm"));
+    assert!(output.contains("remove workspace member: apps/demo/app"));
 
-    let error = confirm_delete_app("demo", target, io::Cursor::new(b"yes\n"), Vec::new())
-        .expect_err("wrong confirmation should cancel");
+    let error = confirm_delete_app(
+        "demo",
+        target,
+        &["apps/demo/app".to_string()],
+        io::Cursor::new(b"yes\n"),
+        Vec::new(),
+    )
+    .expect_err("wrong confirmation should cancel");
     std::assert_matches!(error, AppCommandError::DeleteCancelled);
 }
 
@@ -336,11 +349,12 @@ fn renders_role_mutation_outputs() {
 fn renders_planned_delete_output() {
     let root = Path::new("/workspace");
     let target = root.join("apps/demo");
-    let output = render_planned_delete(root, "demo", &target);
+    let output = render_planned_delete(root, "demo", &target, &["apps/demo/app".to_string()]);
 
     assert!(output.contains("Planned app delete:"));
     assert!(output.contains("app: demo"));
     assert!(output.contains("would_remove: apps/demo"));
+    assert!(output.contains("remove workspace member: apps/demo/app"));
     assert!(output.contains("files_changed: 0"));
 }
 

@@ -256,14 +256,21 @@ pub(super) fn assert_issued_native_funding(input: &AutonomousFundingJourney<'_>)
             Some(canister)
         );
     }
-    let requests: u64 = ic_testkit::pic::query_candid_args(
-        input.pic,
-        input.cycles_ledger,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        "request_count",
-        (),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+    let requests: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes = ic_platform::candid::contract::encode_args(())?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (input.pic).query_call(
+                input.cycles_ledger,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                "request_count",
+                request_bytes,
+            )
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .unwrap();
     let mut replay_adapter = platform();
@@ -275,14 +282,21 @@ pub(super) fn assert_issued_native_funding(input: &AutonomousFundingJourney<'_>)
         ledger_account_balance(input.pic, input.cycles_ledger, input.operator),
         after
     );
-    let replay_requests: u64 = ic_testkit::pic::query_candid_args(
-        input.pic,
-        input.cycles_ledger,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        "request_count",
-        (),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+    let replay_requests: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes = ic_platform::candid::contract::encode_args(())?;
+        let response_bytes = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (input.pic).query_call(
+                input.cycles_ledger,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                "request_count",
+                request_bytes,
+            )
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&response_bytes, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .unwrap();
     assert_eq!(requests, replay_requests);
@@ -300,14 +314,21 @@ pub(super) fn assert_issued_native_funding(input: &AutonomousFundingJourney<'_>)
 }
 
 fn burn_to(input: &AutonomousFundingJourney<'_>, retain: u128) {
-    let burned: u128 = ic_testkit::pic::update_candid_args(
-        input.pic,
-        input.root,
-        input.operator,
-        "audit_recovery_balance",
-        (retain,),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+    let burned: u128 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes = ic_platform::candid::contract::encode_args((retain,))?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (input.pic).update_call(
+                input.root,
+                input.operator,
+                "audit_recovery_balance",
+                request_bytes,
+            )
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .expect("update Candid harness call");
     assert!(burned > 0);
@@ -317,18 +338,26 @@ fn child_status(
     input: &AutonomousFundingJourney<'_>,
     operation_id: [u8; 32],
 ) -> canic_contracts::dto::root::RootComponentChildOperationStatus {
-    let response: Result<RootStatusResponseFragment, Error> = ic_testkit::pic::query_candid_args(
-        input.pic,
-        input.root,
-        input.operator,
-        canic::protocol::CANIC_ROOT_OPERATION_STATUS,
-        (RootStatusRequestFragment::Operation(
-            OperationStatusRequest { operation_id },
-        ),),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .unwrap();
+    let response: Result<RootStatusResponseFragment, Error> =
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args((
+                RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
+            ))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (input.pic).query_call(
+                    input.root,
+                    input.operator,
+                    canic::protocol::CANIC_ROOT_OPERATION_STATUS,
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
+        .map(|(reply,)| reply)
+        .unwrap();
     let RootStatusResponseFragment::Operation(RootOperationStatusResponse::ProvisionChild(status)) =
         response.unwrap()
     else {
@@ -359,20 +388,7 @@ fn block_initial_child(
     let coordinator = Principal::from_text(principal).unwrap();
     for attempt in 0..240 {
         let response: Result<RootStatusResponseFragment, Error> =
-            ic_testkit::pic::query_candid_args(
-                input.pic,
-                input.root,
-                input.operator,
-                canic::protocol::CANIC_ROOT_OPERATION_STATUS,
-                (RootStatusRequestFragment::Operation(
-                    OperationStatusRequest {
-                        operation_id: request.operation_id,
-                    },
-                ),),
-                canic::testing::CANDID_REPLY_LIMITS,
-            )
-            .map(|(reply,)| reply)
-            .unwrap();
+            root_operation_status_as(input.pic, input.root, input.operator, request.operation_id);
         if let Ok(RootStatusResponseFragment::Operation(
             RootOperationStatusResponse::ProvisionComponents(status),
         )) = response
@@ -392,18 +408,25 @@ fn block_initial_child(
     burn_to(input, 800_000_000_000);
     for _ in 0..240 {
         let response: Result<CoordinatorOperationReadResponse, Error> =
-            ic_testkit::pic::query_candid_args(
-                input.pic,
-                coordinator,
-                input.operator,
-                canic::protocol::CANIC_COORDINATOR_OPERATION_STATUS,
-                (CoordinatorOperationReadRequest::Operation(
-                    OperationStatusRequest {
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args((
+                    CoordinatorOperationReadRequest::Operation(OperationStatusRequest {
                         operation_id: request.operation_id,
-                    },
-                ),),
-                canic::testing::CANDID_REPLY_LIMITS,
-            )
+                    }),
+                ))?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (input.pic).query_call(
+                        coordinator,
+                        input.operator,
+                        canic::protocol::CANIC_COORDINATOR_OPERATION_STATUS,
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
             .map(|(reply,)| reply)
             .unwrap();
         let CoordinatorOperationReadResponse::Operation(
@@ -432,14 +455,21 @@ fn block_initial_child(
 }
 
 fn withdrawals(input: &AutonomousFundingJourney<'_>) -> u64 {
-    ic_testkit::pic::query_candid_args(
-        input.pic,
-        input.cycles_ledger,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        "withdrawal_count",
-        (),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes = ic_platform::candid::contract::encode_args(())?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (input.pic).query_call(
+                input.cycles_ledger,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                "withdrawal_count",
+                request_bytes,
+            )
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .unwrap()
 }

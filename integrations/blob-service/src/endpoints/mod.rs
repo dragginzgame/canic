@@ -10,26 +10,20 @@ macro_rules! __canic_blob_endpoint {
         macro_rules! decode {
             (tenant_inspection, $d method:expr, $d bytes:expr) => { ic_blob_storage_contracts::wire::tenant::decode_inspection_request($d bytes).expect("tenant inspection") };
             (tenant_update, $d method:expr, $d bytes:expr) => { ic_blob_storage_contracts::wire::tenant::decode_update_request($d bytes).expect("tenant update") };
-            ($d category:ident, $d method:expr, $d bytes:expr) => { ic_blob_storage_contracts::wire::decode_request($d method, $d bytes, bound!($d category)).expect("Blob Wire request") };
+            ($d category:ident, $d method:expr, $d bytes:expr) => { ic_blob_storage_contracts::wire::decode_request($d method, $d bytes, ic_blob_storage_contracts::wire::request_limit($d method).expect("Blob request limit")).expect("Blob Wire request") };
         }
         macro_rules! encode {
             (tenant_inspection, $d method:expr, $d value:expr) => { ic_blob_storage_contracts::wire::tenant::inspection_response($d value).expect("tenant inspection reply") };
             (tenant_update, $d method:expr, $d value:expr) => { ic_blob_storage_contracts::wire::tenant::update_response($d value).expect("tenant update reply") };
             ($d category:ident, $d method:expr, $d value:expr) => { ic_blob_storage_contracts::wire::encode_response($d method, $d value).expect("Blob Wire reply") };
         }
-        macro_rules! bound {
-            (tenant_inspection) => { ic_blob_storage_contracts::wire::tenant::MAX_REQUEST_BYTES };
-            (tenant_update) => { ic_blob_storage_contracts::wire::tenant::MAX_REQUEST_BYTES };
-            (manifest) => { 131_072 };
-            (request) => { 4096 };
-        }
         macro_rules! arguments {
-            ($d category:ident, $d method:expr;) => { let _: () = decode!($d category, $d method, &$crate::__private::transport::arguments(bound!($d category))); };
-            ($d category:ident, $d method:expr; $d arg:ident : $d ty:ty) => { let $d arg: $d ty = decode!($d category, $d method, &$crate::__private::transport::arguments(bound!($d category))); };
+            ($d category:ident, $d method:expr;) => { let _: () = decode!($d category, $d method, &$crate::__private::transport::arguments(ic_blob_storage_contracts::wire::request_limit($d method).expect("Blob request limit"))); };
+            ($d category:ident, $d method:expr; $d arg:ident : $d ty:ty) => { let $d arg: $d ty = decode!($d category, $d method, &$crate::__private::transport::arguments(ic_blob_storage_contracts::wire::request_limit($d method).expect("Blob request limit"))); };
         }
         macro_rules! endpoint {
             (query, $d category:ident, fn $d name:ident($d($d arg:ident : $d ty:ty),* $d(,)?) -> $d reply:ty $d body:block) => {
-                #[canic::canic_raw_query(public, payload(max_bytes = bound!($d category)))]
+                #[canic::canic_raw_query(public, payload(max_bytes = ic_blob_storage_contracts::wire::request_limit(stringify!($d name)).expect("Blob request limit")))]
                 fn $d name() {
                     arguments!($d category, stringify!($d name); $d($d arg : $d ty),*);
                     let response: $d reply = (|| $d body)();
@@ -37,7 +31,7 @@ macro_rules! __canic_blob_endpoint {
                 }
             };
             (update, $d category:ident, async fn $d name:ident($d($d arg:ident : $d ty:ty),* $d(,)?) -> $d reply:ty $d body:block) => {
-                #[canic::canic_raw_update(public, payload(max_bytes = bound!($d category)))]
+                #[canic::canic_raw_update(public, payload(max_bytes = ic_blob_storage_contracts::wire::request_limit(stringify!($d name)).expect("Blob request limit")))]
                 async fn $d name() {
                     arguments!($d category, stringify!($d name); $d($d arg : $d ty),*);
                     let response: $d reply = (async move $d body).await;

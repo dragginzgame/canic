@@ -208,3 +208,48 @@ fn child_binding_validation_is_placement_strategy_neutral() {
             .expect("all placement strategies use the same exact child authority");
     }
 }
+
+#[test]
+fn app_failure_projection_retains_decoder_limits_and_transport_classification() {
+    use super::super::managed_app::ManagedAppQualificationError as App;
+    use ic_platform::candid::DecodeError;
+    use ic_testkit::pic::{ErrorCode, PocketIcOperationError, RejectCode, RejectResponse};
+
+    let error =
+        ManagedComponentGroupQualificationError::from(App::Decode(DecodeError::ReplyTooLarge {
+            actual: 42,
+            maximum: 8,
+        }));
+    assert!(matches!(
+        error,
+        ManagedComponentGroupQualificationError::Decode(DecodeError::ReplyTooLarge {
+            actual: 42,
+            maximum: 8
+        })
+    ));
+    let response = RejectResponse {
+        reject_code: RejectCode::CanisterReject,
+        reject_message: "refused".into(),
+        error_code: ErrorCode::CanisterRejectedMessage,
+        certified: false,
+    };
+    let error = ManagedComponentGroupQualificationError::from(App::Transport(
+        PocketIcCallFailure::Rejected(response.clone()),
+    ));
+    let ManagedComponentGroupQualificationError::Transport(PocketIcCallFailure::Rejected(actual)) =
+        error
+    else {
+        panic!("rejection must remain distinguishable from transport failure");
+    };
+    assert_eq!(actual, response);
+    let source = PocketIcOperationError::new("fixture transport failure");
+    let error = ManagedComponentGroupQualificationError::from(App::Transport(
+        PocketIcCallFailure::Operation(source.clone()),
+    ));
+    let ManagedComponentGroupQualificationError::Transport(PocketIcCallFailure::Operation(actual)) =
+        error
+    else {
+        panic!("operation failure must retain its typed source");
+    };
+    assert_eq!(actual, source);
+}

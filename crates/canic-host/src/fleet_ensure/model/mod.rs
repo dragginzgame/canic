@@ -14,6 +14,8 @@ pub mod operator_mint;
 pub mod release;
 
 pub mod terminal;
+#[cfg(test)]
+mod tests;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -1433,7 +1435,8 @@ pub struct FleetEnsureTopologyRecord {
 #[serde(deny_unknown_fields)]
 pub struct FleetEnsureJournalRecord {
     /// Whole-Fleet release shares this journal and the ordinary exclusive operation lock.
-    #[serde(deserialize_with = "canic_contracts::serialization::required_option")]
+    /// An omitted or null release carries no release authority.
+    #[serde(default)]
     pub release: Option<release::FleetReleaseExecutionRecord>,
     /// An explicit extension of this operation's registration authority; null until requested.
     #[serde(deserialize_with = "canic_contracts::serialization::required_option")]

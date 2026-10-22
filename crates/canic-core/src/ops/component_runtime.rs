@@ -1,13 +1,18 @@
 //! Module: ops::component_runtime
 //!
-//! Responsibility: derive canonical evidence hashes for managed Component runtime authority.
+//! Responsibility: hash managed runtime evidence and project Component Group members.
 //! Does not own: Directory validation, storage mutation, endpoint authorization, or activation.
-//! Boundary: callers supply a complete passive authority and receive one domain-separated hash.
+//! Boundary: callers supply passive authority for hashing or validated member discovery.
 
 use crate::{
     InternalError,
-    dto::component_registry::{ComponentRuntimeDirectChild, ComponentRuntimeDirectoryAuthority},
+    dto::{
+        component_provisioning::ComponentGroupDirectory,
+        component_registry::{ComponentRuntimeDirectChild, ComponentRuntimeDirectoryAuthority},
+    },
 };
+use canic_contracts::ids::CanisterRole;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use sha2::{Digest, Sha256};
 
 ///
@@ -17,6 +22,19 @@ use sha2::{Digest, Sha256};
 pub struct ComponentRuntimeOps;
 
 impl ComponentRuntimeOps {
+    /// Project every exact role match, preserving the validated Directory's member order.
+    pub(crate) fn group_members_by_role(
+        directory: Option<&ComponentGroupDirectory>,
+        role: &CanisterRole,
+    ) -> Vec<Principal> {
+        directory
+            .into_iter()
+            .flat_map(|directory| &directory.members)
+            .filter(|member| &member.binding.role == role)
+            .map(|member| member.binding.canister_id)
+            .collect()
+    }
+
     /// Hash one exact Fleet and Component Directory authority.
     pub fn directory_authority_hash(
         authority: &ComponentRuntimeDirectoryAuthority,

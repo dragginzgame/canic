@@ -8,6 +8,11 @@ recovery.
 Run `canic` without arguments, or run `canic --help`, to see the top-level help.
 Use `canic <command> --help` for one command's options and examples.
 
+Place global `--icp <path>` and `--environment <name>` before the command.
+For `cycles mint`, the leaf option `--icp <amount>` selects the ICP amount:
+`canic --environment sample --icp /path/to/icp cycles mint --icp 0.01`.
+Use `cycles mint --cycles <amount>` to specify the desired cycles instead.
+
 The maintained command families are listed below. New users will most often
 begin with `app`, `build`, `fleet`, `replica`, and `scaffold`.
 
@@ -42,6 +47,15 @@ and its exact Registry protocol bindings. This includes `info subnets`, which
 requires a complete agreeing live
 Coordinator Registry and Root-summary snapshot. `cycles funding` is protected
 current status only.
+
+Text from canisters, ICP responses and workspace names is escaped in inspection,
+status and list reports so controls cannot issue terminal commands or insert
+report lines. Printable Unicode remains readable. JSON retains the original data.
+
+Fleet rows in `status` come from validated terminal Ensure state. A journal's
+optional `release` field may be omitted or `null`; both mean no release authority.
+Malformed non-null release records and missing required authority fields still
+refuse discovery. Status reads preserve the retained journal bytes.
 
 Snapshot restoration uses `restore plan` for offline review, `restore prepare`
 to validate artifacts and create or adopt the plan and journal, `restore run`
@@ -94,6 +108,13 @@ canic app create <app>
 canic app role attach <app> <role> --component-spec <component-spec>
 canic build <app> <role> --provenance artifacts/<role>-provenance.json
 ```
+
+App creation adds the initial package to an existing workspace's member list.
+Both creation and deletion preview workspace edits with `--dry-run`. App deletion
+confirms the affected member/default-member entries and updates the manifest
+before removing files. A manifest update failure preserves the App; if directory
+removal fails partway, the error names the remaining path and workspace membership
+stays updated.
 
 Standalone builds default to the fast profile; select `--profile release` for
 production artifacts. Canic keeps Wasm compilation non-incremental. Cargo owns
@@ -243,9 +264,14 @@ canic network enroll local \
   --fingerprint "$network_root_fingerprint"
 ```
 
-The `replica` group owns local launcher lifecycle. `evidence` validates and
-gates stable evidence documents. `state` audits declared Canic metadata. Use
-leaf `--help` output for the current grammar.
+The `replica` group owns local launcher lifecycle. If ICP reports the selected
+local network already stopped, `replica stop` checks its configured gateway from
+the resolved ICP root. A reachable gateway with no proven owner produces a
+refusal. Stop a foreground replica with Ctrl-C in its launching terminal, or stop
+the exact owning ICP project/network.
+
+`evidence` validates and gates stable evidence documents. `state` audits declared
+Canic metadata. Use leaf `--help` output for the current grammar.
 
 ## Diagnostics
 

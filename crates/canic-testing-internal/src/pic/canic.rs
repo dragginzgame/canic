@@ -38,9 +38,8 @@ use canic_core::cdk::utils::hash::wasm_hash;
 use canic_host::release_set::AppConfigSnapshot;
 use ic_platform::{candid::contract::encode_one, principal::ExternalPrincipal as Principal};
 use ic_testkit::pic::{
-    CandidCallError, CanisterDiagnosticsRequest, CanisterInstallExt, InstallSpec,
-    LabeledCanisterDiagnosticsRequest, PocketIc, PocketIcBuilder, PocketIcDiagnosticsExt,
-    StandaloneCanisterFixture,
+    CanisterDiagnosticsRequest, CanisterInstallExt, InstallSpec, LabeledCanisterDiagnosticsRequest,
+    PocketIc, PocketIcBuilder, PocketIcDiagnosticsExt, StandaloneCanisterFixture,
 };
 use std::{
     collections::BTreeMap,
@@ -56,14 +55,21 @@ fn root_command(
     root: Principal,
     command: RootCommandFragment,
 ) -> Result<RootCommandResponseFragment, Error> {
-    ic_testkit::pic::update_candid_args(
-        pic,
-        root,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        protocol::CANIC_ROOT_COMMAND,
-        (command,),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes = ic_platform::candid::contract::encode_args((command,))?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (pic).update_call(
+                root,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                protocol::CANIC_ROOT_COMMAND,
+                request_bytes,
+            )
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .expect("Root command transport")
 }
@@ -73,17 +79,25 @@ fn root_status(
     root: Principal,
     request: RootStatusRequestFragment,
 ) -> Result<RootStatusResponseFragment, Error> {
-    ic_testkit::pic::query_candid_args(
-        pic,
-        root,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        match &request {
+    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let call_method = match &request {
             RootStatusRequestFragment::Readiness => protocol::CANIC_OBSERVABILITY,
             RootStatusRequestFragment::Operation(_) => protocol::CANIC_ROOT_OPERATION_STATUS,
-        },
-        (request,),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+        };
+        let request_bytes = ic_platform::candid::contract::encode_args((request,))?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (pic).query_call(
+                root,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                call_method,
+                request_bytes,
+            )
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .expect("Root status transport")
 }
@@ -434,14 +448,14 @@ fn root_store_adoption_operation_id(install_operation_id: [u8; 32]) -> [u8; 32] 
 pub fn wait_until_ready(pic: &PocketIc, canister_id: Principal, tick_limit: usize) {
     for _ in 0..tick_limit {
         if matches!(
-            ic_testkit::pic::query_candid_args::<(Result<RootStatusResponseFragment, Error>,), _>(
-                pic,
-                canister_id,
-                Principal::anonymous(),
-                protocol::CANIC_OBSERVABILITY,
-                (RootStatusRequestFragment::Readiness,),
-                canic::testing::CANDID_REPLY_LIMITS
-            )
+            (|| -> Result<(Result<RootStatusResponseFragment, Error>,), Box<dyn std::error::Error + Send + Sync>> {
+
+       let request_bytes = ic_platform::candid::contract::encode_args((RootStatusRequestFragment::Readiness,))?;
+       let reply = ic_testkit::pic::try_pocket_ic_operation(|| (pic).query_call(canister_id, Principal::anonymous(), protocol::CANIC_OBSERVABILITY, request_bytes))
+           .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+           .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+       ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS).map_err(Into::into)
+   })()
             .map(|(reply,)| reply),
             Ok(Ok(RootStatusResponseFragment::Readiness(
                 CanicReadinessStatus {
@@ -548,15 +562,18 @@ pub fn install_standalone_canister_on_pic(
     canister_id
 }
 
-fn fetch_ready(pic: &PocketIc, canister_id: Principal) -> Result<bool, CandidCallError> {
-    match ic_testkit::pic::query_candid_args::<(Result<CanisterStatusResponseFragment, Error>,), _>(
-        pic,
-        canister_id,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        protocol::CANIC_OBSERVABILITY,
-        (CanisterStatusRequestFragment::Readiness,),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+fn fetch_ready(
+    pic: &PocketIc,
+    canister_id: Principal,
+) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+    match (|| -> Result<(Result<CanisterStatusResponseFragment, Error>,), Box<dyn std::error::Error + Send + Sync>> {
+
+       let request_bytes = ic_platform::candid::contract::encode_args((CanisterStatusRequestFragment::Readiness,))?;
+       let reply = ic_testkit::pic::try_pocket_ic_operation(|| (pic).query_call(canister_id, ic_platform::principal::ExternalPrincipal::anonymous(), protocol::CANIC_OBSERVABILITY, request_bytes))
+           .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+           .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+       ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS).map_err(Into::into)
+   })()
     .map(|(reply,)| reply)
     {
         Ok(Ok(CanisterStatusResponseFragment::Readiness(readiness))) => {
@@ -567,15 +584,18 @@ fn fetch_ready(pic: &PocketIc, canister_id: Principal) -> Result<bool, CandidCal
     }
 }
 
-fn fetch_root_ready(pic: &PocketIc, canister_id: Principal) -> Result<bool, CandidCallError> {
-    match ic_testkit::pic::query_candid_args::<(Result<RootStatusResponseFragment, Error>,), _>(
-        pic,
-        canister_id,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        protocol::CANIC_OBSERVABILITY,
-        (RootStatusRequestFragment::Readiness,),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+fn fetch_root_ready(
+    pic: &PocketIc,
+    canister_id: Principal,
+) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+    match (|| -> Result<(Result<RootStatusResponseFragment, Error>,), Box<dyn std::error::Error + Send + Sync>> {
+
+       let request_bytes = ic_platform::candid::contract::encode_args((RootStatusRequestFragment::Readiness,))?;
+       let reply = ic_testkit::pic::try_pocket_ic_operation(|| (pic).query_call(canister_id, ic_platform::principal::ExternalPrincipal::anonymous(), protocol::CANIC_OBSERVABILITY, request_bytes))
+           .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+           .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+       ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS).map_err(Into::into)
+   })()
     .map(|(reply,)| reply)
     {
         Ok(Ok(RootStatusResponseFragment::Readiness(readiness))) => {

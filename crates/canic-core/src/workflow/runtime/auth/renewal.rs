@@ -118,8 +118,9 @@ impl RootIssuerRenewalWorkflow {
     }
 
     pub(super) async fn run_scheduled() -> OnceRunResult {
+        let result = Self::sweep().await;
         let now_ns = IcOps::now_nanos();
-        match Self::sweep().await {
+        match result {
             Ok(work_count) => Self::completed_result(now_ns, work_count),
             Err(failure) => Self::failed_result(now_ns, failure),
         }
@@ -180,11 +181,11 @@ impl RootIssuerRenewalWorkflow {
         if signed.signed {
             work_count = checked_work_count(work_count, 1)?;
         }
-        if let Some(request) = AuthOps::start_next_chain_key_root_delegation_batch_install(now_ns)
-            .map_err(|cause| RenewalSweepFailure { cause, work_count })?
+        if let Some(request) =
+            AuthOps::start_next_chain_key_root_delegation_batch_install(IcOps::now_nanos())
+                .map_err(|cause| RenewalSweepFailure { cause, work_count })?
         {
-            let outcome =
-                provisioning::install_chain_key_delegation_proof_batch(request, now_ns).await;
+            let outcome = provisioning::install_chain_key_delegation_proof_batch(request).await;
             work_count = checked_work_count(work_count, outcome.installed_count)?;
             if let Some(cause) = outcome.failure {
                 return Err(RenewalSweepFailure { cause, work_count });
@@ -411,8 +412,9 @@ fn retry_delay(streak: u64, now_ns: u64, active_proof_expires_at_ns: Option<u64>
         .checked_mul(multiplier)
         .expect("bounded auth retry duration must fit")
         .min(RETRY_MAX);
-    let Some(remaining_ns) =
-        active_proof_expires_at_ns.and_then(|expires_at_ns| expires_at_ns.checked_sub(now_ns))
+    let Some(remaining_ns) = active_proof_expires_at_ns
+        .and_then(|expires_at_ns| expires_at_ns.checked_sub(now_ns))
+        .filter(|remaining_ns| *remaining_ns > 0)
     else {
         return backoff;
     };
@@ -492,6 +494,9 @@ mod tests {
     #[test]
     fn retry_backoff_is_bounded_and_proof_aware() {
         assert_eq!(retry_delay(0, 100, None), Duration::from_mins(1));
+        assert_eq!(retry_delay(0, 100, Some(99)), Duration::from_mins(1));
+        assert_eq!(retry_delay(0, 100, Some(100)), Duration::from_mins(1));
+        assert_eq!(retry_delay(0, 100, Some(101)), Duration::from_nanos(1));
         assert_eq!(retry_delay(8, 100, None), RETRY_MAX);
         assert_eq!(
             retry_delay(0, 100, Some(20 * NANOS_PER_SECOND + 100)),

@@ -17,11 +17,6 @@ pub const REQUEST_LIMITS: ArgumentLimits = ArgumentLimits {
     max_type_len: 64,
     max_header_len: 4096,
 };
-pub const CONFIGURATION_LIMITS: ArgumentLimits = ArgumentLimits {
-    max_bytes: 16_384,
-    skipping_quota: 0,
-    ..REQUEST_LIMITS
-};
 pub const ENVELOPE_LIMITS: ArgumentLimits = ArgumentLimits {
     max_bytes: 65_536,
     max_type_len: 512,
@@ -61,7 +56,8 @@ pub fn install_from_args() {
             application
                 .as_deref()
                 .expect("service installation arguments"),
-            16_384,
+            crate::__private::ic_blob_storage_contracts::wire::request_limit("blob_install")
+                .expect("Blob installation method"),
         )
         .expect("bounded service configuration");
     install(&input);

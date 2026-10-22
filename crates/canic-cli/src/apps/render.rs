@@ -294,7 +294,12 @@ pub(super) fn render_planned_renamed_role(
     lines.join("\n")
 }
 
-pub(super) fn render_planned_delete(workspace_root: &Path, app: &str, target: &Path) -> String {
+pub(super) fn render_planned_delete(
+    workspace_root: &Path,
+    app: &str,
+    target: &Path,
+    removed_members: &[String],
+) -> String {
     let mut lines = vec![
         "Planned app delete:".to_string(),
         format!("  app: {app}"),
@@ -303,6 +308,9 @@ pub(super) fn render_planned_delete(workspace_root: &Path, app: &str, target: &P
             display_workspace_path(workspace_root, target)
         ),
     ];
+    for member in removed_members {
+        lines.push(format!("  remove workspace member: {member}"));
+    }
     append_dry_run_footer(&mut lines);
     lines.join("\n")
 }

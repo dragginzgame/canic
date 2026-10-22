@@ -9,7 +9,7 @@ use super::artifacts::{self, Composition};
 
 use canic_blob_service::__private::ic_blob_storage_contracts as contracts;
 
-fn decode_blob<T: serde::Serialize + serde::de::DeserializeOwned>(
+pub(super) fn decode_blob<T: serde::Serialize + serde::de::DeserializeOwned>(
     method: &str,
     bytes: &[u8],
 ) -> Result<T, contracts::wire::Error> {
@@ -293,6 +293,8 @@ fn qualify(embedded: bool) {
         expected: None,
         active: true,
     };
+    refuse_invalid_tenant_requests(&fixture, service, operator, request);
+    assert_eq!(capacity(), Err(UploadCapacityFailure::NotEnrolled));
     let denied: Result<TenantEnrollmentResponse, TenantFailure> =
         contracts::wire::tenant::decode_update_response(
             &pic.update_call(
@@ -388,7 +390,7 @@ fn qualify(embedded: bool) {
     let expires_at_ns = pic
         .get_time()
         .as_nanos_since_unix_epoch()
-        .checked_add(60_000_000_000)
+        .checked_add(3_600_000_000_000)
         .expect("bounded permission deadline");
     let permissions = [principal(13), principal(14)]
         .into_iter()
@@ -402,13 +404,16 @@ fn qualify(embedded: bool) {
                 object: index as u128 + 1,
                 incarnation: 1,
                 first_reference: 1,
-                root: [u8::try_from(index).expect("fixture object index fits u8") + 1; 32],
+                root: super::journey::root(
+                    u8::try_from(index).expect("fixture object index fits u8") + 1,
+                ),
                 bytes: 1,
             },
             uploader: uploader.into(),
             expires_at_ns,
         })
         .collect::<Vec<_>>();
+    super::journey::admission_refusals(pic, permissions[0]);
     for permission in &permissions {
         let denied: Result<UploadAdmissionMutation, UploadAdmissionFailure> = decode_blob(
             "blob_admit_upload",
@@ -480,18 +485,26 @@ fn qualify(embedded: bool) {
         }
     );
     if embedded {
-        let count: u64 = ic_testkit::pic::update_candid_args(
-            pic,
-            service,
-            ic_platform::principal::ExternalPrincipal::anonymous(),
-            "application_increment",
-            (),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
+        let count: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args(())?;
+            let response_bytes = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).update_call(
+                    service,
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
+                    "application_increment",
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&response_bytes, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
         .map(|(reply,)| reply)
         .expect("application mutation");
         assert_eq!(count, 42);
     }
+    super::metrics::check(pic, service, 2, false, embedded.then_some(42));
     fixture
         .upgrade_same_release(service, Duration::from_secs(300))
         .expect("same-release restoration");
@@ -503,9 +516,14 @@ fn qualify(embedded: bool) {
             ..admitted_capacity
         }
     );
+    super::metrics::check(pic, service, 2, true, embedded.then_some(42));
     resume();
     resume();
     assert!(!configuration().fenced);
+    super::metrics::check(pic, service, 2, false, embedded.then_some(42));
+    // Background framework updates may legitimately fence the shared owner.
+    // Sampling reports that fence; only authenticated recovery can clear it.
+    resume();
     assert_eq!(capacity().unwrap(), admitted_capacity);
     let restored: Result<TenantEnrollmentResponse, TenantFailure> =
         contracts::wire::tenant::decode_inspection_response(
@@ -519,7 +537,7 @@ fn qualify(embedded: bool) {
         )
         .expect("restored tenant transport");
     assert_eq!(restored.unwrap().enrollment, enrolled.enrollment);
-    for permission in permissions {
+    for &permission in &permissions {
         let replayed: Result<UploadAdmissionMutation, UploadAdmissionFailure> = decode_blob(
             "blob_admit_upload",
             &pic.update_call(
@@ -536,18 +554,54 @@ fn qualify(embedded: bool) {
         assert_eq!(replayed.admission.permission, permission);
     }
     if embedded {
-        let count: u64 = ic_testkit::pic::query_candid_args(
-            pic,
-            service,
-            ic_platform::principal::ExternalPrincipal::anonymous(),
-            "application_count",
-            (),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
+        let count: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args(())?;
+            let response_bytes = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).query_call(
+                    service,
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
+                    "application_count",
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&response_bytes, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
         .map(|(reply,)| reply)
         .expect("restored application counter");
         assert_eq!(count, 42);
     }
+    let statements: Vec<_> = permissions
+        .into_iter()
+        .map(|permission| {
+            super::journey::qualify(pic, permission, || {
+                fixture
+                    .upgrade_same_release(service, Duration::from_secs(300))
+                    .unwrap();
+                resume();
+            })
+        })
+        .collect();
+    fixture
+        .upgrade_same_release(service, Duration::from_secs(300))
+        .unwrap();
+    for &statement in &statements {
+        assert_eq!(
+            super::journey::check_attestation(pic, &statement.request, true),
+            statement
+        );
+    }
+    resume();
+    let original_permission = statements[0].request.permission;
+    for statement in statements {
+        assert_eq!(
+            super::journey::check_attestation(pic, &statement.request, false),
+            statement
+        );
+    }
+    super::journey::qualify_refusals(pic, original_permission);
 }
 
 #[test]
@@ -573,6 +627,36 @@ struct UnmodeledInstallationInput {
 struct UnmodeledEmbeddedInput {
     initial_count: u64,
     blob: Vec<u8>,
+}
+
+fn refuse_invalid_tenant_requests(
+    fixture: &canic::testing::ManagedComponentGroupFixture,
+    service: Principal,
+    operator: Principal,
+    request: TenantUpdateRequest,
+) {
+    let pic = fixture.pic();
+    let stable = pic.get_stable_memory(service);
+    let mut trailing = contracts::wire::tenant::update_request(request).unwrap();
+    trailing.push(0);
+    let ceiling = contracts::wire::request_limit("blob_update_tenant").unwrap();
+    for bytes in [
+        Vec::new(),
+        contracts::wire::encode_request("blob_configuration", ()).unwrap(),
+        trailing,
+        vec![0; ceiling + 1],
+    ] {
+        let expected = if bytes.len() > ceiling {
+            ic_testkit::pic::RejectCode::CanisterReject
+        } else {
+            ic_testkit::pic::RejectCode::CanisterError
+        };
+        let refusal = pic
+            .update_call(service, operator, "blob_update_tenant", bytes)
+            .expect_err("malformed, wrong-method or oversized ingress must refuse");
+        assert_eq!(refusal.reject_code, expected);
+        assert_eq!(pic.get_stable_memory(service), stable);
+    }
 }
 
 fn refuse_invalid_configuration(
@@ -620,7 +704,7 @@ fn refuse_invalid_configuration(
     };
     let stable = pic.get_stable_memory(service);
     for invalid in [unknown_field, extra_argument] {
-        assert!(invalid.len() < canic_blob_service::lifecycle::CONFIGURATION_LIMITS.max_bytes);
+        assert!(invalid.len() < contracts::wire::request_limit("blob_install").unwrap());
         let args =
             ic_platform::candid::contract::encode_args((protected.clone(), Some(invalid))).unwrap();
         pic.wait_out_install_code_rate_limit(Duration::from_secs(300));
@@ -653,14 +737,21 @@ fn refuse_invalid_configuration(
             }
         );
         if embedded {
-            let count: u64 = ic_testkit::pic::query_candid_args(
-                pic,
-                service,
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                "application_count",
-                (),
-                canic::testing::CANDID_REPLY_LIMITS,
-            )
+            let count: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args(())?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (pic).query_call(
+                        service,
+                        ic_platform::principal::ExternalPrincipal::anonymous(),
+                        "application_count",
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
             .map(|(reply,)| reply)
             .unwrap();
             assert_eq!(count, 41);

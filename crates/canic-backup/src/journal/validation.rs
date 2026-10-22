@@ -7,11 +7,7 @@
 use crate::journal::{ArtifactJournalEntry, ArtifactState, DownloadJournal};
 use ic_backup::model::artifacts::ArtifactChecksumRecord;
 
-use std::{
-    collections::BTreeSet,
-    path::{Component, PathBuf},
-    str::FromStr,
-};
+use std::{collections::BTreeSet, str::FromStr};
 
 use ic_platform::principal::ExternalPrincipal as Principal;
 use thiserror::Error as ThisError;
@@ -158,12 +154,7 @@ fn validate_relative_artifact_path(
     field: &'static str,
     value: &str,
 ) -> Result<(), JournalValidationError> {
-    let path = PathBuf::from(value);
-    if path.is_absolute()
-        || !path
-            .components()
-            .all(|component| matches!(component, Component::Normal(_) | Component::CurDir))
-    {
+    if crate::artifacts::relative_artifact_path(value).is_none() {
         return Err(JournalValidationError::InvalidArtifactPath {
             field,
             value: value.to_string(),

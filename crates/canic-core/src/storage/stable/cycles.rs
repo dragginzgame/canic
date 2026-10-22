@@ -451,11 +451,12 @@ impl CycleTopupEvents {
 
     fn next_sequence(&self, timestamp_secs: u64) -> u32 {
         self.map
-            .iter()
-            .filter(|entry| entry.key().timestamp_secs == timestamp_secs)
-            .map(|entry| entry.key().sequence)
-            .max()
-            .map_or(0, |sequence| sequence.saturating_add(1))
+            .range(
+                CycleTopupEventKey::new(timestamp_secs, 0)
+                    ..=CycleTopupEventKey::new(timestamp_secs, u32::MAX),
+            )
+            .next_back()
+            .map_or(0, |entry| entry.key().sequence.saturating_add(1))
     }
 }
 
@@ -588,6 +589,58 @@ mod tests {
             });
             assert!(result.is_err());
         }
+    }
+
+    #[test]
+    fn topup_sequence_uses_only_the_requested_timestamp_range() {
+        let _guard = seams::lock();
+        CycleTopupEvents::clear_for_tests();
+        let next =
+            |timestamp| CYCLE_TOPUP_EVENTS.with_borrow(|events| events.next_sequence(timestamp));
+        assert_eq!(next(10), 0);
+        let entry = |timestamp, sequence| CycleTopupEventEntryRecord {
+            key: CycleTopupEventKey::new(timestamp, sequence),
+            record: CycleTopupEventRecord {
+                requested_cycles: Cycles::new(1),
+                transferred_cycles: None,
+                status: CycleTopupEventStatusRecord::RequestOk,
+                error: None,
+                parent_failure: None,
+            },
+        };
+        CycleTopupEvents::import(CycleTopupEventsData {
+            entries: vec![
+                entry(9, u32::MAX),
+                entry(10, 0),
+                entry(10, 7),
+                entry(11, u32::MAX),
+                entry(u64::MAX, 0),
+            ],
+        });
+        assert_eq!(next(0), 0);
+        assert_eq!(next(10), 8);
+        assert_eq!(next(11), u32::MAX);
+        assert_eq!(next(12), 0);
+        assert_eq!(next(u64::MAX), 1);
+        CycleTopupEvents::record(
+            10,
+            Cycles::new(2),
+            None,
+            CycleTopupEventStatusRecord::RequestOk,
+            None,
+            None,
+        );
+        let retained = CycleTopupEvents::data(0, usize::MAX);
+        assert!(
+            retained
+                .entries
+                .iter()
+                .any(|entry| entry.key == CycleTopupEventKey::new(10, 8))
+        );
+        CycleTopupEvents::clear_for_tests();
+        CycleTopupEvents::import(retained);
+        assert_eq!(next(10), 9);
+        CycleTopupEvents::clear_for_tests();
     }
 
     #[test]

@@ -25,7 +25,7 @@ pub(super) fn write_metrics_report(
 }
 
 fn render_metrics_report(report: &MetricsReport, verbose: bool) -> String {
-    [
+    let mut sections = vec![
         format!(
             "Fleet: {} (environment {}, metrics {})",
             report.fleet,
@@ -38,8 +38,20 @@ fn render_metrics_report(report: &MetricsReport, verbose: bool) -> String {
         } else {
             render_default_metrics_table(report)
         },
-    ]
-    .join("\n")
+    ];
+    for canister in &report.canisters {
+        if canister.truncated {
+            sections.push(format!(
+                "Incomplete metrics for {} ({}): fetched {} of {} rows; showing {}. Requery or raise --limit; omitted rows may be nonzero.",
+                canister.role,
+                canister.canister_id,
+                canister.fetched,
+                canister.total.unwrap_or_default(),
+                canister.entries.len(),
+            ));
+        }
+    }
+    sections.join("\n")
 }
 
 fn render_default_metrics_table(report: &MetricsReport) -> String {
@@ -281,6 +293,9 @@ mod tests {
                 role: "app".to_string(),
                 canister_id: CANISTER_ID.to_string(),
                 status: MetricsCanisterStatus::Ok,
+                total: Some(3),
+                fetched: 3,
+                truncated: false,
                 entries: vec![
                     MetricEntry {
                         labels: ["perf", LONG_LABEL]
@@ -352,5 +367,23 @@ mod tests {
         assert_eq!(average_per_count(15, 3), "5");
         assert_eq!(average_per_count(10, 4), "2.5");
         assert_eq!(average_per_count(1, 0), "-");
+    }
+
+    #[test]
+    fn incomplete_metrics_remain_visible_with_no_displayed_rows() {
+        let mut report = report();
+        let canister = &mut report.canisters[0];
+        canister.entries.clear();
+        canister.status = MetricsCanisterStatus::Empty;
+        canister.total = Some(1500);
+        canister.fetched = 1000;
+        canister.truncated = true;
+
+        for verbose in [false, true] {
+            let output = render_metrics_report(&report, verbose);
+            assert!(output.contains("fetched 1000 of 1500 rows; showing 0"));
+            assert!(output.contains("omitted rows may be nonzero"));
+            assert!(output.contains(CANISTER_ID));
+        }
     }
 }

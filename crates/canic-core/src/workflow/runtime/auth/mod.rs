@@ -488,7 +488,6 @@ mod tests {
         issuer_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: true,
             delegated_token_verifier: false,
-            allowed_token_scopes: Vec::new(),
             local_application_authorization: None,
             role_attestation_cache: false,
         };
@@ -511,7 +510,6 @@ mod tests {
         verifier_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: false,
             delegated_token_verifier: false,
-            allowed_token_scopes: Vec::new(),
             local_application_authorization: None,
             role_attestation_cache: true,
         };
@@ -534,7 +532,6 @@ mod tests {
         issuer_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: true,
             delegated_token_verifier: false,
-            allowed_token_scopes: Vec::new(),
             local_application_authorization: None,
             role_attestation_cache: false,
         };
@@ -564,7 +561,6 @@ mod tests {
         verifier_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: false,
             delegated_token_verifier: true,
-            allowed_token_scopes: Vec::new(),
             local_application_authorization: None,
             role_attestation_cache: false,
         };
@@ -584,7 +580,6 @@ mod tests {
         verifier_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: false,
             delegated_token_verifier: false,
-            allowed_token_scopes: Vec::new(),
             local_application_authorization: None,
             role_attestation_cache: true,
         };
@@ -612,7 +607,6 @@ mod tests {
         verifier_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: false,
             delegated_token_verifier: true,
-            allowed_token_scopes: Vec::new(),
             local_application_authorization: None,
             role_attestation_cache: true,
         };
@@ -621,7 +615,6 @@ mod tests {
         issuer_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: true,
             delegated_token_verifier: false,
-            allowed_token_scopes: Vec::new(),
             local_application_authorization: None,
             role_attestation_cache: false,
         };
@@ -648,7 +641,6 @@ mod tests {
         verifier_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: false,
             delegated_token_verifier: true,
-            allowed_token_scopes: Vec::new(),
             local_application_authorization: None,
             role_attestation_cache: true,
         };
@@ -664,7 +656,6 @@ mod tests {
         issuer_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: true,
             delegated_token_verifier: false,
-            allowed_token_scopes: Vec::new(),
             local_application_authorization: None,
             role_attestation_cache: true,
         };

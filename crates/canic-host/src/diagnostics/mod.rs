@@ -54,13 +54,6 @@ pub struct RetiredDiagnosticEntry {
 }
 
 impl RetiredDiagnosticEntry {
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "the initial unreleased register has no retired rows"
-        )
-    )]
     pub(super) const fn new(code: u16, name: &'static str) -> Self {
         Self {
             code: DiagnosticCode::from_raw(code),

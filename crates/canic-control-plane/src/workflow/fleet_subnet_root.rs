@@ -200,7 +200,6 @@ async fn prepare_sibling_wasm_store_controllers(
             controllers: Some(expected.to_vec()),
             ..CanisterSettings::default()
         },
-        sender_canister_version: None,
     })
     .await
 }

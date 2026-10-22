@@ -10,7 +10,10 @@ use std::collections::BTreeSet;
 #[test]
 fn endpoint_manifest_entries_are_unique() {
     let mut seen = BTreeSet::new();
-    for entry in STORE_ENDPOINT_REPLAY_POLICY_MANIFEST {
+    for entry in ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .chain(STORE_ENDPOINT_REPLAY_POLICY_MANIFEST)
+    {
         assert!(
             seen.insert(entry.endpoint),
             "duplicate replay policy entry for {}",
@@ -20,20 +23,28 @@ fn endpoint_manifest_entries_are_unique() {
 }
 
 #[test]
-fn emitted_canic_update_endpoints_have_replay_policy_entries() {
-    let emitted = emitted_update_endpoint_names();
-    let manifest = ENDPOINT_REPLAY_POLICY_MANIFEST
-        .iter()
-        .chain(STORE_ENDPOINT_REPLAY_POLICY_MANIFEST)
-        .filter(|entry| entry.endpoint_kind == EndpointKind::Update)
-        .map(|entry| entry.endpoint)
-        .collect::<BTreeSet<_>>();
+fn emitted_canic_endpoints_have_replay_policy_entries() {
+    for kind in [EndpointKind::Query, EndpointKind::Update] {
+        let emitted = emitted_endpoint_names(kind);
+        let manifest = ENDPOINT_REPLAY_POLICY_MANIFEST
+            .iter()
+            .chain(STORE_ENDPOINT_REPLAY_POLICY_MANIFEST)
+            .filter(|entry| entry.endpoint_kind == kind)
+            .map(|entry| entry.endpoint.to_owned())
+            .collect::<BTreeSet<_>>();
+        assert_eq!(
+            emitted, manifest,
+            "endpoint inventory must exactly match replay policy"
+        );
+    }
+}
 
-    let missing = emitted.difference(&manifest).copied().collect::<Vec<_>>();
-
-    assert!(
-        missing.is_empty(),
-        "missing replay policy entries for update endpoints: {missing:?}"
+#[test]
+fn command_inventory_selects_the_exact_enum_before_extracting_variants() {
+    let source = "pub enum CommandResponse {\n    Reply,\n}\npub enum Command {\n    Execute,\n}";
+    assert_eq!(
+        enum_variant_names_from_source(source, "pub enum Command"),
+        BTreeSet::from(["Execute"]),
     );
 }
 

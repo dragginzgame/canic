@@ -82,9 +82,17 @@ desired Fleet, not to App source configuration.
 
 Canic treats config/env identity as startup invariants. Missing env data is a fatal error.
 
-- Build time: the build script selects `CANIC_CONFIG_PATH`, parses and validates
-  its TOML on the host, then generates typed Rust configuration. It also retains
-  compact TOML text for Root reporting; no TOML parser enters deployed Wasm.
+- Build time: the host selects the configuration, parses and validates
+  its TOML, then generates typed Rust configuration. It also retains
+  a TOML serialization of that validated model for protected Root reporting,
+  preserving multiline values and including defaults and host-resolved fields.
+  Cycle amounts in this diagnostic snapshot are decimal cycle counts. It excludes
+  later runtime-injected trust data; no TOML parser enters deployed Wasm.
+  Root initialization diagnostics identify embedded configuration without retaining
+  the builder's absolute config path as a runtime value. Generated file paths
+  remain host compiler inputs; this alone does not establish whole-Wasm reproducibility.
+  Every package's `[package.metadata.canic] app` must match the selected App,
+  including the implicit Root and Wasm Store roles.
   `ICP_ENVIRONMENT` is baked in (`local` or `ic`), defaulting to `local` when
   unset.
 - Init/post-upgrade: generated lifecycle code installs the compiled typed model
@@ -156,8 +164,12 @@ Configure log retention for every canister.
 
 - `max_entries: u64` – ring buffer cap on stored log entries (default `10000`).
 - `max_entries` must be `<= 100000` (larger values are rejected at config validation).
-- `max_entry_bytes: u32` – maximum message size in bytes per entry; oversized entries are truncated with a `...[truncated]` suffix (default `16384`).
-- `max_age_secs: u64` – optional maximum age; entries older than this (in seconds) are purged (default `null` = no age limit).
+- `max_entry_bytes: u32` – maximum message size in bytes per entry, at most `65536`
+  (64 KiB); oversized entries are truncated with a `...[truncated]` suffix
+  (default `16384`). Larger configured limits are rejected before installation.
+- `max_age_secs: u64` – optional maximum age; entries older than this (in seconds)
+  are purged (omit for no age limit). An expiry beyond the IC clock's representable
+  range schedules no age timer; count retention still applies.
 
 ### `[auth.delegated_tokens]`
 
@@ -168,7 +180,7 @@ Root/issuer delegated token authentication
 - `root_canister_id: string` – optional root canister trust anchor. If omitted, runtime verification uses the initialized Canic root env.
 - `ic_root_public_key_raw_hex: string` – optional raw 96-byte IC BLS root public key encoded as hex. If omitted, runtime verification uses the IC/test root-key provider for issuer canister-signature proof verification.
 - `build_network: "ic" | "local"` – network class bound into delegated-auth proofs and verifier policy (default `"ic"`).
-- `max_ttl_secs: u64` – optional upper bound on delegated cert/token/session TTL in seconds (default `null` = runtime default cap; must be > 0 when set).
+- `max_ttl_secs: u64` – optional upper bound on delegated cert/token/session TTL in seconds (default `null` = runtime default cap; must be positive and at most `u64::MAX / 1_000_000_000` when set).
 
 When delegated-token verification is enabled on a non-root endpoint canister,
 startup requires issuer canister-signature verification support, an effective
@@ -189,9 +201,9 @@ the build path fills the derived key and path hash before final validation.
   explicit key material for another environment.
 - `key_id: string` – IC chain-key ECDSA key id, such as `"key_1"`.
 - `derivation_path_hash_hex: string` – canonical 32-byte hash of the derivation path, encoded as hex.
-- `derivation_path_hex: [string, ...]` – derivation path components encoded as hex strings.
+- `derivation_path_hex: [string, ...]` – at most 255 derivation path components encoded as hex strings.
 - `public_key_hex: string` – SEC1 secp256k1 public key for the configured root canister, key id, and derivation path.
-- `key_version: u64` – configured signing key version expected in root proof headers.
+- `key_version: u64` – configured signing key version expected in root proof headers; must be at least `min_accepted_key_version`.
 - `min_accepted_key_version: u64` – verifier floor for accepted key versions.
 - `min_accepted_proof_epoch: u64` – verifier floor for root proof epochs. For the byte-free V1 hard cut, deployments must set this strictly above their highest previously accepted proof epoch before issuing new material.
 - `min_accepted_registry_epoch: u64` – verifier floor for delegated-auth registry epochs. For the byte-free V1 hard cut, deployments must set this strictly above their highest previously accepted registry epoch before issuing new material.
@@ -204,8 +216,8 @@ the build path fills the derived key and path hash before final validation.
 
 Root canister-signature role-attestation settings.
 
-- `max_ttl_secs: u64` – maximum role-attestation lifetime in seconds (default `900`, must be > 0).
-- `min_accepted_epoch_by_role.<role>: u64` – optional per-role epoch floor for rejecting older attestations. Application verification arguments may raise this floor but cannot lower it.
+- `max_ttl_secs: u64` – maximum role-attestation lifetime in seconds (default `900`, must be positive and at most `u64::MAX / 1_000_000_000`).
+- `min_accepted_epoch_by_role.<role>: u64` – optional per-role epoch floor for rejecting older attestations. Keys must use canonical role names and identify a declared application role or the built-in `root`, `fleet_coordinator` or `wasm_store` role. Application verification arguments may raise this floor but cannot lower it.
 
 ### `[standards]`
 
@@ -295,8 +307,14 @@ binding. The role is derived from the table key; do not declare `role`, `type`,
 - `topup.threshold = "10T"` – minimum cycles before requesting a top-up
   (default `10T` when the `topup` table is present).
 - `topup.amount = "5T"` – cycles to request when topping up (default `5T`
-  when the `topup` table is present; it cannot exceed half the threshold).
+  when the `topup` table is present; it must be positive and cannot exceed half
+  the threshold).
   Omit `topup` entirely to disable auto top-ups.
+
+The default initial allocation (`5T`) is below the default top-up threshold
+(`10T`). Enabling `topup` with those defaults can request parent funding as soon
+as automatic balance checks run. Choose an explicit `initial_cycles` with enough
+headroom above the threshold to avoid starting below it, allowing for cycle costs.
 
 Cycle amount fields use exact decimal `K`, `M`, `B`, `T`, or `Q` shorthand.
 They must resolve to a whole number of cycles within `u128`; Canic does not
@@ -305,18 +323,15 @@ round, truncate, or saturate them.
 - `sharding` – optional table that defines stateful shard pools.
 - `index` – optional table that defines keyed instance pools.
 - `auth.delegated_token_issuer = true` – mark this role as an issuer for Root proof provisioning; the role requires local issuer-signature support.
-- `auth.delegated_token_verifier = true` – mark this role as a delegated-token
-  verifier; the role contract requires the matching verifier feature and the
-  global delegated-token trust policy.
-- `auth.allowed_token_scopes` – protected, explicit role-local token scope ceiling.
-  Omission permits no token scopes. Declare the complete accepted grant set;
-  Canic never derives it from a submitted token.
+- `auth.delegated_token_verifier = true` – select retained Root/issuer proof
+  verification support; the role contract requires the matching verifier feature
+  and global proof trust policy.
 - `auth.role_attestation_cache = true` – start the role-attestation key cache for canisters that verify root-signed role attestations. Root delegation policy is configured through `auth.delegated_tokens`.
 - `auth.local_application_authorization` – optional role-local application
   session policy with required `allowed_scopes`, `default_session_ttl_secs`,
   and `maximum_session_ttl_secs`. Scope ordering is normalized; TTLs and scope
-  bounds are validated before build. Every session scope must also belong to
-  `auth.allowed_token_scopes`.
+  bounds are validated before build. This is the local scope ceiling; protected
+  Root enrollment must independently constrain issuer grants.
 - `standards.icrc21 = true` – enable the canister-local ICRC-21 endpoint. This
   is separate from the global `[standards]` setting.
 - `diagnostics.memory_ledger = true` – opt this role into the controller-only `canic_memory_ledger` recovery diagnostic. The endpoint is omitted by default to keep the shared Candid/runtime surface smaller.
@@ -409,11 +424,17 @@ bounded to 2 MiB.
 always active as policy; omitted values use finite defaults.
 
 - `max_per_request = "5T"` – maximum granted by one request.
-- `max_per_child = "100T"` – cumulative parent budget for one child.
+- `max_per_child = "100T"` – lifetime cumulative parent budget for one child.
 - `cooldown_secs = 60` – minimum time between grants for the child.
 
 `max_per_request` must not exceed `max_per_child`, and all three values must be
 positive.
+
+The child budget does not refill when a cooldown or aggregate funding window
+expires. Outstanding grants also consume its headroom. Exhaustion produces the
+typed `ChildBudgetExhausted` preflight result; the automatic top-up worker logs
+the parent child-budget limit and stops. Plan this finite lifetime cap alongside
+the top-up amount and expected consumption; automatic funding is not unlimited.
 
 The `wasm_store` role is reserved and implicit.
 Do not add it under `component_specs.*`.
@@ -448,11 +469,27 @@ Placement Index pools place keyed stateful instances.
 [component_specs.<name>.index.pools.<pool>]
 canister_role = "instance_role"
 key_name = "project"
+
+[component_specs.<name>.children.instance_role]
+kind = "instance"
+initial_cycles = "5T"
 ```
 
 - `canister_role` – potential-descendant role in the same Component Spec with
   `kind = "instance"`.
 - `key_name` – non-empty logical key name used by keyed placement admission.
+
+Set `initial_cycles` explicitly on the child role named by `canister_role`.
+Omission selects `5T` for each child's provisioning target, not a total pool
+budget. The example writes that default explicitly; choose the amount for the
+workload and the selected Root's admission limits.
+
+Public application requests that admit new keys can allocate separate funded
+children. Apply application admission and quotas before calling
+`PlacementIndexApi::resolve_or_create`, and review the matching spawn grant's
+`maximum_instances_per_parent` and the Component's `limits.maximum_descendants`.
+Caller authentication alone does not bound creation across fresh identities.
+These instance limits bound admission; they are not per-user spending quotas.
 
 A Placement Index is application-owned keyed state. It is not a Canic
 Directory: Directories are read-only discovery projections derived from
@@ -468,6 +505,10 @@ Sharding pools manage stateful shards that own capacity-bounded partitions.
 canister_role = "shard_role"
 policy.capacity = 1000
 policy.max_shards = 64
+
+[component_specs.<name>.children.shard_role]
+kind = "shard"
+initial_cycles = "5T"
 ```
 
 Fields:
@@ -480,6 +521,11 @@ Fields:
 - `policy.max_shards` – maximum shard count (default `4`, must be positive and
   no greater than the matching spawn grant's
   `maximum_instances_per_parent`).
+
+Shard children use the same per-child `initial_cycles` default of `5T`; make
+that role's allocation explicit and budget it across `initial_shards` and
+`max_shards`. Application admission must bound requests that can drive new shard
+creation. Automatic top-ups, if configured, have their own funding policies.
 
 ---
 
@@ -656,6 +702,7 @@ maximum_instances = 1
 [component_specs.users]
 component_role = "user_hub"
 maximum_instances = 1
+initial_cycles = "15T"
 topup.threshold = "10T"
 topup.amount = "5T"
 
@@ -678,6 +725,7 @@ maximum_instances_per_parent = 4
 [component_specs.scaling]
 component_role = "scale_hub"
 maximum_instances = 1
+initial_cycles = "15T"
 topup.threshold = "10T"
 topup.amount = "5T"
 

@@ -154,14 +154,16 @@ fn bound_child(status: &PlacementIndexStatusResponse) -> Principal {
 }
 
 fn startup_calls(pic: &PocketIc, root: Principal, child: Principal) -> u32 {
-    ic_testkit::pic::query_candid_args::<(Result<u32, Error>,), _>(
-        pic,
-        child,
-        root,
-        "test_startup_calls",
-        (),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+    (|| -> Result<(Result<u32, Error>,), Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes = ic_platform::candid::contract::encode_args(())?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (pic).query_call(child, root, "test_startup_calls", request_bytes)
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .unwrap()
     .unwrap()

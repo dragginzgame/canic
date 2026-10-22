@@ -747,14 +747,21 @@ mod tests {
         canister: Principal,
     ) -> canic::dto::memory::MemoryAllocationsResponse {
         let result: Result<canic::dto::memory::MemoryAllocationsResponse, Error> =
-            ic_testkit::pic::query_candid_args(
-                pic,
-                canister,
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                "memory_allocations_probe",
-                (),
-                canic::testing::CANDID_REPLY_LIMITS,
-            )
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args(())?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (pic).query_call(
+                        canister,
+                        ic_platform::principal::ExternalPrincipal::anonymous(),
+                        "memory_allocations_probe",
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
             .map(|(reply,)| reply)
             .expect("query Candid harness call");
         result.expect("admitted memory observation")
@@ -865,25 +872,39 @@ mod tests {
                 }
             }
             assert_eq!(held.len(), 2);
-            let entered: Vec<bool> = ic_testkit::pic::query_candid_args(
-                &(fixture.pic),
-                canister,
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                "perf_context_entered",
-                (),
-                canic::testing::CANDID_REPLY_LIMITS,
-            )
+            let entered: Vec<bool> = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args(())?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (fixture.pic).query_call(
+                        canister,
+                        ic_platform::principal::ExternalPrincipal::anonymous(),
+                        "perf_context_entered",
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
             .map(|(reply,)| reply)
             .expect("query Candid harness call");
             assert_eq!(entered, [true, true]);
-            let completed: Vec<u8> = ic_testkit::pic::query_candid_args(
-                &(fixture.pic),
-                canister,
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                "perf_context_completed",
-                (),
-                canic::testing::CANDID_REPLY_LIMITS,
-            )
+            let completed: Vec<u8> = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args(())?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (fixture.pic).query_call(
+                        canister,
+                        ic_platform::principal::ExternalPrincipal::anonymous(),
+                        "perf_context_completed",
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
             .map(|(reply,)| reply)
             .expect("query Candid harness call");
             assert!(
@@ -914,39 +935,69 @@ mod tests {
                 let observed: Result<PerfProbeObservation, Error> =
                     ic_platform::candid::decoder::decode_one(&reply).expect("probe observation");
                 let observed = observed.expect("admitted generated endpoint");
-                let metrics: Vec<PerfProbeMetric> = ic_testkit::pic::query_candid_args(
-                    &(fixture.pic),
-                    canister,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "perf_context_metrics",
-                    (),
-                    canic::testing::CANDID_REPLY_LIMITS,
-                )
-                .map(|(reply,)| reply)
-                .expect("query Candid harness call");
+                let metrics: Vec<PerfProbeMetric> =
+                    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                        let request_bytes = ic_platform::candid::contract::encode_args(())?;
+                        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                            (fixture.pic).query_call(
+                                canister,
+                                ic_platform::principal::ExternalPrincipal::anonymous(),
+                                "perf_context_metrics",
+                                request_bytes,
+                            )
+                        })
+                        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                        ic_platform::candid::decode_args(
+                            &reply,
+                            canic::testing::CANDID_REPLY_LIMITS,
+                        )
+                        .map_err(Into::into)
+                    })()
+                    .map(|(reply,)| reply)
+                    .expect("query Candid harness call");
                 assert_perf_observation(&metrics, which, &observed);
-                let completed: Vec<u8> = ic_testkit::pic::query_candid_args(
-                    &(fixture.pic),
-                    canister,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "perf_context_completed",
-                    (),
-                    canic::testing::CANDID_REPLY_LIMITS,
-                )
-                .map(|(reply,)| reply)
-                .expect("query Candid harness call");
+                let completed: Vec<u8> =
+                    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                        let request_bytes = ic_platform::candid::contract::encode_args(())?;
+                        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                            (fixture.pic).query_call(
+                                canister,
+                                ic_platform::principal::ExternalPrincipal::anonymous(),
+                                "perf_context_completed",
+                                request_bytes,
+                            )
+                        })
+                        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                        ic_platform::candid::decode_args(
+                            &reply,
+                            canic::testing::CANDID_REPLY_LIMITS,
+                        )
+                        .map_err(Into::into)
+                    })()
+                    .map(|(reply,)| reply)
+                    .expect("query Candid harness call");
                 assert_eq!(completed, order[..=position]);
             }
-            let metrics: Vec<PerfProbeMetric> = ic_testkit::pic::query_candid_args(
-                &(fixture.pic),
-                canister,
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                "perf_context_metrics",
-                (),
-                canic::testing::CANDID_REPLY_LIMITS,
-            )
-            .map(|(reply,)| reply)
-            .expect("query Candid harness call");
+            let metrics: Vec<PerfProbeMetric> =
+                (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                    let request_bytes = ic_platform::candid::contract::encode_args(())?;
+                    let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                        (fixture.pic).query_call(
+                            canister,
+                            ic_platform::principal::ExternalPrincipal::anonymous(),
+                            "perf_context_metrics",
+                            request_bytes,
+                        )
+                    })
+                    .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                    .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                    ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                        .map_err(Into::into)
+                })()
+                .map(|(reply,)| reply)
+                .expect("query Candid harness call");
             assert_eq!(
                 metrics
                     .iter()
@@ -965,16 +1016,27 @@ mod tests {
         fixture
             .pic
             .wait_for_ready(canister, Principal::anonymous(), 120, "standalone install");
-        let first: Result<u64, Error> = ic_testkit::pic::update_candid_args(
-            &(fixture.pic),
-            canister,
-            ic_platform::principal::ExternalPrincipal::anonymous(),
-            "begin_timer_probe_intent",
-            (211_u8, None::<u64>),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .map(|(reply,)| reply)
-        .expect("update Candid harness call");
+        let begin_intent = |seed: u8| -> Result<u64, Error> {
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes =
+                    ic_platform::candid::contract::encode_args((seed, None::<u64>))?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (fixture.pic).update_call(
+                        canister,
+                        ic_platform::principal::ExternalPrincipal::anonymous(),
+                        "begin_timer_probe_intent",
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
+            .map(|(reply,)| reply)
+            .expect("update Candid harness call")
+        };
+        let first: Result<u64, Error> = begin_intent(211);
         let first = first.expect("initial retained TTL-free reservation");
         let baseline = standalone_memory_allocations(&fixture.pic, canister);
         assert!(baseline.current_generation > 0);
@@ -1007,32 +1069,14 @@ mod tests {
             fixture
                 .pic
                 .wait_for_ready(canister, Principal::anonymous(), 120, "standalone upgrade");
-            let duplicate: Result<u64, Error> = ic_testkit::pic::update_candid_args(
-                &(fixture.pic),
-                canister,
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                "begin_timer_probe_intent",
-                (211_u8, None::<u64>),
-                canic::testing::CANDID_REPLY_LIMITS,
-            )
-            .map(|(reply,)| reply)
-            .expect("update Candid harness call");
+            let duplicate: Result<u64, Error> = begin_intent(211);
             assert_eq!(
                 duplicate
                     .expect_err("original reservation remains held")
                     .code(),
                 canic::diagnostics::codes::CAPACITY_LIMIT.raw_code()
             );
-            let next: Result<u64, Error> = ic_testkit::pic::update_candid_args(
-                &(fixture.pic),
-                canister,
-                ic_platform::principal::ExternalPrincipal::anonymous(),
-                "begin_timer_probe_intent",
-                (211_u8 + attempt, None::<u64>),
-                canic::testing::CANDID_REPLY_LIMITS,
-            )
-            .map(|(reply,)| reply)
-            .expect("update Candid harness call");
+            let next: Result<u64, Error> = begin_intent(211 + attempt);
             assert_eq!(
                 next.expect("new reservation after cold restoration"),
                 first + u64::from(attempt)
@@ -1103,15 +1147,23 @@ mod tests {
             prepared.projection_digest,
             second_prepared.projection_digest
         );
-        let denied: Result<Result<(), Error>, _> = ic_testkit::pic::query_candid_args(
-            &(fixture.pic),
-            canister,
-            admitted,
-            "test_fleet_admission_probe",
-            (),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .map(|(reply,)| reply);
+        let denied: Result<Result<(), Error>, _> =
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args(())?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (fixture.pic).query_call(
+                        canister,
+                        admitted,
+                        "test_fleet_admission_probe",
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
+            .map(|(reply,)| reply);
         assert!(denied.is_err());
 
         activate_projection(&fixture.pic, canister, fixture.root, &directory);
@@ -1161,40 +1213,63 @@ mod tests {
         let unlisted = Fake::principal(16);
 
         let prepared_call: Result<Result<ManagedGuardReceipt, Error>, _> =
-            ic_testkit::pic::update_candid_args(
-                &(fixture.pic),
-                canister,
-                admitted,
-                "managed_guard_admission_probe",
-                (),
-                canic::testing::CANDID_REPLY_LIMITS,
-            )
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args(())?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (fixture.pic).update_call(
+                        canister,
+                        admitted,
+                        "managed_guard_admission_probe",
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
             .map(|(reply,)| reply);
         assert!(prepared_call.is_err());
         activate_projection(&fixture.pic, canister, fixture.root, &directory);
 
-        let public_caller: Result<Principal, Error> = ic_testkit::pic::query_candid_args(
-            &(fixture.pic),
-            canister,
-            unlisted,
-            "managed_guard_public_probe",
-            (),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .map(|(reply,)| reply)
-        .expect("query Candid harness call");
+        let public_caller: Result<Principal, Error> =
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args(())?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (fixture.pic).query_call(
+                        canister,
+                        unlisted,
+                        "managed_guard_public_probe",
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
+            .map(|(reply,)| reply)
+            .expect("query Candid harness call");
         assert_eq!(public_caller, Ok(unlisted));
 
-        let guarded: Result<ManagedGuardReceipt, Error> = ic_testkit::pic::update_candid_args(
-            &(fixture.pic),
-            canister,
-            admitted,
-            "managed_guard_admission_probe",
-            (),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .map(|(reply,)| reply)
-        .expect("update Candid harness call");
+        let guarded: Result<ManagedGuardReceipt, Error> =
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args(())?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (fixture.pic).update_call(
+                        canister,
+                        admitted,
+                        "managed_guard_admission_probe",
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
+            .map(|(reply,)| reply)
+            .expect("update Candid harness call");
         assert_eq!(
             guarded.expect("admitted explicit admission guard caller"),
             ManagedGuardReceipt {
@@ -1204,28 +1279,44 @@ mod tests {
         );
         assert_eq!(managed_guard_workflow_runs(&fixture.pic, canister), 1);
 
-        let canic: Result<Principal, Error> = ic_testkit::pic::query_candid_args(
-            &(fixture.pic),
-            canister,
-            admitted,
-            "canic_fleet_admission_parity_probe",
-            (),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .map(|(reply,)| reply)
-        .expect("query Candid harness call");
+        let canic: Result<Principal, Error> =
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args(())?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (fixture.pic).query_call(
+                        canister,
+                        admitted,
+                        "canic_fleet_admission_parity_probe",
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
+            .map(|(reply,)| reply)
+            .expect("query Candid harness call");
         assert_eq!(canic.expect("admitted Canic endpoint caller"), admitted);
 
-        let application_owned: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
-            &(fixture.pic),
-            canister,
-            admitted,
-            "managed_guard_owned_probe",
-            (),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .map(|(reply,)| reply)
-        .expect("update Candid harness call");
+        let application_owned: Result<Principal, Error> =
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args(())?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (fixture.pic).update_call(
+                        canister,
+                        admitted,
+                        "managed_guard_owned_probe",
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
+            .map(|(reply,)| reply)
+            .expect("update Candid harness call");
         assert_eq!(
             application_owned
                 .expect_err("Fleet admission must not imply application ownership")
@@ -1233,28 +1324,44 @@ mod tests {
             canic::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
         );
 
-        let denied: Result<ManagedGuardReceipt, Error> = ic_testkit::pic::update_candid_args(
-            &(fixture.pic),
-            canister,
-            unlisted,
-            "managed_guard_admission_probe",
-            (),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .map(|(reply,)| reply)
-        .expect("update Candid harness call");
+        let denied: Result<ManagedGuardReceipt, Error> =
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args(())?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (fixture.pic).update_call(
+                        canister,
+                        unlisted,
+                        "managed_guard_admission_probe",
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
+            .map(|(reply,)| reply)
+            .expect("update Candid harness call");
         assert!(denied.is_err());
         assert_eq!(managed_guard_workflow_runs(&fixture.pic, canister), 1);
 
-        let canic_denied: Result<Result<Principal, Error>, _> = ic_testkit::pic::query_candid_args(
-            &(fixture.pic),
-            canister,
-            unlisted,
-            "canic_fleet_admission_parity_probe",
-            (),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .map(|(reply,)| reply);
+        let canic_denied: Result<Result<Principal, Error>, _> =
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args(())?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (fixture.pic).query_call(
+                        canister,
+                        unlisted,
+                        "canic_fleet_admission_parity_probe",
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
+            .map(|(reply,)| reply);
         assert!(matches!(canic_denied, Ok(Err(_))));
 
         let initial = admission_status(&fixture.pic, canister, fixture.root);
@@ -1279,27 +1386,43 @@ mod tests {
                 successor,
             })),
         );
-        let fenced_public: Result<Principal, Error> = ic_testkit::pic::query_candid_args(
-            &(fixture.pic),
-            canister,
-            unlisted,
-            "managed_guard_public_probe",
-            (),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .map(|(reply,)| reply)
-        .expect("query Candid harness call");
+        let fenced_public: Result<Principal, Error> =
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args(())?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (fixture.pic).query_call(
+                        canister,
+                        unlisted,
+                        "managed_guard_public_probe",
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
+            .map(|(reply,)| reply)
+            .expect("query Candid harness call");
         assert_eq!(fenced_public, Ok(unlisted));
-        let fenced: Result<ManagedGuardReceipt, Error> = ic_testkit::pic::update_candid_args(
-            &(fixture.pic),
-            canister,
-            admitted,
-            "managed_guard_admission_probe",
-            (),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .map(|(reply,)| reply)
-        .expect("update Candid harness call");
+        let fenced: Result<ManagedGuardReceipt, Error> =
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args(())?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (fixture.pic).update_call(
+                        canister,
+                        admitted,
+                        "managed_guard_admission_probe",
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
+            .map(|(reply,)| reply)
+            .expect("update Candid harness call");
         assert!(fenced.is_err());
         assert_eq!(managed_guard_workflow_runs(&fixture.pic, canister), 1);
     }
@@ -1588,14 +1711,21 @@ mod tests {
             FleetAdmissionProjectionPhase::Fenced
         );
         let prepared: Result<Result<ManagedGuardReceipt, Error>, _> =
-            ic_testkit::pic::update_candid_args(
-                fixture.pic(),
-                fixture.app(),
-                admitted,
-                "managed_guard_admission_probe",
-                (),
-                canic::testing::CANDID_REPLY_LIMITS,
-            )
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args(())?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (fixture.pic()).update_call(
+                        fixture.app(),
+                        admitted,
+                        "managed_guard_admission_probe",
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
             .map(|(reply,)| reply);
         assert!(prepared.is_err());
 
@@ -1610,14 +1740,21 @@ mod tests {
             FleetAdmissionProjectionPhase::Open
         );
         let admitted_result: Result<ManagedGuardReceipt, Error> =
-            ic_testkit::pic::update_candid_args(
-                fixture.pic(),
-                fixture.app(),
-                admitted,
-                "managed_guard_admission_probe",
-                (),
-                canic::testing::CANDID_REPLY_LIMITS,
-            )
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args(())?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (fixture.pic()).update_call(
+                        fixture.app(),
+                        admitted,
+                        "managed_guard_admission_probe",
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
             .map(|(reply,)| reply)
             .expect("update Candid harness call");
         assert_eq!(
@@ -1652,30 +1789,46 @@ mod tests {
         let wasms = build_canisters_once(&workspace_root);
         let standalone =
             canic::testing::install_standalone_app(wasms.wasm("runtime_probe"), INSTALL_CYCLES);
-        let before_upgrade: Result<(), Error> = ic_testkit::pic::update_candid_args(
-            standalone.pic(),
-            standalone.app(),
-            admitted,
-            "test",
-            (),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .map(|(reply,)| reply)
-        .expect("update Candid harness call");
+        let before_upgrade: Result<(), Error> =
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args(())?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (standalone.pic()).update_call(
+                        standalone.app(),
+                        admitted,
+                        "test",
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
+            .map(|(reply,)| reply)
+            .expect("update Candid harness call");
         assert!(before_upgrade.is_ok());
         standalone
             .upgrade_same_release(Duration::from_mins(5))
             .expect("same-release standalone-local upgrade");
-        let after_upgrade: Result<(), Error> = ic_testkit::pic::update_candid_args(
-            standalone.pic(),
-            standalone.app(),
-            admitted,
-            "test",
-            (),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .map(|(reply,)| reply)
-        .expect("update Candid harness call");
+        let after_upgrade: Result<(), Error> =
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args(())?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (standalone.pic()).update_call(
+                        standalone.app(),
+                        admitted,
+                        "test",
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
+            .map(|(reply,)| reply)
+            .expect("update Candid harness call");
         assert!(after_upgrade.is_ok());
     }
 
@@ -1780,26 +1933,42 @@ mod tests {
             );
         }
 
-        let admitted_probe: Result<Principal, Error> = ic_testkit::pic::query_candid_args(
-            fixture.pic(),
-            user_shard,
-            admitted,
-            "test_fleet_admission_probe",
-            (),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .map(|(reply,)| reply)
-        .expect("query Candid harness call");
+        let admitted_probe: Result<Principal, Error> =
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args(())?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (fixture.pic()).query_call(
+                        user_shard,
+                        admitted,
+                        "test_fleet_admission_probe",
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
+            .map(|(reply,)| reply)
+            .expect("query Candid harness call");
         assert_eq!(admitted_probe, Ok(admitted));
-        let denied_probe: Result<Result<Principal, Error>, _> = ic_testkit::pic::query_candid_args(
-            fixture.pic(),
-            user_shard,
-            unlisted,
-            "test_fleet_admission_probe",
-            (),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .map(|(reply,)| reply);
+        let denied_probe: Result<Result<Principal, Error>, _> =
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args(())?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (fixture.pic()).query_call(
+                        user_shard,
+                        unlisted,
+                        "test_fleet_admission_probe",
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
+            .map(|(reply,)| reply);
         let denied = denied_probe
             .expect("denied child ingress returns its typed Canic result")
             .expect_err("unlisted caller must not enter a managed child");
@@ -1808,43 +1977,34 @@ mod tests {
             Error::from_registered(canic::diagnostics::codes::CONFIGURATION_UNAVAILABLE)
         );
 
-        let assigned: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
-            fixture.pic(),
-            user_hub,
-            admitted,
-            "create_account",
-            (Fake::principal(17),),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .map(|(reply,)| reply)
-        .expect("update Candid harness call");
+        let assigned: Result<Principal, Error> =
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes =
+                    ic_platform::candid::contract::encode_args((Fake::principal(17),))?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (fixture.pic()).update_call(user_hub, admitted, "create_account", request_bytes)
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
+            .map(|(reply,)| reply)
+            .expect("update Candid harness call");
         assert_eq!(assigned, Ok(user_shard));
 
-        let index_request = fixture
-            .pic()
-            .submit_call(
-                index_hub,
-                admitted,
-                "resolve_item",
-                ic_platform::candid::contract::encode_args(("alpha".to_string(),))
-                    .expect("index request arguments"),
-            )
-            .expect("submit on-demand index allocation");
-        assert_eq!(
-            fixture
-                .settle_submitted_call(&index_request, 30)
-                .expect("settle on-demand index child"),
-            1
-        );
+        let before_index = fixture.nodes().len();
         let indexed: Result<canic::dto::placement::index::PlacementIndexStatusResponse, Error> =
-            ic_platform::candid::decoder::decode_one(
-                &fixture
-                    .pic()
-                    .ingress_status(index_request)
-                    .expect("index ingress is terminal after settlement")
-                    .expect("settled index allocation reply"),
-            )
-            .expect("decode index allocation reply");
+            fixture
+                .update_settled(
+                    index_hub,
+                    admitted,
+                    "resolve_item",
+                    ("alpha".to_string(),),
+                    30,
+                )
+                .expect("settle and decode on-demand index allocation");
+        assert_eq!(fixture.nodes().len(), before_index + 1);
         let canic::dto::placement::index::PlacementIndexStatusResponse::Bound {
             instance_pid: indexed,
             ..
@@ -1859,16 +2019,66 @@ mod tests {
             .expect("index-created child enters fixture catalogue");
         assert_eq!(indexed_node.parent_canister_id, Some(index_hub));
         assert_eq!(indexed_node.role.as_str(), "index_child");
-        let indexed_probe: Result<Principal, Error> = ic_testkit::pic::query_candid_args(
-            fixture.pic(),
-            indexed,
-            admitted,
-            "test_fleet_admission_probe",
-            (),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .map(|(reply,)| reply)
-        .expect("query Candid harness call");
+        let invalid: Result<canic::dto::placement::index::PlacementIndexStatusResponse, Error> =
+            fixture
+                .update_settled(index_hub, admitted, "resolve_item", ("x".repeat(129),), 30)
+                .expect("settled helper preserves application refusal");
+        assert_eq!(
+            invalid,
+            Err(Error::from_registered(
+                canic::diagnostics::codes::SECURITY_INVALID
+            ))
+        );
+        assert!(matches!(
+            fixture.update_settled::<(), _>(index_hub, admitted, "missing_method", (), 30),
+            Err(
+                canic::testing::ManagedComponentGroupQualificationError::Transport(
+                    ic_testkit::pic::PocketIcCallFailure::Rejected(_)
+                )
+            )
+        ));
+        assert!(matches!(
+            fixture.update_settled::<String, _>(
+                index_hub,
+                admitted,
+                "resolve_item",
+                ("alpha".to_string(),),
+                30,
+            ),
+            Err(canic::testing::ManagedComponentGroupQualificationError::Decode(_))
+        ));
+        assert!(matches!(
+            fixture.update_settled::<
+                Result<canic::dto::placement::index::PlacementIndexStatusResponse, Error>,
+                _,
+            >(index_hub, admitted, "resolve_item", ("alpha".to_string(),), 1),
+            Err(canic::testing::ManagedComponentGroupQualificationError::ProgressLimit {
+                maximum_ticks: 1,
+                ..
+            })
+        ));
+        fixture
+            .settle_requested_children(30)
+            .expect("finish the bounded-out update without resubmitting");
+        assert_eq!(fixture.nodes().len(), before_index + 1);
+        let indexed_probe: Result<Principal, Error> =
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args(())?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (fixture.pic()).query_call(
+                        indexed,
+                        admitted,
+                        "test_fleet_admission_probe",
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
+            .map(|(reply,)| reply)
+            .expect("query Candid harness call");
         assert_eq!(indexed_probe, Ok(admitted));
 
         let scale_request = fixture
@@ -1923,10 +2133,9 @@ mod tests {
         fixture
             .upgrade_same_release(user_shard, Duration::from_mins(5))
             .expect("same-release managed child upgrade");
-        for _ in 0..3 {
-            fixture.pic().advance_time(Duration::from_secs(1));
-            fixture.pic().tick();
-        }
+        fixture
+            .settle_requested_children(30)
+            .expect("settle restored child lifecycle before timer inspection");
         let after_upgrade = fixture
             .diagnostic_status(user_shard)
             .expect("child timer status after upgrade");
@@ -1959,15 +2168,23 @@ mod tests {
                 .phase,
             FleetAdmissionProjectionPhase::Fenced
         );
-        let fenced_probe: Result<Result<Principal, Error>, _> = ic_testkit::pic::query_candid_args(
-            fixture.pic(),
-            user_shard,
-            admitted,
-            "test_fleet_admission_probe",
-            (),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .map(|(reply,)| reply);
+        let fenced_probe: Result<Result<Principal, Error>, _> =
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args(())?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (fixture.pic()).query_call(
+                        user_shard,
+                        admitted,
+                        "test_fleet_admission_probe",
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
+            .map(|(reply,)| reply);
         let fenced = fenced_probe
             .expect("fenced child ingress returns its typed Canic result")
             .expect_err("a prepared successor must fence admitted callers");
@@ -1983,18 +2200,21 @@ mod tests {
         root: Principal,
         directory: &ComponentRuntimeDirectoryPreparationRequest,
     ) {
-        let response: Result<ManagedCommandResponse, Error> = ic_testkit::pic::update_candid_args(
-            pic,
-            canister,
-            root,
-            CANIC_COMMAND,
-            (ManagedCommand::ConfigureRuntime(Box::new(
-                directory.clone(),
-            )),),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .map(|(reply,)| reply)
-        .expect("update Candid harness call");
+        let response: Result<ManagedCommandResponse, Error> =
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args((
+                    ManagedCommand::ConfigureRuntime(Box::new(directory.clone())),
+                ))?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (pic).update_call(canister, root, CANIC_COMMAND, request_bytes)
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
+            .map(|(reply,)| reply)
+            .expect("update Candid harness call");
         let ManagedCommandResponse::OperationAccepted(receipt) =
             response.expect("Root activates the exact prepared runtime")
         else {
@@ -2010,18 +2230,27 @@ mod tests {
         root: Principal,
     ) -> canic::dto::caller_authority::CallerAuthorityStatus {
         let response: Result<ManagedControlStatusResponse, Error> =
-            ic_testkit::pic::query_candid_args(
-                pic,
-                canister,
-                root,
-                canic_contracts::protocol::CANIC_CONTROL_STATUS,
-                (ManagedControlStatusRequest::CallerAuthority(
-                    canic::dto::role::OperationStatusRequest {
-                        operation_id: [0xa1; 32],
-                    },
-                ),),
-                canic::testing::CANDID_REPLY_LIMITS,
-            )
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args((
+                    ManagedControlStatusRequest::CallerAuthority(
+                        canic::dto::role::OperationStatusRequest {
+                            operation_id: [0xa1; 32],
+                        },
+                    ),
+                ))?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (pic).query_call(
+                        canister,
+                        root,
+                        canic_contracts::protocol::CANIC_CONTROL_STATUS,
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
             .map(|(reply,)| reply)
             .expect("query Candid harness call");
         let ManagedControlStatusResponse::CallerAuthority(status) =
@@ -2101,19 +2330,29 @@ mod tests {
         canister: Principal,
         root: Principal,
     ) -> FleetAdmissionProjectionStatusResponse {
-        let response: Result<ManagedStatusResponse, Error> = ic_testkit::pic::query_candid_args(
-            pic,
-            canister,
-            root,
-            canic_contracts::protocol::CANIC_ADMISSION_STATUS,
-            (ManagedStatusRequest::Admission(PageRequest {
-                offset: 0,
-                limit: u64::MAX,
-            }),),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .map(|(reply,)| reply)
-        .expect("query Candid harness call");
+        let response: Result<ManagedStatusResponse, Error> =
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args((
+                    ManagedStatusRequest::Admission(PageRequest {
+                        offset: 0,
+                        limit: u64::MAX,
+                    }),
+                ))?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (pic).query_call(
+                        canister,
+                        root,
+                        canic_contracts::protocol::CANIC_ADMISSION_STATUS,
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
+            .map(|(reply,)| reply)
+            .expect("query Candid harness call");
         let ManagedStatusResponse::Admission(status) =
             response.expect("protected admission status");
         status
@@ -2124,14 +2363,21 @@ mod tests {
         canister: Principal,
         caller: Principal,
     ) -> Result<(), Error> {
-        ic_testkit::pic::query_candid_args(
-            pic,
-            canister,
-            caller,
-            "test_fleet_admission_probe",
-            (),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args(())?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).query_call(
+                    canister,
+                    caller,
+                    "test_fleet_admission_probe",
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
         .map(|(reply,)| reply)
         .expect("query Candid harness call")
     }
@@ -2141,14 +2387,21 @@ mod tests {
         canister: Principal,
         caller: Principal,
     ) -> Result<Principal, Error> {
-        ic_testkit::pic::query_candid_args(
-            pic,
-            canister,
-            caller,
-            "canic_fleet_admission_parity_probe",
-            (),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args(())?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).query_call(
+                    canister,
+                    caller,
+                    "canic_fleet_admission_parity_probe",
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
         .map(|(reply,)| reply)
         .expect("query Candid harness call")
     }
@@ -2159,16 +2412,19 @@ mod tests {
         root: Principal,
         command: ManagedCommand,
     ) -> ManagedCommandResponse {
-        let response: Result<ManagedCommandResponse, Error> = ic_testkit::pic::update_candid_args(
-            pic,
-            canister,
-            root,
-            CANIC_COMMAND,
-            (command,),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .map(|(reply,)| reply)
-        .expect("update Candid harness call");
+        let response: Result<ManagedCommandResponse, Error> =
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args((command,))?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (pic).update_call(canister, root, CANIC_COMMAND, request_bytes)
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
+            .map(|(reply,)| reply)
+            .expect("update Candid harness call");
         response.expect("accepted target admission transition")
     }
 
@@ -2178,29 +2434,39 @@ mod tests {
         root: Principal,
         command: ManagedCommand,
     ) -> Result<ManagedCommandResponse, Error> {
-        ic_testkit::pic::update_candid_args(
-            pic,
-            canister,
-            root,
-            CANIC_COMMAND,
-            (command,),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args((command,))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).update_call(canister, root, CANIC_COMMAND, request_bytes)
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
         .map(|(reply,)| reply)
         .expect("update Candid harness call")
     }
 
     fn managed_guard_workflow_runs(pic: &PocketIc, canister: Principal) -> u32 {
-        let result: Result<u32, Error> = ic_testkit::pic::query_candid_args(
-            pic,
-            canister,
-            ic_platform::principal::ExternalPrincipal::anonymous(),
-            "managed_guard_workflow_runs",
-            (),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .map(|(reply,)| reply)
-        .expect("query Candid harness call");
+        let result: Result<u32, Error> =
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args(())?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (pic).query_call(
+                        canister,
+                        ic_platform::principal::ExternalPrincipal::anonymous(),
+                        "managed_guard_workflow_runs",
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
+            .map(|(reply,)| reply)
+            .expect("query Candid harness call");
         result.expect("public workflow-run observation")
     }
 

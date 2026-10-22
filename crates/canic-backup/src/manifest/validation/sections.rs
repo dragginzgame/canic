@@ -185,6 +185,12 @@ impl SourceSnapshot {
             "deployment.members[].source_snapshot.artifact_path",
             &self.artifact_path,
         )?;
+        if crate::artifacts::relative_artifact_path(&self.artifact_path).is_none() {
+            return Err(ManifestValidationError::InvalidArtifactPath {
+                field: "deployment.members[].source_snapshot.artifact_path",
+                value: self.artifact_path.clone(),
+            });
+        }
         validate_nonempty(
             "deployment.members[].source_snapshot.checksum_algorithm",
             &self.checksum_algorithm,

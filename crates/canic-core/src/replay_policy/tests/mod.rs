@@ -87,7 +87,15 @@ fn enum_variant_names_from_source_until(
     marker: &'static str,
     closing: &'static str,
 ) -> BTreeSet<&'static str> {
-    let start = source.find(marker).expect("enum exists in source");
+    let start = source
+        .match_indices(marker)
+        .find(|(offset, _)| {
+            source[offset + marker.len()..]
+                .trim_start()
+                .starts_with('{')
+        })
+        .map(|(offset, _)| offset)
+        .expect("exact enum exists in source");
     let body_start = source[start..]
         .find('{')
         .map(|offset| start + offset + 1)
@@ -145,39 +153,61 @@ fn store_command_variant_names() -> BTreeSet<&'static str> {
     )
 }
 
-fn emitted_update_endpoint_names() -> BTreeSet<&'static str> {
-    [
-        include_str!("../../../../canic/src/macros/endpoints/root.rs"),
-        include_str!("../../../../canic/src/macros/endpoints/wasm_store.rs"),
-        include_str!("../../../../canic/src/macros/endpoints/role.rs"),
-        include_str!("../../../../canic/src/macros/endpoints/fleet_coordinator.rs"),
-    ]
-    .into_iter()
-    .flat_map(update_endpoint_names_from_source)
-    .collect()
+fn emitted_endpoint_names(kind: EndpointKind) -> BTreeSet<String> {
+    let mut directories = vec![
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../canic/src/macros/endpoints"),
+    ];
+    let mut names = BTreeSet::new();
+    while let Some(directory) = directories.pop() {
+        for entry in std::fs::read_dir(directory).expect("endpoint source directory") {
+            let entry = entry.expect("endpoint source entry");
+            let path = entry.path();
+            let file_kind = entry.file_type().expect("endpoint source file type");
+            if file_kind.is_dir() {
+                directories.push(path);
+            } else if file_kind.is_file()
+                && path.extension().is_some_and(|extension| extension == "rs")
+            {
+                let source = std::fs::read_to_string(path).expect("endpoint source");
+                names.extend(
+                    endpoint_names_from_source(&source, kind)
+                        .into_iter()
+                        .map(str::to_owned),
+                );
+            }
+        }
+    }
+    assert!(
+        !names.is_empty(),
+        "endpoint source inventory must not be empty"
+    );
+    names
 }
 
-fn update_endpoint_names_from_source(source: &'static str) -> Vec<&'static str> {
+fn endpoint_names_from_source(source: &str, kind: EndpointKind) -> Vec<&str> {
+    let attributes = match kind {
+        EndpointKind::Query => ["#[$crate::canic_query", "#[$crate::canic_raw_query"],
+        EndpointKind::Update => ["#[$crate::canic_update", "#[$crate::canic_raw_update"],
+    };
     let lines = source.lines().collect::<Vec<_>>();
     let mut names = Vec::new();
     for (index, line) in lines.iter().enumerate() {
-        if !line.contains("#[$crate::canic_update") {
+        if !attributes.iter().any(|attribute| line.contains(attribute)) {
             continue;
         }
         let Some(name) = lines
             .iter()
             .skip(index + 1)
-            .take(6)
             .find_map(|candidate| endpoint_name_from_fn_line(candidate))
         else {
-            panic!("canic_update endpoint attribute without following function");
+            panic!("endpoint attribute without following function");
         };
         names.push(name);
     }
     names
 }
 
-fn endpoint_name_from_fn_line(line: &'static str) -> Option<&'static str> {
+fn endpoint_name_from_fn_line(line: &str) -> Option<&str> {
     let marker = "fn ";
     let start = line.find(marker)? + marker.len();
     let rest = &line[start..];

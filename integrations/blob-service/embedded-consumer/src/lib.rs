@@ -48,19 +48,26 @@ fn install() {
         lifecycle::ENVELOPE_LIMITS
             .read()
             .expect("bounded application envelope");
-    let (input,): (InstallationInput,) = lifecycle::CONFIGURATION_LIMITS
-        .decode(
-            application
-                .as_deref()
-                .expect("application installation arguments"),
-        )
-        .expect("bounded application configuration");
+    let (input,): (InstallationInput,) = canic::endpoint::ArgumentLimits {
+        max_bytes: 16_384,
+        skipping_quota: 0,
+        ..lifecycle::REQUEST_LIMITS
+    }
+    .decode(
+        application
+            .as_deref()
+            .expect("application installation arguments"),
+    )
+    .expect("bounded application configuration");
     app::install(input.initial_count);
     let blob: ServiceInstallationInput =
         canic_blob_service::__private::ic_blob_storage_contracts::wire::decode_request(
             "blob_install",
             &input.blob,
-            16_384,
+            canic_blob_service::__private::ic_blob_storage_contracts::wire::request_limit(
+                "blob_install",
+            )
+            .expect("Blob installation method"),
         )
         .expect("bounded Blob installation");
     lifecycle::install(&blob);

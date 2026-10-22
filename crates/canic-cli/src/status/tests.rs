@@ -1,7 +1,7 @@
 // Ensure status defaults to the local environment and ordinary `icp` binary.
 
 use super::*;
-use crate::test_support::temp_dir;
+use crate::test_support::{TempDir, temp_dir};
 use canic_contracts::{
     dto::fleet_registry::FleetRegistry,
     ids::{
@@ -16,7 +16,10 @@ use canic_host::fleet_ensure::{
         FleetEnsureJournalRecord, FleetEnsurePlan, FleetEnsurePlanScope, FleetEnsureStateRecord,
         FleetEnsureTopologyRecord,
     },
-    ops::{EnsurePaths, read_journal, write_journal, write_plan, write_state},
+    ops::{
+        EnsurePaths, EnsureStateError, read_journal, read_state, write_journal, write_plan,
+        write_state,
+    },
     resolve_current_fleet,
 };
 use ic_platform::principal::ExternalPrincipal as Principal;
@@ -99,6 +102,30 @@ fn renders_empty_status_report() {
         render_status_report(&report),
         "Replica: stopped (local, port 8001)\nICP CLI: icp 0.2.5\nICP config: not checked (no Canic App configs)\nApps: 0 configured\nFleets: 0/0 deployed (environment local, network network-1)"
     );
+}
+
+#[test]
+fn status_headers_escape_external_text_before_joining_tables() {
+    let injected = "value\nforged\x1b]52;c;dGVzdA==\x07\u{202e}";
+    let report = StatusReport {
+        environment: injected.into(),
+        replica: ReplicaStatus::Error(injected.into()),
+        replica_port: injected.into(),
+        icp_cli: injected.into(),
+        icp_config: injected.into(),
+        canonical_network_id: injected.into(),
+        apps: vec![StatusAppRow {
+            app: "界".into(),
+            config: "apps/demo/canic.toml".into(),
+            canisters: "1".into(),
+        }],
+        fleets: Vec::new(),
+    };
+    let rendered = render_status_report(&report);
+    assert_eq!(rendered.lines().count(), 9);
+    assert!(!rendered.contains(['\x1b', '\x07', '\u{202e}']));
+    assert!(rendered.contains(r"value\nforged\u{1b}]52;c;dGVzdA==\u{7}\u{202e}"));
+    assert!(rendered.lines().any(|line| line.starts_with("界")));
 }
 
 // Ensure foreground/untracked replicas are visible instead of being silently
@@ -227,6 +254,96 @@ fn terminal_ensure_is_the_status_fleet_source() {
     ));
 
     fs::remove_dir_all(root).expect("remove fixture");
+}
+
+#[test]
+fn status_discovers_fleets_with_null_and_omitted_release_without_writes() {
+    let root = TempDir::new("canic-status-optional-release");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(
+        root.join("icp.yaml"),
+        "environments:\n  - name: staging\n    network: ic\n",
+    )
+    .unwrap();
+    retain_terminal_fleet(&root, "staging", "demo");
+    retain_terminal_fleet(&root, "staging", "other");
+    let paths = EnsurePaths::under(&root, "staging", "other");
+    let coordinator = Principal::from_text("aaaaa-aa").unwrap();
+    let mut state = read_state(&paths, "other").unwrap();
+    let registry = state.active_registry.as_mut().unwrap();
+    let fleet_id = FleetId::from_generated_bytes([8; 32]);
+    registry.authority.binding.fleet.fleet.fleet_id = fleet_id;
+    registry.authority.binding.coordinator = coordinator;
+    registry.admission.fleet.fleet.fleet_id = fleet_id;
+    state
+        .principals
+        .insert("coordinator".into(), coordinator.to_text());
+    write_state(&paths, &state).unwrap();
+    let mut journal: serde_json::Value =
+        serde_json::from_slice(&fs::read(&paths.journal).unwrap()).unwrap();
+    journal.as_object_mut().unwrap().remove("release");
+    fs::write(&paths.journal, serde_json::to_vec(&journal).unwrap()).unwrap();
+    let original = [EnsurePaths::under(&root, "staging", "demo"), paths]
+        .into_iter()
+        .flat_map(|paths| [paths.journal, paths.plan, paths.state])
+        .map(|path| {
+            let bytes = fs::read(&path).unwrap();
+            (path, bytes)
+        })
+        .collect::<Vec<_>>();
+    let discovery = discover_current_fleets(&root, "staging").unwrap();
+    let rows = discovery
+        .fleets
+        .iter()
+        .map(status_fleet_row)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        rows.iter()
+            .map(|row| row.fleet.as_str())
+            .collect::<Vec<_>>(),
+        ["demo", "other"]
+    );
+    assert_eq!(rows[0].coordinator, "rrkah-fqaaa-aaaaa-aaaaq-cai");
+    assert_eq!(rows[1].coordinator, coordinator.to_text());
+    assert!(
+        rows.iter()
+            .all(|row| row.deployed == "yes" && row.app == "shop")
+    );
+    for (path, bytes) in original {
+        assert_eq!(fs::read(path).unwrap(), bytes);
+    }
+}
+
+#[test]
+fn omitted_release_keeps_discovery_record_and_plan_authority_checks() {
+    let root = TempDir::new("canic-status-optional-release-refusal");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(
+        root.join("icp.yaml"),
+        "environments:\n  - name: staging\n    network: ic\n",
+    )
+    .unwrap();
+    retain_terminal_fleet(&root, "staging", "demo");
+    let paths = EnsurePaths::under(&root, "staging", "demo");
+    let mut journal: serde_json::Value =
+        serde_json::from_slice(&fs::read(&paths.journal).unwrap()).unwrap();
+    journal.as_object_mut().unwrap().remove("release");
+    let mut malformed = journal.clone();
+    malformed["release"] = serde_json::json!({"plan_sha256": "22".repeat(32)});
+    let mut incomplete = journal.clone();
+    incomplete
+        .as_object_mut()
+        .unwrap()
+        .remove("bootstrap_registration_recovery");
+    for rejected in [malformed, incomplete] {
+        fs::write(&paths.journal, serde_json::to_vec(&rejected).unwrap()).unwrap();
+        std::assert_matches!(discover_current_fleets(&root, "staging"),
+            Err(CurrentFleetInventoryError::State(EnsureStateError::Decode { source, .. })) if source.is_data());
+    }
+    journal["plan_sha256"] = serde_json::json!("44".repeat(32));
+    fs::write(&paths.journal, serde_json::to_vec(&journal).unwrap()).unwrap();
+    std::assert_matches!(discover_current_fleets(&root, "staging"),
+        Err(CurrentFleetInventoryError::PlanAuthorityConflict { fleet }) if fleet == "demo");
 }
 
 // Ensure Fleet discovery never follows an environment-level directory symlink.

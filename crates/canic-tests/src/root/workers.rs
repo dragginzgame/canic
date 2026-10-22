@@ -23,16 +23,24 @@ pub fn create_worker(
     root_pid: Principal,
     hub_pid: Principal,
 ) -> Result<Principal, Error> {
-    let worker_pid: Result<Principal, Error> = ic_testkit::pic::update_candid_args(
-        pic,
-        hub_pid,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        "create_worker",
-        (),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .expect("update Candid harness call");
+    let worker_pid: Result<Principal, Error> =
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args(())?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).update_call(
+                    hub_pid,
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
+                    "create_worker",
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
+        .map(|(reply,)| reply)
+        .expect("update Candid harness call");
     let worker_pid = worker_pid?;
     wait_for_worker_sync(pic, root_pid, hub_pid, worker_pid);
     Ok(worker_pid)
@@ -58,19 +66,29 @@ fn wait_for_worker_sync(
     for _ in 0..50 {
         pic.tick();
 
-        let children: Result<CanisterStatusResponse, Error> = ic_testkit::pic::query_candid_args(
-            pic,
-            hub_pid,
-            ic_platform::principal::ExternalPrincipal::anonymous(),
-            protocol::CANIC_PUBLIC_STATUS,
-            (CanisterStatusRequest::Children(PageRequest {
-                limit: 100,
-                offset: 0,
-            }),),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
-        .map(|(reply,)| reply)
-        .expect("query Candid harness call");
+        let children: Result<CanisterStatusResponse, Error> =
+            (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+                let request_bytes = ic_platform::candid::contract::encode_args((
+                    CanisterStatusRequest::Children(PageRequest {
+                        limit: 100,
+                        offset: 0,
+                    }),
+                ))?;
+                let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                    (pic).query_call(
+                        hub_pid,
+                        ic_platform::principal::ExternalPrincipal::anonymous(),
+                        protocol::CANIC_PUBLIC_STATUS,
+                        request_bytes,
+                    )
+                })
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                    .map_err(Into::into)
+            })()
+            .map(|(reply,)| reply)
+            .expect("query Candid harness call");
 
         let CanisterStatusResponse::Children(children) =
             children.expect("query child list application");

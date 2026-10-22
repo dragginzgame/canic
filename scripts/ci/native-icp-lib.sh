@@ -15,14 +15,13 @@ is_native_test_icp() {
 use_native_test_icp() {
     local scratch="$1"
     local required_version="$2"
+    local consumer="$3"
     local candidate version bin_dir
     if [[ -v CANIC_TEST_ICP_BIN ]]; then
         candidate="$CANIC_TEST_ICP_BIN"
     else
-        candidate="$(command -v icp || true)"
-        if ! is_native_test_icp "$candidate"; then
-            candidate="${ICP_CLI_INSTALL_DIR:-${CARGO_HOME:-$HOME/.cargo}/bin}/icp"
-        fi
+        make --no-print-directory -C "$consumer" ic-tools-check || return 1
+        candidate="$consumer/.tools/ic/bin/icp"
     fi
     if [[ ! -f "$candidate" || ! -x "$candidate" ]]; then
         echo "native ICP CLI is unavailable: $candidate; run make install-dev or set CANIC_TEST_ICP_BIN" >&2

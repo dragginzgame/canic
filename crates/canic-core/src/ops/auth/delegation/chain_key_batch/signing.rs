@@ -25,6 +25,7 @@ pub(in crate::ops::auth) async fn sign_next_chain_key_root_delegation_batch<S>(
     signing_policy: &ChainKeySigningPolicy,
     now_ns: u64,
     signer: &mut S,
+    completed_at_ns: impl FnOnce() -> u64,
 ) -> Result<SignNextChainKeyRootDelegationBatchResult, InternalError>
 where
     S: ChainKeySigner,
@@ -38,7 +39,14 @@ where
             signing_in_flight: false,
         });
     };
-    sign_chain_key_root_delegation_batch(signing_policy, batch.batch_id, now_ns, signer).await
+    sign_chain_key_root_delegation_batch(
+        signing_policy,
+        batch.batch_id,
+        now_ns,
+        signer,
+        completed_at_ns,
+    )
+    .await
 }
 
 #[expect(
@@ -50,6 +58,7 @@ pub(in crate::ops::auth) async fn sign_chain_key_root_delegation_batch<S>(
     batch_id: [u8; 32],
     now_ns: u64,
     signer: &mut S,
+    completed_at_ns: impl FnOnce() -> u64,
 ) -> Result<SignNextChainKeyRootDelegationBatchResult, InternalError>
 where
     S: ChainKeySigner,
@@ -118,40 +127,41 @@ where
     batch.failure = None;
     RootDelegationStateOps::upsert_chain_key_root_delegation_batch(batch.clone());
 
-    match sign_chain_key_batch_header(
+    let result = sign_chain_key_batch_header(
         SignChainKeyBatchHeaderInput {
             header: &batch.header,
             policy: signing_policy,
         },
         signer,
     )
-    .await
+    .await;
+    let completed_at_ns = completed_at_ns();
+    RootDelegationStateOps::prune_chain_key_root_delegation_batches(completed_at_ns);
+    let Some(current) = RootDelegationStateOps::chain_key_root_delegation_batch(batch.batch_id)
+    else {
+        return Ok(SignNextChainKeyRootDelegationBatchResult {
+            batch_id: None,
+            signed: false,
+            reused_signed: false,
+            signing_in_flight: false,
+        });
+    };
+    if current.status != ChainKeyRootDelegationBatchStatus::Signing
+        || current.header_hash != batch.header_hash
     {
+        return Ok(SignNextChainKeyRootDelegationBatchResult {
+            batch_id: Some(batch.batch_id),
+            signed: false,
+            reused_signed: false,
+            signing_in_flight: false,
+        });
+    }
+    batch = current;
+    match result {
         Ok(signature) => {
-            let Some(current) =
-                RootDelegationStateOps::chain_key_root_delegation_batch(batch.batch_id)
-            else {
-                return Ok(SignNextChainKeyRootDelegationBatchResult {
-                    batch_id: None,
-                    signed: false,
-                    reused_signed: false,
-                    signing_in_flight: false,
-                });
-            };
-            if current.status != ChainKeyRootDelegationBatchStatus::Signing
-                || current.header_hash != batch.header_hash
-            {
-                return Ok(SignNextChainKeyRootDelegationBatchResult {
-                    batch_id: Some(batch.batch_id),
-                    signed: false,
-                    reused_signed: false,
-                    signing_in_flight: false,
-                });
-            }
-            batch = current;
             batch.status = ChainKeyRootDelegationBatchStatus::Signed;
             batch.signature = Some(signature);
-            batch.signed_at_ns = Some(now_ns);
+            batch.signed_at_ns = Some(completed_at_ns);
             batch.retry_after_ns = None;
             batch.failure = None;
             RootDelegationStateOps::upsert_chain_key_root_delegation_batch(batch.clone());
@@ -165,7 +175,7 @@ where
         Err(err) => {
             batch.status = ChainKeyRootDelegationBatchStatus::FailedRetryable;
             batch.retry_after_ns = Some(chain_key_signing_retry_after_ns(
-                now_ns,
+                completed_at_ns,
                 batch.header.expires_at_ns,
             ));
             batch.failure = Some(err.to_string());

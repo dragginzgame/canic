@@ -445,8 +445,16 @@ For a tool selected by a consumer lockfile, replace `--version` with `--lockfile
 
 ```bash
 bash scripts/dev/install-rust-tools.sh --consumer "$PWD" \
-  --package ic-testkit --lockfile Cargo.lock --bin ic-testkit-server --profile release
+  --package ic-testkit --lockfile Cargo.lock --bin ic-testkit-server \
+  --profile release --features cli
+bash scripts/dev/install-rust-tools.sh --consumer "$PWD" \
+  --package ic-testkit --lockfile Cargo.lock --bin ic-testkit-server \
+  --profile release --features cli --check
 ```
+
+Testkit 0.63 requires `cli` for the server binary. Setup and offline admission
+must request the same feature set, which is part of the tool's identity.
+Library-only Testkit dependencies should omit `cli`.
 
 Relative lockfile paths resolve beneath `--consumer`; absolute paths select an
 explicit independent graph. The prepared host yq/jq tools read TOML without Cargo

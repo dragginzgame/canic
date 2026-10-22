@@ -147,7 +147,7 @@ prepare_pocketic_execution() {
     source "$ROOT/scripts/ci/native-icp-lib.sh"
     # shellcheck source=/dev/null
     source "$ROOT/scripts/ci/ic-tool-pins.sh"
-    use_native_test_icp "$CANIC_TEST_SCRATCH" "$CANIC_ICP_CLI_VERSION"
+    use_native_test_icp "$CANIC_TEST_SCRATCH" "$CANIC_ICP_CLI_VERSION" "$ROOT"
 }
 
 run_pocketic_command() {

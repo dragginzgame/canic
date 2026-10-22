@@ -125,32 +125,10 @@ fn validate_auth(
     auth: &CanisterAuthConfig,
     canister: &CanisterRole,
 ) -> Result<(), ConfigSchemaError> {
-    if auth.allowed_token_scopes.len() > MAX_VERIFIED_APPLICATION_SCOPES {
-        return Err(ConfigSchemaError::ValidationError(format!(
-            "canister '{canister}' auth.allowed_token_scopes exceeds {MAX_VERIFIED_APPLICATION_SCOPES} entries",
-        )));
-    }
-    for (index, scope) in auth.allowed_token_scopes.iter().enumerate() {
-        ApplicationScope::parse(scope.clone()).map_err(|error| {
-            ConfigSchemaError::ValidationError(format!(
-                "canister '{canister}' auth.allowed_token_scopes[{index}] is invalid: {error}"
-            ))
-        })?;
-        if index > 0 && auth.allowed_token_scopes[index - 1] >= *scope {
-            return Err(ConfigSchemaError::ValidationError(format!(
-                "canister '{canister}' auth.allowed_token_scopes must be sorted and unique",
-            )));
-        }
-    }
     let Some(local) = &auth.local_application_authorization else {
         return Ok(());
     };
 
-    if !auth.delegated_token_verifier {
-        return Err(ConfigSchemaError::ValidationError(format!(
-            "canister '{canister}' auth.local_application_authorization requires auth.delegated_token_verifier = true",
-        )));
-    }
     if local.allowed_scopes.is_empty() {
         return Err(ConfigSchemaError::ValidationError(format!(
             "canister '{canister}' auth.local_application_authorization.allowed_scopes must not be empty",
@@ -172,16 +150,6 @@ fn validate_auth(
                 "canister '{canister}' auth.local_application_authorization.allowed_scopes must be strictly sorted and unique",
             )));
         }
-    }
-
-    if local
-        .allowed_scopes
-        .iter()
-        .any(|scope| auth.allowed_token_scopes.binary_search(scope).is_err())
-    {
-        return Err(ConfigSchemaError::ValidationError(format!(
-            "canister '{canister}' local application scopes must belong to auth.allowed_token_scopes",
-        )));
     }
 
     let hard_maximum_secs = MAX_LOCAL_APPLICATION_SESSION_TTL_NS / 1_000_000_000;
@@ -326,7 +294,13 @@ fn validate_topup(
     let threshold = topup.threshold.to_u128();
     let amount = topup.amount.to_u128();
 
-    if amount.saturating_mul(2) > threshold {
+    if amount == 0 {
+        return Err(ConfigSchemaError::ValidationError(format!(
+            "canister '{canister}' topup.amount must be > 0",
+        )));
+    }
+
+    if amount > threshold / 2 {
         return Err(ConfigSchemaError::ValidationError(format!(
             "canister '{canister}' topup.amount must be <= 50% of topup.threshold (got amount={amount}, threshold={threshold})",
         )));
@@ -525,4 +499,74 @@ fn validate_index(
     }
 
     Ok(())
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use canic_contracts::cycles::Cycles;
+
+    #[test]
+    fn topup_amount_is_positive_and_bounded_without_overflow() {
+        let role = CanisterRole::owned("app".to_string());
+        assert!(validate_topup(None, &role).is_ok());
+        assert!(validate_topup(Some(&TopupPolicy::default()), &role).is_ok());
+        for (threshold, amount, valid) in [
+            (0, 0, false),
+            (10, 0, false),
+            (u128::MAX, 0, false),
+            (1, 1, false),
+            (2, 1, true),
+            (3, 1, true),
+            (3, 2, false),
+            (10, 5, true),
+            (10, 6, false),
+            (u128::MAX - 1, (u128::MAX - 1) / 2, true),
+            (u128::MAX - 1, (u128::MAX - 1) / 2 + 1, false),
+            (u128::MAX, u128::MAX / 2, true),
+            (u128::MAX, u128::MAX / 2 + 1, false),
+            (u128::MAX, u128::MAX, false),
+        ] {
+            let topup = TopupPolicy {
+                threshold: Cycles::new(threshold),
+                amount: Cycles::new(amount),
+            };
+            let result = validate_topup(Some(&topup), &role);
+            if valid {
+                assert!(result.is_ok(), "threshold={threshold}, amount={amount}");
+            } else {
+                std::assert_matches!(result, Err(ConfigSchemaError::ValidationError(_)));
+            }
+        }
+    }
+
+    #[test]
+    fn component_and_child_topup_configuration_enforces_amount_bounds() {
+        let source = r#"
+component_role = "app"
+maximum_instances = 1
+[children.worker]
+kind = "replica"
+[spawn_grants.app.worker]
+maximum_instances_per_parent = 1
+"#;
+        for table in ["topup", "children.worker.topup"] {
+            for amount in ["0B", "5T", "6T"] {
+                let config: ComponentSpecConfig = toml::from_str(&format!(
+                    "{source}\n[{table}]\nthreshold = \"10T\"\namount = {amount:?}\n"
+                ))
+                .expect("parse top-up configuration");
+                let result = config.validate();
+                if amount == "5T" {
+                    assert!(result.is_ok(), "table={table}");
+                } else {
+                    std::assert_matches!(result, Err(ConfigSchemaError::ValidationError(_)));
+                }
+            }
+        }
+    }
 }

@@ -156,7 +156,7 @@ struct History {
     groups: [Option<Group>; MAX_GROUPS],
     heap_started_at_ns: Option<u64>,
     reserved_bytes: usize,
-    truncated: bool,
+    truncated_families: u8,
     last_expired_slot: Option<u64>,
 }
 
@@ -167,7 +167,7 @@ impl Default for History {
             groups: [const { None }; MAX_GROUPS],
             heap_started_at_ns: None,
             reserved_bytes: 0,
-            truncated: false,
+            truncated_families: 0,
             last_expired_slot: None,
         }
     }
@@ -200,7 +200,7 @@ impl History {
         let series = match self.series.entry(key) {
             Entry::Vacant(entry) => {
                 if series_count >= MAX_HISTORY_SERIES {
-                    self.truncated = true;
+                    self.truncated_families |= family_mask(family);
                     return;
                 }
                 let vacancy = self.groups.iter().enumerate().find_map(|(index, group)| {
@@ -218,7 +218,7 @@ impl History {
                         0
                     };
                 if self.reserved_bytes + bytes > MAX_HISTORY_BYTES {
-                    self.truncated = true;
+                    self.truncated_families |= family_mask(family);
                     return;
                 }
                 let (group, position) = occupy(&mut self.groups, vacancy, slot);
@@ -242,7 +242,7 @@ impl History {
                     if next_total > MAX_HISTORY_BYTES {
                         let removed = entry.remove();
                         release(&mut self.groups, &removed);
-                        self.truncated = true;
+                        self.truncated_families |= family_mask(family);
                         self.recount();
                         return;
                     }
@@ -328,6 +328,7 @@ impl PublicHistoryCache {
     pub fn record(family: PublicMetricFamily, now_ns: u64, metrics: &[PublicMetricSample]) {
         Self::expire(now_ns);
         HISTORY.with_borrow_mut(|history| {
+            history.truncated_families &= !family_mask(family);
             for metric in metrics {
                 let slot = metric.observed_at_ns / PUBLIC_METRICS_CADENCE_NS;
                 let now_slot = now_ns / PUBLIC_METRICS_CADENCE_NS;
@@ -370,9 +371,21 @@ impl PublicHistoryCache {
         HISTORY.with_borrow(|history| history.reserved_bytes)
     }
 
+    /// Whether this family's latest admission pass rejected a history observation.
     #[must_use]
-    pub fn truncated() -> bool {
-        HISTORY.with_borrow(|history| history.truncated)
+    pub fn truncated(family: PublicMetricFamily) -> bool {
+        HISTORY.with_borrow(|history| history.truncated_families & family_mask(family) != 0)
+    }
+}
+
+// Keep per-family flags allocation-free and require new families to select a bit.
+const fn family_mask(family: PublicMetricFamily) -> u8 {
+    match family {
+        PublicMetricFamily::Application => 1,
+        PublicMetricFamily::Cycles => 1 << 1,
+        PublicMetricFamily::Operations => 1 << 2,
+        PublicMetricFamily::Performance => 1 << 3,
+        PublicMetricFamily::ShardOccupancy => 1 << 4,
     }
 }
 

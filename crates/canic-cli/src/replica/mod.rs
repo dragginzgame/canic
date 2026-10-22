@@ -352,21 +352,21 @@ where
     let options = ReplicaOptions::parse_stop(args)?;
     let icp_root = resolve_current_canic_icp_root()?;
     let icp = IcpCli::new(options.icp, None);
-    match icp.local_replica_stop_in(&icp_root, options.debug) {
+    stop_local_replica(&icp, &icp_root, options.debug)
+}
+
+fn stop_local_replica(
+    icp: &IcpCli,
+    icp_root: &Path,
+    debug: bool,
+) -> Result<(), ReplicaCommandError> {
+    match icp.local_replica_stop_in(icp_root, debug) {
         Ok(output) => {
             print_command_output(&output);
             println!("Replica stopped: local");
         }
         Err(error) if local_network_not_running(&error) => {
-            if icp.local_replica_ping(options.debug).unwrap_or(false) {
-                if let Some(owner) =
-                    probe_reachable_local_replica_owner(&icp, &icp_root, options.debug)
-                {
-                    return Err(ReplicaCommandError::ForeignLocalReplicaOwner {
-                        network: owner.network,
-                        project: owner.project,
-                    });
-                }
+            if local_replica_http_reachable(icp_root) {
                 return Err(ReplicaCommandError::ForeignLocalReplicaReachable);
             }
             println!("Replica already stopped: local");
@@ -456,30 +456,6 @@ fn local_network_not_running(error: &IcpCommandError) -> bool {
         error.diagnostic(),
         Some(IcpDiagnostic::LocalNetworkNotRunning)
     )
-}
-
-fn probe_reachable_local_replica_owner(
-    icp: &IcpCli,
-    icp_root: &Path,
-    debug: bool,
-) -> Option<LocalReplicaOwner> {
-    match icp.local_replica_start_in(icp_root, true, debug) {
-        Err(error) => match error.diagnostic() {
-            Some(IcpDiagnostic::ForeignLocalReplicaOwner { network, project }) => {
-                Some(LocalReplicaOwner { network, project })
-            }
-            _ => None,
-        },
-        Ok(_) => None,
-    }
-}
-
-/// Project/network owner parsed from ICP CLI local-port conflict diagnostics.
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct LocalReplicaOwner {
-    network: String,
-    project: String,
 }
 
 fn replica_command() -> ClapCommand {

@@ -10,7 +10,7 @@ use canic_backup::manifest::{
     DeploymentBackupManifest, ManifestValidationError, manifest_validation_summary,
 };
 use clap::Command as ClapCommand;
-use std::{ffi::OsString, fs, path::PathBuf};
+use std::{ffi::OsString, path::PathBuf};
 use thiserror::Error as ThisError;
 
 ///
@@ -102,8 +102,16 @@ where
 fn validate_manifest(
     options: &ManifestValidateOptions,
 ) -> Result<DeploymentBackupManifest, ManifestCommandError> {
-    let data = fs::read_to_string(&options.manifest)?;
-    let manifest: DeploymentBackupManifest = serde_json::from_str(&data)?;
+    let manifest: DeploymentBackupManifest =
+        canic_backup::persistence::read_json(&options.manifest).map_err(|error| match error {
+            canic_backup::persistence::PersistenceError::Io(error) => {
+                ManifestCommandError::Io(error)
+            }
+            canic_backup::persistence::PersistenceError::Json(error) => {
+                ManifestCommandError::Json(error)
+            }
+            error => ManifestCommandError::Io(std::io::Error::other(error)),
+        })?;
     manifest.validate()?;
     Ok(manifest)
 }

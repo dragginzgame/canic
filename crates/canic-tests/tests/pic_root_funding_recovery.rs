@@ -294,6 +294,10 @@ fn root_request_and_retry_measure_the_normal_threshold_floor() {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Keep the paid-effect recovery sequence and its balance assertions together"
+)]
 fn emergency_refill_recovery_floor_covers_transfer_and_notify_response_loss() {
     let workspace_root = workspace_root();
     let wasms = build_canisters(&workspace_root);
@@ -314,28 +318,44 @@ fn emergency_refill_recovery_floor_covers_transfer_and_notify_response_loss() {
     );
     let balance_before = pic.cycle_balance(root);
 
-    let transfer_loss: Result<EmergencyRefillOperation, _> = ic_testkit::pic::update_candid_args(
-        &(pic),
-        root,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        "root_funding_probe_emergency_refill_transfer_then_trap",
-        (),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply);
+    let transfer_loss: Result<EmergencyRefillOperation, _> =
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args(())?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).update_call(
+                    root,
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
+                    "root_funding_probe_emergency_refill_transfer_then_trap",
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
+        .map(|(reply,)| reply);
     assert!(transfer_loss.is_err());
     let prepared = emergency_operation(&pic, root).expect("prepared emergency operation");
     assert_eq!(prepared.phase, EmergencyRefillPhase::Prepared);
 
-    let notify_loss: Result<EmergencyRefillOperation, _> = ic_testkit::pic::update_candid_args(
-        &(pic),
-        root,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        "root_funding_probe_emergency_refill_notify_then_trap",
-        (),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply);
+    let notify_loss: Result<EmergencyRefillOperation, _> =
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args(())?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).update_call(
+                    root,
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
+                    "root_funding_probe_emergency_refill_notify_then_trap",
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
+        .map(|(reply,)| reply);
     assert!(notify_loss.is_err());
     let transferred = emergency_operation(&pic, root).expect("transferred emergency operation");
     assert_eq!(
@@ -343,16 +363,24 @@ fn emergency_refill_recovery_floor_covers_transfer_and_notify_response_loss() {
         EmergencyRefillPhase::Transferred { block_index: 77 }
     );
 
-    let completed: EmergencyRefillOperation = ic_testkit::pic::update_candid_args(
-        &(pic),
-        root,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        "root_funding_probe_emergency_refill",
-        (),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .expect("update Candid harness call");
+    let completed: EmergencyRefillOperation =
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args(())?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).update_call(
+                    root,
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
+                    "root_funding_probe_emergency_refill",
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
+        .map(|(reply,)| reply)
+        .expect("update Candid harness call");
     assert_eq!(
         completed.phase,
         EmergencyRefillPhase::Completed {
@@ -388,6 +416,10 @@ fn round_up_to_100m(value: u128) -> u128 {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Keep the paid-effect recovery sequence and its balance assertions together"
+)]
 fn attached_cycles_recover_across_intent_call_and_receipt_boundaries() {
     let workspace_root = workspace_root();
     let wasms = build_canisters(&workspace_root);
@@ -441,15 +473,23 @@ fn attached_cycles_recover_across_intent_call_and_receipt_boundaries() {
 
     let coordinator_before_fresh = pic.cycle_balance(coordinator);
     let root_before_fresh = pic.cycle_balance(root);
-    let trapped: Result<IssueResult, _> = ic_testkit::pic::update_candid_args(
-        &(pic),
-        coordinator,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        "root_funding_probe_issue_then_trap",
-        (),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply);
+    let trapped: Result<IssueResult, _> =
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args(())?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).update_call(
+                    coordinator,
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
+                    "root_funding_probe_issue_then_trap",
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
+        .map(|(reply,)| reply);
     assert!(trapped.is_err(), "receipt-boundary callback must trap");
 
     let expected_receipt = GrantReceipt {
@@ -594,105 +634,162 @@ fn install_probe(pic: &PocketIc, wasm: Vec<u8>, init: ProbeInit, cycles: u128) -
 }
 
 fn prepare(pic: &PocketIc, coordinator: Principal, root: Principal) -> GrantIntent {
-    ic_testkit::pic::update_candid_args(
-        pic,
-        coordinator,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        "root_funding_probe_prepare",
-        (root, OPERATION_ID, GRANT_CYCLES),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes =
+            ic_platform::candid::contract::encode_args((root, OPERATION_ID, GRANT_CYCLES))?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (pic).update_call(
+                coordinator,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                "root_funding_probe_prepare",
+                request_bytes,
+            )
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .expect("update Candid harness call")
 }
 
 fn issue(pic: &PocketIc, coordinator: Principal) -> IssueResult {
-    ic_testkit::pic::update_candid_args(
-        pic,
-        coordinator,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        "root_funding_probe_issue",
-        (),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes = ic_platform::candid::contract::encode_args(())?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (pic).update_call(
+                coordinator,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                "root_funding_probe_issue",
+                request_bytes,
+            )
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .expect("update Candid harness call")
 }
 
 fn issue_root_accept_then_trap(pic: &PocketIc, coordinator: Principal) -> IssueResult {
-    ic_testkit::pic::update_candid_args(
-        pic,
-        coordinator,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        "root_funding_probe_issue_root_accept_then_trap",
-        (),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes = ic_platform::candid::contract::encode_args(())?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (pic).update_call(
+                coordinator,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                "root_funding_probe_issue_root_accept_then_trap",
+                request_bytes,
+            )
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .expect("update Candid harness call")
 }
 
 fn request_from_root(pic: &PocketIc, root: Principal) -> RootRequestObservation {
-    ic_testkit::pic::update_candid_args(
-        pic,
-        root,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        "root_funding_probe_request",
-        (),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes = ic_platform::candid::contract::encode_args(())?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (pic).update_call(
+                root,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                "root_funding_probe_request",
+                request_bytes,
+            )
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .expect("update Candid harness call")
 }
 
 fn intent(pic: &PocketIc, coordinator: Principal) -> Option<GrantIntent> {
-    ic_testkit::pic::query_candid_args(
-        pic,
-        coordinator,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        "root_funding_probe_intent",
-        (),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes = ic_platform::candid::contract::encode_args(())?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (pic).query_call(
+                coordinator,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                "root_funding_probe_intent",
+                request_bytes,
+            )
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .expect("query Candid harness call")
 }
 
 fn receipt(pic: &PocketIc, root: Principal) -> Option<GrantReceipt> {
-    ic_testkit::pic::query_candid_args(
-        pic,
-        root,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        "root_funding_probe_receipt",
-        (),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes = ic_platform::candid::contract::encode_args(())?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (pic).query_call(
+                root,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                "root_funding_probe_receipt",
+                request_bytes,
+            )
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .expect("query Candid harness call")
 }
 
 fn acceptance_observation(pic: &PocketIc, root: Principal) -> Option<AcceptanceObservation> {
-    ic_testkit::pic::query_candid_args(
-        pic,
-        root,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        "root_funding_probe_acceptance_observation",
-        (),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes = ic_platform::candid::contract::encode_args(())?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (pic).query_call(
+                root,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                "root_funding_probe_acceptance_observation",
+                request_bytes,
+            )
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .expect("query Candid harness call")
 }
 
 fn emergency_operation(pic: &PocketIc, root: Principal) -> Option<EmergencyRefillOperation> {
-    ic_testkit::pic::query_candid_args(
-        pic,
-        root,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        "root_funding_probe_emergency_operation",
-        (),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes = ic_platform::candid::contract::encode_args(())?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (pic).query_call(
+                root,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                "root_funding_probe_emergency_operation",
+                request_bytes,
+            )
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .expect("query Candid harness call")
 }

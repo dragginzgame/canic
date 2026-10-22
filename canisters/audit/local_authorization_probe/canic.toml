@@ -38,7 +38,6 @@ maximum_instances = 1
 icrc21 = true
 
 [component_specs.default.auth]
-allowed_token_scopes = ["probe:read"]
 delegated_token_verifier = true
 
 [component_specs.default.auth.local_application_authorization]

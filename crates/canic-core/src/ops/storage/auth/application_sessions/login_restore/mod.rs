@@ -5,6 +5,7 @@ use crate::model::auth::application_authorization::{
     MAX_APPLICATION_ADMITTED_LOGINS, MAX_APPLICATION_UNKNOWN_LOGOUTS,
 };
 use ic_auth::{portable::LoginRevocationChange, session::Session};
+use ic_auth_protocol_types::{AudienceId, CanonicalId};
 
 pub(super) fn validate_login_records(
     state: &LocalApplicationAuthorizationStateData,
@@ -18,6 +19,15 @@ pub(super) fn validate_login_records(
     if state.logins.len() != state.login_totals.admitted + state.login_totals.unknown {
         return Err(invalid);
     }
+    // Disabled authority still retains logout denials. Its rows must share one
+    // audience; enabled authority additionally pins that audience to the Fleet.
+    let mut audience = match &state.authority_binding {
+        Some(LocalApplicationAuthorityBindingRecord::Enabled { fleet, .. }) => Some(AudienceId {
+            canonical_network_id: CanonicalId::from_bytes(*fleet.canonical_network_id.as_bytes()),
+            fleet_id: CanonicalId::from_bytes(*fleet.fleet_id.as_bytes()),
+        }),
+        _ => None,
+    };
     let mut callers = BTreeSet::new();
     let sessions = state
         .sessions
@@ -31,7 +41,11 @@ pub(super) fn validate_login_records(
     let mut admitted = 0;
     for (caller, record) in &state.logins {
         let login = LoginRevocationChange::decode(&record.bytes).map_err(|_| invalid.clone())?;
-        if login.caller() != (*caller).into() || !callers.insert(*caller) {
+        let expected_audience = audience.get_or_insert_with(|| login.audience());
+        if login.audience() != *expected_audience
+            || login.caller() != (*caller).into()
+            || !callers.insert(*caller)
+        {
             return Err(invalid);
         }
         if let Some(record) = sessions.get(caller) {

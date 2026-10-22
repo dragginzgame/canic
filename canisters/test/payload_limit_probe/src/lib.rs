@@ -207,6 +207,7 @@ fn named_echo(payload: String) -> Result<usize, Error> {
 }
 
 /// Bare CDK updates still inherit the managed ingress inspector default.
+#[ic_platform::candid::contract::candid_method(update)]
 #[ic_platform::cdk::update(decode_with = "codec::decode_one", encode_with = "codec::encode_reply")]
 fn bare_echo(payload: String) -> usize {
     payload.len()

@@ -55,6 +55,11 @@ lifetime lock with restore preparation, execution and
 prune. That lock lives beside the backup directory so deletion cannot replace
 its identity while another process still holds it.
 
+Backup metadata records have a 64 MiB acquisition limit, including standalone
+`canic backup manifest validate --manifest <file>`. Non-regular descriptors and
+oversized records refuse before JSON decoding. Explicit manifest path aliases
+remain supported; streamed snapshot artifacts have separate bounds.
+
 Retained plans, journals and manifests remain readable for inspection and restore
 admission. Removing the capture executor does not delete retained layouts, settle
 an uncertain paid effect, or make a dry-run plan into a completed backup.

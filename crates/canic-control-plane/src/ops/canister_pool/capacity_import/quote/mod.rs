@@ -20,7 +20,6 @@ pub fn maximum_call_debit(controllers: Vec<Principal>) -> Result<u128, InternalE
             controllers: Some(controllers),
             ..CanisterSettings::default()
         },
-        sender_canister_version: None,
     };
     let costs = [
         MgmtOps::canister_inspection_reserve(canister_id)?.required_liquid_cycles,

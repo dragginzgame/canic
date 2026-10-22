@@ -58,18 +58,8 @@ pub(super) fn commit_logout(caller: Principal, login: PreparedLogin) -> Result<(
     );
     APPLICATION_SESSION_INDEXES.with_borrow_mut(|slot| {
         let indexes = slot.as_mut().expect("admitted session indexes");
-        if let Some(session) = canonical {
+        if canonical.is_some() {
             indexes.session_by_caller.remove(&caller);
-            let count = indexes
-                .session_count_by_subject
-                .get_mut(&session.subject().into())
-                .expect("validated session subject count");
-            *count -= 1;
-            if *count == 0 {
-                indexes
-                    .session_count_by_subject
-                    .remove(&session.subject().into());
-            }
         }
         if let Some(moved) = moved_caller {
             indexes

@@ -1114,7 +1114,7 @@ code = 159
 name = "AUTH_TOKEN_EXPIRED"
 origin = "authentication"
 summary = "The delegated authentication token has expired."
-retired = false
+retired = true
 
 [[reason]]
 code = 160

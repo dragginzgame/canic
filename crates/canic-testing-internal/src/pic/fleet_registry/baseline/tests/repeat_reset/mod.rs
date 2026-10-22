@@ -127,14 +127,21 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, previous_operation: &s
         .into_iter()
         .filter(|action| matches!(action, EnsureAction::Fund { .. }))
         .count();
-    let withdrawals: u64 = ic_testkit::pic::query_candid_args(
-        input.pic,
-        ledger,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        "withdrawal_count",
-        (),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+    let withdrawals: u64 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes = ic_platform::candid::contract::encode_args(())?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (input.pic).query_call(
+                ledger,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                "withdrawal_count",
+                request_bytes,
+            )
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .unwrap();
     let funding_lost = root.join("lost-funding-response");
@@ -163,14 +170,21 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, previous_operation: &s
         );
         if funding_interrupted {
             assert_eq!(
-                ic_testkit::pic::query_candid_args::<(u64,), _>(
-                    input.pic,
-                    ledger,
-                    ic_platform::principal::ExternalPrincipal::anonymous(),
-                    "withdrawal_count",
-                    (),
-                    canic::testing::CANDID_REPLY_LIMITS
-                )
+                (|| -> Result<(u64,), Box<dyn std::error::Error + Send + Sync>> {
+                    let request_bytes = ic_platform::candid::contract::encode_args(())?;
+                    let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                        (input.pic).query_call(
+                            ledger,
+                            ic_platform::principal::ExternalPrincipal::anonymous(),
+                            "withdrawal_count",
+                            request_bytes,
+                        )
+                    })
+                    .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+                    .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+                    ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                        .map_err(Into::into)
+                })()
                 .map(|(reply,)| reply)
                 .unwrap(),
                 withdrawals + 1
@@ -188,14 +202,21 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, previous_operation: &s
     };
     assert!(initialized.terminal);
     assert_eq!(
-        ic_testkit::pic::query_candid_args::<(u64,), _>(
-            input.pic,
-            ledger,
-            ic_platform::principal::ExternalPrincipal::anonymous(),
-            "withdrawal_count",
-            (),
-            canic::testing::CANDID_REPLY_LIMITS
-        )
+        (|| -> Result<(u64,), Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args(())?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (input.pic).query_call(
+                    ledger,
+                    ic_platform::principal::ExternalPrincipal::anonymous(),
+                    "withdrawal_count",
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
         .map(|(reply,)| reply)
         .unwrap(),
         withdrawals + u64::try_from(funding_count).unwrap()

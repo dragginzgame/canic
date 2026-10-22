@@ -13,6 +13,7 @@ use crate::{
         globals::{internal_environment_arg, internal_icp_arg},
         help::print_help_or_version,
     },
+    output,
     support::candid::registry_entry_candid_path,
     version_text,
 };
@@ -400,7 +401,7 @@ fn render_text_report(report: &InspectReport) -> String {
         lines.push(format!("state_domains: {}", state.domains.len()));
     }
     append_runtime_metadata_lines(&mut lines, status);
-    lines.join("\n")
+    output::render_terminal_lines(&lines)
 }
 
 fn append_runtime_metadata_lines(lines: &mut Vec<String>, status: &CanicRuntimeStatus) {
@@ -794,6 +795,46 @@ mod tests {
         assert!(value.get("readiness_status").is_none());
         assert!(value.get("warnings").is_none());
         assert!(value.get("next_actions").is_none());
+    }
+
+    #[test]
+    fn terminal_controls_in_runtime_fields_are_visible_without_changing_json() {
+        let mut report = sample_inspect_report();
+        let expected_lines = render_text_report(&report).lines().count();
+        let injected = "界\x1b]52;c;dGVzdA==\x07\nforged\r\t\u{009b}\u{2028}\u{202e}";
+        report.target_resolution.fleet = Some(injected.into());
+        report.target_resolution.role = Some(injected.into());
+        report.target_resolution.environment = injected.into();
+        let status = &mut report.runtime_status.status;
+        status.role = Some(injected.into());
+        status.features[0].name = injected.into();
+        status.auth.as_mut().unwrap().auth_features[0].name = injected.into();
+        status.timers[0].owner = injected.into();
+        status.timers[0].subsystem = injected.into();
+        status.timers[0].name = injected.into();
+        let domain = &mut status.state.as_mut().unwrap().domains[0];
+        domain.domain = injected.into();
+        domain.storage = injected.into();
+        status.recent_failures[0].subsystem = injected.into();
+        status.recent_failures[0].code = injected.into();
+
+        let rendered = render_text_report(&report);
+        assert_eq!(rendered.lines().count(), expected_lines);
+        assert!(
+            !rendered
+                .chars()
+                .any(|character| character.is_control() && character != '\n')
+        );
+        assert!(!rendered.contains(['\u{2028}', '\u{202e}']));
+        assert!(
+            rendered.contains(r"界\u{1b}]52;c;dGVzdA==\u{7}\nforged\r\t\u{9b}\u{2028}\u{202e}")
+        );
+        let json = serde_json::to_value(&report).expect("serialize report");
+        assert_eq!(json["runtime_status"]["status"]["role"], injected);
+        assert_eq!(
+            json["runtime_status"]["status"]["timers"][0]["name"],
+            injected
+        );
     }
 
     #[test]

@@ -371,3 +371,97 @@ mod tests {
         );
     }
 }
+
+#[cfg(all(test, feature = "root-control-plane"))]
+mod root_tests {
+    use super::publication_overview;
+    use crate::{
+        ids::{WasmStoreBinding, WasmStoreGcMode},
+        ops::storage::state::root_wasm_store::RootWasmStoreStateOps,
+        storage::stable::state::root_wasm_store::{
+            RootWasmStoreState, RootWasmStoreStateData, SiblingWasmStoreAdoptionPhaseRecord,
+            SiblingWasmStoreAdoptionRecord,
+        },
+    };
+    use canic_core::cdk::types::Principal;
+
+    #[test]
+    fn store_overview_timestamps_use_epoch_seconds_and_preserve_unset_values() {
+        RootWasmStoreState::import(RootWasmStoreStateData::default());
+        let pid = Principal::from_slice(&[8; 29]);
+        let binding = WasmStoreBinding::owned(pid.to_text());
+        let created_at = 1_791_808_292;
+        let adopted_at_ns = created_at * 1_000_000_000 + 418_714_000;
+        RootWasmStoreState::begin_sibling_wasm_store_adoption(SiblingWasmStoreAdoptionRecord {
+            operation_id: [1; 32],
+            wasm_store: pid,
+            expected_module_hash: [2; 32],
+            controllers: vec![
+                Principal::from_slice(&[9; 29]),
+                Principal::from_slice(&[10; 29]),
+            ],
+            phase: SiblingWasmStoreAdoptionPhaseRecord::MutationInFlight,
+            adopted_at_ns: None,
+        })
+        .unwrap();
+        let receipt =
+            RootWasmStoreState::commit_sibling_wasm_store_adoption([1; 32], adopted_at_ns).unwrap();
+        assert_eq!(receipt.adopted_at_ns, Some(adopted_at_ns));
+        let overview = publication_overview();
+        assert_eq!(overview.stores[0].created_at, created_at);
+        assert_eq!(overview.publication.changed_at, 0);
+        assert_eq!(overview.publication.retired_at, 0);
+        assert_eq!(overview.stores[0].gc.changed_at, 0);
+        assert_eq!(overview.stores[0].gc.prepared_at, None);
+        assert_eq!(overview.stores[0].gc.started_at, None);
+        assert_eq!(overview.stores[0].gc.completed_at, None);
+
+        assert!(RootWasmStoreStateOps::activate_publication_store_binding(
+            binding.clone(),
+            created_at + 1,
+        ));
+        for (mode, offset) in [
+            (WasmStoreGcMode::Prepared, 2),
+            (WasmStoreGcMode::InProgress, 3),
+            (WasmStoreGcMode::Complete, 4),
+        ] {
+            assert!(RootWasmStoreStateOps::transition_wasm_store_gc(
+                &binding,
+                mode,
+                created_at + offset,
+            ));
+        }
+        let overview = publication_overview();
+        assert_eq!(overview.publication.changed_at, created_at + 1);
+        assert_eq!(overview.publication.retired_at, 0);
+        let gc = &overview.stores[0].gc;
+        assert_eq!(gc.changed_at, created_at + 4);
+        assert_eq!(gc.prepared_at, Some(created_at + 2));
+        assert_eq!(gc.started_at, Some(created_at + 3));
+        assert_eq!(gc.completed_at, Some(created_at + 4));
+        assert!(overview.stores[0].created_at < overview.publication.changed_at);
+        assert!(overview.publication.changed_at < gc.prepared_at.unwrap());
+        assert!(gc.prepared_at < gc.started_at);
+        assert!(gc.started_at < gc.completed_at);
+
+        assert!(RootWasmStoreStateOps::clear_publication_store_binding(
+            created_at + 5
+        ));
+        assert_eq!(
+            RootWasmStoreStateOps::retire_detached_publication_store_binding(created_at + 6),
+            Some(binding),
+        );
+        let overview = publication_overview();
+        assert_eq!(overview.publication.changed_at, created_at + 6);
+        assert_eq!(overview.publication.retired_at, created_at + 6);
+        assert!(overview.stores[0].gc.completed_at.unwrap() < overview.publication.retired_at);
+        let replay = RootWasmStoreState::commit_sibling_wasm_store_adoption(
+            [1; 32],
+            adopted_at_ns + 10_000_000_000,
+        )
+        .unwrap();
+        assert_eq!(replay, receipt);
+        assert_eq!(publication_overview().stores[0].created_at, created_at);
+        RootWasmStoreState::import(RootWasmStoreStateData::default());
+    }
+}

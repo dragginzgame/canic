@@ -60,11 +60,13 @@ use canic_core::{
         compile_fleet_admission_projection, compile_installed_fleet_admission_policy,
     },
 };
+use ic_platform::candid::decode_args;
 use ic_platform::{
     candid::contract::{encode_args, encode_one},
     principal::ExternalPrincipal as Principal,
 };
-use ic_testkit::pic::{CandidCallError, CanisterInstallExt, PocketIc};
+use ic_testkit::pic::try_pocket_ic_operation;
+use ic_testkit::pic::{CanisterInstallExt, PocketIc, PocketIcCallFailure};
 use std::{fmt, time::Duration};
 
 const DEFAULT_INSTALL_CYCLES: u128 = 10_000_000_000_000;
@@ -148,16 +150,20 @@ impl ManagedAppFixture {
 
     /// Configure the exact retained runtime directory through Canic's managed command endpoint.
     pub fn configure_runtime(&self) -> Result<OperationReceipt, ManagedAppQualificationError> {
-        let response: Result<ManagedCommandResponse, Error> = ic_testkit::pic::update_candid_args(
-            &self.pic,
-            self.app,
-            self.root,
-            CANIC_COMMAND,
-            (ManagedCommand::ConfigureRuntime(Box::new(
+        let response: Result<ManagedCommandResponse, Error> = {
+            let bytes = encode_args((ManagedCommand::ConfigureRuntime(Box::new(
                 self.directory.clone(),
-            )),),
-            crate::testing::CANDID_REPLY_LIMITS,
-        )
+            )),))
+            .map_err(|error| ManagedAppQualificationError::Candid(error.to_string()))?;
+            let reply = try_pocket_ic_operation(|| {
+                self.pic
+                    .update_call(self.app, self.root, CANIC_COMMAND, bytes)
+            })
+            .map_err(PocketIcCallFailure::Operation)?
+            .map_err(PocketIcCallFailure::Rejected)?;
+            decode_args(&reply, crate::testing::CANDID_REPLY_LIMITS)
+                .map_err(ManagedAppQualificationError::Decode)
+        }
         .map(|(reply,)| reply)?;
         let response = response.map_err(ManagedAppQualificationError::Canic)?;
         let ManagedCommandResponse::OperationAccepted(receipt) = response else {
@@ -213,17 +219,21 @@ impl ManagedAppFixture {
     pub fn admission_status(
         &self,
     ) -> Result<FleetAdmissionProjectionStatusResponse, ManagedAppQualificationError> {
-        let response: Result<ManagedStatusResponse, Error> = ic_testkit::pic::query_candid_args(
-            &self.pic,
-            self.app,
-            self.root,
-            CANIC_ADMISSION_STATUS,
-            (ManagedStatusRequest::Admission(PageRequest {
+        let response: Result<ManagedStatusResponse, Error> = {
+            let bytes = encode_args((ManagedStatusRequest::Admission(PageRequest {
                 limit: DEFAULT_STATUS_PAGE_LIMIT,
                 offset: 0,
-            }),),
-            crate::testing::CANDID_REPLY_LIMITS,
-        )
+            }),))
+            .map_err(|error| ManagedAppQualificationError::Candid(error.to_string()))?;
+            let reply = try_pocket_ic_operation(|| {
+                self.pic
+                    .query_call(self.app, self.root, CANIC_ADMISSION_STATUS, bytes)
+            })
+            .map_err(PocketIcCallFailure::Operation)?
+            .map_err(PocketIcCallFailure::Rejected)?;
+            decode_args(&reply, crate::testing::CANDID_REPLY_LIMITS)
+                .map_err(ManagedAppQualificationError::Decode)
+        }
         .map(|(reply,)| reply)?;
         let response = response.map_err(ManagedAppQualificationError::Canic)?;
         let ManagedStatusResponse::Admission(status) = response else {
@@ -260,14 +270,18 @@ impl ManagedAppFixture {
             expected_policy_digest: current.policy_digest,
             successor,
         };
-        let response: Result<ManagedCommandResponse, Error> = ic_testkit::pic::update_candid_args(
-            &self.pic,
-            self.app,
-            self.root,
-            CANIC_COMMAND,
-            (ManagedCommand::PrepareFleetAdmission(Box::new(request)),),
-            crate::testing::CANDID_REPLY_LIMITS,
-        )
+        let response: Result<ManagedCommandResponse, Error> = {
+            let bytes = encode_args((ManagedCommand::PrepareFleetAdmission(Box::new(request)),))
+                .map_err(|error| ManagedAppQualificationError::Candid(error.to_string()))?;
+            let reply = try_pocket_ic_operation(|| {
+                self.pic
+                    .update_call(self.app, self.root, CANIC_COMMAND, bytes)
+            })
+            .map_err(PocketIcCallFailure::Operation)?
+            .map_err(PocketIcCallFailure::Rejected)?;
+            decode_args(&reply, crate::testing::CANDID_REPLY_LIMITS)
+                .map_err(ManagedAppQualificationError::Decode)
+        }
         .map(|(reply,)| reply)?;
         let response = response.map_err(ManagedAppQualificationError::Canic)?;
         let ManagedCommandResponse::PrepareFleetAdmission(receipt) = response else {
@@ -297,16 +311,20 @@ impl ManagedAppFixture {
     }
 
     fn runtime_is_active(&self) -> Result<bool, ManagedAppQualificationError> {
-        let response: Result<ManagedStatusResponse, Error> = ic_testkit::pic::query_candid_args(
-            &self.pic,
-            self.app,
-            self.root,
-            CANIC_CONTROL_STATUS,
-            (ManagedStatusRequest::Operation(OperationStatusRequest {
+        let response: Result<ManagedStatusResponse, Error> = {
+            let bytes = encode_args((ManagedStatusRequest::Operation(OperationStatusRequest {
                 operation_id: self.directory.operation_id,
-            }),),
-            crate::testing::CANDID_REPLY_LIMITS,
-        )
+            }),))
+            .map_err(|error| ManagedAppQualificationError::Candid(error.to_string()))?;
+            let reply = try_pocket_ic_operation(|| {
+                self.pic
+                    .query_call(self.app, self.root, CANIC_CONTROL_STATUS, bytes)
+            })
+            .map_err(PocketIcCallFailure::Operation)?
+            .map_err(PocketIcCallFailure::Rejected)?;
+            decode_args(&reply, crate::testing::CANDID_REPLY_LIMITS)
+                .map_err(ManagedAppQualificationError::Decode)
+        }
         .map(|(reply,)| reply)?;
         let response = response.map_err(ManagedAppQualificationError::Canic)?;
         let ManagedStatusResponse::Operation(status) = response else {
@@ -736,14 +754,16 @@ pub enum ManagedAppQualificationError {
         operation: &'static str,
         maximum_ticks: usize,
     },
-    /// PocketIC transport or Candid decoding failed.
-    Transport(CandidCallError),
+    /// PocketIC rejected the call or its transport failed.
+    Transport(PocketIcCallFailure),
+    /// The reply exceeded its decoder limits or had an invalid Candid shape.
+    Decode(ic_platform::candid::DecodeError),
     /// The generated Canic endpoint returned another valid variant.
     UnexpectedResponse(&'static str),
 }
 
-impl From<CandidCallError> for ManagedAppQualificationError {
-    fn from(value: CandidCallError) -> Self {
+impl From<PocketIcCallFailure> for ManagedAppQualificationError {
+    fn from(value: PocketIcCallFailure) -> Self {
         Self::Transport(value)
     }
 }
@@ -767,6 +787,9 @@ impl fmt::Display for ManagedAppQualificationError {
                 formatter,
                 "{operation} did not complete within {maximum_ticks} PocketIC ticks"
             ),
+            Self::Decode(error) => {
+                write!(formatter, "managed fixture reply decoding failed: {error}")
+            }
             Self::Transport(error) => write!(formatter, "managed-App call failed: {error}"),
             Self::UnexpectedResponse(operation) => {
                 write!(

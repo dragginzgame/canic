@@ -12,7 +12,7 @@ The shared [package-adapter boundary](../../architecture/independent-package-ada
 also covers backup.
 
 The adapter selects published `ic-blob-storage` and uses the contracts package's
-shared endpoint declarations from 0.35. Canic supplies endpoint authentication,
+shared endpoint declarations. Canic supplies endpoint authentication,
 bounded decoders, actual caller context and synchronous lifecycle participants. It registers
 its service memory grants before Canic bootstraps the sole memory runtime. Its
 managed lifecycle retains Fleet admission.
@@ -25,7 +25,7 @@ Fleet, lifecycle and memory tests. The upstream service suite owns blob authorit
 certificate replies, restoration, provider behavior and accounting; those results
 do not establish deployment qualification for an arbitrary wrapper.
 
-The root catalog requires published Blob Storage/contracts 0.35 and Memory 0.48.2.
+The root dependency catalog selects the published Blob Storage/contracts and Memory families.
 Timers and arithmetic-only Metrics follow the selected Canic runtime in the root
 and independent consumer lockfiles.
 Each complete managed artifact must share one Memory and Timers runtime.
@@ -34,8 +34,54 @@ See [Canic#444](https://github.com/dragginzgame/canic/issues/444) and the
 the shell does not establish live provider behavior. Upload capacity replies expose
 tenant logical, global physical and global billing-liability byte headroom
 separately; `remaining_bytes` is their minimum. Consumers must rebuild against
-Blob 0.35 contracts. This is a pre-1.0 hard cut with cross-release reinstall, while
+the selected Blob contracts. This is a pre-1.0 hard cut with cross-release reinstall, while
 same-release restoration and the upstream mutation fence remain required.
+
+## Framework completion boundary
+
+Canic qualifies the dedicated service and an embedded application through the
+same managed build, installation and memory runtime. Acceptance covers exact
+endpoint contracts, caller permissions, tenant mutation replay, bounded ingress,
+capacity accounting and same-release restoration with the mutation fence.
+Root must bind installation input to the actual provisioned component identity.
+Malformed, wrong-method, trailing-byte and over-limit tenant requests must leave
+service stable state unchanged; ordinary authorized requests must still succeed.
+
+This framework boundary does not qualify a live storage provider or a downstream
+application. Optional paid funding remains separate under
+[#494](https://github.com/dragginzgame/canic/issues/494), and dynamic parent-owned
+provisioning under [#493](https://github.com/dragginzgame/canic/issues/493).
+Upstream owns provider and service-policy acceptance; Canic must not duplicate
+that engine to complete its adapter. See the current handoff for the exact graph
+and completed local qualification, rather than treating this scope as evidence.
+
+## Remaining qualification
+
+The managed cases now cover successful local preparation, one-shot certificate
+replies, verifier-only attestation, reference replay/release and download refusal,
+with two uploaders in dedicated and embedded compositions. They also check public
+accounting and sampler restoration. Blob fence metrics observe the current platform
+version through the shared owner before publication; sampling cannot clear a fence.
+
+The mounted-operation acceptance under
+[#620](https://github.com/dragginzgame/canic/issues/620) is locally qualified:
+service/namespace and caller bindings, expired admission/preparation, pre-exposure
+revocation, malformed/oversized certificate input, uncollected certificate replies,
+and restoration after preparation/exposure. Full attestation receipts retain their
+original acceptance time. Confirmed-upload withdrawal preserves live references.
+Both #620 and the metrics work under
+[#621](https://github.com/dragginzgame/canic/issues/621) await delivery.
+Controlled bytes and a fixture verifier do not qualify external provider reads or
+operation. Local acceptance is not 100% end-to-end production readiness.
+
+Deployed serving/integrity, independent verifier operation and provider deletion
+or billing cessation retain their upstream acceptance issues:
+[serving](https://github.com/dragginzgame/ic-blob-storage/issues/5),
+[reference/deletion](https://github.com/dragginzgame/ic-blob-storage/issues/6),
+[multi-user uploads](https://github.com/dragginzgame/ic-blob-storage/issues/31),
+[GC callbacks](https://github.com/dragginzgame/ic-blob-storage/issues/32) and
+[completion verifier](https://github.com/dragginzgame/ic-blob-storage/issues/33).
+Local composition evidence must not be reported as complete production readiness.
 
 ## Dependency version ownership
 
@@ -43,8 +89,12 @@ The service requirement has one source:
 [`Cargo.toml`](../../../Cargo.toml),
 under `[workspace.dependencies]`. Its package inherits that declaration with
 `ic-blob-storage.workspace = true`; passive wire contracts come directly from
-`ic-blob-storage-contracts` on the same 0.35 release line. The two consumer examples depend on the
+`ic-blob-storage-contracts` on the same release line. The two consumer examples depend on the
 adapter and resolve those requirements through their own lockfiles.
+
+Blob owns the method-bound Wire installation decoder and its byte ceiling.
+An embedded application owns its outer configuration envelope and decoder limits;
+that application envelope is not a second Blob installation protocol.
 
 Locked builds select the exact service protocol and lifecycle composition with
 the single Memory runtime. Adopting another service release requires renewed
@@ -178,7 +228,7 @@ canic_blob_service::canister!();
 
 The shell depends on `canic-blob-service`, `canic` and `ic-platform`.
 The adapter inherits Canic's package version and registry requirement from the
-main workspace, with published Blob `0.35`. Cargo's package manifest
+main workspace, with the published Blob selection from the root catalog. Cargo's package manifest
 removes the development Canic path and excludes these private consumer fixtures.
 Canic and `canic-blob-service` are published together at 0.111.0, including the
 selected Memory runtime. Consumers can select both from crates.io; the coherent
@@ -261,7 +311,6 @@ submitted operator, payer and limits. This is separate from the dedicated and
 embedded composition fixtures and from browser/provider or downstream application
 acceptance.
 
-The maintained adapter selects published Blob Storage 0.35 and Memory 0.48.2.
 Each complete managed Wasm graph must contain one Memory and Timers identity.
 Canic owns the runtime and lifecycle;
 the service participant restores synchronously before deferred work. These
@@ -280,12 +329,6 @@ The library's normal dependency graph contains no App-specific compiled topology
 The owning shell compiles its exact topology. Raw Blob endpoints carry retained
 method declarations; the provider certificate joins Canic's Candid declaration
 scope. Artifact admission compares both declarations with callable Wasm exports.
-
-The source cut removes Canic's embedded blob runtime, feature flags, billing
-commands and passive Medic inspection. Use the service's own operator tools for
-its maintained API. Its status response does not promise the former readiness
-exit code, and there is no qualified replacement for Canic's direct funding
-command. Neither limitation requires retaining the old runtime.
 
 ## Browser and per-project adoption
 
@@ -310,13 +353,15 @@ using its existing observation, attestation and exact-reconciliation commands.
 Its two-browser reference uses a local provider substitute. Application signer
 operation, worker availability and real provider acceptance remain required.
 
-Production post-allocation binding currently requires a Root controller. The
-top-level Toko Miner Blob installation can use this existing controller route;
+Production post-allocation binding currently requires a Root controller. A
+shared Blob Component can use this existing controller route;
 its Component Spec must require application initialization and its application
 producer must retain the target-bound command bytes. The
 existing parent/peer provisioning APIs do not authorize an application hub to
 bind target-dependent bytes. [Canic #493](https://github.com/dragginzgame/canic/issues/493)
-owns that authority path. A configured project `payment_account` also does not
+tracks that future authority path. The selected 0.112 shared Blob deployment
+uses the controller route and does not require dynamic parent provisioning.
+A configured project `payment_account` also does not
 establish provider linkage or attributable external top-up credit. The current
 passive funding views do not dispatch payments; provider funding evidence and
 its adapter composition remain separate prerequisites
@@ -357,12 +402,12 @@ Do not sum the three byte totals or add reservations to them. Logical reference
 release does not establish physical deletion or extinguish provider liabilities.
 These are source accounting units, not measured stable-memory size or a bill.
 
-For Toko Miner, deploy its adapter-backed shell as an ordinary managed Component, configure
+Deploy the adapter-backed shell as an ordinary managed Component, configure
 the upstream service and use its client APIs for blob operations. Then collect
 the selected Fleet with the existing command:
 
 ```sh
-canic --environment staging observatory snapshot toko-staging --out usage.json
+canic --environment staging observatory snapshot shared-storage --out usage.json
 ```
 
 Each private `roles[]` entry carries the storage canister ID and
@@ -376,7 +421,7 @@ inventory, enable metrics remotely, or make paid calls.
 This reports usage **per storage canister**. Usage attributed to a consuming
 canister or tenant remains a separate upstream-authorized disclosure; the
 adapter does not publish that breakdown or infer it from capacity headroom.
-No Toko installation, provider qualification or paid upload is implied by this
+No application deployment, provider qualification or paid upload is implied by this
 reporting integration.
 
 Reinstalling or deleting a live service is a separate operation. Preserve records

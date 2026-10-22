@@ -40,6 +40,13 @@ checkouts. Each chunk must be nonempty and fit the existing
 command envelope. These are transport bounds, not application instruction
 budgets or production-load qualification.
 
+For template publication, Store preparation rejects a declared payload larger
+than the chunk count's 1 MiB-per-chunk ceiling or the selected Store byte limit
+before writing any preparation records. Staging-status reports partial upload
+counts and observed chunk hashes, and verifies the complete payload with a
+streaming SHA-256 over chunks in order. Its working payload buffer is bounded
+by one chunk; it does not allocate the declared payload size.
+
 ## Build and reuse
 
 For lock contention diagnostics and exact reuse guarantees, see

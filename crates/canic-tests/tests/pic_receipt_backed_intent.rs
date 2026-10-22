@@ -555,20 +555,27 @@ fn begin_receipt(
     quantity: u64,
     replay_deadline_ns: u64,
 ) -> ReceiptBeginView {
-    ic_testkit::pic::update_candid_args::<(Result<ReceiptBeginView, String>,), _>(
-        pic,
-        authority_id,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        "begin_receipt",
-        (
+    (|| -> Result<(Result<ReceiptBeginView, String>,), Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes = ic_platform::candid::contract::encode_args((
             operation_seed,
             payload_seed,
             resource_seed,
             quantity,
             replay_deadline_ns,
-        ),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+        ))?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (pic).update_call(
+                authority_id,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                "begin_receipt",
+                request_bytes,
+            )
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .expect("begin receipt transport")
     .expect("begin receipt application")
@@ -585,21 +592,21 @@ fn settle_receipt(
     source_canister: Principal,
     evidence_seed: u8,
 ) -> Result<ReceiptSettlementView, String> {
-    ic_testkit::pic::update_candid_args::<(Result<ReceiptSettlementView, String>,), _>(
-        pic,
-        authority_id,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        "settle_receipt",
-        (
+    (|| -> Result<(Result<ReceiptSettlementView, String>,), Box<dyn std::error::Error + Send + Sync>> {
+
+       let request_bytes = ic_platform::candid::contract::encode_args((
             operation_seed,
             payload_seed,
             expected_revision,
             decision,
             source_canister,
             evidence_seed,
-        ),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+        ))?;
+       let reply = ic_testkit::pic::try_pocket_ic_operation(|| (pic).update_call(authority_id, ic_platform::principal::ExternalPrincipal::anonymous(), "settle_receipt", request_bytes))
+           .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+           .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+       ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS).map_err(Into::into)
+   })()
     .map(|(reply,)| reply)
     .expect("settle receipt transport")
 }
@@ -609,14 +616,24 @@ fn load_receipt(
     authority_id: Principal,
     operation_seed: u8,
 ) -> Option<ReceiptIntentView> {
-    ic_testkit::pic::query_candid_args::<(Result<Option<ReceiptIntentView>, String>,), _>(
-        pic,
-        authority_id,
-        ic_platform::principal::ExternalPrincipal::anonymous(),
-        "load_receipt",
-        (operation_seed,),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes = ic_platform::candid::contract::encode_args((operation_seed,))?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (pic).query_call(
+                authority_id,
+                ic_platform::principal::ExternalPrincipal::anonymous(),
+                "load_receipt",
+                request_bytes,
+            )
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args::<(Result<Option<ReceiptIntentView>, String>,)>(
+            &reply,
+            canic::testing::CANDID_REPLY_LIMITS,
+        )
+        .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .expect("load receipt transport")
     .expect("load receipt application")

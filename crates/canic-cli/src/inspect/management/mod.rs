@@ -6,6 +6,7 @@ use crate::{
         globals::{internal_environment_arg, internal_icp_arg},
     },
     inspect::InspectCommandError,
+    output,
     support::icp_target::IcpTargetOptions,
 };
 use canic_host::{icp::IcpCanisterStatusReport, icp_config::resolve_current_canic_icp_root};
@@ -107,12 +108,34 @@ fn render_report(report: &IcpCanisterStatusReport) -> Result<String, InspectComm
             stats.response_payload_bytes_total
         ));
     }
-    Ok(lines.join("\n"))
+    Ok(output::render_terminal_lines(&lines))
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn management_status_text_escapes_external_scalar_fields() {
+        let injected = "value\nforged\x1b]52;c;dGVzdA==\x07\u{202e}";
+        let report: IcpCanisterStatusReport = serde_json::from_value(serde_json::json!({
+            "id": "rrkah-fqaaa-aaaaa-aaaaq-cai",
+            "status": injected,
+            "cycles": injected,
+            "controllers": [injected],
+        }))
+        .unwrap();
+        let rendered = render_report(&report).unwrap();
+        assert_eq!(rendered.lines().count(), 4);
+        assert!(!rendered.contains(['\x1b', '\x07', '\u{202e}']));
+        assert!(rendered.contains(r"value\nforged\u{1b}]52;c;dGVzdA==\u{7}\u{202e}"));
+        assert_eq!(serde_json::to_value(&report).unwrap()["status"], injected);
+    }
+
     #[test]
     fn partial_status_stays_unavailable_and_wrong_target_rejects() {
         let report: IcpCanisterStatusReport = serde_json::from_str(

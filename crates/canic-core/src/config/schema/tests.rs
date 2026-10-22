@@ -109,10 +109,6 @@ package = "app"
 component_role = "app"
 maximum_instances = 1
 
-[component_specs.default.auth]
-delegated_token_verifier = true
-allowed_token_scopes = ["my_app:read", "my_app:write"]
-
 [component_specs.default.auth.local_application_authorization]
 allowed_scopes = ["my_app:write", "my_app:read"]
 default_session_ttl_secs = 900
@@ -142,25 +138,13 @@ maximum_session_ttl_secs = 1800
 }
 
 #[test]
-fn local_application_authorization_requires_verifier_and_bounded_policy() {
+fn local_application_authorization_requires_bounded_policy() {
     let mut cfg = ConfigModel::test_default();
     cfg.component_specs
         .get_mut(&default_component_spec_id())
         .unwrap()
         .auth
         .local_application_authorization = Some(local_application_authorization());
-    assert!(cfg.validate().is_err(), "verifier is mandatory");
-
-    cfg.component_specs
-        .get_mut(&default_component_spec_id())
-        .unwrap()
-        .auth
-        .delegated_token_verifier = true;
-    cfg.component_specs
-        .get_mut(&default_component_spec_id())
-        .unwrap()
-        .auth
-        .allowed_token_scopes = vec!["my_app:read".to_owned()];
     cfg.validate().expect("exact 1,800-second maximum");
 
     cfg.component_specs
@@ -195,41 +179,6 @@ fn local_application_authorization_requires_verifier_and_bounded_policy() {
 }
 
 #[test]
-fn local_application_scopes_cannot_exceed_the_protected_token_ceiling() {
-    let mut cfg = ConfigModel::test_default();
-    let auth = &mut cfg
-        .component_specs
-        .get_mut(&default_component_spec_id())
-        .unwrap()
-        .auth;
-    auth.delegated_token_verifier = true;
-    auth.local_application_authorization = Some(local_application_authorization());
-    assert!(matches!(
-        cfg.validate(),
-        Err(ConfigSchemaError::ValidationError(_))
-    ));
-    cfg.component_specs
-        .get_mut(&default_component_spec_id())
-        .unwrap()
-        .auth
-        .allowed_token_scopes = vec!["my_app:read".to_owned()];
-    cfg.validate().unwrap();
-    cfg.component_specs
-        .get_mut(&default_component_spec_id())
-        .unwrap()
-        .auth
-        .local_application_authorization
-        .as_mut()
-        .unwrap()
-        .allowed_scopes
-        .push("my_app:write".to_owned());
-    assert!(matches!(
-        cfg.validate(),
-        Err(ConfigSchemaError::ValidationError(_))
-    ));
-}
-
-#[test]
 fn local_application_authorization_rejects_scope_residue() {
     for scopes in [
         vec![],
@@ -242,7 +191,6 @@ fn local_application_authorization_rejects_scope_residue() {
             .get_mut(&default_component_spec_id())
             .unwrap()
             .auth;
-        auth.delegated_token_verifier = true;
         let mut local = local_application_authorization();
         local.allowed_scopes = scopes;
         auth.local_application_authorization = Some(local);
@@ -255,7 +203,6 @@ fn local_application_authorization_rejects_scope_residue() {
         .get_mut(&default_component_spec_id())
         .unwrap()
         .auth;
-    auth.delegated_token_verifier = true;
     let mut local = local_application_authorization();
     local.allowed_scopes = (0..=MAX_VERIFIED_APPLICATION_SCOPES)
         .map(|index| format!("app:scope_{index:02}"))
@@ -423,6 +370,8 @@ fn checked_in_delegated_auth_configs_validate_with_current_chain_key_policy() {
         "apps/test/test-configs/root-sharding.toml",
         "canisters/test/delegation_issuer_stub/canic.toml",
         "canisters/test/delegation_root_stub/canic.toml",
+        "canisters/test/delegation_root_stub/canic.five-components.toml",
+        "canisters/test/delegation_root_stub/canic.five-trillion-component.toml",
         "canisters/test/runtime_probe/canic.toml",
     ] {
         let path = root.join(rel_path);
@@ -1049,6 +998,61 @@ fn delegated_tokens_chain_key_derivation_path_hash_must_match_path() {
 }
 
 #[test]
+fn delegated_tokens_chain_key_version_meets_its_acceptance_floor() {
+    for (version, minimum, valid) in [(1, 2, false), (2, 2, true), (3, 2, true)] {
+        let mut cfg = ConfigModel::test_default();
+        let policy = &mut cfg.auth.delegated_tokens.chain_key_root_proof;
+        policy.key_version = Some(version);
+        policy.min_accepted_key_version = Some(minimum);
+        let result = cfg.validate();
+        if valid {
+            result.unwrap();
+        } else {
+            assert!(matches!(result, Err(ConfigSchemaError::ValidationError(_))));
+        }
+    }
+}
+
+#[test]
+fn delegated_tokens_explicit_chain_key_path_obeys_management_bound() {
+    for (count, valid) in [(255, true), (256, false)] {
+        let mut cfg = ConfigModel::test_default();
+        let path = vec![vec![1]; count];
+        let policy = &mut cfg.auth.delegated_tokens.chain_key_root_proof;
+        policy.derivation_path_hex = Some(path.iter().map(hex).collect());
+        policy.derivation_path_hash_hex = Some(hex(
+            ic_auth::canonical::chain_key_derivation_path_hash(&path).unwrap(),
+        ));
+        let result = cfg.validate();
+        if valid {
+            result.unwrap();
+        } else {
+            assert!(matches!(result, Err(ConfigSchemaError::ValidationError(_))));
+        }
+    }
+}
+
+#[test]
+fn auth_ttls_fit_the_runtime_nanosecond_representation() {
+    let maximum = u64::MAX / 1_000_000_000;
+    for (seconds, valid) in [(0, false), (1, true), (maximum, true), (maximum + 1, false)] {
+        let mut cfg = ConfigModel::test_default();
+        cfg.auth.delegated_tokens.max_ttl_secs = Some(seconds);
+        cfg.auth.role_attestation.max_ttl_secs = seconds;
+        for result in [
+            cfg.auth.delegated_tokens.validate(),
+            cfg.auth.role_attestation.validate(),
+        ] {
+            if valid {
+                result.unwrap();
+            } else {
+                assert!(matches!(result, Err(ConfigSchemaError::ValidationError(_))));
+            }
+        }
+    }
+}
+
+#[test]
 fn delegated_tokens_chain_key_public_key_must_be_sec1_secp256k1() {
     let mut cfg = ConfigModel::test_default();
     cfg.auth
@@ -1146,4 +1150,40 @@ fn role_attestation_empty_min_epoch_role_key_is_invalid() {
 
     cfg.validate()
         .expect_err("expected empty min epoch role key to fail");
+}
+
+#[test]
+fn role_attestation_epoch_floors_require_canonical_known_roles() {
+    for name in ["UserHub", "user-hub", " user_hub", "user_hub "] {
+        let mut cfg = ConfigModel::test_default();
+        cfg.auth
+            .role_attestation
+            .min_accepted_epoch_by_role
+            .insert(name.into(), 1);
+        assert!(matches!(
+            cfg.validate(),
+            Err(ConfigSchemaError::InvalidCanisterRoleName { .. })
+        ));
+    }
+    let mut cfg = ConfigModel::test_default();
+    cfg.auth
+        .role_attestation
+        .min_accepted_epoch_by_role
+        .insert("unknown_role".into(), 1);
+    assert!(matches!(
+        cfg.validate(),
+        Err(ConfigSchemaError::ValidationError(_))
+    ));
+    cfg.auth.role_attestation.min_accepted_epoch_by_role.clear();
+    for role in cfg.roles.keys().chain([
+        &CanisterRole::ROOT,
+        &CanisterRole::FLEET_COORDINATOR,
+        &CanisterRole::WASM_STORE,
+    ]) {
+        cfg.auth
+            .role_attestation
+            .min_accepted_epoch_by_role
+            .insert(role.to_string(), 1);
+    }
+    cfg.validate().unwrap();
 }

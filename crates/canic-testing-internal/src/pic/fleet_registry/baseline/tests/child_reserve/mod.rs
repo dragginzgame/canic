@@ -43,16 +43,7 @@ pub(super) fn initial_child_failure_reaches_coordinator_and_recovers_same_claim(
     .unwrap();
     wait_for_parent_commit(&pic, root, operation_id);
     assert_balance_control_requires_controller(&pic, root);
-    let burned: u128 = ic_testkit::pic::update_candid_args(
-        &(pic),
-        root,
-        Principal::anonymous(),
-        "audit_recovery_balance",
-        (800_000_000_000_u128,),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .expect("update Candid harness call");
+    let burned: u128 = lower_root_reserve(&pic, root);
     assert!(burned > 0);
     let origin = (0..240).find_map(|_| {
         let status = provisioning_status(&pic, coordinator, operation_id);
@@ -387,31 +378,47 @@ fn prepare_spare(pic: &PocketIc, root: Principal) {
 }
 
 fn pause_and_reduce_reserve(pic: &PocketIc, root: Principal) {
-    let paused: Result<Response, Error> = ic_testkit::pic::update_candid_args(
-        pic,
-        root,
-        Principal::anonymous(),
-        canic::protocol::CANIC_ROOT_COMMAND,
-        (Command::SetCyclesFunding(
-            canic::dto::state::SetCyclesFundingRequest { enabled: false },
-        ),),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .expect("update Candid harness call");
+    let paused: Result<Response, Error> =
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes =
+                ic_platform::candid::contract::encode_args((Command::SetCyclesFunding(
+                    canic::dto::state::SetCyclesFundingRequest { enabled: false },
+                ),))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).update_call(
+                    root,
+                    Principal::anonymous(),
+                    canic::protocol::CANIC_ROOT_COMMAND,
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
+        .map(|(reply,)| reply)
+        .expect("update Candid harness call");
     let Response::SetCyclesFunding(paused) = paused.unwrap() else {
         panic!("funding response")
     };
     assert_eq!(paused.propagation.unconfirmed_targets, 0);
     assert!(paused.reconciliation_error.is_none());
-    let burned: u128 = ic_testkit::pic::update_candid_args(
-        pic,
-        root,
-        Principal::anonymous(),
-        "audit_recovery_balance",
-        (800_000_000_000_u128,),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
+    let burned: u128 = (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes = ic_platform::candid::contract::encode_args((800_000_000_000_u128,))?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (pic).update_call(
+                root,
+                Principal::anonymous(),
+                "audit_recovery_balance",
+                request_bytes,
+            )
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
     .map(|(reply,)| reply)
     .expect("update Candid harness call");
     assert!(burned > 0);
@@ -424,16 +431,26 @@ fn provision(
     parent: Principal,
     request: &RootComponentChildAllocationRequest,
 ) {
-    let response: Result<Response, Error> = ic_testkit::pic::update_candid_args(
-        pic,
-        root,
-        parent,
-        canic::protocol::CANIC_ROOT_COMMAND,
-        (Command::ProvisionChild(request.clone()),),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .expect("update Candid harness call");
+    let response: Result<Response, Error> =
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes = ic_platform::candid::contract::encode_args((
+                Command::ProvisionChild(request.clone()),
+            ))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).update_call(
+                    root,
+                    parent,
+                    canic::protocol::CANIC_ROOT_COMMAND,
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
+        .map(|(reply,)| reply)
+        .expect("update Candid harness call");
     let Response::OperationAccepted(receipt) = response.unwrap() else {
         panic!("accepted child")
     };
@@ -476,4 +493,24 @@ fn wait_for(
         "child allocation did not reach the expected boundary: {:?}",
         operation(pic, root, operation_id)
     );
+}
+
+fn lower_root_reserve(pic: &PocketIc, root: Principal) -> u128 {
+    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes = ic_platform::candid::contract::encode_args((800_000_000_000_u128,))?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (pic).update_call(
+                root,
+                Principal::anonymous(),
+                "audit_recovery_balance",
+                request_bytes,
+            )
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
+    .map(|(reply,)| reply)
+    .expect("update Candid harness call")
 }

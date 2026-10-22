@@ -17,8 +17,10 @@ use canic_core::{
     api::caller_authority::CallerAuthorityApi, bootstrap::compiled::CompiledCallerPolicy,
     control_plane_support::policy::caller_authority::matches_permission,
 };
+use ic_platform::candid::{contract::encode_args, decode_args};
 use ic_platform::principal::ExternalPrincipal as Principal;
-use ic_testkit::pic::PocketIc;
+use ic_testkit::pic::try_pocket_ic_operation;
+use ic_testkit::pic::{PocketIc, PocketIcCallFailure};
 
 pub(super) fn publish(
     pic: &PocketIc,
@@ -92,16 +94,23 @@ fn status(
     authority: &CallerReceiverAuthority,
     operation_id: [u8; 32],
 ) -> Result<CallerAuthorityStatus, FixtureError> {
-    let response: Result<StatusResponse, Error> = ic_testkit::pic::query_candid_args(
-        pic,
-        authority.receiver.canister(),
-        root,
-        CANIC_CONTROL_STATUS,
-        (StatusRequest::CallerAuthority(OperationStatusRequest {
+    let response: Result<StatusResponse, Error> = {
+        let bytes = encode_args((StatusRequest::CallerAuthority(OperationStatusRequest {
             operation_id,
-        }),),
-        crate::testing::CANDID_REPLY_LIMITS,
-    )
+        }),))
+        .map_err(|error| FixtureError::Candid(error.to_string()))?;
+        let reply = try_pocket_ic_operation(|| {
+            pic.query_call(
+                authority.receiver.canister(),
+                root,
+                CANIC_CONTROL_STATUS,
+                bytes,
+            )
+        })
+        .map_err(PocketIcCallFailure::Operation)?
+        .map_err(PocketIcCallFailure::Rejected)?;
+        decode_args(&reply, crate::testing::CANDID_REPLY_LIMITS).map_err(FixtureError::Decode)
+    }
     .map(|(reply,)| reply)?;
     let StatusResponse::CallerAuthority(status) = response.map_err(FixtureError::Canic)?;
     if status.authority != *authority {
@@ -162,14 +171,14 @@ fn command(
     target: Principal,
     command: Command,
 ) -> Result<Response, FixtureError> {
-    let response: Result<Response, Error> = ic_testkit::pic::update_candid_args(
-        pic,
-        target,
-        root,
-        CANIC_COMMAND,
-        (command,),
-        crate::testing::CANDID_REPLY_LIMITS,
-    )
+    let response: Result<Response, Error> = {
+        let bytes =
+            encode_args((command,)).map_err(|error| FixtureError::Candid(error.to_string()))?;
+        let reply = try_pocket_ic_operation(|| pic.update_call(target, root, CANIC_COMMAND, bytes))
+            .map_err(PocketIcCallFailure::Operation)?
+            .map_err(PocketIcCallFailure::Rejected)?;
+        decode_args(&reply, crate::testing::CANDID_REPLY_LIMITS).map_err(FixtureError::Decode)
+    }
     .map(|(reply,)| reply)?;
     response.map_err(FixtureError::Canic)
 }

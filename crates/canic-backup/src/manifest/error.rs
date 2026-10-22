@@ -24,6 +24,9 @@ pub enum ManifestValidationError {
     #[error("collection {0} must not be empty")]
     EmptyCollection(&'static str),
 
+    #[error("field {field} must be a nonempty relative artifact path: {value}")]
+    InvalidArtifactPath { field: &'static str, value: String },
+
     #[error("field {field} must be a valid principal: {value}")]
     InvalidPrincipal { field: &'static str, value: String },
 

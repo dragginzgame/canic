@@ -1,6 +1,6 @@
 //! Module: canic_cli::output
 //!
-//! Responsibility: share small CLI output file/stdout helpers.
+//! Responsibility: share safe report-line rendering and CLI file/stdout helpers.
 //! Does not own: command-specific report formats, serialization schema, or diagnostics.
 //! Boundary: writes caller-provided text/JSON payloads to stdout or filesystem paths.
 
@@ -14,7 +14,17 @@ use std::{
 };
 
 use ic_host_fs::durable::{PublicationMode, WriteOptions, write_bytes};
+use ic_host_text::escape::terminal_text;
 use serde::{Serialize, de::DeserializeOwned};
+
+/// Escape each data-bearing report line before adding trusted line separators.
+pub fn render_terminal_lines(lines: &[String]) -> String {
+    lines
+        .iter()
+        .map(|line| terminal_text(line))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
 
 /// Resolve the selected output's existing parent once, including macOS `/tmp`.
 /// Missing directories remain for durable publication; the final file cannot be a link.

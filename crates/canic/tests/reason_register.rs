@@ -152,7 +152,7 @@ fn render_host_catalogue(reasons: &[Reason]) -> String {
         );
     } else {
         rendered
-            .push_str("pub(super) const RETIRED_REASONS: &[super::RetiredDiagnosticEntry] = &[\n");
+            .push_str("#[rustfmt::skip]\npub(super) const RETIRED_REASONS: &[super::RetiredDiagnosticEntry] = &[\n");
         for reason in retired {
             writeln!(
                 rendered,

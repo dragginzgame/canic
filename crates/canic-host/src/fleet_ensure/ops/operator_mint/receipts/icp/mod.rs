@@ -3,7 +3,6 @@
 //! Responsibility: prepare exact replicated reads and authenticate ICP transfer evidence.
 //! Boundary: no submission, archive calls, journal mutation or funding credit.
 
-mod protobuf;
 #[cfg(test)]
 mod tests;
 mod wire;
@@ -20,12 +19,12 @@ use crate::fleet_ensure::{
         validate_intent,
     },
 };
+use ic_host_tools::icp_ledger::{IcpBlockError, IcpTransferFields, decode_transfer};
 use ic_platform::{
     agent::{Agent, AgentError, RequestId, SignedUpdate},
     certification::LookupResult,
     principal::ExternalPrincipal as Principal,
 };
-use prost::Message;
 use serde_bytes::ByteBuf;
 use sha2_host::{Digest, Sha256};
 use thiserror::Error;
@@ -273,7 +272,7 @@ pub fn verify_read(
     config.set_decoding_quota(limits.decoding_quota);
     config.set_skipping_quota(limits.skipping_quota);
     match read.source {
-        ReadSource::Ledger => verify_ledger_reply(read, reply, &config),
+        ReadSource::Ledger => verify_ledger_reply(read, reply, &config, limits.reply_bytes),
         ReadSource::Archive => {
             let blocks: Result<Vec<ByteBuf>, ArchiveReadError> =
                 ic_platform::candid::decoder::decode_one_with_config(reply, &config)
@@ -282,7 +281,7 @@ pub fn verify_read(
             if blocks.len() != 1 {
                 return Err(IcpReadError::BlockMismatch);
             }
-            verified_transfer(read, &blocks[0])
+            verified_transfer(read, &blocks[0], limits.reply_bytes)
         }
     }
 }
@@ -291,6 +290,7 @@ fn verify_ledger_reply(
     read: &IcpTransferRead,
     bytes: &[u8],
     config: &ic_platform::candid::decoder::DecoderConfig,
+    maximum_bytes: usize,
 ) -> Result<IcpReadOutcome, IcpReadError> {
     let reply: EncodedBlocksReply =
         ic_platform::candid::decoder::decode_one_with_config(bytes, config)
@@ -321,14 +321,15 @@ fn verify_ledger_reply(
     if reply.first_block_index != read.block_index || reply.blocks.len() != 1 {
         return Err(IcpReadError::BlockMismatch);
     }
-    verified_transfer(read, &reply.blocks[0])
+    verified_transfer(read, &reply.blocks[0], maximum_bytes)
 }
 
 fn verified_transfer(
     read: &IcpTransferRead,
     encoded: &[u8],
+    maximum_bytes: usize,
 ) -> Result<IcpReadOutcome, IcpReadError> {
-    verify_block(encoded, &read.intent, read.block_index)?;
+    verify_block(encoded, &read.intent, read.block_index, maximum_bytes)?;
     Ok(IcpReadOutcome::Transfer(VerifiedIcpTransfer {
         intent: read.intent.clone(),
         block_index: read.block_index,
@@ -345,69 +346,27 @@ fn verify_reader(agent: &Agent, intent: &OperatorMintIntentRecord) -> Result<(),
     Ok(())
 }
 
-// Compare transfer authority as one exact value; no default fee, account or time.
-#[derive(Eq, PartialEq)]
-struct TransferFields {
-    from: [u8; 32],
-    to: [u8; 32],
-    amount: u64,
-    fee: u64,
-    memo: u64,
-    created_at_time: u64,
-}
-
 fn verify_block(
     bytes: &[u8],
     intent: &OperatorMintIntentRecord,
     index: u64,
+    maximum_bytes: usize,
 ) -> Result<(), IcpReadError> {
-    let block = protobuf::Block::decode(bytes).map_err(|_| IcpReadError::UnsupportedBlock)?;
-    // Upstream emits canonical prost bytes. Round-trip equality rejects unknown
-    // fields, duplicate singular values, extensions and noncanonical encodings.
-    if block.encode_to_vec() != bytes || block.timestamp.is_none() {
-        return Err(IcpReadError::UnsupportedBlock);
-    }
-    match (&block.parent_hash, index) {
-        (None, 0) => {}
-        (Some(hash), 1..) if hash.value.len() == 32 => {}
-        _ => return Err(IcpReadError::UnsupportedBlock),
-    }
-    let transaction = block.transaction.ok_or(IcpReadError::UnsupportedBlock)?;
-    let send = transaction.send.ok_or(IcpReadError::UnsupportedBlock)?;
-    let actual = TransferFields {
-        from: send
-            .from
-            .ok_or(IcpReadError::UnsupportedBlock)?
-            .value
-            .try_into()
-            .map_err(|_| IcpReadError::TransferMismatch)?,
-        to: send
-            .to
-            .ok_or(IcpReadError::UnsupportedBlock)?
-            .value
-            .try_into()
-            .map_err(|_| IcpReadError::TransferMismatch)?,
-        amount: send.amount.ok_or(IcpReadError::UnsupportedBlock)?.value,
-        fee: send.fee.ok_or(IcpReadError::UnsupportedBlock)?.value,
-        memo: transaction
-            .memo
-            .ok_or(IcpReadError::UnsupportedBlock)?
-            .value,
-        created_at_time: transaction
-            .created_at_time
-            .ok_or(IcpReadError::UnsupportedBlock)?
-            .value,
-    };
-    let expected = TransferFields {
+    let actual = decode_transfer(bytes, index, maximum_bytes).map_err(|error| match error {
+        IcpBlockError::BudgetExceeded => IcpReadError::BudgetExceeded,
+        IcpBlockError::InvalidAccount => IcpReadError::TransferMismatch,
+        IcpBlockError::UnsupportedBlock => IcpReadError::UnsupportedBlock,
+    })?;
+    let expected = IcpTransferFields {
         from: account_identifier(intent.authority.operator, &[0; 32]),
         to: account_identifier(
             intent.authority.cmc,
             &principal_subaccount(intent.authority.operator),
         ),
-        amount: intent.amount_e8s,
-        fee: intent.transfer_fee_e8s,
+        amount_e8s: intent.amount_e8s,
+        fee_e8s: intent.transfer_fee_e8s,
         memo: MINT_MEMO,
-        created_at_time: intent.created_at_time_ns,
+        created_at_time_ns: intent.created_at_time_ns,
     };
     if actual != expected {
         return Err(IcpReadError::TransferMismatch);

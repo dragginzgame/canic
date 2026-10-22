@@ -33,6 +33,15 @@ meaning is family-specific.
 full canister ids, principal dimensions, and raw totals behind `--verbose`.
 `--json` preserves the raw metric payload shape.
 
+`--limit` bounds rows fetched per canister before `--nonzero` filters zero values.
+The CLI follows short server pages within that cap. Each JSON canister report
+includes `fetched` (before filtering), `total` (the latest observed server total)
+and `truncated` (`fetched < total`). Failed/unavailable queries have `total: null`,
+`fetched: 0` and `truncated: false`; their status identifies the failure.
+Text output warns about incomplete coverage even when filtering leaves no rows.
+Omitted rows may be nonzero: raise `--limit` to inspect more rows. Pages are live
+observations, so changing metrics between requests do not form an atomic snapshot.
+
 ## Query Perf Samples
 
 Query calls can update in-memory perf tables during the call, but those updates

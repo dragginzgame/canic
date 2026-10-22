@@ -13,7 +13,7 @@ use crate::{
     cli::defaults::{default_icp, local_environment},
     cli::globals::{internal_environment_arg, internal_icp_arg},
     cli::help::print_help_or_version,
-    version_text,
+    output, version_text,
 };
 use canic_host::{
     config_discovery::{ConfigDiscoveryError, discover_workspace_canic_config_choices},
@@ -260,7 +260,7 @@ fn status_fleet_row(fleet: &CurrentFleetSummary) -> StatusFleetRow {
 
 fn render_status_report(report: &StatusReport) -> String {
     let deployed = deployed_count(&report.fleets);
-    let mut lines = vec![
+    let headers = [
         format!(
             "Replica: {}",
             render_replica_status(&report.replica, &report.replica_port)
@@ -275,6 +275,7 @@ fn render_status_report(report: &StatusReport) -> String {
             report.canonical_network_id,
         ),
     ];
+    let mut lines = vec![output::render_terminal_lines(&headers)];
 
     if !report.apps.is_empty() {
         lines.push(String::new());

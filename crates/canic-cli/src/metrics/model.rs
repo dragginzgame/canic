@@ -37,6 +37,9 @@ pub(super) struct MetricsCanisterReport {
     pub(super) role: String,
     pub(super) canister_id: String,
     pub(super) status: MetricsCanisterStatus,
+    pub(super) total: Option<u64>,
+    pub(super) fetched: u64,
+    pub(super) truncated: bool,
     pub(super) entries: Vec<MetricEntry>,
     pub(super) error: Option<String>,
 }
@@ -63,6 +66,18 @@ impl MetricsCanisterStatus {
             Self::Unavailable => "unavailable",
         }
     }
+}
+
+///
+/// MetricsPage
+///
+/// CLI-owned rows with the total observed on the latest fetched page.
+///
+
+#[derive(Debug)]
+pub(super) struct MetricsPage {
+    pub(super) entries: Vec<MetricEntry>,
+    pub(super) total: u64,
 }
 
 ///

@@ -136,13 +136,14 @@ pub fn __render_runtime_log_line(topic: Option<Topic>, level: Level, message: &s
     let role = __canister_role_label();
     let topic_prefix = topic.map_or_else(String::new, |topic| format!("[{}] ", topic.as_str()));
 
-    format!(
-        "{}|{:^12}| {}{}",
-        level.ansi_label(),
-        role,
-        topic_prefix,
-        message
-    )
+    let label = match level {
+        Level::Debug => "DEBUG",
+        Level::Info => "INFO ",
+        Level::Ok => " OK  ",
+        Level::Warn => "WARN ",
+        Level::Error => "ERROR",
+    };
+    format!("{}|{:^12}| {}{}", label, role, topic_prefix, message)
 }
 
 #[doc(hidden)]
@@ -155,3 +156,27 @@ pub fn __canister_role_label() -> String {
 }
 
 pub use canic_contracts::log::Level;
+
+#[cfg(test)]
+mod tests {
+    use super::{__render_runtime_log_line, Level, Topic};
+
+    #[test]
+    fn replica_log_lines_are_plain_text_for_every_severity() {
+        for (level, label) in [
+            (Level::Debug, "DEBUG"),
+            (Level::Info, "INFO "),
+            (Level::Ok, " OK  "),
+            (Level::Warn, "WARN "),
+            (Level::Error, "ERROR"),
+        ] {
+            let line = __render_runtime_log_line(Some(Topic::Init), level, "canister marked READY");
+            assert!(!line.as_bytes().contains(&0x1b));
+            assert!(line.starts_with(&format!("{label}|")));
+            assert!(line.ends_with("| [Init] canister marked READY"));
+        }
+        let line = __render_runtime_log_line(None, Level::Ok, "upload complete");
+        assert!(!line.as_bytes().contains(&0x1b));
+        assert!(line.ends_with("| upload complete"));
+    }
+}

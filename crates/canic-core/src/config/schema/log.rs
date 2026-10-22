@@ -22,6 +22,9 @@ mod defaults {
 #[cfg(any(not(target_arch = "wasm32"), test))]
 pub const MAX_LOG_ENTRIES: u64 = 100_000;
 
+#[cfg(any(not(target_arch = "wasm32"), test))]
+const MAX_LOG_ENTRY_BYTES: u32 = 65_536;
+
 ///
 /// LogConfig
 ///
@@ -61,7 +64,48 @@ impl Validate for LogConfig {
                 self.max_entries, MAX_LOG_ENTRIES
             )));
         }
+        if self.max_entry_bytes > MAX_LOG_ENTRY_BYTES {
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "log.max_entry_bytes {} exceeds max {}",
+                self.max_entry_bytes, MAX_LOG_ENTRY_BYTES
+            )));
+        }
 
         Ok(())
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn log_message_size_accepts_defaults_and_exact_boundaries() {
+        assert!(LogConfig::default().validate().is_ok());
+        for max_entry_bytes in [0, MAX_LOG_ENTRY_BYTES] {
+            let config = LogConfig {
+                max_entry_bytes,
+                ..LogConfig::default()
+            };
+            assert!(config.validate().is_ok());
+        }
+    }
+
+    #[test]
+    fn log_message_size_rejects_values_above_the_bound() {
+        for max_entry_bytes in [MAX_LOG_ENTRY_BYTES + 1, u32::MAX] {
+            let config = LogConfig {
+                max_entry_bytes,
+                ..LogConfig::default()
+            };
+            assert!(matches!(
+                config.validate(),
+                Err(ConfigSchemaError::ValidationError(_))
+            ));
+        }
     }
 }

@@ -14,7 +14,6 @@ pub fn post_upgrade_root_canister_before_bootstrap(
     runtime_authority: RoleRuntimeAuthority,
     config: ConfigModel,
     config_source: &str,
-    config_path: &str,
 ) -> bool {
     crate::api::timer::TimerApi::initialize_root_runtime_required();
     LifecycleMetricsApi::record_runtime(
@@ -31,7 +30,7 @@ pub fn post_upgrade_root_canister_before_bootstrap(
         );
         lifecycle_trap(
             LifecyclePhase::PostUpgrade,
-            format!("config init failed (config_path={config_path}): {err}"),
+            format!("embedded config init failed: {err}"),
         );
     }
     if let Err(err) =

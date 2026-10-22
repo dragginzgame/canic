@@ -115,7 +115,7 @@ idea_index="$design_ideas/README.md"
 require_files "$GUARD_LABEL" "$idea_index"
 
 actual_idea_topics="$(
-    find "$design_ideas" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort
+    find "$design_ideas" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort
 )"
 indexed_idea_topics="$(
     sed -n 's/^- `\([^`]*\)\/`$/\1/p' "$idea_index" |

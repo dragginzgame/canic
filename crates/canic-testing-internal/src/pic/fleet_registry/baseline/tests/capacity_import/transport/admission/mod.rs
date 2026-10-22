@@ -33,16 +33,8 @@ pub(super) fn review(
         .unwrap();
     pic.set_controllers(coordinator, Some(operator), vec![operator])
         .unwrap();
-    let registry: Result<CoordinatorRegistryResponse, Error> = ic_testkit::pic::query_candid_args(
-        pic,
-        coordinator,
-        operator,
-        canic::protocol::CANIC_COORDINATOR_REGISTRY,
-        (CoordinatorRegistryRequest::Registry,),
-        canic::testing::CANDID_REPLY_LIMITS,
-    )
-    .map(|(reply,)| reply)
-    .unwrap();
+    let registry: Result<CoordinatorRegistryResponse, Error> =
+        registry_as_operator(pic, coordinator, operator);
     let CoordinatorRegistryResponse::Registry(registry) = registry.unwrap();
     let infrastructure = [
         (
@@ -110,5 +102,30 @@ pub(super) fn review(
             declarations_sha256,
         },
     )
+    .unwrap()
+}
+
+fn registry_as_operator(
+    pic: &PocketIc,
+    coordinator: Principal,
+    operator: Principal,
+) -> Result<CoordinatorRegistryResponse, Error> {
+    (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+        let request_bytes =
+            ic_platform::candid::contract::encode_args((CoordinatorRegistryRequest::Registry,))?;
+        let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+            (pic).query_call(
+                coordinator,
+                operator,
+                canic::protocol::CANIC_COORDINATOR_REGISTRY,
+                request_bytes,
+            )
+        })
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+        .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+        ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+            .map_err(Into::into)
+    })()
+    .map(|(reply,)| reply)
     .unwrap()
 }

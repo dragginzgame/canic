@@ -1,6 +1,7 @@
 mod command;
 mod options;
 mod render;
+mod workspace;
 
 #[cfg(test)]
 mod tests;
@@ -86,6 +87,11 @@ pub enum AppCommandError {
 
     #[error(transparent)]
     Io(#[from] io::Error),
+
+    #[error(
+        "App directory removal is incomplete at {path}: {source}; workspace membership is updated"
+    )]
+    DeleteIncomplete { path: PathBuf, source: io::Error },
 
     #[error(transparent)]
     Json(#[from] serde_json::Error),
@@ -379,15 +385,22 @@ where
     let options = DeleteAppOptions::parse(args)?;
     let workspace_root = current_canic_workspace_root()?;
     let target = delete_target_dir(&workspace_root, &options.app)?;
+    let membership = workspace::WorkspaceRemoval::plan(&workspace_root, &target)?;
     if options.dry_run {
         println!(
             "{}",
-            render_planned_delete(&workspace_root, &options.app, &target)
+            render_planned_delete(&workspace_root, &options.app, &target, &membership.removed)
         );
         return Ok(());
     }
-    confirm_delete_app(&options.app, &target, io::stdin().lock(), io::stdout())?;
-    fs::remove_dir_all(&target)?;
+    confirm_delete_app(
+        &options.app,
+        &target,
+        &membership.removed,
+        io::stdin().lock(),
+        io::stdout(),
+    )?;
+    membership.delete()?;
 
     println!("Deleted Canic app:");
     println!("  app: {}", options.app);
@@ -466,6 +479,7 @@ fn is_safe_delete_target(workspace_root: &Path, target: &Path) -> bool {
 fn confirm_delete_app<R, W>(
     app: &str,
     target: &Path,
+    removed_members: &[String],
     mut reader: R,
     mut writer: W,
 ) -> Result<(), AppCommandError>
@@ -476,6 +490,9 @@ where
     writeln!(writer, "Delete Canic app?")?;
     writeln!(writer, "  app: {app}")?;
     writeln!(writer, "  target: {}", target.display())?;
+    for member in removed_members {
+        writeln!(writer, "  remove workspace member: {member}")?;
+    }
     writeln!(writer, "This will permanently remove the app directory.")?;
     write!(writer, "Type the app name to confirm: ")?;
     writer.flush()?;

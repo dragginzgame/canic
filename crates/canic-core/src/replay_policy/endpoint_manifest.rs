@@ -37,6 +37,8 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         None,
     ),
     query_read_only(CANIC_OBSERVABILITY),
+    query_read_only("icrc10_supported_standards"),
+    query_read_only("icrc21_canister_call_consent_message"),
     update_command_dispatch(
         CANIC_ROOT_COMMAND,
         command_kind("role.command.v1"),

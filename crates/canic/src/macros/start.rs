@@ -395,13 +395,11 @@ macro_rules! start_fleet_root {
             $crate::__internal::core::bootstrap::compiled::RoleRuntimeAuthority,
             $crate::__internal::core::bootstrap::compiled::ConfigModel,
             &'static str,
-            &'static str,
         ) {
             let runtime_authority = include!(env!("CANIC_ROLE_RUNTIME_AUTHORITY_PATH"));
             let config_model = include!(env!("CANIC_CONFIG_MODEL_PATH"));
             let config_source = include_str!(env!("CANIC_CONFIG_SOURCE_PATH"));
-            let config_path = env!("CANIC_CONFIG_ORIGIN_PATH");
-            (runtime_authority, config_model, config_source, config_path)
+            (runtime_authority, config_model, config_source)
         }
 
         #[$crate::__internal::__canic_lifecycle(init $(, decode = $argument_limits)?)]
@@ -409,7 +407,7 @@ macro_rules! start_fleet_root {
             $crate::__canic_bootstrap_memory!();
             #[cfg(any(canic_capability_observability_metrics, canic_capability_observability_history))]
             $crate::__internal::core::api::public_status::PublicStatusApi::enable_sampling();
-            let (runtime_authority, config, config_source, config_path) = __canic_compiled_config();
+            let (runtime_authority, config, config_source) = __canic_compiled_config();
 
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::init_root_canister_before_bootstrap(
                 args,
@@ -417,7 +415,6 @@ macro_rules! start_fleet_root {
                 runtime_authority,
                 config,
                 config_source,
-                config_path,
             );
 
         }
@@ -427,14 +424,13 @@ macro_rules! start_fleet_root {
             $crate::__canic_bootstrap_memory!();
             #[cfg(any(canic_capability_observability_metrics, canic_capability_observability_history))]
             $crate::__internal::core::api::public_status::PublicStatusApi::enable_sampling();
-            let (runtime_authority, config, config_source, config_path) = __canic_compiled_config();
+            let (runtime_authority, config, config_source) = __canic_compiled_config();
 
             let active = $crate::__internal::control_plane::api::lifecycle::LifecycleApi::post_upgrade_root_canister_before_bootstrap(
                 __CANIC_RELEASE_BUILD_ID.read().as_deref(),
                 runtime_authority,
                 config,
                 config_source,
-                config_path,
             );
 
             if active {
@@ -774,6 +770,7 @@ macro_rules! start_fleet_coordinator {
 
         $crate::__canic_start_ingress_payload_inspect!(fleet_coordinator);
         $crate::canic_emit_fleet_coordinator_endpoints!();
+        $crate::canic_emit_icrc_standards_endpoints!();
     };
 }
 

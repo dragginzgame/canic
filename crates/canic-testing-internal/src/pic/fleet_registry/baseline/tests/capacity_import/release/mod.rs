@@ -16,14 +16,22 @@ pub(super) fn assert_census(
         .map(|source| pic.cycle_balance(source.canister_id))
         .collect::<Vec<_>>();
     let read = |caller| -> Result<StatusResponse, Error> {
-        ic_testkit::pic::query_candid_args(
-            pic,
-            root,
-            caller,
-            canic::protocol::CANIC_ROOT_STATUS,
-            (StatusRequest::PoolRelease,),
-            canic::testing::CANDID_REPLY_LIMITS,
-        )
+        (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
+            let request_bytes =
+                ic_platform::candid::contract::encode_args((StatusRequest::PoolRelease,))?;
+            let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
+                (pic).query_call(
+                    root,
+                    caller,
+                    canic::protocol::CANIC_ROOT_STATUS,
+                    request_bytes,
+                )
+            })
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Operation)?
+            .map_err(ic_testkit::pic::PocketIcCallFailure::Rejected)?;
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .map_err(Into::into)
+        })()
         .map(|(reply,)| reply)
         .unwrap()
     };

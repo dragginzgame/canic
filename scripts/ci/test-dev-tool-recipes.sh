@@ -158,9 +158,10 @@ set -euo pipefail
 [[ "$5" == --lockfile && "$6" == "$PWD/Cargo.lock" ]] || exit 1
 [[ "$7" == --bin && "$8" == ic-testkit-server ]] || exit 1
 [[ "$9" == --profile && "${10}" == release ]] || exit 1
-[[ $# == 10 || ( $# == 11 && "${11}" == --check ) ]] || exit 1
+[[ "${11}" == --features && "${12}" == cli ]] || exit 1
+[[ $# == 12 || ( $# == 13 && "${13}" == --check ) ]] || exit 1
 selected_version=$(yq -p toml -o json -I 0 '.' "$6" | jq -r '.package[] | select(.name == "ic-testkit") | .version')
-printf '%s\n' "$selected_version ${11:-setup}" >> "$INSTALL_SELECTION"
+printf '%s\n' "$selected_version ${13:-setup}" >> "$INSTALL_SELECTION"
 printf '%s\n' "$PWD/.tools/rust/fixture-testkit/installed/bin/testkit-runner"
 SELECT
 : > "$INSTALL_SELECTION"

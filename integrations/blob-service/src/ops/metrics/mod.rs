@@ -1,6 +1,7 @@
 //! Map the service's maintained accounting into Canic's bounded public cache.
 //!
-//! No scans, remote calls, continuity mutations or independent accounting.
+//! No scans, remote calls or independent accounting. Observe the current platform
+//! version through Blob's owner before reporting its recovery fence.
 
 use crate::ops::HOST;
 use canic::{
@@ -13,10 +14,11 @@ use canic::{
 
 /// Read only this service's bounded metrics; the host composes the sole sampler.
 pub fn sample() -> Result<Vec<PublicMetric>, Error> {
-    HOST.with_borrow(|host| {
+    HOST.with_borrow_mut(|host| {
         let host = host
-            .as_ref()
+            .as_mut()
             .ok_or_else(|| Error::from_registered(codes::STORAGE_INACTIVE))?;
+        host.observe_platform_version(ic_platform::cdk::api::canister_version());
         let uploads = &host.stores().uploads;
         let usage = uploads
             .usage()

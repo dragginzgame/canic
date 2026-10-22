@@ -89,9 +89,18 @@ the same recovery guarantee. Current Canic jobs are classified as follows:
 | Runtime-log retention | retained `Once` | Advisory cleanup; lifecycle restoration or a later append reconstructs its exact deadline |
 | Intent cleanup | retained `Once` | Durable expiry indexes reconstruct demand, but trap/exhaustion liveness is not yet qualified |
 | Root issuer renewal | domain-owned retained `Once` | Declared lazily from enabled issuer configuration and current proof demand; its durable attempt lease admits watchdog takeover after five minutes while the auth domain's delegation batch and proof state preserve exact work |
-| Automatic cycle top-up | domain-owned retained `Once` | Declared only for an `AutomaticTopup` capability and current configuration; its durable attempt lease and exact retry operation ID are carried into the replay-protected parent funding request |
+| Root cycle funding | domain-owned retained `Once` | Root funding configuration selects Coordinator requests independently of the child `AutomaticTopup` capability; a durable attempt lease and retained funding request preserve recovery and exact retry |
+| Child automatic cycle top-up | domain-owned retained `Once` | A component `topup` policy compiles the `AutomaticTopup` capability; its durable attempt lease and exact retry operation ID are carried into the replay-protected parent funding request |
 | Placement-receipt acknowledgement | domain-owned retained `Once` | Declared only while the durable terminal-receipt index contains work; its attempt lease surrounds acknowledgement work whose receipt records retain each exact operation ID |
 | Root Canister-pool maintenance | retained `AfterCompletion` | Durable attempt lease around journaled maintenance; the native watchdog requests takeover after expiry while pool journals preserve exact external effects |
+
+Both funding paths use `canic/cycles/topup`. Root derives its threshold and
+cooldown from protected Root funding configuration, with current Fleet funding
+policy controlling new requests. It can therefore report this timer as scheduled
+while its Overview omits `AutomaticTopup` and its App config has no `topup` table.
+Child top-up instead uses the component's `topup` threshold and amount to request
+parent funding. See the [cycle workflow](../../../crates/canic-core/src/workflow/runtime/cycles/mod.rs)
+and [capability derivation](../../../crates/canic-core/src/role_contract/policy.rs).
 
 One retained `canic/async_job_recovery/watchdog` is pre-armed before it
 dispatches fallible work and advances every 30 seconds independently of the

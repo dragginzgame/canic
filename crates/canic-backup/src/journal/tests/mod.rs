@@ -273,3 +273,34 @@ fn journal_round_trips_through_json() {
 
     decoded.validate().expect("decoded journal should validate");
 }
+
+#[test]
+fn artifact_paths_match_persistence_admission() {
+    let root = std::path::Path::new("backup");
+    for (path, admitted) in [
+        ("/absolute", false),
+        ("../escape", false),
+        ("artifacts/../escape", false),
+        ("./artifacts/root", false),
+        (".", false),
+        ("artifact\0name", false),
+        ("artifacts/root", true),
+        ("nested/資料 snapshot", true),
+    ] {
+        let mut record = valid_journal();
+        record.artifacts[0].artifact_path = path.to_string();
+        let result = record.validate();
+        assert_eq!(result.is_ok(), admitted, "{path:?}");
+        assert_eq!(
+            crate::persistence::resolve_backup_artifact_path(root, path).is_some(),
+            admitted,
+            "{path:?}"
+        );
+        if !admitted {
+            std::assert_matches!(
+                result,
+                Err(JournalValidationError::InvalidArtifactPath { .. })
+            );
+        }
+    }
+}
