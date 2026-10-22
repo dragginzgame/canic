@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - Adopt Shared Tooling 0.26.6 for Cargo graph checks and retained failure evidence.
 
+- Delegate generic CI/release audit procedure to the adopted Shared method,
+  retaining Canic artifact custody, effect authority and historical evidence
+  ([#618 — Adopt shared CI/release audit guidance](https://github.com/dragginzgame/canic/issues/618)).
+
 - Align published IC dependency minimums and both Blob consumer locks with
   Auth 0.14.3 and Platform 0.6.7. Adopt Backup 0.38, Query 0.68 and
   Host/Build/Testkit 0.64 together.

@@ -1,98 +1,65 @@
-# Audit: CI And Release Integrity
+# Audit overlay: Canic CI and release integrity
 
 ## Method Contract
 
 - Audit ID: `CANIC-RELEASE-INTEGRITY-001`
-- Method version: `2`
+- Method version: `3`
 - Disposition: `retain`
-- Owner: CI trust, secret exposure, artifact provenance/checksums, and
-  supported host/target release matrix
+- Owner: Canic release authority, artifact custody and declared host/target proof
 - Kind/profile: release `invariant` plus named manual review
-- Trace mode: `code_trace`; package/release probes execute only in disposable
-  local or CI environments
-- Cost/runtime: medium/high; 45-120 minutes excluding package builds
-- Prerequisites: Git, ripgrep, actionlint, current workflow files, release
-  scripts and package metadata
-- False-positive boundary: example placeholders and documented test fixtures
-  are classified separately from usable credentials or untrusted execution
-- Shared contract: [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
+- Trace mode: `code_trace`; effectful probes require separate execution authority
+- Prerequisites: selected scope/source, current workflows and release/package inputs
+- False-positive boundary: examples and inert fixtures are not usable credentials
+- Shared contract: [common audit contract](../../../../audits/README.md)
+- Shared method: [CI and release integrity](../../../../audits/ci-release-integrity.md)
+- Snapshot revision: `4cb9bc907154225a3f7e4c33fd8d75fbeaa125c8`
 
-## Purpose
+Apply the shared method for trust traces, artifact-promotion proof, host evidence,
+findings and verdicts. This overlay retains Canic's scope and product obligations;
+it adds no release gate or authority to install, publish or deploy.
 
-Prove that CI and release automation use least authority, immutable external
-inputs, bounded secrets, attributable artifacts, and an explicit supported
-host/target matrix.
+## Canic entrypoints and artifact custody
 
-This method audits the automation contract. It does not authorize release
-version changes, commits, tags, pushes, publication, or deployment.
+Trace the selected paths through [CI](../../../../.github/workflows/ci.yml),
+[security](../../../../.github/workflows/security.yml), [Make](../../../../Makefile),
+the [release adapter](../../../../scripts/release/adapter.sh) and
+[workspace publication](../../../../scripts/ci/publish-workspace.sh).
+[CI/deployment governance](../../../governance/ci-deployment.md) owns the actual
+validation, package, release and effect boundaries; audit guidance cannot replace
+those commands or their release receipts.
 
-## Invariants
+Include generated Fleet Root/Store/Coordinator and application/component Wasm,
+selected interface metadata, native Host/CLI outputs and Cargo packages when the
+chosen path promotes them. Trace raw, shrunk and compressed bytes to the artifact
+actually admitted by the release index, Wasm Store, package upload or Fleet
+installation. Keep source/lock/toolchain/features, checksums and destination bound
+to that exact selection; a matching artifact name is insufficient.
 
-- Workflow permissions are absent or least-privilege for each job.
-- Third-party actions are pinned to immutable commit identities; mutable tags
-  are findings unless the action is repository-owned and locally resolved.
-- Pull-request or untrusted inputs cannot execute with production/release
-  credentials.
-- Secret values, tokens, private keys, and sensitive environment material are
-  neither committed nor retained in audit/build logs.
-- Published artifacts have source/tool/feature provenance and cryptographic
-  checksums before promotion.
-- Supported host and target combinations are declared and exercised or
-  explicitly excluded.
-- Human-owned versioning, staging, tag, push, publish, and deployment
-  boundaries remain enforced.
+Preserve credential/log custody, controller/network selection, explicit spending
+and publication authority, intent-before-effect records, uncertain-result
+reconciliation and retained bytes across same-release retries. Canic's pre-1.0
+reinstall and cycle-conservation rules remain owned by [AGENTS.md](../../../../AGENTS.md).
+Do not infer cross-release compatibility or permission to repeat a paid effect.
 
-## Scope
+## Canic evidence and historical identity
 
-- `.github/workflows/`, action configuration, and workflow permissions;
-- release/package/install/build scripts and Make targets;
-- Cargo publishing metadata, install URLs, release index, checksums, and
-  provenance output;
-- secret-handling inputs and log/report retention paths; and
-- Rust host, Wasm target, external tools, and supported execution matrix.
+Record the declared Linux/macOS architecture and Wasm/native target cells from
+the selected workflows and product contracts, distinguishing local, hosted,
+maintainer-only and unsupported paths. Missing required proof remains a gap;
+this overlay changes no supported-host claim or product qualification gate.
+Build reproducibility and measured instruction/Wasm evidence keep their existing
+method owners.
 
-Historical workflows and reports are evidence only, not active authority.
+Retain Canic's run/source/snapshot/method identities, selected proof commands,
+unreviewed boundaries and report destination under
+`docs/audits/reports/YYYY-MM/YYYY-MM-DD/`. Local manual-review, P0/P1 review,
+retention and release-line closeout obligations remain in
+[AUDIT-HOWTO.md](../../AUDIT-HOWTO.md) and [META-AUDIT.md](../../META-AUDIT.md).
+Use shared authority/input and artifact/host proof instead of a second generic
+checklist or report template.
 
-## Required Checks
-
-```bash
-actionlint
-rg -n '^permissions:|^[[:space:]]+permissions:|uses:|pull_request_target|workflow_run|secrets\.|GITHUB_TOKEN' .github -g '*.yml' -g '*.yaml'
-rg -n 'curl|wget|sha256|checksum|provenance|artifact|cargo publish|git tag|git push' Makefile scripts .github docs/governance -g '*.sh' -g '*.yml' -g '*.yaml' -g '*.md' -g 'Makefile'
-```
-
-Review every external `uses:` value for immutable pinning and every job's
-effective permission/secret boundary. Review downloaded tools for checksum or
-equivalent integrity verification.
-
-## Artifact And Matrix Proof
-
-Record:
-
-- source commit/tree, lockfile/toolchain/features, builder environment, and
-  command for every promoted artifact class;
-- raw/shrunk/compressed/package checksums and their publication boundary;
-- current host OS/architecture assumptions;
-- Wasm and native target support;
-- installed external tool versions; and
-- which matrix cell is local, CI, maintainer-only, or unsupported.
-
-An undocumented or unvalidated claimed support cell is an evidence gap. An
-artifact promoted without attributable source identity or checksum is a
-failure.
-
-## Fixtures And Boundaries
-
-- Positive: pinned workflow/action and checksum-bound artifact path.
-- Rejection: untrusted PR input cannot reach release secrets or publication.
-- Boundary: maintainer-only release actions stay outside automated agent
-  authority.
-- Regression: mutable action tag, unchecked download, or retained credential
-  pattern is detected and fails review.
-
-## Required Report
-
-Include run identity, workflow permission/action table, credential-handling review,
-download/tool integrity table, artifact provenance/checksum map, host/target
-matrix, human authority boundaries, findings, unreviewed boundaries, and
-verdict.
+The [exact v2 definition](https://github.com/dragginzgame/canic/blob/cf2d3d1fba84a00a76cdbc541ae7e68fe36e9bb5/docs/audits/recurring/system/release-integrity.md)
+and its fingerprint remain historical; prior reports are unchanged. New runs
+identify v3 and the recorded snapshot. Affected comparisons are
+`N/A (method change)`. This delegation does not prove a defect in earlier results
+or execute a new product audit.
