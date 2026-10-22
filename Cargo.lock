@@ -545,7 +545,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.1",
  "thiserror 2.0.18",
  "toml 1.1.8+spec-1.1.0",
 ]
@@ -562,7 +562,7 @@ dependencies = [
  "ic-timers",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.1",
  "thiserror 2.0.18",
  "toml 1.1.8+spec-1.1.0",
 ]
@@ -590,7 +590,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_path_to_error",
- "sha2 0.10.9",
+ "sha2 0.11.1",
  "syn 3.0.9",
  "thiserror 2.0.18",
  "toml 1.1.8+spec-1.1.0",
