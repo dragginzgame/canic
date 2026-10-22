@@ -28,6 +28,16 @@ instruction/Wasm methods remain independent property owners.
 | Module structure and surface hardening | [Module hardening](../../audits/module-surface-hardening.md) | Facade/generated consumers, visibility, runtime shape and retained recovery |
 | Finding-backed cleanup | [Module cleanup](../../audits/module-cleanup.md) | Targeted proofs, generator propagation, changelog and complete deletion inventory |
 
+## Shared CI/release method ownership
+
+[Release integrity v3](recurring/system/release-integrity.md) uses the
+[shared CI/release method](../../audits/ci-release-integrity.md) at reviewed
+snapshot `4cb9bc907154225a3f7e4c33fd8d75fbeaa125c8`. Shared owns generic trust,
+promotion, host-proof and finding mechanics. Canic retains actual release
+entrypoints, artifact classes, effect/recovery authority and product evidence.
+Historical v2 reports retain their identity; affected comparisons are
+`N/A (method change)`.
+
 ## Mandatory Trace Protocol
 
 [CANIC-MANDATORY-TRACE-001/v1](mandatory-trace-protocol.md) owns the common
@@ -73,7 +83,7 @@ retained-method owner below.
 | `wasm-footprint.md` | `revise` | `CANIC-WASM-001/v6` | measured/trend | Canonical optimized release/debug Wasm metrics, two-clean-build determinism, and structural retained-size evidence; run after Wasm-affecting changes or explicit size review. |
 | `workflow-purity.md` | `merge` | `CANIC-LAYERING-001/v2` | invariant | Layering owns workflow responsibility, records, conversions, effects, and typed error placement. |
 | `build-integrity.md` | `retain` | `CANIC-BUILD-INTEGRITY-001/v2` | invariant/measured | Build scripts, macros, generated code, unsafe inventory, and reproducibility; run before closeout and after build-pipeline changes. |
-| `release-integrity.md` | `retain` | `CANIC-RELEASE-INTEGRITY-001/v2` | invariant/manual | CI permissions, action pinning, credential handling, artifact provenance/checksums, host/target matrix; run before closeout and after CI/release changes. |
+| `release-integrity.md` | `retain` | `CANIC-RELEASE-INTEGRITY-001/v3` | invariant/manual | CI permissions, action pinning, credential handling, artifact provenance/checksums, host/target matrix; run before closeout and after CI/release changes. |
 
 ## Authentication Invariant Methods
 
