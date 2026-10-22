@@ -7,8 +7,8 @@ use canic_contracts::dto::wire::projection::current_inventory::{
     ChildrenStatusResponse as CanisterStatusResponse,
 };
 use canic_testing_internal::pic::{CanicPicExt, report_canister_diagnostics};
+use ic_platform::pocket_ic::PocketIc;
 use ic_platform::principal::ExternalPrincipal as Principal;
-use ic_testkit::pic::PocketIc;
 use std::time::Duration;
 
 const TC: u128 = 1_000_000_000_000;

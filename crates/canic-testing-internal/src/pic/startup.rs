@@ -1,7 +1,10 @@
 //! Bounded PocketIC server startup for repository-owned test journeys.
 
-use ic_testkit::pic::{PocketIc, PocketIcBuilder, PocketIcStartupConfig, PocketIcStartupError};
 use std::time::Duration;
+use {
+    ic_platform::pocket_ic::{PocketIc, PocketIcBuilder},
+    ic_testkit::pic::{PocketIcStartupConfig, PocketIcStartupError},
+};
 
 const POCKET_IC_STARTUP_TIMEOUT: Duration = Duration::from_secs(30);
 const POCKET_IC_SERVER_URL_ENV: &str = "IC_TESTKIT_POCKET_IC_URL";

@@ -2,7 +2,7 @@ use ic_platform::principal::ExternalPrincipal as Principal;
 
 use canic::{Error, dto::auth::DelegatedRoleGrant, ids::CanisterRole};
 
-use ic_testkit::pic::PocketIc;
+use ic_platform::pocket_ic::PocketIc;
 
 /// Create one user shard through the reference `user_hub` path.
 ///

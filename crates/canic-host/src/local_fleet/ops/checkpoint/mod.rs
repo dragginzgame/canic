@@ -1,8 +1,8 @@
 //! Bounded checkpoint acknowledgement and exact owned-child cleanup.
 
 use crate::local_fleet::{LocalFleetError, ops::runtime::guarded};
-use ic_testkit::{pic::PocketIcManagedServer, pocket_ic::PocketIc};
 use std::{sync::mpsc, time::Duration};
+use {ic_platform::pocket_ic::PocketIc, ic_testkit::pic::PocketIcManagedServer};
 
 /// Save the instance and confirm its terminal server status before recording success.
 pub fn save(

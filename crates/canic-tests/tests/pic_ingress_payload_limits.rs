@@ -13,12 +13,15 @@ use ic_platform::{
     candid::contract::{CandidType, encode_args, encode_one},
     principal::ExternalPrincipal as Principal,
 };
-use ic_testkit::pic::{
-    CachedPocketIcBaseline, CachedPocketIcBaselinePool, CachedPocketIcBaselinePoolGuard,
-    CanisterInstallExt, ErrorCode, RejectCode, RetryPolicy, SnapshotRestoreFunding,
-    StandaloneCanisterFixture, StandaloneCanisterRecipe,
-};
 use serde::Deserialize;
+use {
+    ic_platform::pocket_ic::{ErrorCode, RejectCode},
+    ic_testkit::pic::{
+        CachedPocketIcBaseline, CachedPocketIcBaselinePool, CachedPocketIcBaselinePoolGuard,
+        CanisterInstallExt, RetryPolicy, SnapshotRestoreFunding, StandaloneCanisterFixture,
+        StandaloneCanisterRecipe,
+    },
+};
 
 const PROBE_CRATE: &str = "payload_limit_probe";
 const PROBE_ROLE: CanisterRole = CanisterRole::new("test");

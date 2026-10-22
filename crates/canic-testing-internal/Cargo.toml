@@ -34,8 +34,8 @@ ic-build.workspace = true
 ic-host-artifacts = { workspace = true, features = ["gzip"] }
 ic-host-fs = { workspace = true }
 ic-host-process.workspace = true
-ic-platform = { workspace = true, features = ["candid", "candid-parser"] }
-ic-testkit = { workspace = true }
+ic-platform = { workspace = true, features = ["pocket-ic", "candid", "candid-parser"] }
+ic-testkit = { workspace = true, features = ["reply-fixtures"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }

@@ -408,7 +408,6 @@ fn installation(service: Principal) -> ServiceInstallationInput {
             },
         },
         project: "canic-production-root-blob".into(),
-        completion_verifier: actor(11).into(),
     }
 }
 

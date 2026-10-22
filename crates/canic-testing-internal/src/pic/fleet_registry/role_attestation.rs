@@ -16,8 +16,8 @@ use canic::{
     ids::{CanisterRole, ComponentBinding},
     protocol::CANIC_ROOT_COMMAND,
 };
+use ic_platform::pocket_ic::PocketIc;
 use ic_platform::principal::ExternalPrincipal as Principal;
-use ic_testkit::pic::PocketIc;
 use std::time::Duration;
 
 use canic_contracts::dto::wire::projection::fixture_role_attestation::RootCommand;

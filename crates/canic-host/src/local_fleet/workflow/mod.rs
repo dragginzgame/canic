@@ -10,11 +10,11 @@ use crate::local_fleet::{
     policy,
     view::LocalFleetView,
 };
-use ic_testkit::{pic::PocketIcManagedServer, pocket_ic::PocketIc};
 use std::{
     fs::File,
     path::{Path, PathBuf},
 };
+use {ic_platform::pocket_ic::PocketIc, ic_testkit::pic::PocketIcManagedServer};
 
 /// Exclusive public developer harness. Drop flushes the instance before terminating its server.
 pub struct LocalFleetSession {

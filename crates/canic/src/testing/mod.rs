@@ -12,7 +12,6 @@ use std::time::Duration;
 
 use ic_testkit::pic::PocketIcStartupConfig;
 
-pub use ic_testkit::pic::{CanisterInstallExt, PocketIc, PocketIcBuilder};
 pub use managed_app::{
     ManagedAppFixture, ManagedAppQualificationError, ManagedAppQualificationInput,
     StandaloneAppFixture, install_managed_app, install_standalone_app,
@@ -21,6 +20,10 @@ pub use managed_component_group::{
     ManagedApplicationInit, ManagedComponentGroupFixture, ManagedComponentGroupQualificationError,
     ManagedComponentGroupQualificationInput, ManagedComponentNode,
     ManagedRoleQualificationArtifact, install_managed_component_group,
+};
+pub use {
+    ic_platform::pocket_ic::{PocketIc, PocketIcBuilder},
+    ic_testkit::pic::CanisterInstallExt,
 };
 
 /// Borrow the governed caller's server; never discover or launch a hidden child.

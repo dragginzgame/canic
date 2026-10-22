@@ -14,7 +14,7 @@ use canic_contracts::dto::wire::projection::capacity_import::Response;
 use canic_contracts::dto::wire::projection::fixture_baseline_capacity_import::StatusRequest;
 use canic_contracts::dto::wire::projection::fixture_baseline_capacity_import::StatusResponse;
 use canic_core::control_plane_support::error::InternalError;
-use ic_testkit::pocket_ic::common::rest::BlobCompression;
+use ic_platform::pocket_ic::common::rest::BlobCompression;
 
 pub(super) mod reset;
 mod transport;
@@ -181,7 +181,7 @@ fn retained_capacity_journey(root_owned: bool) {
         pic.canister_status(source, Some(operator))
             .unwrap_err()
             .error_code,
-        ic_testkit::pic::ErrorCode::CanisterStatusAccessDenied
+        ic_platform::pocket_ic::ErrorCode::CanisterStatusAccessDenied
     );
     let ready = command(
         pic,

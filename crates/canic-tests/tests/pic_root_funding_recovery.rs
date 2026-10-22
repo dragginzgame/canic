@@ -7,11 +7,15 @@ use ic_platform::{
     candid::contract::{CandidType, encode_one},
     principal::ExternalPrincipal as Principal,
 };
-use ic_testkit::pic::{InstallSpec, PocketIc, PocketIcBuilder, prelude::*};
 use serde::Deserialize;
 use std::{
     path::{Path, PathBuf},
     sync::OnceLock,
+};
+use {
+    ic_platform::pocket_ic::{PocketIc, PocketIcBuilder},
+    ic_testkit::pic::InstallSpec,
+    ic_testkit::pic::prelude::*,
 };
 
 const CANISTERS: [&str; 1] = ["root_funding_probe"];

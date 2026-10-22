@@ -3,7 +3,7 @@
 use super::*;
 use canic_contracts::ids::CanonicalNetworkId;
 use ic_platform::agent::BasicIdentity;
-use ic_testkit::pocket_ic::PocketIcBuilder;
+use ic_platform::pocket_ic::PocketIcBuilder;
 use sha2_host::{Digest, Sha256};
 use std::{fs, process::Command, time::SystemTime};
 

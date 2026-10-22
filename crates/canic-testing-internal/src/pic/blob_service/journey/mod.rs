@@ -1,6 +1,7 @@
-//! Mounted protocol qualification with controlled content and verifier identity.
+//! Mounted trusted-registration qualification with controlled content.
 //! This does not fetch provider bytes or qualify deployed browser delivery.
 
+mod inspection;
 mod refusals;
 pub(super) use refusals::qualify as qualify_refusals;
 
@@ -20,10 +21,6 @@ use contracts::{
                 UploadRevocationResponse,
             },
             certificate::CaffeineUploadCertificateResponse,
-            completion::{
-                UploadAttestationFailure, UploadAttestationLookup, UploadAttestationMutation,
-                UploadAttestationReceipt, UploadAttestationRequest, UploadAttestationResponse,
-            },
             manifest::{
                 UploadManifestDeclaration, UploadManifestFailure, UploadManifestHeader,
                 UploadManifestMutation, UploadManifestRequest,
@@ -35,8 +32,8 @@ use contracts::{
         manifest::builder::{CaffeineBuiltManifest, CaffeineManifestBuilder},
     },
 };
+use ic_platform::pocket_ic::PocketIc;
 use ic_platform::principal::ExternalPrincipal as Principal;
-use ic_testkit::pic::PocketIc;
 use std::num::{NonZeroU64, NonZeroUsize};
 
 fn manifest(byte: u8) -> CaffeineBuiltManifest {
@@ -93,11 +90,12 @@ pub(super) fn qualify(
     pic: &PocketIc,
     permission: UploadAdmissionRequest,
     restore: impl Fn(),
-) -> UploadAttestationReceipt {
+) -> UploadAdmissionRequest {
     let service = permission.upload.service.into();
     let uploader = permission.uploader.into();
     let built = manifest(u8::try_from(permission.upload.upload).unwrap());
     let input = preparation(permission);
+    inspection::manifest(pic, permission, false);
     let denied: Result<UploadManifestMutation, UploadManifestFailure> = update(
         pic,
         service,
@@ -114,44 +112,19 @@ pub(super) fn qualify(
     let prepared: Result<UploadManifestMutation, UploadManifestFailure> =
         update(pic, service, uploader, "blob_prepare_upload", &input);
     assert!(prepared.unwrap().changed);
+    inspection::manifest(pic, permission, true);
     restore();
     let replay: Result<UploadManifestMutation, UploadManifestFailure> =
         update(pic, service, uploader, "blob_prepare_upload", &input);
     assert!(!replay.unwrap().changed);
     certificate(pic, permission, built.hashes().provider_root.to_string());
     restore();
-    let statement = UploadAttestationRequest {
-        permission,
-        content_digest: *built.hashes().content_digest.as_bytes(),
-        observed_at_ns: pic.get_time().as_nanos_since_unix_epoch(),
-    };
-    let denied: Result<UploadAttestationMutation, UploadAttestationFailure> =
-        update(pic, service, uploader, "blob_attest_upload", statement);
-    assert_eq!(denied, Err(UploadAttestationFailure::Denied));
-    // Controlled verifier attests known fixture bytes, not an external provider read.
-    // Discard the reply; inspect and replay the same retained statement.
-    let _lost_reply = pic
-        .update_call(
-            service,
-            Principal::from_slice(&[11; 29]),
-            "blob_attest_upload",
-            contracts::wire::encode_request("blob_attest_upload", statement).unwrap(),
-        )
-        .unwrap();
-    let original = check_attestation(pic, &statement, false);
-    let replay: Result<UploadAttestationMutation, UploadAttestationFailure> = update(
-        pic,
-        service,
-        Principal::from_slice(&[11; 29]),
-        "blob_attest_upload",
-        statement,
-    );
-    let replay = replay.unwrap();
-    assert!(!replay.changed);
-    assert_eq!(replay.receipt, original);
+    check_registration(pic, &permission, false);
     references(pic, permission);
-    revoke_confirmed(pic, permission);
-    original
+    restore();
+    inspection::receipt(pic, permission, true);
+    revoke_registered(pic, permission);
+    permission
 }
 
 fn certificate(pic: &PocketIc, permission: UploadAdmissionRequest, root: String) {
@@ -167,7 +140,7 @@ fn certificate(pic: &PocketIc, permission: UploadAdmissionRequest, root: String)
         .unwrap_err();
     assert_eq!(
         denied.reject_code,
-        ic_testkit::pic::RejectCode::CanisterError
+        ic_platform::pocket_ic::RejectCode::CanisterError
     );
     if permission.upload.upload == 2 {
         lose_certificate_reply(pic, permission, args.clone());
@@ -195,7 +168,7 @@ fn certificate(pic: &PocketIc, permission: UploadAdmissionRequest, root: String)
         .unwrap_err();
     assert_eq!(
         repeated.reject_code,
-        ic_testkit::pic::RejectCode::CanisterError
+        ic_platform::pocket_ic::RejectCode::CanisterError
     );
 }
 
@@ -225,7 +198,7 @@ fn lose_certificate_reply(pic: &PocketIc, permission: UploadAdmissionRequest, ar
         let status = status.unwrap();
         assert_eq!(status.upload, permission.upload);
         assert!(!status.revoked);
-        if status.state == UploadState::ExposurePossible {
+        if status.state == UploadState::Registered {
             return;
         }
         assert_eq!(status.state, UploadState::Reserved);
@@ -242,6 +215,7 @@ fn references(pic: &PocketIc, permission: UploadAdmissionRequest) {
         operation: 101,
         action: ReferenceAction::Retain,
     };
+    inspection::receipt(pic, permission, false);
     let denied: Result<ReferenceMutationResponse, ReferenceFailure> = update(
         pic,
         service,
@@ -260,6 +234,7 @@ fn references(pic: &PocketIc, permission: UploadAdmissionRequest) {
     let replay = replay.unwrap();
     assert!(replay.replayed);
     assert_eq!(replay.receipt, retained.receipt);
+    inspection::receipt(pic, permission, true);
     let request = DownloadRequest {
         service: permission.upload.service,
         tenant: permission.upload.tenant,
@@ -296,32 +271,32 @@ fn references(pic: &PocketIc, permission: UploadAdmissionRequest) {
     assert_eq!(unavailable, Err(DownloadFailure::Unavailable));
 }
 
-pub(super) fn check_attestation(
+pub(super) fn check_registration(
     pic: &PocketIc,
-    statement: &UploadAttestationRequest,
+    permission: &UploadAdmissionRequest,
     fenced: bool,
-) -> UploadAttestationReceipt {
-    let response: Result<UploadAttestationResponse, UploadAttestationFailure> = decode_blob(
-        "blob_upload_attestation",
+) {
+    use contracts::dto::reference::status::{ReferenceStatusRequest, ReferenceStatusResponse};
+    let request = ReferenceStatusRequest {
+        upload: permission.upload,
+        reference: permission.upload.first_reference,
+    };
+    let response: Result<ReferenceStatusResponse, ReferenceFailure> = decode_blob(
+        "blob_reference_status",
         &pic.query_call(
-            statement.permission.upload.service.into(),
-            Principal::from_slice(&[11; 29]),
-            "blob_upload_attestation",
-            contracts::wire::encode_request("blob_upload_attestation", statement.permission)
-                .unwrap(),
+            permission.upload.service.into(),
+            permission.upload.tenant.into(),
+            "blob_reference_status",
+            contracts::wire::encode_request("blob_reference_status", request).unwrap(),
         )
         .unwrap(),
     )
     .unwrap();
     let response = response.unwrap();
-    assert_eq!(response.permission, statement.permission);
+    assert_eq!(response.request, request);
+    assert!(response.live);
     assert_eq!(response.fenced, fenced);
-    let UploadAttestationLookup::Found(receipt) = response.attestation else {
-        panic!("retained verifier receipt");
-    };
-    assert_eq!(receipt.request, *statement);
-    assert_eq!(receipt.verifier, Principal::from_slice(&[11; 29]).into());
-    receipt
+    inspection::registered(pic, *permission, fenced);
 }
 
 /// Refusals must happen before any fresh permission consumes bounded capacity.
@@ -348,7 +323,7 @@ pub(super) fn admission_refusals(pic: &PocketIc, permission: UploadAdmissionRequ
     }
 }
 
-fn revoke_confirmed(pic: &PocketIc, permission: UploadAdmissionRequest) {
+fn revoke_registered(pic: &PocketIc, permission: UploadAdmissionRequest) {
     let service = permission.upload.service.into();
     let tenant = permission.upload.tenant.into();
     let denied: Result<UploadRevocationResponse, UploadAdmissionFailure> = update(
@@ -365,10 +340,10 @@ fn revoke_confirmed(pic: &PocketIc, permission: UploadAdmissionRequest) {
         let response = response.unwrap();
         assert_eq!(response.changed, changed);
         assert_eq!(response.admission.permission, permission);
-        assert_eq!(response.admission.state, UploadState::Confirmed);
+        assert_eq!(response.admission.state, UploadState::Registered);
         assert!(response.admission.revoked);
     }
-    // Withdrawing issuance permission does not revoke already-confirmed references.
+    // Withdrawing issuance permission does not revoke already-registered references.
     let request = DownloadRequest {
         service: permission.upload.service,
         tenant: permission.upload.tenant,

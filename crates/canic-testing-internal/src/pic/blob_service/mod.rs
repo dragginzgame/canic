@@ -3,6 +3,7 @@
 pub(super) mod artifacts;
 mod journey;
 mod metrics;
+mod operator;
 mod tests;
 
 pub(super) fn governed_cases() -> Vec<crate::pic::cases::GovernedTestCase> {

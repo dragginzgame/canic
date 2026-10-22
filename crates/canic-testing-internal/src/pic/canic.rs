@@ -37,14 +37,17 @@ use canic_contracts::{
 use canic_core::cdk::utils::hash::wasm_hash;
 use canic_host::release_set::AppConfigSnapshot;
 use ic_platform::{candid::contract::encode_one, principal::ExternalPrincipal as Principal};
-use ic_testkit::pic::{
-    CanisterDiagnosticsRequest, CanisterInstallExt, InstallSpec, LabeledCanisterDiagnosticsRequest,
-    PocketIc, PocketIcBuilder, PocketIcDiagnosticsExt, StandaloneCanisterFixture,
-};
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
     sync::{Arc, Mutex, OnceLock},
+};
+use {
+    ic_platform::pocket_ic::{PocketIc, PocketIcBuilder},
+    ic_testkit::pic::{
+        CanisterDiagnosticsRequest, CanisterInstallExt, InstallSpec,
+        LabeledCanisterDiagnosticsRequest, PocketIcDiagnosticsExt, StandaloneCanisterFixture,
+    },
 };
 
 const INSTALL_CYCLES: u128 = 500_000_000_000_000;

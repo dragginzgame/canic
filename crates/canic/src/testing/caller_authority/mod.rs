@@ -20,7 +20,7 @@ use canic_core::{
 use ic_platform::candid::{contract::encode_args, decode_args};
 use ic_platform::principal::ExternalPrincipal as Principal;
 use ic_testkit::pic::try_pocket_ic_operation;
-use ic_testkit::pic::{PocketIc, PocketIcCallFailure};
+use {ic_platform::pocket_ic::PocketIc, ic_testkit::pic::PocketIcCallFailure};
 
 pub(super) fn publish(
     pic: &PocketIc,

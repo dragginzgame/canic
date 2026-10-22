@@ -12,14 +12,14 @@ use crate::{
 };
 use canic_contracts::dto::wire::projection::local_authority::{Request, Response};
 use ic_platform::{candid::contract::Nat, principal::ExternalPrincipal as Principal};
-use ic_testkit::{
-    pic::{PocketIcManagedServer, PocketIcStartupConfig},
-    pocket_ic::{
-        PocketIc, PocketIcBuilder,
-        common::rest::{IcpFeatures, IcpFeaturesConfig, InstanceHttpGatewayConfig},
-    },
-};
 use std::{path::Path, time::Duration};
+use {
+    ic_platform::pocket_ic::common::rest::{
+        IcpFeatures, IcpFeaturesConfig, InstanceHttpGatewayConfig,
+    },
+    ic_platform::pocket_ic::{PocketIc, PocketIcBuilder},
+    ic_testkit::pic::{PocketIcManagedServer, PocketIcStartupConfig},
+};
 
 /// Spawn one managed server whose drop waits for that exact child.
 

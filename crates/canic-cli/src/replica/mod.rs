@@ -87,6 +87,11 @@ pub enum ReplicaCommandError {
     )]
     ProjectConfigIncomplete { details: String },
 
+    #[error(
+        "ICP stop completed, but the configured local gateway at 127.0.0.1:{port} still accepts connections. Shutdown is incomplete. Canic has not established listener ownership and will not terminate it; stop the owning ICP network or foreground process, then retry."
+    )]
+    GatewayStillListening { port: u16 },
+
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
 
@@ -360,13 +365,17 @@ fn stop_local_replica(
     icp_root: &Path,
     debug: bool,
 ) -> Result<(), ReplicaCommandError> {
+    let port = configured_local_gateway_port_from_root(icp_root)?;
     match icp.local_replica_stop_in(icp_root, debug) {
         Ok(output) => {
             print_command_output(&output);
+            if replica_query::local_replica_gateway_listening(port)? {
+                return Err(ReplicaCommandError::GatewayStillListening { port });
+            }
             println!("Replica stopped: local");
         }
         Err(error) if local_network_not_running(&error) => {
-            if local_replica_http_reachable(icp_root) {
+            if replica_query::local_replica_gateway_listening(port)? {
                 return Err(ReplicaCommandError::ForeignLocalReplicaReachable);
             }
             println!("Replica already stopped: local");

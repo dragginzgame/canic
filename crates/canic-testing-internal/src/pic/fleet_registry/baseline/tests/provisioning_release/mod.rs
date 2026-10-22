@@ -5,8 +5,8 @@ use canic_contracts::dto::{
     root::{RootProvisioningReleaseKey, RootProvisioningReleasePhase},
     wire::projection::release_provisioning::Request,
 };
+use ic_platform::pocket_ic::PocketIc;
 use ic_platform::principal::ExternalPrincipal as Principal;
-use ic_testkit::pic::PocketIc;
 
 /// Discover the original operation in both interrupted and completed states without resuming it.
 pub(super) fn assert_census(

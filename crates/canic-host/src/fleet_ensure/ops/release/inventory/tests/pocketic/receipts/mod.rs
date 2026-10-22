@@ -9,7 +9,7 @@ use crate::fleet_ensure::{
     view::release::receipts::ReleaseReplayDisposition,
     workflow::release::assess_receipts,
 };
-use ic_testkit::pocket_ic::PocketIc;
+use ic_platform::pocket_ic::PocketIc;
 
 pub(super) fn assert_census(
     pic: &PocketIc,

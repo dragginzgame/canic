@@ -1,12 +1,12 @@
 //! Root-specific cached baseline and topology helpers for internal test suites.
 
 use canic::ids::{BuildNetwork, CanisterRole};
-use ic_platform::principal::ExternalPrincipal as Principal;
 #[cfg(all(
     feature = "pocketic-fixtures",
     any(not(test), feature = "governed-pocketic-tests")
 ))]
-use ic_testkit::pic::PocketIc;
+use ic_platform::pocket_ic::PocketIc;
+use ic_platform::principal::ExternalPrincipal as Principal;
 use std::{collections::HashMap, path::PathBuf, time::Instant};
 
 use super::{

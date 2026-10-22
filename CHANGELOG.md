@@ -8,6 +8,30 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Adopt Shared Tooling 0.26.6 for Cargo graph checks and retained failure evidence.
+
+- Align published IC dependency minimums and both Blob consumer locks with
+  Auth 0.14.3 and Platform 0.6.7. Adopt Backup 0.38, Query 0.68 and
+  Host/Build/Testkit 0.64 together.
+
+- Refuse successful replica shutdown while its configured gateway still accepts
+  connections, including unhealthy HTTP listeners
+  ([#589](https://github.com/dragginzgame/canic/issues/589)).
+
+- **Breaking:** include the offending role in Host pool-capacity errors and
+  reject child-role cycle allocations above their Root pool target
+  ([#433 — Validate child-role pool capacity](https://github.com/dragginzgame/canic/issues/433)).
+
+- Bind approved bootstrap templates to the Wasm Store identity registered by Root
+  ([#558 — Approved template names an unregistered store binding](https://github.com/dragginzgame/canic/issues/558)).
+
+- Report the dedicated Fleet Coordinator role consistently in public Health and
+  Overview, including snapshot restoration
+  ([#534](https://github.com/dragginzgame/canic/issues/534)).
+
+- Emit plain severity labels in replica logs so CLI readers can render text
+  ([#554](https://github.com/dragginzgame/canic/issues/554)).
+
 - Export the shared ICRC-10 standards query from the Fleet Coordinator
   ([#536](https://github.com/dragginzgame/canic/issues/536)).
 
@@ -30,9 +54,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Keep Blob public fence metrics consistent with the shared installation owner
   after background framework activity and same-release restoration. Qualify mounted
   upload recovery, bounded certificate decoding and permission withdrawal.
+  Cover mounted Blob inspection, original receipt recovery and tenant isolation
+  across both managed compositions (#622).
+  Verify operator-only status and funding inspection preserve empty outcomes,
+  scope bindings and explicit payment-readiness blockers through restoration.
+  Exercise mounted gateway refresh/revocation/cancellation and account balance
+  inspection against controlled provider replies, including lost replies and fences.
+  Reject oversized provider replies while preserving account state and exact
+  gateway-attempt cancellation. Qualify payment-relationship bindings, provider
+  refusals and exact reported values without granting funding authority.
 
-- Align Blob Storage 0.40.4 across both managed consumer graphs and preserve the
-  canonical Wasm-store package identity when building an App.
+- **Breaking:** adopt Blob Storage 0.41.1 trusted registration across both managed
+  consumers, removing verifier/attestation integration. Adopt Testkit 0.64 and
+  route native PocketIC types through Platform. Blob installations require reinstall.
 
 - **Breaking:** remove unused delegated-token error producers. E159 remains
   identifiable as a retired diagnostic; portable admission uses shared Auth's
@@ -203,9 +237,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   diagnostics and a delayed retry. Remove GNU-only document inventory formatting.
 
 - Keep internal access-evaluation errors from granting permission through negation
-  or alternative branches; seek cycle-event sequences within their timestamp.
-  **Breaking:** remove the ignored settings-update sender-version argument;
-  management calls retain the current execution's version binding.
+  or alternative branches.
+
+- Seek cycle-event sequences within their timestamp instead of scanning history
+  ([#95 — Avoid whole-history cycle-event sequence scans](https://github.com/dragginzgame/canic/issues/95)).
+
+- **Breaking:** remove the ignored settings-update sender-version argument;
+  management calls retain the current execution's version binding
+  ([#87 — Remove the ignored settings-update sender version](https://github.com/dragginzgame/canic/issues/87)).
 
 - Make the Backup writerless-FIFO regression portable across Unix hosts while
   preserving private permissions and rejection before reading.

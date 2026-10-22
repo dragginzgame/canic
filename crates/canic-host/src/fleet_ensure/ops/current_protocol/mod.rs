@@ -2277,7 +2277,9 @@ pub fn compile_current_store_sequence_from_union(
             version: version.clone(),
             payload_hash: payload_hash.clone(),
             payload_size_bytes: bytes.len() as u64,
-            store_binding: WasmStoreBinding::new("bootstrap"),
+            store_binding: WasmStoreBinding::owned(
+                authority.wasm_store_authority.wasm_store.to_text(),
+            ),
             chunking_mode: TemplateChunkingMode::Chunked,
             manifest_state: TemplateManifestState::Approved,
             approved_at: Some(0),

@@ -1,7 +1,7 @@
 //! Real running-application import clears code and stable state once, then replays.
 
 use super::super::*;
-use ic_testkit::pocket_ic::common::rest::BlobCompression;
+use ic_platform::pocket_ic::common::rest::BlobCompression;
 
 #[test]
 pub(in crate::pic::fleet_registry::baseline) fn running_application_import_clears_state_once() {

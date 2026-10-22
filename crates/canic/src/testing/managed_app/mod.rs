@@ -66,8 +66,11 @@ use ic_platform::{
     principal::ExternalPrincipal as Principal,
 };
 use ic_testkit::pic::try_pocket_ic_operation;
-use ic_testkit::pic::{CanisterInstallExt, PocketIc, PocketIcCallFailure};
 use std::{fmt, time::Duration};
+use {
+    ic_platform::pocket_ic::PocketIc,
+    ic_testkit::pic::{CanisterInstallExt, PocketIcCallFailure},
+};
 
 const DEFAULT_INSTALL_CYCLES: u128 = 10_000_000_000_000;
 const DEFAULT_STATUS_PAGE_LIMIT: u64 = 256;

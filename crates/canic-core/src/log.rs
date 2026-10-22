@@ -143,7 +143,7 @@ pub fn __render_runtime_log_line(topic: Option<Topic>, level: Level, message: &s
         Level::Warn => "WARN ",
         Level::Error => "ERROR",
     };
-    format!("{}|{:^12}| {}{}", label, role, topic_prefix, message)
+    format!("{label}|{role:^12}| {topic_prefix}{message}")
 }
 
 #[doc(hidden)]

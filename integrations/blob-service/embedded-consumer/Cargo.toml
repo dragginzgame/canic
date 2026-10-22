@@ -12,10 +12,10 @@ license = "MIT"
 [workspace.dependencies]
 canic = { path = "../../../crates/canic", default-features = false }
 canic-blob-service = { path = ".." }
-ic-memory = "0.50"
+ic-memory = "0.50.10"
 # Tests and tooling only
-ic-platform = { version = "0.6", default-features = false }
-ic-storage = "0.50"
+ic-platform = { version = "0.6.7", default-features = false }
+ic-storage = "0.50.10"
 serde = { version = "1.0", features = ["derive"] }
 
 [package]

@@ -8,8 +8,8 @@ use canic::dto::{
     },
 };
 use canic_contracts::dto::wire::managed::{PublicStatusRequest, PublicStatusResponse};
+use ic_platform::pocket_ic::PocketIc;
 use ic_platform::principal::ExternalPrincipal as Principal;
-use ic_testkit::pic::PocketIc;
 use std::{collections::BTreeSet, time::Duration};
 
 fn snapshot(

@@ -11,8 +11,11 @@ use canic::{
     protocol,
 };
 
-use ic_testkit::pic::{PocketIc, PocketIcBuilder, PocketIcStartupError};
 use std::{collections::HashMap, time::Instant};
+use {
+    ic_platform::pocket_ic::{PocketIc, PocketIcBuilder},
+    ic_testkit::pic::PocketIcStartupError,
+};
 
 use canic_contracts::dto::wire::projection::fixture_root_topology::RootStatusRequest;
 

@@ -10,8 +10,8 @@ use contracts::dto::{
         manifest::{UploadManifestFailure, UploadManifestMutation},
     },
 };
+use ic_platform::pocket_ic::PocketIc;
 use ic_platform::principal::ExternalPrincipal as Principal;
-use ic_testkit::pic::PocketIc;
 use std::time::Duration;
 
 pub fn qualify(pic: &PocketIc, original: UploadAdmissionRequest) {
@@ -68,10 +68,10 @@ pub fn qualify(pic: &PocketIc, original: UploadAdmissionRequest) {
 fn certificate_arguments(pic: &PocketIc, original: UploadAdmissionRequest) {
     let limit = canic_blob_service::lifecycle::REQUEST_LIMITS.max_bytes;
     for (args, expected) in [
-        (vec![0], ic_testkit::pic::RejectCode::CanisterError),
+        (vec![0], ic_platform::pocket_ic::RejectCode::CanisterError),
         (
             vec![0; limit + 1],
-            ic_testkit::pic::RejectCode::CanisterReject,
+            ic_platform::pocket_ic::RejectCode::CanisterReject,
         ),
     ] {
         let error = pic

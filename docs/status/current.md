@@ -1,5 +1,279 @@
 # Current handoff — 2026-10-21
 
+## Blob #622 payment-relationship observations — 2026-10-22
+
+The mounted PaymentRelationship branch now passes both managed compositions:
+exact service/payer bindings, operator/scope refusals, negative signed figures,
+arbitrary-width counters, absent relationship, all structured provider errors,
+malformed bytes and oversized replies. Responses echo the original request and
+leave local status/funding unchanged. No second provider engine or production
+change; Testkit's existing fixture adds the published relationship method.
+
+Strict Clippy and both exact dedicated/embedded PocketIC cases pass:
+`/tmp/canic-blob-relationship/{clippy,dedicated,embedded}.log`. #622 remains open
+for delayed callback races and populated pagination; paid funding/live-provider
+acceptance remains separate. No exhaustive branch coverage, native macOS/MSRV
+or complete 0.112 readiness claim. Docs/changelogs updated; no Git publication.
+
+## Blob #622 provider reply bounds — 2026-10-22
+
+Added mounted account/gateway responses one byte above their configured limits.
+Both return typed ReplyTooLarge; account status remains unchanged and gateway
+sync retains its original attempt, refuses redispatch, and requires exact
+operator cancellation. Strict Clippy and both managed dedicated/embedded cases
+pass: `/tmp/canic-blob-bounds/{clippy,dedicated,embedded}.log`.
+
+No production or dependency changes. #622 remains open for payment-relationship
+responses, delayed callback races and populated pagination. Live-provider and
+paid-funding evidence remains separate. Updated the guide's stale missing-method
+claim: all methods have direct calls, without exhaustive behavioral coverage.
+Complete 0.112 release readiness is not established; no Git publication.
+
+## Blob #622 controlled provider slice — 2026-10-22
+
+All current catalog methods now have direct mounted test calls. Added gateway
+sync/cancel/revoke and account-balance inspection using published Testkit 0.64's
+native `reply-fixtures`. Covers successful membership, actual operator/scope
+refusals, malformed-reply pending identity, exact cancellation, discarded reply
+recovery through the original sequence, revocation and restoration fences.
+Account observations do not credit the funding journal. No provider payment ran.
+
+Strict Clippy, both final managed dedicated/embedded cases and all three locked
+dependency admissions pass: `/tmp/canic-blob622-provider/`. Test-only fixture
+encoding adds wasm-encoder/leb128fmt to the root lock without upgrading existing
+versions; the deployed normal Wasm graph excludes both and Testkit.
+
+Keep #622 open: method invocation coverage is not exhaustive behavioral coverage.
+Next: delayed callback versus cancellation/revocation, populated pagination,
+payment-relationship responses and additional provider refusal/bound cases.
+Populated paid funding and live-provider acceptance retain their separate owners.
+Changelogs updated; no commit, push, deployment or sibling edit. Full 0.112
+readiness, native macOS/MSRV and live-provider qualification are not established.
+
+## Blob #622 operator inspection slice — 2026-10-22
+
+Added direct mounted local status, funding history, outcome and preparation
+assessment checks. Strict governed internal Clippy and both exact managed
+dedicated/embedded cases pass on Blob/contracts 0.41.1; logs:
+`/tmp/canic-blob622-operator/{clippy,dedicated,embedded}.log`. Checks cover operator
+authority, independent service/namespace/Cashier/payer binding, empty history,
+absent outcomes, cursor/intent refusals, allocation-reserve and provider-evidence
+blockers, restored fencing, and unchanged stable memory/local journal observations.
+
+Four methods still lack direct invocation: gateway sync/cancel/revoke and account
+inspection. Testkit 0.64 publishes opt-in `reply-fixtures` raw-reply canisters for
+controlled provider responses; that feature is not yet enabled or qualified here.
+Populated funding/paid reconciliation and complete pagination remain separate
+acceptance gaps; ten added method invocations do not establish exhaustive coverage.
+Keep #622 open. No runtime/dependency change, payment, sibling edit or publication.
+Changelogs reflect this slice; complete 0.112 push readiness is not established.
+
+## Blob #622 inspection coverage slice — 2026-10-22
+
+Added direct mounted coverage for six methods: upload admission, manifest, content
+lookup, reference capacity, upload history and reference receipt. Both exact
+managed dedicated/embedded cases and strict governed internal Clippy pass on
+Blob/contracts 0.41.1. Evidence: `/tmp/canic-blob622/`. Original permissions,
+declarations and receipts remain observable through same-release restoration;
+changed authority/receipt inputs and foreign observers refuse. Absent results
+are distinct from denied requests; queries preserve stable state.
+
+Eight methods still lack direct coverage: local status, funding history/outcome/
+assessment, account inspection and gateway sync/cancel/revoke. #622 stays open;
+the six added methods do not establish exhaustive branch or pagination coverage.
+Upstream provider issues remain maintainer-owned. No production behavior, version,
+dependency, Git publication or paid effect changed. Changelogs updated for this
+slice; complete 0.112 push readiness remains unestablished by the partial audit.
+
+## Blob ownership and coverage audit — 2026-10-22
+
+Both exact managed dedicated/embedded cases pass again on published Blob/contracts
+0.41.1: `/tmp/canic-blob-audit/{dedicated,embedded}.log`. The audit found no second
+Blob engine or retired verifier flow in active Canic Rust. However, the earlier
+framework-completion statement was too broad: 14 mounted gateway/account and
+inspection methods lack direct Canic test invocations. New Canic #622 owns that
+coverage, distinct from the passing #620/#621 journey and metrics subset.
+
+See [the audit](../audits/working/blob-0411-adoption.md) for owners, exact methods,
+artifacts and evidence limits. Updated #620's retired verifier requirements and
+commented on canonical upstream GC issue #32. Provider #32/#34 and application
+#31/#5/#4 remain separate gaps; no new upstream algorithm defect was established.
+No issue closure, commit, publication, paid effect or deployment. Full coverage
+and complete 0.112 readiness are not claimed; native macOS/MSRV were not rerun.
+
+## Blob 0.41.1 patch adoption — 2026-10-22
+
+Verified published Blob/contracts 0.41.1. The root lock already selected this
+pair; raised catalog minimums and aligned both independent consumer locks without
+changing other selections. Upstream changes no Rust source or adapter API.
+Strict adapter and both consumer Clippy checks and all three locked dependency
+admissions pass. Evidence: `/tmp/canic-blob0411/`. The preceding 0.41.0 managed
+PocketIC evidence remains historical; those cases were not rerun for this patch.
+No new macOS, MSRV or live provider qualification. Provider acceptance gaps and
+pending default-branch delivery remain; this patch does not make the complete
+0.112 batch ready to publish. Changelog surfaces are updated; no Git publication.
+
+
+## Blob 0.41 / Testkit 0.64 framework acceptance — 2026-10-22
+
+Adopted published Blob/contracts 0.41.0 and Testkit 0.64.0, preserving incoming
+manifest selections and unrelated work. Removed verifier installation fields and
+attestation fixtures. Certificate issuance now registers retention intent and the
+first reference through Blob's shared engine; it does not prove provider bytes.
+Replaced Testkit's removed PocketIC forwards with Platform imports/features and
+Fake with fake_principal. No compatibility lane or storage migration was added.
+
+Passing: strict all-target/all-feature Clippy for canic, canic-host, canic-tests,
+canic-testing-internal and canic-blob-service; isolated internal no-default-feature
+Clippy; both independent Blob consumer Clippy checks; two exact installation
+codec regressions; both managed dedicated/embedded PocketIC cases; dependency
+admission for all three workspaces and targeted formatting. The managed cases
+build actual Wasm and qualify endpoint parity, authority, registration, lost
+certificate replies, original first-reference recovery, replay/release, fences,
+metrics and embedded application state. Evidence: `/tmp/canic-blob041/`.
+
+#620/#621 are locally qualified, not closed before default-branch delivery.
+Blob's obsolete verifier requirement #33 is retired by the published contract;
+provider GC/deletion/billing #32 and real application/provider acceptance #31
+remain independent. Linux local framework acceptance is complete for this scope;
+end-to-end Blob is not claimed 100%. Native macOS, MSRV and installed-IC/provider
+qualification were not rerun. No commit, push, release, deployment or paid effect.
+The complete 0.112 batch retains its other product/provider acceptance gaps.
+
+
+## Coordinated Backup/Query/Host adoption qualified — 2026-10-22
+
+Verified registry releases and adopted Backup 0.38.0, Query 0.68.0 and
+Build/Host Artifacts/FS/Process/Text/Tools 0.64.0 together. Query #100 and Backup
+#66 no longer block this selected graph: their published public Host identities
+align, with no source adapters, aliases or sibling overrides. Preserve the
+incoming Auth/Timers and unrelated lock selections. Testkit remains 0.63.3 and
+retains transitive Host Artifacts/FS/Process 0.63.3; its API migration is separate.
+
+Passing: all three locked dependency admissions; strict all-target/all-feature
+Clippy for canic-host, canic-backup and canic-cli; all 10 Backup artifact tests;
+all 15 CLI restore-runner tests. Evidence: `/tmp/canic-query068/`. Checksum typed
+errors, no-follow/staging behavior and runner receipts/retries remain covered.
+No full workspace, managed deployment, MSRV or native macOS qualification ran.
+Changelogs updated; pending #589 and other local work preserved. No commit,
+push, release or deployment. These dependency blockers are resolved; existing
+product/provider acceptance gaps still prevent claiming complete release readiness.
+
+
+## Backup 0.38 publication verified; Query prerequisite pending — 2026-10-22
+
+Published Backup 0.38.0 resolves its Host 0.64 dependency alignment (#66).
+Verified crates.io API and sparse index: Backup requires Host Artifacts/FS/Process
+^0.64; Query remains published at 0.67.6. Query's sibling 0.68.0 changes are
+prepared source, not a registry dependency. Query #100 remains the prerequisite
+for combined Backup/Host adoption because its public LedgerTip and Host Tools'
+WasmFacts boundary must share the selected Host identity.
+
+Keep the compilable incoming Backup 0.37.4 and Host/Build 0.63.3 selections until
+Query 0.68 is published. No alias, duplicate record conversion, local patch or
+unpublished dependency was added. Once published, adopt Backup 0.38, Query 0.68
+and Host/Build 0.64 together; run Backup artifact/runner regressions and scoped
+Host/Backup strict Clippy. No compilation was repeated for this registry-only
+check; the preceding failed adoption logs already establish the type conflict.
+
+
+## Shared Tooling adopted; Host 0.64 held — 2026-10-22
+
+Shared Tooling 0.26.6 is adopted at committed upstream revision
+`4cb9bc907154225a3f7e4c33fd8d75fbeaa125c8`, verified against remote HEAD.
+Canonical export includes 133 files and the required CI/release integrity audit.
+Snapshot/governance checks, changed production-shell ShellCheck, all three locked
+dependency admissions and diff whitespace checks pass. Clippy remains first in
+release validation. Upstream exporter/regression suites were not duplicated here.
+
+Published Host/Build 0.64 was attempted, then restored to the incoming 0.63.3
+selection: Query 0.67.6 returns Host Tools 0.63 LedgerTip; retaining old Tools
+alongside new Artifacts also fails its WasmFacts boundary. Backup 0.37.4's public
+artifact-error conversion likewise accepts only Host Artifacts 0.63 errors.
+Trackers: https://github.com/dragginzgame/ic-query/issues/100 and
+https://github.com/dragginzgame/ic-backup/issues/66. Temporary conversion code was
+removed; no compatibility bridge, Cargo override or sibling edit remains.
+Evidence: `/tmp/canic-host-shared-oct22/`. Failed Clippy attempts are retained as
+blocker evidence, not passing qualification. Prior pending source/lock work is
+preserved. No commit, push, release or deployment; complete batch readiness is
+still blocked by its existing acceptance gaps and this dependency alignment.
+
+
+## Published IC dependency alignment — 2026-10-22
+
+Paused #589 implementation at the maintainer's request; its pending changes remain.
+Verified published IC versions through crates.io and raised catalog minimums to
+Auth/protocol 0.14.3, Backup 0.37.4, Build/Host/Testkit 0.63.3, Memory/Storage
+0.50.10, Metrics 0.15.5, Platform 0.6.7, Query 0.67.6 and Timers 0.30.2.
+Blob/contracts remain 0.40.4. The incoming root lock already selected these;
+preserved it and aligned both independent Blob locks, including Wire/derive 0.5.20.
+Shared Tooling snapshot and unrelated dependencies were not updated in this batch.
+
+Passing: all three locked dependency admissions/boundaries and runtime identity
+checks; native strict library Clippy for Core, Host, Backup, Blob adapter and both
+Blob consumers; Core Wasm check with auth-local-application-authorization enabled.
+Evidence: `/tmp/canic-deps-oct22/`. A direct consumer Wasm check was rejected by
+the expected managed-build guard, before artifact qualification; no bypass added.
+Managed consumer builds/install/recovery, MSRV and native macOS were not rerun.
+No new production readiness, TEE or clock-skew qualification is claimed. Existing
+release acceptance gaps remain; changelogs are updated, with no Git publication.
+
+
+## Replica shutdown verification — 2026-10-22
+
+#589's false-success defect is locally fixed: successful ICP stop and the
+already-stopped fallback both check the selected IPv4 loopback gateway. An open
+TCP listener refuses completion even without healthy HTTP; only connection
+refusal establishes absence. No process is terminated or descriptor deleted.
+All 17 focused replica tests pass with local socket access; strict CLI lib/tests
+Clippy passes. Evidence: `/tmp/canic-589/{tests-local,clippy-final}.log`.
+The sandboxed test run failed at socket bind, not a shutdown assertion.
+
+Keep #589 open: safe orphan ownership/reclamation, PID diagnostics and selected
+stale-descriptor cleanup remain unfinished, as does native macOS qualification.
+The inspected ICP wrapper does not expose retained orphan process custody; port
+reachability or executable names cannot authorize termination. Both changelogs
+and CLI documentation are updated. No commit, push or release was performed.
+The complete 0.112 batch retains its existing integration/provider acceptance
+blockers; this slice does not establish complete push/publish readiness.
+
+
+
+## Coordinator Health role — 2026-10-22
+
+#534 is locally fixed. Public Health now uses the existing dedicated Coordinator
+runtime-kind marker rather than requiring an App environment role. Non-Coordinator
+lookup and unavailable-role semantics remain unchanged; no authority is populated
+or widened for reporting. The canonical Coordinator PocketIC case passes real
+Health/Overview identity checks after installation and same-release snapshot
+restoration, alongside its registry replay and restored mutation-fence checks.
+This is snapshot evidence, not a new Coordinator upgrade contract or installed-IC
+qualification. Strict feature-enabled internal Clippy and formatting pass.
+Evidence: `/tmp/canic-issue534/{pocketic,clippy}.log`.
+
+Both changelogs are updated. Keep #534 open pending delivery; #536's separate
+standards work is preserved and its existing endpoint assertion also passed.
+No dependencies, sibling files, Git publication, deployment or broad gates changed.
+The complete 0.112 batch still has its prior integration/provider acceptance gaps;
+this slice alone does not establish push/publish readiness.
+
+
+## Replica log readability and issue triage — 2026-10-22
+
+#554 is locally corrected: runtime replica rendering no longer generates ANSI
+color escapes, while stable append and event selection remain unchanged. The
+all-severity/optional-topic native regression and scoped Core lib/tests strict
+Clippy pass. Evidence: `/tmp/canic-issue554/{test,clippy}.log`. Installed ICP output
+has not been requalified. Both changelogs are updated; keep the issue open until
+default-branch delivery and installed acceptance.
+
+#552 and #555 are already fixed in local commit `de4f36d4e`; their trackers now
+record that evidence. Remote main remains `4caeec25db7d81f6121db1c95ba7a2d91d319c60`
+and still contains both defects, so neither was closed. #566 already records its
+local fix. No Git publication, dependency changes or broad validation ran.
+This focused slice does not establish complete 0.112 push/publish readiness;
+Auth/Backup integration and Blob provider acceptance retain their existing gates.
+
 
 ## Blob mounted recovery acceptance — 2026-10-21
 

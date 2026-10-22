@@ -84,15 +84,16 @@ use ic_platform::{
     principal::ExternalPrincipal as Principal,
 };
 use ic_testkit::pic::try_pocket_ic_operation;
-use ic_testkit::{
-    pic::{CanisterInstallExt, PocketIc, PocketIcCallFailure},
-    pocket_ic::common::rest::RawMessageId,
-};
 use serde::Deserialize;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
     time::Duration,
+};
+use {
+    ic_platform::pocket_ic::PocketIc,
+    ic_platform::pocket_ic::common::rest::RawMessageId,
+    ic_testkit::pic::{CanisterInstallExt, PocketIcCallFailure},
 };
 
 pub use model::{

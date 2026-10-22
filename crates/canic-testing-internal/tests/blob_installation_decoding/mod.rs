@@ -20,7 +20,6 @@ struct EmbeddedInput {
 struct UnmodeledInstallationInput {
     configuration: ServiceConfigurationInput,
     project: String,
-    completion_verifier: Principal,
     unmodeled: Principal,
 }
 
@@ -80,7 +79,6 @@ fn installation() -> ServiceInstallationInput {
             },
         },
         project: "decoder-test".into(),
-        completion_verifier: principal(11).into(),
     }
 }
 
@@ -88,7 +86,6 @@ fn unmodeled(input: &ServiceInstallationInput) -> UnmodeledInstallationInput {
     UnmodeledInstallationInput {
         configuration: input.configuration,
         project: input.project.clone(),
-        completion_verifier: input.completion_verifier.into(),
         unmodeled: Principal::anonymous(),
     }
 }

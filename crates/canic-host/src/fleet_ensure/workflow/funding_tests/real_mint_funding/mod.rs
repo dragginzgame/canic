@@ -19,6 +19,7 @@ use crate::{
     test_support::temp_dir,
 };
 use canic_core::cdk::utils::hash::{decode_hex, hex_bytes, sha256_hex};
+use ic_platform::pocket_ic::{CanisterSettings, CreateCanisterParams, PocketIc};
 use ic_platform::{
     candid::{
         contract::{CandidType, Nat, encode_args},
@@ -26,7 +27,6 @@ use ic_platform::{
     },
     principal::ExternalPrincipal as Principal,
 };
-use ic_testkit::pocket_ic::{CanisterSettings, CreateCanisterParams, PocketIc};
 use serde::Deserialize;
 use std::{
     collections::BTreeMap,

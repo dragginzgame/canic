@@ -24,7 +24,7 @@ use ic_platform::candid::contract::Decode;
 use std::path::Path;
 use thiserror::Error as ThisError;
 
-pub use self::status::local_replica_status_reachable_from_root;
+pub use self::status::{local_replica_gateway_listening, local_replica_status_reachable_from_root};
 
 ///
 /// ReplicaQueryError

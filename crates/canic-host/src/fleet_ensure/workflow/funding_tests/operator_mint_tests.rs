@@ -29,14 +29,14 @@ use ic_platform::{
     },
     principal::ExternalPrincipal as Principal,
 };
-use ic_testkit::{
-    pic::PocketIcBuilder,
-    pocket_ic::common::rest::{IcpFeatures, IcpFeaturesConfig},
-};
 use serde::Deserialize;
 use std::{
     fs,
     time::{SystemTime, UNIX_EPOCH},
+};
+use {
+    ic_platform::pocket_ic::PocketIcBuilder,
+    ic_platform::pocket_ic::common::rest::{IcpFeatures, IcpFeaturesConfig},
 };
 
 #[derive(CandidType, Deserialize)]
@@ -459,7 +459,7 @@ fn operator_mint_journal_requires_explicit_review_and_approval_fields() {
     assert!(serde_json::from_value::<FleetEnsureJournalRecord>(journal).is_err());
 }
 
-pub(super) fn funded_operator() -> (ic_testkit::pocket_ic::PocketIc, OperatorMintTransport) {
+pub(super) fn funded_operator() -> (ic_platform::pocket_ic::PocketIc, OperatorMintTransport) {
     let config = Some(IcpFeaturesConfig::DefaultConfig);
     let mut pic = start_pocket_ic(
         PocketIcBuilder::new()

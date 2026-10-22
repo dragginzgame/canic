@@ -624,7 +624,7 @@ pub(super) fn review(
 fn observe(
     pic: &PocketIc,
     plan: &CapacityImportPlanRecord,
-    stopped: &ic_testkit::pic::CanisterStatusResult,
+    stopped: &ic_platform::pocket_ic::CanisterStatusResult,
 ) -> CapacityImportSourceView {
     let source = &plan.sources[0];
     let observed = pic

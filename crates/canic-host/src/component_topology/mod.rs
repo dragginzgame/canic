@@ -8,8 +8,8 @@
 mod tests;
 
 use canic_contracts::ids::{
-    ComponentSpecAdmission, ComponentSpecId, ComponentTopologyDigest, FleetSubnetRootLimits,
-    SubnetId,
+    CanisterRole, ComponentSpecAdmission, ComponentSpecId, ComponentTopologyDigest,
+    FleetSubnetRootLimits, SubnetId,
 };
 use canic_core::bootstrap::compiled::{ComponentTopology, ConfigModel};
 use ic_platform::principal::ExternalPrincipal as Principal;
@@ -67,7 +67,7 @@ pub struct PlannedFleetTopology {
     pub fleet_subnet_roots: Vec<PlannedFleetSubnetRootTopology>,
 }
 
-/// Root-local admitted Component demand checked against one empty-pool target.
+/// Root-local admitted Component and descendant demand checked against one empty-pool target.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootPoolCapacityInput {
     pub component_admissions: Vec<ComponentSpecAdmission>,
@@ -83,13 +83,14 @@ pub struct RootPoolImportCapacityInput {
     pub root: String,
 }
 
-/// Exact fail-closed mismatch between admitted Component demand and pool capacity.
+/// Exact fail-closed mismatch between admitted role demand and pool capacity.
 #[derive(Debug, Eq, PartialEq, ThisError)]
 pub enum RootPoolCapacityError {
     #[error(
-        "Root {root} pool target {pool_target_cycles} cycles is below admitted Component Spec '{component_spec}' initial demand {required_cycles} cycles"
+        "Root {root} pool target {pool_target_cycles} cycles is below admitted Component Spec '{component_spec}' role '{canister_role}' initial demand {required_cycles} cycles"
     )]
     Insufficient {
+        canister_role: CanisterRole,
         component_spec: ComponentSpecId,
         pool_target_cycles: u128,
         required_cycles: u128,
@@ -138,7 +139,7 @@ pub enum FleetTopologyPlanError {
     UnknownComponentSpec { component_spec: ComponentSpecId },
 }
 
-/// Reject any admitted Component whose exact initial demand exceeds its Root's pool target.
+/// Reject any admitted Component or descendant role whose initial demand exceeds its Root's pool target.
 pub fn validate_root_pool_capacity(
     config: &ConfigModel,
     roots: &[RootPoolCapacityInput],
@@ -152,14 +153,17 @@ pub fn validate_root_pool_capacity(
                     component_spec: admission.component_spec.clone(),
                     root: root.root.clone(),
                 })?;
-            let required_cycles = component.initial_cycles.to_u128();
-            if required_cycles > root.pool_target_cycles {
-                return Err(RootPoolCapacityError::Insufficient {
-                    component_spec: admission.component_spec.clone(),
-                    pool_target_cycles: root.pool_target_cycles,
-                    required_cycles,
-                    root: root.root.clone(),
-                });
+            for (canister_role, canister) in component.canister_configs() {
+                let required_cycles = canister.initial_cycles.to_u128();
+                if required_cycles > root.pool_target_cycles {
+                    return Err(RootPoolCapacityError::Insufficient {
+                        canister_role: canister_role.clone(),
+                        component_spec: admission.component_spec.clone(),
+                        pool_target_cycles: root.pool_target_cycles,
+                        required_cycles,
+                        root: root.root.clone(),
+                    });
+                }
             }
         }
     }

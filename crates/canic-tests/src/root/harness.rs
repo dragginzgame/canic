@@ -4,13 +4,16 @@
 use canic::ids::CanisterRole;
 use canic_testing_internal::pic::{RootBaselineRecipe, RootBaselineSpec};
 use ic_platform::principal::ExternalPrincipal as Principal;
-use ic_testkit::pic::{CachedPocketIcBaselinePool, CachedPocketIcBaselinePoolGuard, PocketIc};
 use std::{
     collections::HashMap,
     io::Write,
     num::NonZeroUsize,
     ops::Deref,
     sync::{Mutex, MutexGuard, OnceLock},
+};
+use {
+    ic_platform::pocket_ic::PocketIc,
+    ic_testkit::pic::{CachedPocketIcBaselinePool, CachedPocketIcBaselinePoolGuard},
 };
 
 use super::profile::RootSetupProfile;

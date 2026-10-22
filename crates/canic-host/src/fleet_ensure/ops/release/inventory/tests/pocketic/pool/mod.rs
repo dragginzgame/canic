@@ -11,7 +11,7 @@ use crate::fleet_ensure::{
     workflow::release::assess_pools,
 };
 use canic_contracts::dto::root::RootPoolReleaseResponse;
-use ic_testkit::pocket_ic::PocketIc;
+use ic_platform::pocket_ic::PocketIc;
 
 pub(super) fn assert_census(
     pic: &PocketIc,

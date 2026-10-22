@@ -183,6 +183,7 @@ fn admitted_component_demand_cannot_exceed_root_pool_target() {
     assert_eq!(
         validate_root_pool_capacity(&config, &[insufficient]),
         Err(RootPoolCapacityError::Insufficient {
+            canister_role: CanisterRole::new("database"),
             component_spec: "database".parse().expect("Component Spec"),
             pool_target_cycles: 4_999_999_999_999,
             required_cycles: 5_000_000_000_000,
@@ -199,6 +200,66 @@ fn admitted_component_demand_cannot_exceed_root_pool_target() {
         }],
     )
     .expect("equal pool target admits the Component");
+}
+
+#[test]
+fn admitted_descendant_demand_cannot_exceed_its_root_pool_target() {
+    let config = parse_config_model(&format!(
+        r#"{CONFIG}
+[roles.user_shard]
+kind = "canister"
+package = "user_shard"
+
+[roles.user_leaf]
+kind = "canister"
+package = "user_leaf"
+
+[component_specs.users.children.user_shard]
+kind = "shard"
+
+[component_specs.users.children.user_leaf]
+kind = "instance"
+initial_cycles = "20T"
+
+[component_specs.users.spawn_grants.user_hub.user_shard]
+maximum_instances_per_parent = 1
+
+[component_specs.users.spawn_grants.user_shard.user_leaf]
+maximum_instances_per_parent = 1
+"#
+    ))
+    .expect("valid descendant role configuration");
+    let plan = plan_initial_fleet_topology(
+        &config,
+        vec![planned_root(
+            5,
+            vec![admission("database", 1), admission("users", 1)],
+        )],
+    )
+    .expect("valid planned Root");
+    let mut root = RootPoolCapacityInput {
+        component_admissions: plan.fleet_subnet_roots[0].component_admissions.clone(),
+        pool_target_cycles: 5_000_000_000_000,
+        root: "root-0".to_string(),
+    };
+    assert_eq!(
+        validate_root_pool_capacity(&config, &[root.clone()]),
+        Err(RootPoolCapacityError::Insufficient {
+            canister_role: CanisterRole::new("user_leaf"),
+            component_spec: "users".parse().unwrap(),
+            pool_target_cycles: 5_000_000_000_000,
+            required_cycles: 20_000_000_000_000,
+            root: "root-0".to_string(),
+        })
+    );
+    root.pool_target_cycles = 20_000_000_000_000;
+    validate_root_pool_capacity(&config, &[root.clone()])
+        .expect("equal pool target admits all descendant roles");
+    root.pool_target_cycles = 5_000_000_000_000;
+    root.component_admissions
+        .retain(|admission| admission.component_spec.as_str() == "database");
+    validate_root_pool_capacity(&config, &[root])
+        .expect("unadmitted descendants do not consume this Root's pool capacity");
 }
 
 #[test]

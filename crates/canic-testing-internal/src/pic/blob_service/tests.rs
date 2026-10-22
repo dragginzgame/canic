@@ -78,7 +78,7 @@ fn installation(service: Principal) -> ServiceInstallationInput {
                 max_tenant_active: 2,
             },
             billing: ServiceBillingInput {
-                cashier: principal(10).into(),
+                cashier: super::operator::cashier().into(),
                 reserve: 100,
                 minimum_balance: 100,
                 target_balance: 200,
@@ -100,7 +100,6 @@ fn installation(service: Principal) -> ServiceInstallationInput {
             },
         },
         project: "canic-managed-blob".into(),
-        completion_verifier: principal(11).into(),
     }
 }
 
@@ -252,6 +251,7 @@ fn qualify(embedded: bool) {
         canic_blob_service::__private::ic_blob_storage_contracts::CONTRACT_VERSION
     );
     assert!(!installed.fenced);
+    super::operator::check(pic, &installed.configuration, false);
     refuse_invalid_configuration(&fixture, service, &reinstall_wasm, embedded, &installed);
     resume();
     assert_eq!(configuration(), installed);
@@ -509,6 +509,7 @@ fn qualify(embedded: bool) {
         .upgrade_same_release(service, Duration::from_secs(300))
         .expect("same-release restoration");
     assert!(configuration().fenced);
+    super::operator::check(pic, &installed.configuration, true);
     assert_eq!(
         capacity().expect("restored fenced capacity"),
         UploadCapacityResponse {
@@ -520,6 +521,7 @@ fn qualify(embedded: bool) {
     resume();
     resume();
     assert!(!configuration().fenced);
+    super::operator::check(pic, &installed.configuration, false);
     super::metrics::check(pic, service, 2, false, embedded.then_some(42));
     // Background framework updates may legitimately fence the shared owner.
     // Sampling reports that fence; only authenticated recovery can clear it.
@@ -573,7 +575,7 @@ fn qualify(embedded: bool) {
         .expect("restored application counter");
         assert_eq!(count, 42);
     }
-    let statements: Vec<_> = permissions
+    let registered: Vec<_> = permissions
         .into_iter()
         .map(|permission| {
             super::journey::qualify(pic, permission, || {
@@ -587,21 +589,20 @@ fn qualify(embedded: bool) {
     fixture
         .upgrade_same_release(service, Duration::from_secs(300))
         .unwrap();
-    for &statement in &statements {
-        assert_eq!(
-            super::journey::check_attestation(pic, &statement.request, true),
-            statement
-        );
+    for permission in &registered {
+        super::journey::check_registration(pic, permission, true);
     }
     resume();
-    let original_permission = statements[0].request.permission;
-    for statement in statements {
-        assert_eq!(
-            super::journey::check_attestation(pic, &statement.request, false),
-            statement
-        );
+    let original_permission = registered[0];
+    for permission in &registered {
+        super::journey::check_registration(pic, permission, false);
     }
     super::journey::qualify_refusals(pic, original_permission);
+    super::operator::qualify(pic, &installed.configuration, resume, || {
+        fixture
+            .upgrade_same_release(service, Duration::from_secs(300))
+            .unwrap();
+    });
 }
 
 #[test]
@@ -618,7 +619,6 @@ pub(super) fn managed_composition_embedded() {
 struct UnmodeledInstallationInput {
     configuration: ServiceConfigurationInput,
     project: String,
-    completion_verifier: Principal,
     unmodeled: Principal,
 }
 
@@ -647,9 +647,9 @@ fn refuse_invalid_tenant_requests(
         vec![0; ceiling + 1],
     ] {
         let expected = if bytes.len() > ceiling {
-            ic_testkit::pic::RejectCode::CanisterReject
+            ic_platform::pocket_ic::RejectCode::CanisterReject
         } else {
-            ic_testkit::pic::RejectCode::CanisterError
+            ic_platform::pocket_ic::RejectCode::CanisterError
         };
         let refusal = pic
             .update_call(service, operator, "blob_update_tenant", bytes)
@@ -674,7 +674,6 @@ fn refuse_invalid_configuration(
     let unmodeled = UnmodeledInstallationInput {
         configuration: installation(service).configuration,
         project: installation(service).project,
-        completion_verifier: installation(service).completion_verifier.into(),
         unmodeled: Principal::anonymous(),
     };
     let unknown_field = if embedded {
@@ -713,7 +712,7 @@ fn refuse_invalid_configuration(
             .unwrap_err();
         assert_eq!(
             refusal.reject_code,
-            ic_testkit::pic::RejectCode::CanisterError
+            ic_platform::pocket_ic::RejectCode::CanisterError
         );
         assert_eq!(pic.get_stable_memory(service), stable);
         let current: Result<HostConfigurationView, HostFailure> = decode_blob(

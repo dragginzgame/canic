@@ -83,28 +83,28 @@ flate2 = { version = "1.1", default-features = false, features = [
 futures = "0.3"
 getrandom = "0.4"
 hmac = "0.13.0"
-ic-auth = { version = "0.14.1", default-features = false }
-ic-auth-protocol-types = "0.14.1"
-ic-backup = { version = "0.37", default-features = false }
-ic-blob-storage = "0.40.4"
-ic-blob-storage-contracts = "0.40.4"
-ic-build = { version = "0.63.2" }
-ic-host-artifacts = { version = "0.63.2", default-features = false }
-ic-host-fs = { version = "0.63.2", default-features = false }
-ic-host-process = { version = "0.63.2", default-features = false }
-ic-host-text = "0.63.2"
-ic-host-tools = "0.63.2"
-ic-memory = "0.50"
-ic-metrics = "0.15"
-ic-platform = { version = "0.6", default-features = false }
-ic-query = { version = "0.67", default-features = false, features = [
+ic-auth = { version = "0.14.3", default-features = false }
+ic-auth-protocol-types = "0.14.3"
+ic-backup = { version = "0.38.0", default-features = false }
+ic-blob-storage = "0.41.1"
+ic-blob-storage-contracts = "0.41.1"
+ic-build = { version = "0.64.0" }
+ic-host-artifacts = { version = "0.64.0", default-features = false }
+ic-host-fs = { version = "0.64.0", default-features = false }
+ic-host-process = { version = "0.64.0", default-features = false }
+ic-host-text = "0.64.0"
+ic-host-tools = "0.64.0"
+ic-memory = "0.50.10"
+ic-metrics = "0.15.5"
+ic-platform = { version = "0.6.7", default-features = false }
+ic-query = { version = "0.68.0", default-features = false, features = [
     "subnet-catalog-host",
 ] }
 # Direct use is limited to corruption fixtures; IC Storage also uses it in production.
 ic-stable-structures = "0.7.2"
-ic-storage = "0.50"
-ic-testkit = { version = "0.63.2" }
-ic-timers = "0.30"
+ic-storage = "0.50.10"
+ic-testkit = { version = "0.64" }
+ic-timers = "0.30.2"
 proc-macro2 = "1.0"
 quote = "1.0"
 remain = "0.2"

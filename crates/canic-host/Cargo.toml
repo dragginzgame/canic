@@ -17,7 +17,7 @@ publish = true
 ignored = ["serde_bytes"]
 
 [features]
-local-fleet = ["dep:ic-testkit"]
+local-fleet = ["dep:ic-testkit", "ic-platform/pocket-ic"]
 
 [dependencies]
 canic-contracts.workspace = true
@@ -60,7 +60,7 @@ rustix = { workspace = true }
 clap = { workspace = true }
 flate2 = { workspace = true }
 ic-host-process = { workspace = true, features = ["test-support"] }
-ic-platform = { workspace = true, features = ["bls"] }
+ic-platform = { workspace = true, features = ["bls", "pocket-ic"] }
 ic-testkit = { workspace = true }
 prost = { workspace = true }
 

@@ -11,6 +11,7 @@ use canic_contracts::dto::wire::projection::{
     inspection_reserve::InspectionReserveResponse as ReserveResponse,
 };
 use canic_testing_internal::pic::{CanicWasmBuildProfile, install_audit_root_probe};
+use ic_platform::pocket_ic::{ErrorCode, PocketIc, RejectResponse};
 use ic_platform::{
     candid::{
         contract::{Nat, encode_one},
@@ -18,7 +19,6 @@ use ic_platform::{
     },
     principal::ExternalPrincipal as Principal,
 };
-use ic_testkit::pic::{ErrorCode, PocketIc, RejectResponse};
 
 #[test]
 fn positive_native_balance_can_fail_root_outbound_inspection_admission() {

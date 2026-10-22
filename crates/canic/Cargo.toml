@@ -28,7 +28,7 @@ auth-issuer-canister-sig-create = ["canic-core/auth-issuer-canister-sig-create"]
 auth-issuer-canister-sig-verify = ["canic-core/auth-issuer-canister-sig-verify"]
 auth-delegated-token-verify = ["canic-core/auth-delegated-token-verify"]
 internal-test-fixtures = ["canic-core/internal-test-fixtures"]
-testing = ["dep:ic-testkit"]
+testing = ["dep:ic-testkit", "ic-platform/pocket-ic"]
 
 [dependencies]
 canic-contracts.workspace = true

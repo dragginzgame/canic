@@ -3,7 +3,7 @@
 //! Installed receiver authority, unavailable recipients and post-await effect fencing.
 
 use super::*;
-use ic_testkit::pocket_ic::common::rest::RawMessageId;
+use ic_platform::pocket_ic::common::rest::RawMessageId;
 
 fn probe(pic: &PocketIc, hub: Principal, caller: Principal) -> Result<Principal, Error> {
     (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {

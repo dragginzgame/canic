@@ -30,7 +30,6 @@ pub fn install(input: &ServiceInstallationInput) {
         ServiceInstallationCandidate {
             configuration: input.configuration,
             project: &input.project,
-            completion_verifier: input.completion_verifier,
             release: ic_blob_storage::LIBRARY_VERSION,
             platform_installation_version: ic_platform::cdk::api::canister_version(),
         },

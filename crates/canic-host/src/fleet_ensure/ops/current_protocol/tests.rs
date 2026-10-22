@@ -1951,6 +1951,10 @@ fn fresh_fleet_store_bootstrap_is_deterministic() {
         prepared_manifests[0].payload_hash,
         compiled.expected_bootstrap.catalog[0].payload_hash
     );
+    assert_eq!(
+        prepared_manifests[0].store_binding,
+        WasmStoreBinding::owned(authority.wasm_store_authority.wasm_store.to_text())
+    );
     assert_ne!(compiled.bootstrap_request.operation_id, [0; 32]);
 
     fs::remove_dir_all(root).expect("remove test root");

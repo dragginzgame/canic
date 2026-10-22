@@ -4,7 +4,7 @@ use super::*;
 use canic::dto::component_registry::{RootMembershipRequest, RootMembershipResponse};
 use ic_platform::candid::contract::types::TypeInner;
 use ic_platform::candid::contract::types::{Function, internal::TypeContainer, subtype};
-use ic_testkit::pocket_ic::ErrorCode;
+use ic_platform::pocket_ic::ErrorCode;
 
 pub(super) fn assert_candid_contract(candid: &[u8]) {
     let source = std::str::from_utf8(candid).expect("Root Candid UTF-8");

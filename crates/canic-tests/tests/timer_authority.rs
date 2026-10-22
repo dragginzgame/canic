@@ -21,9 +21,12 @@ use canic_contracts::dto::wire::projection::fixture_timer_authority::{
 };
 use canic_testing_internal::pic::{CanicPicExt, install_lifecycle_boundary_fixture, upgrade_args};
 use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
-use ic_testkit::pic::{CanisterInstallExt, PocketIc, RetryPolicy};
 use serde::Deserialize;
 use std::time::Duration;
+use {
+    ic_platform::pocket_ic::PocketIc,
+    ic_testkit::pic::{CanisterInstallExt, RetryPolicy},
+};
 
 const READY_TICK_LIMIT: usize = 120;
 const INSTALL_CODE_RETRY_LIMIT: usize = 4;

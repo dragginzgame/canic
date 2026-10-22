@@ -1,8 +1,8 @@
 # Shared Tooling adoption
 
 The [manifest](../../.shared-tooling.snapshot) records reviewed files from
-committed revision `3bef3f2daec7f64f875397ed4d53d5b9e2e68a08` (0.15.0),
-with 115 selected files. Explicit entrypoints record the maintained selection;
+committed revision `4cb9bc907154225a3f7e4c33fd8d75fbeaa125c8` (0.26.6),
+with 133 selected files. Explicit entrypoints record the maintained selection;
 the exporter derives required companions and verifies ownership before retiring
 unused payloads. Refreshes reuse that selection without repeating file arguments.
 [AGENTS.md](../../AGENTS.md) retains the product overlay. Refresh only through

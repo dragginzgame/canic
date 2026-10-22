@@ -5747,8 +5747,8 @@ fn unreadable_plan_without_recovery_evidence_preserves_bytes_and_refuses_effects
     reason = "one governed journey keeps literal-zero planning, lost-Create resume, convergence and second-run proof together"
 )]
 fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects() {
-    use ic_testkit::pic::PocketIcBuilder;
-    use ic_testkit::pocket_ic::{CanisterSettings, CreateCanisterParams, PocketIc};
+    use ic_platform::pocket_ic::PocketIcBuilder;
+    use ic_platform::pocket_ic::{CanisterSettings, CreateCanisterParams, PocketIc};
 
     struct PocketPlatform {
         create_outcomes: BTreeMap<String, EffectOutcome>,

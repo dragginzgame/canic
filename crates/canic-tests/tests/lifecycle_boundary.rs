@@ -21,8 +21,11 @@ use ic_platform::{
     candid::{contract::encode_args, decoder::decode_args},
     principal::ExternalPrincipal as Principal,
 };
-use ic_testkit::pic::{CanisterInstallExt, PocketIc, RetryPolicy};
 use std::{any::Any, time::Duration};
+use {
+    ic_platform::pocket_ic::PocketIc,
+    ic_testkit::pic::{CanisterInstallExt, RetryPolicy},
+};
 
 const INSTALL_CODE_RETRY_LIMIT: usize = 4;
 const INSTALL_CODE_COOLDOWN: Duration = Duration::from_mins(5);

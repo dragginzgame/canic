@@ -277,7 +277,7 @@ fn qualify_bounded_startup_retry(pic: &PocketIc, root: Principal, parent: Princi
 // rounds so deferred startup can execute while the original ingress is pending.
 fn complete_ingress(
     pic: &PocketIc,
-    message: ic_testkit::pocket_ic::common::rest::RawMessageId,
+    message: ic_platform::pocket_ic::common::rest::RawMessageId,
 ) -> Vec<u8> {
     for _ in 0..2048 {
         pic.advance_time(Duration::from_millis(10));

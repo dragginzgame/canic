@@ -35,13 +35,13 @@ use ic_platform::{
     candid::contract::{encode_args, encode_one},
     principal::ExternalPrincipal as Principal,
 };
-use ic_testkit::{
-    Fake,
-    pic::{PocketIc, PocketIcBuilder},
-};
 use std::{
     path::{Path, PathBuf},
     sync::OnceLock,
+};
+use {
+    ic_platform::pocket_ic::{PocketIc, PocketIcBuilder},
+    ic_testkit::fake_principal,
 };
 
 const INSTALL_CYCLES: u128 = 1_000_000_000_000;
@@ -331,7 +331,7 @@ pub fn install_lifecycle_boundary_fixture() -> LifecycleBoundaryFixture {
     let wasms = build_canisters_once(&workspace_root);
 
     LifecycleBoundaryFixture {
-        root: Fake::principal(1),
+        root: fake_principal(1),
         canic_wasm: wasms.wasm("canister_test"),
         runtime_probe_wasm: wasms.wasm("runtime_probe"),
         authority_wasm: wasms.wasm("intent_authority"),
@@ -350,7 +350,7 @@ pub fn install_managed_lifecycle_fixture() -> ManagedLifecycleFixture {
     let wasms = build_managed_lifecycle_canister_once(&workspace_root);
 
     ManagedLifecycleFixture {
-        root: Fake::principal(1),
+        root: fake_principal(1),
         wasm: wasms.wasm("managed_lifecycle_probe"),
         pic: start_pocket_ic(PocketIcBuilder::new().with_application_subnet()),
     }
@@ -359,7 +359,7 @@ pub fn install_managed_lifecycle_fixture() -> ManagedLifecycleFixture {
 /// Encode the intentionally invalid init payload used by lifecycle boundary checks.
 #[must_use]
 pub fn invalid_init_args() -> Vec<u8> {
-    encode_init_args(init_payload(Fake::principal(9), Fake::principal(1)))
+    encode_init_args(init_payload(fake_principal(9), fake_principal(1)))
 }
 
 /// Encode the empty tuple argument used for no-payload upgrades.
@@ -553,12 +553,12 @@ fn init_payload_for_config(
         .project_for_admissions(&admissions)
         .and_then(|topology| topology.digest())
         .expect("lifecycle Component topology projection");
-    let placement_subnet = SubnetId::from_principal(Fake::principal(2));
+    let placement_subnet = SubnetId::from_principal(fake_principal(2));
     let authority = FleetRegistryAuthority {
         binding: FleetCoordinatorBinding {
             fleet: identity.fleet.clone(),
-            coordinator_subnet: SubnetId::from_principal(Fake::principal(3)),
-            coordinator: Fake::principal(4),
+            coordinator_subnet: SubnetId::from_principal(fake_principal(3)),
+            coordinator: fake_principal(4),
             recovery_controllers: Vec::new(),
         },
         epoch: 1,
@@ -601,7 +601,7 @@ fn init_payload_for_config(
     let policy = compile_installed_fleet_admission_policy(
         identity.fleet,
         1,
-        vec![Fake::principal(15)],
+        vec![fake_principal(15)],
         Vec::new(),
     )
     .expect("lifecycle Fleet admission policy");
@@ -689,7 +689,7 @@ mod fast_tests {
 
     #[test]
     fn init_payload_component_spec_matches_embedded_canister_config() {
-        let payload = init_payload(Fake::principal(3), Fake::principal(1));
+        let payload = init_payload(fake_principal(3), fake_principal(1));
         let CanisterInitAuthority::Component { root, binding } = payload.authority else {
             panic!("managed lifecycle Component authority");
         };
@@ -736,10 +736,10 @@ mod tests {
         },
         protocol::CANIC_COMMAND,
     };
-    use ic_testkit::pic::CanisterInstallExt;
-    use ic_testkit::pocket_ic::common::rest::{
+    use ic_platform::pocket_ic::common::rest::{
         CanisterHttpReply, CanisterHttpResponse, MockCanisterHttpResponse,
     };
+    use ic_testkit::pic::CanisterInstallExt;
     use std::time::Duration;
 
     fn standalone_memory_allocations(
@@ -1130,10 +1130,10 @@ mod tests {
     fn managed_projection_fences_then_opens_and_restores() {
         let fixture = install_lifecycle_boundary_fixture();
         let (canister, directory) = fixture.install_canic_canister_with_directory();
-        let second_root = Fake::principal(2);
+        let second_root = fake_principal(2);
         let (second_canister, second_directory) =
             fixture.install_canic_canister_with_directory_for_root(second_root);
-        let admitted = Fake::principal(15);
+        let admitted = fake_principal(15);
 
         let prepared = admission_status(&fixture.pic, canister, fixture.root);
         let second_prepared = admission_status(&fixture.pic, second_canister, second_root);
@@ -1183,7 +1183,7 @@ mod tests {
             admission_probe(&fixture.pic, second_canister, admitted),
             Ok(())
         );
-        assert!(admission_probe(&fixture.pic, canister, Fake::principal(16)).is_err());
+        assert!(admission_probe(&fixture.pic, canister, fake_principal(16)).is_err());
 
         fixture
             .pic
@@ -1209,8 +1209,8 @@ mod tests {
     fn explicit_guard_matches_canic_endpoint_on_direct_ingress() {
         let fixture = install_managed_lifecycle_fixture();
         let (canister, directory) = fixture.install_managed_canister();
-        let admitted = Fake::principal(15);
-        let unlisted = Fake::principal(16);
+        let admitted = fake_principal(15);
+        let unlisted = fake_principal(16);
 
         let prepared_call: Result<Result<ManagedGuardReceipt, Error>, _> =
             (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
@@ -1441,7 +1441,7 @@ mod tests {
         let successor_policy = compile_installed_fleet_admission_policy(
             initial.authority.fleet.clone(),
             initial.generation + 1,
-            vec![Fake::principal(15), Fake::principal(16)],
+            vec![fake_principal(15), fake_principal(16)],
             Vec::new(),
         )
         .expect("successor admission policy");
@@ -1469,7 +1469,7 @@ mod tests {
             try_transition_target(
                 &fixture.pic,
                 canister,
-                Fake::principal(99),
+                fake_principal(99),
                 ManagedCommand::PrepareFleetAdmission(Box::new(valid_prepare())),
             )
             .is_err()
@@ -1477,7 +1477,7 @@ mod tests {
         assert_unchanged();
 
         let mut wrong_coordinator = valid_prepare();
-        wrong_coordinator.successor.authority.coordinator = Fake::principal(98);
+        wrong_coordinator.successor.authority.coordinator = fake_principal(98);
         assert!(
             try_transition_target(
                 &fixture.pic,
@@ -1505,10 +1505,10 @@ mod tests {
         let mut wrong_target = valid_prepare();
         match &mut wrong_target.successor.target {
             canic::ids::ManagedCanisterBinding::Component(binding) => {
-                binding.canister_id = Fake::principal(97);
+                binding.canister_id = fake_principal(97);
             }
             canic::ids::ManagedCanisterBinding::ComponentChild(binding) => {
-                binding.canister_id = Fake::principal(97);
+                binding.canister_id = fake_principal(97);
             }
         }
         assert!(
@@ -1582,7 +1582,7 @@ mod tests {
         let fenced = admission_status(&fixture.pic, canister, fixture.root);
         assert_eq!(fenced.phase, FleetAdmissionProjectionPhase::Fenced);
         assert!(fenced.prepared.is_some());
-        assert!(managed_admission_probe(&fixture.pic, canister, Fake::principal(15)).is_err());
+        assert!(managed_admission_probe(&fixture.pic, canister, fake_principal(15)).is_err());
 
         let activate = FleetAdmissionActivateTargetRequest {
             operation_id,
@@ -1659,8 +1659,8 @@ mod tests {
             ManagedCommandResponse::OpenFleetAdmission(open_receipt.clone())
         );
         assert_eq!(
-            managed_admission_probe(&fixture.pic, canister, Fake::principal(16)),
-            Ok(Fake::principal(16))
+            managed_admission_probe(&fixture.pic, canister, fake_principal(16)),
+            Ok(fake_principal(16))
         );
 
         fixture
@@ -1691,7 +1691,7 @@ mod tests {
 
         let wasms = build_managed_lifecycle_canister_once(&workspace_root);
         let wasm = wasms.wasm("managed_lifecycle_probe");
-        let admitted = Fake::principal(15);
+        let admitted = fake_principal(15);
         let input = canic::testing::ManagedAppQualificationInput::new(
             include_str!("../../../../canisters/test/managed_lifecycle_probe/canic.toml"),
             "test",
@@ -1776,7 +1776,7 @@ mod tests {
             FleetAdmissionProjectionPhase::Open
         );
         fixture
-            .prepare_admission_successor([0x94; 32], vec![admitted, Fake::principal(16)])
+            .prepare_admission_successor([0x94; 32], vec![admitted, fake_principal(16)])
             .expect("fence successor through published managed-App support");
         assert_eq!(
             fixture
@@ -1843,8 +1843,8 @@ mod tests {
         super::super::caller_authority::qualify_candid(&workspace_root);
 
         let wasms = build_managed_component_group_canisters_once(&workspace_root);
-        let admitted = Fake::principal(15);
-        let unlisted = Fake::principal(16);
+        let admitted = fake_principal(15);
+        let unlisted = fake_principal(16);
         let artifact = |role: &str, package: &str| {
             canic::testing::ManagedRoleQualificationArtifact::new(
                 role.parse().expect("canonical fixture role"),
@@ -1980,7 +1980,7 @@ mod tests {
         let assigned: Result<Principal, Error> =
             (|| -> Result<_, Box<dyn std::error::Error + Send + Sync>> {
                 let request_bytes =
-                    ic_platform::candid::contract::encode_args((Fake::principal(17),))?;
+                    ic_platform::candid::contract::encode_args((fake_principal(17),))?;
                 let reply = ic_testkit::pic::try_pocket_ic_operation(|| {
                     (fixture.pic()).update_call(user_hub, admitted, "create_account", request_bytes)
                 })
@@ -2155,11 +2155,7 @@ mod tests {
         super::super::caller_authority::qualify_delivery(&fixture, user_hub, user_shard);
 
         fixture
-            .prepare_admission_successor(
-                user_shard,
-                [0xc4; 32],
-                vec![admitted, Fake::principal(18)],
-            )
+            .prepare_admission_successor(user_shard, [0xc4; 32], vec![admitted, fake_principal(18)])
             .expect("fence child with exact successor projection");
         assert_eq!(
             fixture

@@ -101,7 +101,11 @@ impl PublicMetricsOps {
         let now = IcOps::now_nanos();
         PublicHealth {
             canister_id: IcOps::canister_self(),
-            role: EnvOps::canister_role().ok().map(|role| role.to_string()),
+            role: if EnvOps::is_fleet_coordinator_runtime() {
+                Some("fleet_coordinator".to_string())
+            } else {
+                EnvOps::canister_role().ok().map(|role| role.to_string())
+            },
             health: PublicHealthStatus::Responding,
             observed_at_ns: now,
         }

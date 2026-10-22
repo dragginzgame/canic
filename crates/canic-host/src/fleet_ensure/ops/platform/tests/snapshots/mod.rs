@@ -6,7 +6,7 @@ use crate::{
     test_support::{start_pocket_ic, synthetic_identity_pem},
 };
 use ic_platform::agent::{BasicIdentity, Identity};
-use ic_testkit::pocket_ic::{CanisterSettings, PocketIcBuilder};
+use ic_platform::pocket_ic::{CanisterSettings, PocketIcBuilder};
 use std::{fs, sync::Mutex};
 
 #[test]

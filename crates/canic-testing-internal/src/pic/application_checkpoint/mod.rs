@@ -10,11 +10,13 @@ use canic_contracts::{
     ids::{ApplicationCheckpointBinding as Binding, ApplicationCheckpointPhase as Phase},
 };
 use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
-use ic_testkit::pic::{
-    CanisterInstallExt, CanisterSnapshotTarget, PocketIc, PocketIcSnapshotExt,
-    SnapshotRestoreFunding,
-};
 use serde::Deserialize;
+use {
+    ic_platform::pocket_ic::PocketIc,
+    ic_testkit::pic::{
+        CanisterInstallExt, CanisterSnapshotTarget, PocketIcSnapshotExt, SnapshotRestoreFunding,
+    },
+};
 
 /// Fixture-owned business and hook evidence returned by the participant.
 #[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]

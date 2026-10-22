@@ -55,33 +55,59 @@ Upstream owns provider and service-policy acceptance; Canic must not duplicate
 that engine to complete its adapter. See the current handoff for the exact graph
 and completed local qualification, rather than treating this scope as evidence.
 
-## Remaining qualification
+## Qualified framework integration and remaining deployment evidence
 
-The managed cases now cover successful local preparation, one-shot certificate
-replies, verifier-only attestation, reference replay/release and download refusal,
-with two uploaders in dedicated and embedded compositions. They also check public
-accounting and sampler restoration. Blob fence metrics observe the current platform
-version through the shared owner before publication; sampling cannot clear a fence.
+Published Blob/contracts 0.41 use trusted registration: issuing the one-shot
+certificate atomically registers retention intent and the first live reference.
+`Registered` does not prove uploaded bytes, provider availability or retention.
+The adapter has no completion verifier, attestation endpoint or worker.
+Installation and owned Wire schemas change; use clean retirement/reinstall,
+without carrying old installation state or retry bytes into this release.
 
-The mounted-operation acceptance under
-[#620](https://github.com/dragginzgame/canic/issues/620) is locally qualified:
-service/namespace and caller bindings, expired admission/preparation, pre-exposure
-revocation, malformed/oversized certificate input, uncollected certificate replies,
-and restoration after preparation/exposure. Full attestation receipts retain their
-original acceptance time. Confirmed-upload withdrawal preserves live references.
-Both #620 and the metrics work under
-[#621](https://github.com/dragginzgame/canic/issues/621) await delivery.
-Controlled bytes and a fixture verifier do not qualify external provider reads or
-operation. Local acceptance is not 100% end-to-end production readiness.
+Both dedicated and embedded managed PocketIC cases pass on the selected 0.41
+packages. They cover exact endpoint declarations, bounded installation decoding,
+tenant and uploader isolation, two uploads, preparation, certificate issuance,
+uncollected certificate replies, retained first references, reference replay and
+release, download-descriptor authority, expired/revoked permissions and
+same-release restoration. Retained references are observable while fenced;
+mutations require authenticated recovery. Registration is inspected using the
+original identity and never authorizes a replacement certificate request.
+Public accounting, sampler restoration and embedded application state are covered.
 
-Deployed serving/integrity, independent verifier operation and provider deletion
-or billing cessation retain their upstream acceptance issues:
+Canic-owned framework acceptance for
+[#620](https://github.com/dragginzgame/canic/issues/620) and
+[#621](https://github.com/dragginzgame/canic/issues/621) is locally qualified;
+default-branch delivery remains separate. Native strict Clippy covers the migrated
+packages and both independent consumers, including isolated internal feature
+selection. Controlled fixture bytes do not establish provider availability.
+
+These journeys invoke every mounted method but do not establish exhaustive
+behavioral coverage. The
+[0.41.1 ownership and coverage audit](../../audits/working/blob-0411-adoption.md)
+tracks the remaining gateway/account and receipt/history acceptance branches under
+[#622](https://github.com/dragginzgame/canic/issues/622). Export parity alone is
+not complete behavioral coverage.
+The first follow-through adds admission/manifest, content/headroom, history and
+receipt checks in both compositions, including original observations after
+restoration. Local status and empty-journal funding inspection also cover operator
+authority, exact scope, explicit blockers and restored observations. Controlled
+provider replies now cover gateway refresh/revocation/cancellation and account
+balance inspection, including malformed data, lost replies and restored fences.
+Oversized account and gateway replies produce typed refusals; account state stays
+unchanged and the pending gateway sequence remains available for exact cancellation.
+Payment-relationship inspection also covers exact service/payer bindings, signed
+figures and wide counters, absent relationships, structured provider errors and
+malformed/oversized responses without changing local funding state.
+All current methods have direct calls; delayed callback races, populated
+pagination and paid-funding acceptance are not implied by that method coverage.
+
+End-to-end production readiness still needs upstream/provider evidence:
 [serving](https://github.com/dragginzgame/ic-blob-storage/issues/5),
 [reference/deletion](https://github.com/dragginzgame/ic-blob-storage/issues/6),
-[multi-user uploads](https://github.com/dragginzgame/ic-blob-storage/issues/31),
-[GC callbacks](https://github.com/dragginzgame/ic-blob-storage/issues/32) and
-[completion verifier](https://github.com/dragginzgame/ic-blob-storage/issues/33).
-Local composition evidence must not be reported as complete production readiness.
+[multi-user uploads](https://github.com/dragginzgame/ic-blob-storage/issues/31) and
+[GC callbacks](https://github.com/dragginzgame/ic-blob-storage/issues/32).
+No native macOS, installed-IC, real-provider deletion or billing-cessation evidence
+is claimed by these Linux PocketIC tests. See the current handoff for exact logs.
 
 ## Dependency version ownership
 
@@ -345,13 +371,11 @@ The adapter does not export `_immutableObjectStorageBlobsAreLive`,
 `_immutableObjectStorageConfirmBlobDeletion`. Provider behavior when those
 callbacks are absent is unqualified; logical release alone cannot establish
 provider deletion. [Blob #32](https://github.com/dragginzgame/ic-blob-storage/issues/32)
-owns that gateway contract. Upload completion also requires the configured
-external `completion_verifier`; the adapter supplies no verifier deployment
-([Blob #33](https://github.com/dragginzgame/ic-blob-storage/issues/33)). The service
-includes an [application-operated private native worker recipe](https://github.com/dragginzgame/ic-blob-storage/blob/v0.22.1/docs/completion-verifier.md)
-using its existing observation, attestation and exact-reconciliation commands.
-Its two-browser reference uses a local provider substitute. Application signer
-operation, worker availability and real provider acceptance remain required.
+owns that gateway contract. Certificate issuance records trusted retention intent,
+not completion evidence. Applications decide when to publish an asset and must
+handle unavailable provider bytes. Verified download remains a separate shared
+Blob operation; no operator-controlled attestation or verifier deployment is
+required by the maintained contract.
 
 Production post-allocation binding currently requires a Root controller. A
 shared Blob Component can use this existing controller route;
@@ -391,7 +415,7 @@ identities. All rows are gauges, attributed to the storage canister itself.
 | Metric | Meaning |
 | --- | --- |
 | `blob.logical_bytes` | Tenant logical bytes plus active reservations |
-| `blob.physical_bytes` | Confirmed physical bytes plus active reservations |
+| `blob.physical_bytes` | Registered physical bytes plus active reservations |
 | `blob.liability_bytes` | Unsettled confirmed bytes plus active reservations; not a currency amount |
 | `blob.reserved_bytes` | Active reservations, already included once in each byte total above |
 | `blob.active_reservations` | Active or possibly exposed operations, including zero-byte uploads |

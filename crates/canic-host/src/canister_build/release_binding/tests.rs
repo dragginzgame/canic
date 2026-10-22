@@ -112,7 +112,7 @@ fn governed_pocketic_release_binding_retains_runtime_identity() {
         canister_build::CanisterBuildProfile,
     };
     use canic_contracts::ids::BuildNetwork;
-    use ic_testkit::pic::PocketIcBuilder;
+    use ic_platform::pocket_ic::PocketIcBuilder;
     use std::fs;
 
     let root = crate::test_support::temp_dir("release-binding");
@@ -202,7 +202,7 @@ lto = true
 }
 
 fn assert_runtime_identity(
-    pic: &ic_testkit::pocket_ic::PocketIc,
+    pic: &ic_platform::pocket_ic::PocketIc,
     bound: &[u8],
     template: &[u8],
     id: ReleaseBuildId,
@@ -233,7 +233,7 @@ fn assert_runtime_identity(
         .unwrap_err();
     assert_eq!(
         rejected.reject_code,
-        ic_testkit::pocket_ic::RejectCode::CanisterError
+        ic_platform::pocket_ic::RejectCode::CanisterError
     );
     let unbound = pic
         .reinstall_canister(
@@ -245,7 +245,7 @@ fn assert_runtime_identity(
         .unwrap_err();
     assert_eq!(
         unbound.reject_code,
-        ic_testkit::pocket_ic::RejectCode::CanisterError
+        ic_platform::pocket_ic::RejectCode::CanisterError
     );
     pic.reinstall_canister(canister, bound.to_vec(), id.to_string().into_bytes(), None)
         .unwrap();

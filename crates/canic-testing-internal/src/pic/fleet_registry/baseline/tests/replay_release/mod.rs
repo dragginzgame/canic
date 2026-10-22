@@ -16,8 +16,8 @@ use canic_host::fleet_ensure::ops::release::{
     intents::{ReleaseIntentsError, entry_key},
     receipts::{ReleaseReceiptsError, decode_response},
 };
+use ic_platform::pocket_ic::PocketIc;
 use ic_platform::principal::ExternalPrincipal as Principal;
-use ic_testkit::pic::PocketIc;
 
 /// Read the complete small fixture, proving replay, controller denial and unchanged balance.
 pub(super) fn collect(pic: &PocketIc, owner: Principal, method: &str) -> Vec<ReplayReleaseEntry> {

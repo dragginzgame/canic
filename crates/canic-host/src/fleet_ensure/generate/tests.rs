@@ -732,11 +732,46 @@ fn generation_rejects_component_demand_above_pool_target_before_observation() {
                     pool_target_cycles: 4_800_000_000_000,
                     required_cycles: 5_000_000_000_000,
                     root,
+                    ..
                 }
             )) if component_spec.as_str() == "app" && root == &fleet_root
         ),
         "{:?}",
         result.as_ref().err()
+    );
+
+    let child_config = format!(
+        r#"{}
+[roles.app_child]
+kind = "canister"
+package = "app_child"
+
+[component_specs.app.children.app_child]
+kind = "instance"
+initial_cycles = "20T"
+
+[component_specs.app.spawn_grants.app.app_child]
+maximum_instances_per_parent = 1
+"#,
+        multi_component_config()
+    );
+    fs::write(&app_config, child_config).expect("write excessive child demand");
+    fs::write(
+        &source_path,
+        multi_component_source_toml(&operator, &coordinator_subnet, &placement),
+    )
+    .expect("restore 5T pool source");
+    let error = generate_desired_fleet(&request)
+        .err()
+        .expect("oversized child must reject generation before observation");
+    std::assert_matches!(
+        error,
+        FleetGenerateError::ComponentPoolCapacity(RootPoolCapacityError::Insufficient {
+            canister_role,
+            pool_target_cycles: 5_000_000_000_000,
+            required_cycles: 20_000_000_000_000,
+            ..
+        }) if canister_role.as_str() == "app_child"
     );
 }
 

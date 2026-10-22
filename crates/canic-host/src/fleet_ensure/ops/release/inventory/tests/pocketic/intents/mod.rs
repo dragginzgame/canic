@@ -5,7 +5,7 @@ use crate::fleet_ensure::ops::release::{
     intents::{self, ReleaseIntentsError as Failure, ReleaseIntentsStage as Stage},
     observation::ReleaseObservationError,
 };
-use ic_testkit::pocket_ic::PocketIc;
+use ic_platform::pocket_ic::PocketIc;
 
 pub(super) fn assert_census(
     pic: &PocketIc,

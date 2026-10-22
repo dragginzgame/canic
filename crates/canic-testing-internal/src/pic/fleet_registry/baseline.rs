@@ -11,8 +11,8 @@ use super::build::{
 use super::build::{
     build_pic, build_test_root_wasm, build_test_wasm_store_wasm, root_canister_config_path,
 };
+use ic_platform::pocket_ic::PocketIc;
 use ic_platform::principal::ExternalPrincipal as Principal;
-use ic_testkit::pic::PocketIc;
 use std::path::Path;
 
 const ROOT_INSTALL_CYCLES: u128 = 80_000_000_000_000;
@@ -222,6 +222,11 @@ mod tests {
         TemplateStagingStatusResponse,
     };
     #[cfg(test)]
+    use canic_contracts::dto::wire::projection::fixture_root_topology::{
+        RootStatusRequest as RootStoreOverviewRequest,
+        RootStatusResponse as RootStoreOverviewResponse,
+    };
+    #[cfg(test)]
     use canic_contracts::ids::BuildNetwork;
     #[cfg(test)]
     use canic_contracts::ids::CyclesFundingBudget;
@@ -357,9 +362,9 @@ mod tests {
         TimeResetPolicy, is_dead_pocket_ic_transport_error,
     };
     #[cfg(test)]
-    use ic_testkit::pocket_ic::{
-        CanisterSettings, CreateCanisterParams, CreateCanisterPlacement,
-        common::rest::RawEffectivePrincipal,
+    use {
+        ic_platform::pocket_ic::common::rest::RawEffectivePrincipal,
+        ic_platform::pocket_ic::{CanisterSettings, CreateCanisterParams, CreateCanisterPlacement},
     };
 
     #[cfg(test)]
@@ -6330,6 +6335,53 @@ exec icp "$@"
             nonterminal.is_empty(),
             "an immediate Store/Root replay must issue no update; nonterminal={nonterminal:?}"
         );
+        let reply = pic
+            .query_call(
+                installed.root_id,
+                Principal::anonymous(),
+                canic::protocol::CANIC_ROOT_STATUS,
+                encode_one(RootStoreOverviewRequest::StoreOverview).unwrap(),
+            )
+            .expect("query registered Store bindings");
+        let (overview,): (Result<RootStoreOverviewResponse, Error>,) =
+            ic_platform::candid::decode_args(&reply, canic::testing::CANDID_REPLY_LIMITS)
+                .expect("decode Store overview");
+        let RootStoreOverviewResponse::StoreOverview(overview) = overview.unwrap() else {
+            panic!("Root returned a differently correlated Store overview");
+        };
+        let store = overview
+            .stores
+            .iter()
+            .find(|store| store.pid == wasm_store)
+            .expect("bootstrapped Store is registered");
+        assert_eq!(
+            overview.publication.active_binding.as_ref(),
+            Some(&store.binding)
+        );
+        let version = TemplateVersion::owned(union.release_build_id.to_string());
+        assert!(!store_sequence.expected_bootstrap.catalog.is_empty());
+        for entry in &store_sequence.expected_bootstrap.catalog {
+            let template_id = TemplateId::owned(format!(
+                "{ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX}{}",
+                entry.role
+            ));
+            let status = current_store_staging_status(
+                &pic,
+                wasm_store,
+                installation_controller,
+                &template_id,
+                &version,
+            );
+            assert!(status.complete);
+            assert_eq!(status.stored_chunk_count, status.expected_chunk_count);
+            let manifest = status.manifest.expect("approved catalog manifest");
+            assert_eq!(manifest.store_binding, store.binding);
+            assert_eq!(manifest.manifest_state, TemplateManifestState::Approved);
+            assert_eq!(manifest.template_id, template_id);
+            assert_eq!(manifest.version, version);
+            assert_eq!(manifest.payload_hash, entry.payload_hash);
+            assert_eq!(manifest.payload_size_bytes, entry.payload_size_bytes);
+        }
         qualify_independent_store_chunks(&pic, wasm_store, installation_controller);
         std::fs::remove_dir_all(artifact_root).expect("remove artifact-union fixture");
     }
@@ -8226,7 +8278,7 @@ esac
                 .update_canister_settings(
                     principal,
                     None,
-                    ic_testkit::pocket_ic::CanisterSettings {
+                    ic_platform::pocket_ic::CanisterSettings {
                         controllers: Some(vec![Principal::anonymous(), operator]),
                         ..Default::default()
                     },
@@ -18462,7 +18514,7 @@ cycles = "80T"
                     version: version.clone(),
                     payload_hash: wasm_hash(&bytes),
                     payload_size_bytes: bytes.len() as u64,
-                    store_binding: WasmStoreBinding::new("bootstrap"),
+                    store_binding: WasmStoreBinding::owned(store.to_text()),
                     chunking_mode: TemplateChunkingMode::Chunked,
                     manifest_state: TemplateManifestState::Approved,
                     approved_at: Some(0),

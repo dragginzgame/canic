@@ -213,7 +213,10 @@ fn child_binding_validation_is_placement_strategy_neutral() {
 fn app_failure_projection_retains_decoder_limits_and_transport_classification() {
     use super::super::managed_app::ManagedAppQualificationError as App;
     use ic_platform::candid::DecodeError;
-    use ic_testkit::pic::{ErrorCode, PocketIcOperationError, RejectCode, RejectResponse};
+    use {
+        ic_platform::pocket_ic::{ErrorCode, RejectCode, RejectResponse},
+        ic_testkit::pic::PocketIcOperationError,
+    };
 
     let error =
         ManagedComponentGroupQualificationError::from(App::Decode(DecodeError::ReplyTooLarge {

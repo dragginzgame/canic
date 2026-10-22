@@ -702,12 +702,15 @@ exact local Component Registry preparation before Component provisioning in
 that order. Every configured initial placement must appear once and every
 selected Root must be a declared Root role.
 
-Every admitted Component Spec's release-bound `initial_cycles` must be less
-than or equal to the owning Root's exact pool `canister_cycles` target. Canic
-checks this while generating desired state and again while planning from a
-current desired document. A stale or edited 4.8T pool target therefore cannot
-reach live provisioning for a 5T Component: the no-effect diagnostic names the
-Root, Component Spec, exact target and required cycles.
+Every admitted Component Spec's Component and descendant roles must have
+release-bound `initial_cycles` less than or equal to the owning Root's exact
+pool `canister_cycles` target. This includes children created later through
+spawn grants, Placement Index or sharding, and uses each role's own configured
+or default cycle allocation. Canic checks this while generating desired state
+and again while planning from a current desired document. A 5T pool cannot
+admit a 20T child even when its Component requires only 5T. The diagnostic names
+the Root, Component Spec, offending role, exact target and required cycles;
+planning stops before live provisioning.
 
 All cycle quantities are exact decimal strings. Unknown fields and unknown
 schema generations reject. Wasm, binary init-argument, and drain-Candid files

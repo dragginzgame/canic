@@ -188,7 +188,7 @@ fn assert_balance_control_requires_controller(pic: &PocketIc, root: Principal) {
         .expect_err("a non-controller cannot burn the audit Root's balance");
     assert_eq!(
         denied.reject_code,
-        ic_testkit::pocket_ic::RejectCode::CanisterReject
+        ic_platform::pocket_ic::RejectCode::CanisterReject
     );
 }
 

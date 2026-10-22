@@ -61,7 +61,7 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, recovery: bool) {
         input.pic.set_stable_memory(
             id,
             vec![0x38; 65_536],
-            ic_testkit::pocket_ic::common::rest::BlobCompression::NoCompression,
+            ic_platform::pocket_ic::common::rest::BlobCompression::NoCompression,
         );
     }
     let network_key: [u8; 32] = wasm_hash(&input.pic.root_key().unwrap())

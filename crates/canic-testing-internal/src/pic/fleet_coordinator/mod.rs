@@ -52,9 +52,9 @@ mod tests {
         },
     };
     use ic_platform::{candid::contract::encode_one, principal::ExternalPrincipal as Principal};
-    use ic_testkit::pic::{
-        CanisterSnapshotTarget, PocketIc, PocketIcBuilder, PocketIcSnapshotExt,
-        SnapshotRestoreFunding,
+    use {
+        ic_platform::pocket_ic::{PocketIc, PocketIcBuilder},
+        ic_testkit::pic::{CanisterSnapshotTarget, PocketIcSnapshotExt, SnapshotRestoreFunding},
     };
 
     const INSTALL_CYCLES: u128 = 500_000_000_000_000;
@@ -203,6 +203,33 @@ placement.maximum_members_per_root = 1
 placement.minimum_distinct_roots = 2
 "#;
 
+    fn assert_public_health(pic: &PocketIc, coordinator: Principal) {
+        use canic_contracts::dto::wire::coordinator::{PublicStatusRequest, PublicStatusResponse};
+        let query = |request| {
+            let bytes = pic
+                .query_call(
+                    coordinator,
+                    principal(99),
+                    "canic_public_status",
+                    encode_one(request).unwrap(),
+                )
+                .unwrap();
+            let (result,): (Result<PublicStatusResponse, Error>,) =
+                ic_platform::candid::decode_args(&bytes, canic::testing::CANDID_REPLY_LIMITS)
+                    .unwrap();
+            result.unwrap()
+        };
+        let PublicStatusResponse::Health(health) = query(PublicStatusRequest::Health) else {
+            panic!("Health response");
+        };
+        let PublicStatusResponse::Overview(overview) = query(PublicStatusRequest::Overview) else {
+            panic!("Overview response");
+        };
+        assert_eq!(health.canister_id, coordinator);
+        assert_eq!(health.role.as_deref(), Some("fleet_coordinator"));
+        assert_eq!(health.role.as_deref(), Some(overview.role.as_str()));
+    }
+
     fn assert_supported_standards(pic: &PocketIc, coordinator: Principal) {
         let reply = pic
             .query_call(
@@ -247,6 +274,7 @@ placement.minimum_distinct_roots = 2
         );
 
         assert_supported_standards(&pic, coordinator);
+        assert_public_health(&pic, coordinator);
 
         let CoordinatorObservabilityResponse::RegistryVersion(genesis) = status(
             &pic,
@@ -430,6 +458,7 @@ placement.minimum_distinct_roots = 2
             },
         )
         .expect("Coordinator snapshot restore");
+        assert_public_health(pic, coordinator);
         let CoordinatorObservabilityResponse::AuthorityRestore(restored) = status(
             pic,
             coordinator,

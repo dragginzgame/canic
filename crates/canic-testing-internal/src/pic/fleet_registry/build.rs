@@ -4,9 +4,9 @@ use ic_build::artifacts::{
     ArtifactCacheOutcome, ArtifactCachePreparation, ArtifactCacheSpec, WasmBuildSpec,
     prepare_artifact_cache, resolve_cargo_build_inputs,
 };
-use ic_testkit::pic::{PocketIc, PocketIcBuilder};
 #[cfg(test)]
-use ic_testkit::pocket_ic::common::rest::{IcpFeatures, IcpFeaturesConfig};
+use ic_platform::pocket_ic::common::rest::{IcpFeatures, IcpFeaturesConfig};
+use ic_platform::pocket_ic::{PocketIc, PocketIcBuilder};
 #[cfg(test)]
 use std::time::SystemTime;
 use std::{

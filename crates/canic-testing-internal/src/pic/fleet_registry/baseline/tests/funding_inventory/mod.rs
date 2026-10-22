@@ -18,11 +18,11 @@ use canic_contracts::dto::{
         funding_observation::Command,
     },
 };
+use ic_platform::pocket_ic::PocketIc;
 use ic_platform::{
     candid::{contract::encode_one, decoder::decode_one},
     principal::ExternalPrincipal as Principal,
 };
-use ic_testkit::pic::PocketIc;
 
 /// Observe the real Ledger/CMC completion through the controller-only release census.
 pub(super) fn assert_release_funding(

@@ -13,7 +13,7 @@ use canic_contracts::dto::{
     },
 };
 use canic_core::shared_support::fleet_funding_policy::fleet_subnet_root_funding_policy_hash;
-use ic_testkit::pocket_ic::PocketIc;
+use ic_platform::pocket_ic::PocketIc;
 
 pub(super) fn assert_census(
     pic: &PocketIc,

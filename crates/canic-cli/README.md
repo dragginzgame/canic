@@ -264,11 +264,13 @@ canic network enroll local \
   --fingerprint "$network_root_fingerprint"
 ```
 
-The `replica` group owns local launcher lifecycle. If ICP reports the selected
-local network already stopped, `replica stop` checks its configured gateway from
-the resolved ICP root. A reachable gateway with no proven owner produces a
-refusal. Stop a foreground replica with Ctrl-C in its launching terminal, or stop
-the exact owning ICP project/network.
+The `replica` group owns local launcher lifecycle. After ICP reports successful
+stop or an already-stopped network, `replica stop` checks the selected configured
+IPv4 loopback gateway with a bounded TCP connection. A listener causes refusal,
+even if its HTTP status is unhealthy; other connection errors also prevent success.
+This check does not establish process ownership or authorize termination. Stop a
+foreground replica with Ctrl-C in its launching terminal, or stop the exact owning
+ICP project/network. Orphan reclamation is not implemented.
 
 `evidence` validates and gates stable evidence documents. `state` audits declared
 Canic metadata. Use leaf `--help` output for the current grammar.

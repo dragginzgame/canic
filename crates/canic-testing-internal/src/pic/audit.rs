@@ -1,7 +1,10 @@
 use crate::canister::{APP, SCALE_HUB};
 use ic_platform::principal::ExternalPrincipal as Principal;
-use ic_testkit::pic::{PocketIc, PocketIcBuilder, StandaloneCanisterFixture};
 use std::path::{Path, PathBuf};
+use {
+    ic_platform::pocket_ic::{PocketIc, PocketIcBuilder},
+    ic_testkit::pic::StandaloneCanisterFixture,
+};
 
 use super::{
     CanicPicExt, CanicWasmBuildProfile,

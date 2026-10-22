@@ -3,15 +3,7 @@ use super::*;
 #[cfg(unix)]
 use crate::test_support::TempDir;
 #[cfg(unix)]
-use std::{
-    fs,
-    io::{BufRead, BufReader, Write},
-    net::TcpListener,
-    os::unix::fs::PermissionsExt,
-    path::PathBuf,
-    thread,
-    time::{Duration, Instant},
-};
+use std::{fs, net::TcpListener, os::unix::fs::PermissionsExt, path::PathBuf};
 
 // Ensure replica start defaults to foreground mode while allowing background use.
 #[test]
@@ -243,86 +235,55 @@ fn detects_project_local_network_not_running() {
 #[cfg(unix)]
 #[test]
 fn stop_checks_the_selected_gateway_when_the_network_is_absent() {
-    for reachable in [true, false] {
-        let root = TempDir::new("canic-replica-stop-gateway");
-        fs::create_dir_all(&root).unwrap();
-        let selected_root = fs::canonicalize(&root).unwrap();
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        listener.set_nonblocking(true).unwrap();
-        let port = listener.local_addr().unwrap().port();
-        fs::write(
-            root.join("icp.yaml"),
-            format!(
+    for status in [0, 1] {
+        for reachable in [true, false] {
+            let root = TempDir::new("canic-replica-stop-gateway");
+            fs::create_dir_all(&root).unwrap();
+            let selected_root = fs::canonicalize(&root).unwrap();
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let port = listener.local_addr().unwrap().port();
+            fs::write(root.join("icp.yaml"), format!(
                 "networks:\n  - name: local\n    mode: managed\n    gateway:\n      port: {port}\n"
-            ),
-        )
-        .unwrap();
-        let server = thread::spawn(move || {
-            let deadline = Instant::now() + Duration::from_secs(5);
-            let stream = loop {
-                match listener.accept() {
-                    Ok((stream, _)) => break stream,
-                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                        assert!(
-                            Instant::now() < deadline,
-                            "selected gateway was not queried"
-                        );
-                        thread::sleep(Duration::from_millis(10));
-                    }
-                    Err(error) => panic!("accept selected gateway request: {error}"),
-                }
-            };
-            stream
-                .set_read_timeout(Some(Duration::from_secs(5)))
-                .unwrap();
-            let mut request = BufReader::new(stream);
-            let mut first_line = String::new();
-            request.read_line(&mut first_line).unwrap();
-            loop {
-                let mut line = String::new();
-                assert!(request.read_line(&mut line).unwrap() > 0);
-                if line == "\r\n" {
-                    break;
-                }
-            }
-            let status = if reachable {
-                "200 OK"
+            )).unwrap();
+            let listener = if reachable {
+                Some(listener)
             } else {
-                "503 Service Unavailable"
+                drop(listener);
+                None
             };
-            write!(
-                request.get_mut(),
-                "HTTP/1.1 {status}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
-            )
-            .unwrap();
-            first_line
-        });
-        let executable = write_stop_icp(&root, 1, "Error: network 'local' is not running");
-        let icp = IcpCli::new(executable.to_str().unwrap(), None);
-        let result = stop_local_replica(&icp, &selected_root, true);
-        assert_eq!(server.join().unwrap(), "GET /api/v2/status HTTP/1.1\r\n");
-        if reachable {
-            std::assert_matches!(
-                result,
-                Err(ReplicaCommandError::ForeignLocalReplicaReachable)
+            // A bare TCP listener deliberately provides no healthy HTTP response.
+            let executable = write_stop_icp(&root, status, "Error: network 'local' is not running");
+            let icp = IcpCli::new(executable.to_str().unwrap(), None);
+            let result = stop_local_replica(&icp, &selected_root, true);
+            match (status, reachable) {
+                (0, true) => {
+                    std::assert_matches!(result, Err(ReplicaCommandError::GatewayStillListening { port: actual }) if actual == port);
+                }
+                (_, true) => std::assert_matches!(
+                    result,
+                    Err(ReplicaCommandError::ForeignLocalReplicaReachable)
+                ),
+                (_, false) => result.unwrap(),
+            }
+            if let Some(listener) = listener {
+                // Unknown listener custody is unchanged by both refusal paths.
+                assert!(std::net::TcpStream::connect(listener.local_addr().unwrap()).is_ok());
+            }
+            assert_eq!(
+                fs::read_to_string(root.join("calls")).unwrap(),
+                "network\nstop\nlocal\n--debug\n"
             );
-        } else {
-            result.unwrap();
+            assert_eq!(
+                fs::read_to_string(root.join("selected-roots"))
+                    .unwrap()
+                    .trim(),
+                selected_root.to_str().unwrap()
+            );
+            assert_eq!(
+                fs::read_to_string(root.join("cwd")).unwrap().trim(),
+                selected_root.to_str().unwrap()
+            );
         }
-        assert_eq!(
-            fs::read_to_string(root.join("calls")).unwrap(),
-            "network\nstop\nlocal\n--debug\n"
-        );
-        assert_eq!(
-            fs::read_to_string(root.join("selected-roots"))
-                .unwrap()
-                .trim(),
-            selected_root.to_str().unwrap()
-        );
-        assert_eq!(
-            fs::read_to_string(root.join("cwd")).unwrap().trim(),
-            selected_root.to_str().unwrap()
-        );
     }
 }
 
@@ -342,6 +303,16 @@ fn stop_preserves_success_and_typed_command_failures() {
     {
         let root = TempDir::new("canic-replica-stop-result");
         fs::create_dir_all(&root).unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        fs::write(
+            root.join("icp.yaml"),
+            format!(
+                "networks:\n  - name: local\n    mode: managed\n    gateway:\n      port: {port}\n"
+            ),
+        )
+        .unwrap();
+        drop(listener);
         let executable = write_stop_icp(&root, status, diagnostic);
         let icp = IcpCli::new(executable.to_str().unwrap(), None);
         let result = stop_local_replica(&icp, &root, false);

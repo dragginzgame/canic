@@ -231,7 +231,7 @@ fn qualify_terminal_diagnostic(pic: &PocketIc, root: Principal, hub: Principal, 
         .unwrap_err();
     assert_eq!(
         rejected.error_code,
-        ic_testkit::pic::ErrorCode::CanisterOutOfCycles
+        ic_platform::pocket_ic::ErrorCode::CanisterOutOfCycles
     );
     assert_eq!(terminal_failure(pic, root, child), before);
 }

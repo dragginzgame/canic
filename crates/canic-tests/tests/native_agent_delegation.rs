@@ -26,8 +26,8 @@ use ic_stable_structures::{
     memory_manager::{MemoryId, MemoryManager},
 };
 use ic_testkit::pic::{CanisterInstallExt, RetryPolicy};
-use ic_testkit::pocket_ic::{PocketIc, common::rest::BlobCompression};
 use std::{cell::RefCell, rc::Rc, time::Duration};
+use {ic_platform::pocket_ic::PocketIc, ic_platform::pocket_ic::common::rest::BlobCompression};
 
 const MAX_LOCAL_AUTHORIZATION_INSTRUCTIONS: u64 = 1_000_000;
 const INSTALL_CODE_RETRY_LIMIT: usize = 4;
@@ -126,7 +126,7 @@ fn selected_issuer_corruption_rejects_same_release_restore() {
     drop(fixture);
     assert_eq!(
         error.error_code,
-        ic_testkit::pic::ErrorCode::CanisterCalledTrap
+        ic_platform::pocket_ic::ErrorCode::CanisterCalledTrap
     );
 }
 

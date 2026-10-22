@@ -9,7 +9,7 @@ use canic_testing_internal::{
     pic::{invalid_init_args, managed_test_init_identity, upgrade_args},
 };
 use ic_platform::candid::decoder::{decode_args, decode_one};
-use ic_testkit::Fake;
+use ic_testkit::fake_principal;
 
 // Verify canonical test role constants stay aligned with canister role names.
 #[test]
@@ -43,7 +43,7 @@ fn invalid_init_args_encode_mismatched_component_authority() {
         panic!("invalid fixture must carry Component authority");
     };
     assert_eq!(binding.authority.binding.fleet, identity.fleet);
-    assert_eq!(binding.canister_id, Fake::principal(9));
+    assert_eq!(binding.canister_id, fake_principal(9));
 }
 
 // Verify the upgrade fixture is the empty tuple expected by no-payload upgrades.

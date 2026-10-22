@@ -7,12 +7,16 @@ use ic_platform::{
     candid::contract::{CandidType, encode_one},
     principal::ExternalPrincipal as Principal,
 };
-use ic_testkit::pic::{InstallSpec, PocketIc, PocketIcBuilder, RetryPolicy, prelude::*};
 use serde::Deserialize;
 use std::{
     path::{Path, PathBuf},
     sync::OnceLock,
     time::Duration,
+};
+use {
+    ic_platform::pocket_ic::{PocketIc, PocketIcBuilder},
+    ic_testkit::pic::prelude::*,
+    ic_testkit::pic::{InstallSpec, RetryPolicy},
 };
 
 const INSTALL_CYCLES: u128 = 1_000_000_000_000;

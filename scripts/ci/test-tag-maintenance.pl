@@ -1,4 +1,5 @@
 #!/usr/bin/env perl
+# Shared companions: scripts/dev/delete-github-tags-up-to.pl
 use strict;
 use warnings;
 use Cwd qw(abs_path);
