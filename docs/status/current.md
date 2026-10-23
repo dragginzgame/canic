@@ -2313,6 +2313,22 @@ then address any installed bootstrap failure. The earlier activation failure is
 historical evidence, not proof that this replacement now passes. Blob #89 remains
 an independent upstream blocker. No broad gates or Git/release actions ran.
 
+## Explicit memory handoff refresh — 2026-10-20
+
+The existing handoff contribution now includes committed main `4caeec25d` and
+published Memory 0.48.2. Cold bootstrap publishes one shared runtime only after
+commitment; warm checks reuse that authority without replaying admission. The
+retired pool cache is not restored. All 29 Core memory cases and actual Rust
+1.91 native/Wasm library checks pass. Strict Core test Clippy reports ten lints
+in files identical to main; those errors are outside this change. A disposable
+native Canic/IcyDB proof passes same-instance binding, one admission, retained
+live payload/lease, warm generation stability and retry after mismatch. Its
+selected family is Memory 0.48.2 / Storage 0.5.4; a fresh graph instead selects
+Storage 0.5.7 / Memory 0.49 and rejects mixed handles. Final dependency adoption,
+installed composition and native macOS acceptance remain consumer-owned. No
+normal sibling checkout, release version, integration ref or publication changed.
+
+
 ## Focused restore and Build 0.19 qualification — 2026-10-19
 
 Continue 0.112 with the framework Candid protocol unchanged and live coordinated

@@ -37,6 +37,7 @@ fn checked_provider_is_available_before_bootstrap_and_after_warm_adoption() {
         .requests
         .push(ic_memory::MemoryRequest::new("provider-test", "provider_test.rows.v1").unwrap());
     canic::memory::bootstrap(input).unwrap();
+    let shared = canic::memory::runtime::shared_runtime().unwrap();
     assert_eq!(grow_application_memory(), 0);
     assert_eq!(application_memory_pool().unwrap(), before);
     let mut input = canic::memory::framework();
@@ -46,6 +47,14 @@ fn checked_provider_is_available_before_bootstrap_and_after_warm_adoption() {
         .push(ic_memory::MemoryRequest::new("provider-test", "provider_test.rows.v1").unwrap());
     canic::memory::bootstrap(input).unwrap();
     assert_eq!(grow_application_memory(), 1);
+    let repeated = canic::memory::runtime::shared_runtime().unwrap();
+    assert!(std::rc::Rc::ptr_eq(&shared, &repeated));
+    let lease = shared.open_memory("provider_test.rows.v1").unwrap();
+    assert!(matches!(
+        repeated.open_memory("provider_test.rows.v1"),
+        Err(ic_memory::RuntimeOpenError::AlreadyOpen { .. })
+    ));
+    drop(lease);
     assert_eq!(application_memory_pool().unwrap(), before);
 }
 

@@ -542,6 +542,11 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
 ### ⚠️ Breaking
 
+- **Composed memory:** expose the committed host runtime through
+  `memory::runtime::shared_runtime()` for explicit component binding. Complete
+  bootstrap before handoff; exact warm replay verifies the binding through the
+  shared owner without rerunning admission or invalidating live leases.
+
 - **Host rendering and backup checksums:** remove Canic's table engine and checksum
   record in favor of Host Text and IC Backup. Build tables use underlined columns;
   malformed checksum records reject during decoding. Consumers must use upstream

@@ -454,3 +454,14 @@ upstream slot type does not grant allocation authority.
 - [Browse runtime features](README.md)
 - [Browse all documentation](../../README.md)
 - [Back to the main README](../../../README.md)
+
+## Component runtime handoff
+
+After the lifecycle root commits its complete requests, grants and admission,
+`canic::memory::runtime::shared_runtime()` returns that same committed runtime
+for synchronous component binding. Bind consumers before invoking their startup
+participant. This does not create another manager or grant additional keys.
+Finish bootstrap before handoff. Exact warm bootstrap verifies the committed
+request/pool/policy binding without mutable access, admission replay or new
+allocation; a mismatch refuses while retaining the existing runtime and leases.
+Runtime diagnostics and Canic stores use the same allocation authority.
