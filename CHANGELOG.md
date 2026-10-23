@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Stage releases from the same complete file inventory as the shared runner,
+  including both private Blob consumer lockfiles. Refuse inventory failures
+  before changing the index.
+
 - Adopt Shared Tooling 0.26.6 for Cargo graph checks and retained failure evidence.
 
 - Align published IC dependency minimums and both Blob consumer locks with

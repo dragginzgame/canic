@@ -229,12 +229,11 @@ release-patch-fast:
 	@$(MAKE) release-push
 
 release-stage:
-	@version="$$(bash scripts/ci/read-workspace-version.sh)"; \
-		minor_line="$${version%.*}"; \
-		git add Cargo.toml Cargo.lock CHANGELOG.md scripts/dev/install_dev.sh \
-			release-validation.json \
-			"docs/changelog/$$minor_line.md" \
-			$$(git ls-files -m -- '*/Cargo.toml' || true)
+	@paths="$$(mktemp "$${TMPDIR:-/tmp}/canic-release-files.XXXXXX")" || exit $$?; \
+		trap 'rm -f -- "$$paths"' EXIT; \
+		version="$$(bash scripts/ci/read-workspace-version.sh)" || exit $$?; \
+		RELEASE_VERSION="$$version" bash scripts/release/adapter.sh files > "$$paths" || exit $$?; \
+		git --literal-pathspecs add --pathspec-from-file="$$paths" --pathspec-file-nul
 
 release-candidate:
 	bash scripts/ci/check-release-candidate.sh
@@ -389,6 +388,7 @@ release-integrity-contract-gate:
 	bash scripts/ci/test-release-commit-view.sh
 	bash scripts/ci/test-commit-release.sh
 	bash scripts/ci/test-release-recipes.sh
+	bash scripts/ci/test-release-stage.sh
 	MAKEFLAGS='-- RELEASE_PREVIOUS=9.9.9 RELEASE_KIND=minor RELEASE_VERSION=9.10.0' bash scripts/release/test-preflight.sh
 	bash scripts/ci/test-release-validation-lane.sh
 	bash scripts/ci/check-publish-manifest-boundary.sh
