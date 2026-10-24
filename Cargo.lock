@@ -2620,9 +2620,9 @@ checksum = "3aa440238acf049dc652b9cd9a932b79b19e5562f8e80d6994d3eb92523221a4"
 
 [[package]]
 name = "ic-metrics"
-version = "0.15.0"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee8bcc41cde9657498086117ef1cfa826ef7b2e3ff06b4245db1b0b2e96c093f"
+checksum = "04672103617e91ccda77460401d29f1e23256e1689766b1741129242a7121988"
 
 [[package]]
 name = "ic-platform"
@@ -2755,11 +2755,11 @@ dependencies = [
 
 [[package]]
 name = "ic-timers"
-version = "0.30.8"
+version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b4f17793f1f9848c2000e6e875287f4dd175e914d4059a0292dcade1e43a3f4"
+checksum = "8acd92583f67a4b314a7ac52cf797d1a3335b9143e94e5083c1543424b7c8f7b"
 dependencies = [
- "ic-metrics 0.15.0",
+ "ic-metrics 0.16.0",
  "ic-platform",
  "thiserror 2.0.18",
 ]
