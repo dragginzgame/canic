@@ -16,6 +16,8 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
   management-helper and IC0 dependencies without changing lifecycle ownership.
 
 - Share Canic's operator-health projection between runtime status and metrics.
+  Reuse the current framework's exact, representable timer-counter admission
+  in the older adapter branch rather than narrowing new counter types silently.
 
 ### ⚠️ Breaking
 
