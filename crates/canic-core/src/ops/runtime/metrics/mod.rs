@@ -433,14 +433,14 @@ fn inter_canister_call_entries() -> Vec<MetricEntry> {
 fn timer_entries(snapshots: &[ic_timers::TimerSnapshot]) -> Vec<MetricEntry> {
     snapshots
         .iter()
-        .map(|snapshot| {
+        .filter_map(|snapshot| {
             let identity = snapshot.identity();
             let counters = snapshot.observability().counters();
             let latest_delay_ms = snapshot
                 .latest_armed_delay_ns()
                 .unwrap_or_default()
                 .saturating_div(1_000_000);
-            MetricEntry {
+            Some(MetricEntry {
                 labels: vec![
                     snapshot.policy().label().to_string(),
                     identity.owner().to_string(),
@@ -449,10 +449,12 @@ fn timer_entries(snapshots: &[ic_timers::TimerSnapshot]) -> Vec<MetricEntry> {
                 ],
                 principal: None,
                 value: MetricValue::CountAndU64 {
-                    count: counters.work_started(),
+                    count: crate::ops::runtime::timer_status::counter_total(&[
+                        counters.work_started()
+                    ])?,
                     value_u64: latest_delay_ms,
                 },
-            }
+            })
         })
         .collect()
 }
