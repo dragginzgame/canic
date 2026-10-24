@@ -665,10 +665,8 @@ name = "canic-icydb"
 version = "0.111.0"
 dependencies = [
  "canic-macros",
- "ic-cdk",
- "ic-cdk-management-canister",
+ "ic-platform",
  "ic-timers",
- "ic0",
 ]
 
 [[package]]
@@ -2430,20 +2428,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ic-cdk-management-canister"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c8fb578283e842e9f2c84a4477f751ee2146bea13017a10d227afd952d349a2"
-dependencies = [
- "candid",
- "ic-cdk",
- "ic-management-canister-types 0.11.0",
- "serde",
- "serde_bytes",
- "thiserror 2.0.18",
-]
-
-[[package]]
 name = "ic-certification"
 version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2642,16 +2626,19 @@ checksum = "ee8bcc41cde9657498086117ef1cfa826ef7b2e3ff06b4245db1b0b2e96c093f"
 
 [[package]]
 name = "ic-platform"
-version = "0.5.1"
+version = "0.6.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4469fe3e1e7ea4b8cb57db1e32d9906ca95fdb93df5110e4a289352917dc9c76"
+checksum = "0a89ca2109e79e00b8e8008f942bd4b2c0f26d1821376c1863d178ee3ad021a4"
 dependencies = [
+ "candid",
  "crc32fast",
  "data-encoding",
  "ic-cdk-executor",
  "ic0",
  "ic_principal",
+ "pin-project-lite",
  "serde",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -2768,9 +2755,9 @@ dependencies = [
 
 [[package]]
 name = "ic-timers"
-version = "0.30.0"
+version = "0.30.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05a9d0f47406f1ca601e7e1fd0c9064a8c4b7a43af980798747620f10168303a"
+checksum = "2b4f17793f1f9848c2000e6e875287f4dd175e914d4059a0292dcade1e43a3f4"
 dependencies = [
  "ic-metrics 0.15.0",
  "ic-platform",

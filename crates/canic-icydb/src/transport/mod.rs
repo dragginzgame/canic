@@ -1,5 +1,7 @@
 //! Bounded raw IC transport; native database codecs are supplied by the consumer.
 
+use ic_platform::ic0;
+
 /// Admit the raw argument length before allocating or copying ingress bytes.
 /// Returns `None` on admission/allocation failure or outside Wasm execution.
 #[must_use]

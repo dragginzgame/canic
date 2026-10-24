@@ -21,12 +21,12 @@
 /// ```ignore
 /// canic_icydb::start!(icydb; participant);
 ///
-/// #[ic_cdk::init]
+/// // Inside the application's own init export:
 /// fn init() {
 ///     crate::__icydb_lifecycle_participant::init();
 /// }
 ///
-/// #[ic_cdk::post_upgrade]
+/// // Inside the application's own post-upgrade export:
 /// fn post_upgrade() {
 ///     crate::__icydb_lifecycle_participant::post_upgrade();
 /// }
@@ -151,7 +151,7 @@ macro_rules! __icydb_start_participant_lifecycle {
                         state.set(State::Running);
                         true
                     }
-                    State::Running => $crate::__private::cdk::trap(
+                    State::Running => $crate::__private::cdk::api::trap(
                         "IcyDB lifecycle participant re-entered while running",
                     ),
                     State::Completed => false,
@@ -216,7 +216,7 @@ macro_rules! __icydb_start_lifecycle {
         fn __icydb_startup_init() {
             let ($($init_arg,)*): ($($init_ty,)*) = match $crate::read_arguments(crate::__icydb_facade::wire::MAX_REQUEST_BYTES).ok_or(crate::__icydb_facade::wire::Error::Limit).and_then(|bytes| crate::__icydb_facade::wire::decode_init_arguments(&bytes)) {
                 Ok(arguments) => arguments,
-                Err(_) => $crate::__private::cdk::trap("invalid IcyDB init arguments"),
+                Err(_) => $crate::__private::cdk::api::trap("invalid IcyDB init arguments"),
             };
             crate::__icydb_host::__icydb_startup_init();
             let (): () = crate::__icydb_facade::db::with_request_execution(|| ($init)($($init_arg),*));
@@ -226,7 +226,7 @@ macro_rules! __icydb_start_lifecycle {
         fn __icydb_startup_post_upgrade() {
             let ($($upgrade_arg,)*): ($($upgrade_ty,)*) = match $crate::read_arguments(crate::__icydb_facade::wire::MAX_REQUEST_BYTES).ok_or(crate::__icydb_facade::wire::Error::Limit).and_then(|bytes| crate::__icydb_facade::wire::decode_post_upgrade_arguments(&bytes)) {
                 Ok(arguments) => arguments,
-                Err(_) => $crate::__private::cdk::trap("invalid IcyDB post-upgrade arguments"),
+                Err(_) => $crate::__private::cdk::api::trap("invalid IcyDB post-upgrade arguments"),
             };
             crate::__icydb_host::__icydb_startup_post_upgrade();
             let (): () = crate::__icydb_facade::db::with_request_execution(

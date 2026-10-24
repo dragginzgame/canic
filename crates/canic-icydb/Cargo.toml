@@ -11,10 +11,8 @@ readme = "README.md"
 
 [dependencies]
 canic-macros.workspace = true
-ic-cdk.workspace = true
-ic-cdk-management-canister.workspace = true
+ic-platform = { workspace = true, features = ["candid", "runtime"] }
 ic-timers.workspace = true
-ic0.workspace = true
 
 [lints]
 workspace = true

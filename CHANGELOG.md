@@ -10,12 +10,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
-- Select IC Timers 0.30 and its matching Metrics dependency without changing
-  timer lifecycle or watchdog policy.
+- Align the standalone IcyDB adapter with Timers 0.30.8 and Platform 0.6.11.
+  Platform owns its runtime, raw system calls and external management Candid;
+  database methods retain their Wire contract. Remove the adapter's direct CDK,
+  management-helper and IC0 dependencies without changing lifecycle ownership.
 
-- Align the standalone IcyDB host adapter with Timer 0.27 so consuming
-  applications resolve one timer runtime; share Canic's operator-health
-  projection between runtime status and metrics.
+- Share Canic's operator-health projection between runtime status and metrics.
 
 ### ⚠️ Breaking
 
