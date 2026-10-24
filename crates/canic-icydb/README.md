@@ -6,8 +6,13 @@ actual `icydb` facade binding to `start!`; emitted code is checked against that
 binding. The adapter has no runtime IcyDB or Memory dependency, so it cannot create
 a parallel allocator or duplicate the application's native database types.
 Database semantics, accepted schema authority, retained state and precommit reply
-admission remain with IcyDB. Native methods have no Candid envelope. The upstream
-SDK management call used for entropy retains its own Candid protocol.
+admission remain with IcyDB. Native methods have no Candid envelope. Published
+Platform owns runtime calls, the shared executor and raw IC0 boundary. The
+external management `raw_rand` call retains its Candid protocol through Platform,
+with bounded reply admission and the existing single-flight/cancellation policy.
+Do not add a direct CDK or a second timer/memory runtime to consuming canisters.
+Generated caller context uses Platform's owned Principal, matching IcyDB's
+current boundary; external Candid identities stay within their protocol adapter.
 
 ## Application Wire methods
 

@@ -48,7 +48,7 @@ macro_rules! __icydb_host_module {
 
         fn initialize_startup_timer_runtime() {
             if $crate::__private::ic_timers::initialize_runtime().is_err() {
-                $crate::__private::cdk::trap(
+                $crate::__private::cdk::api::trap(
                     "IcyDB timer runtime initialization failed",
                 );
             }
@@ -62,7 +62,7 @@ macro_rules! __icydb_host_module {
                 "recovery",
             ) {
                 Ok(identity) => identity,
-                Err(_) => $crate::__private::cdk::trap(
+                Err(_) => $crate::__private::cdk::api::trap(
                     "IcyDB startup watchdog identity is invalid",
                 ),
             }
@@ -74,7 +74,7 @@ macro_rules! __icydb_host_module {
                 ::std::time::Duration::from_secs(1),
             ) {
                 Ok(cadence) => cadence,
-                Err(_) => $crate::__private::cdk::trap(
+                Err(_) => $crate::__private::cdk::api::trap(
                     "IcyDB startup watchdog cadence is invalid",
                 ),
             }
@@ -88,7 +88,7 @@ macro_rules! __icydb_host_module {
             let cadence = startup_watchdog_cadence();
             STARTUP_WATCHDOG_REGISTRATION.with(|slot| {
                 let Ok(mut registration) = slot.try_borrow_mut() else {
-                    $crate::__private::cdk::trap(
+                    $crate::__private::cdk::api::trap(
                         "IcyDB startup watchdog reconciliation is reentrant",
                     );
                 };
@@ -101,7 +101,7 @@ macro_rules! __icydb_host_module {
                 )
                 .is_err()
                 {
-                    $crate::__private::cdk::trap(
+                    $crate::__private::cdk::api::trap(
                         "IcyDB startup watchdog reconciliation failed",
                     );
                 }

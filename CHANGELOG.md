@@ -13,9 +13,14 @@ Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 - Share Canic's exact committed memory runtime with the IcyDB lifecycle
   participant, retaining one host bootstrap and exclusive allocation leases.
 
-- Align the standalone IcyDB host adapter with Timer 0.27 so consuming
-  applications resolve one timer runtime; share Canic's operator-health
-  projection between runtime status and metrics.
+- Align the standalone IcyDB adapter with Timers 0.30.8 and Platform 0.6.11.
+  Platform owns its runtime, raw system calls and external management Candid;
+  database methods retain their Wire contract. Remove the adapter's direct CDK,
+  management-helper and IC0 dependencies without changing lifecycle ownership.
+
+- Share Canic's operator-health projection between runtime status and metrics.
+  Reuse the current framework's exact, representable timer-counter admission
+  in the older adapter branch rather than narrowing new counter types silently.
 
 ### ⚠️ Breaking
 
