@@ -4,7 +4,7 @@ use ic_host_artifacts::wasm::WasmFacts;
 use ic_host_tools::interface::{ExportedMethod, MethodMode};
 use std::collections::BTreeSet;
 
-#[derive(Debug, Eq, PartialEq, thiserror::Error)]
+#[derive(Debug, Eq, thiserror::Error, PartialEq)]
 pub(super) enum DeclarationError {
     #[error("truncated raw endpoint declaration")]
     Framing,

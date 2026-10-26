@@ -2,16 +2,24 @@
 
 /// Include the generated private actor module emitted by the consumer's IcyDB build script.
 ///
-/// The final host must define `icydb_memory_pool() ->
+/// A standalone host must define `icydb_memory_pool() ->
 /// Result<icydb::db::MemoryAllocationPool, icydb::db::MemoryAllocationPoolError>`.
-/// Cold bootstrap uses this explicit pool's namespace grants and physical
-/// exclusions. An already committed host is adopted without invoking the provider.
+/// Standalone lifecycle bootstrap uses this pool's grants and exclusions.
+/// Participant hosts bind their committed runtime before startup; database access
+/// verifies that binding without constructing a manager.
 /// Permanent component keys never choose IDs or grant their own namespace.
 /// The generated public `icydb_memory_requests()` factory returns all database
 /// requests without opening stores. A composed host combines those requests with
 /// other components and passes a checked `icydb::db::SealedDeclarationSnapshot` to
 /// Memory bootstrap, invoking `icydb::db::prepare_memory_bootstrap` in its policy.
 /// IcyDB then verifies its requirements against that committed host once.
+///
+/// For a Canic-managed host, select `participant, runtime =
+/// canic::memory::runtime::shared_runtime`. The adapter binds that exact committed
+/// instance before either startup hook. Participant startup verifies the bound
+/// runtime; it does not construct a manager or request another pool callback.
+/// The host still composes requests and pre-commit admission once through
+/// `canic::start!(memory = ..., lifecycle_participant(...))`.
 ///
 /// The zero-argument form owns hidden install and post-upgrade lifecycle
 /// entries for canisters without application hooks. Applications that own
@@ -23,11 +31,13 @@
 ///
 /// // Inside the application's own init export:
 /// fn init() {
+///     host::bootstrap_and_bind_memory();
 ///     crate::__icydb_lifecycle_participant::init();
 /// }
 ///
 /// // Inside the application's own post-upgrade export:
 /// fn post_upgrade() {
+///     host::bootstrap_and_bind_memory();
 ///     crate::__icydb_lifecycle_participant::post_upgrade();
 /// }
 /// ```
@@ -65,12 +75,12 @@ macro_rules! start {
         $crate::__icydb_host_module!();
         $crate::__icydb_start_lifecycle!();
     };
-    ($database:path; participant) => {
+    ($database:path; participant $(, runtime = $runtime:path)?) => {
         use $database as __icydb_facade;
         use $crate::__private::cdk as __icydb_host_sdk;
         crate::__icydb_facade::__icydb_start_actor!();
         $crate::__icydb_host_module!();
-        $crate::__icydb_start_participant_lifecycle!();
+        $crate::__icydb_start_participant_lifecycle!($($runtime)?);
     };
     ($database:path;
         init($($init_arg:ident : $init_ty:ty),* $(,)?) => $init:path;
@@ -94,7 +104,7 @@ macro_rules! start {
     reason = "participant functions must call the consuming canister's generated actor"
 )]
 macro_rules! __icydb_start_participant_lifecycle {
-    () => {
+    ($($runtime:path)?) => {
         #[doc(hidden)]
         #[allow(
             dead_code,
@@ -164,6 +174,12 @@ macro_rules! __icydb_start_participant_lifecycle {
                 #[cfg(not(target_family = "wasm"))]
                 let mut rollback = NativeRollbackGuard::new();
 
+                $(
+                    let runtime = ($runtime)().unwrap_or_else(|error|
+                        $crate::__private::cdk::api::trap(format!("host memory unavailable: {error}")));
+                    crate::__icydb_facade::db::bind_memory_runtime(runtime).unwrap_or_else(|error|
+                        $crate::__private::cdk::api::trap(format!("IcyDB memory binding refused: {error}")));
+                )?
                 work();
                 STATE.with(|state| state.set(State::Completed));
 
@@ -199,11 +215,15 @@ macro_rules! __icydb_start_lifecycle {
     () => {
         #[$crate::__private::native_entry(init, name = "", sdk = crate::__icydb_host_sdk)]
         fn __icydb_startup_init() {
+            crate::bootstrap_standalone_memory(crate::icydb_memory_pool)
+                .unwrap_or_else(|error| $crate::__private::cdk::api::trap(error.to_string()));
             crate::__icydb_host::__icydb_startup_init();
         }
 
         #[$crate::__private::native_entry(post_upgrade, name = "", sdk = crate::__icydb_host_sdk)]
         fn __icydb_startup_post_upgrade() {
+            crate::bootstrap_standalone_memory(crate::icydb_memory_pool)
+                .unwrap_or_else(|error| $crate::__private::cdk::api::trap(error.to_string()));
             crate::__icydb_host::__icydb_startup_post_upgrade();
         }
     };
@@ -218,6 +238,8 @@ macro_rules! __icydb_start_lifecycle {
                 Ok(arguments) => arguments,
                 Err(_) => $crate::__private::cdk::api::trap("invalid IcyDB init arguments"),
             };
+            crate::bootstrap_standalone_memory(crate::icydb_memory_pool)
+                .unwrap_or_else(|error| $crate::__private::cdk::api::trap(error.to_string()));
             crate::__icydb_host::__icydb_startup_init();
             let (): () = crate::__icydb_facade::db::with_request_execution(|| ($init)($($init_arg),*));
         }
@@ -228,6 +250,8 @@ macro_rules! __icydb_start_lifecycle {
                 Ok(arguments) => arguments,
                 Err(_) => $crate::__private::cdk::api::trap("invalid IcyDB post-upgrade arguments"),
             };
+            crate::bootstrap_standalone_memory(crate::icydb_memory_pool)
+                .unwrap_or_else(|error| $crate::__private::cdk::api::trap(error.to_string()));
             crate::__icydb_host::__icydb_startup_post_upgrade();
             let (): () = crate::__icydb_facade::db::with_request_execution(
                 || ($post_upgrade)($($upgrade_arg),*)

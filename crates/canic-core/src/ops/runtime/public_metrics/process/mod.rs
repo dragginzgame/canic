@@ -10,13 +10,9 @@ use crate::{
     InternalError,
     domain::public_metrics::PublicMetricKind,
     model::public_metrics::PublicMetricSample,
-    ops::runtime::{
-        metrics::{
-            intent::IntentMetrics, placement_index::PlacementIndexMetrics,
-            platform_call::PlatformCallMetrics, system::SystemMetrics,
-            wasm_store::WasmStoreMetrics,
-        },
-        timer_process_condition,
+    ops::runtime::metrics::{
+        intent::IntentMetrics, placement_index::PlacementIndexMetrics,
+        platform_call::PlatformCallMetrics, system::SystemMetrics, wasm_store::WasmStoreMetrics,
     },
 };
 use std::collections::BTreeMap;
@@ -26,7 +22,7 @@ const MAX_PROCESS_SOURCE_ROWS: usize = 256;
 pub(super) fn operations() -> Result<Vec<PublicMetricSample>, InternalError> {
     let mut rows = process_rows()?;
     let inventory = ic_timers::timer_inventory().map_err(|_| InternalError::invalid_input())?;
-    rows.extend(timer_rows(inventory.timers()));
+    rows.extend(timer_rows(inventory.timers())?);
     Ok(rows)
 }
 
@@ -79,16 +75,18 @@ fn add(
     *total = total.saturating_add(count);
 }
 
-fn timer_rows(timers: &[ic_timers::TimerSnapshot]) -> Vec<PublicMetricSample> {
+fn timer_rows(
+    timers: &[ic_timers::TimerSnapshot],
+) -> Result<Vec<PublicMetricSample>, InternalError> {
     let mut counts = BTreeMap::new();
     // The timer owner admits at most 64 declarations, independently of topology size.
     for timer in timers {
-        let condition = timer_process_condition(
-            timer.state(),
-            timer.scheduling_mode(),
-            timer.observability().outcomes().last_outcome(),
+        add(
+            &mut counts,
+            "state",
+            crate::ops::runtime::timer_status::condition(timer).label(),
+            1,
         );
-        add(&mut counts, "state", condition.label(), 1);
         let counters = timer.observability().counters();
         for (name, value) in [
             ("schedule_requests", counters.schedule_requests()),
@@ -101,13 +99,18 @@ fn timer_rows(timers: &[ic_timers::TimerSnapshot]) -> Vec<PublicMetricSample> {
             ("unacknowledged", counters.unacknowledged()),
             ("coalesced", counters.coalesced()),
         ] {
-            add(&mut counts, "events", name, value);
+            let value = crate::ops::runtime::timer_status::counter_total(&[value])
+                .ok_or_else(InternalError::invalid_input)?;
+            let total = counts.entry(("events", name)).or_default();
+            *total = total
+                .checked_add(value)
+                .ok_or_else(InternalError::invalid_input)?;
         }
     }
-    counts
+    Ok(counts
         .into_iter()
         .map(|((category, name), value)| sample(format!("timer.{category}.{name}"), value, "count"))
-        .collect()
+        .collect())
 }
 
 #[cfg(target_arch = "wasm32")]
