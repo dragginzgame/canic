@@ -25,3 +25,23 @@ Use `serve_raw` for synchronous handlers. An asynchronous handler is spawned in
 the entrypoint's SDK executor and awaits `serve_raw_async`; both share admission
 and reply handling. Encoding failure traps the current message. Effects already
 committed before an await require the application's own recovery contract.
+
+## Endpoint contracts
+
+`canic_icydb::wire::Endpoint` owns the selected IcyDB method names and frame
+identities. One declaration generates name/ID lookup in both directions; native
+request and reply payloads remain database contracts. Envelope operations take
+`ic_wire::Limits` from the database's existing resource policy. Generated mounts
+carry `icydb::wire::limits` and its request/reply ceilings into those operations.
+Host callers use the same owner and policy:
+
+```rust,ignore
+let bytes = canic_icydb::wire::Endpoint::Query.encode_request(
+    sql,
+    icydb::wire::limits(icydb::wire::MAX_REQUEST_BYTES),
+)?;
+```
+
+Lifecycle argument envelopes use `canic_icydb::wire::encode_init_arguments` and
+`encode_post_upgrade_arguments` with the same native request limits. Retain exact
+frames for retries; decoding does not establish byte identity or authorization.

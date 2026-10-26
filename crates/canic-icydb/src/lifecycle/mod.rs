@@ -44,7 +44,7 @@
 /// ```
 ///
 /// Supply each composed hook's argument tuple, including `()`, as raw bytes
-/// from `icydb::wire::encode_init_arguments` or `icydb::wire::encode_post_upgrade_arguments`.
+/// from `canic_icydb::wire::encode_init_arguments` or `canic_icydb::wire::encode_post_upgrade_arguments`.
 ///
 /// IcyDB registers its startup watchdog before invoking either callback. The
 /// callback remains application-owned and must observe `startup_state()`
@@ -214,7 +214,7 @@ macro_rules! __icydb_start_lifecycle {
     ) => {
         #[$crate::__private::native_entry(init, name = "", sdk = crate::__icydb_host_sdk)]
         fn __icydb_startup_init() {
-            let ($($init_arg,)*): ($($init_ty,)*) = match $crate::read_arguments(crate::__icydb_facade::wire::MAX_REQUEST_BYTES).ok_or(crate::__icydb_facade::wire::Error::Limit).and_then(|bytes| crate::__icydb_facade::wire::decode_init_arguments(&bytes)) {
+            let ($($init_arg,)*): ($($init_ty,)*) = match $crate::read_arguments(crate::__icydb_facade::wire::MAX_REQUEST_BYTES).ok_or(crate::__icydb_facade::wire::Error::Limit).and_then(|bytes| $crate::wire::decode_init_arguments(&bytes, crate::__icydb_facade::wire::limits(crate::__icydb_facade::wire::MAX_REQUEST_BYTES))) {
                 Ok(arguments) => arguments,
                 Err(_) => $crate::__private::cdk::api::trap("invalid IcyDB init arguments"),
             };
@@ -224,7 +224,7 @@ macro_rules! __icydb_start_lifecycle {
 
         #[$crate::__private::native_entry(post_upgrade, name = "", sdk = crate::__icydb_host_sdk)]
         fn __icydb_startup_post_upgrade() {
-            let ($($upgrade_arg,)*): ($($upgrade_ty,)*) = match $crate::read_arguments(crate::__icydb_facade::wire::MAX_REQUEST_BYTES).ok_or(crate::__icydb_facade::wire::Error::Limit).and_then(|bytes| crate::__icydb_facade::wire::decode_post_upgrade_arguments(&bytes)) {
+            let ($($upgrade_arg,)*): ($($upgrade_ty,)*) = match $crate::read_arguments(crate::__icydb_facade::wire::MAX_REQUEST_BYTES).ok_or(crate::__icydb_facade::wire::Error::Limit).and_then(|bytes| $crate::wire::decode_post_upgrade_arguments(&bytes, crate::__icydb_facade::wire::limits(crate::__icydb_facade::wire::MAX_REQUEST_BYTES))) {
                 Ok(arguments) => arguments,
                 Err(_) => $crate::__private::cdk::api::trap("invalid IcyDB post-upgrade arguments"),
             };
