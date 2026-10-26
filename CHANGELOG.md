@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+### 📝 Summary
+
 - Adopt Shared Tooling 0.26.6 for Cargo graph checks and retained failure evidence.
 
 - Align published IC dependency minimums and both Blob consumer locks with
