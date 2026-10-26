@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.112.0]
 
+- Own IcyDB endpoint identities and lifecycle Wire envelopes in the adapter,
+  with one method roster and database-supplied resource admission (#590).
+
 Detailed notes: [docs/changelog/0.112.md](docs/changelog/0.112.md)
 
 - Admit Timers 0.31 in the standalone IcyDB adapter so consumers using Metrics

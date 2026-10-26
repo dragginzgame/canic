@@ -91,8 +91,8 @@ macro_rules! __icydb_endpoints_internal {
             #[used]
             #[expect(unsafe_code, reason = "generated method identity metadata belongs to its raw export")]
             #[unsafe(link_section = "icydb:wire")]
-            static CONTRACT: [u8; 8] = crate::__icydb_facade::wire::Endpoint::Query.id().to_le_bytes();
-            $crate::__icydb_serve!(crate::__icydb_facade::wire::Endpoint::Query, |sql: String| -> Result<__icydb_facade::db::sql::SqlQueryResult, __icydb_facade::Error> {
+            static CONTRACT: [u8; 8] = $crate::wire::Endpoint::Query.id().to_le_bytes();
+            $crate::__icydb_serve!($crate::wire::Endpoint::Query, |sql: String| -> Result<__icydb_facade::db::sql::SqlQueryResult, __icydb_facade::Error> {
 
                 let guard: crate::__icydb_facade::ReadAuthorizationGuard = $guard;
                 crate::__icydb_facade::__macro::authorize_sql_read(
@@ -124,8 +124,8 @@ macro_rules! __icydb_endpoints_internal {
             #[used]
             #[expect(unsafe_code, reason = "generated method identity metadata belongs to its raw export")]
             #[unsafe(link_section = "icydb:wire")]
-            static CONTRACT: [u8; 8] = crate::__icydb_facade::wire::Endpoint::Query.id().to_le_bytes();
-            $crate::__icydb_serve!(crate::__icydb_facade::wire::Endpoint::Query, |sql: String| -> Result<__icydb_facade::db::sql::SqlQueryResult, __icydb_facade::Error> {
+            static CONTRACT: [u8; 8] = $crate::wire::Endpoint::Query.id().to_le_bytes();
+            $crate::__icydb_serve!($crate::wire::Endpoint::Query, |sql: String| -> Result<__icydb_facade::db::sql::SqlQueryResult, __icydb_facade::Error> {
 
                 let guard: crate::__icydb_facade::ReadAuthorizationGuard = $guard;
                 crate::__icydb_facade::__macro::authorize_sql_read(
@@ -154,8 +154,8 @@ macro_rules! __icydb_endpoints_internal {
             #[used]
             #[expect(unsafe_code, reason = "generated method identity metadata belongs to its raw export")]
             #[unsafe(link_section = "icydb:wire")]
-            static CONTRACT: [u8; 8] = crate::__icydb_facade::wire::Endpoint::Query.id().to_le_bytes();
-            $crate::__icydb_serve!(crate::__icydb_facade::wire::Endpoint::Query, |sql: String| -> Result<__icydb_facade::db::sql::SqlQueryResult, __icydb_facade::Error> {
+            static CONTRACT: [u8; 8] = $crate::wire::Endpoint::Query.id().to_le_bytes();
+            $crate::__icydb_serve!($crate::wire::Endpoint::Query, |sql: String| -> Result<__icydb_facade::db::sql::SqlQueryResult, __icydb_facade::Error> {
 
                 crate::__icydb_endpoint_authorization::require_sql_controller()?;
                 crate::__icydb_facade::db::with_request_execution(|| {
@@ -180,8 +180,8 @@ macro_rules! __icydb_endpoints_internal {
             #[used]
             #[expect(unsafe_code, reason = "generated method identity metadata belongs to its raw export")]
             #[unsafe(link_section = "icydb:wire")]
-            static CONTRACT: [u8; 8] = crate::__icydb_facade::wire::Endpoint::Query.id().to_le_bytes();
-            $crate::__icydb_serve!(crate::__icydb_facade::wire::Endpoint::Query, |sql: String| -> Result<__icydb_facade::db::sql::SqlQueryResult, __icydb_facade::Error> {
+            static CONTRACT: [u8; 8] = $crate::wire::Endpoint::Query.id().to_le_bytes();
+            $crate::__icydb_serve!($crate::wire::Endpoint::Query, |sql: String| -> Result<__icydb_facade::db::sql::SqlQueryResult, __icydb_facade::Error> {
 
                 crate::__icydb_endpoint_authorization::require_sql_controller()?;
                 crate::__icydb_facade::db::with_request_execution(|| {
@@ -206,8 +206,8 @@ macro_rules! __icydb_endpoints_internal {
             #[used]
             #[expect(unsafe_code, reason = "generated method identity metadata belongs to its raw export")]
             #[unsafe(link_section = "icydb:wire")]
-            static CONTRACT: [u8; 8] = crate::__icydb_facade::wire::Endpoint::Ddl.id().to_le_bytes();
-            $crate::__icydb_serve!(crate::__icydb_facade::wire::Endpoint::Ddl, |sql: String| -> Result<__icydb_facade::db::sql::SqlQueryResult, __icydb_facade::Error> {
+            static CONTRACT: [u8; 8] = $crate::wire::Endpoint::Ddl.id().to_le_bytes();
+            $crate::__icydb_serve!($crate::wire::Endpoint::Ddl, |sql: String| -> Result<__icydb_facade::db::sql::SqlQueryResult, __icydb_facade::Error> {
 
                 crate::__icydb_endpoint_authorization::require_sql_controller()?;
                 crate::__icydb_facade::db::with_request_execution(|| {
@@ -232,8 +232,8 @@ macro_rules! __icydb_endpoints_internal {
             #[used]
             #[expect(unsafe_code, reason = "generated method identity metadata belongs to its raw export")]
             #[unsafe(link_section = "icydb:wire")]
-            static CONTRACT: [u8; 8] = crate::__icydb_facade::wire::Endpoint::Update.id().to_le_bytes();
-            $crate::__icydb_serve!(crate::__icydb_facade::wire::Endpoint::Update, |sql: String| -> Result<__icydb_facade::db::sql::SqlQueryResult, __icydb_facade::Error> {
+            static CONTRACT: [u8; 8] = $crate::wire::Endpoint::Update.id().to_le_bytes();
+            $crate::__icydb_serve!($crate::wire::Endpoint::Update, |sql: String| -> Result<__icydb_facade::db::sql::SqlQueryResult, __icydb_facade::Error> {
 
                 crate::__icydb_endpoint_authorization::require_sql_controller()?;
                 crate::__icydb_facade::db::with_request_execution(|| {
@@ -258,8 +258,8 @@ macro_rules! __icydb_endpoints_internal {
             #[used]
             #[expect(unsafe_code, reason = "generated method identity metadata belongs to its raw export")]
             #[unsafe(link_section = "icydb:wire")]
-            static CONTRACT: [u8; 8] = crate::__icydb_facade::wire::Endpoint::Update.id().to_le_bytes();
-            $crate::__icydb_serve!(crate::__icydb_facade::wire::Endpoint::Update, |sql: String| -> Result<__icydb_facade::db::sql::SqlQueryResult, __icydb_facade::Error> {
+            static CONTRACT: [u8; 8] = $crate::wire::Endpoint::Update.id().to_le_bytes();
+            $crate::__icydb_serve!($crate::wire::Endpoint::Update, |sql: String| -> Result<__icydb_facade::db::sql::SqlQueryResult, __icydb_facade::Error> {
 
                 crate::__icydb_endpoint_authorization::require_sql_controller()?;
                 crate::__icydb_facade::db::with_request_execution(|| {
@@ -288,8 +288,8 @@ macro_rules! __icydb_endpoints_internal {
             #[used]
             #[expect(unsafe_code, reason = "generated method identity metadata belongs to its raw export")]
             #[unsafe(link_section = "icydb:wire")]
-            static CONTRACT: [u8; 8] = crate::__icydb_facade::wire::Endpoint::Integrity.id().to_le_bytes();
-            $crate::__icydb_serve!(crate::__icydb_facade::wire::Endpoint::Integrity, |sql: String| -> Result<__icydb_facade::db::IntegrityCheckResult, __icydb_facade::db::SqlIntegrityError> {
+            static CONTRACT: [u8; 8] = $crate::wire::Endpoint::Integrity.id().to_le_bytes();
+            $crate::__icydb_serve!($crate::wire::Endpoint::Integrity, |sql: String| -> Result<__icydb_facade::db::IntegrityCheckResult, __icydb_facade::db::SqlIntegrityError> {
 
                 crate::__icydb_endpoint_authorization::require_sql_controller()
                     .map_err(__icydb_facade::db::SqlIntegrityError::Sql)?;
@@ -323,8 +323,8 @@ macro_rules! __icydb_endpoints_internal {
             #[used]
             #[expect(unsafe_code, reason = "generated method identity metadata belongs to its raw export")]
             #[unsafe(link_section = "icydb:wire")]
-            static CONTRACT: [u8; 8] = crate::__icydb_facade::wire::Endpoint::FixturesReset.id().to_le_bytes();
-            $crate::__icydb_serve!(crate::__icydb_facade::wire::Endpoint::FixturesReset, |_: ()| -> Result<(), __icydb_facade::Error> {
+            static CONTRACT: [u8; 8] = $crate::wire::Endpoint::FixturesReset.id().to_le_bytes();
+            $crate::__icydb_serve!($crate::wire::Endpoint::FixturesReset, |_: ()| -> Result<(), __icydb_facade::Error> {
 
                 crate::__icydb_endpoint_authorization::require_sql_controller()?;
                 crate::__icydb_facade::db::with_request_execution(|| {
@@ -353,8 +353,8 @@ macro_rules! __icydb_endpoints_internal {
             #[used]
             #[expect(unsafe_code, reason = "generated method identity metadata belongs to its raw export")]
             #[unsafe(link_section = "icydb:wire")]
-            static CONTRACT: [u8; 8] = crate::__icydb_facade::wire::Endpoint::FixturesLoad.id().to_le_bytes();
-            $crate::__icydb_serve!(crate::__icydb_facade::wire::Endpoint::FixturesLoad, |_: ()| -> Result<(), __icydb_facade::Error> {
+            static CONTRACT: [u8; 8] = $crate::wire::Endpoint::FixturesLoad.id().to_le_bytes();
+            $crate::__icydb_serve!($crate::wire::Endpoint::FixturesLoad, |_: ()| -> Result<(), __icydb_facade::Error> {
 
                 crate::__icydb_endpoint_authorization::require_sql_controller()?;
                 let handler: fn() -> Result<(), crate::__icydb_facade::Error> = $handler;
@@ -380,8 +380,8 @@ macro_rules! __icydb_endpoints_internal {
             #[used]
             #[expect(unsafe_code, reason = "generated method identity metadata belongs to its raw export")]
             #[unsafe(link_section = "icydb:wire")]
-            static CONTRACT: [u8; 8] = crate::__icydb_facade::wire::Endpoint::Metrics.id().to_le_bytes();
-            $crate::__icydb_serve!(crate::__icydb_facade::wire::Endpoint::Metrics, |_: ()| -> Result<__icydb_facade::metrics::MetricsReport, __icydb_facade::Error> {
+            static CONTRACT: [u8; 8] = $crate::wire::Endpoint::Metrics.id().to_le_bytes();
+            $crate::__icydb_serve!($crate::wire::Endpoint::Metrics, |_: ()| -> Result<__icydb_facade::metrics::MetricsReport, __icydb_facade::Error> {
 
                 crate::__icydb_generated::endpoint_handlers::metrics()
 
@@ -403,8 +403,8 @@ macro_rules! __icydb_endpoints_internal {
             #[used]
             #[expect(unsafe_code, reason = "generated method identity metadata belongs to its raw export")]
             #[unsafe(link_section = "icydb:wire")]
-            static CONTRACT: [u8; 8] = crate::__icydb_facade::wire::Endpoint::Metrics.id().to_le_bytes();
-            $crate::__icydb_serve!(crate::__icydb_facade::wire::Endpoint::Metrics, |_: ()| -> Result<__icydb_facade::metrics::MetricsReport, __icydb_facade::Error> {
+            static CONTRACT: [u8; 8] = $crate::wire::Endpoint::Metrics.id().to_le_bytes();
+            $crate::__icydb_serve!($crate::wire::Endpoint::Metrics, |_: ()| -> Result<__icydb_facade::metrics::MetricsReport, __icydb_facade::Error> {
 
                 crate::__icydb_endpoint_authorization::require_operational_controller()?;
                 crate::__icydb_generated::endpoint_handlers::metrics()
@@ -427,8 +427,8 @@ macro_rules! __icydb_endpoints_internal {
             #[used]
             #[expect(unsafe_code, reason = "generated method identity metadata belongs to its raw export")]
             #[unsafe(link_section = "icydb:wire")]
-            static CONTRACT: [u8; 8] = crate::__icydb_facade::wire::Endpoint::MetricsReset.id().to_le_bytes();
-            $crate::__icydb_serve!(crate::__icydb_facade::wire::Endpoint::MetricsReset, |_: ()| -> Result<(), __icydb_facade::Error> {
+            static CONTRACT: [u8; 8] = $crate::wire::Endpoint::MetricsReset.id().to_le_bytes();
+            $crate::__icydb_serve!($crate::wire::Endpoint::MetricsReset, |_: ()| -> Result<(), __icydb_facade::Error> {
 
                 crate::__icydb_endpoint_authorization::require_operational_controller()?;
                 crate::__icydb_generated::endpoint_handlers::metrics_reset()
@@ -449,8 +449,8 @@ macro_rules! __icydb_endpoints_internal {
             #[used]
             #[expect(unsafe_code, reason = "generated method identity metadata belongs to its raw export")]
             #[unsafe(link_section = "icydb:wire")]
-            static CONTRACT: [u8; 8] = crate::__icydb_facade::wire::Endpoint::Snapshot.id().to_le_bytes();
-            $crate::__icydb_serve!(crate::__icydb_facade::wire::Endpoint::Snapshot, |_: ()| -> Result<__icydb_facade::db::StorageReport, __icydb_facade::Error> {
+            static CONTRACT: [u8; 8] = $crate::wire::Endpoint::Snapshot.id().to_le_bytes();
+            $crate::__icydb_serve!($crate::wire::Endpoint::Snapshot, |_: ()| -> Result<__icydb_facade::db::StorageReport, __icydb_facade::Error> {
 
             crate::__icydb_endpoint_authorization::require_operational_controller()?;
             crate::__icydb_facade::db::with_request_execution(|| {
@@ -472,8 +472,8 @@ macro_rules! __icydb_endpoints_internal {
             #[used]
             #[expect(unsafe_code, reason = "generated method identity metadata belongs to its raw export")]
             #[unsafe(link_section = "icydb:wire")]
-            static CONTRACT: [u8; 8] = crate::__icydb_facade::wire::Endpoint::Schema.id().to_le_bytes();
-            $crate::__icydb_serve!(crate::__icydb_facade::wire::Endpoint::Schema, |_: ()| -> Result<Vec<__icydb_facade::db::EntitySchemaDescription>, __icydb_facade::Error> {
+            static CONTRACT: [u8; 8] = $crate::wire::Endpoint::Schema.id().to_le_bytes();
+            $crate::__icydb_serve!($crate::wire::Endpoint::Schema, |_: ()| -> Result<Vec<__icydb_facade::db::EntitySchemaDescription>, __icydb_facade::Error> {
 
             crate::__icydb_facade::db::with_request_execution(|| {
                 crate::__icydb_generated::endpoint_handlers::schema()
@@ -496,8 +496,8 @@ macro_rules! __icydb_endpoints_internal {
             #[used]
             #[expect(unsafe_code, reason = "generated method identity metadata belongs to its raw export")]
             #[unsafe(link_section = "icydb:wire")]
-            static CONTRACT: [u8; 8] = crate::__icydb_facade::wire::Endpoint::Schema.id().to_le_bytes();
-            $crate::__icydb_serve!(crate::__icydb_facade::wire::Endpoint::Schema, |_: ()| -> Result<Vec<__icydb_facade::db::EntitySchemaDescription>, __icydb_facade::Error> {
+            static CONTRACT: [u8; 8] = $crate::wire::Endpoint::Schema.id().to_le_bytes();
+            $crate::__icydb_serve!($crate::wire::Endpoint::Schema, |_: ()| -> Result<Vec<__icydb_facade::db::EntitySchemaDescription>, __icydb_facade::Error> {
 
             let guard: crate::__icydb_facade::ReadAuthorizationGuard = $guard;
             crate::__icydb_facade::__macro::authorize_schema_read(
@@ -523,8 +523,8 @@ macro_rules! __icydb_endpoints_internal {
             #[used]
             #[expect(unsafe_code, reason = "generated method identity metadata belongs to its raw export")]
             #[unsafe(link_section = "icydb:wire")]
-            static CONTRACT: [u8; 8] = crate::__icydb_facade::wire::Endpoint::Schema.id().to_le_bytes();
-            $crate::__icydb_serve!(crate::__icydb_facade::wire::Endpoint::Schema, |_: ()| -> Result<Vec<__icydb_facade::db::EntitySchemaDescription>, __icydb_facade::Error> {
+            static CONTRACT: [u8; 8] = $crate::wire::Endpoint::Schema.id().to_le_bytes();
+            $crate::__icydb_serve!($crate::wire::Endpoint::Schema, |_: ()| -> Result<Vec<__icydb_facade::db::EntitySchemaDescription>, __icydb_facade::Error> {
 
             crate::__icydb_endpoint_authorization::require_schema_controller()?;
             crate::__icydb_facade::db::with_request_execution(|| {
@@ -548,8 +548,8 @@ macro_rules! __icydb_endpoints_internal {
             #[used]
             #[expect(unsafe_code, reason = "generated method identity metadata belongs to its raw export")]
             #[unsafe(link_section = "icydb:wire")]
-            static CONTRACT: [u8; 8] = crate::__icydb_facade::wire::Endpoint::SchemaMigrate.id().to_le_bytes();
-            $crate::__icydb_serve!(crate::__icydb_facade::wire::Endpoint::SchemaMigrate, |command: __icydb_facade::db::SchemaMigrationCommand| -> Result<__icydb_facade::db::SchemaMigrationStatusPage, __icydb_facade::Error> {
+            static CONTRACT: [u8; 8] = $crate::wire::Endpoint::SchemaMigrate.id().to_le_bytes();
+            $crate::__icydb_serve!($crate::wire::Endpoint::SchemaMigrate, |command: __icydb_facade::db::SchemaMigrationCommand| -> Result<__icydb_facade::db::SchemaMigrationStatusPage, __icydb_facade::Error> {
 
                 crate::__icydb_endpoint_authorization::require_operational_controller()?;
                 crate::__icydb_facade::db::with_request_execution(|| {
@@ -574,8 +574,8 @@ macro_rules! __icydb_endpoints_internal {
             #[used]
             #[expect(unsafe_code, reason = "generated method identity metadata belongs to its raw export")]
             #[unsafe(link_section = "icydb:wire")]
-            static CONTRACT: [u8; 8] = crate::__icydb_facade::wire::Endpoint::SchemaMigration.id().to_le_bytes();
-            $crate::__icydb_serve!(crate::__icydb_facade::wire::Endpoint::SchemaMigration, |request: __icydb_facade::db::SchemaMigrationStatusRequest| -> Result<__icydb_facade::db::SchemaMigrationStatusPage, __icydb_facade::Error> {
+            static CONTRACT: [u8; 8] = $crate::wire::Endpoint::SchemaMigration.id().to_le_bytes();
+            $crate::__icydb_serve!($crate::wire::Endpoint::SchemaMigration, |request: __icydb_facade::db::SchemaMigrationStatusRequest| -> Result<__icydb_facade::db::SchemaMigrationStatusPage, __icydb_facade::Error> {
 
                 crate::__icydb_endpoint_authorization::require_operational_controller()?;
                 crate::__icydb_facade::db::with_request_execution(|| {
@@ -612,8 +612,22 @@ macro_rules! __icydb_serve {
         let endpoint = $endpoint;
         $crate::serve_raw(
             crate::__icydb_facade::wire::MAX_REQUEST_BYTES,
-            |bytes| endpoint.decode_request(bytes),
-            |response| endpoint.encode_response(response),
+            |bytes| {
+                endpoint.decode_request(
+                    bytes,
+                    crate::__icydb_facade::wire::limits(
+                        crate::__icydb_facade::wire::MAX_REQUEST_BYTES,
+                    ),
+                )
+            },
+            |response| {
+                endpoint.encode_response(
+                    response,
+                    crate::__icydb_facade::wire::limits(
+                        crate::__icydb_facade::wire::MAX_REPLY_BYTES,
+                    ),
+                )
+            },
             $handler,
         );
     }};

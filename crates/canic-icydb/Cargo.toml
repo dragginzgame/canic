@@ -13,6 +13,11 @@ readme = "README.md"
 canic-macros.workspace = true
 ic-platform = { workspace = true, features = ["candid", "runtime"] }
 ic-timers.workspace = true
+ic-wire.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+serde = { workspace = true, features = ["derive"] }
 
 [lints]
 workspace = true
