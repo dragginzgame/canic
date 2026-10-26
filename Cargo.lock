@@ -507,7 +507,7 @@ version = "0.111.0"
 dependencies = [
  "canic",
  "ic-blob-storage",
- "ic-blob-storage-contracts",
+ "ic-blob-storage-contracts 0.42.0",
  "ic-memory",
  "ic-platform",
 ]
@@ -2165,7 +2165,7 @@ version = "0.41.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a5a453075125c873a834ce8c74b5a5bd76cd3fc77b34542a278d396c1c9f2c04"
 dependencies = [
- "ic-blob-storage-contracts",
+ "ic-blob-storage-contracts 0.41.1",
  "ic-memory",
  "ic-platform",
  "ic-storage",
@@ -2178,6 +2178,21 @@ name = "ic-blob-storage-contracts"
 version = "0.41.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "072e261174fb53635169c2f196392bd8fcf2bf6a28b70d87eedf1b62d7d1c49c"
+dependencies = [
+ "ic-platform",
+ "ic-wire",
+ "percent-encoding",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "ic-blob-storage-contracts"
+version = "0.42.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed35775550fdc97e6ac1a100134180a1e895cd91c549be896aa463a58af6f5d4"
 dependencies = [
  "ic-platform",
  "ic-wire",

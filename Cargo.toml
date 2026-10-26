@@ -87,7 +87,7 @@ ic-auth = { version = "0.14.3", default-features = false }
 ic-auth-protocol-types = "0.14.3"
 ic-backup = { version = "0.38.0", default-features = false }
 ic-blob-storage = "0.41.1"
-ic-blob-storage-contracts = "0.41.1"
+ic-blob-storage-contracts = "0.42.0"
 ic-build = { version = "0.64.0" }
 ic-host-artifacts = { version = "0.64.0", default-features = false }
 ic-host-fs = { version = "0.64.0", default-features = false }
