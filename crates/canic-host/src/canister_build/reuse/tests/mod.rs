@@ -50,11 +50,15 @@ fn file_fingerprint_preserves_digest_and_typed_path_refusals() {
 #[test]
 fn unrelated_generated_workspaces_do_not_change_selected_cargo_source() {
     let (root, context) = infrastructure_build_fixture();
+    // The fixture's spec owns its output; do not also supply Make's command override.
+    let environment = crate::build_environment::inputs()
+        .into_iter()
+        .filter(|(key, _)| key != "CARGO_TARGET_DIR");
     let spec = ic_build::artifacts::WasmBuildSpec::new(
         &context.workspace_root,
         &root.join("artifact-cache"),
         &["reuse-app"],
-        crate::build_environment::inputs(),
+        environment,
         crate::canister_build::CARGO_CONFIGURATION_LIMITS,
     );
     let before = ic_build::artifacts::resolve_cargo_build_inputs(&spec).unwrap();

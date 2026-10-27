@@ -192,3 +192,13 @@ runtime selection, scoped ShellCheck, and the entire affected
 `CARGO_NET_OFFLINE=true make release-integrity-contract-gate` passed. That gate's
 publication checks use substitutes and had no registry effects. Evidence remains
 in `target/session-qualification/`; no complete retry was used to diagnose this fix.
+
+The third complete attempt at `d8a53b6a0` passed every pre-test stage and stopped
+after 665.245s on one ordinary Host fixture. It supplied Make's CARGO_TARGET_DIR
+as a command override as well as a spec-owned output; strict input admission
+correctly rejected the duplicate ownership. The fixture now filters that command
+override while retaining the spec output and every contamination/invalidation
+assertion. Its exact Make-environment regression passes (0.09s after 49.33s build),
+and Host all-target/all-feature Clippy passes (17.83s). Production admission is
+unchanged. Other ordinary/internal/local-Fleet/doc groups completed, but the failed
+ordinary barrier correctly prevented all serial PocketIC execution in that attempt.
