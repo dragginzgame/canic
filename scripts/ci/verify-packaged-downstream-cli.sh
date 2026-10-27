@@ -6,10 +6,10 @@ source "$(dirname "${BASH_SOURCE[0]}")/../ci/require-jq.sh"
 require_jq
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$ROOT"
 TMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/canic-packaged-cli.XXXXXX")"
 HOST_CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
 HOST_RUSTUP_HOME="${RUSTUP_HOME:-$HOME/.rustup}"
-PACKAGE_STAGING_ROOT="$ROOT/target/package"
 TOOL_ROOT="$TMP_ROOT/tool-root"
 PACKAGE_ROOT="$TOOL_ROOT/package-root"
 DOWNSTREAM_ROOT="$TOOL_ROOT/downstream-root"
@@ -17,10 +17,11 @@ PROOF_HOME="$TMP_ROOT/home"
 PROOF_TARGET_DIR="$TMP_ROOT/cargo-target"
 PROOF_TMPDIR="$TMP_ROOT/tmp"
 INSTALLED_CLI="$TMP_ROOT/install/bin/canic"
-VERSION="$(
-    cargo metadata --locked --offline --no-deps --format-version=1 --manifest-path "$ROOT/Cargo.toml" |
-        "$JQ_BIN" -r '.packages[] | select(.name == "canic") | .version'
-)"
+# Cargo owns archive placement, including explicit target-directory overrides.
+workspace_metadata="$(cargo metadata --locked --offline --no-deps --format-version=1 --manifest-path "$ROOT/Cargo.toml")"
+VERSION="$("$JQ_BIN" -er '.packages[] | select(.name == "canic") | .version' <<<"$workspace_metadata")"
+PACKAGE_STAGING_ROOT="$("$JQ_BIN" -er '.target_directory' <<<"$workspace_metadata")/package"
+unset workspace_metadata
 
 cleanup() {
     rm -rf "$TMP_ROOT"
@@ -112,8 +113,8 @@ assert_packaged_tool_root() {
         exit 1
     fi
 
-    if grep -R -Fq 'target/debug/canic' "$TOOL_ROOT/Cargo.toml" "$PACKAGE_ROOT"; then
-        echo "packaged downstream CLI proof must not use target/debug/canic" >&2
+    if grep -R -Eq 'target/(cargo/)?debug/canic' "$TOOL_ROOT/Cargo.toml" "$PACKAGE_ROOT"; then
+        echo "packaged downstream CLI proof must not use a repository-built canic binary" >&2
         exit 1
     fi
 }

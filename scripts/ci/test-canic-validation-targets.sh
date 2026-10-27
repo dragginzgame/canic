@@ -71,7 +71,30 @@ printf 'ensure-clean\nclippy\n' >"$FIXTURE/expected"
 cmp "$FIXTURE/expected" "$ORDER_EVENTS"
 : >"$ORDER_EVENTS"
 make -j4 --no-print-directory -C "$FIXTURE" validate >"$FIXTURE/order.log" 2>&1
-printf '%s\n' tools-check dependency-adoption-admission clippy dependency-adoption-fixtures fmt-check check-invariants dependency-risk-gate \
-    shellcheck check control-plane-feature-gate test >"$FIXTURE/expected"
+printf '%s\n' tools-check dependency-adoption-admission clippy dependency-adoption-fixtures fmt-check check-invariants shellcheck dependency-risk-gate dependency-risk-inventory-test \
+    check control-plane-feature-gate test >"$FIXTURE/expected"
 cmp "$FIXTURE/expected" "$ORDER_EVENTS"
-echo 'Canic validation policy and actual Make adapter pass'
+# Hosted partitions consume the same groups, with deliberate cheap-first scheduling.
+for target in ci-preflight ci-checks ci-security; do
+    : > "$ORDER_EVENTS"
+    make -j4 --no-print-directory -C "$FIXTURE" "$target" >"$FIXTURE/order.log" 2>&1
+    case "$target" in
+        ci-preflight) printf '%s\n' check-invariants shellcheck lint-workflows workspace-test-inventory-gate ;;
+        ci-checks) printf '%s\n' fmt-check clippy control-plane-feature-gate ;;
+        ci-security) printf '%s\n' dependency-risk-gate dependency-risk-inventory-test ;;
+    esac >"$FIXTURE/expected"
+    cmp "$FIXTURE/expected" "$ORDER_EVENTS"
+done
+: > "$ORDER_EVENTS"
+if ORDER_CLIPPY_STATUS=23 make -j4 --no-print-directory -C "$FIXTURE" ci-checks >"$FIXTURE/order.log" 2>&1; then exit 1; fi
+printf '%s\n' fmt-check clippy >"$FIXTURE/expected"
+cmp "$FIXTURE/expected" "$ORDER_EVENTS"
+# Changing a group's membership reaches both callers; there is no copied CI list.
+for target in validate ci-security; do
+    : > "$ORDER_EVENTS"
+    make --no-print-directory -C "$FIXTURE" "$target" \
+        'CANIC_QUALIFICATION_SECURITY=security-membership-probe' >"$FIXTURE/order.log" 2>&1
+    [[ "$(grep -Fxc security-membership-probe "$ORDER_EVENTS")" == 1 ]]
+    if grep -q '^dependency-risk-' "$ORDER_EVENTS"; then exit 1; fi
+done
+echo 'Canic validation policy, shared qualification groups and actual Make adapter pass'

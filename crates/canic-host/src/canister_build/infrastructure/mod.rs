@@ -176,7 +176,11 @@ fn resolve_source(
     let metadata = cargo_metadata(&context.workspace_root, true)?;
     let canic = resolved_canic_package(&metadata)?;
     let dependencies = resolved_wrapper_dependencies(&metadata, canic)?;
-    let manifest = fleet_package::manifest_path(&context.config_path, role.package());
+    let manifest = fleet_package::manifest_path(
+        &context.workspace_root,
+        &context.config_path,
+        role.package(),
+    );
     let config_env = canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV;
     let build_script = format!(
         "fn main() {{ let config = std::env::var({config_env:?}).expect(\"Canic build configuration must be set\"); canic::build!(config); }}\n"

@@ -30,7 +30,8 @@ fn generated_infrastructure_provenance_records_its_build_lockfile_and_parent_see
     let output = write_sample_artifacts(&root, "root");
     let mut request = sample_request(&root, output);
     request.role = "root".to_string();
-    let manifest = crate::canonical_root::manifest_path(&root.join("apps/demo/canic.toml"));
+    let manifest =
+        crate::canonical_root::manifest_path(&root.join("apps/demo/canic.toml")).unwrap();
     fs::create_dir_all(manifest.parent().unwrap()).unwrap();
     fs::write(&manifest, "[package]\nname = 'canic-fleet-root'\n").unwrap();
     let lock = manifest.with_file_name("Cargo.lock");

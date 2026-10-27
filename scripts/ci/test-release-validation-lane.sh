@@ -35,6 +35,7 @@ printf '## [2.0.0]\n' >"$FIXTURE/docs/changelog/2.0.md"
 printf '%s\n' \
     '#!/usr/bin/env bash' \
     'printf "make %s\n" "$*" >>"$FIXTURE_EVENTS"' \
+    'if [[ "$*" == *tools-check* ]]; then exit "${FAKE_TOOLS_STATUS:-0}"; fi' \
     'if [[ "$*" == *validate* ]]; then exit "${FAKE_VALIDATE_STATUS:-0}"; fi' \
     'exit 0' >"$FIXTURE/bin/make"
 printf '%s\n' \
@@ -75,7 +76,6 @@ chmod +x "$FIXTURE/bin/make" "$FIXTURE/bin/git" \
 
 export FIXTURE_EVENTS="$FIXTURE/events"
 export FAKE_GIT_COUNT="$FIXTURE/git-count"
-export CANIC_RELEASE_RECEIPT_DIR="$FIXTURE/receipts"
 PATH="$FIXTURE/bin:$PATH"
 export PATH
 
@@ -95,7 +95,7 @@ assert_no_bump() {
 
 assert_no_validation() {
     if [[ -f "$FIXTURE_EVENTS" ]] && rg -F 'make --no-print-directory validate' "$FIXTURE_EVENTS" >/dev/null; then
-        echo "release validation lane test failed: unexpected validation after preflight or receipt reuse" >&2
+        echo "release validation lane test failed: unexpected validation after failed preflight" >&2
         exit 1
     fi
 }
@@ -134,8 +134,8 @@ for lane in complete fast; do
     }
     assert_no_validation
     assert_no_bump
-    if [[ -d "$CANIC_RELEASE_RECEIPT_DIR" ]] || rg -Fxq fast-eligibility "$FIXTURE_EVENTS"; then
-        echo "release validation lane test failed: failed remote preflight reached eligibility or receipt creation" >&2
+    if rg -Fxq fast-eligibility "$FIXTURE_EVENTS"; then
+        echo "release validation lane test failed: failed remote preflight reached eligibility" >&2
         exit 1
     fi
 done
@@ -188,22 +188,41 @@ status=0
 FAKE_REMOTE_STATUS=37 \
     bash "$FIXTURE/scripts/ci/run-release-validation-lane.sh" complete major || status=$?
 [[ "$status" -eq 37 ]] || {
-    echo "release validation lane test failed: retained receipt bypassed remote readiness" >&2
+    echo "release validation lane test failed: qualification bypassed remote readiness" >&2
     exit 1
 }
 assert_no_validation
 assert_no_bump
-[[ -f "$CANIC_RELEASE_RECEIPT_DIR/complete-validated-head.receipt" ]] || {
-    echo "release validation lane test failed: failed preflight discarded the retained receipt" >&2
+reset_fixture major
+bash "$FIXTURE/scripts/ci/run-release-validation-lane.sh" complete major
+rg -Fx 'make --no-print-directory validate' "$FIXTURE_EVENTS" >/dev/null
+rg -F 'bump=major validated=1 head=validated-head kind=complete' "$FIXTURE_EVENTS" >/dev/null || {
+    echo "release validation lane test failed: fresh qualification did not authorize version mutation" >&2
     exit 1
 }
 
+# The one-shot hook uses the same owner, but always qualifies effective inputs
+# afresh and never invokes version mutation itself.
 reset_fixture major
-bash "$FIXTURE/scripts/ci/run-release-validation-lane.sh" complete major
-assert_no_validation
-rg -F 'bump=major validated=1 head=validated-head kind=complete' "$FIXTURE_EVENTS" >/dev/null || {
-    echo "release validation lane test failed: retained receipt did not resume version mutation" >&2
+RELEASE_SOURCE=validated-head bash "$FIXTURE/scripts/ci/run-release-validation-lane.sh" complete
+rg -Fx 'make --no-print-directory validate' "$FIXTURE_EVENTS" >/dev/null
+assert_no_bump
+rg -Fx 'make --no-print-directory tools-check' "$FIXTURE_EVENTS" >/dev/null
+
+reset_fixture major
+if FAKE_TOOLS_STATUS=41 bash "$FIXTURE/scripts/ci/run-release-validation-lane.sh" complete; then
+    echo 'qualification bypassed prepared-tool admission' >&2
     exit 1
-}
+fi
+assert_no_validation
+assert_no_bump
+
+reset_fixture major
+if RELEASE_SOURCE=another-source bash "$FIXTURE/scripts/ci/run-release-validation-lane.sh" complete; then
+    echo 'release qualification accepted a different delivery source' >&2
+    exit 1
+fi
+assert_no_validation
+assert_no_bump
 
 echo "release validation lane test passed" >&3

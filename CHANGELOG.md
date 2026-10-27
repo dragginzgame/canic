@@ -10,6 +10,35 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### 📝 Summary
 
+- Make preparation and qualification select the same managed compiler-cache
+  environment without manual exports. Pin sccache 0.19.0 with its upstream archive
+  checksum, isolate its runtime by version, and reject mismatched explicit cache
+  binaries. Preserve explicit output, wrapper and incremental selections; prepare
+  the same managed environment before macOS native tool builds.
+
+- Separate repository compiler output (`target/cargo`) from configuration-keyed
+  Fleet source (`target/canic-packages`). Reject overlapping explicit outputs
+  before generation; retain normal selected-source input admission. The installed
+  snapshot regression observes the expected pre-dispatch transport refusal directly
+  and verifies unchanged inventory after rejected allocation. Package proofs discover
+  archives from Cargo metadata, including explicit output overrides; restored Root
+  rejection checks the specific typed `CanisterCalledTrap` transport code. Validate
+  nested generated-package aliases before writing; the offline Wasm crypto checker
+  consumes the shared preparation step instead of fetching again.
+
+- Centralize release/CI prerequisite preparation and qualification group membership.
+  Fetch all three locked Cargo graphs explicitly; keep dependency fetching out of
+  security checks and preserve local/CI failure barriers without result caching.
+  Prepare the shared Rust tools for preflight consumer fixtures, the release Wasm
+  target, and locked dependencies before `update-dev` audits.
+
+- Isolate generated Fleet packages from application source fingerprints and share
+  build-environment normalization with internal artifact production. Correct
+  snapshot prepare/resume admission while retaining release-fence rejection.
+- Share fresh release qualification, retain consumer boundary checks, prepare
+  offline CI dependencies and the pinned metadata editor, and preserve failure
+  diagnostics. Alternate staging uses the adapter roster, including private locks.
+
 - Serialize artifact/schema production across workspaces sharing a Cargo target,
   and carry raw fixture endpoint declarations into compiled Wire metadata.
   Align test canister auth features with all three qualification profiles.

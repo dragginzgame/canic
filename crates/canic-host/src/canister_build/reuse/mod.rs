@@ -525,7 +525,9 @@ fn selected_export_producers(
             )
         })
         .collect();
-    for manifest in crate::fleet_package::generated_manifests(&context.config_path) {
+    for manifest in
+        crate::fleet_package::generated_manifests(&context.workspace_root, &context.config_path)
+    {
         if !manifest.is_file() {
             continue;
         }
@@ -567,7 +569,9 @@ fn prepare_generated_inputs(context: &WorkspaceBuildContext) -> Result<(), Build
 }
 
 fn append_generated_inputs(context: &WorkspaceBuildContext, paths: &mut BTreeSet<PathBuf>) {
-    for manifest in crate::fleet_package::generated_manifests(&context.config_path) {
+    for manifest in
+        crate::fleet_package::generated_manifests(&context.workspace_root, &context.config_path)
+    {
         let root = manifest.parent().expect("generated package directory");
         for name in [
             "Cargo.toml",

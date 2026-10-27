@@ -26,6 +26,33 @@ fn generated_infrastructure_inputs_are_stable_before_compilation() {
         refresh_canonical_infrastructure_did: false,
         release_build_id: None,
     };
+    // Read Make's actual exported default instead of inventing a non-overlapping fixture.
+    let probe = directory.join("output-probe.mk");
+    fs::write(
+        &probe,
+        "canic-output-probe:\n\t@printf '%s' \"$$CARGO_TARGET_DIR\"\n",
+    )
+    .unwrap();
+    let output = std::process::Command::new("make")
+        .current_dir(&context.workspace_root)
+        .env_remove("CARGO_TARGET_DIR")
+        .env_remove("CANIC_CARGO_TARGET_DIR")
+        .args(["--no-print-directory", "-f", "Makefile", "-f"])
+        .arg(&probe)
+        .arg("canic-output-probe")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let make_target = PathBuf::from(String::from_utf8(output.stdout).unwrap());
+    let mut inputs_environment: BTreeMap<_, _> =
+        crate::build_environment::inputs().into_iter().collect();
+    // Match compile_native_producer: the resolved output belongs to the spec,
+    // not a second command override. The caller's selection is retained above.
+    inputs_environment.remove(std::ffi::OsStr::new("CARGO_TARGET_DIR"));
     let spec = ic_build::artifacts::WasmBuildSpec::new(
         &package,
         &directory.join("target"),
@@ -40,18 +67,22 @@ fn generated_infrastructure_inputs_are_stable_before_compilation() {
     let cold = ic_build::artifacts::resolve_cargo_build_inputs(&spec).unwrap();
     prepare_workspace_infrastructure_packages(&context).unwrap();
     assert!(
-        !cold.is_content_current().unwrap(),
-        "late package preparation changes an enclosing package's frozen inputs"
+        cold.is_content_current().unwrap(),
+        "generated packages must not change the application's source inputs"
     );
     let prepared = ic_build::artifacts::resolve_cargo_build_inputs(&spec).unwrap();
     prepare_workspace_infrastructure_packages(&context).unwrap();
     assert!(prepared.is_content_current().unwrap());
     assert!(prepared.is_current(&spec).unwrap());
     for name in ["canic-fleet-coordinator", "canic-fleet-wasm-store"] {
-        let root = crate::fleet_package::manifest_path(&context.config_path, name)
-            .parent()
-            .unwrap()
-            .to_path_buf();
+        let root = crate::fleet_package::manifest_path(
+            &context.workspace_root,
+            &context.config_path,
+            name,
+        )
+        .parent()
+        .unwrap()
+        .to_path_buf();
         assert!(root.join("Cargo.lock").is_file());
         assert!(root.join("src/lib.rs").is_file());
     }
@@ -59,18 +90,67 @@ fn generated_infrastructure_inputs_are_stable_before_compilation() {
         !directory.join("target").exists(),
         "preparation must not compile"
     );
+    let generated_manifest = crate::fleet_package::manifest_path(
+        &context.workspace_root,
+        &context.config_path,
+        "canic-fleet-wasm-store",
+    );
+    let generated_spec = ic_build::artifacts::WasmBuildSpec::new(
+        generated_manifest.parent().unwrap(),
+        &make_target,
+        &["canic-fleet-wasm-store"],
+        inputs_environment.clone(),
+        crate::canister_build::CARGO_CONFIGURATION_LIMITS,
+    );
+    let generated = ic_build::artifacts::resolve_cargo_build_inputs(&generated_spec).unwrap();
+    let mut sibling = context.clone();
+    sibling.config_path = package.join("sibling.toml");
+    prepare_workspace_infrastructure_packages(&sibling).unwrap();
+    assert!(generated.is_content_current().unwrap());
+    assert!(prepared.is_content_current().unwrap());
+    let external = directory.join("explicit-output");
+    let explicit_spec = ic_build::artifacts::WasmBuildSpec::new(
+        generated_manifest.parent().unwrap(),
+        &external,
+        &["canic-fleet-wasm-store"],
+        inputs_environment.clone(),
+        crate::canister_build::CARGO_CONFIGURATION_LIMITS,
+    );
+    let explicit = ic_build::artifacts::resolve_cargo_build_inputs(&explicit_spec).unwrap();
+    let overlapping = context.workspace_root.join("target");
+    let invalid_spec = ic_build::artifacts::WasmBuildSpec::new(
+        generated_manifest.parent().unwrap(),
+        &overlapping,
+        &["canic-fleet-wasm-store"],
+        inputs_environment,
+        crate::canister_build::CARGO_CONFIGURATION_LIMITS,
+    );
+    let rejected = ic_build::artifacts::resolve_cargo_build_inputs(&invalid_spec).unwrap_err();
+    assert!(
+        matches!(rejected, ic_build::artifacts::WasmBuildError::Io { source, .. }
+        if source.kind() == std::io::ErrorKind::InvalidInput)
+    );
     fs::write(
-        crate::fleet_package::manifest_path(&context.config_path, "canic-fleet-wasm-store")
-            .parent()
-            .unwrap()
-            .join("src/lib.rs"),
+        generated_manifest.parent().unwrap().join("src/lib.rs"),
         "changed source",
     )
     .unwrap();
     assert!(
-        !prepared.is_content_current().unwrap(),
-        "preparing early must not exclude later source changes"
+        !generated.is_content_current().unwrap(),
+        "selected generated source changes must invalidate their own inputs"
     );
+    assert!(!explicit.is_content_current().unwrap());
+    assert!(prepared.is_content_current().unwrap());
+    fs::remove_dir_all(crate::fleet_package::generated_root(
+        &context.workspace_root,
+        &context.config_path,
+    ))
+    .unwrap();
+    fs::remove_dir_all(crate::fleet_package::generated_root(
+        &sibling.workspace_root,
+        &sibling.config_path,
+    ))
+    .unwrap();
     fs::remove_dir_all(directory).unwrap();
 }
 #[test]
@@ -238,6 +318,7 @@ fn configured_specs_bind_canonical_root_and_application_workspace() {
         let expected_workspace = if spec.role == "root" {
             assert_eq!(spec.package_name, crate::canonical_root::PACKAGE);
             crate::canonical_root::manifest_path(&context.config_path)
+                .unwrap()
                 .parent()
                 .unwrap()
                 .to_path_buf()

@@ -40,7 +40,10 @@ preserve the underlying report and its input fingerprints without claiming
 that a deployment mutation happened.
 
 The host generates thin Cargo packages for Root, Coordinator and Store under
-`.canic/generated/<config-file>/` beside the selected configuration. Sibling
+`target/canic-packages/<configuration-path-sha256>/` under the owning workspace.
+The identity hashes the workspace-relative configuration path. Generated packages
+remain outside application source trees; only selected generated inputs join
+their build evidence. Sibling
 configurations have independent manifests and lockfiles. All three bind the exact
 Canic dependency and use unpublished build packages. Root selects configured
 capabilities, Store compiles its configuration, and Coordinator remains
@@ -48,12 +51,32 @@ independent of App configuration. Cargo graphs are validated before artifact
 finalization. Canonical Coordinator/Store Candid ships in `canic/candid`; Root
 Candid follows its configured capabilities.
 
+`target/` is a disposable aggregate, not a compiler output root. Repository Cargo
+and Make use `target/cargo/`; Host's unset-output default remains
+`target/canic-wasm/`. Generated source stays in the sibling `canic-packages/`
+tree, preserving inherited Cargo configuration. Selected generated source is
+admitted and fingerprinted normally; application source scans exclude their
+`target/` tree. Explicit `CARGO_TARGET_DIR` overrides remain effective, but may
+not enclose or enter the generated-source tree (including through symlinks).
+Use `target/cargo/`, `target/custom/`, or a separate external output directory;
+an override to workspace `target/` is rejected before generation. `make clean-wasm`
+owns removal of generated packages; no cache is removed during an active build.
+Generated manifests remain unpublished and the ignored `target/` tree is not
+release source or package content. Existing output in `target/debug/` is historical
+cache, not the new default executable location; no automatic migration is performed.
+
 Generated locks are derived from the selected workspace's current `Cargo.lock`.
 A change to that lock or the generated manifest atomically refreshes the seed;
 Cargo then resolves the generated package's graph. Unchanged inputs preserve that
 resolved graph. The `lock-seed.json` record identifies the derivation, while cache
 and provenance evidence fingerprint the actual resolved lock. Complete-build reuse
 prepares these inputs before taking its snapshot.
+
+Build commands and cache fingerprints share Host's captured build environment.
+Owned execution plumbing (temporary directories, Make flags and test-runner
+controls) is withheld from both. Unknown variables, compiler options and Cargo
+offline policy remain effective inputs; normalization cannot hide an input that
+a child build receives.
 
 Application and Root builds select the Wasm named in Cargo's compiler-artifact
 messages for the exact package manifest. Custom library names are supported.

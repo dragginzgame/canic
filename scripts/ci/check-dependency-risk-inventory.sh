@@ -31,10 +31,21 @@ audit_version="$(cargo audit --version 2>/dev/null | awk '{print $2}')" ||
     fail "cargo-audit version mismatch: expected $CANIC_CARGO_AUDIT_VERSION, got ${audit_version:-unavailable}"
 
 tmp_dir="$(mktemp -d)"
+phase=initialization
 finish() {
     local status=$?
     if [[ "$status" == 0 ]]; then rm -rf -- "$tmp_dir"
-    else echo "Dependency audit evidence retained: $tmp_dir" >&2; fi
+    else
+        # Upload only bounded structured diagnostics, never the database checkout,
+        # environment, tool stderr or credential-bearing transport output.
+        local evidence
+        mkdir -p "$ROOT/target/dependency-audits"
+        evidence="$(mktemp -d "$ROOT/target/dependency-audits/failure.XXXXXX")"
+        "$JQ_BIN" -n --arg phase "$phase" --argjson status "$status" \
+            '{schema: 1, phase: $phase, exit_code: $status}' > "$evidence/failure.json"
+        echo "Dependency audit failed during $phase (exit $status); summary: $evidence" >&2
+        echo "Private dependency audit evidence retained: $tmp_dir" >&2
+    fi
 }
 trap finish EXIT
 audit_json="$tmp_dir/audit.json"
@@ -44,13 +55,7 @@ audit_status=0
 
 case "$#" in
 0)
-    # The gate deliberately resolves dependency ownership offline below. Make
-    # the complete locked graph available first so a fresh runner and a warm
-    # Cargo cache produce the same result.
-    (
-        cd "$ROOT"
-        cargo fetch --locked
-    )
+    # Dependency preparation belongs to prepare-validation, not this check.
     mode=online
     source_db=https://github.com/RustSec/advisory-db
     if [ "${CANIC_CARGO_AUDIT_NO_FETCH:-0}" = "1" ]; then
@@ -58,12 +63,14 @@ case "$#" in
         cargo_home="${CARGO_HOME:-$HOME/.cargo}"
         source_db="${CANIC_CARGO_AUDIT_DB:-$cargo_home/advisory-db}"
     fi
+    phase=advisory-database-preparation
     bash "$ROOT/scripts/ci/prepare-rustsec-db.sh" "$mode" "$source_db" "$prepared_db" >/dev/null
+    phase=cargo-audit
     audit_args=(--no-fetch --db "$audit_db" --json)
     (
         cd "$ROOT"
         cargo audit "${audit_args[@]}"
-    ) >"$audit_json" || audit_status=$?
+    ) >"$audit_json" 2>"$tmp_dir/audit.stderr" || audit_status=$?
     ;;
 2)
     [ "$1" = "--audit-json" ] || fail "usage: $0 [--audit-json <path>]"
@@ -73,9 +80,11 @@ case "$#" in
 *) fail "usage: $0 [--audit-json <path>]" ;;
 esac
 
+phase=audit-result-admission
 "$JQ_BIN" -e 'type == "object"' "$audit_json" >/dev/null || fail "cargo-audit JSON is invalid"
 vulnerability_count="$("$JQ_BIN" -r '.vulnerabilities.count // (.vulnerabilities.list | length) // 0' "$audit_json")"
 [[ "$vulnerability_count" =~ ^[0-9]+$ ]] || fail "cargo-audit vulnerability count is invalid"
+phase=vulnerability-policy
 if [ "$vulnerability_count" -ne 0 ]; then
     "$JQ_BIN" -r '.vulnerabilities.list[] |
         "\(.advisory.id // "unknown advisory"): \(.package.name // "unknown package") \(.package.version // "unknown version") — \(.advisory.title // "known vulnerability"); patched: \((.versions.patched // []) | join(", "))"' \
@@ -100,6 +109,7 @@ if [ "$audit_status" -ne 0 ] && ! { [ "$audit_status" -eq 1 ] && [ "$vulnerabili
 fi
 
 expected="$tmp_dir/expected.tsv"
+phase=dependency-policy
 actual="$tmp_dir/actual.tsv"
 awk -F '\t' 'NF && $1 !~ /^#/ && $2 != "vulnerability" { print $1 "\t" $2 "\t" $3 "\t" $4 "\t" $5 }' "$INVENTORY" |
     LC_ALL=C sort >"$expected"

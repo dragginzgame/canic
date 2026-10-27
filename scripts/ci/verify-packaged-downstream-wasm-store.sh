@@ -6,12 +6,12 @@ source "$(dirname "${BASH_SOURCE[0]}")/../ci/require-jq.sh"
 require_jq
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$ROOT"
 export PATH="$ROOT/.tools/host/bin:$PATH"
 MSRV="$(yq -p toml -o json '.workspace.package."rust-version"' "$ROOT/Cargo.toml" | "$JQ_BIN" -er 'select(type == "string" and test("^[0-9]+\\.[0-9]+(\\.[0-9]+)?$"))')"
 TMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/canic-packaged-downstream-wasm-store.XXXXXX")"
 HOST_CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
 HOST_RUSTUP_HOME="${RUSTUP_HOME:-$HOME/.rustup}"
-PACKAGE_STAGING_ROOT="$ROOT/target/package"
 GENERATED_TOOL_ROOT="$TMP_ROOT/tool-root-generated"
 GENERATED_PACKAGE_ROOT="$GENERATED_TOOL_ROOT/package-root"
 GENERATED_DOWNSTREAM_ROOT="$TMP_ROOT/downstream-generated"
@@ -19,10 +19,11 @@ GENERATED_TESTING_ROOT="$TMP_ROOT/testing-consumer-generated"
 GENERATED_TARGET_DIR="$TMP_ROOT/cargo-target-generated"
 PROOF_HOME="$TMP_ROOT/home"
 PROOF_TMPDIR="$TMP_ROOT/tmp"
-VERSION="$(
-    cargo metadata --locked --no-deps --format-version=1 --manifest-path "$ROOT/Cargo.toml" |
-        "$JQ_BIN" -r '.packages[] | select(.name == "canic") | .version'
-)"
+# Cargo owns archive placement, including explicit target-directory overrides.
+workspace_metadata="$(cargo metadata --locked --offline --no-deps --format-version=1 --manifest-path "$ROOT/Cargo.toml")"
+VERSION="$("$JQ_BIN" -er '.packages[] | select(.name == "canic") | .version' <<<"$workspace_metadata")"
+PACKAGE_STAGING_ROOT="$("$JQ_BIN" -er '.target_directory' <<<"$workspace_metadata")/package"
+unset workspace_metadata
 
 cleanup() {
     rm -rf "$TMP_ROOT"
@@ -154,8 +155,8 @@ assert_packaged_tool_root() {
         exit 1
     fi
 
-    if grep -R -Fq 'target/debug/canic' "$tool_root/Cargo.toml" "$package_root"; then
-        echo "packaged downstream wasm_store proof must not use target/debug/canic" >&2
+    if grep -R -Eq 'target/(cargo/)?debug/canic' "$tool_root/Cargo.toml" "$package_root"; then
+        echo "packaged downstream wasm_store proof must not use a repository-built canic binary" >&2
         exit 1
     fi
 }
@@ -439,7 +440,10 @@ assert_fleet_probe_outputs() {
     local role="$3"
     local feature="$4"
     local package="$5"
-    local manifest="$downstream_root/.canic/generated/canic.toml/$package/Cargo.toml"
+    local config_identity
+    printf %s canic.toml > "$TMP_ROOT/config-relative-path"
+    config_identity="$(bash "$ROOT/scripts/ci/verify-file-checksum.sh" --print sha256 "$TMP_ROOT/config-relative-path")"
+    local manifest="$downstream_root/target/canic-packages/$config_identity/$package/Cargo.toml"
     local artifacts="$downstream_root/.icp/local/canisters/$role"
     for extension in wasm wasm.gz did wire.json wire.ts; do
         test -s "$artifacts/$role.$extension"

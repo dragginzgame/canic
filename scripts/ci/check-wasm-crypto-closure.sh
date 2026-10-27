@@ -8,9 +8,7 @@ export LC_ALL=C
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-# Offline tree resolution needs packages beyond the displayed Wasm graph.
-# Prime the complete locked graph so cold CI caches include those packages too.
-cargo fetch --locked
+# The preparation owner supplies the locked graph before this offline check.
 
 CANONICAL_PACKAGE_PROFILES=(
     canic/fleet-coordinator-canister:none

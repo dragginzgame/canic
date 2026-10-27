@@ -17,7 +17,7 @@ use std::{
 pub(super) fn generated_target_names(
     context: &WorkspaceBuildContext,
 ) -> Result<BTreeSet<String>, BuildReuseError> {
-    crate::fleet_package::generated_manifests(&context.config_path)
+    crate::fleet_package::generated_manifests(&context.workspace_root, &context.config_path)
         .into_iter()
         .map(|manifest| {
             manifest
@@ -47,11 +47,8 @@ pub(super) fn append_observed_cargo_inputs(
     let intermediate = intermediate
         .map(|path| resolve_existing_path(&path))
         .transpose()?;
-    let generated = context
-        .config_path
-        .parent()
-        .ok_or_else(|| BuildReuseError::Unsupported(context.config_path.clone()))?
-        .join(".canic/generated");
+    let generated =
+        crate::fleet_package::generated_root(&context.workspace_root, &context.config_path);
     let generated = resolve_existing_path(&generated)?;
     let mut outputs = vec![runtime.clone(), generated];
     let mut targets = vec![runtime, declaration_target_root(&context.workspace_root)];

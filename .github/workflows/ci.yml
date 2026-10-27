@@ -35,26 +35,30 @@ jobs:
       - name: Install preflight tools
         shell: bash
         run: |
-          source tool-versions.env
-          make install-host-tools
+          make prepare-validation SCOPE=preflight
           echo "$GITHUB_WORKSPACE/.tools/host/bin" >> "$GITHUB_PATH"
-          export PATH="$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
-          cargo install cargo-edit --version "$CANIC_CARGO_EDIT_VERSION" --locked
-          bash scripts/ci/testkit-server.sh >/dev/null
-          ACTIONLINT_BIN="$(bash scripts/ci/install-pinned-ci-tool.sh actionlint)"
-          SHELLCHECK_BIN="$(bash scripts/ci/install-pinned-ci-tool.sh shellcheck)"
-          echo "ACTIONLINT_BIN=$ACTIONLINT_BIN" >> "$GITHUB_ENV"
-          echo "SHELLCHECK_BIN=$SHELLCHECK_BIN" >> "$GITHUB_ENV"
       - name: Check preflight tools
         shell: bash
         run: |
           rg --version
           rg --pcre2-version
-          "$ACTIONLINT_BIN" -version
-          "$SHELLCHECK_BIN" --version
+          "$HOME/.local/bin/actionlint" -version
+          "$HOME/.local/bin/shellcheck" --version
       - name: Run preflight validation with complete feedback
         shell: bash
         run: make ci-preflight
+      - name: Retain failure logs and timings
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: diagnostics-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}-${{ github.run_attempt }}
+          path: |
+            target/validation-runs/
+            target/validation-failures/
+            target/test-runs/
+            target/dependency-audits/
+          retention-days: 14
+          if-no-files-found: ignore
 
   macos-host:
     needs: [preflight, security]
@@ -103,6 +107,7 @@ jobs:
           make install-host-tools
           echo "$GITHUB_WORKSPACE/.tools/host/bin" >> "$GITHUB_PATH"
           export PATH="$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
+          make prepare-build-environment
           make install-rust-tools install-candid-extractor
           echo "$GITHUB_WORKSPACE/.tools/rust/common/bin" >> "$GITHUB_PATH"
           export PATH="$GITHUB_WORKSPACE/.tools/rust/common/bin:$PATH"
@@ -147,6 +152,18 @@ jobs:
         run: cargo run --locked -p canic-cli --bin canic -- build demo user_shard --environment local
       - name: Qualify one managed lifecycle through the Make PocketIC runner
         run: make test-pocketic-case CASE=pic::lifecycle::tests::published_managed_component_group_support_drives_child_lifecycle
+      - name: Retain failure logs and timings
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: diagnostics-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}-${{ github.run_attempt }}
+          path: |
+            target/validation-runs/
+            target/validation-failures/
+            target/test-runs/
+            target/dependency-audits/
+          retention-days: 14
+          if-no-files-found: ignore
 
   security:
     runs-on: ubuntu-24.04
@@ -164,11 +181,8 @@ jobs:
       - name: Install security tools
         shell: bash
         run: |
-          source tool-versions.env
-          make install-host-tools
+          make prepare-validation SCOPE=security
           echo "$GITHUB_WORKSPACE/.tools/host/bin" >> "$GITHUB_PATH"
-          export PATH="$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
-          cargo install cargo-audit --version "$CANIC_CARGO_AUDIT_VERSION" --locked
       - name: Check security tools
         shell: bash
         run: |
@@ -177,6 +191,18 @@ jobs:
       - name: Run security validation with complete feedback
         shell: bash
         run: make ci-security
+      - name: Retain failure logs and timings
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: diagnostics-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}-${{ github.run_attempt }}
+          path: |
+            target/validation-runs/
+            target/validation-failures/
+            target/test-runs/
+            target/dependency-audits/
+          retention-days: 14
+          if-no-files-found: ignore
 
   msrv:
     needs: [preflight, security]
@@ -203,6 +229,18 @@ jobs:
         if: ${{ failure() }}
         shell: bash
         run: bash scripts/ci/check-runner-disk-space.sh --label "MSRV failure" --path "$GITHUB_WORKSPACE" --min-free-mib 0 --diagnostic-path "$GITHUB_WORKSPACE/target" --diagnostic-path "$HOME/.cargo"
+      - name: Retain failure logs and timings
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: diagnostics-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}-${{ github.run_attempt }}
+          path: |
+            target/validation-runs/
+            target/validation-failures/
+            target/test-runs/
+            target/dependency-audits/
+          retention-days: 14
+          if-no-files-found: ignore
 
   checks:
     needs: [preflight, security]
@@ -226,25 +264,19 @@ jobs:
           key: compiler-${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-${{ env.CANIC_INTERNAL_TOOLCHAIN }}-${{ hashFiles('tool-versions.env', 'ci/ic-tools.tsv', 'ci/tool-versions.env') }}-${{ github.sha }}
           restore-keys: |
             compiler-${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-${{ env.CANIC_INTERNAL_TOOLCHAIN }}-${{ hashFiles('tool-versions.env', 'ci/ic-tools.tsv', 'ci/tool-versions.env') }}-
-      - name: Install compiler cache
+      - name: Configure compiler cache
         shell: bash
         run: |
-          bash scripts/ci/install-pinned-ci-tool.sh sccache
           {
             echo "SCCACHE_DIR=$RUNNER_TEMP/canic-sccache"
             echo "SCCACHE_CACHE_SIZE=2G"
-            echo "RUSTC_WRAPPER=$GITHUB_WORKSPACE/scripts/ci/run-canic-sccache.sh"
           } >> "$GITHUB_ENV"
       - name: Install formatting tools
         shell: bash
         run: |
-          source tool-versions.env
-          make install-host-tools
+          make prepare-validation SCOPE=checks
           echo "$GITHUB_WORKSPACE/.tools/host/bin" >> "$GITHUB_PATH"
-          export PATH="$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
-          make install-rust-tools
           echo "$GITHUB_WORKSPACE/.tools/rust/common/bin" >> "$GITHUB_PATH"
-          export PATH="$GITHUB_WORKSPACE/.tools/rust/common/bin:$PATH"
       - name: Check formatting tools
         shell: bash
         run: |
@@ -269,6 +301,18 @@ jobs:
         with:
           path: ${{ runner.temp }}/canic-sccache
           key: ${{ steps.compiler-cache.outputs.cache-primary-key }}
+      - name: Retain failure logs and timings
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: diagnostics-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}-${{ github.run_attempt }}
+          path: |
+            target/validation-runs/
+            target/validation-failures/
+            target/test-runs/
+            target/dependency-audits/
+          retention-days: 14
+          if-no-files-found: ignore
 
   tests-ordinary:
     needs: [checks]
@@ -295,11 +339,10 @@ jobs:
       - name: Install compiler cache
         shell: bash
         run: |
-          bash scripts/ci/install-pinned-ci-tool.sh sccache
+          make prepare-build-environment
           {
             echo "SCCACHE_DIR=$RUNNER_TEMP/canic-sccache"
             echo "SCCACHE_CACHE_SIZE=2G"
-            echo "RUSTC_WRAPPER=$GITHUB_WORKSPACE/scripts/ci/run-canic-sccache.sh"
           } >> "$GITHUB_ENV"
       - name: Install ordinary test helper tools
         shell: bash
@@ -338,6 +381,18 @@ jobs:
         with:
           path: ${{ runner.temp }}/canic-sccache
           key: ${{ steps.compiler-cache.outputs.cache-primary-key }}
+      - name: Retain failure logs and timings
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: diagnostics-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}-${{ github.run_attempt }}
+          path: |
+            target/validation-runs/
+            target/validation-failures/
+            target/test-runs/
+            target/dependency-audits/
+          retention-days: 14
+          if-no-files-found: ignore
 
   tests-pocketic:
     needs: [checks]
@@ -363,11 +418,10 @@ jobs:
       - name: Install compiler cache
         shell: bash
         run: |
-          bash scripts/ci/install-pinned-ci-tool.sh sccache
+          make prepare-build-environment
           {
             echo "SCCACHE_DIR=$RUNNER_TEMP/canic-sccache"
             echo "SCCACHE_CACHE_SIZE=2G"
-            echo "RUSTC_WRAPPER=$GITHUB_WORKSPACE/scripts/ci/run-canic-sccache.sh"
           } >> "$GITHUB_ENV"
       - name: Install PocketIC test helper tools
         shell: bash
@@ -433,6 +487,18 @@ jobs:
         with:
           path: ${{ runner.temp }}/canic-sccache
           key: ${{ steps.compiler-cache.outputs.cache-primary-key }}
+      - name: Retain failure logs and timings
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: diagnostics-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}-${{ github.run_attempt }}
+          path: |
+            target/validation-runs/
+            target/validation-failures/
+            target/test-runs/
+            target/dependency-audits/
+          retention-days: 14
+          if-no-files-found: ignore
 
   release-build:
     needs: [checks]
@@ -459,3 +525,16 @@ jobs:
         if: ${{ failure() }}
         shell: bash
         run: bash scripts/ci/check-runner-disk-space.sh --label "release-build failure" --path "$GITHUB_WORKSPACE" --min-free-mib 0 --diagnostic-path "$GITHUB_WORKSPACE/target" --diagnostic-path "$HOME/.cargo"
+
+      - name: Retain failure logs and timings
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: diagnostics-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}-${{ github.run_attempt }}
+          path: |
+            target/validation-runs/
+            target/validation-failures/
+            target/test-runs/
+            target/dependency-audits/
+          retention-days: 14
+          if-no-files-found: ignore

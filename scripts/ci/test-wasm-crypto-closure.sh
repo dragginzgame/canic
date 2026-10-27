@@ -10,10 +10,11 @@ cat >"$fixture/bin/cargo" <<'STUB'
 set -euo pipefail
 [[ "$LC_ALL" == C ]]
 case "$1" in
-    fetch) exit 0 ;;
     tree) shift ;;
     *) exit 2 ;;
 esac
+[[ " $* " == *" --locked "* && " $* " == *" --offline "* ]]
+[[ "$CRYPTO_TEST_CASE" != missing-cache ]] || exit 37
 package=""
 features=""
 while [[ $# -gt 0 ]]; do
@@ -75,6 +76,7 @@ check_case() {
 }
 
 check_case valid 0 C
+check_case missing-cache 37 C
 host_collation="$(locale -a | awk 'tolower($0) ~ /^en_us\./ { print; exit }')"
 if [[ -n "$host_collation" ]]; then
     check_case valid 0 "$host_collation"

@@ -125,11 +125,7 @@ pub(super) fn append_observed(
 ) -> Result<(), BuildReuseError> {
     let mut outputs = vec![
         canister_build_target_root(&context.workspace_root),
-        context
-            .config_path
-            .parent()
-            .ok_or_else(|| BuildReuseError::Unsupported(context.config_path.clone()))?
-            .join(".canic/generated"),
+        crate::fleet_package::generated_root(&context.workspace_root, &context.config_path),
     ];
     if let Some(path) = std::env::var_os("CARGO_BUILD_BUILD_DIR") {
         let path = PathBuf::from(path);

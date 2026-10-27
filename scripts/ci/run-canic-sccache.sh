@@ -9,7 +9,7 @@ if [[ $# -eq 0 || "$1" == -* ]]; then
     exec bash "$launcher" "$@"
 fi
 
-# sccache 0.17 reports its own failures with exit 2 and this diagnostic prefix.
+# sccache reports its own failures with exit 2 and this diagnostic prefix.
 # Compiler failures are forwarded separately, even when the compiler exits 2.
 # Its built-in I/O fallback does not cover the initial server connection.
 diagnostics="$(mktemp)"

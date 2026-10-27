@@ -48,6 +48,40 @@ fn file_fingerprint_preserves_digest_and_typed_path_refusals() {
 }
 
 #[test]
+fn unrelated_generated_workspaces_do_not_change_selected_cargo_source() {
+    let (root, context) = infrastructure_build_fixture();
+    let spec = ic_build::artifacts::WasmBuildSpec::new(
+        &context.workspace_root,
+        &root.join("artifact-cache"),
+        &["reuse-app"],
+        crate::build_environment::inputs(),
+        crate::canister_build::CARGO_CONFIGURATION_LIMITS,
+    );
+    let before = ic_build::artifacts::resolve_cargo_build_inputs(&spec).unwrap();
+    let config = context.workspace_root.join("another/canic.toml");
+    for manifest in crate::fleet_package::generated_manifests(&context.workspace_root, &config) {
+        let directory = manifest.parent().unwrap();
+        fs::create_dir_all(directory.join("src")).unwrap();
+        fs::write(
+            &manifest,
+            "[workspace]\n[package]\nname='unselected'\nversion='0.1.0'\n",
+        )
+        .unwrap();
+        fs::write(directory.join("src/lib.rs"), "pub fn unselected() {}\n").unwrap();
+    }
+    assert!(before.is_content_current().unwrap());
+    let after = ic_build::artifacts::resolve_cargo_build_inputs(&spec).unwrap();
+    assert_eq!(before.fingerprint(), after.fingerprint());
+    fs::write(
+        context.workspace_root.join("src/lib.rs"),
+        "pub fn changed() {}\n",
+    )
+    .unwrap();
+    assert!(!before.is_content_current().unwrap());
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn generated_lock_and_derivation_changes_invalidate_complete_build_inputs() {
     let (root, context) = infrastructure_build_fixture();
     let capture_generated = || {
@@ -56,7 +90,9 @@ fn generated_lock_and_derivation_changes_invalidate_complete_build_inputs() {
         InputEvidence::capture(&source_evidence_spec("generated", &paths)).unwrap()
     };
     let before = capture_generated();
-    for manifest in crate::fleet_package::generated_manifests(&context.config_path) {
+    for manifest in
+        crate::fleet_package::generated_manifests(&context.workspace_root, &context.config_path)
+    {
         let directory = manifest.parent().unwrap();
         fs::create_dir_all(directory).unwrap();
         for name in ["Cargo.lock", "lock-seed.json"] {
@@ -118,7 +154,9 @@ fn generated_packages_are_resolved_before_complete_build_inputs_are_frozen() {
         InputEvidence::capture(&source_evidence_spec("generated", &paths)).unwrap()
     };
     let before = capture_generated();
-    for manifest in crate::fleet_package::generated_manifests(&context.config_path) {
+    for manifest in
+        crate::fleet_package::generated_manifests(&context.workspace_root, &context.config_path)
+    {
         for name in ["Cargo.lock", "lock-seed.json"] {
             assert!(matches!(
                 before.entries()[&manifest.with_file_name(name)],

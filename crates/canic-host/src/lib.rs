@@ -20,7 +20,7 @@ mod artifact_io;
 pub mod binaryen;
 mod bootstrap_candid;
 mod bounded_reads;
-mod build_environment;
+pub mod build_environment;
 mod build_profile;
 pub mod build_provenance;
 pub mod build_toolchain;

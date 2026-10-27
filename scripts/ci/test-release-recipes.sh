@@ -75,7 +75,7 @@ printf '%s\n' '--no-print-directory tools-check' \
     'scripts/ci/run-canic-validation-targets.sh dependency-adoption-admission' \
     'scripts/ci/run-canic-validation-targets.sh clippy' \
     'scripts/ci/run-canic-validation-targets.sh dependency-adoption-fixtures' \
-    'scripts/ci/run-canic-validation-targets.sh fmt-check check-invariants dependency-risk-gate shellcheck' \
+    'scripts/ci/run-canic-validation-targets.sh fmt-check check-invariants shellcheck dependency-risk-gate dependency-risk-inventory-test' \
     'scripts/ci/run-canic-validation-targets.sh check' \
     'scripts/ci/run-canic-validation-targets.sh control-plane-feature-gate' \
     'scripts/ci/run-canic-validation-targets.sh test' > "$fixture/expected"

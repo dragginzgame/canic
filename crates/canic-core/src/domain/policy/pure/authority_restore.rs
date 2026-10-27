@@ -22,13 +22,19 @@ pub fn require_update_allowed(
     endpoint: &'static str,
     root_authority: bool,
 ) -> Result<(), AuthorityRestoreEndpointPolicyError> {
+    let snapshot_recovery = fence == AuthorityMutationFence::Snapshot
+        && matches!(
+            endpoint,
+            crate::protocol::protected_state::snapshot_prepare::METHOD
+                | crate::protocol::protected_state::snapshot_resume::METHOD
+        );
     let root_snapshot_read = fence == AuthorityMutationFence::Snapshot
         && root_authority
         && matches!(
             endpoint,
             crate::protocol::inspection::METHOD | crate::protocol::inspection_history::METHOD
         );
-    if fence == AuthorityMutationFence::Open || root_snapshot_read {
+    if fence == AuthorityMutationFence::Open || snapshot_recovery || root_snapshot_read {
         return Ok(());
     }
     Err(AuthorityRestoreEndpointPolicyError::Fenced { endpoint })
@@ -64,6 +70,25 @@ mod tests {
             );
         }
     }
+    #[test]
+    fn snapshot_recovery_reaches_handlers_on_both_authority_roles() {
+        for endpoint in [
+            crate::protocol::protected_state::snapshot_prepare::METHOD,
+            crate::protocol::protected_state::snapshot_resume::METHOD,
+        ] {
+            for root in [false, true] {
+                assert_eq!(
+                    require_update_allowed(AuthorityMutationFence::Snapshot, endpoint, root),
+                    Ok(())
+                );
+                assert_eq!(
+                    require_update_allowed(AuthorityMutationFence::Release, endpoint, root),
+                    Err(AuthorityRestoreEndpointPolicyError::Fenced { endpoint })
+                );
+            }
+        }
+    }
+
     #[test]
     fn snapshots_admit_only_root_inspection_methods() {
         for endpoint in [

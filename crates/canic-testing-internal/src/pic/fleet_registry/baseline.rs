@@ -14946,10 +14946,6 @@ cycles = "80T"
     }
 
     #[test]
-    #[expect(
-        clippy::significant_drop_tightening,
-        reason = "the pooled Fleet fixture lease is intentionally retained for the full test"
-    )]
     fn restored_root_preserves_its_inventory_but_cannot_allocate() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let initial = acquire_active_component_registry();
@@ -15027,18 +15023,43 @@ cycles = "80T"
             .code(),
             canic_contracts::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
         );
-        let fresh_allocation = crate::pic::canic::provision_component(
-            fixture.pic(),
-            fixture.root,
-            Principal::anonymous(),
-            RootComponentAllocationRequest {
+        assert_sealed_root_rejects_allocation(&fixture);
+        assert_eq!(
+            crate::pic::registry_discovery::root_inventory(fixture.pic(), fixture.root)
+                .expect("query root inventory after rejected allocation"),
+            after,
+        );
+    }
+
+    #[cfg(test)]
+    fn assert_sealed_root_rejects_allocation(fixture: &ActiveComponentRegistryFixture) {
+        // A sealed authority rejects before Wire handler dispatch. The ordinary
+        // provisioning helper requires transport success and cannot observe this refusal.
+        let request = ic_wire::native::encode_request(
+            canic::protocol::component_control::provision::METHOD_ID,
+            &RootComponentAllocationRequest {
                 operation_id: [0xb5; 32],
                 component_spec: fixture.verifier.component_spec.clone(),
             },
+            canic::protocol::component_control::REQUEST_LIMITS,
+        )
+        .expect("encode allocation request");
+        let rejection = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                Principal::anonymous(),
+                canic::protocol::component_control::provision::METHOD,
+                request,
+            )
+            .expect_err("restored root must reject allocation before handler dispatch");
+        assert_eq!(
+            rejection.reject_code,
+            ic_platform::pocket_ic::RejectCode::CanisterError
         );
-        assert!(
-            fresh_allocation.is_err(),
-            "restored root must reject allocation before handler dispatch"
+        assert_eq!(
+            rejection.error_code,
+            ic_platform::pocket_ic::ErrorCode::CanisterCalledTrap
         );
     }
 

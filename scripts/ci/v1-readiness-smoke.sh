@@ -2,7 +2,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-CANIC_BIN="${CANIC_BIN:-$ROOT/target/debug/canic}"
+CANIC_BIN="${CANIC_BIN:-${CARGO_TARGET_DIR:-$ROOT/target/cargo}/debug/canic}"
+if [[ "$CANIC_BIN" != /* ]]; then
+    CANIC_BIN="$PWD/$CANIC_BIN"
+fi
 TMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/canic-v1-readiness.XXXXXX")"
 
 cleanup() {

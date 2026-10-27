@@ -288,7 +288,7 @@ separate workspace and can be built explicitly with:
 
 ```sh
 cd integrations/blob-service/embedded-consumer
-../../../target/debug/canic build embedded-app --workspace . --config canic.toml --icp-root . --profile fast --json
+../../../target/cargo/debug/canic build embedded-app --workspace . --config canic.toml --icp-root . --profile fast --json
 ```
 
 Build the complete App for managed installation: selecting only `backend` emits
@@ -344,7 +344,7 @@ separate `consumer-app` workspace and configuration. Build it explicitly:
 ```sh
 cargo build --locked -p canic-cli --bin canic
 cd integrations/blob-service/consumer
-../../../target/debug/canic build consumer-app --workspace . --config canic.toml --icp-root . --profile fast --json
+../../../target/cargo/debug/canic build consumer-app --workspace . --config canic.toml --icp-root . --profile fast --json
 ```
 
 The complete App build above stamps the release-build identity required by

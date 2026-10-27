@@ -62,17 +62,21 @@ export ICP_ENVIRONMENT
 CARGO_ENV := ICP_ENVIRONMENT=$(ICP_ENVIRONMENT)
 CANIC_BLOB_WORKSPACES := integrations/blob-service/consumer \
                          integrations/blob-service/embedded-consumer
-CANIC_CARGO_TARGET_DIR ?= $(CURDIR)/target
+CANIC_CARGO_TARGET_DIR ?= $(CURDIR)/target/cargo
 CARGO_TARGET_DIR ?= $(CANIC_CARGO_TARGET_DIR)
 export CARGO_TARGET_DIR
-SCCACHE_BIN ?= $(shell command -v sccache 2>/dev/null)
+# Linux uses the checksum-pinned archive; other hosts use the existing Rust owner.
+ifeq ($(shell uname -s):$(shell uname -m),Linux:x86_64)
+CANIC_MANAGED_SCCACHE_BIN := $(CURDIR)/.tools/canic-sccache/bin/sccache
+else
+CANIC_MANAGED_SCCACHE_BIN := $(shell bash scripts/dev/install-rust-tools.sh --consumer "$(CURDIR)" --package sccache --version "$(CANIC_SCCACHE_VERSION)" --bin sccache --profile release --check 2>/dev/null)
+endif
+SCCACHE_BIN ?= $(CANIC_MANAGED_SCCACHE_BIN)
 CANIC_SCCACHE_WRAPPER := $(CURDIR)/scripts/ci/run-canic-sccache.sh
-ifeq ($(origin RUSTC_WRAPPER), undefined)
-ifneq ($(strip $(SCCACHE_BIN)),)
 CANIC_SCCACHE_BIN ?= $(SCCACHE_BIN)
 RUSTC_WRAPPER ?= $(CANIC_SCCACHE_WRAPPER)
-endif
-endif
+SCCACHE_RUNTIME_DIR ?= $(CURDIR)/.tmp/sccache-$(CANIC_SCCACHE_VERSION)-runtime
+export SCCACHE_RUNTIME_DIR
 ifneq ($(filter sccache run-canic-sccache.sh,$(notdir $(RUSTC_WRAPPER))),)
 CARGO_INCREMENTAL ?= 0
 SCCACHE_CACHE_SIZE ?= 40G
@@ -81,14 +85,27 @@ export CARGO_INCREMENTAL
 export SCCACHE_CACHE_SIZE
 export SCCACHE_IDLE_TIMEOUT
 endif
+ifneq ($(strip $(CANIC_SCCACHE_BIN)),)
 export CANIC_SCCACHE_BIN
+else
+# An unprepared Rust-owner selection must be resolved anew by subsequent Make.
+unexport CANIC_SCCACHE_BIN
+endif
 export RUSTC_WRAPPER
 VALIDATION_RUNNER := bash scripts/ci/run-canic-validation-targets.sh
 RELEASE_VALIDATION_LANE := bash scripts/ci/run-release-validation-lane.sh
 
+.PHONY: prepare-build-environment check-build-environment
+prepare-build-environment:
+	@bash scripts/ci/prepare-validation.sh environment
+
+check-build-environment:
+	@bash scripts/ci/prepare-validation.sh check-environment
+
 # Check for clean git state
 ensure-clean:
-	@if ! git diff-index --quiet HEAD --; then \
+	@state="$$(git status --porcelain)" || exit $$?; \
+	if [ -n "$$state" ]; then \
 		echo "🚨 Working directory not clean! Please commit or stash your changes."; \
 		exit 1; \
 	fi
@@ -103,6 +120,7 @@ help:
 	@echo "  install-testkit-server  Prepare the published Testkit CLI and PocketIC"
 	@echo "  testkit-server-check    Verify the prepared Testkit CLI and PocketIC offline"
 	@echo "  install-tools    Install pinned repository host, IC and Rust tools"
+	@echo "  prepare-validation SCOPE=release|preflight|security|checks  Prepare locked graphs and selected tools"
 	@echo "  tools-check      Verify repository tool bytes and versions offline"
 	@echo "  install-hooks    Configure the repository formatting-only pre-commit hook"
 	@echo "  update-dev       Synchronize reviewed development tools and report Binaryen updates"
@@ -197,6 +215,7 @@ update-dev:
 	"$(CURDIR)/.tools/ic/bin/icp" --version
 	"$(CURDIR)/.tools/ic/bin/ic-wasm" --version
 	"$(CURDIR)/.tools/ic/bin/wasm-opt" --version
+	+$(MAKE) --no-print-directory prepare-locked-dependencies
 	bash scripts/ci/check-dependency-risk-inventory.sh
 
 #
@@ -230,12 +249,7 @@ release-patch-fast:
 	@$(MAKE) release-push
 
 release-stage:
-	@version="$$(bash scripts/ci/read-workspace-version.sh)"; \
-		minor_line="$${version%.*}"; \
-		git add Cargo.toml Cargo.lock CHANGELOG.md scripts/dev/install_dev.sh \
-			release-validation.json \
-			"docs/changelog/$$minor_line.md" \
-			$$(git ls-files -m -- '*/Cargo.toml' || true)
+	@bash scripts/release/stage.sh
 
 release-candidate:
 	bash scripts/ci/check-release-candidate.sh
@@ -284,71 +298,61 @@ test: test-unit
 # PocketIC suite.
 test-wasm: test-unit-fast
 
-# Clippy must pass before invariant fixtures, compilation and tests start.
-# Each later barrier collects every independent target failure before returning.
-# Primitive development targets retain only the operation named by that target.
+# One membership definition per qualification group. Local and CI scheduling
+# differ deliberately: local Clippy first; hosted cheap jobs gate expensive jobs.
+CANIC_QUALIFICATION_LINT := clippy
+CANIC_QUALIFICATION_FORMAT := fmt-check
+CANIC_QUALIFICATION_POLICY := check-invariants shellcheck
+CANIC_QUALIFICATION_SECURITY := dependency-risk-gate dependency-risk-inventory-test
+CANIC_QUALIFICATION_FEATURES := control-plane-feature-gate
+
+.PHONY: prepare-locked-dependencies prepare-validation
+prepare-locked-dependencies:
+	@for manifest in Cargo.toml $(addsuffix /Cargo.toml,$(CANIC_BLOB_WORKSPACES)); do \
+		cargo fetch --locked --manifest-path "$$manifest" || exit "$$?"; done
+
+prepare-validation:
+	+bash scripts/ci/prepare-validation.sh "$(SCOPE)"
+
+# Preparation is explicit; qualification contains no dependency-setup recipe.
+# Every barrier remains sequential even under parallel Make.
 validate:
 	+@$(MAKE) --no-print-directory tools-check
 	+@$(VALIDATION_RUNNER) dependency-adoption-admission
-	+@$(VALIDATION_RUNNER) clippy
+	+@$(VALIDATION_RUNNER) $(CANIC_QUALIFICATION_LINT)
 	+@$(VALIDATION_RUNNER) dependency-adoption-fixtures
-	+@$(VALIDATION_RUNNER) \
-		fmt-check \
-		check-invariants \
-		dependency-risk-gate \
-		shellcheck
-	+@$(VALIDATION_RUNNER) \
-		check
-	+@$(VALIDATION_RUNNER) \
-		control-plane-feature-gate
-	+@$(VALIDATION_RUNNER) \
-		test
+	+@$(VALIDATION_RUNNER) $(CANIC_QUALIFICATION_FORMAT) $(CANIC_QUALIFICATION_POLICY) $(CANIC_QUALIFICATION_SECURITY)
+	+@$(VALIDATION_RUNNER) check
+	+@$(VALIDATION_RUNNER) $(CANIC_QUALIFICATION_FEATURES)
+	+@$(VALIDATION_RUNNER) test
 
-check-invariants:
-	+@$(VALIDATION_RUNNER) \
+CANIC_INVARIANT_TARGETS := \
 		cargo-dependency-boundaries-gate \
 		runtime-dependency-graph-gate \
 		dependency-pins-gate \
 		layering-gate \
 		current-document-semantics-gate \
-		dependency-risk-inventory-test \
 		release-validation-matrix-gate \
 		release-integrity-contract-gate \
 		recovery-runbooks-gate \
 		validation-runner-gate \
 		wasm-capability-size-report-gate \
 		wasm-crypto-closure-gate
+
+check-invariants:
+	+@$(VALIDATION_RUNNER) $(CANIC_INVARIANT_TARGETS)
 
 # CI keeps tool installation as an immediate prerequisite, then collects every
 # independent preflight or security failure before gating expensive jobs.
 ci-preflight:
-	+@$(VALIDATION_RUNNER) \
-		cargo-dependency-boundaries-gate \
-		runtime-dependency-graph-gate \
-		dependency-pins-gate \
-		lint-workflows \
-		shellcheck \
-		layering-gate \
-		current-document-semantics-gate \
-		release-validation-matrix-gate \
-		release-integrity-contract-gate \
-		recovery-runbooks-gate \
-		validation-runner-gate \
-		workspace-test-inventory-gate \
-		wasm-capability-size-report-gate \
-		wasm-crypto-closure-gate
+	+@$(VALIDATION_RUNNER) $(CANIC_QUALIFICATION_POLICY) lint-workflows workspace-test-inventory-gate
 
 ci-checks:
-	+@$(VALIDATION_RUNNER) \
-		fmt-check \
-		clippy
-	+@$(VALIDATION_RUNNER) \
-		control-plane-feature-gate
+	+@$(VALIDATION_RUNNER) $(CANIC_QUALIFICATION_FORMAT) $(CANIC_QUALIFICATION_LINT)
+	+@$(VALIDATION_RUNNER) $(CANIC_QUALIFICATION_FEATURES)
 
 ci-security:
-	+@$(VALIDATION_RUNNER) \
-		dependency-risk-gate \
-		dependency-risk-inventory-test
+	+@$(VALIDATION_RUNNER) $(CANIC_QUALIFICATION_SECURITY)
 
 audit-method-catalog-gate:
 	bash scripts/ci/check-audit-method-catalog.sh
@@ -371,30 +375,24 @@ recovery-runbooks-gate:
 
 release-integrity-contract-gate:
 	bash scripts/ci/check-shared-governance.sh
-	bash scripts/ci/test-gh-ci.sh
-	bash scripts/ci/test-release-runner.sh
 	bash scripts/ci/check-release-integrity-contract.sh
 	bash scripts/ci/test-require-jq.sh
-	bash scripts/ci/test-ic-tools.sh
-	bash scripts/ci/test-host-tools.sh
 	bash scripts/ci/test-dev-tool-recipes.sh
 	bash scripts/ci/test-release-tools.sh
 	bash scripts/ci/test-pinned-ci-tools.sh
+	bash scripts/ci/test-build-environment.sh
 	bash scripts/ci/test-shared-release-adoption.sh
-	bash scripts/ci/test-format-tools.sh
 	bash scripts/ci/test-canic-formatters.sh
-	bash scripts/ci/test-cargo-metadata.sh
 	bash scripts/ci/test-dependency-adoption.sh
-	bash scripts/ci/test-file-digests.sh
-	bash scripts/ci/test-rustsec-db.sh
 	bash scripts/ci/test-release-commit-view.sh
 	bash scripts/ci/test-commit-release.sh
 	bash scripts/ci/test-release-recipes.sh
+	bash scripts/release/test-stage.sh
 	MAKEFLAGS='-- RELEASE_PREVIOUS=9.9.9 RELEASE_KIND=minor RELEASE_VERSION=9.10.0' bash scripts/release/test-preflight.sh
 	bash scripts/ci/test-release-validation-lane.sh
 	bash scripts/ci/check-publish-manifest-boundary.sh
 	bash scripts/ci/test-publish-manifest-boundary.sh
-	bash scripts/ci/test-crates-io-version.sh
+	bash scripts/ci/test-packaged-output-paths.sh
 	bash scripts/ci/test-publish-workspace.sh
 
 release-validation-matrix-gate:
@@ -494,6 +492,7 @@ clean:
 clean-wasm:
 	rm -rf -- target/test-artifacts
 	rm -rf -- target/canic-wasm
+	rm -rf -- target/canic-packages
 	rm -rf -- target/icp-build
 	rm -rf -- target/pic-wasm
 	rm -rf -- target/pic-runtime-wasm
@@ -519,7 +518,7 @@ release-version:
 release-preflight:
 	@bash scripts/release/adapter.sh preflight
 release-verify:
-	+CARGO_NET_OFFLINE=true $(MAKE) --no-print-directory validate
+	+CARGO_NET_OFFLINE=true $(RELEASE_VALIDATION_LANE) complete
 release-prepare-version:
 	@CANIC_RELEASE_VALIDATED=1 CANIC_RELEASE_VALIDATED_HEAD="$(RELEASE_SOURCE)" CANIC_RELEASE_VALIDATION_KIND=complete CANIC_RELEASE_DATE="$(RELEASE_DATE)" bash scripts/ci/bump-version.sh "$(RELEASE_KIND)"
 release-prepared-check:

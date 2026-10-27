@@ -47,9 +47,10 @@ impl InputLocations {
                 declaration_target_root(&context.workspace_root),
             ),
         ]);
-        if let Some(parent) = context.config_path.parent() {
-            roots.insert("generated", parent.join(".canic/generated"));
-        }
+        roots.insert(
+            "generated",
+            crate::fleet_package::generated_root(&context.workspace_root, &context.config_path),
+        );
         if let Some(path) = env::var_os("CARGO_BUILD_BUILD_DIR").map(PathBuf::from) {
             roots.insert(
                 "intermediate",

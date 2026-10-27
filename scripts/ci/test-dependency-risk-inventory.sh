@@ -139,6 +139,11 @@ vulnerability="$tmp_dir/vulnerability.json"
 if bash "$GATE" --audit-json "$vulnerability" >"$tmp_dir/vulnerability.log" 2>&1; then
     fail "known vulnerability fixture was accepted"
 fi
+diagnostics=("$fixture"/target/dependency-audits/failure.*/failure.json)
+[[ "${#diagnostics[@]}" -eq 1 ]] || fail "missing or ambiguous failure summary"
+"$JQ_BIN" -e 'keys == ["exit_code", "phase", "schema"] and
+    .schema == 1 and .exit_code == 1 and .phase == "vulnerability-policy"' \
+    "${diagnostics[0]}" >/dev/null || fail "failure summary must contain only bounded phase and status"
 rg -F 'RUSTSEC-2099-0003: canic-risk-transitive-fixture 1.0.0' "$tmp_dir/vulnerability.log" >/dev/null ||
     fail "vulnerability diagnostic omitted its advisory or package identity"
 rg -F 'patched: >=1.0.1' "$tmp_dir/vulnerability.log" >/dev/null ||

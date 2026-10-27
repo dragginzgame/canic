@@ -117,6 +117,25 @@ fn invoke_environment(
         .env_remove("SHLVL")
         .env_remove("CODEX_SESSION_ID")
         .env_remove("CODEX_THREAD_ID");
+    // Each invocation has different execution plumbing. Neither Cargo children
+    // nor their cache identity may depend on these run-owned values.
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos()
+        .to_string();
+    for key in [
+        "CANIC_TEST_SCRATCH",
+        "CANIC_POCKETIC_WORKER",
+        "CANIC_GOVERNED_CASE_FILE",
+        "CANIC_GOVERNED_REPORT_FILE",
+        "IC_TESTKIT_POCKET_IC_URL",
+        "TMPDIR",
+        "VALIDATION_LOG_DIR",
+        "GITHUB_STEP_SUMMARY",
+    ] {
+        command.env(key, &nonce);
+    }
     if let Some((session, thread)) = session {
         command
             .env("CODEX_SESSION_ID", session)
@@ -149,6 +168,9 @@ fn main() {
     assert!(std::env::var_os("CANIC_ICP_IDENTITY_PASSWORD_FILE").is_none());
     assert!(std::env::var_os("CODEX_SESSION_ID").is_none());
     assert!(std::env::var_os("CODEX_THREAD_ID").is_none());
+    for key in ["CANIC_TEST_SCRATCH", "IC_TESTKIT_POCKET_IC_URL", "CANIC_GOVERNED_CASE_FILE", "TMPDIR"] {
+        assert!(std::env::var_os(key).is_none());
+    }
     assert_eq!(std::env::var("SHLVL").as_deref(), Ok("0"));
     let input = std::env::var("CANIC_TEST_BUILD_INPUT").unwrap();
     assert_eq!(std::env::var("CODEX_BUILD_FIXTURE_INPUT").unwrap(), input);

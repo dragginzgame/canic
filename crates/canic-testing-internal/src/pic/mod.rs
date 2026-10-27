@@ -270,7 +270,6 @@ mod governed_suite {
     #[ignore = "the workspace runner supplies owned PocketIC servers and scratch"]
     fn governed_internal_pocketic_suite() {
         assert_governed_pocketic_inventory();
-        artifacts::preflight_governed_shared_artifacts();
         let cases = ordered_governed_pocketic_cases();
         if let Some(path) = std::env::var_os(workers::CASE_FILE_ENV) {
             let names = std::fs::read_to_string(path).expect("worker case selection");

@@ -53,6 +53,7 @@ case "$name:$*" in
     'bash:'*'/scripts/dev/install-rust-tools.sh '*) exit "${FAIL_RUST_TOOLS:-0}" ;;
     'testkit-runner:setup' | 'testkit-runner:check') exit "${FAIL_TESTKIT:-0}" ;;
     'wasm-opt:--version') exit "${FAIL_WASM_OPT:-0}" ;;
+    'cargo:fetch --locked --manifest-path '*) exit "${FAIL_LOCKED_FETCH:-0}" ;;
 esac
 SH
 for executable in bin/bash bin/cargo '.tools/host/bin/rg' 'cargo tools/sccache' \
@@ -86,6 +87,17 @@ done
 for executable in '.tools/ic/bin/icp' '.tools/ic/bin/ic-wasm' '.tools/ic/bin/wasm-opt'; do
     grep -Fxq "$fixture/$executable"$'\t--version' "$EVENTS"
 done
+awk -F '\t' '
+    $2 ~ /^fetch --locked --manifest-path / { fetches++; next }
+    $2 == "scripts/ci/check-dependency-risk-inventory.sh" { audit=1; if (fetches != 3) exit 1 }
+    END { if (!audit) exit 1 }
+' "$EVENTS"
+if FAIL_LOCKED_FETCH=19 run_recipe update-dev; then
+    echo 'update-dev accepted failed dependency preparation' >&2; exit 1
+fi
+if grep -Fq 'scripts/ci/check-dependency-risk-inventory.sh' "$EVENTS"; then
+    echo 'update-dev audited after failed dependency preparation' >&2; exit 1
+fi
 
 if FAIL_WASM_OPT=17 run_recipe update-dev; then
     echo 'update-dev accepted a failed installed-tool probe' >&2
@@ -213,7 +225,12 @@ printf '#!%s\n' "$real_bash" > bin/make
 cat >> bin/make <<'MAKE'
 set -euo pipefail
 case "$*" in
+    prepare-build-environment)
+        [[ "${CANIC_ENVIRONMENT_FAILURE:-0}" == 0 ]] || exit "$CANIC_ENVIRONMENT_FAILURE"
+        touch "$CANIC_EXTRACTOR_FIXTURE/environment-prepared"
+        exit 0 ;;
     'install-rust-tools install-candid-extractor')
+        [[ "${CANIC_EXPECT_ENVIRONMENT:-0}" == 0 || -f "$CANIC_EXTRACTOR_FIXTURE/environment-prepared" ]] || exit 96
         exec "$CANIC_EXTRACTOR_MAKE" --no-print-directory -C "$CANIC_EXTRACTOR_FIXTURE" install-candid-extractor ;;
     '--no-print-directory candid-extractor-check')
         exec "$CANIC_EXTRACTOR_MAKE" --no-print-directory -C "$CANIC_EXTRACTOR_FIXTURE" candid-extractor-check ;;
@@ -224,6 +241,11 @@ MAKE
 chmod +x bin/make
 export GITHUB_WORKSPACE="$fixture" GITHUB_PATH="$fixture/github-path"
 for step in 'Install and qualify pinned native build tools' 'Install PocketIC test helper tools'; do
+    export CANIC_EXPECT_ENVIRONMENT=0
+    if [[ "$step" == 'Install and qualify pinned native build tools' ]]; then
+        CANIC_EXPECT_ENVIRONMENT=1
+    fi
+    rm -f "$fixture/environment-prepared"
     yq -o json '.' "$ROOT/.github/workflows/ci.yml" | jq -er --arg step "$step" \
         '[.jobs[].steps[] | select(.name == $step) | .run] | if length == 1 then .[0] else error("ambiguous native setup") end' > workflow-step
     : > "$GITHUB_PATH"
@@ -234,6 +256,14 @@ for step in 'Install and qualify pinned native build tools' 'Install PocketIC te
     CANIC_EXTRACTOR_FAILURE=37 PATH="$fixture/bin:$PATH" "$real_bash" -e -o pipefail workflow-step > workflow-output 2>&1 || status=$?
     [[ "$status" != 0 ]] || exit 1
     if grep -Fx "$fixture/admitted bin" "$GITHUB_PATH"; then exit 1; fi
+    if [[ "$CANIC_EXPECT_ENVIRONMENT" == 1 ]]; then
+        rm -f "$fixture/environment-prepared"
+        : > "$GITHUB_PATH"
+        status=0
+        CANIC_ENVIRONMENT_FAILURE=38 PATH="$fixture/bin:$PATH" "$real_bash" -e -o pipefail workflow-step > workflow-output 2>&1 || status=$?
+        [[ "$status" == 38 && ! -e "$fixture/environment-prepared" ]] || exit 1
+        if grep -Fx "$fixture/admitted bin" "$GITHUB_PATH"; then exit 1; fi
+    fi
 done
 echo 'Development recipes, explicit extractor admission and native workflow PATH publication passed (installer effects substituted)'
 fixture_complete=true

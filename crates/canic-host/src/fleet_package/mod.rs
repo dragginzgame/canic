@@ -63,14 +63,17 @@ pub struct FleetPackageSpec<'a> {
     pub build_script: Option<&'a str>,
 }
 
-pub fn manifest_path(config_path: &Path, package: &str) -> PathBuf {
-    config_path
-        .parent()
-        .unwrap_or_else(|| Path::new("."))
-        .join(".canic/generated")
-        // Sibling configurations can require different Root features. Their
-        // generated manifests must not overwrite another build's frozen inputs.
-        .join(config_path.file_name().unwrap_or_default())
+/// Keep generated Cargo workspaces outside every application package source tree.
+pub fn generated_root(workspace: &Path, config_path: &Path) -> PathBuf {
+    let relative = config_path.strip_prefix(workspace).unwrap_or(config_path);
+    let identity =
+        canic_core::cdk::utils::hash::sha256_hex(relative.as_os_str().as_encoded_bytes());
+    workspace.join("target/canic-packages").join(identity)
+}
+
+#[must_use]
+pub fn manifest_path(workspace: &Path, config_path: &Path, package: &str) -> PathBuf {
+    generated_root(workspace, config_path)
         .join(package)
         .join("Cargo.toml")
 }
@@ -82,6 +85,11 @@ pub fn materialize(
     dependencies: &GeneratedWrapperDependencies,
     spec: &FleetPackageSpec<'_>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    require_separate_output(
+        workspace,
+        manifest.parent().ok_or("Fleet manifest has no parent")?,
+        &crate::canister_build::cache::canister_build_target_root(workspace),
+    )?;
     let canic_root = canic_manifest
         .parent()
         .ok_or("Canic manifest has no parent")?;
@@ -127,14 +135,38 @@ pub fn materialize(
     Ok(())
 }
 
+/// Reject physical overlap before writing generated source or compiling it.
+fn require_separate_output(
+    workspace: &Path,
+    source: &Path,
+    output: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let output = ic_host_fs::path::canonicalize_allow_missing(output, workspace, usize::MAX)?;
+    // Protect the namespace and the actual package: a nested alias can redirect
+    // one selected package without redirecting the namespace itself.
+    for source in [
+        workspace.join("target/canic-packages"),
+        source.to_path_buf(),
+    ] {
+        let source = ic_host_fs::path::canonicalize_allow_missing(&source, workspace, usize::MAX)?;
+        if source.starts_with(&output) || output.starts_with(&source) {
+            return Err(format!(
+            "Cargo output {} overlaps generated Fleet source {}. Select a separate CARGO_TARGET_DIR, such as {}/target/cargo or an external output directory; workspace/target contains generated source and cannot be the compiler output root.",
+            output.display(), source.display(), workspace.display()
+            ).into());
+        }
+    }
+    Ok(())
+}
+
 /// Maintained infrastructure packages for the selected configuration only.
-pub fn generated_manifests(config: &Path) -> [PathBuf; 3] {
+pub fn generated_manifests(workspace: &Path, config: &Path) -> [PathBuf; 3] {
     [
         "canic-fleet-coordinator",
         "canic-fleet-root",
         "canic-fleet-wasm-store",
     ]
-    .map(|package| manifest_path(config, package))
+    .map(|package| manifest_path(workspace, config, package))
 }
 
 fn write_if_changed(path: &Path, bytes: &[u8]) -> Result<(), Box<dyn std::error::Error>> {

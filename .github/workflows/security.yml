@@ -31,11 +31,21 @@ jobs:
       - name: Install dependency-audit tools
         shell: bash
         run: |
-          source tool-versions.env
-          make install-host-tools
+          make prepare-validation SCOPE=security
           echo "$GITHUB_WORKSPACE/.tools/host/bin" >> "$GITHUB_PATH"
-          export PATH="$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
-          cargo install cargo-audit --version "$CANIC_CARGO_AUDIT_VERSION" --locked
       - name: Check dependency risk inventory
         shell: bash
-        run: bash scripts/ci/check-dependency-risk-inventory.sh
+        run: make ci-security
+
+      - name: Retain failure logs and timings
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: diagnostics-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}-${{ github.run_attempt }}
+          path: |
+            target/validation-runs/
+            target/validation-failures/
+            target/test-runs/
+            target/dependency-audits/
+          retention-days: 14
+          if-no-files-found: ignore

@@ -15,6 +15,7 @@ mod wire_schema;
 
 pub(crate) use reuse::retain_cargo_include_exports;
 
+pub use crate::fleet_package::manifest_path as generated_package_manifest;
 pub use crate::{
     artifact_io::{
         WireArtifactError, WireBindings, deterministic_gzip_bytes, generate_wire_bindings,

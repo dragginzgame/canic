@@ -14,9 +14,7 @@ case "${1:-}" in
             esac
         done < "$paths"
         bash scripts/ci/check-release-draft-ready.sh "${RELEASE_KIND:?}"
-        cargo fetch --locked
-        make --no-print-directory install-tools
-        make --no-print-directory tools-check
+        make --no-print-directory prepare-validation SCOPE=release
         ;;
     consumer-locks)
         printf '%s\n' integrations/blob-service/consumer/Cargo.lock \

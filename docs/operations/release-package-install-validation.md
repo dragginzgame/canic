@@ -58,7 +58,7 @@ not add new release behavior.
 | Gate | Command | Release question | When to run |
 | --- | --- | --- | --- |
 | Publishable crate package | `make package` | Can the workspace produce publishable package archives through `cargo package` from a clean worktree? | RC/final release. |
-| Installed CLI smoke | `make test-installed-canic-cli` | Does an installed `canic` binary run the maintained v1 readiness smoke and current retained operator CLI checks without using `target/debug/canic` or repository state? | RC/final release when local Cargo install is available. |
+| Installed CLI smoke | `make test-installed-canic-cli` | Does an installed `canic` binary run the maintained v1 readiness smoke and current retained operator CLI checks without using `target/cargo/debug/canic` or repository state? | RC/final release when local Cargo install is available. |
 | Packaged downstream CLI | `make test-packaged-downstream-cli` | Can an installed CLI from extracted packages build a consumer, deploy a small Fleet on PocketIC, recover interrupted calls and replay with zero effects using public JSON? | Explicit package qualification and RC/final release with the pinned PocketIC/toolchain and local Cargo cache. |
 | Packaged downstream Canister, managed-App testing and wasm store | `make test-packaged-downstream-wasm-store` | Can an ordinary typed Canister use packaged `build!`, `start!` and `finish!`, can an isolated host consumer compile the published `canic::testing` managed/standalone facade, and can both `wasm_store` bootstrap paths build outside the repository package graph? | RC/final release when Wasm/Cargo package support is available. |
 | Release workspace build | `cargo build --release --workspace --locked` | Does the release build shape compile with the locked resolver? | Release-commit `main` CI and RC validation. |
@@ -85,7 +85,7 @@ RC and final release reports should account for these artifact expectations:
 - Packaged downstream proofs must resolve through temporary package roots, not
   repository crate paths.
 - Installed CLI proof must execute the temporary installed binary, not
-  `target/debug/canic`.
+  `target/cargo/debug/canic`.
 - Installed CLI smoke covers command availability and input validation. The
   packaged CLI journey also builds real Wasm, exercises Fleet recovery through
   public JSON and compares deployed artifact hashes on disposable PocketIC.
@@ -108,7 +108,7 @@ Package/install gates may be expensive or environment-specific.
 
 | Gate family | Environment notes | Owner |
 | --- | --- | --- |
-| `make package` | Requires a clean worktree and may write under `target/package`. | RC/final release owner. |
+| `make package` | Requires a clean worktree and writes under Cargo’s selected `target_directory/package` (repository default `target/cargo/package`). | RC/final release owner. |
 | Installed CLI smoke | Installs into a temporary root and isolates `HOME`, `CARGO_HOME`, `CARGO_TARGET_DIR`, and `TMPDIR` under the proof root. | RC/final release owner or CI environment with local install support. |
 | Packaged downstream probes | Use package archives and temporary downstream roots; they intentionally reuse caller Cargo/Rust caches for offline package execution. | RC/final release owner or CI environment with package cache support. |
 | Fleet ensure PocketIC qualification | Runs inside the maintained workspace test graph and requires the pinned PocketIC server. | RC validation owner or CI. |

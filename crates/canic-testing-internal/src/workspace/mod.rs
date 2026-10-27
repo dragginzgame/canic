@@ -41,5 +41,7 @@ pub fn discover() -> io::Result<PathBuf> {
 /// Capture build inputs while leaving output placement to `WasmBuildSpec`.
 pub(crate) fn wasm_build_environment()
 -> impl Iterator<Item = (std::ffi::OsString, std::ffi::OsString)> {
-    std::env::vars_os().filter(|(key, _)| key != "CARGO_TARGET_DIR")
+    canic_host::build_environment::inputs()
+        .into_iter()
+        .filter(|(key, _)| key != "CARGO_TARGET_DIR")
 }

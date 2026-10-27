@@ -72,6 +72,7 @@ fn coordinator_declaration_pass_exports_candid_only_from_the_selected_leaf() {
 #[test]
 fn generated_fleet_coordinator_wrapper_satisfies_its_runtime_only_contract() {
     let root = temp_dir("canic-generated-fleet-coordinator-contract");
+    fs::create_dir_all(&root).expect("create configuration directory owned by this fixture");
     let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let context = WorkspaceBuildContext {
         role: "fleet_coordinator".to_string(),
@@ -125,5 +126,10 @@ fn generated_fleet_coordinator_wrapper_satisfies_its_runtime_only_contract() {
         std::collections::BTreeSet::from([CanicFeatureKey::FleetCoordinatorCanister])
     );
 
+    fs::remove_dir_all(fleet_package::generated_root(
+        &context.workspace_root,
+        &context.config_path,
+    ))
+    .expect("clean this configuration's generated packages");
     fs::remove_dir_all(root).expect("clean temp dir");
 }

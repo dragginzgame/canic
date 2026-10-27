@@ -3,6 +3,43 @@ use crate::test_support::temp_dir;
 use serde_json::json;
 
 #[test]
+fn generated_source_rejects_overlapping_outputs_before_creation() {
+    let root = temp_dir("generated-output-boundary");
+    let source = root.join("target/canic-packages");
+    for output in [
+        root.join("target"),
+        source.clone(),
+        source.join("config/build"),
+    ] {
+        assert!(require_separate_output(&root, &source, &output).is_err());
+    }
+    for output in [
+        root.join("target/cargo"),
+        root.join("target/canic-wasm"),
+        root.join("external-output"),
+    ] {
+        require_separate_output(&root, &source, &output).unwrap();
+    }
+    #[cfg(unix)]
+    {
+        fs::create_dir_all(root.join("target")).unwrap();
+        std::os::unix::fs::symlink(root.join("target"), root.join("alias")).unwrap();
+        assert!(require_separate_output(&root, &source, &root.join("alias")).is_err());
+    }
+    assert!(!source.exists());
+    #[cfg(unix)]
+    {
+        let output = root.join("target/cargo");
+        fs::create_dir_all(&output).unwrap();
+        fs::create_dir_all(&source).unwrap();
+        std::os::unix::fs::symlink(&output, source.join("selected")).unwrap();
+        assert!(require_separate_output(&root, &source.join("selected/package"), &output).is_err());
+        assert!(!output.join("package").exists());
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn generated_profiles_match_the_maintained_workspace_profiles() {
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let manifest: toml::Value =
@@ -87,7 +124,7 @@ fn generated_packages_preserve_special_characters_in_dependency_patch_paths() {
     };
     for role in ["root", "fleet_coordinator", "wasm_store"] {
         let package = format!("canic-{role}-fixture");
-        let manifest = manifest_path(&root.join("canic.toml"), &package);
+        let manifest = manifest_path(&root, &root.join("canic.toml"), &package);
         materialize(
             &manifest,
             &root,
@@ -195,8 +232,11 @@ fn sibling_configurations_preserve_each_others_generated_packages() {
         "canic-fleet-coordinator",
         "canic-fleet-wasm-store",
     ] {
-        let first = manifest_path(&root.join("configs/first.toml"), package);
-        let second = manifest_path(&root.join("configs/second.toml"), package);
+        let first = manifest_path(&root, &root.join("apps/first/canic.toml"), package);
+        let second = manifest_path(&root, &root.join("apps/second/canic.toml"), package);
+        assert_ne!(first, second);
+        assert!(first.starts_with(root.join("target/canic-packages")));
+        assert!(second.starts_with(root.join("target/canic-packages")));
         let write = |manifest: &Path, features: &[&str]| {
             materialize(
                 manifest,

@@ -61,6 +61,20 @@ fn ancestors(workflow: &Value, job: &str, seen: &mut BTreeSet<String>) {
     }
 }
 
+fn assert_preparation_order(workflow: &Value, job: &str, scope: &str, gate: &str) {
+    let commands = workflow["jobs"][job]["steps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|step| step["run"].as_str())
+        .flat_map(str::lines)
+        .map(str::trim)
+        .collect::<Vec<_>>();
+    let prepare = format!("make prepare-validation SCOPE={scope}");
+    let position = |command| commands.iter().position(|line| *line == command).unwrap();
+    assert!(position(prepare.as_str()) < position(gate));
+}
+
 #[test]
 fn maintained_ci_preserves_pins_credentials_and_validation_dependencies() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -83,6 +97,49 @@ fn maintained_ci_preserves_pins_credentials_and_validation_dependencies() {
     assert!(inspected > 0);
     let workflow =
         inspect(&fs::read_to_string(root.join(".github/workflows/ci.yml")).unwrap()).unwrap();
+    for (job, scope, gate) in [
+        ("preflight", "preflight", "make ci-preflight"),
+        ("security", "security", "make ci-security"),
+        ("checks", "checks", "make ci-checks"),
+    ] {
+        assert_preparation_order(&workflow, job, scope, gate);
+    }
+    for file in ["ci.yml", "security.yml"] {
+        let workflow =
+            inspect(&fs::read_to_string(root.join(".github/workflows").join(file)).unwrap())
+                .unwrap();
+        if file == "security.yml" {
+            assert_preparation_order(
+                &workflow,
+                "dependency-audit",
+                "security",
+                "make ci-security",
+            );
+        }
+        for job in workflow["jobs"].as_object().unwrap().values() {
+            let upload = job["steps"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|step| {
+                    step["uses"]
+                        .as_str()
+                        .is_some_and(|action| action.starts_with("actions/upload-artifact@"))
+                })
+                .unwrap();
+            assert_eq!(upload["if"], "${{ failure() }}");
+            let paths = upload["with"]["path"].as_str().unwrap();
+            for path in [
+                "target/validation-runs/",
+                "target/validation-failures/",
+                "target/test-runs/",
+                "target/dependency-audits/",
+            ] {
+                assert!(paths.lines().any(|line| line.trim() == path));
+            }
+            assert_eq!(upload["with"]["retention-days"], 14);
+        }
+    }
     for job in [
         "checks",
         "macos-host",

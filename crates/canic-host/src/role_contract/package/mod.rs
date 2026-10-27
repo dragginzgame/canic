@@ -138,7 +138,11 @@ pub fn declared_role_manifest_path(
         .get(role)
         .ok_or_else(|| RoleContractFinding::RoleUnknown { role: role.clone() })?;
     let manifest_path = if role.is_root() {
-        crate::canonical_root::manifest_path(config_path)
+        crate::canonical_root::manifest_path(config_path).map_err(|error| {
+            RoleContractFinding::DependencyShapeUnsupported {
+                reason: format!("canonical Fleet Subnet Root package: {error}"),
+            }
+        })?
     } else {
         let package = declaration
             .package

@@ -4,6 +4,7 @@ use crate::{canister_build::CanisterBuildProfile, test_support::temp_dir};
 #[test]
 fn generated_wasm_store_wrapper_satisfies_role_package_contract() {
     let root = temp_dir("canic-generated-wasm-store-contract");
+    fs::create_dir_all(&root).expect("create configuration directory owned by this fixture");
     let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let context = WorkspaceBuildContext {
         role: "wasm_store".to_string(),
@@ -57,6 +58,11 @@ fn generated_wasm_store_wrapper_satisfies_role_package_contract() {
             .contains(&canic_core::role_contract::CanicFeatureKey::WasmStoreCanister)
     );
 
+    fs::remove_dir_all(fleet_package::generated_root(
+        &context.workspace_root,
+        &context.config_path,
+    ))
+    .expect("clean this configuration's generated packages");
     fs::remove_dir_all(root).expect("clean temp dir");
 }
 
@@ -94,7 +100,11 @@ fn wasm_store_build_uses_the_locked_resolver() {
     let command = cargo_command_for_role(
         InfrastructureRole::Store,
         &context,
-        &fleet_package::manifest_path(&context.config_path, "canic-fleet-wasm-store"),
+        &fleet_package::manifest_path(
+            &context.workspace_root,
+            &context.config_path,
+            "canic-fleet-wasm-store",
+        ),
         false,
     )
     .command()
@@ -120,7 +130,11 @@ fn wasm_store_declaration_build_uses_the_canonical_candid_environment() {
     let command = cargo_command_for_role(
         InfrastructureRole::Store,
         &context,
-        &fleet_package::manifest_path(&context.config_path, "canic-fleet-wasm-store"),
+        &fleet_package::manifest_path(
+            &context.workspace_root,
+            &context.config_path,
+            "canic-fleet-wasm-store",
+        ),
         true,
     )
     .command()

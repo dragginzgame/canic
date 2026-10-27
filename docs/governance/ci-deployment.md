@@ -48,6 +48,52 @@ an interrupted target may have a partial log without a completed timing row.
 Nested validation barriers have separate directories. These logs are diagnostic
 evidence, not reusable release-validation receipts.
 
+Preparation is explicit: `make prepare-validation SCOPE=release` prepares the
+complete release prerequisites; CI selects `preflight`, `security` or `checks`
+for its corresponding job. `scripts/ci/prepare-validation.sh` owns these selections
+and reuses the existing pinned installers. Release preflight invokes the same
+owner automatically. Preparation admits the managed build environment, then calls
+`prepare-locked-dependencies`,
+which fetches the root and both private Blob consumer graphs with `--locked`.
+An explicit `CARGO_NET_OFFLINE=true` is preserved and a missing cache stops setup;
+preparation never updates a lockfile to recover. The release scope also prepares
+`wasm32-unknown-unknown` for the selected Rust toolchain. Preflight installs the
+shared Rust tools used by consumer formatting/version fixtures, then prepares and
+admits the exact metadata editor before its consumer transaction regression.
+The security and Wasm crypto-closure checkers do not fetch Cargo dependencies.
+Direct crypto-closure checks require `make prepare-locked-dependencies` first. Advisory-database
+acquisition remains its explicit security operation, separate from Cargo setup.
+The normal non-publishing sequence is `make prepare-validation SCOPE=release`,
+maintainer review/commit of the intended tree, then `make release-verify`. No manual
+build-environment exports are required. Preparation preserves explicit Cargo
+offline policy; with offline enabled it cannot fetch missing dependencies. The
+Make verification entrypoint enforces Cargo offline; direct `validate` and the
+underlying lane script inherit the caller's selection. The clean-tree fence remains
+mandatory.
+Direct validation/gate invocations require prepared prerequisites. For a direct
+security check, run `make prepare-validation SCOPE=security` before
+`make dependency-risk-gate` or `make ci-security`. `update-dev` explicitly
+prepares the locked graphs before its final security check; security fixtures
+prepare their own isolated local graphs. The standalone test runner retains its
+own locked-fetch admission for direct test entrypoints. It can repeat a cache
+check after release preparation; this is not compilation or test-result reuse.
+
+Make's `CANIC_QUALIFICATION_*` groups define gate membership once. Local
+`validate` retains admission, Clippy, private-consumer fixtures, the independent
+policy/security barrier, checking, feature qualification and tests in that order.
+CI schedules the shared policy, format/lint, feature and security groups through
+its existing jobs; workflow lint and inventory checks remain explicit CI preflight
+additions. Existing local-only adoption/fixture/check selections and separate
+host/MSRV/test jobs remain explicit; the CI graph is not represented as identical
+to the local complete gate. This composition change does not add test-result reuse
+or remove runtime/package proofs. Generic Shared Tooling producer regressions stay
+upstream; snapshot integrity, consumer wiring, release identity and package-boundary
+checks remain local. Scheduled security uses the same security group as push CI.
+Failed CI jobs retain validation/test logs and timings for 14 days. Dependency
+audit failures retain a bounded JSON phase/status summary in
+`target/dependency-audits/`; raw tool stderr and database scratch remain private
+and are not uploaded. These diagnostics do not establish hosted-runner success.
+
 ## Command Authority
 
 An unambiguous maintainer instruction in the current conversation authorizes
@@ -134,11 +180,17 @@ do not start PocketIC or require the full deployment-tool installation.
 
 Direct Cargo and Make-based work within this checkout share the repository
 `target/`. Repository Cargo configuration also directs standalone audit fixtures
-there by default. When `sccache` is available
-and no explicit `RUSTC_WRAPPER` is set, Make selects it through the repository
-wrapper and disables Rust incremental compilation so compiler results remain
-cacheable. The wrapper gives the persistent cache server a stable
-`.tmp/sccache-runtime/` socket and temporary directory; it never inherits an
+there by default. Every Make invocation selects the centrally pinned sccache
+through the repository wrapper and defaults cached builds to `CARGO_INCREMENTAL=0`.
+Linux x86_64 uses `.tools/canic-sccache/bin/sccache`, prepared by the existing
+checksum installer. Other supported hosts use the existing shared Rust installer
+with the same exact version; its checked selection supplies the executable path.
+`make prepare-build-environment` prepares that selection; preparation scopes call
+it before Cargo consumers. Qualification calls `make check-build-environment`,
+which checks the effective executable version and admits the runtime through its
+existing launcher. An ambient binary on PATH is never the default.
+The wrapper gives the persistent cache server a stable
+`.tmp/sccache-<governed-version>-runtime/` socket and temporary directory; it never inherits an
 invocation-owned `test-runtime.*` directory that cleanup removes. Cache infrastructure
 errors fall back quietly to the original compiler command. Set
 `CANIC_SCCACHE_VERBOSE=1` to print cache fallback diagnostics while investigating
@@ -147,8 +199,20 @@ failures retain their diagnostics and exit codes without another compile attempt
 cache-management commands retain their own failure status. Without a
 wrapper, Make leaves Cargo's profile defaults intact: local dev/test work may
 remain incremental while `release` and `fast` artifacts stay non-incremental.
-Explicit `CARGO_TARGET_DIR`, `CARGO_INCREMENTAL` and `RUSTC_WRAPPER` values
-remain authoritative. Canic artifact builds keep incremental compilation
+Explicit `CARGO_TARGET_DIR`, `CARGO_INCREMENTAL` (0 or 1), `RUSTC_WRAPPER`
+(including empty), `CANIC_SCCACHE_BIN` and `SCCACHE_RUNTIME_DIR` values remain
+authoritative. Explicit cache binaries must report the governed version; setup
+does not overwrite them. A custom wrapper must be executable and owns its own
+runtime behavior; the Canic wrapper admits runtime overrides through the shared
+launcher. A prepared subprocess never serves as persistent environment setup. Repository Cargo and Make default compiler output to
+`target/cargo/`; Host defaults to `target/canic-wasm/` when no output override is
+provided. `target/canic-packages/` holds configuration-keyed generated source,
+not compiler output. Overrides that enclose or enter that source tree are refused
+before generation, including physical overlap through symlinks. Select a sibling
+output directory or a separate external directory instead. `make clean-wasm`
+owns generated-source cleanup; `cargo clean` removes only its selected compiler
+output. These storage-maintenance commands must not race active builds.
+Canic artifact builds keep incremental compilation
 disabled for deterministic Wasm output. Installed `canic build` leaves compiler
 wrapper selection to Cargo and the operator's explicit configuration.
 Direct `scripts/ci/run-with-test-scratch.sh` invocations also select the stable
@@ -534,40 +598,55 @@ repository. Do not ask the maintainer to repeat it or run intermediate commands
 by hand. Do not infer the same authority from “continue,” “finish,” “ready to
 push,” an audit request or a request to prepare a candidate.
 
-The normal complete patch path is `make patch`, followed by
-`make release-stage`, `make release-commit`, and `make release-push`; the
-one-shot form is `make release-patch`. Minor and major releases use their
-corresponding commands.
+The canonical normal path is to review the complete batch, stage and commit it,
+then explicitly select `make release-minor` (or the appropriate patch/major
+increment). The pre-commit hook may format selected files. Start from a clean
+checkout, with the intended branch/upstream, release notes, exact prepared tools,
+registry dependencies and authenticated Git access. Release preflight prepares
+locked dependencies and the pinned metadata editor before offline qualification.
+Do not pre-run another full validation: the release command owns that gate.
 The standard commands use the [Shared Tooling runner](shared-tooling.md).
-Normal release increments start fresh from current committed metadata and repeat
-preflight and validation. Historical plans do not block that fresh attempt.
-Use `make release-resume VERSION=X.Y.Z` only to reconcile the exact saved
-release, with its original source, payload and destination checks.
-Before patch validation and version mutation, `make patch` prints the
-read-only `make release-cadence` advisory. The advisory reports when the next
-release would exceed the soft 12-release minor-line guideline but never blocks
-or expands the maintainer's release authority.
-The complete and fast Make version targets delegate to one fail-fast release
-validation owner. Before the gate or receipt reuse, it checks source cleanliness,
-the planned release notes, freshly observed remote ancestry and availability of
-the planned release tag. Diverged branches, occupied tags and failed remote
-observations stop before compilation or PocketIC. It propagates any
-nonzero validation or eligibility result immediately, checks cleanliness again,
-and proves that `HEAD` is unchanged before granting version-mutation authority.
-The complete lane runs the same explicit `make validate` workflow. It does not
-mutate source formatting; the pre-commit hook handles routine formatting, while
-validation's `make fmt-check` catches bypassed hooks. Any failed target leaves
-the version unchanged. After a complete gate succeeds and the clean immutable
-source revision is rechecked, the lane atomically retains a local exact-HEAD
-success receipt under `target/release-validation/`. If versioning, remote
-readiness or another later release-only step fails, rerunning the same complete
-release command rechecks the cheap preflight and reuses that receipt instead of
-rerunning compilation or PocketIC. A source commit change or missing receipt
-requires validation again. An executable release-integrity regression proves
-that a failed gate cannot invoke the bump script and that an exact successful
-receipt resumes version mutation without a second validation. The underlying
-bump script rejects direct invocation without the private validation marker
-supplied by the owner.
+Normal increments start fresh from committed metadata. Historical plans do not
+block a fresh attempt. The alternate explicit version/stage/commit/push helpers
+remain available; staging derives its complete NUL-delimited roster from the
+same adapter, including both private Blob consumer lockfiles.
+
+The complete and fast version targets and the one-shot verification hook share
+one fail-fast qualification owner. It checks source cleanliness and delivery
+source identity, admits prepared tools, runs the selected gate, then rechecks
+cleanliness and unchanged HEAD. Version targets additionally check planned notes
+and remote readiness before qualification. The complete lane runs `make validate`;
+formatting remains owned by the pre-commit hook and checked by `fmt-check`.
+A failed gate cannot authorize version mutation. Qualification is always fresh:
+a source SHA and tool admission alone do not bind environment overrides or the
+security database. No local source-only success receipt skips qualification.
+The immutable published receipt used by the eligible fast lane is a separate
+contract described below. The underlying bump script requires the private
+validation marker supplied by the qualification owner.
+
+Stop on failed prerequisites, gates, source drift, remote conflicts or uncertain
+network outcomes. Preserve logs, artifacts and recovery state. If an attempt
+has a saved release plan, use `make release-resume VERSION=X.Y.Z` to reconcile
+that exact attempt with its original source, payload and destination checks.
+Inspect the saved phase and remote refs first; do not remove a release lock merely
+because its PID is absent from a restricted process view. A failure before a saved
+recoverable state requires diagnosis and a fresh authorized release, not an
+invented receipt. Do not manually bump again to recover a prepared release.
+
+`make release-minor` releases source: its success establishes the exact source
+release commit/tag and atomic branch/tag delivery. `make publish` separately
+publishes the governed package family; registry visibility is its completion
+boundary. In `make release-minor && make publish`, the shell only starts publication
+if the synchronous source-release command succeeds. It does not wait for the
+push-triggered CI result, install the CLI, build an application, deploy a Fleet,
+or verify a live service. Check CI for the exact release commit separately.
+CLI installation, application build, Fleet deployment and live verification each
+need their own selected version, application, environment, identity and evidence.
+Successful publication is not deployment evidence. Pre-1.0 deployment remains
+clean reinstall with controller checks, bounded spending, cycle conservation and
+same-operation recovery; this source-release procedure does not imply rollback
+or cross-release migration.
+
 The root `Cargo.toml` is the sole live workspace package-version authority;
 ordinary status and planning prose must not act as a parallel package-version
 source. Current and committed version queries select their source through the

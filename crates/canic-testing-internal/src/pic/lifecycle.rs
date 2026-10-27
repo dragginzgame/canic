@@ -120,12 +120,11 @@ pub fn held_fixture_store_wasm() -> Vec<u8> {
         let _ = retained_fixture_store_wasm();
         let workspace = workspace_root();
         let config = workspace.join(MANAGED_LIFECYCLE_CONFIG_PATH);
-        let manifest = config
-            .parent()
-            .unwrap()
-            .join(".canic/generated")
-            .join(config.file_name().unwrap())
-            .join("canic-fleet-wasm-store/Cargo.toml");
+        let manifest = canic_host::canister_build::generated_package_manifest(
+            &workspace,
+            &config,
+            "canic-fleet-wasm-store",
+        );
         let target = workspace.join("target/pic-wasm");
         let mut command = std::process::Command::new("cargo");
         command

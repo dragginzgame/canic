@@ -25,8 +25,14 @@ pub const PACKAGE: &str = "canic-fleet-root";
 const ENTRYPOINT: &str = "canic::start_fleet_root!();\ncanic::finish!();\n";
 const BUILD_SCRIPT: &str = "fn main() { canic::build!(\"canic.toml\"); }\n";
 
-pub fn manifest_path(config_path: &Path) -> PathBuf {
-    fleet_package::manifest_path(config_path, PACKAGE)
+pub fn manifest_path(config_path: &Path) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let workspace = crate::workspace_discovery::discover_workspace_root_from(config_path)?
+        .ok_or("configuration has no Cargo workspace")?;
+    Ok(fleet_package::manifest_path(
+        &workspace,
+        config_path,
+        PACKAGE,
+    ))
 }
 
 pub fn materialize(
@@ -46,7 +52,7 @@ fn materialize_package(
     config: &ConfigModel,
     mode: PackageValidationMode,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let manifest = manifest_path(config_path);
+    let manifest = manifest_path(config_path)?;
     if mode != PackageValidationMode::Build {
         return Ok(manifest);
     }
