@@ -27,7 +27,8 @@ owners, and strengthens release-bound observations and interruption recovery.
   bounded native Wire. Retained evidence uses Wire-specific fields; fixture and
   replay records use canonical storage encoding. Reinstall and regenerate current
   artifacts; external IC/provider protocols retain Candid and use available
-  published Platform DTOs. ICRC-21 handlers use standard `Result` in place of the
+  published Platform DTOs, including shared management change details for capacity
+  import recovery. ICRC-21 handlers use standard `Result` in place of the
   copied response enum.
 - **Wire contracts:** replace owned Candid dispatchers with typed, method-bound
   endpoints across runtime, control plane, Host, CLI and generated clients.

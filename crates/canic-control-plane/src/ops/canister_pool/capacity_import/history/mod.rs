@@ -2,7 +2,10 @@
 
 use crate::view::canister_pool::{PoolImportHistoryKind, PoolImportHistoryView};
 use canic_core::control_plane_support::error::InternalError;
-use ic_platform::{candid::contract::CandidType, principal::ExternalPrincipal as Principal};
+use ic_platform::{
+    candid::contract::CandidType, management_canister_types::ChangeDetails,
+    principal::ExternalPrincipal as Principal,
+};
 use serde::Deserialize;
 
 #[derive(CandidType, Deserialize)]
@@ -18,7 +21,7 @@ struct History {
 struct Change {
     canister_version: u64,
     origin: Option<Origin>,
-    details: Option<Details>,
+    details: Option<ChangeDetails>,
 }
 
 #[derive(CandidType, Deserialize)]
@@ -29,15 +32,6 @@ enum Origin {
         canister_id: Principal,
         canister_version: Option<u64>,
     },
-}
-
-#[derive(CandidType, Deserialize)]
-#[candid_path("ic_platform::candid::contract")]
-enum Details {
-    #[serde(rename = "controllers_change")]
-    Controllers { controllers: Vec<Principal> },
-    #[serde(rename = "code_uninstall")]
-    Uninstall,
 }
 
 pub(super) fn decode(
@@ -62,15 +56,16 @@ pub(super) fn decode(
     };
     history.controllers.sort_unstable();
     let kind = match change.details {
-        Some(Details::Controllers { mut controllers }) => {
+        Some(ChangeDetails::ControllersChange(record)) => {
+            let mut controllers = record.controllers;
             controllers.sort_unstable();
             if controllers != history.controllers {
                 return Err(InternalError::conflict());
             }
             PoolImportHistoryKind::Controllers
         }
-        Some(Details::Uninstall) => PoolImportHistoryKind::Uninstall,
-        None => return Err(InternalError::conflict()),
+        Some(ChangeDetails::CodeUninstall) => PoolImportHistoryKind::Uninstall,
+        _ => return Err(InternalError::conflict()),
     };
     Ok(PoolImportHistoryView {
         canister_id,
@@ -94,6 +89,47 @@ pub(super) fn decode(
 mod tests {
     use super::*;
 
+    #[test]
+    fn capacity_import_history_admits_exact_controllers_and_refuses_deployment() {
+        let root = Principal::from_slice(&[1; 10]);
+        let other = Principal::from_slice(&[2; 10]);
+        let mut history = History {
+            controllers: vec![root],
+            module_hash: None,
+            recent_changes: vec![Change {
+                canister_version: 13,
+                origin: Some(Origin::FromCanister {
+                    canister_id: root,
+                    canister_version: Some(44),
+                }),
+                details: Some(
+                    serde_json::from_value(serde_json::json!({
+                        "controllers_change": { "controllers": [root.to_text()] }
+                    }))
+                    .unwrap(),
+                ),
+            }],
+        };
+        let bytes = ic_platform::candid::contract::encode_one(&history).unwrap();
+        assert_eq!(
+            decode(other, &bytes).unwrap().kind,
+            PoolImportHistoryKind::Controllers
+        );
+        history.controllers = vec![other];
+        let bytes = ic_platform::candid::contract::encode_one(&history).unwrap();
+        assert!(decode(other, &bytes).is_err());
+
+        history.controllers = vec![root];
+        history.recent_changes[0].details = Some(
+            serde_json::from_value(serde_json::json!({
+                "code_deployment": { "mode": "reinstall", "module_hash": vec![0_u8; 32] }
+            }))
+            .unwrap(),
+        );
+        let bytes = ic_platform::candid::contract::encode_one(&history).unwrap();
+        assert!(decode(other, &bytes).is_err());
+    }
+
     #[derive(CandidType)]
     #[candid_path("ic_platform::candid::contract")]
     struct WireHistory {
@@ -108,7 +144,7 @@ mod tests {
     struct WireChange {
         canister_version: u64,
         origin: WireOrigin,
-        details: Option<Details>,
+        details: Option<ChangeDetails>,
         timestamp_nanos: u64,
     }
 
@@ -139,7 +175,7 @@ mod tests {
                     canister_id: root,
                     canister_version: Some(44),
                 },
-                details: Some(Details::Uninstall),
+                details: Some(ChangeDetails::CodeUninstall),
             }],
         };
         let decoded = decode(
@@ -182,7 +218,7 @@ mod tests {
                     canister_id: root,
                     canister_version: Some(44),
                 }),
-                details: Some(Details::Uninstall),
+                details: Some(ChangeDetails::CodeUninstall),
             }],
         };
         let decoded = decode(

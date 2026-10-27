@@ -23,7 +23,7 @@ wasm-store-canister = []
 async-trait = { workspace = true }
 canic-contracts.workspace = true
 canic-core = { workspace = true }
-ic-platform = { workspace = true, features = ["cdk", "candid"] }
+ic-platform = { workspace = true, features = ["cdk", "candid", "management-canister-types"] }
 ic-timers = { workspace = true }
 ic-wire = { workspace = true }
 serde = { workspace = true }

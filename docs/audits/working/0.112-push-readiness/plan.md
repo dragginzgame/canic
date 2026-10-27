@@ -3,6 +3,63 @@
 Audit date: 2026-10-26. Status: owned cut locally qualified; external DTO supply blocks full requested cleanup.
 This is a development checklist, not release authority or a validation receipt.
 
+## External contract supply follow-up — 2026-10-27
+
+The selected Platform 0.6.19 already exports `ChangeDetails`. Capacity-import
+history now uses that identity directly and deletes its local `Details` enum and
+runtime derive. Its controller-set, origin and sender-version decisions remain
+Canic-owned; all other change kinds still refuse. Three focused history tests
+pass, including matching/mismatched controllers, deployment refusal, user-origin
+refusal and missing sender version. The Control Plane declares its management
+feature explicitly; Core already selected it, so this adds no dependency version
+or effective feature. No Wasm-size improvement is claimed from the source removal.
+
+Qualification for this removal: `cargo test --locked --offline -p
+canic-control-plane --lib capacity_import_history -- --nocapture` passes all three
+selected cases; `cargo check --locked --offline -p canic-control-plane --lib
+--no-default-features --features root-control-plane --target wasm32-unknown-unknown`
+passes. File formatting, scoped links and diff whitespace pass; all three lock
+hashes are unchanged. No fresh installed recovery or full release suite was run.
+
+The ten ICRC-21 mirrors and management request/nested identities still await the
+prepared public exports. `DefiniteCanisterSettings` is public, but its log-visibility
+enum is not separately exported for Canic's semantic conversion. Do not introduce
+serialization conversions to work around that gap. Host's `LedgerBlock` uses the
+upstream generic `Value`, while `BlockWithId` uses `ICRC3Value`; adopting the latter
+requires the receipt owner's qualification, not a mechanical rename.
+
+Inspected clean `main` at `aed32be2afbaf66d7e2867292da52f75ce028e41`.
+The maintainer authorized Canic adoption of the incoming Platform supplier and
+confirmed that required external Candid is acceptable. Candid presence is not a
+release defect; removal of redundant local DTO ownership remains the objective.
+No supplying dependency was adopted during this inspection.
+
+The remaining supply work now has owning Platform issues, with canonical source
+revisions, exact Canic callers and consumer acceptance requirements:
+
+- [Platform #61](https://github.com/dragginzgame/ic-platform/issues/61): CMC
+  top-up/rate/mint and ICP Ledger transfer/encoded-block/archive contracts.
+- [Platform #62](https://github.com/dragginzgame/ic-platform/issues/62): Cycles
+  Ledger creation **and withdrawal**, including complete error/rejection evidence.
+- [Platform #63](https://github.com/dragginzgame/ic-platform/issues/63): NNS subnet
+  lookup; canonical optional-principal shape needs cost/submission qualification.
+- [Platform #64](https://github.com/dragginzgame/ic-platform/issues/64): certified
+  asset get/chunk contracts; retain Canic's bounded host reader and acceptance.
+
+These extend the previous CT-06 inventory to include withdrawal and ICP receipt
+families; they do not duplicate the incoming management/history/ICRC export patch.
+Upstream source observations are not deployed-provider acceptance. No service
+engine dependency, copied crypto, fallback codec or direct DFINITY contribution
+was introduced. Existing source projections are not automatically runtime bugs.
+
+All three workspace dependency-boundary checks and scoped documentation-link
+checks pass. Both independent Blob lock hashes still match the recorded evidence.
+The current root lock is `0c02b4f2fdebaccb19838335c8a4ab2f9dc2d1c7aab3b9e890e552f6be41ab5c`,
+which differs from the earlier qualification record. Reconcile that graph before
+reusing its installed acceptance; the later Root size build alone is insufficient.
+The initial supply inspection ran static checks only; the later local enum removal
+has the focused qualification above. No release or paid effect was performed.
+
 ## Current release scope — 2026-10-26
 
 The maintainer narrowed the remaining release outcome to **Blob storage and Wire**.
