@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Exercise the copied launcher's runtime, not the invoking Make server directory.
+unset SCCACHE_RUNTIME_DIR SCCACHE_REPOSITORY_ROOT
+
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 mkdir -p "$ROOT/.tmp"
 fixture="$(mktemp -d "$ROOT/.tmp/sccache-wrapper-test.XXXXXX")"
@@ -103,5 +106,7 @@ CACHE_MODE=unavailable "$wrapper" --show-stats > "$fixture/stdout" 2> "$fixture/
 printf '%s\0' --show-stats > "$fixture/expected-cache"
 cmp "$fixture/expected-cache" "$CACHE_RECORD"
 
-[[ -z "$(find "$fixture/.tmp/sccache-runtime/tmp" -name 'client-error.*' -print -quit)" ]]
+[[ -d "$fixture/.tmp/sccache-runtime/tmp" ]]
+diagnostics="$(find "$fixture/.tmp/sccache-runtime/tmp" -name 'client-error.*' -print -quit)"
+[[ -z "$diagnostics" ]]
 echo 'sccache wrapper tests passed'

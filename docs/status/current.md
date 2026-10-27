@@ -181,3 +181,14 @@ cleanup extraction; no complete retry occurred between those focused checks.
 The corrected source must be committed and qualified afresh. No push or release
 has occurred. Fresh hosted setup and the historical activation conflict remain
 unresolved.
+
+The second complete attempt, at `8e745713c`, stopped after 269.636s at the
+release-tools fixture: it inherited Make's versioned runtime while expecting its
+own temporary runtime. Formatting, shell lint, security and the other invariant
+gates passed. Both copied-wrapper fixtures now clear inherited runtime selection;
+the wrapper's cleanup assertion also refuses a missing directory instead of
+accepting empty output from a failed find. Both exact fixtures with inherited
+runtime selection, scoped ShellCheck, and the entire affected
+`CARGO_NET_OFFLINE=true make release-integrity-contract-gate` passed. That gate's
+publication checks use substitutes and had no registry effects. Evidence remains
+in `target/session-qualification/`; no complete retry was used to diagnose this fix.

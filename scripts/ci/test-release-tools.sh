@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Copied launchers own fixture-local runtime paths, never the invoking Make runtime.
+unset SCCACHE_RUNTIME_DIR SCCACHE_REPOSITORY_ROOT
+
 # Expected rejection diagnostics stay captured unless a fixture actually fails.
 if [[ "${1:-}" != --run-fixtures ]]; then
     [[ "$#" -eq 0 ]] || exit 2
