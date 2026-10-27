@@ -1,5 +1,17 @@
 # Current handoff — 2026-10-27
 
+## Latest Wire registration repair
+
+Combined native tests unified Canic’s wire-schema feature into consumers whose
+local feature and derives were disabled. Registration now requires the consumer’s
+declared wire-schema feature as well as Canic support. Mixed-feature checks pass
+for all nine failing packages: leaf_probe, canister_index_hub, canister_user_hub,
+canister_user_shard, delegation_issuer_stub, intent_authority,
+managed_lifecycle_probe, runtime_probe and sharding_root_stub. The explicit
+Canic wire_schema integration test passes and verifies actual registered types,
+method identities and budgets. Logs: /tmp/canic-schema-affected.log and
+/tmp/canic-schema-registration-test.log. No full suite rerun was performed.
+
 ## Latest release-gate diagnosis
 
 The validation adapter expected the old order and omitted dependency admission

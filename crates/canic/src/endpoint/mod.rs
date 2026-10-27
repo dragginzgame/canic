@@ -100,8 +100,8 @@
 //! use the ordinary endpoint path. Reply encoding failure traps; synchronous
 //! mutations therefore roll back. Async callbacks retain ordinary IC transaction
 //! boundaries. This selection emits no Candid registration or fallback codec.
-//! Native builds with Canic's `wire-schema` feature register these exact signatures
-//! and budgets. `endpoint::schema::snapshot(&compiled)` requires declarations read
+//! Native builds with both Canic's and the consuming package's `wire-schema`
+//! features register these exact signatures and budgets. `endpoint::schema::snapshot(&compiled)` requires declarations read
 //! from the final Wasm and refuses inventory, identity, mode or budget drift.
 //! Request/reply types must implement Wire metadata; deployed Wasm acquires no
 //! registry or JSON dependency. Target-specific type-layout parity, release

@@ -83,6 +83,10 @@ owners, and strengthens release-bound observations and interruption recovery.
 
 ### 🔧 Changed
 
+- Scope native Wire schema registration to each consumer’s declared `wire-schema`
+  selection, so Cargo feature unification does not require schema derives in
+  ordinary probe and application builds.
+
 - Keep the maintainer-accepted crypto-bigint 0.5.5 advisory visible without blocking
   release; acceptance matches the exact advisory, version and checksum.
 

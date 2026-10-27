@@ -1,4 +1,5 @@
-//! Feature selection belongs to Canic, not an invented consuming-crate cfg.
+//! Native schema registration requires both Canic support and the consumer's
+//! declared `wire-schema` feature, matching its conditional DTO derives.
 
 /// Register one native projection owner; it may contribute several mounted methods.
 #[doc(hidden)]
@@ -9,6 +10,7 @@ macro_rules! __canic_register_wire_schema_provider {
         $crate::__canic_register_wire_schema_provider!($projection, None);
     };
     ($projection:expr, $adapter:expr) => {
+        #[cfg(feature = "wire-schema")]
         const _: () = {
             #[$crate::__internal::core::__reexports::ctor::ctor(
                         unsafe, anonymous, crate_path = $crate::__internal::core::__reexports::ctor
