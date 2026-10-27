@@ -1,4 +1,4 @@
-use std::{error::Error, fmt};
+use thiserror::Error;
 
 use super::{
     diagnostic::{IcpDiagnostic, classify_icp_diagnostic},
@@ -9,20 +9,23 @@ use super::{
 /// IcpCommandError
 ///
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum IcpCommandError {
-    Io(std::io::Error),
-    MissingCli {
-        executable: String,
-    },
-    IncompatibleCliVersion {
-        executable: String,
-        found: String,
-    },
-    Failed {
-        command: String,
-        stderr: String,
-    },
+    #[error("{0}")]
+    Io(#[source] std::io::Error),
+    #[error(
+        "icp-cli executable not found: {executable}\nrequired: icp-cli {ICP_CLI_SUPPORTED_VERSION_RANGE}\n{}",
+        icp_cli_install_hint()
+    )]
+    MissingCli { executable: String },
+    #[error(
+        "unsupported icp-cli version for {executable}\nfound: {found}\nrequired: icp-cli {ICP_CLI_SUPPORTED_VERSION_RANGE}\n{}",
+        icp_cli_install_hint()
+    )]
+    IncompatibleCliVersion { executable: String, found: String },
+    #[error("icp command failed: {command}\n{stderr}")]
+    Failed { command: String, stderr: String },
+    #[error("could not parse icp json output for {command}: {source}\n{output}")]
     Json {
         command: String,
         output: String,
@@ -48,64 +51,103 @@ impl IcpCommandError {
     }
 }
 
-impl fmt::Display for IcpCommandError {
-    // Render ICP CLI command failures with the command line and captured diagnostics.
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Io(err) => write!(formatter, "{err}"),
-            Self::MissingCli { executable } => {
-                write!(
-                    formatter,
-                    "icp-cli executable not found: {executable}\nrequired: icp-cli {ICP_CLI_SUPPORTED_VERSION_RANGE}\n{}",
-                    icp_cli_install_hint(),
-                )
-            }
-            Self::IncompatibleCliVersion { executable, found } => {
-                write!(
-                    formatter,
-                    "unsupported icp-cli version for {executable}\nfound: {found}\nrequired: icp-cli {ICP_CLI_SUPPORTED_VERSION_RANGE}\n{}",
-                    icp_cli_install_hint(),
-                )
-            }
-            Self::Failed { command, stderr } => {
-                write!(formatter, "icp command failed: {command}\n{stderr}")
-            }
-            Self::Json {
-                command,
-                output,
-                source,
-            } => {
-                write!(
-                    formatter,
-                    "could not parse icp json output for {command}: {source}\n{output}"
-                )
-            }
-        }
-    }
-}
-
 fn icp_cli_install_hint() -> String {
     format!(
         "next: install checksum-verified icp-cli {REQUIRED_ICP_CLI_VERSION} or newer and ensure it is first on PATH\n  from a Canic checkout: make install-dev\nnote: `icp network update` updates the local network launcher, not the `icp` CLI binary; pass top-level --icp <path> to use a non-PATH install"
     )
 }
 
-impl Error for IcpCommandError {
-    // Preserve the underlying I/O error as the source when command execution fails locally.
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            Self::Io(err) => Some(err),
-            Self::Json { source, .. } => Some(source),
-            Self::Failed { .. } | Self::IncompatibleCliVersion { .. } | Self::MissingCli { .. } => {
-                None
-            }
-        }
-    }
-}
-
 impl From<std::io::Error> for IcpCommandError {
     // Convert process-spawn failures into the shared ICP CLI command error type.
     fn from(err: std::io::Error) -> Self {
         Self::Io(err)
+    }
+}
+
+#[cfg(test)]
+mod error_contract_tests {
+    use super::*;
+    use std::error::Error as _;
+
+    #[test]
+    fn command_error_messages_keep_version_requirements_and_install_hints() {
+        let missing = IcpCommandError::MissingCli {
+            executable: "custom-icp".into(),
+        };
+        assert_eq!(
+            missing.to_string(),
+            format!(
+                "icp-cli executable not found: custom-icp\nrequired: icp-cli {ICP_CLI_SUPPORTED_VERSION_RANGE}\n{}",
+                icp_cli_install_hint(),
+            )
+        );
+        let incompatible = IcpCommandError::IncompatibleCliVersion {
+            executable: "custom-icp".into(),
+            found: "0.1.0".into(),
+        };
+        assert_eq!(
+            incompatible.to_string(),
+            format!(
+                "unsupported icp-cli version for custom-icp\nfound: 0.1.0\nrequired: icp-cli {ICP_CLI_SUPPORTED_VERSION_RANGE}\n{}",
+                icp_cli_install_hint(),
+            )
+        );
+        for error in [missing, incompatible] {
+            assert!(error.source().is_none());
+            assert_eq!(error.external_output(), None);
+            assert_eq!(error.diagnostic(), None);
+        }
+    }
+
+    #[test]
+    fn command_error_forwards_the_original_io_and_json_sources() {
+        let io: IcpCommandError = std::io::Error::other("spawn refused").into();
+        let IcpCommandError::Io(inner) = &io else {
+            panic!("I/O conversion changed variant")
+        };
+        assert_eq!(io.to_string(), inner.to_string());
+        assert!(std::ptr::eq(
+            io.source()
+                .unwrap()
+                .downcast_ref::<std::io::Error>()
+                .unwrap(),
+            inner
+        ));
+        assert_eq!(io.external_output(), None);
+        assert_eq!(io.diagnostic(), None);
+
+        let source = serde_json::from_str::<serde_json::Value>("not json").unwrap_err();
+        let expected = format!("could not parse icp json output for status: {source}\nIC0207");
+        let json = IcpCommandError::Json {
+            command: "status".into(),
+            output: "IC0207".into(),
+            source,
+        };
+        let IcpCommandError::Json { source, .. } = &json else {
+            unreachable!()
+        };
+        assert_eq!(json.to_string(), expected);
+        assert!(std::ptr::eq(
+            json.source()
+                .unwrap()
+                .downcast_ref::<serde_json::Error>()
+                .unwrap(),
+            source
+        ));
+        assert!(json.source().unwrap().source().is_none());
+        assert_eq!(json.external_output(), Some("IC0207"));
+        assert_eq!(json.diagnostic(), Some(IcpDiagnostic::CanisterOutOfCycles));
+    }
+
+    #[test]
+    fn failed_command_retains_diagnostics_without_a_source() {
+        let error = IcpCommandError::Failed {
+            command: "status".into(),
+            stderr: "IC0207".into(),
+        };
+        assert_eq!(error.to_string(), "icp command failed: status\nIC0207");
+        assert!(error.source().is_none());
+        assert_eq!(error.external_output(), Some("IC0207"));
+        assert_eq!(error.diagnostic(), Some(IcpDiagnostic::CanisterOutOfCycles));
     }
 }

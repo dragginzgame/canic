@@ -4,6 +4,7 @@
 //! Does not own: Coordinator persistence, Fleet Registry mutation, or Directory publication.
 //! Boundary: Coordinator workflow supplies one validated plan and every authenticated root receipt.
 
+use crate::ops::fleet_registry::compare_service_members;
 #[cfg(test)]
 mod tests;
 
@@ -36,10 +37,7 @@ use crate::{
 };
 use canic_contracts::ids::{ComponentGroupPlacementId, ComponentInstanceId, FleetServiceId};
 use ic_platform::principal::ExternalPrincipal as Principal;
-use std::{
-    cmp::Ordering,
-    collections::{BTreeMap, BTreeSet},
-};
+use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;
 
 /// Typed rejection while deriving exact configured Fleet-service bindings.
@@ -736,7 +734,7 @@ fn compile_service(
             service: target.service.clone(),
         });
     }
-    members.sort_by(compare_members);
+    members.sort_by(compare_service_members);
     let mode = validate_service_mode(target, &members)?;
     validate_service_placement(target, &members)?;
     Ok(FleetServiceBinding {
@@ -831,23 +829,4 @@ fn validate_service_placement(
         });
     }
     Ok(())
-}
-
-fn compare_members(
-    left: &FleetServiceComponentBinding,
-    right: &FleetServiceComponentBinding,
-) -> Ordering {
-    service_member_purpose_tag(left.member_purpose)
-        .cmp(&service_member_purpose_tag(right.member_purpose))
-        .then_with(|| left.group_placement.cmp(&right.group_placement))
-        .then_with(|| left.member_path.cmp(&right.member_path))
-        .then_with(|| left.component.cmp(&right.component))
-}
-
-const fn service_member_purpose_tag(purpose: FleetServiceMemberPurpose) -> u8 {
-    match purpose {
-        FleetServiceMemberPurpose::Authority => 0,
-        FleetServiceMemberPurpose::Replica => 1,
-        FleetServiceMemberPurpose::PoolMember => 2,
-    }
 }

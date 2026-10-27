@@ -4,6 +4,8 @@
 //! Does not own: renewal orchestration, issuer installation, or stable storage.
 //! Boundary: auth-internal helper between root renewal workflow and management ops.
 
+use crate::ops::auth::chain_key_config::ChainKeyConfigFields;
+
 use super::{
     canonical::{CanonicalAuthError, chain_key_batch_header_hash, chain_key_derivation_path_hash},
     chain_key::{
@@ -26,6 +28,10 @@ use canic_contracts::ids::BuildNetwork;
 use ic_platform::ecdsa::Signature as K256EcdsaSignature;
 use std::{future::Future, pin::Pin};
 use thiserror::Error;
+
+const CHAIN_KEY_FIELDS: ChainKeyConfigFields = ChainKeyConfigFields {
+    purpose: "chain-key signing",
+};
 
 const PRODUCTION_ECDSA_KEY_ID: &str = "key_1";
 const TEST_ECDSA_KEY_ID: &str = "test_key_1";
@@ -122,10 +128,11 @@ pub(in crate::ops::auth) fn chain_key_signing_policy_from_config(
     build_network: BuildNetwork,
 ) -> Result<ChainKeySigningPolicy, InternalError> {
     let chain_key = &config.chain_key_root_proof;
-    let key_id = required_chain_key_field(chain_key.key_id.as_deref(), "key_id")?;
+    let key_id =
+        CHAIN_KEY_FIELDS.required_chain_key_field(chain_key.key_id.as_deref(), "key_id")?;
     let derivation_path =
         required_chain_key_derivation_path(chain_key.derivation_path_hex.as_deref())?;
-    let derivation_path_hash = required_fixed_32_chain_key_hex(
+    let derivation_path_hash = CHAIN_KEY_FIELDS.required_fixed_32_chain_key_hex(
         chain_key.derivation_path_hash_hex.as_deref(),
         "derivation_path_hash_hex",
     )?;
@@ -137,8 +144,8 @@ pub(in crate::ops::auth) fn chain_key_signing_policy_from_config(
         )
         .into());
     }
-    let public_key_hex =
-        required_chain_key_field(chain_key.public_key_hex.as_deref(), "public_key_hex")?;
+    let public_key_hex = CHAIN_KEY_FIELDS
+        .required_chain_key_field(chain_key.public_key_hex.as_deref(), "public_key_hex")?;
     let public_key = decode_hex(public_key_hex).map_err(|err| {
         AuthValidationError::Auth(format!(
             "auth.delegated_tokens.chain_key_root_proof.public_key_hex is not valid hex: {err}"
@@ -149,7 +156,8 @@ pub(in crate::ops::auth) fn chain_key_signing_policy_from_config(
             "auth.delegated_tokens.chain_key_root_proof.public_key_hex must be a secp256k1 SEC1 public key: {err}"
         ))
     })?;
-    let key_version = required_chain_key_u64(chain_key.key_version, "key_version")?;
+    let key_version =
+        CHAIN_KEY_FIELDS.required_chain_key_u64(chain_key.key_version, "key_version")?;
 
     Ok(ChainKeySigningPolicy {
         root_canister_id,
@@ -271,26 +279,6 @@ fn validate_signing_key_network(policy: &ChainKeySigningPolicy) -> Result<(), Ch
     Ok(())
 }
 
-fn required_chain_key_field<'a>(
-    value: Option<&'a str>,
-    field: &'static str,
-) -> Result<&'a str, InternalError> {
-    let Some(value) = value else {
-        return Err(AuthValidationError::Auth(format!(
-            "auth.delegated_tokens.chain_key_root_proof.{field} is required for chain-key signing"
-        ))
-        .into());
-    };
-    let value = value.trim();
-    if value.is_empty() {
-        return Err(AuthValidationError::Auth(format!(
-            "auth.delegated_tokens.chain_key_root_proof.{field} must not be empty"
-        ))
-        .into());
-    }
-    Ok(value)
-}
-
 fn required_chain_key_derivation_path(
     value: Option<&[String]>,
 ) -> Result<Vec<Vec<u8>>, InternalError> {
@@ -312,34 +300,6 @@ fn required_chain_key_derivation_path(
             })
         })
         .collect()
-}
-
-fn required_fixed_32_chain_key_hex(
-    value: Option<&str>,
-    field: &'static str,
-) -> Result<[u8; 32], InternalError> {
-    let value = required_chain_key_field(value, field)?;
-    let decoded = decode_hex(value).map_err(|err| {
-        AuthValidationError::Auth(format!(
-            "auth.delegated_tokens.chain_key_root_proof.{field} is not valid hex: {err}"
-        ))
-    })?;
-    decoded.try_into().map_err(|decoded: Vec<u8>| {
-        AuthValidationError::Auth(format!(
-            "auth.delegated_tokens.chain_key_root_proof.{field} must decode to 32 bytes, got {}",
-            decoded.len()
-        ))
-        .into()
-    })
-}
-
-fn required_chain_key_u64(value: Option<u64>, field: &'static str) -> Result<u64, InternalError> {
-    value.ok_or_else(|| {
-        AuthValidationError::Auth(format!(
-            "auth.delegated_tokens.chain_key_root_proof.{field} is required for chain-key signing"
-        ))
-        .into()
-    })
 }
 
 // -----------------------------------------------------------------------------

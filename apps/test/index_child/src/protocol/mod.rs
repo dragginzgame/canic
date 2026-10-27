@@ -1,6 +1,6 @@
 //! Native admission probe contract for this installed application fixture.
 
-pub const ADMISSION: u64 = 0x5445535400000300;
+pub const ADMISSION: u64 = 0x5445_5354_0000_0300;
 pub const REQUEST_LIMITS: ic_wire::Limits = ic_wire::Limits {
     bytes: 16_384,
     allocation: 65_536,

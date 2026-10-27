@@ -12,11 +12,11 @@ pub const RESPONSE_LIMITS: ic_wire::Limits = ic_wire::Limits {
     nodes: 131_072,
     depth: 32,
 };
-pub const TIME: u64 = 0x4155445400000010;
-pub const ENV: u64 = 0x4155445400000011;
-pub const LOG: u64 = 0x4155445400000012;
-pub const COHORT: u64 = 0x4155445400000013;
-pub const BALANCE: u64 = 0x4155445400000014;
+pub const TIME: u64 = 0x4155_4454_0000_0010;
+pub const ENV: u64 = 0x4155_4454_0000_0011;
+pub const LOG: u64 = 0x4155_4454_0000_0012;
+pub const COHORT: u64 = 0x4155_4454_0000_0013;
+pub const BALANCE: u64 = 0x4155_4454_0000_0014;
 
 /// Complete environment observation with native principals.
 #[derive(serde::Deserialize, serde::Serialize)]

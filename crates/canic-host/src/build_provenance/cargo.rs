@@ -1,3 +1,4 @@
+use crate::toml_support::manifest_string;
 use std::{env, fs, path::Path};
 
 use toml::Value as TomlValue;
@@ -18,12 +19,12 @@ pub(super) fn cargo_provenance(
     let manifest_source = fs::read_to_string(package_manifest)?;
     let manifest = toml::from_str::<TomlValue>(&manifest_source)?;
     let cargo_lock_path = build_cargo_lock_path(request, package_manifest);
-    let package_metadata_app = required_manifest_str(
+    let package_metadata_app = manifest_string(
         &manifest,
         &["package", "metadata", "canic", "app"],
         package_manifest,
     )?;
-    let package_metadata_role = required_manifest_str(
+    let package_metadata_role = manifest_string(
         &manifest,
         &["package", "metadata", "canic", "role"],
         package_manifest,
@@ -39,7 +40,7 @@ pub(super) fn cargo_provenance(
         )
         .into());
     }
-    let package_name = required_manifest_str(&manifest, &["package", "name"], package_manifest)?;
+    let package_name = manifest_string(&manifest, &["package", "name"], package_manifest)?;
     if package_name != request.output.package_name {
         return Err(format!(
             "built artifact package {:?} does not match admitted package {:?}",
@@ -78,28 +79,6 @@ fn optional_file_sha256(path: &Path) -> Result<Option<String>, Box<dyn std::erro
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(err) => Err(err.into()),
     }
-}
-
-fn required_manifest_str(
-    manifest: &TomlValue,
-    path: &[&str],
-    manifest_path: &Path,
-) -> Result<String, Box<dyn std::error::Error>> {
-    let mut value = manifest;
-    for segment in path {
-        value = value
-            .get(*segment)
-            .ok_or_else(|| format!("missing {} in {}", path.join("."), manifest_path.display()))?;
-    }
-
-    value.as_str().map(ToString::to_string).ok_or_else(|| {
-        format!(
-            "{} must be a string in {}",
-            path.join("."),
-            manifest_path.display()
-        )
-        .into()
-    })
 }
 
 fn command_version<const N: usize>(command: &str, args: [&str; N]) -> Option<String> {

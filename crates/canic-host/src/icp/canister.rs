@@ -54,12 +54,11 @@ impl IcpCli {
             candid_path,
             CanisterCallMode::Update,
         );
-        self.record_remote_call();
-        self.measure_request(
+        self.measured_canister_output(
+            &mut command,
             super::IcpRequestKind::Update,
-            Some(canister),
-            Some(method),
-            || run_output(&mut command, self),
+            canister,
+            method,
         )
     }
 
@@ -80,13 +79,7 @@ impl IcpCli {
             candid_path,
             CanisterCallMode::Query,
         );
-        self.record_remote_call();
-        self.measure_request(
-            super::IcpRequestKind::Query,
-            Some(canister),
-            Some(method),
-            || run_output(&mut command, self),
-        )
+        self.measured_canister_output(&mut command, super::IcpRequestKind::Query, canister, method)
     }
 
     fn canister_binary_args_command(
@@ -130,12 +123,11 @@ impl IcpCli {
             candid_path,
             CanisterCallMode::Update,
         );
-        self.record_remote_call();
-        self.measure_request(
+        self.measured_canister_output(
+            &mut command,
             super::IcpRequestKind::Update,
-            Some(canister),
-            Some(method),
-            || run_output(&mut command, self),
+            canister,
+            method,
         )
     }
 
@@ -155,13 +147,7 @@ impl IcpCli {
             candid_path,
             CanisterCallMode::Query,
         );
-        self.record_remote_call();
-        self.measure_request(
-            super::IcpRequestKind::Query,
-            Some(canister),
-            Some(method),
-            || run_output(&mut command, self),
-        )
+        self.measured_canister_output(&mut command, super::IcpRequestKind::Query, canister, method)
     }
 
     /// Query one canister method with an explicit Candid argument, optional local Candid, and optional JSON output.
@@ -181,13 +167,20 @@ impl IcpCli {
             candid_path,
             CanisterCallMode::Query,
         );
+        self.measured_canister_output(&mut command, super::IcpRequestKind::Query, canister, method)
+    }
+
+    fn measured_canister_output(
+        &self,
+        command: &mut std::process::Command,
+        kind: super::IcpRequestKind,
+        canister: &str,
+        method: &str,
+    ) -> Result<String, IcpCommandError> {
         self.record_remote_call();
-        self.measure_request(
-            super::IcpRequestKind::Query,
-            Some(canister),
-            Some(method),
-            || run_output(&mut command, self),
-        )
+        self.measure_request(kind, Some(canister), Some(method), || {
+            run_output(command, self)
+        })
     }
 
     fn canister_text_args_command(

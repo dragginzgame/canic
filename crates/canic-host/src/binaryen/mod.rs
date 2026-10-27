@@ -10,7 +10,7 @@ mod tests;
 
 use crate::{
     output_with_executable_busy_retry,
-    tool_install::{self, ArchiveFormat, InstallError, InstallSpec, sha256_file},
+    tool_install::{self, ArchiveFormat, InstallSpec, sha256_file},
     tool_resolution,
 };
 use std::{
@@ -245,47 +245,7 @@ pub enum BinaryenToolError {
     },
 }
 
-impl From<InstallError> for BinaryenToolError {
-    fn from(error: InstallError) -> Self {
-        match error {
-            InstallError::ArchiveDownload { status, stderr } => {
-                Self::ArchiveDownload { status, stderr }
-            }
-            InstallError::ArchiveExtraction { status, stderr } => {
-                Self::ArchiveExtraction { status, stderr }
-            }
-            InstallError::ArchiveHashMismatch {
-                path,
-                actual,
-                expected,
-            } => Self::ArchiveHashMismatch {
-                path,
-                actual,
-                expected,
-            },
-            InstallError::ExecutableHashMismatch {
-                path,
-                actual,
-                expected,
-            } => Self::ExecutableHashMismatch {
-                path,
-                actual,
-                expected,
-            },
-            InstallError::Io {
-                operation,
-                path,
-                source,
-            } => Self::Io {
-                operation,
-                path,
-                source,
-            },
-            InstallError::TempDirectoryExhausted { root } => Self::TempDirectoryExhausted { root },
-        }
-    }
-}
-
+crate::tool_install::impl_install_error_conversion!(BinaryenToolError);
 /// Return the checksum authority for the current supported host platform.
 pub fn current_binaryen_authority() -> Result<BinaryenAuthority, BinaryenToolError> {
     binaryen_authority_for(env::consts::OS, env::consts::ARCH)

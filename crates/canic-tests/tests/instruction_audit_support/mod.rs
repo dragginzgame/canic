@@ -12,7 +12,6 @@ use canic::{
         rpc::{CyclesRequest, Request, Response, RootRequestMetadata},
     },
     ids::cap,
-    protocol,
 };
 use canic_testing_internal::canister::{APP, SCALE_HUB, TEST, USER_HUB};
 use canic_testing_internal::pic::{

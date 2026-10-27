@@ -13,4 +13,4 @@ pub const RESPONSE_LIMITS: ic_wire::Limits = ic_wire::Limits {
     depth: 32,
 };
 
-pub const REQUEST_CYCLES: u64 = 0x5445535400000100;
+pub const REQUEST_CYCLES: u64 = 0x5445_5354_0000_0100;

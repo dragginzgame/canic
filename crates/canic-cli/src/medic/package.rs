@@ -4,6 +4,7 @@
 //! Does not own: app configuration policy, report rendering, or Cargo manifest mutation.
 //! Boundary: reads Cargo manifests and returns passive metadata to workspace medic checks.
 
+use canic_host::toml_support::manifest_string;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -53,24 +54,4 @@ pub(super) fn canic_dependency_feature_snippet<'a>(
         .join(", ");
 
     format!("[dependencies]\ncanic = {{ workspace = true, features = [{features}] }}")
-}
-
-fn manifest_string(
-    manifest: &TomlValue,
-    path: &[&str],
-    manifest_path: &Path,
-) -> Result<String, String> {
-    let mut value = manifest;
-    for segment in path {
-        value = value
-            .get(*segment)
-            .ok_or_else(|| format!("missing {} in {}", path.join("."), manifest_path.display()))?;
-    }
-    value.as_str().map(ToString::to_string).ok_or_else(|| {
-        format!(
-            "{} must be a string in {}",
-            path.join("."),
-            manifest_path.display()
-        )
-    })
 }

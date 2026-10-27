@@ -288,10 +288,6 @@ fn root_request_and_retry_measure_the_normal_threshold_floor() {
 }
 
 #[test]
-#[expect(
-    clippy::too_many_lines,
-    reason = "Keep the paid-effect recovery sequence and its balance assertions together"
-)]
 fn emergency_refill_recovery_floor_covers_transfer_and_notify_response_loss() {
     let workspace_root = workspace_root();
     let wasms = build_canisters(&workspace_root);
@@ -318,7 +314,7 @@ fn emergency_refill_recovery_floor_covers_transfer_and_notify_response_loss() {
         ic_platform::principal::ExternalPrincipal::anonymous(),
         funding_spec(
             "root_funding_probe_emergency_refill_transfer_then_trap",
-            0x5445535400000d04,
+            0x5445_5354_0000_0d04,
         ),
         &(),
     );
@@ -332,7 +328,7 @@ fn emergency_refill_recovery_floor_covers_transfer_and_notify_response_loss() {
         ic_platform::principal::ExternalPrincipal::anonymous(),
         funding_spec(
             "root_funding_probe_emergency_refill_notify_then_trap",
-            0x5445535400000d05,
+            0x5445_5354_0000_0d05,
         ),
         &(),
     );
@@ -347,7 +343,7 @@ fn emergency_refill_recovery_floor_covers_transfer_and_notify_response_loss() {
         &pic,
         root,
         ic_platform::principal::ExternalPrincipal::anonymous(),
-        funding_spec("root_funding_probe_emergency_refill", 0x5445535400000d03),
+        funding_spec("root_funding_probe_emergency_refill", 0x5445_5354_0000_0d03),
         &(),
     )
     .expect("update Wire harness call");
@@ -386,10 +382,6 @@ fn round_up_to_100m(value: u128) -> u128 {
 }
 
 #[test]
-#[expect(
-    clippy::too_many_lines,
-    reason = "Keep the paid-effect recovery sequence and its balance assertions together"
-)]
 fn attached_cycles_recover_across_intent_call_and_receipt_boundaries() {
     let workspace_root = workspace_root();
     let wasms = build_canisters(&workspace_root);
@@ -447,7 +439,7 @@ fn attached_cycles_recover_across_intent_call_and_receipt_boundaries() {
         &pic,
         coordinator,
         ic_platform::principal::ExternalPrincipal::anonymous(),
-        funding_spec("root_funding_probe_issue_then_trap", 0x5445535400000d09),
+        funding_spec("root_funding_probe_issue_then_trap", 0x5445_5354_0000_0d09),
         &(),
     );
     assert!(trapped.is_err(), "receipt-boundary callback must trap");
@@ -598,7 +590,7 @@ fn prepare(pic: &PocketIc, coordinator: Principal, root: Principal) -> GrantInte
         pic,
         coordinator,
         ic_platform::principal::ExternalPrincipal::anonymous(),
-        funding_spec("root_funding_probe_prepare", 0x5445535400000d00),
+        funding_spec("root_funding_probe_prepare", 0x5445_5354_0000_0d00),
         &PrepareRequest {
             root: root.into(),
             operation_id: OPERATION_ID,
@@ -613,7 +605,7 @@ fn issue(pic: &PocketIc, coordinator: Principal) -> IssueResult {
         pic,
         coordinator,
         ic_platform::principal::ExternalPrincipal::anonymous(),
-        funding_spec("root_funding_probe_issue", 0x5445535400000d07),
+        funding_spec("root_funding_probe_issue", 0x5445_5354_0000_0d07),
         &(),
     )
     .expect("update Wire harness call")
@@ -626,7 +618,7 @@ fn issue_root_accept_then_trap(pic: &PocketIc, coordinator: Principal) -> IssueR
         ic_platform::principal::ExternalPrincipal::anonymous(),
         funding_spec(
             "root_funding_probe_issue_root_accept_then_trap",
-            0x5445535400000d08,
+            0x5445_5354_0000_0d08,
         ),
         &(),
     )
@@ -638,7 +630,7 @@ fn request_from_root(pic: &PocketIc, root: Principal) -> RootRequestObservation 
         pic,
         root,
         ic_platform::principal::ExternalPrincipal::anonymous(),
-        funding_spec("root_funding_probe_request", 0x5445535400000d02),
+        funding_spec("root_funding_probe_request", 0x5445_5354_0000_0d02),
         &(),
     )
     .expect("update Wire harness call")
@@ -649,7 +641,7 @@ fn intent(pic: &PocketIc, coordinator: Principal) -> Option<GrantIntent> {
         pic,
         coordinator,
         ic_platform::principal::ExternalPrincipal::anonymous(),
-        funding_spec("root_funding_probe_intent", 0x5445535400000d0a),
+        funding_spec("root_funding_probe_intent", 0x5445_5354_0000_0d0a),
         &(),
     )
     .expect("query Wire harness call")
@@ -660,7 +652,7 @@ fn receipt(pic: &PocketIc, root: Principal) -> Option<GrantReceipt> {
         pic,
         root,
         ic_platform::principal::ExternalPrincipal::anonymous(),
-        funding_spec("root_funding_probe_receipt", 0x5445535400000d0b),
+        funding_spec("root_funding_probe_receipt", 0x5445_5354_0000_0d0b),
         &(),
     )
     .expect("query Wire harness call")
@@ -673,7 +665,7 @@ fn acceptance_observation(pic: &PocketIc, root: Principal) -> Option<AcceptanceO
         ic_platform::principal::ExternalPrincipal::anonymous(),
         funding_spec(
             "root_funding_probe_acceptance_observation",
-            0x5445535400000d0c,
+            0x5445_5354_0000_0d0c,
         ),
         &(),
     )
@@ -685,7 +677,10 @@ fn emergency_operation(pic: &PocketIc, root: Principal) -> Option<EmergencyRefil
         pic,
         root,
         ic_platform::principal::ExternalPrincipal::anonymous(),
-        funding_spec("root_funding_probe_emergency_operation", 0x5445535400000d06),
+        funding_spec(
+            "root_funding_probe_emergency_operation",
+            0x5445_5354_0000_0d06,
+        ),
         &(),
     )
     .expect("query Wire harness call")
@@ -716,7 +711,7 @@ struct PrepareRequest {
     amount: u128,
 }
 
-fn funding_spec(method: &'static str, method_id: u64) -> ic_testkit::pic::WireCallSpec {
+const fn funding_spec(method: &'static str, method_id: u64) -> ic_testkit::pic::WireCallSpec {
     let limits = ic_wire::Limits {
         bytes: 16_384,
         allocation: 65_536,

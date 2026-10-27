@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::storage::stable::env::{Env, EnvData, EnvRecord};
+use canic_contracts::protocol::protected_memory_allocations::{METHOD_ID, RESPONSE_LIMITS};
 use ic_memory::{
     AllocationDeclaration, Memory, MemoryManagerSlot, VectorMemory, testing::allocation_record,
 };
@@ -132,7 +133,6 @@ fn allocation_snapshot_preserves_unopened_memories_and_ledger_generation() {
         report.allocated_bucket_bytes,
         report.virtual_extent.bytes + report.bucket_slack_bytes
     );
-    use canic_contracts::protocol::protected_memory_allocations::{METHOD_ID, RESPONSE_LIMITS};
     let bytes = ic_wire::native::encode_response(METHOD_ID, &report, RESPONSE_LIMITS)
         .expect("encode bounded report");
     let decoded: MemoryAllocationsResponse =

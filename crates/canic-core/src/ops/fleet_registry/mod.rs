@@ -667,7 +667,7 @@ fn validate_added_service_member(
     Ok(())
 }
 
-fn compare_service_members(
+pub(super) fn compare_service_members(
     left: &FleetServiceComponentBinding,
     right: &FleetServiceComponentBinding,
 ) -> Ordering {

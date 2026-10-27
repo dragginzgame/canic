@@ -411,3 +411,52 @@ impl Drop for TempDirectory {
         let _ = fs::remove_dir_all(&self.path);
     }
 }
+
+// Keep tool-specific public variants while sharing the mechanical install-error mapping.
+macro_rules! impl_install_error_conversion {
+    ($target:ty) => {
+        impl From<$crate::tool_install::InstallError> for $target {
+            fn from(error: $crate::tool_install::InstallError) -> Self {
+                match error {
+                    $crate::tool_install::InstallError::ArchiveDownload { status, stderr } => {
+                        Self::ArchiveDownload { status, stderr }
+                    }
+                    $crate::tool_install::InstallError::ArchiveExtraction { status, stderr } => {
+                        Self::ArchiveExtraction { status, stderr }
+                    }
+                    $crate::tool_install::InstallError::ArchiveHashMismatch {
+                        path,
+                        actual,
+                        expected,
+                    } => Self::ArchiveHashMismatch {
+                        path,
+                        actual,
+                        expected,
+                    },
+                    $crate::tool_install::InstallError::ExecutableHashMismatch {
+                        path,
+                        actual,
+                        expected,
+                    } => Self::ExecutableHashMismatch {
+                        path,
+                        actual,
+                        expected,
+                    },
+                    $crate::tool_install::InstallError::Io {
+                        operation,
+                        path,
+                        source,
+                    } => Self::Io {
+                        operation,
+                        path,
+                        source,
+                    },
+                    $crate::tool_install::InstallError::TempDirectoryExhausted { root } => {
+                        Self::TempDirectoryExhausted { root }
+                    }
+                }
+            }
+        }
+    };
+}
+pub(crate) use impl_install_error_conversion;

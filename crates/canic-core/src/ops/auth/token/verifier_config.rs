@@ -4,8 +4,14 @@
 //! Does not own: token verification flow, metrics, cache mutation, or proof storage.
 //! Boundary: deterministic config validation and verifier-policy construction.
 
+use crate::ops::auth::chain_key_config::ChainKeyConfigFields;
+
 use super::*;
 use crate::ops::runtime::env::EnvOps;
+
+const CHAIN_KEY_FIELDS: ChainKeyConfigFields = ChainKeyConfigFields {
+    purpose: "delegated-token verification",
+};
 
 pub(super) fn configured_root_canister_id(
     cfg: &DelegatedTokenConfig,
@@ -35,13 +41,14 @@ pub(super) fn configured_chain_key_root_verifier(
     build_network: BuildNetwork,
 ) -> Result<Option<AuthChainKeyRootVerifierConfig>, InternalError> {
     let chain_key = &cfg.chain_key_root_proof;
-    let key_id = required_chain_key_field(chain_key.key_id.as_deref(), "key_id")?;
-    let derivation_path_hash = required_fixed_32_chain_key_hex(
+    let key_id =
+        CHAIN_KEY_FIELDS.required_chain_key_field(chain_key.key_id.as_deref(), "key_id")?;
+    let derivation_path_hash = CHAIN_KEY_FIELDS.required_fixed_32_chain_key_hex(
         chain_key.derivation_path_hash_hex.as_deref(),
         "derivation_path_hash_hex",
     )?;
-    let public_key_hex =
-        required_chain_key_field(chain_key.public_key_hex.as_deref(), "public_key_hex")?;
+    let public_key_hex = CHAIN_KEY_FIELDS
+        .required_chain_key_field(chain_key.public_key_hex.as_deref(), "public_key_hex")?;
     let public_key = decode_hex(public_key_hex).map_err(|err| {
         AuthValidationError::Auth(format!(
             "auth.delegated_tokens.chain_key_root_proof.public_key_hex is not valid hex: {err}"
@@ -58,22 +65,25 @@ pub(super) fn configured_chain_key_root_verifier(
     }
     // The SDK admits the curve point during cryptographic proof verification.
     // Live sessions compare current key bytes with that already-admitted authority.
-    let key_version = required_chain_key_u64(chain_key.key_version, "key_version")?;
-    let min_accepted_key_version = required_chain_key_u64(
+    let key_version =
+        CHAIN_KEY_FIELDS.required_chain_key_u64(chain_key.key_version, "key_version")?;
+    let min_accepted_key_version = CHAIN_KEY_FIELDS.required_chain_key_u64(
         chain_key.min_accepted_key_version,
         "min_accepted_key_version",
     )?;
-    let min_accepted_proof_epoch = required_chain_key_u64(
+    let min_accepted_proof_epoch = CHAIN_KEY_FIELDS.required_chain_key_u64(
         chain_key.min_accepted_proof_epoch,
         "min_accepted_proof_epoch",
     )?;
-    let min_accepted_registry_epoch = required_chain_key_u64(
+    let min_accepted_registry_epoch = CHAIN_KEY_FIELDS.required_chain_key_u64(
         chain_key.min_accepted_registry_epoch,
         "min_accepted_registry_epoch",
     )?;
-    let valid_from_ns = required_chain_key_u64(chain_key.valid_from_ns, "valid_from_ns")?;
-    let accept_until_ns = required_chain_key_u64(chain_key.accept_until_ns, "accept_until_ns")?;
-    let max_revocation_latency_ns = required_chain_key_u64(
+    let valid_from_ns =
+        CHAIN_KEY_FIELDS.required_chain_key_u64(chain_key.valid_from_ns, "valid_from_ns")?;
+    let accept_until_ns =
+        CHAIN_KEY_FIELDS.required_chain_key_u64(chain_key.accept_until_ns, "accept_until_ns")?;
+    let max_revocation_latency_ns = CHAIN_KEY_FIELDS.required_chain_key_u64(
         chain_key.max_revocation_latency_ns,
         "max_revocation_latency_ns",
     )?;
@@ -126,54 +136,6 @@ pub(super) fn configured_chain_key_root_verifier(
         },
         allow_test_chain_key: chain_key.allow_test_key,
     }))
-}
-
-fn required_chain_key_field<'a>(
-    value: Option<&'a str>,
-    field: &'static str,
-) -> Result<&'a str, InternalError> {
-    let Some(value) = value else {
-        return Err(AuthValidationError::Auth(format!(
-            "auth.delegated_tokens.chain_key_root_proof.{field} is required for delegated-token verification"
-        ))
-        .into());
-    };
-    let value = value.trim();
-    if value.is_empty() {
-        return Err(AuthValidationError::Auth(format!(
-            "auth.delegated_tokens.chain_key_root_proof.{field} must not be empty"
-        ))
-        .into());
-    }
-    Ok(value)
-}
-
-fn required_chain_key_u64(value: Option<u64>, field: &'static str) -> Result<u64, InternalError> {
-    value.ok_or_else(|| {
-        AuthValidationError::Auth(format!(
-            "auth.delegated_tokens.chain_key_root_proof.{field} is required for delegated-token verification"
-        ))
-        .into()
-    })
-}
-
-fn required_fixed_32_chain_key_hex(
-    value: Option<&str>,
-    field: &'static str,
-) -> Result<[u8; 32], InternalError> {
-    let value = required_chain_key_field(value, field)?;
-    let decoded = decode_hex(value).map_err(|err| {
-        AuthValidationError::Auth(format!(
-            "auth.delegated_tokens.chain_key_root_proof.{field} is not valid hex: {err}"
-        ))
-    })?;
-    decoded.try_into().map_err(|decoded: Vec<u8>| {
-        AuthValidationError::Auth(format!(
-            "auth.delegated_tokens.chain_key_root_proof.{field} must decode to 32 bytes, got {}",
-            decoded.len()
-        ))
-        .into()
-    })
 }
 
 pub(super) fn configured_ic_root_public_key_raw(

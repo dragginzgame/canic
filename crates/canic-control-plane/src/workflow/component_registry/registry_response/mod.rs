@@ -332,14 +332,11 @@ pub(super) fn partition_response(
 pub(in crate::workflow) fn component_directory_head(
     partition: &ComponentRegistryPartitionView,
 ) -> ComponentDirectoryHead {
-    ComponentDirectoryHead {
-        provenance: ComponentDirectoryProvenance {
-            component: partition.binding.clone(),
-            source_fleet_subnet_root: partition.binding.fleet_subnet_root,
-            component_registry_revision: partition.revision,
-            component_registry_content_hash: partition.content_hash,
-            synchronized_at_ns: partition.directory_synchronized_at_ns,
-        },
-        descendant_count: partition.committed_descendants,
-    }
+    crate::ops::component_registry::directory_head(
+        &partition.binding,
+        partition.revision,
+        partition.content_hash,
+        partition.directory_synchronized_at_ns,
+        partition.committed_descendants,
+    )
 }

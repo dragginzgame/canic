@@ -22,17 +22,14 @@ use canic_core::{
         error::InternalError,
         model::replay::CommandKind,
         ops::{
-            cost_guard::{CostGuardPermit, CostGuardRequest},
+            cost_guard::CostGuardPermit,
             ic::{IcOps, mgmt::MgmtOps},
         },
-        workflow::cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error},
+        workflow::cost_guard::CostGuardWorkflow,
     },
-    replay_policy::CostClass,
 };
 
 const STORE_DELETION_CYCLE_RECLAMATION_COMMAND_KIND: &str = "wasm_store.reclaim_deletion_cycles.v1";
-const VALUE_TRANSFER_QUOTA_WINDOW_SECONDS: u64 = 60;
-const MAX_VALUE_TRANSFERS_PER_WINDOW: u64 = 60;
 
 /// Return every transferable cycle above the root-calculated deletion reserve.
 pub async fn reclaim_deletion_cycles(
@@ -139,20 +136,14 @@ fn reserve_cycle_reclamation(
     retained_cycles: u128,
     current_cycle_balance: u128,
 ) -> Result<CostGuardPermit, InternalError> {
-    CostGuardWorkflow::reserve(CostGuardRequest {
-        cost_class: CostClass::ValueTransfer,
-        command_kind: CommandKind::new(STORE_DELETION_CYCLE_RECLAMATION_COMMAND_KIND)
-            .expect("Store deletion cycle-reclamation command kind is valid"),
-        quota_subject: destination,
-        payer: IcOps::canister_self(),
-        now_secs: IcOps::now_secs(),
-        quota_window_secs: VALUE_TRANSFER_QUOTA_WINDOW_SECONDS,
-        max_operations_per_window: MAX_VALUE_TRANSFERS_PER_WINDOW,
+    super::cycle_reclamation::reserve(
+        CommandKind::new(STORE_DELETION_CYCLE_RECLAMATION_COMMAND_KIND)
+            .expect("deletion cycle-reclamation command kind is valid"),
+        destination,
+        maximum_transfer,
+        retained_cycles,
         current_cycle_balance,
-        cycle_reservation_cycles: maximum_transfer,
-        min_cycles_after_reservation: retained_cycles,
-    })
-    .map_err(map_cost_guard_reserve_error)
+    )
 }
 
 async fn transfer_reclaimed_cycles(

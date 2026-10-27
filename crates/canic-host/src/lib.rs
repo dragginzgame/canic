@@ -64,6 +64,7 @@ pub mod subnet_catalog;
 pub mod terminal;
 #[cfg(test)]
 mod test_support;
+pub mod toml_support;
 mod tool_install;
 mod tool_resolution;
 mod workspace_discovery;

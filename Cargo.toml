@@ -82,27 +82,27 @@ flate2 = { version = "1.1", default-features = false, features = [
 futures = "0.3"
 getrandom = "0.4"
 hmac = "0.13.0"
-ic-auth = { version = "0.17.1", default-features = false }
-ic-auth-protocol-types = "0.17.1"
-ic-backup = { version = "0.44.3", default-features = false }
-ic-blob-storage = "0.49.1"
-ic-blob-storage-contracts = "0.49.1"
-ic-build = { version = "0.68.8" }
-ic-host-artifacts = { version = "0.68.8", default-features = false }
-ic-host-fs = { version = "0.68.8", default-features = false }
-ic-host-process = { version = "0.68.8", default-features = false }
-ic-host-text = "0.68.8"
-ic-host-tools = "0.68.8"
-ic-memory = "0.51.4"
+ic-auth = { version = "0.18.0", default-features = false }
+ic-auth-protocol-types = "0.18.0"
+ic-backup = { version = "0.45.0", default-features = false }
+ic-blob-storage = "0.51.0"
+ic-blob-storage-contracts = "0.51.0"
+ic-build = { version = "0.69.0" }
+ic-host-artifacts = { version = "0.69.0", default-features = false }
+ic-host-fs = { version = "0.69.0", default-features = false }
+ic-host-process = { version = "0.69.0", default-features = false }
+ic-host-text = "0.69.0"
+ic-host-tools = "0.69.0"
+ic-memory = "0.51.10"
 ic-metrics = "0.16.3"
-ic-platform = { version = "0.6.19", default-features = false }
-ic-query = { version = "0.74.1", default-features = false, features = [
+ic-platform = { version = "0.7.0", default-features = false }
+ic-query = { version = "0.75.0", default-features = false, features = [
     "subnet-catalog-host",
 ] }
-ic-storage = "0.51.4"
-ic-testkit = { version = "0.68.8" }
-ic-timers = "0.31.5"
-ic-wire = { version = "0.7.17", default-features = false }
+ic-storage = "0.51.10"
+ic-testkit = { version = "0.69.0" }
+ic-timers = "0.31.10"
+ic-wire = { version = "0.7.18", default-features = false }
 num-bigint = { version = "0.4", default-features = false }
 proc-macro2 = "1.0"
 quote = "1.0"

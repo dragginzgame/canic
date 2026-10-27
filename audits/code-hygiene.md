@@ -20,6 +20,18 @@ where applicable; consumers supply other language conventions and commands.
 3. Inspect boundary validation and negative tests. Errors should retain actionable
    typed context through callers. Golden-path tests, rendered-string matching,
    and tests of private layout do not substitute for the maintained contract.
+   Review native handwritten `Display`/`Error` pairs against the
+   [error-derive guidance](../docs/principles/rust-code-hygiene.md#errors-and-trust-boundaries):
+   identify mechanical implementations that can use the existing `thiserror`
+   dependency, while retaining meaningful recovery/source projections. A source
+   search finds candidates; it does not establish equivalent error contracts or
+   justify a blanket ban on manual implementations.
+   Trace [machine-output admission, subprocess capture and terminal rendering](../docs/principles/rust-code-hygiene.md#external-inputs-and-native-tools):
+   check strict bytes/schema admission, explicit output/lifecycle bounds and
+   escaping of untrusted presentation fields. Preserve raw evidence, optional
+   protocol fields, interactive contracts and uncertain-effect recovery. Inspect
+   directly affected rejection tests; a bounded diagnostic prefix is not a
+   complete machine response.
 4. Check public documentation and examples against current behavior. Identify
    accidental visibility, test-only production APIs, obsolete comments and
    dependency/feature declarations with no maintained purpose.
@@ -32,6 +44,11 @@ where applicable; consumers supply other language conventions and commands.
    relevant non-mutating formatting, lint, type, generated-parity or focused
    test checks. Broad CI, builds and release gates retain their own authority.
    Verify test selections execute the intended assertions, not zero tests.
+   Required source scanners must fail on traversal/read/decode errors and
+   establish their intended input coverage. Exercise missing or unreadable
+   required inputs; keep optional inputs and intentional exclusions explicit.
+   Confirm regression cases run in the owning normal gate. Rule adoption alone
+   does not establish executable enforcement or consumer qualification.
 
 ## Findings
 

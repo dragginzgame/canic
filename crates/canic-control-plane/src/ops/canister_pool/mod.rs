@@ -892,7 +892,7 @@ impl CanisterPoolOps {
     }
 
     pub fn commit_creation(operation_id: [u8; 32]) -> Result<(), InternalError> {
-        let mut state = CanisterPoolStore::state();
+        let state = CanisterPoolStore::state();
         let creation = state
             .creation
             .as_ref()
@@ -903,17 +903,12 @@ impl CanisterPoolOps {
         require_creation_operation(creation, operation_id)?;
         require_creation_cost_settled(creation)?;
         require_created_inventory_adoption(creation)?;
-        state.next_creation_sequence = state
-            .next_creation_sequence
-            .checked_add(1)
-            .ok_or_else(InternalError::resource_exhausted)?;
-        state.creation = None;
-        CanisterPoolStore::set_state(state);
+        clear_creation(state)?;
         Ok(())
     }
 
     pub fn retry_blocked_creation() -> Result<[u8; 32], InternalError> {
-        let mut state = CanisterPoolStore::state();
+        let state = CanisterPoolStore::state();
         let creation = state
             .creation
             .as_ref()
@@ -925,17 +920,12 @@ impl CanisterPoolOps {
             return Err(InternalError::conflict());
         }
         let operation_id = creation.operation_id;
-        state.next_creation_sequence = state
-            .next_creation_sequence
-            .checked_add(1)
-            .ok_or_else(InternalError::resource_exhausted)?;
-        state.creation = None;
-        CanisterPoolStore::set_state(state);
+        clear_creation(state)?;
         Ok(operation_id)
     }
 
     pub fn cancel_known_unapplied_creation() -> Result<[u8; 32], InternalError> {
-        let mut state = CanisterPoolStore::state();
+        let state = CanisterPoolStore::state();
         let creation = state
             .creation
             .as_ref()
@@ -945,17 +935,12 @@ impl CanisterPoolOps {
         }
         require_creation_cost_settled(creation)?;
         let operation_id = creation.operation_id;
-        state.next_creation_sequence = state
-            .next_creation_sequence
-            .checked_add(1)
-            .ok_or_else(InternalError::resource_exhausted)?;
-        state.creation = None;
-        CanisterPoolStore::set_state(state);
+        clear_creation(state)?;
         Ok(operation_id)
     }
 
     pub fn rollover_known_expired_creation() -> Result<[u8; 32], InternalError> {
-        let mut state = CanisterPoolStore::state();
+        let state = CanisterPoolStore::state();
         let creation = state
             .creation
             .as_ref()
@@ -965,12 +950,7 @@ impl CanisterPoolOps {
         }
         require_creation_cost_settled(creation)?;
         let operation_id = creation.operation_id;
-        state.next_creation_sequence = state
-            .next_creation_sequence
-            .checked_add(1)
-            .ok_or_else(InternalError::resource_exhausted)?;
-        state.creation = None;
-        CanisterPoolStore::set_state(state);
+        clear_creation(state)?;
         Ok(operation_id)
     }
 
@@ -1517,6 +1497,19 @@ fn require_creation_attempt(
     Ok(())
 }
 
+// Publish only after the caller has admitted its transition-specific predicate.
+fn clear_creation(
+    mut state: crate::storage::stable::canister_pool::CanisterPoolStateRecord,
+) -> Result<(), InternalError> {
+    state.next_creation_sequence = state
+        .next_creation_sequence
+        .checked_add(1)
+        .ok_or_else(InternalError::resource_exhausted)?;
+    state.creation = None;
+    CanisterPoolStore::set_state(state);
+    Ok(())
+}
+
 fn require_creation_operation(
     creation: &CanisterPoolCreationRecord,
     operation_id: [u8; 32],
@@ -2017,6 +2010,20 @@ mod tests {
         let mut next = creation_authority_for(next_operation_id);
         next.created_at_time_ns = 11;
         CanisterPoolOps::begin_creation(&config(), next, 14).expect("begin monotonic refill");
+        CanisterPoolStore::clear();
+    }
+
+    #[test]
+    fn exhausted_creation_sequence_preserves_the_admitted_creation() {
+        CanisterPoolStore::clear();
+        CanisterPoolOps::begin_creation(&config(), creation_authority_for([7; 32]), 10).unwrap();
+        let mut state = CanisterPoolStore::state();
+        state.next_creation_sequence = u64::MAX;
+        CanisterPoolStore::set_state(state);
+        let before = CanisterPoolStore::state();
+        let error = CanisterPoolOps::cancel_known_unapplied_creation().unwrap_err();
+        assert!(error.is_public_resource_exhausted());
+        assert_eq!(CanisterPoolStore::state(), before);
         CanisterPoolStore::clear();
     }
 

@@ -1,11 +1,11 @@
 //! Native issuer fixture contracts; shared Auth owns authorization and proof verification.
 
-pub const SUBJECT: u64 = 0x5445535400000800;
-pub const ADMISSION: u64 = 0x5445535400000801;
-pub const DENIAL: u64 = 0x5445535400000802;
-pub const VERIFY: u64 = 0x5445535400000803;
-pub const ATTESTED: u64 = 0x5445535400000804;
-pub const ROOT_GUARD: u64 = 0x5445535400000805;
+pub const SUBJECT: u64 = 0x5445_5354_0000_0800;
+pub const ADMISSION: u64 = 0x5445_5354_0000_0801;
+pub const DENIAL: u64 = 0x5445_5354_0000_0802;
+pub const VERIFY: u64 = 0x5445_5354_0000_0803;
+pub const ATTESTED: u64 = 0x5445_5354_0000_0804;
+pub const ROOT_GUARD: u64 = 0x5445_5354_0000_0805;
 
 pub const REQUEST_LIMITS: ic_wire::Limits = ic_wire::Limits {
     bytes: 65_536,

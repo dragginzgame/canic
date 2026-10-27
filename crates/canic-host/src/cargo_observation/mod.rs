@@ -31,10 +31,7 @@ pub fn cargo_metadata(
         offline: false,
         features: &CargoFeatureSelection::default(),
     };
-    let output = capture_command(&mut spec.command(cargo_command())?, limits())?
-        .require_success()?
-        .require_complete()?;
-    Ok(decode_metadata(&output.stdout)?)
+    capture_metadata(&spec)
 }
 
 pub fn cargo_metadata_for_manifest(
@@ -52,10 +49,7 @@ pub fn cargo_metadata_for_manifest(
         offline,
         features,
     };
-    let output = capture_command(&mut spec.command(cargo_command())?, limits())?
-        .require_success()?
-        .require_complete()?;
-    Ok(decode_metadata(&output.stdout)?)
+    capture_metadata(&spec)
 }
 
 pub fn cargo_metadata_catalog_for_manifest(
@@ -72,6 +66,10 @@ pub fn cargo_metadata_catalog_for_manifest(
         offline,
         features,
     };
+    capture_metadata(&spec)
+}
+
+fn capture_metadata(spec: &CargoMetadataSpec<'_>) -> Result<Metadata, Box<dyn std::error::Error>> {
     let output = capture_command(&mut spec.command(cargo_command())?, limits())?
         .require_success()?
         .require_complete()?;

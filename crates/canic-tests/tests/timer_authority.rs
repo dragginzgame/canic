@@ -450,6 +450,10 @@ fn optional_sampling_is_bounded_and_rejected_performance_preserves_cycle_trackin
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Keep the controller authorization matrix across all observation endpoints together"
+)]
 fn exact_cycles_and_runtime_metrics_require_controller() {
     let fixture = install_lifecycle_boundary_fixture();
     let standalone = fixture.install_runtime_probe_canister();

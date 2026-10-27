@@ -64,7 +64,7 @@ use canic_core::{
         error::InternalError,
         model::replay::CommandKind,
         ops::{
-            cost_guard::{CostGuardPermit, CostGuardRequest},
+            cost_guard::CostGuardPermit,
             ic::{
                 IcOps,
                 mgmt::{CanisterSettings, MgmtOps, UpdateSettingsArgs},
@@ -72,9 +72,8 @@ use canic_core::{
             icp_refill::IcpRefillStoreOps,
             root_draining_reservation::FleetSubnetRootDrainingReservationOps,
         },
-        workflow::cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error},
+        workflow::cost_guard::CostGuardWorkflow,
     },
-    replay_policy::CostClass,
 };
 use ic_platform::{candid::contract::Nat, principal::ExternalPrincipal as Principal};
 use sha2::{Digest, Sha256};
@@ -82,8 +81,6 @@ use std::time::Duration;
 
 const ROOT_DELETION_CYCLE_RECLAMATION_COMMAND_KIND: &str =
     "fleet_subnet_root.reclaim_deletion_cycles.v1";
-const VALUE_TRANSFER_QUOTA_WINDOW_SECONDS: u64 = 60;
-const MAX_VALUE_TRANSFERS_PER_WINDOW: u64 = 60;
 const ROOT_COMPONENT_REMOVAL_OPERATION_DOMAIN: &[u8] =
     b"canic.fleet-subnet-root.component-removal.v1";
 const SECONDS_PER_DAY: u128 = 86_400;
@@ -1502,20 +1499,14 @@ pub(super) fn reserve_root_deletion_cycle_reclamation(
     retained_cycles: u128,
     current_cycle_balance: u128,
 ) -> Result<CostGuardPermit, InternalError> {
-    CostGuardWorkflow::reserve(CostGuardRequest {
-        cost_class: CostClass::ValueTransfer,
-        command_kind: CommandKind::new(ROOT_DELETION_CYCLE_RECLAMATION_COMMAND_KIND)
-            .expect("root deletion cycle-reclamation command kind is valid"),
-        quota_subject: coordinator,
-        payer: IcOps::canister_self(),
-        now_secs: IcOps::now_secs(),
-        quota_window_secs: VALUE_TRANSFER_QUOTA_WINDOW_SECONDS,
-        max_operations_per_window: MAX_VALUE_TRANSFERS_PER_WINDOW,
+    super::cycle_reclamation::reserve(
+        CommandKind::new(ROOT_DELETION_CYCLE_RECLAMATION_COMMAND_KIND)
+            .expect("deletion cycle-reclamation command kind is valid"),
+        coordinator,
+        maximum_transfer,
+        retained_cycles,
         current_cycle_balance,
-        cycle_reservation_cycles: maximum_transfer,
-        min_cycles_after_reservation: retained_cycles,
-    })
-    .map_err(map_cost_guard_reserve_error)
+    )
 }
 
 pub(super) fn settle_root_deletion_cycle_reclamation(

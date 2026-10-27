@@ -51,19 +51,3 @@ pub(super) fn toml_assignment_key(line: &str) -> Option<&str> {
     let (key, _) = line.split_once('=')?;
     Some(key.trim())
 }
-
-pub(super) fn toml_string_literal(value: &str) -> String {
-    let mut escaped = String::from("\"");
-    for ch in value.chars() {
-        match ch {
-            '\\' => escaped.push_str("\\\\"),
-            '"' => escaped.push_str("\\\""),
-            '\n' => escaped.push_str("\\n"),
-            '\r' => escaped.push_str("\\r"),
-            '\t' => escaped.push_str("\\t"),
-            ch => escaped.push(ch),
-        }
-    }
-    escaped.push('"');
-    escaped
-}

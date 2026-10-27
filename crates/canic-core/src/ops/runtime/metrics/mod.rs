@@ -151,6 +151,14 @@ pub fn runtime_entries() -> Vec<MetricEntry> {
     entries
 }
 
+const fn count_entry(labels: Vec<String>, count: u64) -> MetricEntry {
+    MetricEntry {
+        labels,
+        principal: None,
+        value: MetricValue::Count(count),
+    }
+}
+
 fn timer_inventory_availability(available: bool) -> MetricEntry {
     MetricEntry {
         labels: vec!["inventory".to_string(), "available".to_string()],
@@ -214,15 +222,16 @@ pub fn reset_for_tests() {
 fn platform_call_entries() -> Vec<MetricEntry> {
     PlatformCallMetrics::snapshot()
         .into_iter()
-        .map(|(key, count)| MetricEntry {
-            labels: vec![
-                key.surface.metric_label().to_string(),
-                key.mode.metric_label().to_string(),
-                key.outcome.metric_label().to_string(),
-                key.reason.metric_label().to_string(),
-            ],
-            principal: None,
-            value: MetricValue::Count(count),
+        .map(|(key, count)| {
+            count_entry(
+                vec![
+                    key.surface.metric_label().to_string(),
+                    key.mode.metric_label().to_string(),
+                    key.outcome.metric_label().to_string(),
+                    key.reason.metric_label().to_string(),
+                ],
+                count,
+            )
         })
         .collect()
 }
@@ -232,15 +241,16 @@ fn platform_call_entries() -> Vec<MetricEntry> {
 fn intent_entries() -> Vec<MetricEntry> {
     IntentMetrics::snapshot()
         .into_iter()
-        .map(|(key, count)| MetricEntry {
-            labels: vec![
-                key.surface.metric_label().to_string(),
-                key.operation.metric_label().to_string(),
-                key.outcome.metric_label().to_string(),
-                key.reason.metric_label().to_string(),
-            ],
-            principal: None,
-            value: MetricValue::Count(count),
+        .map(|(key, count)| {
+            count_entry(
+                vec![
+                    key.surface.metric_label().to_string(),
+                    key.operation.metric_label().to_string(),
+                    key.outcome.metric_label().to_string(),
+                    key.reason.metric_label().to_string(),
+                ],
+                count,
+            )
         })
         .collect()
 }
@@ -250,14 +260,15 @@ fn intent_entries() -> Vec<MetricEntry> {
 fn replay_entries() -> Vec<MetricEntry> {
     ReplayMetrics::snapshot()
         .into_iter()
-        .map(|(key, count)| MetricEntry {
-            labels: vec![
-                key.operation.metric_label().to_string(),
-                key.outcome.metric_label().to_string(),
-                key.reason.metric_label().to_string(),
-            ],
-            principal: None,
-            value: MetricValue::Count(count),
+        .map(|(key, count)| {
+            count_entry(
+                vec![
+                    key.operation.metric_label().to_string(),
+                    key.outcome.metric_label().to_string(),
+                    key.reason.metric_label().to_string(),
+                ],
+                count,
+            )
         })
         .collect()
 }
@@ -267,15 +278,16 @@ fn replay_entries() -> Vec<MetricEntry> {
 fn auth_entries() -> Vec<MetricEntry> {
     AuthMetrics::snapshot()
         .into_iter()
-        .map(|(key, count)| MetricEntry {
-            labels: vec![
-                key.surface.metric_label().to_string(),
-                key.operation.metric_label().to_string(),
-                key.outcome.metric_label().to_string(),
-                key.reason.metric_label().to_string(),
-            ],
-            principal: None,
-            value: MetricValue::Count(count),
+        .map(|(key, count)| {
+            count_entry(
+                vec![
+                    key.surface.metric_label().to_string(),
+                    key.operation.metric_label().to_string(),
+                    key.outcome.metric_label().to_string(),
+                    key.reason.metric_label().to_string(),
+                ],
+                count,
+            )
         })
         .collect()
 }
@@ -285,14 +297,15 @@ fn auth_entries() -> Vec<MetricEntry> {
 fn placement_index_entries() -> Vec<MetricEntry> {
     PlacementIndexMetrics::snapshot()
         .into_iter()
-        .map(|(key, count)| MetricEntry {
-            labels: vec![
-                key.operation.metric_label().to_string(),
-                key.outcome.metric_label().to_string(),
-                key.reason.metric_label().to_string(),
-            ],
-            principal: None,
-            value: MetricValue::Count(count),
+        .map(|(key, count)| {
+            count_entry(
+                vec![
+                    key.operation.metric_label().to_string(),
+                    key.outcome.metric_label().to_string(),
+                    key.reason.metric_label().to_string(),
+                ],
+                count,
+            )
         })
         .collect()
 }
@@ -302,14 +315,15 @@ fn placement_index_entries() -> Vec<MetricEntry> {
 fn scaling_entries() -> Vec<MetricEntry> {
     ScalingMetrics::snapshot()
         .into_iter()
-        .map(|(key, count)| MetricEntry {
-            labels: vec![
-                key.operation.metric_label().to_string(),
-                key.outcome.metric_label().to_string(),
-                key.reason.metric_label().to_string(),
-            ],
-            principal: None,
-            value: MetricValue::Count(count),
+        .map(|(key, count)| {
+            count_entry(
+                vec![
+                    key.operation.metric_label().to_string(),
+                    key.outcome.metric_label().to_string(),
+                    key.reason.metric_label().to_string(),
+                ],
+                count,
+            )
         })
         .collect()
 }
@@ -320,14 +334,15 @@ fn scaling_entries() -> Vec<MetricEntry> {
 fn sharding_entries() -> Vec<MetricEntry> {
     ShardingMetrics::snapshot()
         .into_iter()
-        .map(|(key, count)| MetricEntry {
-            labels: vec![
-                key.operation.metric_label().to_string(),
-                key.outcome.metric_label().to_string(),
-                key.reason.metric_label().to_string(),
-            ],
-            principal: None,
-            value: MetricValue::Count(count),
+        .map(|(key, count)| {
+            count_entry(
+                vec![
+                    key.operation.metric_label().to_string(),
+                    key.outcome.metric_label().to_string(),
+                    key.reason.metric_label().to_string(),
+                ],
+                count,
+            )
         })
         .collect()
 }
@@ -337,15 +352,16 @@ fn sharding_entries() -> Vec<MetricEntry> {
 fn cascade_entries() -> Vec<MetricEntry> {
     CascadeMetrics::snapshot()
         .into_iter()
-        .map(|(key, count)| MetricEntry {
-            labels: vec![
-                key.operation.metric_label().to_string(),
-                key.snapshot.metric_label().to_string(),
-                key.outcome.metric_label().to_string(),
-                key.reason.metric_label().to_string(),
-            ],
-            principal: None,
-            value: MetricValue::Count(count),
+        .map(|(key, count)| {
+            count_entry(
+                vec![
+                    key.operation.metric_label().to_string(),
+                    key.snapshot.metric_label().to_string(),
+                    key.outcome.metric_label().to_string(),
+                    key.reason.metric_label().to_string(),
+                ],
+                count,
+            )
         })
         .collect()
 }
@@ -361,15 +377,16 @@ fn canister_ops_entries_from(
 ) -> Vec<MetricEntry> {
     snapshot
         .into_iter()
-        .map(|(key, count)| MetricEntry {
-            labels: vec![
-                key.operation.metric_label().to_string(),
-                key.role,
-                key.outcome.metric_label().to_string(),
-                key.reason.metric_label().to_string(),
-            ],
-            principal: None,
-            value: MetricValue::Count(count),
+        .map(|(key, count)| {
+            count_entry(
+                vec![
+                    key.operation.metric_label().to_string(),
+                    key.role,
+                    key.outcome.metric_label().to_string(),
+                    key.reason.metric_label().to_string(),
+                ],
+                count,
+            )
         })
         .collect()
 }
@@ -379,15 +396,16 @@ fn canister_ops_entries_from(
 fn wasm_store_entries() -> Vec<MetricEntry> {
     WasmStoreMetrics::snapshot()
         .into_iter()
-        .map(|(key, count)| MetricEntry {
-            labels: vec![
-                key.operation.metric_label().to_string(),
-                key.source.metric_label().to_string(),
-                key.outcome.metric_label().to_string(),
-                key.reason.metric_label().to_string(),
-            ],
-            principal: None,
-            value: MetricValue::Count(count),
+        .map(|(key, count)| {
+            count_entry(
+                vec![
+                    key.operation.metric_label().to_string(),
+                    key.source.metric_label().to_string(),
+                    key.outcome.metric_label().to_string(),
+                    key.reason.metric_label().to_string(),
+                ],
+                count,
+            )
         })
         .collect()
 }
@@ -401,15 +419,16 @@ fn lifecycle_entries() -> Vec<MetricEntry> {
 fn lifecycle_entries_from(snapshot: Vec<(lifecycle::LifecycleMetricKey, u64)>) -> Vec<MetricEntry> {
     snapshot
         .into_iter()
-        .map(|(key, count)| MetricEntry {
-            labels: vec![
-                key.phase.metric_label().to_string(),
-                key.role.metric_label().to_string(),
-                key.stage.metric_label().to_string(),
-                key.outcome.metric_label().to_string(),
-            ],
-            principal: None,
-            value: MetricValue::Count(count),
+        .map(|(key, count)| {
+            count_entry(
+                vec![
+                    key.phase.metric_label().to_string(),
+                    key.role.metric_label().to_string(),
+                    key.stage.metric_label().to_string(),
+                    key.outcome.metric_label().to_string(),
+                ],
+                count,
+            )
         })
         .collect()
 }
@@ -474,10 +493,11 @@ fn access_entries() -> Vec<MetricEntry> {
     AccessMetrics::snapshot()
         .entries
         .into_iter()
-        .map(|(key, count)| MetricEntry {
-            labels: vec![key.endpoint, key.kind.as_str().to_string(), key.predicate],
-            principal: None,
-            value: MetricValue::Count(count),
+        .map(|(key, count)| {
+            count_entry(
+                vec![key.endpoint, key.kind.as_str().to_string(), key.predicate],
+                count,
+            )
         })
         .collect()
 }
@@ -516,18 +536,17 @@ fn delegated_auth_entries() -> Vec<MetricEntry> {
 fn root_capability_entries() -> Vec<MetricEntry> {
     RootCapabilityMetrics::snapshot()
         .into_iter()
-        .map(
-            |(capability, event_type, outcome, proof_mode, count)| MetricEntry {
-                labels: vec![
+        .map(|(capability, event_type, outcome, proof_mode, count)| {
+            count_entry(
+                vec![
                     capability.metric_label().to_string(),
                     event_type.metric_label().to_string(),
                     outcome.metric_label().to_string(),
                     proof_mode.metric_label().to_string(),
                 ],
-                principal: None,
-                value: MetricValue::Count(count),
-            },
-        )
+                count,
+            )
+        })
         .collect()
 }
 
@@ -571,11 +590,7 @@ fn cycles_topup_entries_from(
 ) -> Vec<MetricEntry> {
     snapshot
         .into_iter()
-        .map(|(metric, count)| MetricEntry {
-            labels: vec![metric.metric_label().to_string()],
-            principal: None,
-            value: MetricValue::Count(count),
-        })
+        .map(|(metric, count)| count_entry(vec![metric.metric_label().to_string()], count))
         .collect()
 }
 

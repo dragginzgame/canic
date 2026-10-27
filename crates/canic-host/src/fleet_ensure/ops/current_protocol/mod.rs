@@ -2601,7 +2601,7 @@ pub(super) fn operation_bytes(operation_id: &str) -> Result<[u8; 32], CurrentPro
         .ok_or(CurrentProtocolError::InvalidOperationIdentity)
 }
 
-fn retained_principal(
+pub(super) fn retained_principal(
     desired: &DesiredFleet,
     state: &FleetEnsureStateRecord,
     name: &str,

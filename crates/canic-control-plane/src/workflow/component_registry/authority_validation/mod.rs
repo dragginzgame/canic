@@ -681,20 +681,15 @@ pub(super) fn validate_component_draining(
         return Err(InternalError::conflict());
     }
     if let Some(fleet_directory) = fleet_directory {
-        let authority = ComponentRuntimeDirectoryAuthority {
-            fleet: fleet_directory.clone(),
-            component: ComponentDirectoryHead {
-                provenance: ComponentDirectoryProvenance {
-                    component: partition.binding.clone(),
-                    source_fleet_subnet_root: partition.binding.fleet_subnet_root,
-                    component_registry_revision: draining.registry.revision,
-                    component_registry_content_hash: draining.registry.content_hash,
-                    synchronized_at_ns: draining.started_at_ns,
-                },
-                descendant_count: draining.descendant_count,
-            },
-            component_group: None,
-        };
+        let authority = crate::ops::component_registry::directory_authority(
+            &partition.binding,
+            draining.registry.revision,
+            draining.registry.content_hash,
+            draining.started_at_ns,
+            draining.descendant_count,
+            fleet_directory.clone(),
+            None,
+        );
         if ComponentRuntimeOps::directory_authority_hash(&authority)?
             != draining.directory_authority_hash
         {

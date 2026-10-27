@@ -299,28 +299,15 @@ fn cycles_error_report(
     live_cycles: Option<(u64, u128)>,
     error: String,
 ) -> CyclesCanisterReport {
-    CyclesCanisterReport {
-        role: entry.role.clone().unwrap_or_else(|| "-".to_string()),
+    let mut report = cycles_limited_report(
+        entry,
         tree_prefix,
-        canister_id: entry.pid.clone(),
-        status: CyclesCanisterStatus::Error,
-        sample_count: 0,
-        total_samples: 0,
         requested_since_secs,
-        coverage_seconds: None,
-        coverage_status: CyclesCoverageStatus::None,
-        latest_timestamp_secs: live_cycles.map(|(timestamp, _)| timestamp),
-        latest_cycles: live_cycles.map(|(_, cycles)| cycles),
-        baseline_timestamp_secs: None,
-        baseline_cycles: None,
-        delta_cycles: None,
-        rate_cycles_per_hour: None,
-        burn_cycles: None,
-        burn_cycles_per_hour: None,
-        topup_cycles_per_hour: None,
-        topups: None,
-        error: Some(error),
-    }
+        CyclesCanisterStatus::Error,
+        live_cycles,
+    );
+    report.error = Some(error);
+    report
 }
 
 fn cycles_unavailable_report(

@@ -295,9 +295,10 @@ esac
     }
     assert_eq!(icp.remote_call_count(), 0);
     let calls = fs::read_to_string(root.join("calls")).unwrap();
-    for kind in ["network", "export", "principal"] {
-        assert_eq!(calls.lines().filter(|line| *line == kind).count(), 6);
-    }
+    assert_eq!(
+        calls.lines().collect::<Vec<_>>(),
+        ["network", "export", "principal"].repeat(4),
+    );
     fs::remove_dir_all(root).unwrap();
 }
 

@@ -3771,5 +3771,2139 @@
       "publication"
     ],
     "gitPublication": "Awaiting explicit permission to submit the prepared isolated PR; original no-commit/no-push instruction remains in force."
+  },
+  "supplierAdoption20261027": {
+    "date": "2026-10-27",
+    "head": "b9482ec526c5dfb9f5dd349d22b1f60190b2dfdf",
+    "scope": "Published Platform 0.6.20 and Blob Storage/Contracts 0.49.3 across root and both independent consumers; own versions unchanged",
+    "locks": [
+      {
+        "name": "root",
+        "path": "Cargo.lock",
+        "beforeSha256": "b8383878adfad90b4b280196b1e98b64c2d6a9223062be6c4fb874be5f328d06",
+        "sha256": "b57114598cb2f0ca53ad590bea175ef8d1a0c90a18c4dece4402d83c24ca1eec",
+        "selected": [
+          {
+            "name": "ic-backup",
+            "version": "0.44.5"
+          },
+          {
+            "name": "ic-blob-storage",
+            "version": "0.49.3"
+          },
+          {
+            "name": "ic-blob-storage-contracts",
+            "version": "0.49.3"
+          },
+          {
+            "name": "ic-memory",
+            "version": "0.51.5"
+          },
+          {
+            "name": "ic-platform",
+            "version": "0.6.20"
+          },
+          {
+            "name": "ic-platform-macros",
+            "version": "0.6.20"
+          },
+          {
+            "name": "ic-storage",
+            "version": "0.51.5"
+          },
+          {
+            "name": "ic-timers",
+            "version": "0.31.6"
+          },
+          {
+            "name": "ic-wire",
+            "version": "0.7.18"
+          }
+        ]
+      },
+      {
+        "name": "dedicated",
+        "path": "integrations/blob-service/consumer/Cargo.lock",
+        "beforeSha256": "c0b98999346e8ff37c81fb7bf24a797165c49ec68a4933786275ce742a6b78bf",
+        "sha256": "7db66fc2e3bb74fa231a88c9ef6f05ec5a54dcfe9261073c26e8add8b3a534b4",
+        "selected": [
+          {
+            "name": "ic-blob-storage",
+            "version": "0.49.3"
+          },
+          {
+            "name": "ic-blob-storage-contracts",
+            "version": "0.49.3"
+          },
+          {
+            "name": "ic-memory",
+            "version": "0.51.5"
+          },
+          {
+            "name": "ic-platform",
+            "version": "0.6.20"
+          },
+          {
+            "name": "ic-platform-macros",
+            "version": "0.6.20"
+          },
+          {
+            "name": "ic-storage",
+            "version": "0.51.5"
+          },
+          {
+            "name": "ic-timers",
+            "version": "0.31.5"
+          },
+          {
+            "name": "ic-wire",
+            "version": "0.7.18"
+          }
+        ]
+      },
+      {
+        "name": "embedded",
+        "path": "integrations/blob-service/embedded-consumer/Cargo.lock",
+        "beforeSha256": "941f7dee1b73719a908155931a018deae3bf7dfc0c2e8e2a56cc9e33ac2183db",
+        "sha256": "43e06fe15738bb01c089b1e5ec059cdc4e81e393fe894fb661db900240620c82",
+        "selected": [
+          {
+            "name": "ic-blob-storage",
+            "version": "0.49.3"
+          },
+          {
+            "name": "ic-blob-storage-contracts",
+            "version": "0.49.3"
+          },
+          {
+            "name": "ic-memory",
+            "version": "0.51.5"
+          },
+          {
+            "name": "ic-platform",
+            "version": "0.6.20"
+          },
+          {
+            "name": "ic-platform-macros",
+            "version": "0.6.20"
+          },
+          {
+            "name": "ic-storage",
+            "version": "0.51.5"
+          },
+          {
+            "name": "ic-timers",
+            "version": "0.31.5"
+          },
+          {
+            "name": "ic-wire",
+            "version": "0.7.18"
+          }
+        ]
+      }
+    ],
+    "preservedIncomingChanges": [
+      "Root selected Blob/Contracts 0.49.3, Platform Macros 0.6.20, Backup 0.44.5 and Timers 0.31.6 before this adoption",
+      "Four test/example Clippy corrections"
+    ],
+    "checks": [
+      {
+        "command": "bash scripts/ci/check-cargo-dependency-boundaries.sh --consumer <each of root, dedicated, embedded> --external-ic",
+        "result": "PASS all three"
+      },
+      {
+        "command": "make test-pocketic-case CASE=pic::blob_service::tests::managed_composition_dedicated",
+        "result": "PASS with localhost process permission; initial sandbox attempt failed before installation",
+        "proofSeconds": 477
+      },
+      {
+        "command": "make test-pocketic-case CASE=pic::blob_service::tests::managed_composition_embedded",
+        "result": "PASS",
+        "proofSeconds": 352
+      },
+      {
+        "command": "cargo run --locked --offline -p canic-testing-internal --example verify_embedded_root",
+        "result": "Initial changed-artifact refusal; PASS after owning refresh"
+      },
+      {
+        "command": "cargo run --locked --offline -p canic-testing-internal --example refresh_embedded_root",
+        "result": "PASS"
+      },
+      {
+        "command": "Scoped documentation links and git diff --check",
+        "result": "PASS"
+      }
+    ],
+    "releaseBuildIds": {
+      "dedicated": "4bbd150be6199f38ff375c3829e2bbfd93ab3673c5760976368e14dd16002f09",
+      "embedded": "7ffb9719a070d98ce21f8203dd3a14df08a7175f4ae00a392d080a9ae4ae16d9"
+    },
+    "fixture": {
+      "artifact": "crates/canic/src/testing/managed_component_group/fixture/sharding_root_stub.wasm",
+      "sha256": "da7efb1efcfd193913a59ea2186709a9a4c485289e50aae32f3901b1fb0f8e54",
+      "evidence": "scripts/dev/managed-root-fixture.json",
+      "evidenceSha256": "6bdd4ca5f60a1792736a8d535a8c7ec48512df4bb941a6b1a9b13d4f29afd321"
+    },
+    "logs": [
+      {
+        "path": "/tmp/canic-new-suppliers/dedicated.log",
+        "sha256": "b0e6a03305eacf6b48747ac47d00fac89dd4b2cf273d53d4d35aed2bfdfd7dc0"
+      },
+      {
+        "path": "/tmp/canic-new-suppliers/dedicated-rerun.log",
+        "sha256": "4ccd2c5ecf15c010b96dc2f585797b5d4c7696503ff132fdf6d24791cc546a22"
+      },
+      {
+        "path": "/tmp/canic-new-suppliers/embedded.log",
+        "sha256": "ed60e023139dc8163715c5f5acc1267f42abb3ed9d46f37aefddbccd50fddffe"
+      },
+      {
+        "path": "/tmp/canic-new-suppliers/verify-peer.log",
+        "sha256": "e0f1c89cd9bf443b8aed5d84edbadbdbf528ace1452619b09f8394a5d5800695"
+      },
+      {
+        "path": "/tmp/canic-new-suppliers/refresh-peer.log",
+        "sha256": "ff1560dd2898ca874bdccb9fd7dc59a87515b46f12ab316e0fbd689a35afabb5"
+      },
+      {
+        "path": "/tmp/canic-new-suppliers/verify-peer-final.log",
+        "sha256": "4496b38255d10459b0208695affc153296dc6734a9e132d83046bde0158e88ab"
+      }
+    ],
+    "limitations": [
+      "No new DTO feature or local mirror migration in this dependency adoption",
+      "Platform 0.6.20 supplies CMC/ICP/Cycles/NNS/assets modules but not the separate management/history/ICRC export patch",
+      "No full release gate, new browser-client run, live-provider operation, deployment or matched Wasm improvement measurement",
+      "Earlier qualification remains attached to its recorded source and locks"
+    ]
+  },
+  "icFamilyRefresh20261027": {
+    "date": "2026-10-27",
+    "status": "targeted adoption qualification passed",
+    "selected": {
+      "ic-auth-protocol-types": "0.17.1",
+      "ic-auth": "0.17.1",
+      "ic-backup": "0.44.6",
+      "ic-blob-storage-contracts": "0.49.3",
+      "ic-blob-storage": "0.49.3",
+      "ic-build": "0.68.10",
+      "ic-host-artifacts": "0.68.10",
+      "ic-host-fs": "0.68.10",
+      "ic-host-process": "0.68.10",
+      "ic-host-text": "0.68.10",
+      "ic-host-tools": "0.68.10",
+      "ic-memory": "0.51.6",
+      "ic-metrics": "0.16.3",
+      "ic-platform": "0.6.20",
+      "ic-query": "0.74.4",
+      "ic-storage": "0.51.6",
+      "ic-testkit": "0.68.10",
+      "ic-timers": "0.31.7",
+      "ic-wire": "0.7.18"
+    },
+    "sharedTooling": {
+      "version": "0.26.21",
+      "revision": "66c91c4412856baa147482e648fc80428db8b179",
+      "integrity": "passed"
+    },
+    "locks": [
+      {
+        "path": "Cargo.lock",
+        "sha256": "c14004ac5ab54a6b084d59b8c856ed11020f2008f28c82fad4e20381be2d3a8f"
+      },
+      {
+        "path": "integrations/blob-service/consumer/Cargo.lock",
+        "sha256": "844c460f6ee376342c78a8a5195bf8f07b566a58c43f5114a6b2616ca00865ae"
+      },
+      {
+        "path": "integrations/blob-service/embedded-consumer/Cargo.lock",
+        "sha256": "665970029c23bccd56778bdd1e3266457e5f5611b902361321528cb897ae5ada"
+      }
+    ],
+    "nativeTests": {
+      "subnetCatalog": 10,
+      "memory": 16,
+      "paymentReceipts": 30
+    },
+    "initialDedicatedAttempt": "Stopped before installation: Testkit 0.68.10 server not prepared. Exact governed setup subsequently passed.",
+    "limitations": [
+      "No full release gate",
+      "No live provider operations",
+      "No DTO mirror migration",
+      "No fresh Wasm-size comparison"
+    ],
+    "logs": "/tmp/canic-upstream-refresh-20261027/",
+    "dedicated": {
+      "result": "pass",
+      "proofSeconds": 354,
+      "releaseBuildIds": [
+        "60eb8fe8f6f81b97c8797f06bad6c5c072e8eb9278a0343cd01e7bfeea446966"
+      ]
+    },
+    "embedded": {
+      "result": "pass",
+      "proofSeconds": 325,
+      "releaseBuildIds": [
+        "1e3292b355ef6ea77f088b526d09169a52811df7ffa59ee32c1a0fec19576e34"
+      ]
+    },
+    "allocationPeer": {
+      "initialVerification": "failed: generated artifact differed from current producer",
+      "refresh": "passed",
+      "finalVerification": "passed"
+    },
+    "commands": [
+      [
+        "cargo test --locked --offline -p canic-host --lib subnet_catalog",
+        "pass: 10"
+      ],
+      [
+        "cargo test --locked --offline -p canic-core --lib ops::runtime::memory",
+        "pass: 16"
+      ],
+      [
+        "cargo test --locked --offline -p canic-host --lib operator_mint::receipts",
+        "pass: 30"
+      ],
+      [
+        "make test-pocketic-case CASE=pic::blob_service::tests::managed_composition_dedicated",
+        "pass after Testkit preparation"
+      ],
+      [
+        "make test-pocketic-case CASE=pic::blob_service::tests::managed_composition_embedded",
+        "pass"
+      ],
+      [
+        "cargo run --locked --offline -p canic-testing-internal --example refresh_embedded_root",
+        "pass"
+      ],
+      [
+        "cargo run --locked --offline -p canic-testing-internal --example verify_embedded_root",
+        "pass after regeneration"
+      ]
+    ],
+    "lockfilesUnchangedDuringQualification": true,
+    "artifacts": [
+      {
+        "path": "crates/canic/src/testing/managed_component_group/fixture/sharding_root_stub.wasm",
+        "sha256": "f1db3ee632130a1f456687205d7e446bc734b3ec1a9190cfcb81d9367388c6f6"
+      },
+      {
+        "path": "scripts/dev/managed-root-fixture.json",
+        "sha256": "cf0b873f655aa749f67c60876b160bc0560df79cafd3a406b26eca1ed7eae4d5"
+      }
+    ],
+    "logHashes": {
+      "native-query.log": "9f94c4b730d9e8d63aa05f6e1634d85694ed6956a8016cf28e6f84e4519960ce",
+      "native-memory.log": "b603faf117580540e3e871ea7d4f139cf348ba0a2110c88b1f5ff38f779a4469",
+      "native-receipts.log": "75b52cdc36be8ccdc04add4aa2f83cb6b7414ee528bd239947e589fcbf3a2959",
+      "dedicated.log": "405431c2d637a4d135c4dc4c82837398ee885ecadb39fe55b122de768d2fab0e",
+      "testkit-setup.log": "480927160f7614a549c003f46d6e60dd9e5054e17b1086947df407c79aec3832",
+      "dedicated-rerun.log": "e295e812a33a8f67d9f1739513cb8582220ed4d3a76e7b169cb3a9724771b8f6",
+      "embedded.log": "3728dc1ff19e8c98576585a27aa063eab320f24c1c881b3c407e4e1f68740331",
+      "peer-verify.log": "0eb2c97ae6dbeff12785bc0a6f3380d06ced48740a66d4162db3d1e06b893a60",
+      "peer-refresh.log": "5fe4749a93489d7f139463af33e0f3d81c312ba031fd2004741310b53a6df06a",
+      "peer-final.log": "ae6e89675f9ba029a536b6713217d6880217a3b5b3bf98b0a921fbf218be389b"
+    }
+  },
+  "icFamilyRefreshSecond20261027": {
+    "date": "2026-10-27",
+    "status": "targeted adoption qualification passed",
+    "selected": {
+      "ic-auth-protocol-types": "0.17.1",
+      "ic-auth": "0.17.1",
+      "ic-backup": "0.44.7",
+      "ic-blob-storage-contracts": "0.49.3",
+      "ic-blob-storage": "0.49.3",
+      "ic-build": "0.68.11",
+      "ic-host-artifacts": "0.68.11",
+      "ic-host-fs": "0.68.11",
+      "ic-host-process": "0.68.11",
+      "ic-host-text": "0.68.11",
+      "ic-host-tools": "0.68.11",
+      "ic-memory": "0.51.7",
+      "ic-metrics": "0.16.3",
+      "ic-platform": "0.6.21",
+      "ic-query": "0.74.5",
+      "ic-storage": "0.51.7",
+      "ic-testkit": "0.68.11",
+      "ic-timers": "0.31.7",
+      "ic-wire": "0.7.18"
+    },
+    "browser": {
+      "platform": "0.1.1",
+      "sdkCore": "6.1.1",
+      "node": "24.21.0",
+      "npm": "12.2.0",
+      "typescript": "6.0.3"
+    },
+    "locks": [
+      {
+        "path": "Cargo.lock",
+        "sha256": "d0a6e6a0f5b03e9e85c8053e97185039876b34358221874fc949b06ee759d71a"
+      },
+      {
+        "path": "integrations/blob-service/consumer/Cargo.lock",
+        "sha256": "4eea521ac8e496ab1a500d7341ecb168f9274989e8c2db0dc8b42b74610b563f"
+      },
+      {
+        "path": "integrations/blob-service/embedded-consumer/Cargo.lock",
+        "sha256": "7e85e37c837f3ed5fcfda925b46a14cd5203e0bd223d37c633b0c5465d25466f"
+      },
+      {
+        "path": "crates/canic-host/examples/frontend-consumer/package-lock.json",
+        "sha256": "5da97912cc864b8305f97b66d2dc176482e86473cfd09aaed3257cf6c360eeca"
+      }
+    ],
+    "nativeTests": {
+      "subnetCatalog": 10,
+      "backupRestoreRunner": 26,
+      "memory": 16
+    },
+    "logs": "/tmp/canic-deps-round2/",
+    "limitations": [
+      "No broad release gate",
+      "No live-provider operation or browser UI acceptance",
+      "No external DTO mirror migration",
+      "No Wasm-size comparison",
+      "The full dedicated/embedded funding-failure matrix was not repeated; this browser case selects malformed funding replies. Earlier matrix evidence remains attached to its older graph."
+    ],
+    "publishedSourceComparison": {
+      "storage": "src trees identical between 0.51.6 and 0.51.7",
+      "memory": "only src/testing/diagnostics.rs differs between 0.51.6 and 0.51.7",
+      "platformMacros": "src trees identical between 0.6.20 and 0.6.21",
+      "platform": "only management and ICRC type export modules differ between 0.6.20 and 0.6.21"
+    },
+    "installed": {
+      "command": "make test-pocketic-case CASE=pic::blob_service::tests::managed_browser_compositions",
+      "result": "passed",
+      "proofSeconds": 637,
+      "scope": "Dedicated and embedded Blob installed compositions with generated browser-client calls; malformed funding reply path",
+      "releaseBuildIds": [
+        "30ac3b2cbcef9b12e59c46af065f052a4f19f5b89c5dacc4dc46099d043998a8",
+        "cdcd74ad2f82a10cef40651c624fd2afdf4b605fdd079e742e8f0e366531dbca"
+      ],
+      "environment": {
+        "CANIC_FRONTEND_NODE": "/home/adam/.nvm/versions/node/v24.21.0/bin/node",
+        "CANIC_FRONTEND_TYPESCRIPT": "/home/adam/projects/canic/crates/canic-host/examples/frontend-consumer/node_modules/typescript"
+      }
+    },
+    "lockfilesUnchangedDuringQualification": true,
+    "commands": [
+      [
+        "cargo test --locked --offline -p canic-host --lib subnet_catalog",
+        "passed: 10"
+      ],
+      [
+        "cargo test --locked --offline -p canic-backup --lib restore::runner::tests",
+        "passed: 26"
+      ],
+      [
+        "cargo test --locked --offline -p canic-core --lib ops::runtime::memory",
+        "passed: 16"
+      ],
+      [
+        "npm ci --ignore-scripts --no-audit --no-fund",
+        "passed"
+      ],
+      [
+        "npm run check:boundary",
+        "passed"
+      ],
+      [
+        "cargo run --locked --offline -p canic-testing-internal --example refresh_embedded_root",
+        "passed"
+      ],
+      [
+        "cargo run --locked --offline -p canic-testing-internal --example verify_embedded_root",
+        "passed after regeneration"
+      ]
+    ],
+    "allocationPeer": {
+      "initialVerification": "failed: artifact differs from current source",
+      "refresh": "passed",
+      "finalVerification": "passed"
+    },
+    "artifacts": [
+      {
+        "path": "crates/canic/src/testing/managed_component_group/fixture/sharding_root_stub.wasm",
+        "sha256": "6032c6d1731e9ec604507140a64194e56ad74b031e42c9964760e835d1bbe0eb"
+      },
+      {
+        "path": "scripts/dev/managed-root-fixture.json",
+        "sha256": "be119e8aa154347a3f7cc45c857c0589b5f744086b546511cafa001d5ca7c493"
+      }
+    ],
+    "logHashes": {
+      "query.log": "92d92cf23d90d674608b9f96820c394c8520e936b4316a2e15aa55c17228de9b",
+      "backup.log": "31a6da8a69249b37bfb4efeacf2a40a7779d73665f1f1b5c8ee69c3c51998895",
+      "memory.log": "25042d9ebd3278fd852368603f7fcca7295e868526c1a24e6905429ae4a5bd1a",
+      "testkit-setup.log": "69c58dd450cd43706d4bea1e75ff54c2d610b6868c42d5bb4b95fe0e728dc6d1",
+      "browser-compositions.log": "6b590295f86a592b2a26dfb0ae72037be31133e12df04b1499fadbd2442cb0a5",
+      "peer-verify.log": "61924430ff2fea69b71ab3263e67858060196a0a0088c932d4d4f6bafa3a9b5d",
+      "peer-refresh.log": "6d79f53f814a494e724ebbffde3bcd6bcf345cdea10ecd204efa8d278cc91181",
+      "peer-final.log": "dda6f4514923bbb6aaf9559cb8fd81f19ae38e8e83c22d012247db221e0d0c07"
+    }
+  },
+  "issueConsolidation20261027": {
+    "kind": "targeted-development-qualification-not-release-validation",
+    "head": "b9482ec526c5dfb9f5dd349d22b1f60190b2dfdf",
+    "branch": "main",
+    "dirty": true,
+    "implementedIssues": [
+      663,
+      664,
+      666,
+      667,
+      668,
+      669,
+      670,
+      671,
+      672,
+      673,
+      674,
+      675,
+      676,
+      677,
+      679,
+      681,
+      682,
+      683,
+      684,
+      685,
+      686,
+      687,
+      688,
+      689
+    ],
+    "superseded": [
+      {
+        "issue": 678,
+        "reason": "Reported Candid query wrappers are absent after the accepted Wire cut; current Wire calls retain distinct contract limits and error projections."
+      }
+    ],
+    "selectedDependencyEvidence": "icFamilyRefreshSecond20261027",
+    "sourceFiles": [
+      {
+        "path": "crates/canic-cli/src/cycles/transport.rs",
+        "sha256": "1be6cc0b7e9ab69478c63dc465e4fc9ee2916edeb50177b0e307e1d367577610"
+      },
+      {
+        "path": "crates/canic-cli/src/medic/package.rs",
+        "sha256": "620452dc1ec7fb40c95dc073e0135f491adb1a56f0f830e96aa5760fce1a9795"
+      },
+      {
+        "path": "crates/canic-cli/src/medic/tests.rs",
+        "sha256": "57bea02d9500d3e239211cf4a607b6f819e381fef0ab222aa3e27b71c4d56694"
+      },
+      {
+        "path": "crates/canic-cli/src/restore/enforce.rs",
+        "sha256": "c15374793977c1916d39b4c08eafb88d6444d772d0ef10f8fe4c9096e70f77ea"
+      },
+      {
+        "path": "crates/canic-cli/src/scaffold/mod.rs",
+        "sha256": "9d87fcef95773a198e14ee405439cd9f00951431e8c76255614448fa52a32a08"
+      },
+      {
+        "path": "crates/canic-contracts/examples/wire_conformance/unsigned_magnitude/mod.rs",
+        "sha256": "d3c7889d61dec970ffdebe594d110718f0507b8e0aa8d0fbbe9bb545dede5cc7"
+      },
+      {
+        "path": "crates/canic-contracts/src/dto/role/mod.rs",
+        "sha256": "e9b828c6dbeac505872b27206e0da9880e5bb94f2fafafad68850c0004853f01"
+      },
+      {
+        "path": "crates/canic-contracts/src/ids/template/mod.rs",
+        "sha256": "cb2ad61f95ae715378af86f2956b7dad2b3ba056fc418f632e4fb27600f4c7f2"
+      },
+      {
+        "path": "crates/canic-control-plane/src/ops/canister_pool/mod.rs",
+        "sha256": "68b944248e8856dc7eaeaa241d19840a9e185951245af5bf03b6dc9e561cc582"
+      },
+      {
+        "path": "crates/canic-control-plane/src/ops/component_provisioning/mod.rs",
+        "sha256": "d33d66f1e2c2ec148ae3d2902130385dfff518a21de9ac7ac3dac28609b32245"
+      },
+      {
+        "path": "crates/canic-control-plane/src/ops/component_registry/directory_refresh/mod.rs",
+        "sha256": "7ad5536396003f43baf26e9c3dd4ec516150f9941664d87a5ebffbd095fe1c1d"
+      },
+      {
+        "path": "crates/canic-control-plane/src/ops/component_registry/mod.rs",
+        "sha256": "f089bd72e6c2d0aea8b487c68b3ff1ee8024ce71ce202ceed2d23203187c6131"
+      },
+      {
+        "path": "crates/canic-control-plane/src/workflow/component_registry/authority_validation/mod.rs",
+        "sha256": "cccb44013866427f0d09f8d6dbf686b9ca5fc18f81be8a905f232ae40aff56f0"
+      },
+      {
+        "path": "crates/canic-control-plane/src/workflow/component_registry/registry_response/mod.rs",
+        "sha256": "8b94cffc3dcfe5fbca75c4336c780280b3a8dd94092c282c96ea5e752ad00ab2"
+      },
+      {
+        "path": "crates/canic-control-plane/src/workflow/fleet_subnet_root.rs",
+        "sha256": "3469c750091a83a6fdfa3a8e069c7ef45afb0094bca2bb507838d1a31bdafabc"
+      },
+      {
+        "path": "crates/canic-control-plane/src/workflow/mod.rs",
+        "sha256": "2195bada6b716a21c4ce9d749d9e49f24ce249d1c71b605fdb352b1658807247"
+      },
+      {
+        "path": "crates/canic-control-plane/src/workflow/wasm_store/mod.rs",
+        "sha256": "6ae7f30e189b5c7bc8b897cd04d2de68353c84e1333d0f84a86c770e5904dcea"
+      },
+      {
+        "path": "crates/canic-core/src/bootstrap/render.rs",
+        "sha256": "ae475bb881f334d8e5acec23c6e2103a1205f2d8cda342502eb3a810120a908e"
+      },
+      {
+        "path": "crates/canic-core/src/error.rs",
+        "sha256": "81fb9f690bc0f1cdd7077ae531f35b28cab75de5f7e2feb88510d09b4cfd237f"
+      },
+      {
+        "path": "crates/canic-core/src/ops/auth/delegated/chain_key_signing/mod.rs",
+        "sha256": "2fd0f5eb99063203a682291adb82a9bb9beccb5556f077f41a8c1d59bce75de5"
+      },
+      {
+        "path": "crates/canic-core/src/ops/auth/delegation/mod.rs",
+        "sha256": "4d8a3280fbfd6d5a07b7812ac1d91ee8085edfe32d75f7b4d22354f062f243d5"
+      },
+      {
+        "path": "crates/canic-core/src/ops/auth/mod.rs",
+        "sha256": "120c81c677f339c87a57aaf5cd7244c0c1878428b8b970908802fcef089b4ecc"
+      },
+      {
+        "path": "crates/canic-core/src/ops/auth/token/verifier_config.rs",
+        "sha256": "1a844974e0efa6cf15c812fc064046a7a9f56659ed19738dad49b1163c236f67"
+      },
+      {
+        "path": "crates/canic-core/src/ops/fleet_registry/mod.rs",
+        "sha256": "4c6c292e18f64a752360592c1bf686634e99afa9e8517718482f3d4304073e77"
+      },
+      {
+        "path": "crates/canic-core/src/ops/fleet_registry/validation/mod.rs",
+        "sha256": "d3525639ca5ba81565bd14fcc7912ddfa93b575f2d86fdb967e385414fcb9331"
+      },
+      {
+        "path": "crates/canic-core/src/ops/fleet_service_binding/mod.rs",
+        "sha256": "baeae57735e92cf611d8be3cc450589777b848ad262d1ce9b397b00d55cadf02"
+      },
+      {
+        "path": "crates/canic-core/src/ops/fleet_service_binding/tests.rs",
+        "sha256": "5eaf21029094797050573a73cd9c77eceb8ea65bbe61cc01772161a4ec663241"
+      },
+      {
+        "path": "crates/canic-core/src/ops/ic/call.rs",
+        "sha256": "a93c620057914df43d3a3964212debad853efb3ccbff066e0817a8915b4459c3"
+      },
+      {
+        "path": "crates/canic-core/src/ops/rpc/request/dispatch.rs",
+        "sha256": "d4b1b64a7523087f31293233dbfcc4378de7ca2d16b0563319124775dcaded95"
+      },
+      {
+        "path": "crates/canic-core/src/ops/runtime/memory/tests.rs",
+        "sha256": "d3fa4efbe265ce1cf3706f043dd2d5ab4c10decd01c8fa183e8ae100c8ddee05"
+      },
+      {
+        "path": "crates/canic-core/src/ops/runtime/metrics/mod.rs",
+        "sha256": "a316b94e7a3f97fee1515c58cc3c9b4a9a88113bd5d1ba861c39d891658e3b04"
+      },
+      {
+        "path": "crates/canic-core/src/workflow/ic/icp_refill/replay.rs",
+        "sha256": "96701a44ca43cfbcf1a685fb0cfb1b4ccb28f14763839a31d3db7e1d807ad754"
+      },
+      {
+        "path": "crates/canic-host/src/binaryen/mod.rs",
+        "sha256": "24fdf707da44050e08c6a2cbf5edf5c7dc7a73c2e256442a0863981601bd9b9e"
+      },
+      {
+        "path": "crates/canic-host/src/build_provenance/cargo.rs",
+        "sha256": "86afde3b17b1d0d8fc3f1d77699e48a291b8bf6373c94b9a705987be2281b6c6"
+      },
+      {
+        "path": "crates/canic-host/src/canister_build/reuse/tests/complete/mod.rs",
+        "sha256": "b7aabfa6be16fc14d09e9cab73af3c1658e1216cd1febb5c445b15600491804f"
+      },
+      {
+        "path": "crates/canic-host/src/cargo_observation/mod.rs",
+        "sha256": "00e236f2de646ff76b89dc24c384fa2b876333332dc1afad82e42f352e19f4e1"
+      },
+      {
+        "path": "crates/canic-host/src/fleet_ensure/ops/current_inventory/mod.rs",
+        "sha256": "80d28d37e0e5aa97a08e3f4f947580dd998294660c87a223641e3c3f70e4dcc6"
+      },
+      {
+        "path": "crates/canic-host/src/fleet_ensure/ops/current_protocol/mod.rs",
+        "sha256": "753189e307f4c47490d769abc405a1c64c0b483d3c7fbd194d2677a4058c8ff3"
+      },
+      {
+        "path": "crates/canic-host/src/fleet_ensure/ops/platform/mod.rs",
+        "sha256": "3137bde70a798acc4ca271cb7633d36233ab1aee1055a56576bf84c3266dd68b"
+      },
+      {
+        "path": "crates/canic-host/src/fleet_ensure/policy/mod.rs",
+        "sha256": "04acd7a263b434d878087781542b55dfda13a98bbd430881ca2e7a85546cc6ea"
+      },
+      {
+        "path": "crates/canic-host/src/ic_wasm/mod.rs",
+        "sha256": "8c663f4c8d79e59aacde2b569cc219ab5d7efe6b707f9b06d32b28cfc7e20912"
+      },
+      {
+        "path": "crates/canic-host/src/icp/canister.rs",
+        "sha256": "dc69de3d8d8ed2a8a885b31997225cd8b74c1bae7b01e308726469c02f0df476"
+      },
+      {
+        "path": "crates/canic-host/src/icp/error.rs",
+        "sha256": "773d9d5d078eb66ef300341266440d0af447af4230b3c18793744b08158f2853"
+      },
+      {
+        "path": "crates/canic-host/src/icp/query/tests.rs",
+        "sha256": "64ff6a2479a7ad37be3f2ec13acec33cfe8ea6aa2d77bfb7059750b778f28845"
+      },
+      {
+        "path": "crates/canic-host/src/lib.rs",
+        "sha256": "12f7037b22c90924db1a6e1f4ffc39f9e6b7c37b234366af50d8bb002f4d7a9e"
+      },
+      {
+        "path": "crates/canic-host/src/local_fleet/ops/mod.rs",
+        "sha256": "36d5b261ee128a21789e3faadedbdc9cbd64e53aa398c0a8d8d14a98a33dc75c"
+      },
+      {
+        "path": "crates/canic-host/src/local_fleet/ops/prepare/mod.rs",
+        "sha256": "2419aaac20c86aa010c092a1f090e74be9e45cce6c8aab4ddc02f5270738dbfb"
+      },
+      {
+        "path": "crates/canic-host/src/policy_gate/evaluation/mod.rs",
+        "sha256": "1aee00b0264da1f95d71171da25108608a17cafb9773985f8a96da570f218444"
+      },
+      {
+        "path": "crates/canic-host/src/release_set/config/mutation/attach.rs",
+        "sha256": "d190cb05b0319110bef962b0eef71c19b4e60b597cf76a2359100b6a2ac8d9fe"
+      },
+      {
+        "path": "crates/canic-host/src/release_set/config/mutation/declare.rs",
+        "sha256": "c967edde9ac408d96bde41c5a8ad07255f68b104ecda4823912b787eb30bb699"
+      },
+      {
+        "path": "crates/canic-host/src/release_set/config/mutation/rename.rs",
+        "sha256": "124c7f38dac7ee525919eaba1627f8bab79aa650562c5a427c5315675babeabc"
+      },
+      {
+        "path": "crates/canic-host/src/release_set/config/mutation/support.rs",
+        "sha256": "66693fb9464c4645ca84215994f6a11c104b833256c62f14c2556b6e897ef3af"
+      },
+      {
+        "path": "crates/canic-host/src/state_manifest/audit.rs",
+        "sha256": "6e0be33abb4f9ffb0b31720fced119d0d44ba54542c56446a42691be908b8e7f"
+      },
+      {
+        "path": "crates/canic-host/src/tool_install/mod.rs",
+        "sha256": "df70b44972aeafb06777d5f35d3105692d82c831c0b7241ecd5175e528506a99"
+      },
+      {
+        "path": "crates/canic-control-plane/src/workflow/cycle_reclamation/mod.rs",
+        "sha256": "f5d33dc4cf624d75f536f3917f8ddb9503e3eb2404e1265f0942a206d0306fa9"
+      },
+      {
+        "path": "crates/canic-core/src/ops/auth/chain_key_config/mod.rs",
+        "sha256": "2c8ad6d4b4135b01e89530a702bf3ac469fdf3fbd6115cf1386a286a2eedf5ac"
+      },
+      {
+        "path": "crates/canic-host/src/toml_support/mod.rs",
+        "sha256": "fd360ab86b87db2e92cb5b164192a724118d703e619e87c070033bdd3b54f4ae"
+      }
+    ],
+    "qualifiedLocks": [
+      {
+        "path": "Cargo.lock",
+        "sha256": "d0a6e6a0f5b03e9e85c8053e97185039876b34358221874fc949b06ee759d71a"
+      },
+      {
+        "path": "integrations/blob-service/consumer/Cargo.lock",
+        "sha256": "4eea521ac8e496ab1a500d7341ecb168f9274989e8c2db0dc8b42b74610b563f"
+      },
+      {
+        "path": "integrations/blob-service/embedded-consumer/Cargo.lock",
+        "sha256": "7e85e37c837f3ed5fcfda925b46a14cd5203e0bd223d37c633b0c5465d25466f"
+      }
+    ],
+    "observedRootLockChange": {
+      "sha256": "c715b35460c84feb964071f04b4a627093b89e4d12f0a9248c165679c7c9d959",
+      "snapshot": "/tmp/canic-issues-663-689/root-lock-concurrent-change.lock",
+      "owner": "unconfirmed",
+      "action": "preserved; clarification requested; no dependency update issued in this batch",
+      "newerSelections": [
+        "Tooling/Testkit 0.68.12",
+        "Memory/Storage 0.51.8",
+        "Timers 0.31.8",
+        "Backup 0.44.8"
+      ]
+    },
+    "native": {
+      "passed": 940,
+      "ignored": 4,
+      "checks": [
+        {
+          "command": "cargo test --locked --offline -p canic-core --lib --all-features ops::fleet_",
+          "log": "/tmp/canic-issues-663-689/canic-core-ops_fleet_.log",
+          "passed": 48,
+          "ignored": 0,
+          "logSha256": "5e084597d41562be938b13b0122f832880b707a007342a6190df55e7a532a4a1"
+        },
+        {
+          "command": "cargo test --locked --offline -p canic-core --lib --all-features ops::auth::",
+          "log": "/tmp/canic-issues-663-689/canic-core-ops_auth_.log",
+          "passed": 132,
+          "ignored": 0,
+          "logSha256": "f687f91be3e820d46ddd1e4c10ed2da35474881f8849fc43ff35175977efa46a"
+        },
+        {
+          "command": "cargo test --locked --offline -p canic-core --lib --all-features bootstrap::render",
+          "log": "/tmp/canic-issues-663-689/canic-core-bootstrap_render.log",
+          "passed": 2,
+          "ignored": 0,
+          "logSha256": "03014aee60ebc88f0b74a05524b643e5e06bbb8aa75ef10895468f38f182d83b"
+        },
+        {
+          "command": "cargo test --locked --offline -p canic-core --lib --all-features ops::rpc::request",
+          "log": "/tmp/canic-issues-663-689/canic-core-ops_rpc_request.log",
+          "passed": 6,
+          "ignored": 0,
+          "logSha256": "291ed41416fd1462977e1dba8545a5de50915b335c07aa2ef7af1da6cd37b5e3"
+        },
+        {
+          "command": "cargo test --locked --offline -p canic-core --lib --all-features ops::runtime::metrics",
+          "log": "/tmp/canic-issues-663-689/canic-core-ops_runtime_metrics.log",
+          "passed": 47,
+          "ignored": 0,
+          "logSha256": "12a083d7918262a616b220e4b5993fa9da79923c710703dea539d1068ec7cf18"
+        },
+        {
+          "command": "cargo test --locked --offline -p canic-core --lib --all-features workflow::ic::icp_refill",
+          "log": "/tmp/canic-issues-663-689/canic-core-workflow_ic_icp_refill.log",
+          "passed": 50,
+          "ignored": 0,
+          "logSha256": "65e795b9a95319616a84c6c73094fdbf9aaa0a364da5016e8e9e6987e608a5ac"
+        },
+        {
+          "command": "cargo test --locked --offline -p canic-core --lib --all-features infra::ic::call",
+          "log": "/tmp/canic-issues-663-689/canic-core-infra_ic_call.log",
+          "passed": 4,
+          "ignored": 0,
+          "logSha256": "8cd49e99bccb2f9bd3f4e945aaa452e6838e325dd47c3c9df4f342b61a2b5992"
+        },
+        {
+          "command": "cargo test --locked --offline -p canic-control-plane --lib --all-features ops::component_registry",
+          "log": "/tmp/canic-issues-663-689/canic-control-plane-ops_component_registry.log",
+          "passed": 33,
+          "ignored": 0,
+          "logSha256": "0172cd5487269d3af295e2b566e8d1691abe40682189943167c996c4ce60168f"
+        },
+        {
+          "command": "cargo test --locked --offline -p canic-control-plane --lib --all-features ops::component_provisioning",
+          "log": "/tmp/canic-issues-663-689/canic-control-plane-ops_component_provisioning.log",
+          "passed": 16,
+          "ignored": 0,
+          "logSha256": "d5485f5e830a75062d64c1f2d575a4540a922d575d1607f028de049ef77cec12"
+        },
+        {
+          "command": "cargo test --locked --offline -p canic-control-plane --lib --all-features ops::canister_pool",
+          "log": "/tmp/canic-issues-663-689/canic-control-plane-ops_canister_pool.log",
+          "passed": 53,
+          "ignored": 0,
+          "logSha256": "ea0f5346699285ed0baa6ae0a089d6e7839e11a7035e48ae5864e223a511740d"
+        },
+        {
+          "command": "cargo test --locked --offline -p canic-control-plane --lib --all-features workflow::fleet_subnet_root",
+          "log": "/tmp/canic-issues-663-689/canic-control-plane-workflow_fleet_subnet_root.log",
+          "passed": 6,
+          "ignored": 0,
+          "logSha256": "95366a8e1993d65e20f2c0e2681d47c68cd2e1da5277770e8ce4ad8e2bc52162"
+        },
+        {
+          "command": "cargo test --locked --offline -p canic-control-plane --lib --all-features workflow::wasm_store",
+          "log": "/tmp/canic-issues-663-689/canic-control-plane-workflow_wasm_store.log",
+          "passed": 1,
+          "ignored": 0,
+          "logSha256": "a1f16328458574bdc303490d1eaf60e86c9d7e05cae90a0b5641efd662db03d9"
+        },
+        {
+          "command": "cargo test --locked --offline -p canic-control-plane --lib --all-features workflow::component_registry",
+          "log": "/tmp/canic-issues-663-689/canic-control-plane-workflow_component_registry.log",
+          "passed": 11,
+          "ignored": 0,
+          "logSha256": "b2cdb130207fd129dfe6a8ff158d848c80ea337b6027fcd013d2348ac2ccb933"
+        },
+        {
+          "command": "cargo test --locked --offline -p canic-host --lib --all-features icp::",
+          "log": "/tmp/canic-issues-663-689/canic-host-icp_.log",
+          "passed": 85,
+          "ignored": 0,
+          "logSha256": "3b8eb450c1d54957e2814a4fedec6412e865efe899d1353836b7f5c036a14906"
+        },
+        {
+          "command": "cargo test --locked --offline -p canic-host --lib --all-features ic_wasm::",
+          "log": "/tmp/canic-issues-663-689/canic-host-ic_wasm_.log",
+          "passed": 6,
+          "ignored": 0,
+          "logSha256": "5393fbba88fc144d6735531d4240651efd528c9015b80acfe32d3d5de8faa6e7"
+        },
+        {
+          "command": "cargo test --locked --offline -p canic-host --lib --all-features binaryen::",
+          "log": "/tmp/canic-issues-663-689/canic-host-binaryen_.log",
+          "passed": 7,
+          "ignored": 0,
+          "logSha256": "8e7a361d263ec1757106209442a0bdb11e0bcfb445871be813fa8da149412299"
+        },
+        {
+          "command": "cargo test --locked --offline -p canic-host --lib --all-features tool_install::",
+          "log": "/tmp/canic-issues-663-689/canic-host-tool_install_.log",
+          "passed": 8,
+          "ignored": 0,
+          "logSha256": "d9c6d0e5e5a2f08d6963575d3d1b67414f9f070d2f8617c41e592614f5bff226"
+        },
+        {
+          "command": "cargo test --locked --offline -p canic-host --lib --all-features local_fleet::",
+          "log": "/tmp/canic-issues-663-689/canic-host-local_fleet_.log",
+          "passed": 7,
+          "ignored": 1,
+          "logSha256": "910c8dfb69299d2a41e34f39f739e8ef4f2002868609dc49c157d8e7935a3f3f"
+        },
+        {
+          "command": "cargo test --locked --offline -p canic-host --lib --all-features policy_gate::",
+          "log": "/tmp/canic-issues-663-689/canic-host-policy_gate_.log",
+          "passed": 25,
+          "ignored": 0,
+          "logSha256": "efa999a8e29da70da37f466209fa2e764aa222f4380df16995e457f903feb44e"
+        },
+        {
+          "command": "cargo test --locked --offline -p canic-host --lib --all-features state_manifest::",
+          "log": "/tmp/canic-issues-663-689/canic-host-state_manifest_.log",
+          "passed": 20,
+          "ignored": 0,
+          "logSha256": "611c558d1dff98defdb567f2b6846f46ebdfd7527742333d635f81b08d5ea766"
+        },
+        {
+          "command": "cargo test --locked --offline -p canic-host --lib --all-features build_provenance::",
+          "log": "/tmp/canic-issues-663-689/canic-host-build_provenance_.log",
+          "passed": 23,
+          "ignored": 0,
+          "logSha256": "73f543463ce27f9f9c83e4a71730a10a0443ac0b84c73b59e93c7ab9db7eb027"
+        },
+        {
+          "command": "cargo test --locked --offline -p canic-host --lib --all-features canister_build::reuse",
+          "log": "/tmp/canic-issues-663-689/canic-host-canister_build_reuse.log",
+          "passed": 44,
+          "ignored": 1,
+          "logSha256": "078085c082949813c7be544b939bca44912e92ad00260d9eddc17ccc0b891392"
+        },
+        {
+          "command": "cargo test --locked --offline -p canic-host --lib --all-features fleet_ensure::policy::",
+          "log": "/tmp/canic-issues-663-689/canic-host-fleet_ensure_policy_.log",
+          "passed": 91,
+          "ignored": 0,
+          "logSha256": "51f8d021efcf4f9268a8fbd415386f7ff151bc18141d6d7f081c2c386876be20"
+        },
+        {
+          "command": "cargo test --locked --offline -p canic-host --lib --all-features fleet_ensure::ops::current_",
+          "log": "/tmp/canic-issues-663-689/canic-host-fleet_ensure_ops_current_.log",
+          "passed": 54,
+          "ignored": 1,
+          "logSha256": "fd7e9b7aa83a2b1045bb9e4eb050ac29f8e598f56c82de7311a8b9854170a0e5"
+        },
+        {
+          "command": "cargo test --locked --offline -p canic-host --lib --all-features release_set::config::",
+          "log": "/tmp/canic-issues-663-689/canic-host-release_set_config_.log",
+          "passed": 10,
+          "ignored": 0,
+          "logSha256": "ac2024e0a43a1627886bef4d566b98f0ff1651a4fbb569274079f88ffde32e67"
+        },
+        {
+          "command": "cargo test --locked --offline -p canic-cli --lib --all-features restore::",
+          "log": "/tmp/canic-issues-663-689/canic-cli-restore_.log",
+          "passed": 42,
+          "ignored": 1,
+          "logSha256": "8281e97a1eb6cdd4d13ca4dd7ea7a2c6befc70a9002d482cbac5e7a5a5444fe6"
+        },
+        {
+          "command": "cargo test --locked --offline -p canic-cli --lib --all-features cycles::",
+          "log": "/tmp/canic-issues-663-689/canic-cli-cycles_.log",
+          "passed": 49,
+          "ignored": 0,
+          "logSha256": "29cfe9d97cf15b9bd4710e1162b08427ce1c0bdf21ee7f7cf94940f3c37cc717"
+        },
+        {
+          "command": "cargo test --locked --offline -p canic-cli --lib --all-features scaffold::",
+          "log": "/tmp/canic-issues-663-689/canic-cli-scaffold_.log",
+          "passed": 24,
+          "ignored": 0,
+          "logSha256": "7362c60ed15d60b2242283396248d3adf586cbae1d021a7013ba62a759dc3a91"
+        },
+        {
+          "command": "cargo test --locked --offline -p canic-cli --lib --all-features medic::",
+          "log": "/tmp/canic-issues-663-689/canic-cli-medic_.log",
+          "passed": 36,
+          "ignored": 0,
+          "logSha256": "53dee099efe21dc19fb02b3e0be4d7dcd7c66bd973598839f3c7401623e87906"
+        }
+      ]
+    },
+    "checks": [
+      {
+        "command": "cargo clippy --locked --offline -p canic-core -p canic-control-plane -p canic-host -p canic-cli --lib --tests --all-features -- -D warnings",
+        "outcome": "pass",
+        "log": "/tmp/canic-issues-663-689/clippy-rerun2.log",
+        "logSha256": "a14062234f5012207f36342d09295660c2479a8815b14d7de1c7ff955146b96d"
+      },
+      {
+        "command": "cargo clippy --locked --offline -p canic-core -p canic-host -p canic-cli --lib --tests --all-features -- -D warnings",
+        "outcome": "pass",
+        "log": "/tmp/canic-issues-663-689/clippy-fixtures.log",
+        "logSha256": "482e1145a175f983940f161a86b395299ef7fadaac5034d72fed494d304b9871"
+      },
+      {
+        "command": "cargo check --locked --offline -p canic-control-plane --lib --no-default-features --features root-control-plane --target wasm32-unknown-unknown",
+        "outcome": "pass",
+        "log": "/tmp/canic-issues-663-689/wasm-root.log",
+        "logSha256": "cf377a82616661568b1ca2cd0c8619c8646996e15d6f9bb7b3f73bd072373774"
+      },
+      {
+        "command": "cargo check --locked --offline -p canic-control-plane --lib --no-default-features --features wasm-store-canister --target wasm32-unknown-unknown",
+        "outcome": "pass",
+        "log": "/tmp/canic-issues-663-689/wasm-store.log",
+        "logSha256": "241d6bff7a9b5700a6a289fece339617e4bd5c5d166e3e8f3cb56146bef18807"
+      },
+      {
+        "command": "PATH=.tools/ic/bin:$PATH cargo run --locked --offline -p canic-testing-internal --example refresh_embedded_root",
+        "outcome": "pass",
+        "log": "/tmp/canic-issues-663-689/peer-refresh.log",
+        "logSha256": "ba53bdcfecbae05ecf12fd5754c1b8e86f11ff5e2f73dd966a6159e7e6c14e1f"
+      },
+      {
+        "command": "PATH=.tools/ic/bin:$PATH cargo run --locked --offline -p canic-testing-internal --example verify_embedded_root",
+        "outcome": "pass",
+        "log": "/tmp/canic-issues-663-689/peer-verify-final.log",
+        "logSha256": "63d056765bef5492f8638c6c347383489326df148c8d86509d05fcda56478987"
+      },
+      {
+        "command": "PATH=.tools/ic/bin:$PATH make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::fresh_five_component_provisioning_reaches_runtime_active_and_publishes_catalog",
+        "outcome": "failed-before-installed-execution-cargo-inputs-changed",
+        "log": "/tmp/canic-issues-663-689/pic-provisioning.log",
+        "logSha256": "e465a20e8c1298a13d127c1092c9f1f5de57aba37fa9d3792e104f9c61367c1e"
+      },
+      {
+        "command": "PATH=.tools/ic/bin:$PATH make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::published_draining_root_autonomously_reaches_external_deletion_readiness",
+        "outcome": "not-run-root-lock-change-awaiting-owner"
+      }
+    ],
+    "fixtureCorrections": [
+      "Receipt hash expectation updated to current native Wire; mismatch reproduced with original ordering files restored before correction. See order-baseline.log.",
+      "Query authority observations assert four exact network/export/principal sequences; mismatched identities still reject before remote calls.",
+      "Build-reuse tests supply the existing valid Wire Wasm/schema fixture; current production release admission is unchanged.",
+      "Medic feature forwarding test asserts finding code and failure status without freezing explanatory prose."
+    ],
+    "ignored": [
+      "local_fleet::tests::persistent_session_preserves_subnets_allocations_time_and_trust",
+      "canister_build::reuse::tests::complete::environment::frozen_relocated_and_changed_tree_measurement",
+      "fleet_ensure::ops::current_protocol::tests::root_authority_reads_matched_latency_measurement",
+      "restore::tests::operational_readiness::real_upload_effect_survives_process_death"
+    ],
+    "peer": {
+      "schema_version": 1,
+      "package": "sharding_root_stub",
+      "target": "wasm32-unknown-unknown",
+      "profile": "fast",
+      "fixture_version": "0.0.0",
+      "source_input_digest": "01bc4e6947f14a4e79a90283f835302493dd58cb1ae626afa35cc16ed7357466",
+      "build_fingerprint": "21e814fb9ab1c8947daeaba733692396aec5f667017d96a7eee831ce8cb6478c",
+      "lock_sha256": "d0a6e6a0f5b03e9e85c8053e97185039876b34358221874fc949b06ee759d71a",
+      "producer_lock_sha256": "e6bed95e3936a8a74a49f25332edba54c0b8fdfd968bcf806ccc08cb3aee4538",
+      "artifact_sha256": "f09fe6264bf35e97cded66bd69a54ec62204650fea922c72ba9feca97dfc6085",
+      "cargo": "cargo 1.99.1 (5f94df478 2026-08-27)\nrelease: 1.99.1\ncommit-hash: 5f94df4789f005f9a352888e8355ffc645b7ed0e\ncommit-date: 2026-08-27\nhost: x86_64-unknown-linux-gnu\nlibgit2: 1.9.6 (sys:0.21.0 vendored)\nlibcurl: 8.21.0-DEV (sys:0.4.90+curl-8.21.0 vendored ssl:OpenSSL/3.6.3)\nssl: OpenSSL 3.6.3 9 Jun 2026\nos: Linux Mint 22.3.0 (zena) [64-bit]\n",
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n"
+    },
+    "limitations": [
+      "Installed qualification blocked by root Cargo.lock changing during the provisioning command; prior passing checks do not qualify this newer graph",
+      "No broad workspace/release/PocketIC gate",
+      "No fresh dedicated/embedded Blob consumer run for this consolidation; adapter and dependency graph are unchanged",
+      "No live provider or paid operations",
+      "No Wasm size improvement measured",
+      "External DTO consumer migration remains outstanding for the complete 0.112 batch",
+      "No GitHub issue closure/comment, staging, commit, push, version bump or publication"
+    ]
+  },
+  "supplierRefreshThird20261027": {
+    "kind": "incomplete-targeted-development-qualification-not-release-validation",
+    "head": "b9482ec526c5dfb9f5dd349d22b1f60190b2dfdf",
+    "dirty": true,
+    "userConfirmedIncomingUpdate": true,
+    "initialPublished": [
+      {
+        "name": "ic-auth-protocol-types",
+        "version": "0.17.1",
+        "checksum": "130a6fe93fa317914c72bdf61bdb957a333c202da8daacc7f09924cef6f86501"
+      },
+      {
+        "name": "ic-auth",
+        "version": "0.17.1",
+        "checksum": "b498d9981816367c59317b7c74e666d40650fe6bc08c0c78c4c04d7255cb7178"
+      },
+      {
+        "name": "ic-backup",
+        "version": "0.44.8",
+        "checksum": "519ab2bd0a9fe661d493517e0695f39d5a86e36e353c07a7b56281b3d2b9b5f5"
+      },
+      {
+        "name": "ic-blob-storage-contracts",
+        "version": "0.50.0",
+        "checksum": "85e2e9458a6cfa77117ddacddbbeeee7de2010c4fe78c3658f22c5b046421260"
+      },
+      {
+        "name": "ic-blob-storage",
+        "version": "0.50.0",
+        "checksum": "beb94d1cbc7a939cfc1aa1cdf95e935550b8da9a4ed5a20b740f4f7cc951d9a4"
+      },
+      {
+        "name": "ic-build",
+        "version": "0.68.12",
+        "checksum": "376671b1ada1568f9ceac3f78d4427d653f4c7cd80aa607691fe740af8b9d943"
+      },
+      {
+        "name": "ic-host-artifacts",
+        "version": "0.68.12",
+        "checksum": "edb95a14c94d265ac37af080aeb4ac34fc9fc23d4c5006f67f5a392b0314a440"
+      },
+      {
+        "name": "ic-host-fs",
+        "version": "0.68.12",
+        "checksum": "aabb147a5ed028184d43ea1a2ad5f1eb4dd514a3389cd8d8bbe79a901402ae24"
+      },
+      {
+        "name": "ic-host-process",
+        "version": "0.68.12",
+        "checksum": "b38129cea401bb4d45ed3068847b31dd680c76e34059a635098747af3cadb991"
+      },
+      {
+        "name": "ic-host-text",
+        "version": "0.68.12",
+        "checksum": "416ae07de398d17d1456a8a1c83c0e3f559070fc84bd61668080f68c74863e1d"
+      },
+      {
+        "name": "ic-host-tools",
+        "version": "0.68.12",
+        "checksum": "8082b1ee80c4f53311c73c986d2213d726a0a96c43b3d8a7cc0dc4aa6e723afd"
+      },
+      {
+        "name": "ic-memory",
+        "version": "0.51.8",
+        "checksum": "d005398889cd66f2659ffeaea43a12b11c008c80428f5f5978f7f753d55e51bb"
+      },
+      {
+        "name": "ic-metrics",
+        "version": "0.16.3",
+        "checksum": "4b29592cae8a0f2d6f1d7d8d4fbd107cfbb3f3ad2e3e18515d7f598665037056"
+      },
+      {
+        "name": "ic-platform-macros",
+        "version": "0.7.0",
+        "checksum": "55473c96a300e051643ded29e5904e2efb131f531c322e2b1610619f3052648f"
+      },
+      {
+        "name": "ic-platform",
+        "version": "0.7.0",
+        "checksum": "677aad73f8b1339cbe1cd7c851f4140bdcdc91c3838fda425bb82549dcd7c35d"
+      },
+      {
+        "name": "ic-query",
+        "version": "0.74.5",
+        "checksum": "bb6c0371fbd2b6ccf6a6929de11a0e191534ae0b830b7b9c03b812a758e89a20"
+      },
+      {
+        "name": "ic-storage",
+        "version": "0.51.8",
+        "checksum": "2cb9325103a1ed5e5c9ceab29487c1d862b6a994a168cf3d31ba12cf70fb83d5"
+      },
+      {
+        "name": "ic-testkit",
+        "version": "0.68.12",
+        "checksum": "053cb818b980a3ddd195a579c1f734415308002cdea898bd3261d6743f0ff25a"
+      },
+      {
+        "name": "ic-timers",
+        "version": "0.31.8",
+        "checksum": "69291fe69669d38c41797e7c268fba30de39d6f07e1f85ac52d7b9812daf048c"
+      },
+      {
+        "name": "ic-wire",
+        "version": "0.7.18",
+        "checksum": "edd828493d11d764d091290eac815bcea8fca77754d567d818c17236118251bb"
+      }
+    ],
+    "latestObserved": [
+      {
+        "name": "ic-auth-protocol-types",
+        "version": "0.17.1",
+        "checksum": "130a6fe93fa317914c72bdf61bdb957a333c202da8daacc7f09924cef6f86501"
+      },
+      {
+        "name": "ic-auth",
+        "version": "0.17.1",
+        "checksum": "b498d9981816367c59317b7c74e666d40650fe6bc08c0c78c4c04d7255cb7178"
+      },
+      {
+        "name": "ic-backup",
+        "version": "0.44.8",
+        "checksum": "519ab2bd0a9fe661d493517e0695f39d5a86e36e353c07a7b56281b3d2b9b5f5"
+      },
+      {
+        "name": "ic-blob-storage-contracts",
+        "version": "0.50.0",
+        "checksum": "85e2e9458a6cfa77117ddacddbbeeee7de2010c4fe78c3658f22c5b046421260"
+      },
+      {
+        "name": "ic-blob-storage",
+        "version": "0.50.0",
+        "checksum": "beb94d1cbc7a939cfc1aa1cdf95e935550b8da9a4ed5a20b740f4f7cc951d9a4"
+      },
+      {
+        "name": "ic-build",
+        "version": "0.68.12",
+        "checksum": "376671b1ada1568f9ceac3f78d4427d653f4c7cd80aa607691fe740af8b9d943"
+      },
+      {
+        "name": "ic-host-artifacts",
+        "version": "0.68.12",
+        "checksum": "edb95a14c94d265ac37af080aeb4ac34fc9fc23d4c5006f67f5a392b0314a440"
+      },
+      {
+        "name": "ic-host-fs",
+        "version": "0.68.12",
+        "checksum": "aabb147a5ed028184d43ea1a2ad5f1eb4dd514a3389cd8d8bbe79a901402ae24"
+      },
+      {
+        "name": "ic-host-process",
+        "version": "0.68.12",
+        "checksum": "b38129cea401bb4d45ed3068847b31dd680c76e34059a635098747af3cadb991"
+      },
+      {
+        "name": "ic-host-text",
+        "version": "0.68.12",
+        "checksum": "416ae07de398d17d1456a8a1c83c0e3f559070fc84bd61668080f68c74863e1d"
+      },
+      {
+        "name": "ic-host-tools",
+        "version": "0.68.12",
+        "checksum": "8082b1ee80c4f53311c73c986d2213d726a0a96c43b3d8a7cc0dc4aa6e723afd"
+      },
+      {
+        "name": "ic-memory",
+        "version": "0.51.9",
+        "checksum": "3f2685991be486b2d424d757ab63b8f5f906c527f681f1de03e09ff23660b470"
+      },
+      {
+        "name": "ic-metrics",
+        "version": "0.16.3",
+        "checksum": "4b29592cae8a0f2d6f1d7d8d4fbd107cfbb3f3ad2e3e18515d7f598665037056"
+      },
+      {
+        "name": "ic-platform-macros",
+        "version": "0.7.0",
+        "checksum": "55473c96a300e051643ded29e5904e2efb131f531c322e2b1610619f3052648f"
+      },
+      {
+        "name": "ic-platform",
+        "version": "0.7.0",
+        "checksum": "677aad73f8b1339cbe1cd7c851f4140bdcdc91c3838fda425bb82549dcd7c35d"
+      },
+      {
+        "name": "ic-query",
+        "version": "0.74.5",
+        "checksum": "bb6c0371fbd2b6ccf6a6929de11a0e191534ae0b830b7b9c03b812a758e89a20"
+      },
+      {
+        "name": "ic-storage",
+        "version": "0.51.9",
+        "checksum": "fd54d3b2f6bacdf090deebc3c8293b7244a738b24c24f9aee1c753991386dc64"
+      },
+      {
+        "name": "ic-testkit",
+        "version": "0.68.12",
+        "checksum": "053cb818b980a3ddd195a579c1f734415308002cdea898bd3261d6743f0ff25a"
+      },
+      {
+        "name": "ic-timers",
+        "version": "0.31.9",
+        "checksum": "4cd692eb8a6791f37a8ec719b2609347ad6eef99c9ffdf9f2d192d5c6d2287b6"
+      },
+      {
+        "name": "ic-wire",
+        "version": "0.7.18",
+        "checksum": "edd828493d11d764d091290eac815bcea8fca77754d567d818c17236118251bb"
+      }
+    ],
+    "qualifiedLocks": [
+      {
+        "path": "Cargo.lock",
+        "sha256": "6c5367df7b7435c9235959dd94e5365156d049fdf45d4df6f5305c41640064c2"
+      },
+      {
+        "path": "integrations/blob-service/consumer/Cargo.lock",
+        "sha256": "486c4c7115cd5f925f860800e75747dca6a9dacc47ef385e3a064cd397507e04"
+      },
+      {
+        "path": "integrations/blob-service/embedded-consumer/Cargo.lock",
+        "sha256": "f89d042ab314c54eab1c8472135260a3aa565b4a0886c497a3d5c4be92e79066"
+      }
+    ],
+    "native": {
+      "passed": 1072,
+      "ignored": 4,
+      "filters": [
+        {
+          "log": "/tmp/canic-deps-final/canic-backup-restore_.log",
+          "passed": 116,
+          "ignored": 0,
+          "sha256": "ea5b3e93384d2a3da66a58b05ec7da3ad25c37db739bb5001562758fec0233c3"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-cli-cycles_.log",
+          "passed": 49,
+          "ignored": 0,
+          "sha256": "d9db5825c72db6f7b4b4469f9039931a28df24d2e635ed8bd1744311321ed2e7"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-cli-medic_.log",
+          "passed": 36,
+          "ignored": 0,
+          "sha256": "e9735b19ef9947f1aa31ee369246851345b2606b7ab6f29ec1db03175330ad1b"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-cli-restore_.log",
+          "passed": 42,
+          "ignored": 1,
+          "sha256": "468e3cec663e9b1ef8d98b95c879692610ad75323e133545ce9d2f6a924c42c9"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-cli-scaffold_.log",
+          "passed": 24,
+          "ignored": 0,
+          "sha256": "0102fa730f754cb251fa492e50ab301f7b967390e307d44ce42475e1882ceb5a"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-control-plane-ops_canister_pool.log",
+          "passed": 53,
+          "ignored": 0,
+          "sha256": "c8337842abb241547a42b33e7e5fd024d012386a00d0eaf35ac1a346143d01b8"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-control-plane-ops_component_provisioning.log",
+          "passed": 16,
+          "ignored": 0,
+          "sha256": "9ff941777f1f8ce0230eb68f9a3aed1466128b9e59ff76453bc139682110dd7f"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-control-plane-ops_component_registry.log",
+          "passed": 33,
+          "ignored": 0,
+          "sha256": "aa702e7273dc9b4c29f80b55ce317dd5154199feae9a130d120a3edfbe09fd1b"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-control-plane-workflow_component_registry.log",
+          "passed": 11,
+          "ignored": 0,
+          "sha256": "ee5d218e77246d4ab0b60dfb961d94ba15acd4a105da312a3e663c992d562f66"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-control-plane-workflow_fleet_subnet_root.log",
+          "passed": 6,
+          "ignored": 0,
+          "sha256": "3c2770327d2934b06c875d00fc5485d7bc4adf5b75cac95336f7257076143c9e"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-control-plane-workflow_wasm_store.log",
+          "passed": 1,
+          "ignored": 0,
+          "sha256": "913a4a5d99f749bac9cc486dab4d845085bcefb8dbc019d20f3fac833b1be880"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-core-bootstrap_render.log",
+          "passed": 2,
+          "ignored": 0,
+          "sha256": "1cdaac6b4a7111c6594d56166d146c59d54a6ebe4d947a9d0998cbd5a6472a00"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-core-infra_ic_call.log",
+          "passed": 4,
+          "ignored": 0,
+          "sha256": "b5c79d8d3f144f8d6827f72731c2d0b75ba997a1ecbd0bc5d076605eb7a06b2d"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-core-ops_auth_.log",
+          "passed": 132,
+          "ignored": 0,
+          "sha256": "8066c8935899df78e7028322d878e022fb4dd63b23e84951ccec85ed4338da8e"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-core-ops_fleet_.log",
+          "passed": 48,
+          "ignored": 0,
+          "sha256": "21f0727feaa2a6cca08178f007664fd12b058842601599599ce1847f4f0c783b"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-core-ops_rpc_request.log",
+          "passed": 6,
+          "ignored": 0,
+          "sha256": "62e3df8c4ca07f5c20079f27e4a70843c60105b813c50d90f5167898372854a2"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-core-ops_runtime_memory.log",
+          "passed": 16,
+          "ignored": 0,
+          "sha256": "94bac99db3c17c3019c3dae97d4724271aa5ff2d381d1ae56979fdcc8eaadb03"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-core-ops_runtime_metrics.log",
+          "passed": 47,
+          "ignored": 0,
+          "sha256": "f7568adcb6a22e5fb1a35f7b4713f878c77e7efb06bbecae7206d7bc9c523774"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-core-workflow_ic_icp_refill.log",
+          "passed": 50,
+          "ignored": 0,
+          "sha256": "4c9970b06c8382aec9f17cfa7853e484613e430233c2dc17a9033a099d109ed7"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-host-binaryen_.log",
+          "passed": 7,
+          "ignored": 0,
+          "sha256": "9873d2d1a85d4c4890d57ae04655f38286842c1a6caaf5b0b996874a57f0b19d"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-host-build_provenance_.log",
+          "passed": 23,
+          "ignored": 0,
+          "sha256": "f8143e50d3c9d250df2efe5981c11d6f30de8ea7ec0262cfe590aa6e39bea5de"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-host-canister_build_reuse.log",
+          "passed": 44,
+          "ignored": 1,
+          "sha256": "007c1bcf916560c890e11921276a1ea079176c410faaaf8d38c9e7f2836d6e85"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-host-fleet_ensure_ops_current_.log",
+          "passed": 54,
+          "ignored": 1,
+          "sha256": "b3240f7d1517ab7a8b9b9abd1b7042a2689e7e4e627b29eaa8581521702128a4"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-host-fleet_ensure_policy_.log",
+          "passed": 91,
+          "ignored": 0,
+          "sha256": "4c4219eb2c995a06b7ab1124bbbe12a98662d5a7ebc37db93663bf115ed9ca79"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-host-ic_wasm_.log",
+          "passed": 6,
+          "ignored": 0,
+          "sha256": "37ccf978c63a473a4c8a83312e472ab4dbca5c90a7b41a32bbe22907283a1d90"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-host-icp_.log",
+          "passed": 85,
+          "ignored": 0,
+          "sha256": "98b6bb3e0704aeec527da39a077845013e847d2ecc5a7d4bef6f49e89e5162e7"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-host-local_fleet_.log",
+          "passed": 7,
+          "ignored": 1,
+          "sha256": "f75469d6455dafe528b906c1b67a7960ccc2b2c2d8ee7af8a0ffcf77a9ce7500"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-host-policy_gate_.log",
+          "passed": 25,
+          "ignored": 0,
+          "sha256": "9460dced7000687ab43d0600d85ea7d052bfe75eabd93155e94a7c8b6263bc5f"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-host-release_set_config_.log",
+          "passed": 10,
+          "ignored": 0,
+          "sha256": "9eb77fe5a2bee7e06bba9cf5270eb84a9537637a3fd5ce648c9ab48ad72996bd"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-host-state_manifest_.log",
+          "passed": 20,
+          "ignored": 0,
+          "sha256": "910614dc654169d07a1e69e68af9c91f9af919c87b76a61b60d82872e2fb81fd"
+        },
+        {
+          "log": "/tmp/canic-deps-final/canic-host-tool_install_.log",
+          "passed": 8,
+          "ignored": 0,
+          "sha256": "e28d0483609308bf60649c5e70ea7f753d7f1a195ed89e0bbc55301692a18c2e"
+        }
+      ]
+    },
+    "passedChecks": [
+      {
+        "log": "/tmp/canic-deps-final/clippy.log",
+        "sha256": "3ca099b9f4f01580f0f5a2d7192afdc621145911b64e18b8811ed6124d6ccd01"
+      },
+      {
+        "log": "/tmp/canic-deps-final/wasm-root.log",
+        "sha256": "0a966ed10a95461ce66872e751f12709e6d0d3e88c1510e78c7e245f953b4c63"
+      },
+      {
+        "log": "/tmp/canic-deps-final/wasm-store.log",
+        "sha256": "c5ffd7b3338822dc3dff8786bed1de66f6618073839652ee09520f692fb5daf4"
+      },
+      {
+        "log": "/tmp/canic-deps-final/wasm-blob.log",
+        "sha256": "92dfa70d5002049b32f1a9ac82959dca426d2255db5164e829b7ce7e66487391"
+      },
+      {
+        "log": "/tmp/canic-deps-final/shared-verify.log",
+        "sha256": "2ec6d225d2dd85bf397f74443faaf0dc6a11ec36e9356a3f44d2286cc3f7e208"
+      },
+      {
+        "log": "/tmp/canic-deps-final/doc-links.log",
+        "sha256": "1b70637fb4cce8f73c0c2a145da0d75154b2ac71c33c741fad952fc3e8a7b308"
+      }
+    ],
+    "sharedTooling": {
+      "version": "0.26.22",
+      "revision": "5fc904a935d82ad31f0fba14434b71ccb8c10345",
+      "exporter": "canonical reviewed clean source",
+      "executablePayloadChanged": false
+    },
+    "platformAttempt": {
+      "version": "0.7.0",
+      "core": "pass",
+      "blob": "four Principal type mismatches at installation/funding boundaries",
+      "log": "/tmp/canic-deps-final/integration-check.log",
+      "sha256": "02659015b93029853bcd4e68faa3ec51f82b1edd16f619af9f72cd5948fc3e34",
+      "currentDirectSelection": "0.6.21",
+      "prerequisite": "published matching Blob Platform adoption; 0.51.0 currently an unpublished draft",
+      "compatibilityBridgesAdded": false
+    },
+    "interruption": {
+      "reason": "root lock changed again during qualification; Memory/Storage 0.51.9 and transitive Platform 0.7.0",
+      "snapshot": "/tmp/canic-deps-final/root-second-concurrent-change.lock",
+      "sha256": "e6b57f06fe2ae0d155562aedb8843427388a36360299a365dd8d43a33b615a41",
+      "action": "stopped own validation process group; preserved incoming lock and requested other sessions pause Canic updates",
+      "installedCasesRun": false,
+      "peer": "verification build interrupted before completion"
+    },
+    "commands": {
+      "native": "/tmp/canic-deps-final/run-native.sh",
+      "lintAndWasm": "/tmp/canic-deps-final/post-native.sh",
+      "plannedInstalled": "/tmp/canic-deps-final/qualify-installed.sh"
+    },
+    "limitations": [
+      "Passing checks qualify captured root-selected.lock, not the subsequent incoming graph",
+      "Both independent consumer locks unchanged during checks",
+      "No broad gate, Git publication, release, deployment or paid provider operation",
+      "Platform 0.7 adoption and final installed qualification incomplete"
+    ]
+  },
+  "runtimeRefreshFourth20261027": {
+    "kind": "targeted-development-qualification-not-release-validation",
+    "head": "b9482ec526c5dfb9f5dd349d22b1f60190b2dfdf",
+    "dirty": true,
+    "selected": {
+      "blob": "0.50.0",
+      "platformDirect": "0.6.21",
+      "platformTransitive": "0.7.0",
+      "tooling": "0.68.12",
+      "memoryStorage": "0.51.9",
+      "timers": "0.31.9",
+      "backup": "0.44.8",
+      "query": "0.74.5",
+      "wire": "0.7.18",
+      "sharedTooling": "0.26.22"
+    },
+    "locks": [
+      {
+        "path": "Cargo.lock",
+        "sha256": "e1b497fd5728444793483d63256d69d00bcdb555a791f60d806111897cba59fc"
+      },
+      {
+        "path": "integrations/blob-service/consumer/Cargo.lock",
+        "sha256": "3819e6a25a9d44710073a0120f72b2043561dc9124d2e308707dd3ae1125ab1e"
+      },
+      {
+        "path": "integrations/blob-service/embedded-consumer/Cargo.lock",
+        "sha256": "9918e2fde92afc5243ee52a07d72106ab12f94a64ca9093c7964da5882f7496f"
+      }
+    ],
+    "checks": [
+      {
+        "command": "cargo test --locked --offline -p canic-core --lib --all-features ops::runtime::memory",
+        "outcome": "pass",
+        "log": "/tmp/canic-deps-fourth/memory.log",
+        "sha256": "b4e9bd9381d17eba3162db0f8b7670e6c2f99194f6e9f5a3e6b0d161482380e4"
+      },
+      {
+        "command": "cargo test --locked --offline -p canic-core --lib --all-features ops::runtime::timer_status",
+        "outcome": "pass",
+        "log": "/tmp/canic-deps-fourth/timers.log",
+        "sha256": "3fecdaf600c2f217156b15616f4ad63c3776477b205fe2410a4635ecfa507771"
+      },
+      {
+        "command": "cargo clippy --locked --offline -p canic-core -p canic-control-plane -p canic-blob-service --lib --tests --all-features -- -D warnings",
+        "outcome": "pass",
+        "log": "/tmp/canic-deps-fourth/clippy.log",
+        "sha256": "d75f99d020ed6bce73c518097f5cf6a687338dcd13a888d9983875a5b439fb7c"
+      },
+      {
+        "command": "three scoped check-cargo-dependency-boundaries.sh --external-ic checks",
+        "outcome": "pass",
+        "log": "/tmp/canic-deps-fourth/boundaries.log",
+        "sha256": "42c1d1105632a35b121b60ec9047c071aacbdf34b0d6450deaea412ed4376c94"
+      },
+      {
+        "command": "cargo run --locked --offline -p canic-testing-internal --example refresh_embedded_root",
+        "outcome": "pass",
+        "log": "/tmp/canic-deps-fourth/peer-refresh.log",
+        "sha256": "ff1560dd2898ca874bdccb9fd7dc59a87515b46f12ab316e0fbd689a35afabb5"
+      },
+      {
+        "command": "cargo run --locked --offline -p canic-testing-internal --example verify_embedded_root",
+        "outcome": "pass",
+        "log": "/tmp/canic-deps-fourth/peer-final.log",
+        "sha256": "20d44aa3f27866820c40e18e68c9dffe3282509cf09e0497c69b18a1079b062e"
+      },
+      {
+        "command": "make test-pocketic-case CASE=pic::blob_service::tests::managed_browser_compositions",
+        "outcome": "pass",
+        "log": "/tmp/canic-deps-fourth/pic-blob-browser-rerun.log",
+        "sha256": "59797203eb11322c017cd499dd5441370bd5bcad8d9c0f3a9e9cb6460d039284"
+      }
+    ],
+    "browserEnvironment": {
+      "CANIC_FRONTEND_NODE": "/home/adam/.nvm/versions/node/v24.21.0/bin/node",
+      "CANIC_FRONTEND_TYPESCRIPT": "/home/adam/projects/canic/crates/canic-host/examples/frontend-consumer/node_modules/typescript"
+    },
+    "initialFailure": {
+      "log": "/tmp/canic-deps-fourth/pic-blob-browser.log",
+      "reason": "missing CANIC_FRONTEND_NODE after dedicated artifact and recovery work; no production defect; exact case rerun with pinned paths passed"
+    },
+    "nativeTests": 18,
+    "installedProofSeconds": 336,
+    "releaseIds": {
+      "dedicated": "1e72dcbccca0a1b9e7c1e96407bdaa25ed8ee69ba2568faf1ec432ef77326fce",
+      "embedded": "1525df3dca4c5aab9ed1b30f8e5fdea494f0e8471183e76aab05c5e1cb0b0e51"
+    },
+    "peer": {
+      "schema_version": 1,
+      "package": "sharding_root_stub",
+      "target": "wasm32-unknown-unknown",
+      "profile": "fast",
+      "fixture_version": "0.0.0",
+      "source_input_digest": "a123b7e28624ba91455e2632d1eb761be2b63302d9796b2a7a565791c0bcf42e",
+      "build_fingerprint": "6f41306c62e964a78de79a4157b337d31a26f01cc653eef42241e639b0c04b51",
+      "lock_sha256": "e1b497fd5728444793483d63256d69d00bcdb555a791f60d806111897cba59fc",
+      "producer_lock_sha256": "b23cf1acb44afb957a51fdcbb7e1adb15915370554f3891f756408e733eda42e",
+      "artifact_sha256": "48bfb4f4895272e87b9202488920d4f6e776e1d006d1543532851971ae77fc26",
+      "cargo": "cargo 1.99.1 (5f94df478 2026-08-27)\nrelease: 1.99.1\ncommit-hash: 5f94df4789f005f9a352888e8355ffc645b7ed0e\ncommit-date: 2026-08-27\nhost: x86_64-unknown-linux-gnu\nlibgit2: 1.9.6 (sys:0.21.0 vendored)\nlibcurl: 8.21.0-DEV (sys:0.4.90+curl-8.21.0 vendored ssl:OpenSSL/3.6.3)\nssl: OpenSSL 3.6.3 9 Jun 2026\nos: Linux Mint 22.3.0 (zena) [64-bit]\n",
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n"
+    },
+    "limitations": [
+      "No full suite or release qualification",
+      "Malformed-funding case only, not full provider error matrix",
+      "No Root provisioning/retirement rerun for this slice",
+      "Later supplier adoptions require their own evidence"
+    ]
+  },
+  "tooling069AdoptionProbe20261027": {
+    "kind": "blocked-adoption-probe-not-release-qualification",
+    "published": {
+      "tooling": "0.69.0",
+      "backup": "0.45.0",
+      "platform": "0.7.0"
+    },
+    "unpublishedPrerequisites": {
+      "query": "0.75.0",
+      "blob": "0.51.0"
+    },
+    "failures": [
+      {
+        "log": "/tmp/canic-deps-fifth/integration-check.log",
+        "sha256": "588e4094e0a11022a9eb0c5d71811f773bef876b87a64184dd93441c3968aaae",
+        "reason": "Backup 0.44.8 expects Host 0.68 DirectoryChecksumError; direct Tooling 0.69 supplies another Rust type"
+      },
+      {
+        "log": "/tmp/canic-deps-fifth/backup-aligned-check.log",
+        "sha256": "63d97eedc986c17d19e865ceaf0658f5acd1b9ec49a70e4cbe423529ed50b7df",
+        "reason": "After Backup 0.45 alignment, Query 0.74.5 returns Host Tools 0.68 LedgerTip rather than the direct 0.69 type",
+        "source": "crates/canic-host/src/fleet_ensure/ops/operator_mint/receipts/certificate/mod.rs:24"
+      }
+    ],
+    "publicationEvidence": [
+      {
+        "path": "/tmp/canic-deps-fifth/backup-recheck.jsonl",
+        "sha256": "76a315706c5171952f2e58d494a9a45bc4e85810477579151319616965f0e938"
+      },
+      {
+        "path": "/tmp/canic-deps-fifth/query-fresh.jsonl",
+        "sha256": "796ef8b76ba9d822643a31e41f6b846e67f4f60b2669af383f0ccc8aaf160030"
+      },
+      {
+        "path": "/tmp/canic-deps-fifth/blob-fresh.jsonl",
+        "sha256": "a1194b6ac824c259c45c85aed8e4461dfc6b632f8488d530be583210cdaabc5d"
+      }
+    ],
+    "resolution": "Restore direct Tooling 0.68.12 and Backup 0.44.8; retain Platform 0.6.21 until Blob 0.51 publishes. No aliases, conversions, patches or fallback codecs. Adopt Tooling/Backup/Query/Platform/Blob coherently when published."
+  },
+  "latestSupplierAdoption20261027": {
+    "kind": "dependency-selection-only-not-validation",
+    "date": "2026-10-27",
+    "baseCommit": "b9482ec526c5dfb9f5dd349d22b1f60190b2dfdf",
+    "dirty": true,
+    "maintainerInstruction": "dont bother testing just adopt and ill try and release",
+    "publishedPackages": [
+      {
+        "name": "ic-auth-protocol-types",
+        "version": "0.18.0",
+        "checksum": "d5fac8584729308ef9766bc3eeef72dcb19a94eef49c5719b9cff7c44010f145",
+        "publishedAt": "2026-10-27T11:13:01Z"
+      },
+      {
+        "name": "ic-auth",
+        "version": "0.18.0",
+        "checksum": "51a9a096e477110881222f9cbccb7f606ba7450e5ff556c267b312c0376f3fa6",
+        "publishedAt": "2026-10-27T11:13:08Z"
+      },
+      {
+        "name": "ic-backup",
+        "version": "0.45.0",
+        "checksum": "73c0550064ed1f4e982a6551d5f2376c8b5b2ea29f50287aa838673adf90f3f4",
+        "publishedAt": "2026-10-27T11:09:14Z"
+      },
+      {
+        "name": "ic-blob-storage-contracts",
+        "version": "0.51.0",
+        "checksum": "83cae60dbc3fd215e0d37cd80ce75b50620a372533d69c4ef00488dcea534bb1",
+        "publishedAt": "2026-10-27T11:18:04Z"
+      },
+      {
+        "name": "ic-blob-storage",
+        "version": "0.51.0",
+        "checksum": "f1050a83a3511f9335361c7c93e0978f801941a2dcb429c3501f492939b725c6",
+        "publishedAt": "2026-10-27T11:18:21Z"
+      },
+      {
+        "name": "ic-build",
+        "version": "0.69.0",
+        "checksum": "37e6b66125a983e0e579fe9073a2d9dce333f1bac06e879bed88815c1ec9be49",
+        "publishedAt": "2026-10-27T10:52:33Z"
+      },
+      {
+        "name": "ic-host-artifacts",
+        "version": "0.69.0",
+        "checksum": "0be52dbee3196757c330a4b673447eb42c07823210bc6d3308917696e2bf5da7",
+        "publishedAt": "2026-10-27T10:52:22Z"
+      },
+      {
+        "name": "ic-host-fs",
+        "version": "0.69.0",
+        "checksum": "74745003fa19e7036ecaf1523f9aa6348e7bc74c91d3e906299b688d7d3d6979",
+        "publishedAt": "2026-10-27T10:52:27Z"
+      },
+      {
+        "name": "ic-host-process",
+        "version": "0.69.0",
+        "checksum": "bfe52382d0c27f6e2ae313c771d736080ade7493fc6abebd720a65361403ccff",
+        "publishedAt": "2026-10-27T10:52:30Z"
+      },
+      {
+        "name": "ic-host-text",
+        "version": "0.69.0",
+        "checksum": "5fc9e35a34079b5ca9856e4c52915cf76274779353d22f7adb53df6211f00f55",
+        "publishedAt": "2026-10-27T10:52:23Z"
+      },
+      {
+        "name": "ic-host-tools",
+        "version": "0.69.0",
+        "checksum": "b4e92fa3a22d2eb5bee7c12eae93dd96802ca85df65cbe5207883a9e31fa3eef",
+        "publishedAt": "2026-10-27T10:52:34Z"
+      },
+      {
+        "name": "ic-memory",
+        "version": "0.51.10",
+        "checksum": "df69a902952a37e427872ad381a3745539b1dfd4cfe9c21ff2fd4796f71bcc37",
+        "publishedAt": "2026-10-27T11:06:08Z"
+      },
+      {
+        "name": "ic-metrics",
+        "version": "0.16.3",
+        "checksum": "4b29592cae8a0f2d6f1d7d8d4fbd107cfbb3f3ad2e3e18515d7f598665037056",
+        "publishedAt": "2026-10-26T15:47:02Z"
+      },
+      {
+        "name": "ic-platform-macros",
+        "version": "0.7.0",
+        "checksum": "55473c96a300e051643ded29e5904e2efb131f531c322e2b1610619f3052648f",
+        "publishedAt": "2026-10-27T10:18:16Z"
+      },
+      {
+        "name": "ic-platform",
+        "version": "0.7.0",
+        "checksum": "677aad73f8b1339cbe1cd7c851f4140bdcdc91c3838fda425bb82549dcd7c35d",
+        "publishedAt": "2026-10-27T10:18:19Z"
+      },
+      {
+        "name": "ic-query",
+        "version": "0.75.0",
+        "checksum": "926ba83e937056c2d448818c8e6955a567c22a58cdbd7c42899d791f54fc10bd",
+        "publishedAt": "2026-10-27T11:14:15Z"
+      },
+      {
+        "name": "ic-storage",
+        "version": "0.51.10",
+        "checksum": "d17f6a5be22824f33703b0f629210a7366d4a1e2ee6a4ba74dea9025504f33a5",
+        "publishedAt": "2026-10-27T11:06:13Z"
+      },
+      {
+        "name": "ic-testkit",
+        "version": "0.69.0",
+        "checksum": "8a6fdcfb4adf96f7850a6f16e8985db6d90d82562743516a6121f4376e657f97",
+        "publishedAt": "2026-10-27T10:52:36Z"
+      },
+      {
+        "name": "ic-timers",
+        "version": "0.31.10",
+        "checksum": "7b64795c89c99f673d1ce8318eee12446d072ccd4632c462fca35c9aa50d88bb",
+        "publishedAt": "2026-10-27T11:03:00Z"
+      },
+      {
+        "name": "ic-wire",
+        "version": "0.7.18",
+        "checksum": "edd828493d11d764d091290eac815bcea8fca77754d567d818c17236118251bb",
+        "publishedAt": "2026-10-26T17:09:17Z"
+      }
+    ],
+    "selectedGraphs": [
+      {
+        "lock": "Cargo.lock",
+        "icPackages": [
+          {
+            "name": "ic-agent",
+            "version": "0.49.3"
+          },
+          {
+            "name": "ic-auth",
+            "version": "0.18.0"
+          },
+          {
+            "name": "ic-auth-protocol-types",
+            "version": "0.18.0"
+          },
+          {
+            "name": "ic-backup",
+            "version": "0.45.0"
+          },
+          {
+            "name": "ic-blob-storage",
+            "version": "0.51.0"
+          },
+          {
+            "name": "ic-blob-storage-contracts",
+            "version": "0.51.0"
+          },
+          {
+            "name": "ic-build",
+            "version": "0.69.0"
+          },
+          {
+            "name": "ic-cdk-executor",
+            "version": "2.0.0"
+          },
+          {
+            "name": "ic-certification",
+            "version": "3.2.0"
+          },
+          {
+            "name": "ic-ed25519",
+            "version": "0.6.0"
+          },
+          {
+            "name": "ic-host-artifacts",
+            "version": "0.69.0"
+          },
+          {
+            "name": "ic-host-fs",
+            "version": "0.69.0"
+          },
+          {
+            "name": "ic-host-process",
+            "version": "0.69.0"
+          },
+          {
+            "name": "ic-host-text",
+            "version": "0.69.0"
+          },
+          {
+            "name": "ic-host-tools",
+            "version": "0.69.0"
+          },
+          {
+            "name": "ic-management-canister-types",
+            "version": "0.8.0"
+          },
+          {
+            "name": "ic-management-canister-types",
+            "version": "0.11.0"
+          },
+          {
+            "name": "ic-memory",
+            "version": "0.51.10"
+          },
+          {
+            "name": "ic-metrics",
+            "version": "0.16.3"
+          },
+          {
+            "name": "ic-platform",
+            "version": "0.7.0"
+          },
+          {
+            "name": "ic-platform-macros",
+            "version": "0.7.0"
+          },
+          {
+            "name": "ic-query",
+            "version": "0.75.0"
+          },
+          {
+            "name": "ic-secp256k1",
+            "version": "0.3.0"
+          },
+          {
+            "name": "ic-stable-structures",
+            "version": "0.7.2"
+          },
+          {
+            "name": "ic-storage",
+            "version": "0.51.10"
+          },
+          {
+            "name": "ic-testkit",
+            "version": "0.69.0"
+          },
+          {
+            "name": "ic-timers",
+            "version": "0.31.10"
+          },
+          {
+            "name": "ic-transport-types",
+            "version": "0.49.3"
+          },
+          {
+            "name": "ic-verify-bls-signature",
+            "version": "0.6.0"
+          },
+          {
+            "name": "ic-wire",
+            "version": "0.7.18"
+          },
+          {
+            "name": "ic-wire-derive",
+            "version": "0.7.18"
+          }
+        ]
+      },
+      {
+        "lock": "integrations/blob-service/consumer/Cargo.lock",
+        "icPackages": [
+          {
+            "name": "ic-auth",
+            "version": "0.18.0"
+          },
+          {
+            "name": "ic-auth-protocol-types",
+            "version": "0.18.0"
+          },
+          {
+            "name": "ic-blob-storage",
+            "version": "0.51.0"
+          },
+          {
+            "name": "ic-blob-storage-contracts",
+            "version": "0.51.0"
+          },
+          {
+            "name": "ic-cdk-executor",
+            "version": "2.0.0"
+          },
+          {
+            "name": "ic-host-artifacts",
+            "version": "0.69.0"
+          },
+          {
+            "name": "ic-management-canister-types",
+            "version": "0.11.0"
+          },
+          {
+            "name": "ic-memory",
+            "version": "0.51.10"
+          },
+          {
+            "name": "ic-metrics",
+            "version": "0.16.3"
+          },
+          {
+            "name": "ic-platform",
+            "version": "0.7.0"
+          },
+          {
+            "name": "ic-platform-macros",
+            "version": "0.7.0"
+          },
+          {
+            "name": "ic-secp256k1",
+            "version": "0.3.0"
+          },
+          {
+            "name": "ic-stable-structures",
+            "version": "0.7.2"
+          },
+          {
+            "name": "ic-storage",
+            "version": "0.51.10"
+          },
+          {
+            "name": "ic-timers",
+            "version": "0.31.10"
+          },
+          {
+            "name": "ic-wire",
+            "version": "0.7.18"
+          },
+          {
+            "name": "ic-wire-derive",
+            "version": "0.7.18"
+          }
+        ]
+      },
+      {
+        "lock": "integrations/blob-service/embedded-consumer/Cargo.lock",
+        "icPackages": [
+          {
+            "name": "ic-auth",
+            "version": "0.18.0"
+          },
+          {
+            "name": "ic-auth-protocol-types",
+            "version": "0.18.0"
+          },
+          {
+            "name": "ic-blob-storage",
+            "version": "0.51.0"
+          },
+          {
+            "name": "ic-blob-storage-contracts",
+            "version": "0.51.0"
+          },
+          {
+            "name": "ic-cdk-executor",
+            "version": "2.0.0"
+          },
+          {
+            "name": "ic-host-artifacts",
+            "version": "0.69.0"
+          },
+          {
+            "name": "ic-management-canister-types",
+            "version": "0.11.0"
+          },
+          {
+            "name": "ic-memory",
+            "version": "0.51.10"
+          },
+          {
+            "name": "ic-metrics",
+            "version": "0.16.3"
+          },
+          {
+            "name": "ic-platform",
+            "version": "0.7.0"
+          },
+          {
+            "name": "ic-platform-macros",
+            "version": "0.7.0"
+          },
+          {
+            "name": "ic-secp256k1",
+            "version": "0.3.0"
+          },
+          {
+            "name": "ic-stable-structures",
+            "version": "0.7.2"
+          },
+          {
+            "name": "ic-storage",
+            "version": "0.51.10"
+          },
+          {
+            "name": "ic-timers",
+            "version": "0.31.10"
+          },
+          {
+            "name": "ic-wire",
+            "version": "0.7.18"
+          },
+          {
+            "name": "ic-wire-derive",
+            "version": "0.7.18"
+          }
+        ]
+      }
+    ],
+    "inputs": [
+      {
+        "path": "Cargo.toml",
+        "sha256": "349cb4afdfaed723011d4519f7e115f642f4180e1a922b49125cc25f2bc233a9"
+      },
+      {
+        "path": "Cargo.lock",
+        "sha256": "7338746b99f2d5a55d78dceb05b0a8f77e729388646daf2e6da2f78724482d92"
+      },
+      {
+        "path": "integrations/blob-service/consumer/Cargo.toml",
+        "sha256": "449be33074514fd34654294c28cb92c78d4dc4bfacd38d9a2a37af7f4fb69c96"
+      },
+      {
+        "path": "integrations/blob-service/consumer/Cargo.lock",
+        "sha256": "9c7f33a06e16719fb265e796e8502e960532b2236b6e9e1403878802dde84e13"
+      },
+      {
+        "path": "integrations/blob-service/embedded-consumer/Cargo.toml",
+        "sha256": "2d23cbd131acade9d83756712a3931f512ebb7240537ee30d8e0e5bc6386e57b"
+      },
+      {
+        "path": "integrations/blob-service/embedded-consumer/Cargo.lock",
+        "sha256": "dfc6adfb6e8a59d62fffc47937d312f56c9a933f5dff911916f5f0b05dd37cd0"
+      }
+    ],
+    "sharedTooling": {
+      "version": "0.26.22",
+      "revision": "5fc904a935d82ad31f0fba14434b71ccb8c10345"
+    },
+    "validation": {
+      "finalGraphCompiled": false,
+      "finalGraphTested": false,
+      "reason": "Maintainer selected adoption without further tests or builds. Earlier passing results qualify only their recorded graphs."
+    },
+    "allocationPeer": {
+      "regeneratedForFinalGraph": false,
+      "note": "Checked-in fixture and provenance retain the earlier graph; maintainer release validation owns required freshness checks and regeneration."
+    },
+    "evidenceDirectory": "/tmp/canic-deps-latest/",
+    "publicationPerformed": false,
+    "note": "Root and both independent consumer locks select one Platform 0.7.0 identity. Earlier supplier publication blockers are superseded; no complete release qualification is claimed."
   }
 }

@@ -1,7 +1,7 @@
 # Independent frontend consumer
 
 This small consumer qualifies Canic's frontend manifest using the published
-`@tokostudios/ic-platform` 0.1.0 boundary. Its package lock pins transitive
+`@tokostudios/ic-platform` 0.1.1 boundary. Its package lock pins transitive
 SDK Core 6.1.1 and TypeScript
 6.0.3 for declaration checks and export compilation, with Node 24.21.0 and npm 12.2.0. These are explicit
 qualification versions; they are not a claim about the latest SDK or Toko's
@@ -32,7 +32,7 @@ Ed25519 identities directly and does not install a browser login provider.
 ## Platform boundary adoption
 
 The canonical browser SDK owner is the published `@tokostudios/ic-platform`
-0.1.0 package, using SDK Core 6.1.1. Agent/Principal/Ed25519 imports use its
+0.1.1 package, using SDK Core 6.1.1. Agent/Principal/Ed25519 imports use its
 explicit subpaths. `createAgentOptions` retains the admitted origin and root,
 three retries, query verification and disabled construction-time synchronization;
 `queryRaw` owns query rejection conversion. Updates retain SDK polling behavior.

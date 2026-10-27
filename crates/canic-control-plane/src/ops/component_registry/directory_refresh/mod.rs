@@ -27,10 +27,7 @@ use crate::{
 use canic_contracts::{
     dto::{
         component_provisioning::ComponentGroupDirectory,
-        component_registry::{
-            ComponentDirectoryHead, ComponentDirectoryProvenance, ComponentLifecycleStatus,
-            ComponentRegistryHead, ComponentRuntimeDirectoryAuthority,
-        },
+        component_registry::{ComponentLifecycleStatus, ComponentRegistryHead},
         fleet_registry::FleetDirectorySnapshot,
     },
     ids::ComponentInstanceId,
@@ -142,20 +139,15 @@ impl ComponentRegistryOps {
             revision,
             content_hash,
         };
-        let authority = ComponentRuntimeDirectoryAuthority {
-            fleet: fleet_directory,
-            component: ComponentDirectoryHead {
-                provenance: ComponentDirectoryProvenance {
-                    component: partition.binding.clone(),
-                    source_fleet_subnet_root: partition.binding.fleet_subnet_root,
-                    component_registry_revision: revision,
-                    component_registry_content_hash: content_hash,
-                    synchronized_at_ns: directory_synchronized_at_ns,
-                },
-                descendant_count: partition.committed_descendants,
-            },
+        let authority = crate::ops::component_registry::directory_authority(
+            &partition.binding,
+            revision,
+            content_hash,
+            directory_synchronized_at_ns,
+            partition.committed_descendants,
+            fleet_directory,
             component_group,
-        };
+        );
         let directory_authority_hash = ComponentRuntimeOps::directory_authority_hash(&authority)?;
         Ok(RootComponentDirectoryRefreshPlanView {
             allocation_operation_id: target.allocation_operation_id,
@@ -253,20 +245,15 @@ impl ComponentRegistryOps {
         {
             return Err(InternalError::conflict());
         }
-        let authority = ComponentRuntimeDirectoryAuthority {
-            fleet: fleet_directory,
-            component: ComponentDirectoryHead {
-                provenance: ComponentDirectoryProvenance {
-                    component: partition.binding.clone(),
-                    source_fleet_subnet_root: partition.binding.fleet_subnet_root,
-                    component_registry_revision: partition.revision,
-                    component_registry_content_hash: partition.content_hash,
-                    synchronized_at_ns: partition.directory_synchronized_at_ns,
-                },
-                descendant_count: partition.committed_descendants,
-            },
+        let authority = crate::ops::component_registry::directory_authority(
+            &partition.binding,
+            partition.revision,
+            partition.content_hash,
+            partition.directory_synchronized_at_ns,
+            partition.committed_descendants,
+            fleet_directory,
             component_group,
-        };
+        );
         let plan = RootComponentDirectoryRefreshPlanView {
             allocation_operation_id: intent.allocation_operation_id,
             previous_registry: intent.previous_registry.clone(),

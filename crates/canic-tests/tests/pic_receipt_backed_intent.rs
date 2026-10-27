@@ -124,7 +124,7 @@ const RECEIPT_LIMITS: ic_wire::Limits = ic_wire::Limits {
     depth: 32,
 };
 
-fn receipt_spec(method: &'static str, method_id: u64) -> ic_testkit::pic::WireCallSpec {
+const fn receipt_spec(method: &'static str, method_id: u64) -> ic_testkit::pic::WireCallSpec {
     ic_testkit::pic::WireCallSpec {
         method,
         method_id,

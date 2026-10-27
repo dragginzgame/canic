@@ -12,4 +12,4 @@ pub const RESPONSE_LIMITS: ic_wire::Limits = ic_wire::Limits {
     nodes: 131_072,
     depth: 32,
 };
-pub const BALANCE: u64 = 0x4155445400000016;
+pub const BALANCE: u64 = 0x4155_4454_0000_0016;

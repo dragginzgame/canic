@@ -94,43 +94,50 @@ impl PolicyReportBuilder {
     }
 
     fn evaluate_payload_schema(&mut self, policy: &CiPolicyV1, envelope: &EvidenceEnvelopeV1) {
-        let requirement_id = "envelope.allowed_payload_schemas";
-        let Some(allowed) = policy.envelope.allowed_payload_schemas.as_ref() else {
-            return;
-        };
-        let actual = envelope.payload_schema.id.clone();
-        if allowed.contains(&actual) {
-            self.pass(requirement_id);
-            return;
-        }
-        self.fail(
-            requirement_id,
-            PolicyFindingV1::error(
-                "policy.payload_schema.disallowed",
-                format!("payload schema '{actual}' is not allowed by policy"),
-                requirement_id,
-                ExitClassV1::BlockedByPolicy,
-            )
-            .expected(serde_json::json!(allowed))
-            .actual(serde_json::json!(actual)),
+        self.evaluate_payload_allow_list(
+            policy.envelope.allowed_payload_schemas.as_deref(),
+            &envelope.payload_schema.id,
+            "envelope.allowed_payload_schemas",
+            "policy.payload_schema.disallowed",
+            || {
+                format!(
+                    "payload schema '{}' is not allowed by policy",
+                    envelope.payload_schema.id
+                )
+            },
         );
     }
 
     fn evaluate_payload_stability(&mut self, policy: &CiPolicyV1, envelope: &EvidenceEnvelopeV1) {
-        let requirement_id = "envelope.allowed_payload_stability";
-        let Some(allowed) = policy.envelope.allowed_payload_stability.as_ref() else {
+        self.evaluate_payload_allow_list(
+            policy.envelope.allowed_payload_stability.as_deref(),
+            &envelope.payload_schema.stability,
+            "envelope.allowed_payload_stability",
+            "policy.payload_stability.disallowed",
+            || "payload schema stability is not allowed by policy".to_string(),
+        );
+    }
+
+    fn evaluate_payload_allow_list<T: PartialEq + serde::Serialize>(
+        &mut self,
+        allowed: Option<&[T]>,
+        actual: &T,
+        requirement_id: &'static str,
+        code: &'static str,
+        failure: impl FnOnce() -> String,
+    ) {
+        let Some(allowed) = allowed else {
             return;
         };
-        let actual = envelope.payload_schema.stability;
-        if allowed.contains(&actual) {
+        if allowed.contains(actual) {
             self.pass(requirement_id);
             return;
         }
         self.fail(
             requirement_id,
             PolicyFindingV1::error(
-                "policy.payload_stability.disallowed",
-                "payload schema stability is not allowed by policy",
+                code,
+                failure(),
                 requirement_id,
                 ExitClassV1::BlockedByPolicy,
             )

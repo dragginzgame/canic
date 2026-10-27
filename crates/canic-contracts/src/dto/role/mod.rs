@@ -150,8 +150,8 @@ mod tests {
         let operation = OperationStatusRequest {
             operation_id: [7; 32],
         };
-        let bytes = crate::protocol::authority::encode(&operation)
-            .expect("encode operation status request");
+        let bytes =
+            crate::protocol::authority::encode(operation).expect("encode operation status request");
         assert_eq!(
             crate::protocol::authority::decode::<OperationStatusRequest>(&bytes)
                 .expect("decode operation status request"),
@@ -161,7 +161,7 @@ mod tests {
         let receipt = OperationReceipt {
             operation_id: operation.operation_id,
         };
-        let bytes = crate::protocol::authority::encode(&receipt).expect("encode operation receipt");
+        let bytes = crate::protocol::authority::encode(receipt).expect("encode operation receipt");
         assert_eq!(
             crate::protocol::authority::decode::<OperationReceipt>(&bytes)
                 .expect("decode operation receipt"),

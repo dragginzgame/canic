@@ -283,7 +283,7 @@ fn allocation_reply_keeps_settlement_and_acknowledgement_slots_distinct() {
                     .unwrap();
             let observation = decoded.pop().unwrap();
             assert!(decoded.is_empty());
-            assert_eq!(observation._settled, settled);
+            assert_eq!(observation.settled, settled);
             let allocation = FixtureChildAllocation::from(observation);
             assert_eq!(allocation.acknowledged, acknowledged);
             assert_eq!(allocation.request_id, [9; 32]);

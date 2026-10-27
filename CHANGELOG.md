@@ -16,6 +16,13 @@ owners, and strengthens release-bound observations and interruption recovery.
 
 ### ⚠️ Breaking
 
+- **Supplier refresh:** adopt Platform 0.7.0, Blob Storage/Contracts 0.51.0,
+  Auth/protocol types 0.18.0, Tooling/Host/Testkit 0.69.0, Query 0.75.0 and
+  Backup 0.45.0 with matching public type identities. Select Memory/Storage
+  0.51.10 and Timers 0.31.10 across the applicable consumer graphs. Blob-owned
+  records use its bounded Wire storage contract; preserve existing installation
+  obligations. Refresh the canonical Shared Tooling snapshot to 0.26.22.
+
 - **CBOR storage:** use the IC Rust stack's pinned `serde_cbor` and encode stored
   unsigned 128-bit values as exactly 16 big-endian bytes. Preserve the full cycle
   range and numeric Wire transport; regenerate artifacts and cleanly reinstall.
@@ -76,12 +83,17 @@ owners, and strengthens release-bound observations and interruption recovery.
 
 ### 🔧 Changed
 
+- Fix generated metrics endpoints for canisters with no enabled metrics families
+  by making the rejection result type explicit.
+
+- Align the root and both independent Blob consumer catalogs and locks with
+  the published IC family above. Retain browser Platform 0.1.1 and Wire 0.7.18.
 - Delegate installed Blob funding access and preparation to its upstream owner.
   Measure Store request sizes without allocating discarded Wire frames.
 - Validate final endpoint exports against their declared codecs before replacing
   build artifacts; canonical infrastructure DIDs describe lifecycle arguments and
   required external Candid methods.
-- Adopt Auth 0.17.1 and matching protocol types, preserving existing proof,
+- Adopt Auth 0.18.0 and matching protocol types, preserving existing proof,
   session-storage and production activation boundaries.
 
 - Seal native schemas, generated browser runtimes and bindings with final Wasm;
@@ -118,6 +130,11 @@ owners, and strengthens release-bound observations and interruption recovery.
 
 ### 🧹 Cleanup
 
+- Consolidate repeated directory authority, pool cleanup, runtime metrics and
+  Host/CLI mechanics while preserving authority inputs, diagnostics and recovery.
+
+- Derive Core and ICP command error formatting with the existing error library,
+  preserving diagnostic messages, private evidence and source chains (#662).
 - Remove exhausted owned-Candid transports, selectors, projections and duplicate
   local mechanisms. Retain external IC/provider Candid and separately owned
   lifecycle, signed-byte and persistence contracts.

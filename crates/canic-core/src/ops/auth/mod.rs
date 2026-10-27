@@ -8,6 +8,7 @@ pub mod application_authorization;
 mod attestation;
 #[cfg(feature = "auth-root-canister-sig-verify")]
 mod canister_signature;
+mod chain_key_config;
 mod crypto;
 mod delegated;
 mod delegation;

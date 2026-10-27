@@ -114,20 +114,7 @@ pub fn begin(
 }
 
 fn save(directory: &Path, record: &LocalPreparationRecord) -> Result<(), LocalFleetError> {
-    let bytes = serde_json::to_vec_pretty(record)?;
-    if bytes.len() > 4 * 1024 * 1024 {
-        return Err(LocalFleetError::Capacity);
-    }
-    durable::write_bytes(
-        &directory.join("preparation.json"),
-        WriteOptions {
-            mode: PublicationMode::Replace,
-            permissions: 0o666,
-        },
-        &bytes,
-    )
-    .map_err(crate::publication::ops::io_error)?;
-    Ok(())
+    super::publish_record(&directory.join("preparation.json"), record, 4 * 1024 * 1024)
 }
 
 /// Convert each named source role into one explicit simulator allocation input.

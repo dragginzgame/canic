@@ -3577,37 +3577,40 @@ fn optional_init_arg_sha256(
     artifacts: &DesiredFleetArtifacts,
     configured: &crate::fleet_ensure::model::DesiredCanister,
 ) -> Result<Option<String>, EnsurePolicyError> {
-    configured
-        .init_arg
-        .as_ref()
-        .map(|_| {
-            artifacts
-                .init_arg_sha256_by_canister
-                .get(&configured.name)
-                .cloned()
-                .ok_or_else(|| EnsurePolicyError::MissingArtifactIdentity {
-                    kind: "init argument",
-                    name: configured.name.clone(),
-                })
-        })
-        .transpose()
+    optional_artifact_sha256(
+        configured.init_arg.is_some(),
+        &artifacts.init_arg_sha256_by_canister,
+        &configured.name,
+        "init argument",
+    )
 }
 
 fn optional_init_candid_sha256(
     artifacts: &DesiredFleetArtifacts,
     configured: &crate::fleet_ensure::model::DesiredCanister,
 ) -> Result<Option<String>, EnsurePolicyError> {
-    configured
-        .init_candid
-        .as_ref()
-        .map(|_| {
-            artifacts
-                .init_candid_sha256_by_canister
-                .get(&configured.name)
+    optional_artifact_sha256(
+        configured.init_candid.is_some(),
+        &artifacts.init_candid_sha256_by_canister,
+        &configured.name,
+        "init Candid",
+    )
+}
+
+fn optional_artifact_sha256(
+    present: bool,
+    hashes: &std::collections::BTreeMap<String, String>,
+    name: &str,
+    kind: &'static str,
+) -> Result<Option<String>, EnsurePolicyError> {
+    present
+        .then(|| {
+            hashes
+                .get(name)
                 .cloned()
                 .ok_or_else(|| EnsurePolicyError::MissingArtifactIdentity {
-                    kind: "init Candid",
-                    name: configured.name.clone(),
+                    kind,
+                    name: name.to_string(),
                 })
         })
         .transpose()

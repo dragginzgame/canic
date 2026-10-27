@@ -16,6 +16,6 @@ pub const RESPONSE_LIMITS: ic_wire::Limits = ic_wire::Limits {
     depth: 8,
 };
 
-pub const OVERVIEW: u64 = 0x44454d4f00000200;
+pub const OVERVIEW: u64 = 0x4445_4d4f_0000_0200;
 
-pub const DESCRIBE: u64 = 0x44454d4f00000201;
+pub const DESCRIBE: u64 = 0x4445_4d4f_0000_0201;

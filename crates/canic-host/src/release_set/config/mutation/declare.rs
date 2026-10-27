@@ -1,11 +1,9 @@
-use super::{
-    DeclaredAppRoleSource,
-    support::{admit_canister_role_name, toml_string_literal},
-};
+use super::{DeclaredAppRoleSource, support::admit_canister_role_name};
 use crate::release_set::config::{
     AppConfigError, AppConfigMutationConflict, AppConfigNameField, AppConfigNameIssue,
     AppConfigOperation, model::DeclaredAppRole,
 };
+use crate::toml_support::toml_string_literal;
 use canic_contracts::ids::CanisterRole;
 use canic_core::bootstrap::parse_config_model;
 

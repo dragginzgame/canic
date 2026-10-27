@@ -82,12 +82,20 @@ pub fn read_record(directory: &Path) -> Result<Option<LocalFleetRecord>, LocalFl
 
 /// Publish a complete record before another local effect can be attempted.
 pub fn write_record(directory: &Path, record: &LocalFleetRecord) -> Result<(), LocalFleetError> {
+    publish_record(&directory.join("environment.json"), record, 1024 * 1024)
+}
+
+fn publish_record(
+    path: &Path,
+    record: &impl serde::Serialize,
+    maximum_bytes: usize,
+) -> Result<(), LocalFleetError> {
     let bytes = serde_json::to_vec_pretty(record)?;
-    if bytes.len() > 1024 * 1024 {
+    if bytes.len() > maximum_bytes {
         return Err(LocalFleetError::Capacity);
     }
     durable::write_bytes(
-        &directory.join("environment.json"),
+        path,
         WriteOptions {
             mode: PublicationMode::Replace,
             permissions: 0o666,

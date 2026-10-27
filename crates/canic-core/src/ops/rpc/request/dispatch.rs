@@ -48,6 +48,7 @@ impl RequestOps {
         A: serde::Serialize + Send + Sync,
     {
         Self::create_canister_with_metadata(
+            CreateCanisterCommand::Generic,
             canister_role,
             parent,
             extra,
@@ -66,7 +67,8 @@ impl RequestOps {
     where
         A: serde::Serialize + Send + Sync,
     {
-        Self::allocate_placement_child_with_metadata(
+        Self::create_canister_with_metadata(
+            CreateCanisterCommand::Placement,
             canister_role,
             parent,
             extra,
@@ -91,6 +93,7 @@ impl RequestOps {
     }
 
     async fn create_canister_with_metadata<A>(
+        command: CreateCanisterCommand,
         canister_role: &CanisterRole,
         parent: CreateCanisterParent,
         extra: Option<A>,
@@ -108,35 +111,7 @@ impl RequestOps {
         RpcOps::execute_response_rpc(
             root_pid,
             CreateCanisterRpc {
-                command: CreateCanisterCommand::Generic,
-                canister_role: canister_role.clone(),
-                parent,
-                extra_arg,
-                metadata: Some(metadata),
-            },
-        )
-        .await
-    }
-
-    async fn allocate_placement_child_with_metadata<A>(
-        canister_role: &CanisterRole,
-        parent: CreateCanisterParent,
-        extra: Option<A>,
-        metadata: RootRequestMetadata,
-    ) -> Result<CreateCanisterResponse, InternalError>
-    where
-        A: serde::Serialize + Send + Sync,
-    {
-        let extra_arg = extra
-            .map(encode)
-            .transpose()
-            .map_err(|_err| InternalError::invariant())?;
-
-        let root_pid = EnvOps::root_pid()?;
-        RpcOps::execute_response_rpc(
-            root_pid,
-            CreateCanisterRpc {
-                command: CreateCanisterCommand::Placement,
+                command,
                 canister_role: canister_role.clone(),
                 parent,
                 extra_arg,

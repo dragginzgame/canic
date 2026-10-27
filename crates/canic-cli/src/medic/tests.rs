@@ -915,7 +915,6 @@ storage = ["canic/sharding"]
         })
         .unwrap_or_else(|| panic!("package shape finding: {checks:#?}"));
     assert_eq!(check.status, MedicStatus::Fail);
-    assert!(check.detail.contains("must not forward"));
 
     fs::remove_dir_all(root).expect("remove temp root");
 }

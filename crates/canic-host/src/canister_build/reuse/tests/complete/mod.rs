@@ -272,8 +272,7 @@ fn artifact(root: &Path, name: &str, release: ReleaseBuildId) -> (PathBuf, PathB
         .join("artifacts");
     fs::create_dir_all(&directory).unwrap();
     // Byte-admission fixture only: no executable IC behavior is claimed.
-    let mut bytes = b"\0asm".to_vec();
-    bytes.extend_from_slice(release.to_string().as_bytes());
+    let bytes = crate::test_support::wire_wasm(release.to_string().as_bytes());
     let path = directory.join(format!("{name}.wasm"));
     let gzip_path = directory.join(format!("{name}.wasm.gz"));
     let mut encoder = GzBuilder::new()
@@ -281,6 +280,11 @@ fn artifact(root: &Path, name: &str, release: ReleaseBuildId) -> (PathBuf, PathB
         .write(Vec::new(), Compression::fast());
     encoder.write_all(&bytes).unwrap();
     fs::write(&path, &bytes).unwrap();
+    fs::write(
+        path.with_extension("wire.json"),
+        crate::test_support::WIRE_SCHEMA,
+    )
+    .unwrap();
     fs::write(&gzip_path, encoder.finish().unwrap()).unwrap();
     (path, gzip_path)
 }

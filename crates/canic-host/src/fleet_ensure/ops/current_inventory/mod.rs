@@ -1794,18 +1794,7 @@ fn retained_principal(
     state: &FleetEnsureStateRecord,
     name: &str,
 ) -> Result<Principal, CurrentProtocolError> {
-    state
-        .pending_principals
-        .get(name)
-        .or_else(|| state.principals.get(name))
-        .cloned()
-        .or_else(|| {
-            desired
-                .canisters
-                .iter()
-                .find(|canister| canister.name == name)
-                .and_then(|canister| canister.principal.clone())
-        })
+    super::current_protocol::retained_principal(desired, state, name)
         .and_then(|principal| Principal::from_text(principal).ok())
         .ok_or_else(|| inventory_error(format!("{name} has no exact retained Principal")))
 }

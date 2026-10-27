@@ -462,16 +462,15 @@ fn pass(
     subject: &str,
     detail: String,
 ) -> StateAuditCheck {
-    StateAuditCheck {
+    audit_check(
         category,
         code,
-        status: StateAuditStatus::Pass,
-        severity: StateAuditSeverity::Info,
-        subject: subject.to_string(),
+        subject,
         detail,
-        next: None,
-        source: SOURCE_STATE_MANIFEST,
-    }
+        StateAuditStatus::Pass,
+        StateAuditSeverity::Info,
+        None,
+    )
 }
 
 fn warn(
@@ -481,16 +480,15 @@ fn warn(
     detail: String,
     next: &str,
 ) -> StateAuditCheck {
-    StateAuditCheck {
+    audit_check(
         category,
         code,
-        status: StateAuditStatus::Warn,
-        severity: StateAuditSeverity::Warning,
-        subject: subject.to_string(),
+        subject,
         detail,
-        next: Some(next.to_string()),
-        source: SOURCE_STATE_MANIFEST,
-    }
+        StateAuditStatus::Warn,
+        StateAuditSeverity::Warning,
+        Some(next),
+    )
 }
 
 fn fail(
@@ -500,14 +498,34 @@ fn fail(
     detail: String,
     next: &str,
 ) -> StateAuditCheck {
+    audit_check(
+        category,
+        code,
+        subject,
+        detail,
+        StateAuditStatus::Fail,
+        StateAuditSeverity::Blocked,
+        Some(next),
+    )
+}
+
+fn audit_check(
+    category: StateAuditCategory,
+    code: &'static str,
+    subject: &str,
+    detail: String,
+    status: StateAuditStatus,
+    severity: StateAuditSeverity,
+    next: Option<&str>,
+) -> StateAuditCheck {
     StateAuditCheck {
         category,
         code,
-        status: StateAuditStatus::Fail,
-        severity: StateAuditSeverity::Blocked,
+        status,
+        severity,
         subject: subject.to_string(),
         detail,
-        next: Some(next.to_string()),
+        next: next.map(str::to_string),
         source: SOURCE_STATE_MANIFEST,
     }
 }

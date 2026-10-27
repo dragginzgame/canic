@@ -1,7 +1,5 @@
 //! Minimal Fleet Subnet Root stub for Registry lifecycle tests.
 
-#![expect(clippy::unused_async)]
-
 mod protocol;
 
 use canic::{Error, api::auth::AuthApi, prelude::*};

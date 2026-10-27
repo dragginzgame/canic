@@ -4,6 +4,7 @@
 //! Does not own: stable storage, snapshot publication, transport, or root lifecycle effects.
 //! Boundary: the parent ops module calls this against one compiled Component Topology.
 
+use super::compare_service_members;
 use crate::{
     config::{ComponentTopology, ComponentTopologyError, FleetServiceMemberPurpose},
     dto::fleet_registry::{
@@ -465,24 +466,5 @@ impl FleetServicePlacementAssessment {
             && self.minimum_distinct_roots > 0
             && self.actual_distinct_roots >= self.required_distinct_roots
             && self.root_density_within_limit
-    }
-}
-
-fn compare_service_members(
-    left: &FleetServiceComponentBinding,
-    right: &FleetServiceComponentBinding,
-) -> std::cmp::Ordering {
-    service_member_purpose_tag(left.member_purpose)
-        .cmp(&service_member_purpose_tag(right.member_purpose))
-        .then_with(|| left.group_placement.cmp(&right.group_placement))
-        .then_with(|| left.member_path.cmp(&right.member_path))
-        .then_with(|| left.component.cmp(&right.component))
-}
-
-const fn service_member_purpose_tag(purpose: FleetServiceMemberPurpose) -> u8 {
-    match purpose {
-        FleetServiceMemberPurpose::Authority => 0,
-        FleetServiceMemberPurpose::Replica => 1,
-        FleetServiceMemberPurpose::PoolMember => 2,
     }
 }

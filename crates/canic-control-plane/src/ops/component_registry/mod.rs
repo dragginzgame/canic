@@ -4033,22 +4033,15 @@ fn committed_records(
         revision,
         content_hash,
     };
-    let directory = ComponentDirectoryHead {
-        provenance: ComponentDirectoryProvenance {
-            component: installation.binding.clone(),
-            source_fleet_subnet_root: installation.binding.fleet_subnet_root,
-            component_registry_revision: registry.revision,
-            component_registry_content_hash: registry.content_hash,
-            synchronized_at_ns: directory_synchronized_at_ns,
-        },
-        descendant_count: 0,
-    };
-    let directory_authority_hash =
-        ComponentRuntimeOps::directory_authority_hash(&ComponentRuntimeDirectoryAuthority {
-            fleet: fleet_directory.clone(),
-            component: directory,
-            component_group: None,
-        })?;
+    let directory_authority_hash = component_directory_authority_hash_with_group(
+        &installation.binding,
+        registry.revision,
+        registry.content_hash,
+        directory_synchronized_at_ns,
+        0,
+        fleet_directory,
+        None,
+    )?;
     let mut next_record = record.clone();
     next_record.progress = RootComponentAllocationProgressRecord::Committed {
         creation: creation.clone(),
@@ -4253,6 +4246,49 @@ fn component_directory_authority_hash(
     )
 }
 
+/// Project the exact supplied registry revision and synchronization evidence into a directory head.
+pub fn directory_head(
+    binding: &ComponentBinding,
+    revision: u64,
+    content_hash: [u8; 32],
+    synchronized_at_ns: u64,
+    descendant_count: u32,
+) -> ComponentDirectoryHead {
+    ComponentDirectoryHead {
+        provenance: ComponentDirectoryProvenance {
+            component: binding.clone(),
+            source_fleet_subnet_root: binding.fleet_subnet_root,
+            component_registry_revision: revision,
+            component_registry_content_hash: content_hash,
+            synchronized_at_ns,
+        },
+        descendant_count,
+    }
+}
+
+/// Compose authority without replacing retained registry evidence with current live state.
+pub fn directory_authority(
+    binding: &ComponentBinding,
+    revision: u64,
+    content_hash: [u8; 32],
+    synchronized_at_ns: u64,
+    descendant_count: u32,
+    fleet: FleetDirectorySnapshot,
+    component_group: Option<ComponentGroupDirectory>,
+) -> ComponentRuntimeDirectoryAuthority {
+    ComponentRuntimeDirectoryAuthority {
+        fleet,
+        component: directory_head(
+            binding,
+            revision,
+            content_hash,
+            synchronized_at_ns,
+            descendant_count,
+        ),
+        component_group,
+    }
+}
+
 fn component_directory_authority_hash_with_group(
     binding: &ComponentBinding,
     revision: u64,
@@ -4262,20 +4298,15 @@ fn component_directory_authority_hash_with_group(
     fleet_directory: &FleetDirectorySnapshot,
     component_group: Option<&ComponentGroupDirectory>,
 ) -> Result<[u8; 32], InternalError> {
-    ComponentRuntimeOps::directory_authority_hash(&ComponentRuntimeDirectoryAuthority {
-        fleet: fleet_directory.clone(),
-        component: ComponentDirectoryHead {
-            provenance: ComponentDirectoryProvenance {
-                component: binding.clone(),
-                source_fleet_subnet_root: binding.fleet_subnet_root,
-                component_registry_revision: revision,
-                component_registry_content_hash: content_hash,
-                synchronized_at_ns,
-            },
-            descendant_count,
-        },
-        component_group: component_group.cloned(),
-    })
+    ComponentRuntimeOps::directory_authority_hash(&directory_authority(
+        binding,
+        revision,
+        content_hash,
+        synchronized_at_ns,
+        descendant_count,
+        fleet_directory.clone(),
+        component_group.cloned(),
+    ))
 }
 
 fn exact_committed_child_partition(
@@ -4552,20 +4583,15 @@ fn validate_membership_directory_authority_hash(
     component_group: Option<&ComponentGroupDirectory>,
     membership: &RootComponentMembershipRecord,
 ) -> Result<(), InternalError> {
-    let authority = ComponentRuntimeDirectoryAuthority {
-        fleet: fleet_directory.clone(),
-        component: ComponentDirectoryHead {
-            provenance: ComponentDirectoryProvenance {
-                component: partition.binding.clone(),
-                source_fleet_subnet_root: partition.binding.fleet_subnet_root,
-                component_registry_revision: partition.revision,
-                component_registry_content_hash: partition.content_hash,
-                synchronized_at_ns: partition.directory_synchronized_at_ns,
-            },
-            descendant_count: membership.committed_descendants,
-        },
-        component_group: component_group.cloned(),
-    };
+    let authority = directory_authority(
+        &partition.binding,
+        partition.revision,
+        partition.content_hash,
+        partition.directory_synchronized_at_ns,
+        membership.committed_descendants,
+        fleet_directory.clone(),
+        component_group.cloned(),
+    );
     if ComponentRuntimeOps::directory_authority_hash(&authority)?
         != membership.directory_authority_hash
     {
@@ -4580,20 +4606,15 @@ fn validate_child_directory_authority_hash(
     component_group: Option<&ComponentGroupDirectory>,
     commitment: &RootComponentChildCommitmentRecord,
 ) -> Result<(), InternalError> {
-    let authority = ComponentRuntimeDirectoryAuthority {
-        fleet: fleet_directory.clone(),
-        component: ComponentDirectoryHead {
-            provenance: ComponentDirectoryProvenance {
-                component: partition.binding.clone(),
-                source_fleet_subnet_root: partition.binding.fleet_subnet_root,
-                component_registry_revision: commitment.registry.revision,
-                component_registry_content_hash: commitment.registry.content_hash,
-                synchronized_at_ns: commitment.directory_synchronized_at_ns,
-            },
-            descendant_count: commitment.committed_descendants,
-        },
-        component_group: component_group.cloned(),
-    };
+    let authority = directory_authority(
+        &partition.binding,
+        commitment.registry.revision,
+        commitment.registry.content_hash,
+        commitment.directory_synchronized_at_ns,
+        commitment.committed_descendants,
+        fleet_directory.clone(),
+        component_group.cloned(),
+    );
     if ComponentRuntimeOps::directory_authority_hash(&authority)?
         != commitment.directory_authority_hash
     {
@@ -4608,20 +4629,15 @@ fn validate_child_membership_directory_authority_hash(
     component_group: Option<&ComponentGroupDirectory>,
     membership: &RootComponentChildMembershipRecord,
 ) -> Result<(), InternalError> {
-    let authority = ComponentRuntimeDirectoryAuthority {
-        fleet: fleet_directory.clone(),
-        component: ComponentDirectoryHead {
-            provenance: ComponentDirectoryProvenance {
-                component: partition.binding.clone(),
-                source_fleet_subnet_root: partition.binding.fleet_subnet_root,
-                component_registry_revision: membership.registry.revision,
-                component_registry_content_hash: membership.registry.content_hash,
-                synchronized_at_ns: membership.directory_synchronized_at_ns,
-            },
-            descendant_count: membership.committed_descendants,
-        },
-        component_group: component_group.cloned(),
-    };
+    let authority = directory_authority(
+        &partition.binding,
+        membership.registry.revision,
+        membership.registry.content_hash,
+        membership.directory_synchronized_at_ns,
+        membership.committed_descendants,
+        fleet_directory.clone(),
+        component_group.cloned(),
+    );
     if ComponentRuntimeOps::directory_authority_hash(&authority)?
         != membership.directory_authority_hash
     {
@@ -4635,20 +4651,15 @@ fn validate_directory_authority_hash(
     fleet_directory: &FleetDirectorySnapshot,
     commitment: &RootComponentCommitmentRecord,
 ) -> Result<(), InternalError> {
-    let authority = ComponentRuntimeDirectoryAuthority {
-        fleet: fleet_directory.clone(),
-        component: ComponentDirectoryHead {
-            provenance: ComponentDirectoryProvenance {
-                component: partition.binding.clone(),
-                source_fleet_subnet_root: partition.binding.fleet_subnet_root,
-                component_registry_revision: partition.revision,
-                component_registry_content_hash: partition.content_hash,
-                synchronized_at_ns: partition.directory_synchronized_at_ns,
-            },
-            descendant_count: 0,
-        },
-        component_group: None,
-    };
+    let authority = directory_authority(
+        &partition.binding,
+        partition.revision,
+        partition.content_hash,
+        partition.directory_synchronized_at_ns,
+        0,
+        fleet_directory.clone(),
+        None,
+    );
     if ComponentRuntimeOps::directory_authority_hash(&authority)?
         != commitment.directory_authority_hash
     {

@@ -67,26 +67,14 @@ pub struct CallBuilder<'a> {
     mode: PlatformCallMetricMode,
 }
 
-impl CallBuilder<'_> {
+impl<'a> CallBuilder<'a> {
     // single-arg convenience
     /// Encode a single argument into Candid bytes (fallible).
     pub fn with_arg<A>(self, arg: A) -> Result<Self, InternalError>
     where
         A: CandidType,
     {
-        let mode = self.mode;
-        let inner = match self.inner.with_arg(arg).map_err(OpsError::from) {
-            Ok(inner) => inner,
-            Err(err) => {
-                record_generic_call(
-                    mode,
-                    PlatformCallMetricOutcome::Failed,
-                    PlatformCallMetricReason::CandidEncode,
-                );
-                return Err(err.into());
-            }
-        };
-        Ok(Self { inner, mode })
+        Self::encoded(self.mode, self.inner.with_arg(arg).map_err(OpsError::from))
     }
 
     // multi-arg convenience (IMPORTANT FIX)
@@ -95,19 +83,24 @@ impl CallBuilder<'_> {
     where
         A: ArgumentEncoder,
     {
-        let mode = self.mode;
-        let inner = match self.inner.with_args(args).map_err(OpsError::from) {
-            Ok(inner) => inner,
-            Err(err) => {
-                record_generic_call(
-                    mode,
-                    PlatformCallMetricOutcome::Failed,
-                    PlatformCallMetricReason::CandidEncode,
-                );
-                return Err(err.into());
-            }
-        };
-        Ok(Self { inner, mode })
+        Self::encoded(
+            self.mode,
+            self.inner.with_args(args).map_err(OpsError::from),
+        )
+    }
+
+    fn encoded(
+        mode: PlatformCallMetricMode,
+        result: Result<InfraCallBuilder<'a>, OpsError>,
+    ) -> Result<Self, InternalError> {
+        result.map(|inner| Self { inner, mode }).map_err(|err| {
+            record_generic_call(
+                mode,
+                PlatformCallMetricOutcome::Failed,
+                PlatformCallMetricReason::CandidEncode,
+            );
+            err.into()
+        })
     }
 
     /// Use pre-encoded Candid arguments (no validation performed).
@@ -172,52 +165,28 @@ impl CallResult {
         self.inner.into_bytes()
     }
 
+    fn decoded<R>(&self, result: Result<R, OpsError>) -> Result<R, InternalError> {
+        let outcome = if result.is_ok() {
+            PlatformCallMetricOutcome::Completed
+        } else {
+            PlatformCallMetricOutcome::Failed
+        };
+        record_generic_call(self.mode, outcome, PlatformCallMetricReason::CandidDecode);
+        result.map_err(InternalError::from)
+    }
+
     pub fn candid<R>(&self) -> Result<R, InternalError>
     where
         R: CandidType + DeserializeOwned,
     {
-        match self.inner.candid().map_err(OpsError::from) {
-            Ok(value) => {
-                record_generic_call(
-                    self.mode,
-                    PlatformCallMetricOutcome::Completed,
-                    PlatformCallMetricReason::CandidDecode,
-                );
-                Ok(value)
-            }
-            Err(err) => {
-                record_generic_call(
-                    self.mode,
-                    PlatformCallMetricOutcome::Failed,
-                    PlatformCallMetricReason::CandidDecode,
-                );
-                Err(err.into())
-            }
-        }
+        self.decoded(self.inner.candid().map_err(OpsError::from))
     }
 
     pub fn candid_tuple<R>(&self) -> Result<R, InternalError>
     where
         R: for<'de> ArgumentDecoder<'de>,
     {
-        match self.inner.candid_tuple().map_err(OpsError::from) {
-            Ok(value) => {
-                record_generic_call(
-                    self.mode,
-                    PlatformCallMetricOutcome::Completed,
-                    PlatformCallMetricReason::CandidDecode,
-                );
-                Ok(value)
-            }
-            Err(err) => {
-                record_generic_call(
-                    self.mode,
-                    PlatformCallMetricOutcome::Failed,
-                    PlatformCallMetricReason::CandidDecode,
-                );
-                Err(err.into())
-            }
-        }
+        self.decoded(self.inner.candid_tuple().map_err(OpsError::from))
     }
 }
 

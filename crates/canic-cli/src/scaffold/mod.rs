@@ -5,6 +5,7 @@
 //! state mutation.
 //! Boundary: validates CLI input and writes new local source/config files only.
 
+use canic_host::toml_support::toml_string_literal;
 #[cfg(test)]
 mod tests;
 
@@ -927,22 +928,6 @@ fn canister_package_name(app: &str, role: &str) -> String {
 
 fn display_path(workspace_root: &Path, path: &Path) -> PathBuf {
     PathBuf::from(display_workspace_path(workspace_root, path))
-}
-
-fn toml_string_literal(value: &str) -> String {
-    let mut escaped = String::from("\"");
-    for ch in value.chars() {
-        match ch {
-            '\\' => escaped.push_str("\\\\"),
-            '"' => escaped.push_str("\\\""),
-            '\n' => escaped.push_str("\\n"),
-            '\r' => escaped.push_str("\\r"),
-            '\t' => escaped.push_str("\\t"),
-            ch => escaped.push(ch),
-        }
-    }
-    escaped.push('"');
-    escaped
 }
 
 fn write_new_file(path: &Path, contents: &str) -> Result<(), ScaffoldCommandError> {

@@ -13,6 +13,6 @@ pub const RESPONSE_LIMITS: ic_wire::Limits = ic_wire::Limits {
     depth: 32,
 };
 
-pub const CREATE_WORKER: u64 = 0x5445535400000200;
+pub const CREATE_WORKER: u64 = 0x5445_5354_0000_0200;
 
-pub const PLAN_WORKER: u64 = 0x5445535400000201;
+pub const PLAN_WORKER: u64 = 0x5445_5354_0000_0201;

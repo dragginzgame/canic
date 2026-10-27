@@ -10,6 +10,10 @@ use ic_platform::pocket_ic::{ErrorCode, PocketIc, RejectResponse};
 use ic_platform::{candid::contract::Nat, principal::ExternalPrincipal as Principal};
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Keep the measured reserve failure and recovery sequence together"
+)]
 fn positive_native_balance_can_fail_root_outbound_inspection_admission() {
     let fixture = install_audit_root_probe(CanicWasmBuildProfile::Fast);
     let pic = &fixture.pic;

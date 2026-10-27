@@ -244,45 +244,43 @@ pub(super) fn mark_icp_refill_transfer_effect(
     token: &ReplayReceiptToken,
     operation: &IcpRefillOperation,
 ) -> Result<(), InternalError> {
-    mark_external_effect_in_flight(
+    mark_icp_refill_effect(
         token,
+        operation,
         ExternalEffectDescriptor::IcpTransfer {
             operation_id: OperationId::from_bytes(operation.operation_id),
         },
-        IcOps::now_nanos(),
+        "ledger_transfer",
     )
-    .map_err(InternalError::from)?;
-    crate::log!(
-        crate::log::Topic::Cycles,
-        Info,
-        "icp refill replay effect marked effect=ledger_transfer command_kind={} operation_id={} record_id={} source={} target={} amount_e8s={}",
-        ICP_REFILL_REPLAY_COMMAND_KIND,
-        operation_id_display(operation.operation_id),
-        operation.id,
-        operation.source_canister,
-        operation.target_canister,
-        operation.amount_e8s
-    );
-    Ok(())
 }
 
 pub(super) fn mark_icp_refill_notify_effect(
     token: &ReplayReceiptToken,
     operation: &IcpRefillOperation,
 ) -> Result<(), InternalError> {
-    mark_external_effect_in_flight(
+    mark_icp_refill_effect(
         token,
+        operation,
         ExternalEffectDescriptor::ManagementCall {
             canister: operation.cmc_canister_id,
             method: "notify_top_up".to_string(),
         },
-        IcOps::now_nanos(),
+        "cmc_notify_top_up",
     )
-    .map_err(InternalError::from)?;
+}
+
+fn mark_icp_refill_effect(
+    token: &ReplayReceiptToken,
+    operation: &IcpRefillOperation,
+    effect: ExternalEffectDescriptor,
+    effect_name: &'static str,
+) -> Result<(), InternalError> {
+    mark_external_effect_in_flight(token, effect, IcOps::now_nanos())
+        .map_err(InternalError::from)?;
     crate::log!(
         crate::log::Topic::Cycles,
         Info,
-        "icp refill replay effect marked effect=cmc_notify_top_up command_kind={} operation_id={} record_id={} source={} target={} amount_e8s={}",
+        "icp refill replay effect marked effect={effect_name} command_kind={} operation_id={} record_id={} source={} target={} amount_e8s={}",
         ICP_REFILL_REPLAY_COMMAND_KIND,
         operation_id_display(operation.operation_id),
         operation.id,

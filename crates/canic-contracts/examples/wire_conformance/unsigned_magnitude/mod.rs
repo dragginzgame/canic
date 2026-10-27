@@ -31,7 +31,7 @@ pub fn vectors(limits: Limits) -> Result<Value, Box<dyn std::error::Error>> {
         assert_eq!(magnitude.as_ref().map(to_nat).transpose()?, value);
         cases.push(json!({
             "decimal": value.as_ref().map(|v| v.0.to_str_radix(10)),
-            "bytes": magnitude.as_ref().map(|v| v.as_slice()),
+            "bytes": magnitude.as_ref().map(ic_wire::Bytes::as_slice),
             "request": native::encode_request(71, &magnitude, limits)?,
             "response": native::encode_response(71, &magnitude, limits)?,
         }));

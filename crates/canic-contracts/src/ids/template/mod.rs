@@ -301,7 +301,7 @@ mod tests {
 
         assert_eq!(
             crate::protocol::authority::encode(&version).unwrap(),
-            crate::protocol::authority::encode(&"0.18.5").unwrap()
+            crate::protocol::authority::encode("0.18.5").unwrap()
         );
     }
 }

@@ -1,7 +1,8 @@
 use super::{
     RenamedAppRoleSource,
-    support::{admit_canister_role_name, toml_assignment_key, toml_string_literal},
+    support::{admit_canister_role_name, toml_assignment_key},
 };
+use crate::toml_support::toml_string_literal;
 use crate::{
     release_set::config::{
         AppConfigDeclaration, AppConfigError, AppConfigIoOperation, AppConfigMutationConflict,

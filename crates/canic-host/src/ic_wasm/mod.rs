@@ -10,7 +10,7 @@ mod tests;
 
 use crate::{
     output_with_executable_busy_retry,
-    tool_install::{self, ArchiveFormat, InstallError, InstallSpec, sha256_file},
+    tool_install::{self, ArchiveFormat, InstallSpec, sha256_file},
     tool_resolution,
 };
 use std::{
@@ -223,47 +223,7 @@ pub enum IcWasmToolError {
     },
 }
 
-impl From<InstallError> for IcWasmToolError {
-    fn from(error: InstallError) -> Self {
-        match error {
-            InstallError::ArchiveDownload { status, stderr } => {
-                Self::ArchiveDownload { status, stderr }
-            }
-            InstallError::ArchiveExtraction { status, stderr } => {
-                Self::ArchiveExtraction { status, stderr }
-            }
-            InstallError::ArchiveHashMismatch {
-                path,
-                actual,
-                expected,
-            } => Self::ArchiveHashMismatch {
-                path,
-                actual,
-                expected,
-            },
-            InstallError::ExecutableHashMismatch {
-                path,
-                actual,
-                expected,
-            } => Self::ExecutableHashMismatch {
-                path,
-                actual,
-                expected,
-            },
-            InstallError::Io {
-                operation,
-                path,
-                source,
-            } => Self::Io {
-                operation,
-                path,
-                source,
-            },
-            InstallError::TempDirectoryExhausted { root } => Self::TempDirectoryExhausted { root },
-        }
-    }
-}
-
+crate::tool_install::impl_install_error_conversion!(IcWasmToolError);
 /// Return the archive authority for the current install-capable host platform.
 pub fn current_ic_wasm_authority() -> Result<IcWasmAuthority, IcWasmToolError> {
     ic_wasm_authority_for(env::consts::OS, env::consts::ARCH)

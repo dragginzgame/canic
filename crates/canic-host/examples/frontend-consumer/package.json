@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@tokostudios/ic-platform": "0.1.0"
+    "@tokostudios/ic-platform": "0.1.1"
   },
   "devDependencies": {
     "typescript": "6.0.3"

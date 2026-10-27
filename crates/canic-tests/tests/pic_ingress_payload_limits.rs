@@ -7,7 +7,7 @@ use canic_testing_internal::pic::{
     standalone_canister_wasm,
 };
 use ic_platform::{
-    candid::contract::{CandidType, encode_args, encode_one},
+    candid::contract::{CandidType, encode_args, encode_one, types::TypeInner},
     principal::ExternalPrincipal as Principal,
 };
 use serde::Deserialize;
@@ -554,7 +554,6 @@ fn compiled_payload_contract_matches_actual_ingress_boundaries() {
         let function = env.as_func(ty).unwrap();
         assert_eq!(function.rets.len(), 1);
         let response = env.trace_type(&function.rets[0]).unwrap();
-        use ic_platform::candid::contract::types::TypeInner;
         assert!(matches!(
             (record, response.as_ref()),
             (true, TypeInner::Record(_)) | (false, TypeInner::Variant(_))

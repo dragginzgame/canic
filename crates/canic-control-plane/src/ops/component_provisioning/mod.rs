@@ -3098,23 +3098,7 @@ fn member_at_cursor(
         .entries
         .get(usize::try_from(member_index).map_err(|_| InternalError::invariant())?)
         .ok_or_else(InternalError::invariant)?;
-    Ok(RootComponentProvisioningMemberView {
-        member_operation_id: member_operation_id(
-            view.batch.root.fleet_subnet_root,
-            view.operation_id,
-            view.plan_hash,
-            &placement.group_placement,
-            &entry.member_path,
-        )?,
-        group_placement: placement.group_placement.clone(),
-        component_group: placement.component_group.clone(),
-        member_path: entry.member_path.clone(),
-        component_spec: entry.component_spec.clone(),
-        spec_hash: entry.spec_hash,
-        purpose: entry.purpose.clone(),
-        labels: entry.labels.clone(),
-        limits: entry.limits.clone(),
-    })
+    member_view(view, placement, entry)
 }
 
 fn member_by_path(
@@ -3133,6 +3117,14 @@ fn member_by_path(
         .iter()
         .find(|entry| &entry.member_path == member_path)
         .ok_or_else(InternalError::invariant)?;
+    member_view(view, placement, entry)
+}
+
+fn member_view(
+    view: &RootComponentProvisioningView,
+    placement: &canic_contracts::dto::component_provisioning::ComponentGroupPlacementPlan,
+    entry: &canic_contracts::dto::component_provisioning::ComponentGroupPlanEntry,
+) -> Result<RootComponentProvisioningMemberView, InternalError> {
     Ok(RootComponentProvisioningMemberView {
         member_operation_id: member_operation_id(
             view.batch.root.fleet_subnet_root,

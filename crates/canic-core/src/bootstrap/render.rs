@@ -1367,51 +1367,18 @@ fn render_cycles(value: u128) -> TokenStream {
 
 // Render a large integer literal with separators so generated code stays clippy-clean.
 fn render_u128_literal(value: u128) -> TokenStream {
-    let digits = value.to_string();
-    let grouped = digits
-        .chars()
-        .rev()
-        .enumerate()
-        .fold(String::new(), |mut acc, (index, ch)| {
-            if index > 0 && index % 3 == 0 {
-                acc.push('_');
-            }
-            acc.push(ch);
-            acc
-        })
-        .chars()
-        .rev()
-        .collect::<String>();
-
-    format!("{grouped}_u128")
-        .parse()
-        .expect("valid u128 literal")
+    render_integer_literal(&value.to_string(), "u128")
 }
 
-// Render a u32 literal with separators so generated code stays clippy-clean.
 fn render_u32_literal(value: u32) -> TokenStream {
-    let digits = value.to_string();
-    let grouped = digits
-        .chars()
-        .rev()
-        .enumerate()
-        .fold(String::new(), |mut acc, (index, ch)| {
-            if index > 0 && index % 3 == 0 {
-                acc.push('_');
-            }
-            acc.push(ch);
-            acc
-        })
-        .chars()
-        .rev()
-        .collect::<String>();
-
-    format!("{grouped}_u32").parse().expect("valid u32 literal")
+    render_integer_literal(&value.to_string(), "u32")
 }
 
-// Render a u64 literal with separators so generated code stays clippy-clean.
 fn render_u64_literal(value: u64) -> TokenStream {
-    let digits = value.to_string();
+    render_integer_literal(&value.to_string(), "u64")
+}
+
+fn render_integer_literal(digits: &str, suffix: &str) -> TokenStream {
     let grouped = digits
         .chars()
         .rev()
@@ -1427,7 +1394,9 @@ fn render_u64_literal(value: u64) -> TokenStream {
         .rev()
         .collect::<String>();
 
-    format!("{grouped}_u64").parse().expect("valid u64 literal")
+    format!("{grouped}_{suffix}")
+        .parse()
+        .expect("valid unsigned integer literal")
 }
 
 // Render the automatic top-up policy.

@@ -5,7 +5,6 @@ use canic::{
         metrics::QueryPerfSample,
         page::PageRequest,
     },
-    protocol,
 };
 
 // This corruption fixture deliberately edits raw stored bytes outside runtime custody.

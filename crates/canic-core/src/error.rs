@@ -7,7 +7,7 @@ use crate::{
     },
     dto::error::Error as PublicError,
 };
-use std::fmt;
+use thiserror::Error;
 
 ///
 /// InternalError
@@ -23,7 +23,8 @@ use std::fmt;
 /// defined in dto/.
 ///
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
+#[error("{code}")]
 pub struct InternalError {
     code: RegisteredDiagnosticCode,
     projection: PublicProjection,
@@ -281,14 +282,6 @@ impl InternalError {
     }
 }
 
-impl fmt::Display for InternalError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.code, f)
-    }
-}
-
-impl std::error::Error for InternalError {}
-
 impl From<AccessError> for InternalError {
     fn from(err: AccessError) -> Self {
         match err {
@@ -378,5 +371,54 @@ impl From<ComponentChildAllocationPolicyError> for InternalError {
             }
         };
         Self::public(code)
+    }
+}
+
+#[cfg(test)]
+mod error_contract_tests {
+    use super::*;
+    use crate::domain::provisioning_failure::{
+        ProvisioningFailureStage, ProvisioningRetryCategory,
+    };
+    use ic_platform::principal::ExternalPrincipal;
+    use std::error::Error as _;
+
+    #[test]
+    fn internal_error_formats_only_the_code_without_exposing_retained_evidence() {
+        let target = ExternalPrincipal::from_slice(&[1]);
+        let error = InternalError::projected(codes::PLATFORM_FAILED, codes::STATE_FAILED)
+            .with_platform_rejection(5, "protected rejection")
+            .with_dependency_failure(target, "canister_status", "observe")
+            .with_provisioning_failure(
+                ProvisioningFailureStage::ComponentRuntime,
+                target,
+                [7; 32],
+                ProvisioningRetryCategory::Backoff,
+            );
+        assert_eq!(error.to_string(), codes::PLATFORM_FAILED.to_string());
+        assert_eq!(format!("{error:>12}"), format!("{:>12}", error.code()));
+        assert!(error.source().is_none());
+        assert_eq!(error.public_code(), Some(codes::STATE_FAILED));
+        assert_eq!(error.platform_rejection(), Some("protected rejection"));
+        let retained = error.provisioning_failure().unwrap();
+        assert_eq!(retained.operation_id, [7; 32]);
+        assert_eq!(retained.target, target);
+        let dependency = retained.dependency.unwrap();
+        assert_eq!(dependency.target, target);
+        assert_eq!(dependency.rejection_code, Some(5));
+        assert_eq!(
+            dependency.rejection_detail.as_deref(),
+            Some("protected rejection")
+        );
+    }
+
+    #[test]
+    fn forwarded_public_error_keeps_its_projection_without_becoming_a_source() {
+        let public = PublicError::from_registered(codes::REQUEST_INVALID);
+        let error = InternalError::observed_public(public);
+        assert_eq!(error.public_error(), public);
+        assert_eq!(error.public_code(), None);
+        assert_eq!(error.to_string(), codes::PLATFORM_FAILED.to_string());
+        assert!(error.source().is_none());
     }
 }

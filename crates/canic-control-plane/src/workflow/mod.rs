@@ -44,3 +44,6 @@ pub mod runtime;
 pub mod state;
 #[cfg(feature = "wasm-store-canister")]
 pub mod wasm_store;
+
+#[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
+mod cycle_reclamation;

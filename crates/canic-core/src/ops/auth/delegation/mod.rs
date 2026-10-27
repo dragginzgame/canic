@@ -191,24 +191,7 @@ impl AuthOps {
         build_network: BuildNetwork,
         now_ns: u64,
     ) -> Result<ChainKeyRootDelegationBatchSigningResult, InternalError> {
-        let config = ConfigOps::delegated_tokens_config()?;
-        let signing_policy =
-            chain_key_signing_policy_from_config(&config, IcOps::canister_self(), build_network)?;
-        let mut signer = ManagementCanisterChainKeySigner;
-        let result = chain_key_batch::sign_next_chain_key_root_delegation_batch(
-            &signing_policy,
-            now_ns,
-            &mut signer,
-            IcOps::now_nanos,
-        )
-        .await?;
-
-        Ok(ChainKeyRootDelegationBatchSigningResult {
-            batch_id: result.batch_id,
-            signed: result.signed,
-            reused_signed: result.reused_signed,
-            signing_in_flight: result.signing_in_flight,
-        })
+        Self::sign_chain_key_batch(build_network, None, now_ns).await
     }
 
     pub(crate) async fn sign_chain_key_root_delegation_batch(
@@ -216,19 +199,39 @@ impl AuthOps {
         batch_id: [u8; 32],
         now_ns: u64,
     ) -> Result<ChainKeyRootDelegationBatchSigningResult, InternalError> {
+        Self::sign_chain_key_batch(build_network, Some(batch_id), now_ns).await
+    }
+
+    async fn sign_chain_key_batch(
+        build_network: BuildNetwork,
+        batch_id: Option<[u8; 32]>,
+        now_ns: u64,
+    ) -> Result<ChainKeyRootDelegationBatchSigningResult, InternalError> {
         let config = ConfigOps::delegated_tokens_config()?;
         let signing_policy =
             chain_key_signing_policy_from_config(&config, IcOps::canister_self(), build_network)?;
         let mut signer = ManagementCanisterChainKeySigner;
-        let result = chain_key_batch::sign_chain_key_root_delegation_batch(
-            &signing_policy,
-            batch_id,
-            now_ns,
-            &mut signer,
-            IcOps::now_nanos,
-        )
-        .await?;
-
+        let result = match batch_id {
+            Some(batch_id) => {
+                chain_key_batch::sign_chain_key_root_delegation_batch(
+                    &signing_policy,
+                    batch_id,
+                    now_ns,
+                    &mut signer,
+                    IcOps::now_nanos,
+                )
+                .await?
+            }
+            None => {
+                chain_key_batch::sign_next_chain_key_root_delegation_batch(
+                    &signing_policy,
+                    now_ns,
+                    &mut signer,
+                    IcOps::now_nanos,
+                )
+                .await?
+            }
+        };
         Ok(ChainKeyRootDelegationBatchSigningResult {
             batch_id: result.batch_id,
             signed: result.signed,

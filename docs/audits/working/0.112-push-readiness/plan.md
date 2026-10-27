@@ -1,7 +1,237 @@
 # 0.112 consolidated push-readiness plan
 
-Audit date: 2026-10-26. Status: owned cut locally qualified; external DTO supply blocks full requested cleanup.
+Audit date: 2026-10-26. Status: earlier owned-cut evidence retained; latest dependencies adopted with validation left to the maintainer; external DTO migration remains.
 This is a development checklist, not release authority or a validation receipt.
+
+## Final coordinated adoption — maintainer-selected validation boundary
+
+All requested latest published IC releases are now adopted: Platform/macros 0.7.0,
+Blob/Contracts 0.51.0, Auth/protocol types 0.18.0, Tooling/Host/Testkit 0.69.0,
+Query 0.75.0, Backup 0.45.0, Memory/Storage 0.51.10 and Timers 0.31.10.
+Wire 0.7.18, Metrics 0.16.3, browser Platform 0.1.1 and Shared Tooling 0.26.22
+remain current. Root and both independent consumer catalogs/locks align without
+compatibility adapters; each lock selects one Platform 0.7.0 identity.
+
+The maintainer explicitly requested adoption without further tests and will try
+the release. No tests, builds or allocation-peer regeneration were run after that
+instruction. Final-graph compilation/installed qualification and fixture freshness
+are therefore not claimed. The checked-in peer retains its earlier provenance.
+Changelog selection notes are updated, but this does not approve the entire 0.112
+batch or complete the separate external DTO migration. Structured selection:
+latestSupplierAdoption20261027; registry records and logs: /tmp/canic-deps-latest/.
+
+The following refresh/probe sections are historical development evidence. Their
+publication blockers are superseded; their passing checks remain tied to their
+recorded graphs and must not be relabelled as proof of this final selection.
+
+## Latest published runtime refresh — 2026-10-27
+
+The renewed request selects published Memory/Storage 0.51.9 and Timers 0.31.9
+in the root and both independent Blob consumers. Shared Tooling 0.26.22 remains
+current and verifies. Direct Platform 0.6.21 and Blob/Contracts 0.50.0 retain their
+matching Principal identity; updated Memory/Storage and Timers select transitive
+Platform 0.7.0. Tooling 0.69.0 and Backup 0.45.0 published during qualification,
+but the combined adoption probe fails because Query 0.74.5 returns Host Tools
+0.68 LedgerTip rather than the direct 0.69 type. Query 0.75.0 remains unpublished.
+Blob 0.51.0 also remains unpublished, so direct Platform 0.7 remains blocked.
+The final compatible selection retains Tooling 0.68.12 and Backup 0.44.8; no
+compatibility conversion is introduced. Evidence: tooling069AdoptionProbe20261027.
+
+Sixteen memory and two timer-status tests pass. Strict Core/Control Plane/Blob
+library/test Clippy passes with all features, and all three dependency-boundary
+checks pass. The allocation peer changed bytes, was regenerated through its
+owner and verifies. The exact managed_browser_compositions case passes on both
+dedicated and embedded graphs, with generated clients, same-release recovery
+and malformed-funding checks (336 seconds of proof). Its initial run lacked the
+Node environment variable; the rerun supplies pinned Node/TypeScript paths.
+All three lock hashes stayed unchanged. This does not repeat the full provider
+error matrix or the pending Root provisioning/retirement cases. Logs, registry
+records and selected lock hashes: /tmp/canic-deps-fourth/. Structured evidence:
+runtimeRefreshFourth20261027. Earlier results retain their recorded graphs.
+
+## Confirmed supplier refresh — 2026-10-27
+
+The maintainer confirmed the concurrent dependency update and requested all newly
+published IC dependencies, specifically Blob, Platform and Shared Tooling. This
+resolves the lock-ownership question in the issue section below. The root and
+independent consumers adopt published Blob/Contracts 0.50.0, Memory/Storage
+0.51.8, Timers 0.31.8, applicable Tooling/Host/Testkit 0.68.12 and Backup 0.44.8.
+Query 0.74.5, Wire 0.7.18, Auth 0.17.1 and Metrics 0.16.3 remain selected.
+Registry evidence and captured locks are under /tmp/canic-deps-final/.
+
+Platform 0.7.0 was attempted and Core compiled, but Blob installation and funding
+failed at four Principal inputs: published Blob 0.50.0 uses Platform 0.6 identities.
+The matching Blob 0.51.0 adoption is an unpublished draft. Retain Platform/macros
+0.6.21 without conversions or overrides; recheck publication before completion.
+The failed check is retained in integration-check.log and the successful Core
+probe in platform-070-check.log. Neither is full Platform adoption qualification.
+
+Shared Tooling 0.26.22 at 5fc904a935d82ad31f0fba14434b71ccb8c10345 was reviewed
+and exported through its canonical owner. Five governance documents change;
+executable tools and pins do not. Snapshot integrity passes. Blob 0.50.0 changes
+its owned storage to bounded Wire records; fresh managed consumers and
+same-release restoration need installed qualification. Existing installation
+obligations remain, with no retirement or deployment implied. The captured graph
+passes 1,072 native tests across 31 filters (four opt-in cases ignored), strict
+five-package Clippy and separate Root/Store/Blob Wasm checks.
+
+The root lock changed again during qualification to Memory/Storage 0.51.9 with
+transitive Platform 0.7.0. The agent stopped its own installed-test sequence
+during allocation-peer compilation, preserving the incoming lock and asking other
+sessions to pause Canic updates. No installed case ran in this refresh. Registry
+recheck also confirms Timers 0.31.9, but Blob remains 0.50.0. Final catalog/lock
+alignment and installed qualification await a fixed graph; the previous passing
+checks do not qualify the new incoming lock. Structured evidence is retained as
+supplierRefreshThird20261027. Full 0.112 readiness still also requires the
+external DTO consumer migration.
+
+## New issue consolidation batch — 2026-10-27
+
+The maintainer requested working through the newly added Canic issues. This batch
+covers the 25 open issues added after #662, checked against current source rather
+than the reported cf2d3d1fb baseline. It preserves current protocols, validation
+order, error variants, hash inputs, bounded effects and same-release recovery.
+No new minor, version change or publication is part of this batch.
+
+| Scope | Issues | Status |
+| --- | --- | --- |
+| Authority and state | [#663](https://github.com/dragginzgame/canic/issues/663), [#664](https://github.com/dragginzgame/canic/issues/664), [#668](https://github.com/dragginzgame/canic/issues/668), [#673](https://github.com/dragginzgame/canic/issues/673), [#676](https://github.com/dragginzgame/canic/issues/676), [#683](https://github.com/dragginzgame/canic/issues/683), [#684](https://github.com/dragginzgame/canic/issues/684) | Implemented locally; native/Wasm/lint pass on recorded graph; installed qualification blocked by root-lock change |
+| Runtime transport and observations | [#666](https://github.com/dragginzgame/canic/issues/666), [#667](https://github.com/dragginzgame/canic/issues/667), [#674](https://github.com/dragginzgame/canic/issues/674), [#677](https://github.com/dragginzgame/canic/issues/677), [#685](https://github.com/dragginzgame/canic/issues/685), [#688](https://github.com/dragginzgame/canic/issues/688) | Implemented locally; native/Wasm/lint pass on recorded graph; installed qualification blocked by root-lock change |
+| Host and CLI mechanics | [#669](https://github.com/dragginzgame/canic/issues/669), [#670](https://github.com/dragginzgame/canic/issues/670), [#671](https://github.com/dragginzgame/canic/issues/671), [#672](https://github.com/dragginzgame/canic/issues/672), [#675](https://github.com/dragginzgame/canic/issues/675), [#679](https://github.com/dragginzgame/canic/issues/679), [#681](https://github.com/dragginzgame/canic/issues/681), [#682](https://github.com/dragginzgame/canic/issues/682), [#686](https://github.com/dragginzgame/canic/issues/686), [#687](https://github.com/dragginzgame/canic/issues/687), [#689](https://github.com/dragginzgame/canic/issues/689) | Implemented locally; native/Wasm/lint pass on recorded graph; installed qualification blocked by root-lock change |
+| Superseded by the Wire cut | [#678](https://github.com/dragginzgame/canic/issues/678) | Reported Candid auth-query wrappers are absent. Current typed Wire calls have distinct method limits and root/issuer errors; no replacement abstraction added. |
+
+The common directory constructor preserves each caller's revision, content hash,
+synchronization time, descendant count, fleet snapshot and optional group. Pool
+creation predicates still run before sequence increment/clear; a new exhaustion
+regression checks that failed publication preserves the admitted creation. Root
+and Store cycle reservations keep their distinct command/quota identities, 60-second
+windows, 60-operation limits, observed balance and retained-cycle amount. Shared
+installer conversion expands to the existing public tool-error variants rather
+than changing diagnostics. Host-only TOML lookup/rendering remains outside Wasm.
+
+Native qualification passes 940 tests across 29 owning filters; four opt-in
+process/measurement tests remain ignored. Separate Root/Store Wasm checks and
+strict four-crate library/test Clippy with all features pass. Final strict Clippy
+also covers the subsequent fixture corrections. Changed Rust formatting and
+scoped documentation links pass. Allocation-peer refresh and verification pass
+on that selected graph. The exact provisioning case failed before installed
+execution when its Cargo-input stability guard observed a changed root lock.
+Retirement qualification has not run. Logs: /tmp/canic-issues-663-689/.
+
+The root lock changed from d0a6e6a0f5b03e9e85c8053e97185039876b34358221874fc949b06ee759d71a
+to c715b35460c84feb964071f04b4a627093b89e4d12f0a9248c165679c7c9d959 during
+that command. It selects Tooling/Testkit 0.68.12, Memory/Storage 0.51.8, Timers
+0.31.8 and Backup 0.44.8. No dependency update was issued in this issue batch;
+the changed lock is preserved pending clarification of its owner. Independent
+locks and changed Rust source hashes stayed unchanged. Do not attribute the
+earlier passing results to this newer root graph. Confirm the intended graph,
+then rerun the owning checks, allocation-peer qualification and two installed
+cases. Structured record: issueConsolidation20261027.
+
+Focused checks found four stale assumptions from the earlier Wire cut. The receipt
+golden failed identically with the original comparator implementation restored;
+its expected hash now matches the current native-Wire receipt. The query test
+asserts the current exact network/export/principal observation sequence and still
+rejects mismatched identity before any remote call. Build-reuse fixtures now use
+the existing valid Wire Wasm/schema pair rather than malformed pre-Wire bytes.
+Medic tests assert the stable forwarding finding code/status without freezing its
+explanatory prose. Production admission and encoding remain unchanged.
+
+No GitHub issue comment or closure, commit, push, release or deployment has been
+performed. The earlier DTO migration remains a separate outstanding extraction
+acceptance item.
+
+## Subsequent published dependency refresh — 2026-10-27
+
+The second requested refresh selects Tooling/Host/Testkit 0.68.11, Query 0.74.5,
+Backup 0.44.7, Memory/Storage 0.51.7 and Platform/Macros 0.6.21 in the root
+and applicable independent consumers. The captured root lock already contains
+these versions. Browser Platform advances to 0.1.1 with SDK Core 6.1.1 unchanged.
+Shared Tooling remains 0.26.21; unpublished sibling release drafts are excluded.
+Features, current contracts and storage layouts are unchanged.
+
+Platform 0.6.21 publishes the prepared management/history/ECDSA and ICRC
+transfer/consent exports. This supersedes the supply-blocked conclusions in the
+older sections below. The prepared patch is historical evidence, not an outstanding
+publication requirement. CT-06 still requires Canic mirror migration and owning
+acceptance; dependency adoption alone does not accomplish that removal.
+
+Targeted qualification passes: ten subnet-catalog, twenty-six Backup restore-runner
+and sixteen memory tests; all three dependency-boundary checks; npm locked
+installation and SDK-boundary checks; the exact managed_browser_compositions
+PocketIC case for both dedicated and embedded graphs (637 seconds of proof).
+This case exercises generated clients and malformed funding replies; it does not
+repeat the complete funding-error matrix. Allocation-peer verification found
+changed bytes; the owner regenerated fixture/provenance and final verification
+passes. All Cargo and npm lock hashes stayed unchanged. Results, commands, hashes
+and release IDs are recorded under icFamilyRefreshSecond20261027 in the structured
+evidence. Logs and captured locks: /tmp/canic-deps-round2/. No broad gate, live
+provider operation or DTO mirror migration ran.
+
+## Earlier published IC family refresh — 2026-10-27
+
+The subsequent maintainer-requested adoption raises root catalog minimums to
+Tooling/Host/Testkit 0.68.10, Query 0.74.4, Backup 0.44.6, Memory/Storage 0.51.6,
+Timers 0.31.7 and Wire 0.7.18, retaining existing features. The captured root lock
+already selected these versions and remains byte-identical to that baseline.
+Both independent consumers move Host Artifacts 0.68.8 to 0.68.10,
+Memory/Storage 0.51.5 to 0.51.6 and Timers 0.31.5 to 0.31.7.
+Platform 0.6.20 and Blob 0.49.3 remain selected. This refresh supersedes the graph
+in the earlier supplier-adoption section below; it does not rewrite its evidence.
+
+Shared Tooling 0.26.21 was exported from committed revision
+66c91c4412856baa147482e648fc80428db8b179 in an isolated checkout. Only the baseline
+and changelog-rule payloads change, plus the snapshot record. Uncommitted producer
+work was excluded. Snapshot integrity and all three dependency-boundary checks
+pass. Native tests pass: ten subnet-catalog, thirty payment-receipt and sixteen
+memory cases. Exact dedicated and embedded Blob PocketIC cases pass (354 and
+325 seconds of proof respectively), including fresh complete artifacts and
+installed recovery/funding-failure checks. The initial dedicated preflight lacked
+the selected Testkit server; explicit governed setup of 0.68.10 passed before the
+successful rerun. No broad gate or live-provider operation ran.
+
+Allocation-peer verification found changed bytes; the owning generator refreshed
+the fixture/provenance and final verification passes. All three lock hashes stayed
+unchanged through qualification. The structured evidence records exact selections,
+commands, lock/artifact/log hashes and release IDs under icFamilyRefresh20261027.
+Logs and captured locks: /tmp/canic-upstream-refresh-20261027/. This adoption changes no owned DTO, codec,
+storage layout or feature declaration. It does not resolve remaining mirror
+migration or establish a new Wasm-size improvement.
+
+## Earlier published supplier adoption — 2026-10-27
+
+The root and both independent Blob consumers now require published Platform
+0.6.20 and Blob Storage/Contracts 0.49.3. Both consumer locks also move to the
+required Memory/Storage 0.51.5 and Wire/derive 0.7.18 closure. Root's pre-existing
+Backup 0.44.5, Timers 0.31.6 and Platform Macros 0.6.20 changes were preserved;
+independent Timers stays 0.31.5. Only Platform changed in the root lock relative
+to the beginning of this adoption, when Blob 0.49.3 was already selected.
+
+All three dependency-boundary checks pass. Exact governed PocketIC cases
+`pic::blob_service::tests::managed_composition_dedicated` and
+`pic::blob_service::tests::managed_composition_embedded` pass, with fresh complete
+four-artifact builds, native/Wasm compilation, installed behavior, same-release
+recovery and the owning malformed/provider-error/callback/liquidity/budget cases.
+Dedicated proof took 477 seconds; embedded proof took 352 seconds. These are
+qualification timings, not production performance measurements. An earlier
+dedicated attempt failed before installation because the sandbox prevented the
+localhost server from binding; the same command passed with local-process access.
+Logs and exact before/after lock snapshots are under `/tmp/canic-new-suppliers/`.
+The allocation-peer verifier detected a changed executable on this graph; its
+owning refresh generator regenerated the checked-in Wasm and provenance. Initial
+verification failure and refresh logs are retained alongside the composition logs.
+Final `verify_embedded_root` passes. The structured evidence's
+`supplierAdoption20261027` entry records all three lock identities, the two release
+build IDs, artifact/log hashes and exact qualification scope. Scoped links and
+diff checks pass. The dependency-adoption slice is complete; CT-06 mirror migration
+and the missing export supply still prevent the full requested extraction closeout.
+
+Platform 0.6.20 supplies the optional DTO families in #61–64, but does not include
+the prepared management/history/ICRC export patch. This adoption enables no new
+DTO feature and does not claim mirror removal. Remaining work is actual migration
+to the supplied DTOs, qualification of changed external consumers, and supply of
+the remaining exports. Required external Candid is accepted. No whole-release,
+live-provider or new Wasm-savings claim follows from these targeted results.
 
 ## External contract supply follow-up — 2026-10-27
 

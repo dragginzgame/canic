@@ -434,7 +434,12 @@ macro_rules! __canic_role_metrics_status {
             ::canic::dto::metrics::MetricsKind::Storage => {
                 Ok($crate::__internal::core::api::metrics::MetricsQuery::storage(request.page))
             }
-            _ => Err(::canic::Error::from_registered(
+            _ => Err::<
+                $crate::__internal::contracts::dto::page::Page<
+                    $crate::__internal::contracts::dto::metrics::MetricEntry,
+                >,
+                _,
+            >(::canic::Error::from_registered(
                 ::canic::diagnostics::codes::REQUEST_INVALID,
             )),
         }

@@ -1,14 +1,12 @@
 use super::{
     AttachedAppRoleSource,
-    support::{
-        admit_canister_role_name, toml_string_literal, validate_attach_kind,
-        validate_component_spec_id,
-    },
+    support::{admit_canister_role_name, validate_attach_kind, validate_component_spec_id},
 };
 use crate::release_set::config::{
     AppConfigDeclaration, AppConfigError, AppConfigMutationConflict, AppConfigOperation,
     model::AttachedAppRole,
 };
+use crate::toml_support::toml_string_literal;
 use canic_contracts::ids::CanisterRole;
 use canic_core::bootstrap::parse_config_model;
 

@@ -7,31 +7,34 @@ pub(super) fn enforce_restore_run_requirements(
     options: &RestoreRunOptions,
     run: &RestoreRunResponse,
 ) -> Result<(), RestoreCommandError> {
-    enforce_restore_ready(options.require_ready, run)?;
-    if options.require_complete && !run.complete {
-        return Err(RestoreCommandError::RestoreApplyIncomplete {
-            backup_id: run.backup_id.clone(),
-            completed_operations: run.completed_operations,
-            operation_count: run.operation_count,
-        });
-    }
-
-    if options.require_no_attention && run.attention_required {
-        return Err(RestoreCommandError::RestoreApplyReportNeedsAttention {
-            backup_id: run.backup_id.clone(),
-            outcome: run.outcome.clone(),
-        });
-    }
-
-    Ok(())
+    enforce_restore_requirements(
+        options.require_ready,
+        options.require_complete,
+        options.require_no_attention,
+        run,
+    )
 }
 
 pub(super) fn enforce_restore_status_requirements(
     options: &RestoreStatusOptions,
     run: &RestoreRunResponse,
 ) -> Result<(), RestoreCommandError> {
-    enforce_restore_ready(options.require_ready, run)?;
-    if options.require_complete && !run.complete {
+    enforce_restore_requirements(
+        options.require_ready,
+        options.require_complete,
+        options.require_no_attention,
+        run,
+    )
+}
+
+fn enforce_restore_requirements(
+    require_ready: bool,
+    require_complete: bool,
+    require_no_attention: bool,
+    run: &RestoreRunResponse,
+) -> Result<(), RestoreCommandError> {
+    enforce_restore_ready(require_ready, run)?;
+    if require_complete && !run.complete {
         return Err(RestoreCommandError::RestoreApplyIncomplete {
             backup_id: run.backup_id.clone(),
             completed_operations: run.completed_operations,
@@ -39,7 +42,7 @@ pub(super) fn enforce_restore_status_requirements(
         });
     }
 
-    if options.require_no_attention && run.attention_required {
+    if require_no_attention && run.attention_required {
         return Err(RestoreCommandError::RestoreApplyReportNeedsAttention {
             backup_id: run.backup_id.clone(),
             outcome: run.outcome.clone(),

@@ -1694,8 +1694,8 @@ struct WireChildAllocation {
     canister_role: CanisterRole,
     extra_arg: Option<Vec<u8>>,
     child: ic_platform::Principal,
-    #[serde(rename = "settled")]
-    _settled: bool,
+    #[cfg_attr(not(test), expect(dead_code))]
+    settled: bool,
     acknowledged: bool,
 }
 

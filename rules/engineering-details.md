@@ -184,12 +184,25 @@ product, release and recovery obligations remain binding when applicable.
   endpoints called by third parties, owned canister RPC and frontend/client
   payloads. Caller location or endpoint visibility does not select the codec.
   Reuse Wire's encoding, decoding and generated bindings.
+- **Do not derive or implement `CandidType` on owned application types.** This
+  includes domain/state records, storage models, reports, and owned request/reply
+  DTOs. Conditional derives, optional Candid features, generic trait bounds and
+  Platform re-exports do not make an owned type an external protocol. Use Wire
+  and its normal Serde contracts for our payloads; do not maintain dual-codec
+  application types merely for convenience.
 - Candid adapts independently defined interfaces that require it, such as
   management/system canisters, NNS/SNS and ledger protocols. A third-party caller
   of our application is not itself an external Candid protocol. Record the
   required interface; existing derives or a Candid-first example are not reasons
   to retain it. Required external Candid dependencies still follow the
   [IC Platform boundary](cargo-dependencies.md#external-ic-dependency-boundary).
+- Reuse qualified external DTOs supplied by Platform before defining another
+  Candid projection. When a required external interface needs a local Rust shape,
+  keep it in that external adapter and explicitly convert to owned types. Record
+  the named protocol and actual encoder/decoder that requires it. A Rust struct
+  written in our repository can mirror an external contract; that narrow role
+  is different from giving an application model `CandidType`. Missing Platform
+  exports belong in an owning capability issue, not a duplicate public facade.
 - A missing released Wire capability requires an owning issue and qualification
   before adoption, or an expressly approved scoped exception. Do not introduce
   a local codec or a Candid fallback to bypass that work.
@@ -198,6 +211,14 @@ product, release and recovery obligations remain binding when applicable.
   in Wire merely to claim adoption. Storage layouts and canonical hash inputs
   retain their owning contracts. Existing persisted Candid checkpoint bytes are
   a compatibility obligation, not permission for new Candid storage formats.
+  Isolate any still-required historical Candid schema at its legacy boundary;
+  record its retained-byte obligation and retirement condition. Do not silently
+  change existing stored bytes or erase uncertain effects to remove a derive.
+- Tests, examples and generators follow the same owned-type rule. Dedicated
+  external-provider fixtures and explicit Candid-versus-Wire benchmark controls
+  may retain the Candid shapes needed for that protocol or comparison, isolated
+  from production application types. A fixture's privacy is not an exemption;
+  identify the external contract or measurement that requires the Candid shape.
 - IC Wire owns codecs, resource admission and codec generation. Consumers retain
   endpoint exports, transport, authentication, method identities, semantic
   validation, rollback and retry policy. Qualify the selected released APIs and
