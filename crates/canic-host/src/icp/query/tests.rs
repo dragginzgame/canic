@@ -295,8 +295,10 @@ esac
     }
     assert_eq!(icp.remote_call_count(), 0);
     let calls = fs::read_to_string(root.join("calls")).unwrap();
+    // Each seed constructs one agent and makes one query that is refused
+    // during fresh authority admission, before any remote dispatch.
     for kind in ["network", "export", "principal"] {
-        assert_eq!(calls.lines().filter(|line| *line == kind).count(), 6);
+        assert_eq!(calls.lines().filter(|line| *line == kind).count(), 4);
     }
     fs::remove_dir_all(root).unwrap();
 }

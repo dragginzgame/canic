@@ -4,7 +4,11 @@
 //! Does not own: funding sufficiency policy, Fleet authority, or deployment planning.
 //! Boundary: parses the exact machine-readable balance output owned by ICP CLI.
 
-use super::{error::IcpCommandError, model::IcpCli, run::run_json};
+use super::{
+    error::IcpCommandError,
+    model::IcpCli,
+    run::{capture_probe, run_json},
+};
 
 use serde::Deserialize;
 use thiserror::Error as ThisError;
@@ -35,7 +39,7 @@ impl IcpCli {
         command.args(["cycles", "balance", "--json"]);
         self.add_target_args(&mut command);
         self.record_remote_call();
-        let output = run_json::<BalanceOutput>(&mut command, self)?;
+        let output = run_json::<BalanceOutput>(&mut command, self, capture_probe)?;
         parse_cycles(&output.balance)
     }
 }

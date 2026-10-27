@@ -4,7 +4,11 @@
 //! Does not own: global identity selection, authentication policy, or controller authorization.
 //! Boundary: callers compare the returned text with their own typed authority.
 
-use super::{error::IcpCommandError, model::IcpCli, run::run_output};
+use super::{
+    error::IcpCommandError,
+    model::IcpCli,
+    run::{capture_probe, run_output},
+};
 
 impl IcpCli {
     /// Freeze the selected identity for this operation and every clone of its transport.
@@ -23,7 +27,7 @@ impl IcpCli {
         }
         let mut command = self.request_command();
         command.args(["identity", "default"]);
-        let identity = run_output(&mut command, self)?;
+        let identity = run_output(&mut command, self, capture_probe)?;
         if identity.is_empty() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -38,7 +42,7 @@ impl IcpCli {
     pub fn identity_principal_text(&self) -> Result<String, IcpCommandError> {
         let mut command = self.identity_principal_command();
         self.measure_request(super::IcpRequestKind::Identity, None, None, || {
-            run_output(&mut command, self)
+            run_output(&mut command, self, capture_probe)
         })
     }
 
@@ -48,7 +52,7 @@ impl IcpCli {
         format: IcpIdentityAccountFormat,
     ) -> Result<String, IcpCommandError> {
         let mut command = self.identity_account_id_command(format);
-        run_output(&mut command, self)
+        run_output(&mut command, self, capture_probe)
     }
 
     fn identity_principal_command(&self) -> std::process::Command {

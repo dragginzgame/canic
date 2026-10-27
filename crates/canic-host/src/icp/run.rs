@@ -6,20 +6,19 @@
 use std::{
     io::{self, Write},
     path::Path,
-    process::{Command, Stdio},
+    process::{Command, Output, Stdio},
+    time::Duration,
 };
 
 use ic_host_process::{
     child::OwnedChild,
     tool::{
         CompletedExecution, ExecutionFailure, OutputLimit, OutputLimits, SuccessfulExit, ToolError,
-        communicate_child_with_observer,
+        capture_command, communicate_child_with_observer,
     },
 };
 
 use crate::{output_with_executable_busy_retry, with_executable_busy_retry};
-
-const FOREGROUND_DIAGNOSTIC_BYTES: usize = 64 * 1024;
 
 use super::{
     command::{command_display, ensure_command_compatible},
@@ -28,10 +27,42 @@ use super::{
     version::compatible_version_output,
 };
 
+const FOREGROUND_DIAGNOSTIC_BYTES: usize = 64 * 1024;
+
+/// Bound read-only observations without changing paid-command process custody.
+pub(super) fn capture_probe(command: &mut Command) -> io::Result<Output> {
+    with_executable_busy_retry(|| {
+        capture_command(
+            command,
+            OutputLimits {
+                stdout: OutputLimit::Terminate(16 * 1024 * 1024),
+                stderr: OutputLimit::Terminate(FOREGROUND_DIAGNOSTIC_BYTES),
+                timeout: Some(Duration::from_secs(30)),
+            },
+        )
+        .map(|output| Output {
+            status: output.status,
+            stdout: output.stdout,
+            stderr: output.stderr,
+        })
+        .map_err(|error| {
+            let kind = match error.execution_error().map(|error| &error.failure) {
+                Some(ExecutionFailure::Io { source, .. }) => source.kind(),
+                _ => io::ErrorKind::Other,
+            };
+            io::Error::new(kind, error)
+        })
+    })
+}
+
 /// Execute a command and capture trimmed stdout.
-pub(super) fn run_output(command: &mut Command, icp: &IcpCli) -> Result<String, IcpCommandError> {
+pub(super) fn run_output(
+    command: &mut Command,
+    icp: &IcpCli,
+    capture: impl FnOnce(&mut Command) -> io::Result<Output>,
+) -> Result<String, IcpCommandError> {
     icp.ensure_compatible_command(command)?;
-    run_output_unchecked(command)
+    run_output_unchecked(command, capture)
 }
 
 /// Execute a command whose successful stdout contains secret material.
@@ -56,11 +87,16 @@ pub(super) fn run_secret_output(
     }
 }
 
-fn run_output_unchecked(command: &mut Command) -> Result<String, IcpCommandError> {
+fn run_output_unchecked(
+    command: &mut Command,
+    capture: impl FnOnce(&mut Command) -> io::Result<Output>,
+) -> Result<String, IcpCommandError> {
     let display = command_display(command);
-    let output = output_with_executable_busy_retry(command)?;
+    let output = capture(command)?;
     if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        String::from_utf8(output.stdout)
+            .map(|stdout| stdout.trim().to_owned())
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error).into())
     } else {
         Err(IcpCommandError::Failed {
             command: display,
@@ -87,18 +123,21 @@ pub fn run_output_with_stderr(command: &mut Command) -> Result<String, IcpComman
 }
 
 /// Execute a command and parse successful stdout as JSON.
-pub(super) fn run_json<T>(command: &mut Command, icp: &IcpCli) -> Result<T, IcpCommandError>
+pub(super) fn run_json<T>(
+    command: &mut Command,
+    icp: &IcpCli,
+    capture: impl FnOnce(&mut Command) -> io::Result<Output>,
+) -> Result<T, IcpCommandError>
 where
     T: serde::de::DeserializeOwned,
 {
     icp.ensure_compatible_command(command)?;
     let display = command_display(command);
-    let output = output_with_executable_busy_retry(command)?;
+    let output = capture(command)?;
     if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        serde_json::from_str(&stdout).map_err(|source| IcpCommandError::Json {
+        serde_json::from_slice(&output.stdout).map_err(|source| IcpCommandError::Json {
             command: display,
-            output: stdout,
+            output: String::from_utf8_lossy(&output.stdout).trim().to_string(),
             source,
         })
     } else {
@@ -274,6 +313,42 @@ impl IcpCli {
 mod tests {
     use super::*;
     use std::{fs, os::unix::process::CommandExt as _};
+
+    #[test]
+    fn machine_json_rejects_invalid_utf8_instead_of_replacing_bytes() {
+        let icp = IcpCli::new("sh", None);
+        *icp.compatible_version.lock().unwrap() = Some("icp 1.5.0".to_owned());
+        let mut command = Command::new("sh");
+        command.args(["-c", "printf '{\"api_url\":\"\\377\"}'"]);
+        let error = run_json::<serde_json::Value>(&mut command, &icp, capture_probe).unwrap_err();
+        assert!(matches!(error, IcpCommandError::Json { .. }));
+    }
+
+    #[test]
+    fn read_probe_capture_refuses_excess_output_without_returning_a_prefix() {
+        let mut command = Command::new("sh");
+        command.args(["-c", "dd if=/dev/zero bs=1048576 count=17 2>/dev/null"]);
+        let error = capture_probe(&mut command).unwrap_err();
+        let cause = error
+            .get_ref()
+            .unwrap()
+            .downcast_ref::<ToolError>()
+            .unwrap();
+        assert!(matches!(
+            cause.execution_error().unwrap().failure,
+            ExecutionFailure::OutputLimit { .. }
+        ));
+    }
+
+    #[test]
+    fn strict_text_capture_preserves_invalid_data_as_an_error() {
+        let mut command = Command::new("sh");
+        command.args(["-c", "printf '\\377'"]);
+        let error = run_output_unchecked(&mut command, capture_probe).unwrap_err();
+        assert!(
+            matches!(error, IcpCommandError::Io(source) if source.kind() == io::ErrorKind::InvalidData)
+        );
+    }
 
     #[test]
     fn supplied_spawn_runs_once_and_bounded_capture_retains_typed_failure() {
