@@ -177,18 +177,8 @@ fn finalize_audit_root(output: &CanisterArtifactBuildOutput, runtime: &Path, can
     );
     canic_host::canister_build::validate_wasm_endpoints(&output.wasm_path, &output.did_path)
         .unwrap();
-    std::fs::write(
-        &output.wasm_gz_path,
-        gzip(&std::fs::read(&output.wasm_path).unwrap()),
-    )
-    .unwrap();
-}
-
-fn gzip(bytes: &[u8]) -> Vec<u8> {
-    let mut encoded = Vec::new();
-    ic_host_artifacts::artifact::encode_gzip(bytes, &mut encoded, 6, u64::MAX)
-        .expect("gzip fixture Wasm");
-    encoded
+    canic_host::canister_build::write_gzip_artifact(&output.wasm_path, &output.wasm_gz_path)
+        .unwrap();
 }
 
 /// Reuse the exact audit runtime selection, not the canonical Root package recipe.

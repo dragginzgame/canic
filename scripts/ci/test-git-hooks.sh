@@ -48,6 +48,7 @@ MAKE
 #!/usr/bin/env bash
 set -euo pipefail
 [[ -z "${GIT_INDEX_FILE:-}" && -z "${GIT_DIR:-}" ]] || exit 1
+[[ "${SHARED_TOOLING_FORMAT_WORKTREE:-}" == 1 ]] || exit 1
 for path in *.rs Cargo.toml README.md; do
     [[ -f "$path" ]] || continue
     sed 's/unformatted/formatted/g' "$path" > "$path.fmt"
@@ -232,32 +233,32 @@ bash .githooks/pre-commit > output
 [[ ! -e README.md && -z "$(git ls-files -- README.md)" ]] || exit 1
 
 new_fixture installer
-bash scripts/dev/install-git-hooks.sh > output
+bash scripts/dev/install-git-hooks.sh --consumer "$PWD" > output
 [[ "$(git config --local --get core.hooksPath)" == .githooks ]] || exit 1
-bash scripts/dev/install-git-hooks.sh > output
+bash scripts/dev/install-git-hooks.sh --consumer "$PWD" > output
 
 # Logical aliases such as macOS /var versus /private/var name the same root.
 new_fixture installer-path-alias
 ln -s "$PWD" "$FIXTURE/installer-alias"
 (
     cd "$FIXTURE/installer-alias"
-    bash scripts/dev/install-git-hooks.sh > output
+    bash scripts/dev/install-git-hooks.sh --consumer "$PWD" > output
 )
 [[ "$(git config --local --get core.hooksPath)" == .githooks ]] || exit 1
 
 new_fixture installer-configured
 git config --local core.hooksPath custom-hooks
-expect_failure bash scripts/dev/install-git-hooks.sh
+expect_failure bash scripts/dev/install-git-hooks.sh --consumer "$PWD"
 [[ "$(git config --get core.hooksPath)" == custom-hooks ]] || exit 1
 
 new_fixture installer-disabled
 git config --local core.hooksPath ''
-expect_failure bash scripts/dev/install-git-hooks.sh
+expect_failure bash scripts/dev/install-git-hooks.sh --consumer "$PWD"
 [[ "$(git config --local --get core.hooksPath)" == '' ]] || exit 1
 
 new_fixture installer-inherited
 printf '[core]\n\thooksPath = inherited-hooks\n' > "$FIXTURE/global-config"
-GIT_CONFIG_GLOBAL="$FIXTURE/global-config" expect_failure bash scripts/dev/install-git-hooks.sh
+GIT_CONFIG_GLOBAL="$FIXTURE/global-config" expect_failure bash scripts/dev/install-git-hooks.sh --consumer "$PWD"
 [[ -z "$(git config --local --get core.hooksPath || true)" ]] || exit 1
 
 new_fixture installer-private-hook
@@ -265,13 +266,13 @@ mkdir .git/hooks
 printf '#!/bin/sh\nexit 0\n' > .git/hooks/pre-push
 chmod +x .git/hooks/pre-push
 cp .git/hooks/pre-push before
-expect_failure bash scripts/dev/install-git-hooks.sh
+expect_failure bash scripts/dev/install-git-hooks.sh --consumer "$PWD"
 cmp before .git/hooks/pre-push
 [[ -z "$(git config --get core.hooksPath || true)" ]] || exit 1
 
 new_fixture installer-non-executable
 chmod -x .githooks/pre-commit
-expect_failure bash scripts/dev/install-git-hooks.sh
+expect_failure bash scripts/dev/install-git-hooks.sh --consumer "$PWD"
 [[ ! -x .githooks/pre-commit && -z "$(git config --get core.hooksPath || true)" ]] || exit 1
 
 # Exercise real Cargo/rustfmt on both a root and a standalone nested workspace.

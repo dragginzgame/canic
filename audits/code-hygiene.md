@@ -35,6 +35,9 @@ where applicable; consumers supply other language conventions and commands.
 4. Check public documentation and examples against current behavior. Identify
    accidental visibility, test-only production APIs, obsolete comments and
    dependency/feature declarations with no maintained purpose.
+   Trace gzip fixture construction to the [canonical Tooling encoder](../rules/engineering-details.md#gzip-encoding);
+   distinguish product settings and retained compressed-byte contracts from
+   deliberate independent backend/interoperability controls.
 5. Inspect large files by responsibility and callers. Authored data volume,
    generated code and atomic recovery transitions are not defects merely because
    they are large. Route deletion/exposure investigations to

@@ -57,6 +57,7 @@ git_variables="$(git rev-parse --local-env-vars)"
     while IFS= read -r variable; do unset "$variable"; done <<< "$git_variables"
     export PATH="$root/.tools/host/bin:$root/.tools/ic/bin:$root/.tools/rust/common/bin:$PATH"
     export GIT_CEILING_DIRECTORIES="$snapshot/worktree"
+    export SHARED_TOOLING_FORMAT_WORKTREE=1
     make --no-print-directory -C "$snapshot/worktree" fmt
 ) || exit $?
 

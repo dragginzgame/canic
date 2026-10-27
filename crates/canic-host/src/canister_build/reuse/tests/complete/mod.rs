@@ -1,6 +1,7 @@
 mod environment;
 
 use super::*;
+use crate::test_support::gzip;
 use crate::{
     release_build::{
         finalize_release_build_from_manifest, plan_release_build_for_profile_and_network,
@@ -16,7 +17,6 @@ use crate::{
 };
 use canic_contracts::ids::CanisterRole;
 use canic_core::role_contract::ProtocolProfileDigest;
-use flate2::{Compression, GzBuilder};
 
 #[test]
 fn verified_repeat_survives_missing_diagnostics_and_rejects_tampered_output() {
@@ -275,17 +275,13 @@ fn artifact(root: &Path, name: &str, release: ReleaseBuildId) -> (PathBuf, PathB
     let bytes = crate::test_support::wire_wasm(release.to_string().as_bytes());
     let path = directory.join(format!("{name}.wasm"));
     let gzip_path = directory.join(format!("{name}.wasm.gz"));
-    let mut encoder = GzBuilder::new()
-        .mtime(0)
-        .write(Vec::new(), Compression::fast());
-    encoder.write_all(&bytes).unwrap();
     fs::write(&path, &bytes).unwrap();
     fs::write(
         path.with_extension("wire.json"),
         crate::test_support::WIRE_SCHEMA,
     )
     .unwrap();
-    fs::write(&gzip_path, encoder.finish().unwrap()).unwrap();
+    fs::write(&gzip_path, gzip(&bytes)).unwrap();
     (path, gzip_path)
 }
 

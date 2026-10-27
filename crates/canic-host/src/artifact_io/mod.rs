@@ -392,7 +392,9 @@ pub fn write_wasm_artifact(
     Ok(())
 }
 
-// Write one deterministic `.wasm.gz` artifact with a zeroed gzip timestamp.
+const GZIP_COMPRESSION_LEVEL: u32 = 9;
+
+/// Publish one `.wasm.gz` artifact using the production level and zero timestamp.
 pub fn write_gzip_artifact(
     wasm_path: &Path,
     wasm_gz_path: &Path,
@@ -404,14 +406,15 @@ pub fn write_gzip_artifact(
             mode: PublicationMode::Replace,
             permissions: 0o666,
         },
-        |file| encode_gzip(&wasm_bytes, file, 9, u64::MAX),
+        |file| encode_gzip(&wasm_bytes, file, GZIP_COMPRESSION_LEVEL, u64::MAX),
     )?;
     Ok(())
 }
 
-fn deterministic_gzip_bytes(bytes: &[u8]) -> Result<Vec<u8>, std::io::Error> {
+/// Encode in-memory artifacts using the same policy as published Wasm files.
+pub fn deterministic_gzip_bytes(bytes: &[u8]) -> Result<Vec<u8>, std::io::Error> {
     let mut output = Vec::new();
-    encode_gzip(bytes, &mut output, 9, u64::MAX)?;
+    encode_gzip(bytes, &mut output, GZIP_COMPRESSION_LEVEL, u64::MAX)?;
     Ok(output)
 }
 

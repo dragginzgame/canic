@@ -4,6 +4,54 @@ use super::*;
 use std::time::SystemTime;
 
 #[test]
+fn production_gzip_policy_binds_fixture_release_artifacts() {
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let config = workspace.join("apps/test/test-configs/generated-mixed-topology.toml");
+    let snapshot = AppConfigSnapshot::load(&config).unwrap();
+    let raw = b"fixture artifact with repeated data for production compression".repeat(128);
+    let modules = snapshot
+        .model()
+        .roles
+        .keys()
+        .filter(|role| !role.is_root())
+        .map(|role| (role.clone(), raw.clone()))
+        .collect();
+    let release = crate::pic::managed_test_init_identity().release_build_id;
+    let (manifest, artifacts) = super::super::exact_root_store_fixture(&config, &modules, release);
+    assert!(!manifest.entries.is_empty());
+
+    let directory = std::env::temp_dir().join(format!(
+        "canic-gzip-policy-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos(),
+    ));
+    let _cleanup = super::super::TestDirectoryCleanup(directory.clone());
+    std::fs::create_dir(&directory).unwrap();
+    let wasm = directory.join("fixture.wasm");
+    let gzip = directory.join("fixture.wasm.gz");
+    std::fs::write(&wasm, &raw).unwrap();
+    canic_host::canister_build::write_gzip_artifact(&wasm, &gzip).unwrap();
+    let production = std::fs::read(&gzip).unwrap();
+    for entry in &manifest.entries {
+        let artifact = &entry.artifact;
+        let retained = &artifacts[&artifact.role];
+        assert_eq!(retained, &production);
+        assert_eq!(artifact.wasm_gz_size_bytes, retained.len() as u64);
+        assert_eq!(
+            artifact.wasm_gz_sha256_hex,
+            canic_core::cdk::utils::hash::sha256_hex(retained)
+        );
+        assert_eq!(
+            ic_host_artifacts::artifact::decode_gzip(retained, retained.len(), raw.len()).unwrap(),
+            raw,
+        );
+    }
+}
+
+#[test]
 #[ignore = "focused qualification resolves the real fixture Cargo graphs"]
 pub fn batched_fixture_role_evidence_matches_isolated_validation() {
     let workspace =

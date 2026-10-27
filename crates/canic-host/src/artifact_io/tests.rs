@@ -777,8 +777,7 @@ fn qualified_set_publishes_matching_wasm_candid_and_gzip_after_admission() {
     assert_eq!(fs::read(&wasm_path).unwrap(), wasm);
     assert_eq!(fs::read(&did_path).unwrap(), candid);
     let gzip = fs::read(&gzip_path).unwrap();
-    let mut decoded = Vec::new();
-    std::io::Read::read_to_end(&mut flate2::read::GzDecoder::new(&gzip[..]), &mut decoded).unwrap();
+    let decoded = ic_host_artifacts::artifact::decode_gzip(&gzip, gzip.len(), wasm.len()).unwrap();
     assert_eq!(decoded, wasm);
     assert_no_artifact_stage(&root);
     fs::remove_dir_all(root).unwrap();

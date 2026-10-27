@@ -5,6 +5,7 @@
 //! Boundary: exercises topology completeness, build qualification, and admission-scoped output.
 
 use super::*;
+use crate::test_support::gzip;
 use crate::{
     component_topology::{
         PlannedFleetSubnetRootTopologyInput, RootComponentAdmissionInput,
@@ -26,9 +27,7 @@ use canic_core::{
     bootstrap::{compiled::ConfigModel, parse_config_model},
     cdk::utils::hash::hex_bytes,
 };
-use flate2::{Compression, GzBuilder};
 use ic_platform::principal::ExternalPrincipal as Principal;
-use std::io::Write;
 
 const CONFIG: &str = r#"
 [app]
@@ -158,14 +157,6 @@ fn wasm(role: &str) -> Vec<u8> {
     crate::test_support::wire_wasm(role.as_bytes())
 }
 
-fn gzip(bytes: &[u8]) -> Vec<u8> {
-    let mut encoder = GzBuilder::new()
-        .mtime(0)
-        .write(Vec::new(), Compression::best());
-    encoder.write_all(bytes).expect("write gzip fixture");
-    encoder.finish().expect("finish gzip fixture")
-}
-
 fn target(role: &str) -> ApplicationArtifactBuildTarget {
     ApplicationArtifactBuildTarget {
         role: CanisterRole::owned(role.to_string()),
@@ -184,7 +175,15 @@ fn output(role: &str, release_build_id: ReleaseBuildId) -> ApplicationArtifactBu
         release_build_id,
         wasm_relative_path: target.wasm_relative_path,
         wasm_gz_relative_path: target.wasm_gz_relative_path,
-        wasm_gz: gzip(&wasm),
+        // Freeze the input evidence, not an upstream compressor's byte choices.
+        // These level-9 members were produced by the shared artifact encoder;
+        // compilation still validates each member against the current raw Wasm.
+        wasm_gz: match role {
+            "alpha" => include_bytes!("fixtures/alpha.wasm.gz").to_vec(),
+            "beta" => include_bytes!("fixtures/beta.wasm.gz").to_vec(),
+            "shared" => include_bytes!("fixtures/shared.wasm.gz").to_vec(),
+            _ => gzip(&wasm),
+        },
         wasm,
         wire_schema: crate::test_support::WIRE_SCHEMA.to_vec(),
         candid_sha256: [3; 32],
@@ -284,7 +283,7 @@ fn compiler_freezes_one_canonical_qualified_topology_union() {
     );
     assert_eq!(
         hex_bytes(union.digest(&topology).expect("frozen union digest")),
-        "9a74a4991fed2a953086a48b7c987ca3819c2af900db2104e7429c4c714bd601"
+        "ca9c9fb6aa1768617194a75c67c0ad8768c3923a0032006026babb16fe730c54"
     );
 }
 
@@ -446,7 +445,7 @@ fn projection_preserves_every_spec_role_while_reusing_shared_artifact_evidence()
                 .expect("frozen manifest digest")
                 .into_bytes()
         ),
-        "33a691c881ccde2b83ada2408aea8937863152b34eaf7c6884fd2797fa5a6f3f"
+        "d516853f7b203e1db1a635624bec967cf5a16f755a1da5b4e38486f5b748afa6"
     );
 }
 

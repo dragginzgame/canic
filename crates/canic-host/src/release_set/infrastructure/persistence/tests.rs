@@ -1,10 +1,10 @@
 use super::*;
+use crate::test_support::gzip;
 use crate::{
     release_build::{finalize_release_build_from_manifest, plan_release_build},
     test_support::temp_dir,
 };
-use flate2::{Compression, GzBuilder};
-use std::{fs, io::Write, path::Path};
+use std::{fs, path::Path};
 
 #[test]
 fn qualified_complete_build_persists_one_exact_canonical_manifest() {
@@ -377,14 +377,6 @@ fn wasm(marker: u8, release_build_id: ReleaseBuildId) -> Vec<u8> {
 
 fn wasm_without_identity(marker: u8) -> Vec<u8> {
     crate::test_support::wire_wasm(&[marker])
-}
-
-fn gzip(bytes: &[u8]) -> Vec<u8> {
-    let mut encoder = GzBuilder::new()
-        .mtime(0)
-        .write(Vec::new(), Compression::best());
-    encoder.write_all(bytes).expect("write gzip");
-    encoder.finish().expect("finish gzip")
 }
 
 #[test]

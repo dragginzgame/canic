@@ -17,7 +17,8 @@ pub(crate) use reuse::retain_cargo_include_exports;
 
 pub use crate::{
     artifact_io::{
-        WireArtifactError, WireBindings, generate_wire_bindings, validate_wasm_endpoints,
+        WireArtifactError, WireBindings, deterministic_gzip_bytes, generate_wire_bindings,
+        validate_wasm_endpoints, write_gzip_artifact,
     },
     build_profile::CanisterBuildProfile,
 };

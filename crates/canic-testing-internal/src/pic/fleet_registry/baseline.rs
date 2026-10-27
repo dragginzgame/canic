@@ -17648,7 +17648,8 @@ cycles = "80T"
             .get(role)
             .cloned()
             .unwrap_or_else(|| format!("raw fixture for {role}").into_bytes());
-        let compressed = gzip(&raw);
+        let compressed = canic_host::canister_build::deterministic_gzip_bytes(&raw)
+            .expect("gzip fixture Wasm with the production artifact policy");
         let existing = artifacts.insert(role.clone(), compressed.clone());
         assert!(
             existing.as_ref().is_none_or(|bytes| bytes == &compressed),
@@ -17782,13 +17783,6 @@ cycles = "80T"
             .iter()
             .map(|(role, package)| (CanisterRole::new(role), wasms.wasm(package)))
             .collect()
-    }
-
-    fn gzip(bytes: &[u8]) -> Vec<u8> {
-        let mut encoded = Vec::new();
-        ic_host_artifacts::artifact::encode_gzip(bytes, &mut encoded, 6, u64::MAX)
-            .expect("gzip fixture Wasm");
-        encoded
     }
 
     fn stage_chunked_payload(

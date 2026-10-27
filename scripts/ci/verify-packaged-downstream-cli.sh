@@ -228,7 +228,9 @@ placement.maximum_per_root = 1
 placement.minimum_distinct_roots = 1
 EOF
 
-    printf '\x00asm\x01\x00\x00\x00' | gzip -n > "$DOWNSTREAM_ROOT/.icp/local/canisters/app/app.wasm.gz"
+    # Reuse bytes produced by the shared artifact encoder for this size-report fixture.
+    cp "$ROOT/crates/canic-host/src/release_set/application/fixtures/alpha.wasm.gz" \
+        "$DOWNSTREAM_ROOT/.icp/local/canisters/app/app.wasm.gz"
 }
 
 run_packaged_canic() {

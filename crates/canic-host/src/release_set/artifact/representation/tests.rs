@@ -1,12 +1,5 @@
 use super::*;
-use flate2::{Compression, write::GzEncoder};
-use std::io::Write;
-
-fn gzip(bytes: &[u8]) -> Vec<u8> {
-    let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-    encoder.write_all(bytes).unwrap();
-    encoder.finish().unwrap()
-}
+use crate::test_support::gzip;
 
 #[test]
 fn qualified_facts_bind_both_exact_representations() {

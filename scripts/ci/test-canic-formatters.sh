@@ -9,9 +9,11 @@ cp "$ROOT/Makefile" "$ROOT/tool-versions.env" "$fixture/"
 cp "$ROOT/make/tools.mk" "$ROOT/make/execution.mk" "$ROOT/make/release.mk" "$ROOT/make/consumer.mk" "$ROOT/make/rust-format.mk" "$fixture/make/"
 cp "$ROOT/ci/tool-versions.env" "$ROOT/ci/ic-tools.tsv" "$fixture/ci/"
 cp "$ROOT/scripts/ci/check-make-execution.sh" "$ROOT/scripts/ci/check-format-tools.sh" \
-    "$ROOT/scripts/ci/run-formatting.sh" "$ROOT/scripts/ci/run-canic-formatters.sh" \
+    "$ROOT/scripts/ci/run-rust-formatting.pl" \
     "$ROOT/scripts/ci/ic-tool-pins.sh" "$ROOT/scripts/ci/tool-catalog-records.pl" \
     "$ROOT/scripts/ci/StableVersion.pm" "$fixture/scripts/ci/"
+# Observe every actual formatter invocation in this routing fixture.
+printf '\nFORMAT_RUST_ARGS += --no-cache\n' >> "$fixture/Makefile"
 mkdir -p "$fixture/integrations/blob-service/consumer" "$fixture/integrations/blob-service/embedded-consumer"
 cat > "$fixture/.tools/rust/common/bin/cargo" <<'CARGO'
 #!/usr/bin/env bash
@@ -20,6 +22,7 @@ set -euo pipefail
 case "$*" in
     'sort --version') echo 'cargo-sort 2.1.4' ;;
     'fmt --version') echo rustfmt ;;
+    'sort-derives --version') echo 'cargo-sort-derives 0.14.1' ;;
     *) printf '%s\t%s\n' "$PWD" "$*" >> "$CANIC_FORMAT_EVENTS"
        [[ "$*" != "${CANIC_FORMAT_FAIL:-}" ]] || exit 23 ;;
 esac
@@ -29,7 +32,6 @@ export CANIC_FORMAT_EVENTS="$fixture/events" RUNNER_TEMP="$fixture"
 for target in fmt fmt-check; do
     : > "$CANIC_FORMAT_EVENTS"
     make --no-print-directory -C "$fixture" "$target" > "$fixture/output" 2>&1
-    [[ "$(wc -l < "$fixture/output")" == 1 ]]
     for workspace in "$fixture" \
         "$fixture/integrations/blob-service/consumer" "$fixture/integrations/blob-service/embedded-consumer"; do
         awk -F '\t' -v root="$workspace" '$1 == root && $2 ~ /^fmt --all/ { found = 1 } END { exit !found }' "$CANIC_FORMAT_EVENTS"

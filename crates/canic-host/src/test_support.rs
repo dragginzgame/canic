@@ -243,3 +243,8 @@ pub fn pool_reply(
 }
 
 pub use crate::release_set::test_artifact::{WIRE_SCHEMA, wire_wasm};
+
+/// Use the production artifact encoder and compression policy for test bytes.
+pub fn gzip(bytes: &[u8]) -> Vec<u8> {
+    crate::artifact_io::deterministic_gzip_bytes(bytes).expect("encode gzip fixture")
+}

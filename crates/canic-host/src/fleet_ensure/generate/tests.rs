@@ -1,4 +1,5 @@
 use super::*;
+use crate::test_support::gzip;
 use crate::{
     fleet_ensure::{
         model::{
@@ -49,10 +50,9 @@ use canic_core::{
     cdk::utils::hash::{hex_bytes, sha256_hex},
     role_contract::{ProtocolProfileDigest, RoleCapabilityKey},
 };
-use flate2::{Compression, GzBuilder};
 #[cfg(unix)]
 use std::os::unix::fs::{PermissionsExt, symlink};
-use std::{collections::BTreeSet, fs, io, io::Write as _};
+use std::{collections::BTreeSet, fs, io};
 
 #[test]
 fn recovery_controller_source_is_active_and_rejects_unsafe_sets() {
@@ -4637,14 +4637,6 @@ fn persist_test_release_authority(
     .expect("write current release manifest");
     finalize_release_build_from_manifest(root, release_build_id, &current_path)
         .expect("finalize test release authority");
-}
-
-fn gzip(bytes: &[u8]) -> Vec<u8> {
-    let mut encoder = GzBuilder::new()
-        .mtime(0)
-        .write(Vec::new(), Compression::best());
-    encoder.write_all(bytes).expect("write gzip");
-    encoder.finish().expect("finish gzip")
 }
 
 fn copy_test_file(source: &Path, destination: PathBuf) -> io::Result<u64> {

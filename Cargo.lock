@@ -599,7 +599,6 @@ dependencies = [
  "canic-core",
  "clap",
  "crc32fast",
- "flate2",
  "getrandom 0.4.3",
  "hmac 0.13.0",
  "ic-build",

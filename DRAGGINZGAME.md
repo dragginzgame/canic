@@ -134,6 +134,14 @@ for owned RPC; keep unavoidable Candid in dedicated external-protocol boundary
 types, not our domain, state or RPC models. Read the [encoding contract](rules/engineering-details.md#ic-application-encoding)
 and [RPC budgets](rules/rpc-budgets.md) for codecs, bindings or protocol changes.
 
+## Gzip encoding
+
+IC Tooling's `ic-host-artifacts::artifact::encode_gzip` owns gzip encoding.
+Production code, tests, examples and generators reuse it; consumers retain
+compression levels, budgets and artifact admission. Read the
+[gzip contract](rules/engineering-details.md#gzip-encoding) before changing
+encoders or compressed-byte identities.
+
 ## Pre-1.0 contracts
 
 Keep one current repository-owned contract, without compatibility shims or parallel

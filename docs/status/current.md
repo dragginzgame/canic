@@ -1,205 +1,101 @@
 # Current handoff — 2026-10-27
 
-## Latest Wire registration repair
-
-Combined native tests unified Canic’s wire-schema feature into consumers whose
-local feature and derives were disabled. Registration now requires the consumer’s
-declared wire-schema feature as well as Canic support. Mixed-feature checks pass
-for all nine failing packages: leaf_probe, canister_index_hub, canister_user_hub,
-canister_user_shard, delegation_issuer_stub, intent_authority,
-managed_lifecycle_probe, runtime_probe and sharding_root_stub. The explicit
-Canic wire_schema integration test passes and verifies actual registered types,
-method identities and budgets. Logs: /tmp/canic-schema-affected.log and
-/tmp/canic-schema-registration-test.log. No full suite rerun was performed.
-
-## Latest release-gate diagnosis
-
-The validation adapter expected the old order and omitted dependency admission
-and fixture qualification. Its focused shell regression now passes after fixing
-the expected sequence. Dependency-risk classification regressions and scoped
-ShellCheck also pass. The audit gate now prints advisory/package/patch details
-instead of exiting silently on cargo-audit status 1.
-
-The maintainer accepted RUSTSEC-2026-0387 for the exact crypto-bigint 0.5.5
-checksum recorded in the dependency-risk inventory. It now remains visible as
-a warning and does not block release. Exact-match acceptance and changed-identity
-rejection tests pass; replay of the captured audit passes. The captured
-audit lists >=0.7.6 as patched; elliptic-curve 0.13.8 requires 0.5, through the
-ECDSA/k256/p256/ic-agent graph. No dependency was changed; other vulnerabilities remain blocking.
-Evidence: /tmp/tmp.AT1Up3yD87/audit.json, /tmp/canic-current-risk-diagnostic.log
-and /tmp/canic-crypto-bigint-parents.log. No full release validation was rerun.
-
 ## Accepted scope and candidate
 
 Continue the accepted 0.112 Blob/Wire hard cut using the
 [closeout plan](../audits/working/0.112-push-readiness/plan.md) and its
-[earlier structured qualification](../audits/working/0.112-push-readiness/owned-candid-cut.json).
-The current base is main at `b9482ec52` with local supplier-adoption and lint fixes.
+[graph-specific evidence](../audits/working/0.112-push-readiness/owned-candid-cut.json).
+Current base: main at `860721a50`, with local gzip consolidation changes.
 Own package versions remain 0.111.0; the open changelog target is 0.112.0.
-Do not conflate the old dirty `cf2d3d1fb` evidence with this selected graph.
+The maintainer is running release validation and reports failures for scoped repair.
+Do not run full gates, commit, push, bump versions or release without instruction.
 
-The maintainer accepts required external Candid. Owned endpoints, initialization
-and authority/hash contracts use Wire. Removing redundant external DTO mirrors
-remains intended; a zero-Candid checkout is not an acceptance requirement.
-Production portable Auth, live Backup and ten unrelated unstarted simplifications
-remain deferred with their unavailable paths closed. Preserve the eight completed
-simplifications and their acceptance recorded in the plan.
+Required external Candid is accepted. Owned endpoints, initialization and
+hash contracts use Wire; redundant external DTO migration remains intended.
+A zero-Candid checkout is not an acceptance requirement. Production portable
+Auth, live Backup and unrelated unstarted simplifications remain deferred.
+Preserve completed simplifications and issue-batch evidence linked from the plan.
 
-## Current supplier adoption — workspace Clippy passed
+## Current gzip repair
 
-The maintainer requested all latest IC releases and then explicitly instructed:
-"dont bother testing just adopt and ill try and release". The subsequent explicit request to run Cargo Clippy and fix all findings
-authorized the workspace lint gate. The subsequent reported allocation-peer
-freshness failure was repaired through the owning refresh and verification commands.
-The latest
-published dependencies are adopted in the root and both independent Blob
-consumer catalogs and locks, preserving existing features and unrelated work:
+The maintainer requested one shared gzip method. IC Tooling already owns it in
+ic-host-artifacts 0.69.0: artifact::encode_gzip/decode_gzip. Canic production and
+Rust fixtures now delegate to that owner with one level-9 compression policy.
+Remove direct flate2 from the Host dev catalog and root lock edge; retain upstream
+transitive selections. The packaged CLI size fixture reuses qualified gzip bytes.
+No upstream checkout or compression implementation was changed.
 
-- Platform/macros 0.7.0; Blob Storage/Contracts 0.51.0; Auth/protocol types 0.18.0.
-- Tooling/Host/Testkit 0.69.0; Query 0.75.0; Backup 0.45.0.
-- Memory/Storage 0.51.10; Timers 0.31.10; Wire 0.7.18; Metrics 0.16.3.
-- Shared Tooling 0.26.22 at 5fc904a935d82ad31f0fba14434b71ccb8c10345.
-  Browser Platform remains the latest 0.1.1 with SDK Core 6.1.1 unchanged.
+Issue #698’s remaining baseline and audit Root level-6 helpers are removed.
+They now use the existing production in-memory and file adapters exposed through
+canister_build; the file path retains durable publication. No new test-only
+production API or encoder is introduced. The fixture byte/size/hash regression
+and cache-input test pass (one existing opt-in case ignored), all 90 release-set
+tests pass, and strict Host/Testing Internal library/test Clippy passes with
+governed-pocketic-tests enabled. Logs: /tmp/canic-698-{fixtures-enabled,release-set,clippy}.log.
+The initial default-feature filter selected zero tests and is not qualification.
+No installed test or full release gate ran. Shared Tooling 0.26.23 is now adopted
+from committed revision 48ec9794892da6f8e2812653ec16c5e8ea23df47 through its exporter,
+completing #698’s snapshot requirement locally. The snapshot verifies 139 files.
+Canic now selects its existing three formatter roots, derive sorting and manifest
+order declaratively; the copied runner is removed. Hook scratch views explicitly
+disable reuse. Routing, Shared driver, real fmt-check and hook tests pass, as do
+scoped ShellCheck and diff checks. Hook installer fixtures now pass --consumer.
+Current formatter reuse is conservatively disabled by frontend node_modules
+symlinks; per-pass timing works and the complete check took about 11 seconds.
+Logs: /tmp/canic-shared-02623-*.log. No issue closure, commit or release performed.
 
-All three locks now select a single Platform 0.7.0 identity. The earlier Blob,
-Backup and Query publication/type-identity blockers are superseded by the matching
-published releases. No compatibility conversions, local overrides or fallback
-codecs were added. Registry evidence and lock-update logs: /tmp/canic-deps-latest/.
-Structured selection: latestSupplierAdoption20261027.
+The two reported application digest failures reproduced with the default
+backend. Enabling zlib-rs changed those digests again and exposed the same fragile
+golden in infrastructure tests. Three digest goldens now use fixed gzip inputs;
+compilation still qualifies each against its current raw Wasm. Other tests use
+the shared live encoder. This preserves exact-byte identity without treating
+upstream compression byte choices as a release-manifest serialization contract.
+Six small gzip fixtures are under release_set/{application,infrastructure}/fixtures.
 
-The final Auth/Blob/Platform graph passes `cargo clippy --locked --workspace
---all-targets --all-features -- -D warnings` through the governed workspace
-runner. Log: `/tmp/canic-clippy-complete.log`. Fixes include grouped method IDs,
-import/visibility and lint-expectation cleanup, and an explicit metrics rejection
-result type for canisters with no compiled metrics families. No tests were run. Earlier passing checks qualify only their
-recorded graphs. The allocation peer and its provenance have now been regenerated
-for this selection. Both `refresh_embedded_root` and `verify_embedded_root` passed
-via `cargo run --locked --offline -p canic-testing-internal --example <name>`.
-All three Cargo locks stayed unchanged. Logs: `/tmp/canic-peer-refresh-current.log`
-and `/tmp/canic-peer-verify-current.log`. This repairs the reported fixture gate;
-no full validation or installed tests were rerun. Open
-0.112 changelog notes reflect final selections; own package versions stay 0.111.0.
-No staging, commit, push, release, deployment or paid operation was performed.
-Remaining external DTO migration and the earlier issue-batch acceptance gaps are
-recorded below and in the closeout plan; this adoption is not full release approval.
+All 90 release-set tests pass with both tested backends. Another 75 owning tests
+pass across artifact IO, generation, current protocol and build reuse; two existing
+opt-in tests remain ignored. Strict Host library/test Clippy and scoped ShellCheck
+pass. Logs: /tmp/canic-gzip-{default-final,zlib-final,callers,clippy-final}.log.
+No full workspace or packaged-downstream execution was rerun. Production gzip
+settings, stored retry bytes and custody/recovery rules remain unchanged.
 
-## Newly added issue batch
+## Selected dependencies and earlier qualification
 
-The maintainer requested working through the 25 newly added issues after #662.
-Twenty-four are implemented locally; #678 is superseded by the owned Wire cut.
-The issue inventory and invariants are recorded in the closeout plan. This batch
-consolidates authority construction, pool transitions, bounded cycle reservations,
-auth configuration, metrics, transport observations and Host/CLI mechanics.
-No codec, protocol, error variant or storage layout is deliberately changed.
+Root and both independent Blob consumers select Platform/macros 0.7.0,
+Blob/Contracts 0.51.0, Auth/protocol types 0.18.0, Memory/Storage 0.51.10,
+Timers 0.31.10, Wire 0.7.18 and Metrics 0.16.3 where applicable.
+Root Host/Tooling/Testkit is 0.69.0, Query 0.75.0 and Backup 0.45.0.
+Shared Tooling: 0.26.23 at 48ec9794892da6f8e2812653ec16c5e8ea23df47.
+Browser Platform: 0.1.1; SDK Core: 6.1.1. Earlier publication blockers are resolved.
+No compatibility adapters or local dependency overrides were introduced.
 
-Targeted qualification has passed 940 native tests across 29 owning filters,
-separate Root/Store Wasm compilation and strict library/test Clippy for the four
-affected production crates. Four opt-in process/measurement tests remain ignored.
-Four stale test assumptions were corrected: the native-Wire receipt golden,
-query authority-observation count, release-reuse Wasm/schema fixture and a Medic
-prose assertion. The receipt mismatch was reproduced with the original ordering
-implementation before updating its golden. Allocation-peer regeneration and verification passed on that graph. The installed
-provisioning case then failed its Cargo-input stability guard before installed
-execution: the root lock changed during the command. New selections include
-Tooling/Testkit 0.68.12, Memory/Storage 0.51.8, Timers 0.31.8 and Backup 0.44.8.
-No dependency update was issued in this issue batch. Preserve the changed lock;
-its owner is unconfirmed and clarification was requested. The independent locks
-and changed Rust source hashes stayed unchanged. Retirement qualification has
-not run. Prior passing checks do not qualify the changed root graph. Evidence:
-issueConsolidation20261027; logs and both root-lock snapshots:
-/tmp/canic-issues-663-689/ and /tmp/canic-deps-round2/root-before.lock.
+Workspace all-target/all-feature warning-denied Clippy passed before these latest
+repairs. Allocation-peer refresh and verification subsequently passed, preserving
+all three locks at that point. Those results retain their recorded input scope.
+Combined tests later exposed schema feature unification: registration now requires
+the consumer's declared wire-schema feature as well as Canic support. All nine
+failing consumers compile in the mixed-feature case; the explicit schema registry
+test passes. Logs: /tmp/canic-schema-{affected,registration-test}.log.
 
-No GitHub issue comment or closure, staging, commit, push or release is performed.
-The existing external DTO migration remains the separate full-batch blocker.
+The validation adapter's stale ordering was repaired and its regression passes.
+Risk diagnostics now print advisory/package/patch details. The maintainer accepts
+RUSTSEC-2026-0387 for the exact crypto-bigint 0.5.5 checksum in the risk inventory;
+it remains a warning, not a release blocker. Identity-change rejection tests and
+captured audit replay pass. Other vulnerabilities remain blocking. See the scoped
+acceptance in docs/governance/ci-deployment.md; no crypto dependency was changed.
 
-## Supplier adoption qualified before the concurrent root-lock change
+## Remaining scope and safety
 
-The latest maintainer-requested refresh selects Tooling/Host/Testkit 0.68.11,
-Query 0.74.5, Backup 0.44.7, Memory/Storage 0.51.7 and Platform/Macros 0.6.21.
-Timers 0.31.7, Wire 0.7.18, Blob Storage/Contracts 0.49.3 and Auth 0.17.1 stay
-selected. Unpublished Timers 0.31.8, Persistence 0.51.8 and Blob 0.50.0 are
-excluded. Both independent Blob consumers align their catalogs and locks.
-The captured root lock already selected the new Rust versions and is preserved.
-Existing feature selections remain unchanged. Shared Tooling stays 0.26.21.
+External DTO consumer migration and its acceptance remain separate from adoption.
+Earlier Root provisioning stopped on an input-stability failure; retirement
+qualification and complete final-graph installed qualification remain unclaimed.
+Earlier dedicated/embedded Blob passes, issue fixes and Wasm measurements apply
+only to their recorded graphs; retain the structured evidence rather than relabel it.
 
-The browser consumer now selects published Platform 0.1.1, preserving SDK Core
-6.1.1 and pinned Node/npm/TypeScript. Locked installation and its SDK-boundary
-check pass. Native checks pass: ten Query subnet-catalog, twenty-six Backup
-restore-runner and sixteen memory cases. The exact managed_browser_compositions
-PocketIC case passes for both dedicated and embedded consumers, including generated
-clients and its malformed-funding path. It does not repeat the full funding-error
-matrix. Allocation-peer verification found changed bytes; owning regeneration and
-final verification pass. All three Cargo locks and the npm lock stayed unchanged.
-Dependency boundaries, scoped doc links and diff checks pass. Structured evidence:
-icFamilyRefreshSecond20261027. Logs and before-lock snapshots: /tmp/canic-deps-round2/.
-
-The preceding icFamilyRefresh20261027 and supplierAdoption20261027 evidence
-qualifies its recorded earlier graphs. Do not present it as fresh proof of the
-latest selections. No DTO mirror is removed solely by changing dependency versions.
-
-## Remaining DTO ownership work
-
-The owning supply issues are [Platform #61](https://github.com/dragginzgame/ic-platform/issues/61)
-(CMC/ICP transfer and receipts), [#62](https://github.com/dragginzgame/ic-platform/issues/62)
-(Cycles creation/withdrawal), [#63](https://github.com/dragginzgame/ic-platform/issues/63)
-(NNS lookup) and [#64](https://github.com/dragginzgame/ic-platform/issues/64)
-(asset retrieval). Their published APIs still need actual Canic consumer
-migration and qualification; do not close them on version selection alone.
-
-The [prepared export patch](../audits/working/0.112-push-readiness/platform-external-contracts.patch)
-adds management/history/ECDSA and ICRC transfer/consent identities from existing
-upstream crates. Its isolated native/Wasm/MSRV/strict-library-lint evidence remains
-in the plan as historical preparation evidence. Published Platform 0.6.21 now
-supplies these exports, including the distinct ICRC-21 namespace. The supply gap
-is resolved; actual Canic consumer migration and acceptance remain outstanding.
-
-Capacity-import history already reuses available Platform ChangeDetails instead
-of a local runtime enum. Three focused history tests and Root control-plane Wasm
-compilation pass; exact origin, sender-version and controller checks remain.
-Adopt the larger mirrors from their matching published public types with owning
-consumer tests. Do not substitute differently shaped ledger contracts or introduce
-serialization bridges.
-
-## Retained qualification and safety
-
-[Issue #662](https://github.com/dragginzgame/canic/issues/662) is implemented locally:
-Core InternalError and Host IcpCommandError derive their mechanical formatting/
-source implementations using existing thiserror. Five focused native Linux tests
-pass for messages, exact source identity, projections and retained evidence.
-Strict Core/Host library/test Clippy with all features and Core Wasm compilation
-pass. A one-line Host status-fixture default-type spelling fixed an existing lint
-found during that check. Logs: `/tmp/canic-662-{tests,clippy,clippy-rerun,wasm}.log`.
-Formatting/diff checks pass; no full gate, macOS or installed test was run for this
-presentation-only change. Custom conversions and other error types are untouched.
-
-Earlier owned-cut qualification covers native/macro/ingress bounds, managed
-initialization, both Blob compositions, generated clients, checkpoint restoration,
-Root bootstrap/recycle/replacement, held replies, package consumers, timer custody
-and Root deletion readiness. Those results remain attached to their recorded
-source and dependency graphs; they are not fresh proof for this adoption.
-
-The prior comparable dedicated fast Root measured 8,597,817 code-body bytes and
-9,109,546 total bytes, 2.32% less code than its immediate pre-cut baseline. That
-measurement predates this supplier graph. No new Wasm-size improvement is claimed.
-
-The latest reported Clippy failures were corrected in four test/example files:
-import placement, three unnecessary borrows and a redundant closure. Strict
-Core/Contracts library/test/conformance-example Clippy passed before this adoption.
-No production behavior changed in that lint correction; no broad gate was rerun.
-
-Keep endpoint authorization, exact identity/controller binding, bounded spending,
+Preserve endpoint authentication, explicit identities/controllers, bounded spending,
 original retry bytes, uncertain-effect reconciliation, same-release recovery and
-cycle conservation. The unqualified Blob confirm_credit wrapper remains removed;
-uncertain payments and replay obligations remain. Blob owns its service/funding
-engine; Canic owns mounting, auth/caller context, lifecycle/memory composition and
-installation identity. Canic's Wasm Store is its artifact registry.
-
-Storage retains the accepted serde_cbor 0.11.2 hard cut: nested u128 values use
-exactly 16 big-endian bytes; Wire keeps native numbers. No fallback, CBOR tag
-feature or Postcard experiment was adopted. The advisory exception remains scoped.
-
-No staging, commits, pushes, own-version changes, release receipts, deployments or
-paid/provider effects are authorized by ordinary continuation. Preserve existing
-work and sibling checkouts. Only focused validation is authorized; inspect host-
-visible target ownership before source edits or builds. Full extraction readiness
-still depends on the remaining external DTO adoption and its owning acceptance.
+cycle conservation. The unqualified confirm_credit wrapper remains removed;
+uncertain payments and replay obligations remain. Blob owns its service engine;
+Canic owns mounting, caller context, lifecycle/memory composition and installation.
+Storage retains serde_cbor 0.11.2 with nested u128 encoded as 16 big-endian bytes.
+Wire carries native numbers; no Ciborium or fallback codec is adopted.

@@ -59,7 +59,6 @@ rustix = { workspace = true }
 
 [dev-dependencies]
 clap = { workspace = true }
-flate2 = { workspace = true }
 ic-host-process = { workspace = true, features = ["test-support"] }
 ic-platform = { workspace = true, features = ["bls", "pocket-ic"] }
 ic-testkit = { workspace = true }

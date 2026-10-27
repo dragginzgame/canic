@@ -10,6 +10,7 @@ use crate::fleet_ensure::{
     ops::read_plan,
     workflow,
 };
+use crate::test_support::gzip;
 use canic_contracts::{
     cycles::Cycles,
     dto::{
@@ -31,10 +32,9 @@ use canic_core::{
         bind_initial_fleet_admission_policy, compile_fleet_admission_policy_template,
     },
 };
-use flate2::{Compression, GzBuilder};
+use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt as _;
-use std::{fs, io::Write};
 
 const CONFIG: &str = r#"
 [app]
@@ -1820,11 +1820,7 @@ fn fresh_fleet_store_bootstrap_is_deterministic() {
     )
     .unwrap();
     fs::write(&wasm_path, &wasm).expect("write Wasm");
-    let mut encoder = GzBuilder::new()
-        .mtime(0)
-        .write(Vec::new(), Compression::best());
-    encoder.write_all(&wasm).expect("write gzip payload");
-    fs::write(&wasm_gz_path, encoder.finish().expect("finish gzip")).expect("write gzip Wasm");
+    fs::write(&wasm_gz_path, gzip(&wasm)).expect("write gzip Wasm");
     let targets = vec![crate::release_set::ApplicationArtifactBuildTarget {
         role: CanisterRole::new("alpha"),
         package: "alpha".to_string(),
@@ -1979,11 +1975,7 @@ fn persist_infrastructure_manifest(root: &Path, release_build_id: ReleaseBuildId
     .map(|(index, role)| {
         let index = u8::try_from(index).expect("infrastructure role index fits u8");
         let raw = [b"\0asm\x01\0\0\0".as_slice(), &[index]].concat();
-        let mut encoder = GzBuilder::new()
-            .mtime(0)
-            .write(Vec::new(), Compression::best());
-        encoder.write_all(&raw).expect("write infrastructure gzip");
-        let gzip = encoder.finish().expect("finish infrastructure gzip");
+        let gzip = gzip(&raw);
         let base = format!(".icp/local/canisters/{0}/{0}", role.as_str());
         fs::create_dir_all(root.join(&base).parent().expect("artifact parent"))
             .expect("create artifact parent");
@@ -2425,9 +2417,7 @@ fn store_chunk_compilation_rejects_empty_payload_without_actions() {
 #[test]
 fn store_chunk_compilation_binds_the_upload_representation_not_the_raw_module() {
     let wasm = b"\0asm\x01\0\0\0";
-    let mut encoder = GzBuilder::new().write(Vec::new(), Compression::default());
-    encoder.write_all(wasm).unwrap();
-    let compressed = encoder.finish().unwrap();
+    let compressed = gzip(wasm);
     let mut actions = Vec::new();
     append_chunk_actions(
         &mut actions,

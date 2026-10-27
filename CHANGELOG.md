@@ -21,7 +21,7 @@ owners, and strengthens release-bound observations and interruption recovery.
   Backup 0.45.0 with matching public type identities. Select Memory/Storage
   0.51.10 and Timers 0.31.10 across the applicable consumer graphs. Blob-owned
   records use its bounded Wire storage contract; preserve existing installation
-  obligations. Refresh the canonical Shared Tooling snapshot to 0.26.22.
+  obligations. Refresh the canonical Shared Tooling snapshot to 0.26.23.
 
 - **CBOR storage:** use the IC Rust stack's pinned `serde_cbor` and encode stored
   unsigned 128-bit values as exactly 16 big-endian bytes. Preserve the full cycle
@@ -82,6 +82,16 @@ owners, and strengthens release-bound observations and interruption recovery.
   ([#584 — Resolve Component Group members by role](https://github.com/dragginzgame/canic/issues/584)).
 
 ### 🔧 Changed
+
+- Adopt Shared Tooling 0.26.23, including gzip ownership and timed formatting
+  passes. Use its declarative three-workspace formatter instead of a copied
+  runner, with isolated hook formatting explicitly excluded from reuse.
+
+- Use IC Tooling’s gzip encoder for artifact fixtures as well as production,
+  with one Canic compression-level policy. Remove the direct flate2 dependency
+  and bind release digest goldens to fixed, qualified artifact bytes. Align the
+  baseline and audit Root fixtures with the same level-9 policy
+  ([#698](https://github.com/dragginzgame/canic/issues/698)).
 
 - Scope native Wire schema registration to each consumer’s declared `wire-schema`
   selection, so Cargo feature unification does not require schema derives in

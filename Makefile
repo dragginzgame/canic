@@ -28,8 +28,9 @@ LOCAL_TOOL_INSTALL_TARGETS += install-ic-tools install-candid-extractor install-
 LOCAL_TOOL_CHECK_TARGETS += ic-tools-check candid-extractor-check testkit-server-check
 LOCAL_TOOL_INSTALL_TARGETS += install-release-metadata-editor
 LOCAL_TOOL_CHECK_TARGETS += release-metadata-editor-check
-FORMAT_WRITE_COMMAND = bash scripts/ci/run-canic-formatters.sh --write $(CANIC_BLOB_WORKSPACES)
-FORMAT_CHECK_COMMAND = bash scripts/ci/run-canic-formatters.sh --check $(CANIC_BLOB_WORKSPACES)
+FORMAT_RUST_ARGS = --sort-derives \
+    $(foreach workspace,$(CANIC_BLOB_WORKSPACES),--extra-workspace $(workspace)) \
+    --extra-manifest-order workspace,package,lib,dependencies,dev-dependencies,build-dependencies,profile
 include make/consumer.mk
 
 .PHONY: install-candid-extractor candid-extractor-check install-testkit-server testkit-server-check

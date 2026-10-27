@@ -1,8 +1,7 @@
 use super::*;
+use crate::test_support::gzip;
 use canic_contracts::ids::{ReleaseBuildId, ReleaseBuildNonce};
 use canic_core::cdk::utils::hash::sha256_hex;
-use flate2::{Compression, GzBuilder};
-use std::io::Write;
 
 fn release_build(byte: u8) -> ReleaseBuildId {
     ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes([byte; 32]))
@@ -10,14 +9,6 @@ fn release_build(byte: u8) -> ReleaseBuildId {
 
 fn wasm(marker: u8) -> Vec<u8> {
     crate::test_support::wire_wasm(&[marker])
-}
-
-fn gzip(bytes: &[u8]) -> Vec<u8> {
-    let mut encoder = GzBuilder::new()
-        .mtime(0)
-        .write(Vec::new(), Compression::best());
-    encoder.write_all(bytes).expect("write gzip");
-    encoder.finish().expect("finish gzip")
 }
 
 fn owned_inputs(release_build_id: ReleaseBuildId) -> Vec<OwnedInput> {
@@ -71,7 +62,14 @@ impl OwnedInput {
             release_build_id,
             wasm_relative_path: format!(".icp/local/canisters/{0}/{0}.wasm", role.as_str()),
             wasm_gz_relative_path: format!(".icp/local/canisters/{0}/{0}.wasm.gz", role.as_str()),
-            wasm_gz: gzip(&wasm),
+            // Fixed input evidence keeps digest goldens independent of compressor versions.
+            // Compilation verifies these retained members against the raw fixture bytes.
+            wasm_gz: match marker {
+                1 => include_bytes!("fixtures/1.wasm.gz").to_vec(),
+                2 => include_bytes!("fixtures/2.wasm.gz").to_vec(),
+                3 => include_bytes!("fixtures/3.wasm.gz").to_vec(),
+                _ => gzip(&wasm),
+            },
             wasm,
         }
     }
@@ -144,7 +142,7 @@ fn compiler_derives_one_canonical_entry_per_infrastructure_role() {
     assert_eq!(manifest.digest().expect("manifest digest"), expected_digest);
     assert_eq!(
         canic_core::cdk::utils::hash::hex_bytes(expected_digest),
-        "e14af9321e27362056bd5c2abd55dab2abd1eba85ea789033276cf92baef6f9d",
+        "4ddb2efdef6e4cbb76203971a86b0b7789735ffed1e9d8a1f59aac9ad559f0a0",
     );
 }
 

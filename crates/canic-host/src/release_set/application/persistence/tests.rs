@@ -5,14 +5,14 @@
 //! Boundary: exercises exact build, topology, artifact-file, and durable-path admission.
 
 use super::*;
+use crate::test_support::gzip;
 use crate::{
     release_build::{finalize_release_build_from_manifest, plan_release_build},
     test_support::temp_dir,
 };
 use canic_contracts::ids::{CanisterRole, ReleaseBuildId};
 use canic_core::bootstrap::{compiled::ComponentTopology, parse_config_model};
-use flate2::{Compression, GzBuilder};
-use std::{fs, io::Write, path::Path};
+use std::{fs, path::Path};
 
 const CONFIG: &str = r#"
 [app]
@@ -483,14 +483,6 @@ fn wasm(marker: u8, release_build_id: ReleaseBuildId) -> Vec<u8> {
 
 fn wasm_without_identity(marker: u8) -> Vec<u8> {
     crate::test_support::wire_wasm(&[marker])
-}
-
-fn gzip(bytes: &[u8]) -> Vec<u8> {
-    let mut encoder = GzBuilder::new()
-        .mtime(0)
-        .write(Vec::new(), Compression::best());
-    encoder.write_all(bytes).expect("write gzip");
-    encoder.finish().expect("finish gzip")
 }
 
 #[test]

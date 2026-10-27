@@ -234,6 +234,35 @@ product, release and recovery obligations remain binding when applicable.
   Follow the [pre-1.0 contract rules](#pre-10-contracts); do not silently change a
   public interface or introduce parallel codecs/fallback readers for adoption.
 
+## Gzip encoding
+
+- IC Tooling's `ic-host-artifacts::artifact::encode_gzip`, behind its `gzip`
+  feature, is the canonical gzip encoder. General gzip compression belongs in
+  Tooling; it does not move into IC Platform merely because IC artifacts use it.
+- Reuse that API in production, tests, fixtures, examples and generators rather
+  than constructing another `flate2` encoder or copying header/compression logic.
+  A local adapter is justified when it supplies product policy or necessary
+  translation; it must delegate encoding to the canonical helper.
+- Consumers own the explicit compression level, compressed-byte allowance,
+  input custody, staging and publication. Ordinary fixtures use the fastest
+  setting that preserves the tested property, normally level 1. Do not run a
+  production level such as Canic's level 9 merely to construct valid gzip input.
+  Use the product's adapter/settings when testing exact compressed bytes/hashes,
+  release parity or compression-sensitive limits; keep explicit level/backend
+  coverage at the codec owner. A stored member is suitable only when the test
+  does not require actual size reduction.
+- Keep independent encoder controls only for a named backend/interoperability or
+  noncanonical-format test. Document the property they prove and isolate them
+  from ordinary fixture construction. System archive tools used for bootstrap,
+  packaging or evidence remain infrastructure dependencies; do not use them as
+  alternate application or Wasm-artifact encoders.
+- Zero timestamps alone do not make compressed bytes canonical across backends,
+  feature selections or dependency versions. Before changing compression inputs,
+  check frozen hashes, retained artifacts and external compressed-byte contracts.
+  Preserve obligated bytes or explicitly qualify their migration; do not silently
+  rewrite expected hashes to make a test pass. Exact emitted-byte hashes remain
+  valid artifact identities; they are not interchangeable with raw-payload hashes.
+
 ## Complete, reviewable changes
 
 - Ordinary continuation resumes the accepted coherent in-repository batch through
@@ -474,9 +503,10 @@ contracts; ordinary development does not require rereading these mechanics.
   prepared Rust toolchains and system bootstrap packages separately.
   Adopt the [consumer Make interface](../docs/make-interface.md) from the reviewed
   snapshot for common commands and LOC reporting, replacing copied recipes;
-  CI calls the same targets. Keep product inputs and adapters local. Use paired
-  formatter command inputs for extra workspaces/frontends instead of replacing
-  the shared recipes; preserve all existing checks during adoption.
+  CI calls the same targets. Keep product inputs and adapters local. Use
+  declarative Rust formatter inputs for extra workspaces, derive sorting and
+  manifest order. Use paired custom commands for other policies/frontends
+  instead of replacing shared recipes; preserve all checks during adoption.
 - Shared Tooling owns common executable storage as well as installation commands.
   Its reviewed snapshot also owns the default common tool versions and digests.
   Adopt those catalogs with the installers; do not maintain independent default
