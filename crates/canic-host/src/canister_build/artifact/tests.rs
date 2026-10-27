@@ -5,49 +5,8 @@ use canic_contracts::ids::BuildNetwork;
 
 #[test]
 fn generated_infrastructure_inputs_are_stable_before_compilation() {
-    let directory = crate::test_support::temp_dir("infrastructure-input-preparation");
-    let package = directory.join("consumer");
-    fs::create_dir_all(package.join("src")).unwrap();
-    fs::write(
-        package.join("Cargo.toml"),
-        "[package]\nname = \"fixture-consumer\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n",
-    )
-    .unwrap();
-    fs::write(package.join("src/lib.rs"), "").unwrap();
-    let context = WorkspaceBuildContext {
-        role: "root".into(),
-        profile: CanisterBuildProfile::Fast,
-        environment: "local".into(),
-        build_network: canic_contracts::ids::BuildNetwork::Local,
-        workspace_root: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."),
-        icp_root: directory.clone(),
-        config_path: package.join("canic.toml"),
-        local_replica: None,
-        refresh_canonical_infrastructure_did: false,
-        release_build_id: None,
-    };
-    // Read Make's actual exported default instead of inventing a non-overlapping fixture.
-    let probe = directory.join("output-probe.mk");
-    fs::write(
-        &probe,
-        "canic-output-probe:\n\t@printf '%s' \"$$CARGO_TARGET_DIR\"\n",
-    )
-    .unwrap();
-    let output = std::process::Command::new("make")
-        .current_dir(&context.workspace_root)
-        .env_remove("CARGO_TARGET_DIR")
-        .env_remove("CANIC_CARGO_TARGET_DIR")
-        .args(["--no-print-directory", "-f", "Makefile", "-f"])
-        .arg(&probe)
-        .arg("canic-output-probe")
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let make_target = PathBuf::from(String::from_utf8(output.stdout).unwrap());
+    let (directory, package, context) = infrastructure_input_fixture();
+    let make_target = make_output_root(&context.workspace_root, &directory);
     let mut inputs_environment: BTreeMap<_, _> =
         crate::build_environment::inputs().into_iter().collect();
     // Match compile_native_producer: the resolved output belongs to the spec,
@@ -141,18 +100,68 @@ fn generated_infrastructure_inputs_are_stable_before_compilation() {
     );
     assert!(!explicit.is_content_current().unwrap());
     assert!(prepared.is_content_current().unwrap());
+    remove_generated_fixture(&context);
+    remove_generated_fixture(&sibling);
+    fs::remove_dir_all(directory).unwrap();
+}
+fn remove_generated_fixture(context: &WorkspaceBuildContext) {
     fs::remove_dir_all(crate::fleet_package::generated_root(
         &context.workspace_root,
         &context.config_path,
     ))
     .unwrap();
-    fs::remove_dir_all(crate::fleet_package::generated_root(
-        &sibling.workspace_root,
-        &sibling.config_path,
-    ))
-    .unwrap();
-    fs::remove_dir_all(directory).unwrap();
 }
+
+fn infrastructure_input_fixture() -> (PathBuf, PathBuf, WorkspaceBuildContext) {
+    let directory = crate::test_support::temp_dir("infrastructure-input-preparation");
+    let package = directory.join("consumer");
+    fs::create_dir_all(package.join("src")).unwrap();
+    fs::write(
+        package.join("Cargo.toml"),
+        "[package]\nname = \"fixture-consumer\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n",
+    )
+    .unwrap();
+    fs::write(package.join("src/lib.rs"), "").unwrap();
+    let context = WorkspaceBuildContext {
+        role: "root".into(),
+        profile: CanisterBuildProfile::Fast,
+        environment: "local".into(),
+        build_network: canic_contracts::ids::BuildNetwork::Local,
+        workspace_root: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."),
+        icp_root: directory.clone(),
+        config_path: package.join("canic.toml"),
+        local_replica: None,
+        refresh_canonical_infrastructure_did: false,
+        release_build_id: None,
+    };
+    (directory, package, context)
+}
+
+fn make_output_root(workspace: &Path, directory: &Path) -> PathBuf {
+    // Read Make's actual exported default instead of inventing a non-overlapping fixture.
+    let probe = directory.join("output-probe.mk");
+    fs::write(
+        &probe,
+        "canic-output-probe:\n\t@printf '%s' \"$$CARGO_TARGET_DIR\"\n",
+    )
+    .unwrap();
+    let output = std::process::Command::new("make")
+        .current_dir(workspace)
+        .env_remove("CARGO_TARGET_DIR")
+        .env_remove("CANIC_CARGO_TARGET_DIR")
+        .args(["--no-print-directory", "-f", "Makefile", "-f"])
+        .arg(&probe)
+        .arg("canic-output-probe")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    PathBuf::from(String::from_utf8(output.stdout).unwrap())
+}
+
 #[test]
 fn configured_specs_group_into_one_cargo_command_per_workspace() {
     let specs = [

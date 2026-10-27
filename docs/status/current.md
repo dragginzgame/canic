@@ -163,3 +163,21 @@ The continuation's real compilation evidence is retained in
 server shutdown log). It exercised Make's default binary/wrapper/incremental
 selection with explicit temporary cache/runtime isolation, without touching shared
 Cargo outputs. No additional integration defect was found in this focused review.
+
+## Authorized qualification attempt and recovery
+
+The repair batch was committed as `ad66b647366b6e11f50ce537d74e64ecbd226256`
+on local branch `repair/release-qualification`. Its clean-tree
+`make release-verify` attempt stopped at Clippy after 108.756s: the generated-input
+regression exceeded the 100-line function limit (144 lines). No later qualification
+stage ran. Tool and dependency admission passed; Clippy's stage time was 61s.
+
+Extracting fixture setup, Make output discovery and generated-directory cleanup
+preserves all assertions. The final focused Host all-target/all-feature Clippy
+passes (33.70s); the exact generated-input regression passes (1 test, 6.62s after
+112s native compilation). Logs are in `target/session-qualification/`. The first
+helper extraction still exceeded the limit and failed narrowly before the final
+cleanup extraction; no complete retry occurred between those focused checks.
+The corrected source must be committed and qualified afresh. No push or release
+has occurred. Fresh hosted setup and the historical activation conflict remain
+unresolved.
