@@ -37,11 +37,16 @@ pub(super) fn prepare_login(
             encoded_len(&(change.caller(), &previous)).map_err(|_| SessionError::StorageFailure)?;
         let retained = LoginRevocationChange::decode(&previous.bytes)
             .map_err(|_| SessionError::StorageFailure)?;
+        let binding = |state| match state {
+            LoginRecordState::Reserved(binding) => Some(binding),
+            LoginRecordState::Revoked(binding) => binding,
+        };
         let same_authority = retained.audience() == change.audience()
             && retained.caller() == change.caller()
-            && retained.admitted_pool() == change.admitted_pool();
-        let preserves_denial = !retained.revoked() || change.revoked();
-        let preserves_binding = retained.binding() == change.binding();
+            && binding(retained.state()).is_some() == binding(change.state()).is_some();
+        let preserves_denial = !matches!(retained.state(), LoginRecordState::Revoked(_))
+            || matches!(change.state(), LoginRecordState::Revoked(_));
+        let preserves_binding = binding(retained.state()) == binding(change.state());
         if !same_authority
             || !preserves_denial
             || !preserves_binding
@@ -49,19 +54,19 @@ pub(super) fn prepare_login(
         {
             return Err(SessionError::InvalidPolicyOrRecord);
         }
-        let count = if change.admitted_pool() {
-            totals.admitted
-        } else {
+        let count = if matches!(change.state(), LoginRecordState::Revoked(None)) {
             totals.unknown
+        } else {
+            totals.admitted
         };
         if count == 0 {
             return Err(SessionError::StorageFailure);
         }
     } else {
-        let count = if change.admitted_pool() {
-            &mut totals.admitted
-        } else {
+        let count = if matches!(change.state(), LoginRecordState::Revoked(None)) {
             &mut totals.unknown
+        } else {
+            &mut totals.admitted
         };
         *count = count.checked_add(1).ok_or(SessionError::Capacity)?;
     }

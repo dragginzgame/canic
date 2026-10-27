@@ -167,7 +167,9 @@ fn assert_mode_recovery(
                 },
             )
             .expect("native Store GC transport");
-        assert_error(store_response, code);
+        // Root-authorized internal GC remains available during Fleet pauses so
+        // retirement and same-operation recovery cannot be fenced by user mode.
+        assert_eq!(store_response.unwrap().operation_id, [0x77; 32],);
         let managed_response: Result<canic::dto::admission_control::TargetReceipt, Error> =
             ic_testkit::pic::update_wire(
                 pic,
@@ -191,6 +193,7 @@ fn assert_mode_recovery(
     }
 }
 
+#[track_caller]
 fn assert_error<T>(response: Result<T, Error>, code: canic_contracts::diagnostics::DiagnosticCode) {
     assert_eq!(
         response.err().expect("typed command rejection").code(),

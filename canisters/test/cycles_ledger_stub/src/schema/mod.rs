@@ -1,5 +1,5 @@
 //! Native fixture controls only; ledger and registry methods are external Candid.
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "set_transfer_fee_override",
     Update,
     crate::protocol::SET_TRANSFER_FEE_OVERRIDE,
@@ -8,7 +8,7 @@ canic::__canic_register_wire_schema!(
     crate::protocol::LIMITS,
     crate::protocol::LIMITS
 );
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "lose_next_transfer_reply",
     Update,
     crate::protocol::LOSE_NEXT_TRANSFER_REPLY,
@@ -17,7 +17,7 @@ canic::__canic_register_wire_schema!(
     crate::protocol::LIMITS,
     crate::protocol::LIMITS
 );
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "withdrawal_count",
     Query,
     crate::protocol::WITHDRAWAL_COUNT,
@@ -26,7 +26,7 @@ canic::__canic_register_wire_schema!(
     crate::protocol::LIMITS,
     crate::protocol::LIMITS
 );
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "set_creation_retry_refusal",
     Update,
     crate::protocol::SET_CREATION_RETRY_REFUSAL,
@@ -35,7 +35,7 @@ canic::__canic_register_wire_schema!(
     crate::protocol::LIMITS,
     crate::protocol::LIMITS
 );
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "transfer_count",
     Query,
     crate::protocol::TRANSFER_COUNT,
@@ -44,7 +44,7 @@ canic::__canic_register_wire_schema!(
     crate::protocol::LIMITS,
     crate::protocol::LIMITS
 );
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "request_count",
     Query,
     crate::protocol::REQUEST_COUNT,
@@ -53,7 +53,7 @@ canic::__canic_register_wire_schema!(
     crate::protocol::LIMITS,
     crate::protocol::LIMITS
 );
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "requested_amounts",
     Query,
     crate::protocol::REQUESTED_AMOUNTS,

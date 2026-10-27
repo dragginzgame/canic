@@ -49,3 +49,41 @@ macro_rules! __canic_register_wire_schema {
         });
     };
 }
+
+/// Declare a consumer-owned raw Wire entrypoint in both Wasm and native schemas.
+/// The caller owns its export, codec and access enforcement; no handler is generated.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __canic_register_raw_wire_schema {
+    ($name:expr, $kind:ident, $id:expr, $request:ty, $response:ty, $input:expr, $output:expr) => {
+        #[cfg(target_arch = "wasm32")]
+        const _: () = {
+            use $crate::__internal::contracts::protocol::wire_declaration::{
+                CompiledMethod, HEADER_BYTES, MethodKind, MethodLimits,
+            };
+            #[used]
+            #[unsafe(link_section = "icp:private canic:wire")]
+            static DECLARATION: [u8; HEADER_BYTES + ($name).len()] = CompiledMethod {
+                name: $name,
+                kind: MethodKind::$kind,
+                id: $id,
+                request: MethodLimits {
+                    bytes: ($input).bytes as u64,
+                    allocation: ($input).allocation as u64,
+                    nodes: ($input).nodes as u64,
+                    depth: ($input).depth as u64,
+                },
+                response: MethodLimits {
+                    bytes: ($output).bytes as u64,
+                    allocation: ($output).allocation as u64,
+                    nodes: ($output).nodes as u64,
+                    depth: ($output).depth as u64,
+                },
+            }
+            .encode();
+        };
+        $crate::__canic_register_wire_schema!(
+            $name, $kind, $id, $request, $response, $input, $output
+        );
+    };
+}

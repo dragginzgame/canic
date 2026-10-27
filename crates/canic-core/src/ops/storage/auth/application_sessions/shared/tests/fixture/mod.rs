@@ -4,12 +4,15 @@ use super::*;
 use ic_auth::{
     admission_budget::SessionAdmissionBudget,
     portable::{
-        MemoryLoginRevocations, PortableClaimsContext, PortableClaimsError, browser_principal,
-        claims_hash, encode_claims,
+        MemoryLoginRevocations, PortableAuthority, PortableClaimsContext, PortableClaimsError,
+        browser_principal, claims_hash, encode_claims,
     },
     portable_credential::PortableVerificationContext,
-    session::{MemorySessionStore, SessionContext, SessionEstablished, SessionPolicy},
-    session_request::SessionRequest,
+    session::{
+        MemorySessionStore, SessionAdmissionContext, SessionContext, SessionEstablished,
+        SessionPolicy,
+    },
+    session_request::{SessionRequest, SessionTtlLimit, SessionTtlPolicy},
 };
 use ic_auth_protocol_types::{
     AudienceId, AuthRole, CanonicalId, DelegatedRoleGrant, PortableClaims, PortableMechanism,
@@ -178,8 +181,8 @@ pub(super) fn establish_issued(
         target: role.clone(),
         scopes: vec!["read".into()],
     }];
-    let context = SessionContext {
-        authority: PortableClaimsContext {
+    let claims = PortableClaimsContext {
+        authority: PortableAuthority {
             audience: &audience,
             issuer: Principal::from_slice(&[approved_issuer]).into(),
             mechanism: PortableMechanism::Ed25519,
@@ -191,36 +194,32 @@ pub(super) fn establish_issued(
             authority_expires_at_ns: NOW + 120_000_000_000,
             enrollment_expires_at_ns: NOW + 90_000_000_000,
             min_login_started_at_ns: 0,
-            min_proof_issued_at_ns: 0,
-            max_login_ttl_ns: 86_400_000_000_000,
-            max_proof_ttl_ns: 60_000_000_000,
         },
-        role: &role,
-        required_scopes: &[],
+        min_proof_issued_at_ns: 0,
+        max_login_ttl_ns: 86_400_000_000_000,
+        max_proof_ttl_ns: 60_000_000_000,
     };
     ic_auth::session::establish_session(
         store,
         logins,
         budget,
-        &issued.bytes,
+        &ic_auth_protocol_types::PortableCredential {
+            claims: issued.bytes.clone(),
+            proof: issued.proof.clone(),
+        },
         &SessionRequest::new(vec!["read".into()], None).unwrap(),
-        &context,
+        &SessionAdmissionContext {
+            verification: PortableVerificationContext::Ed25519 {
+                claims: &claims,
+                public_key: &public_key,
+            },
+            role: &role,
+            ttl: SessionTtlPolicy::new(5, 30).unwrap(),
+        },
         SessionPolicy {
             generation: 0,
             enabled: true,
             subject_admissible: true,
-            default_ttl_secs: 5,
-            max_ttl_secs: 30,
-        },
-        |budget, decoded| {
-            Ok(decoded.verify(
-                budget,
-                &issued.proof,
-                &PortableVerificationContext::Ed25519 {
-                    claims: &context.authority,
-                    public_key: &public_key,
-                },
-            )?)
         },
     )
 }
@@ -232,7 +231,7 @@ pub(super) fn authorize(
     now_ns: u64,
     generation: u64,
     required_scopes: &[String],
-    refresh: impl FnOnce(&mut PortableClaimsContext<'_>),
+    refresh: impl FnOnce(&mut PortableAuthority<'_>),
 ) -> Result<Session, SessionError> {
     let signer = SigningKey::from_bytes(&[42; 32]);
     let audience = audience();
@@ -242,7 +241,7 @@ pub(super) fn authorize(
         scopes: vec!["read".into()],
     }];
     let mut context = SessionContext {
-        authority: PortableClaimsContext {
+        authority: PortableAuthority {
             audience: &audience,
             issuer: Principal::from_slice(&[42]).into(),
             mechanism: PortableMechanism::Ed25519,
@@ -254,12 +253,10 @@ pub(super) fn authorize(
             authority_expires_at_ns: NOW + 120_000_000_000,
             enrollment_expires_at_ns: NOW + 90_000_000_000,
             min_login_started_at_ns: 0,
-            min_proof_issued_at_ns: 0,
-            max_login_ttl_ns: 86_400_000_000_000,
-            max_proof_ttl_ns: 60_000_000_000,
         },
         role: &role,
         required_scopes,
+        max_ttl: SessionTtlLimit::new(30).unwrap(),
     };
     refresh(&mut context.authority);
     ic_auth::session::authorize_session(
@@ -270,8 +267,6 @@ pub(super) fn authorize(
             generation,
             enabled: true,
             subject_admissible: true,
-            default_ttl_secs: 5,
-            max_ttl_secs: 30,
         },
     )
 }

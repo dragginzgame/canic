@@ -149,7 +149,7 @@ fn test_release_fixture() {
     persist(&record);
 }
 
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "test_release_fixture",
     Update,
     crate::protocol::RELEASE_FIXTURE,

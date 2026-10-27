@@ -156,14 +156,36 @@ pub(super) fn wait_for_snapshot_pids_ready(
     root_id: Principal,
     snapshot_pids: &[Principal],
 ) {
-    pic.wait_for_all_ready(
-        snapshot_pids
-            .iter()
-            .copied()
-            .map(|canister_id| (canister_id, root_id)),
-        spec.bootstrap_tick_limit,
-        "root registered child bootstrap",
-    );
+    // Store exposes bootstrap through its role overview, not the protected
+    // application readiness endpoint. Components were checked separately above.
+    for _ in 0..spec.bootstrap_tick_limit {
+        pic.tick();
+        let mut all_ready = true;
+        for canister_id in snapshot_pids {
+            let response: Result<canic::dto::role::RoleOverviewResponse, canic::Error> =
+                ic_testkit::pic::query_wire(
+                    pic,
+                    *canister_id,
+                    root_id,
+                    ic_testkit::pic::WireCallSpec {
+                        method: canic::protocol::CANIC_PUBLIC_OVERVIEW,
+                        method_id: canic::protocol::public_overview::METHOD_ID,
+                        request_limits: canic::protocol::public_overview::REQUEST_LIMITS,
+                        response_limits: canic::protocol::public_overview::RESPONSE_LIMITS,
+                    },
+                    &(),
+                )
+                .expect("snapshot role overview transport");
+            all_ready &= response
+                .expect("snapshot role overview application result")
+                .bootstrap
+                .ready;
+        }
+        if all_ready {
+            return;
+        }
+    }
+    panic!("snapshot roles did not finish bootstrap within the bounded wait");
 }
 
 // Start one root baseline through the testkit's typed fallible builder boundary.

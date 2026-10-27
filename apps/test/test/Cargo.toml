@@ -20,7 +20,7 @@ crate-type = ["cdylib", "rlib"]
 wire-schema = ["canic/wire-schema"]
 
 [dependencies]
-canic = { workspace = true, features = ["auth-delegated-token-verify"] }
+canic = { workspace = true, features = ["auth-chain-key-ecdsa", "auth-root-canister-sig-verify"] }
 ic-platform = { workspace = true, features = ["cdk", "candid"] }
 ic-timers = { workspace = true }
 ic-wire = { workspace = true }

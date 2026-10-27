@@ -5,17 +5,37 @@
 Continue the accepted 0.112 Blob/Wire hard cut using the
 [closeout plan](../audits/working/0.112-push-readiness/plan.md) and its
 [graph-specific evidence](../audits/working/0.112-push-readiness/owned-candid-cut.json).
-Current inspected base: main at `c4f90ec5f`, with committed seven-target test repairs.
+Current inspected base: main at `492bac2b2`, with committed seven-target test repairs
+and the preserved Backup 0.45.1 selection. The next repair batch is in progress.
 Own package versions remain 0.111.0; the open changelog target is 0.112.0.
 The maintainer explicitly authorized staging, committing as `0.112.0`, running
 `make release-minor`, and repairing/retrying failures until release completes.
-The first attempt passed Clippy, invariant gates, ordinary workspace tests and
-native feature checks, then stopped preparing the Fleet PocketIC artifact.
-During validation the root lock changed from Backup 0.45.0 to 0.45.1; the latter
-was not cached. Offline metadata reproduced the child failure (exit 101,
-124 stderr bytes). Preserve that selection; locked fetching now supplies it and
-offline metadata passes. No version preparation or release tag occurred.
-The prior passes describe the earlier graph; the retry must qualify the new lock.
+The second release attempt passed strict Clippy, invariant/format guards, ordinary
+workspace tests, Host PocketIC and payload-limit checks. It failed internal
+PocketIC and Root baseline restoration before version preparation. No tag or push
+has occurred. Full output: /tmp/canic-release-0112-attempt2.log.
+
+The maintainer then requested Auth and Timers adoption. All three lockfiles now
+select Auth/protocol types 0.19.0 and Timers 0.31.11. Restore matches typed login
+state; the session qualification backend uses read/admit/logout and protected
+credential admission. All 34 session-storage regressions pass.
+
+Current repairs serialize native schema/artifact builds at their shared Cargo
+target, prepare generated infrastructure before source capture, emit compiled
+Wire declarations for manually mounted fixtures, and build both audit Root
+callers through one App-qualified generated package. Readiness uses the recorded
+controller for protected queries and role overview for Store bootstrap. Rejected
+queries no longer masquerade as pending readiness. Other fixture assertions
+retain asynchronous completion, Store-owned timestamps, sealed Root rejection,
+and internal recovery access during paused Fleet modes.
+
+Focused passes on the updated graph: shared-target lock exclusion, installed
+state cascade, retained child-claim recovery and Root baseline restoration. The
+baseline test confirms same-instance snapshot reuse, identities, controllers,
+module hashes and current time. Embedded peer refresh and verification pass, as
+does final scoped strict Clippy. Remaining installed repairs must still pass
+in the explicitly authorized release retry. Logs: /tmp/canic-release-repair-*.log
+and /tmp/canic-release-auth-*.log. Do not infer release readiness from these passes.
 
 Required external Candid is accepted. Owned endpoints, initialization and
 hash contracts use Wire; redundant external DTO migration remains intended.
@@ -98,9 +118,9 @@ settings, stored retry bytes and custody/recovery rules remain unchanged.
 ## Selected dependencies and earlier qualification
 
 Root and both independent Blob consumers select Platform/macros 0.7.0,
-Blob/Contracts 0.51.0, Auth/protocol types 0.18.0, Memory/Storage 0.51.10,
-Timers 0.31.10, Wire 0.7.18 and Metrics 0.16.3 where applicable.
-Root Host/Tooling/Testkit is 0.69.0, Query 0.75.0 and Backup 0.45.0.
+Blob/Contracts 0.51.0, Auth/protocol types 0.19.0, Memory/Storage 0.51.10,
+Timers 0.31.11, Wire 0.7.18 and Metrics 0.16.3 where applicable.
+Root Host/Tooling/Testkit is 0.69.0, Query 0.75.0 and Backup 0.45.1.
 Shared Tooling: 0.26.23 at 48ec9794892da6f8e2812653ec16c5e8ea23df47.
 Browser Platform: 0.1.1; SDK Core: 6.1.1. Earlier publication blockers are resolved.
 No compatibility adapters or local dependency overrides were introduced.

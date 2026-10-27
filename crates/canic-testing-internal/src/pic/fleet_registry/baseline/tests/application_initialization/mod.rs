@@ -189,6 +189,10 @@ pub(super) fn production_initialization_recovers_exact_target_bytes() {
     await_root_provisioning(&pic, fixture.root_id, operation, |status| {
         status.root_runtime_active
     });
+    assert_eq!(
+        allocation(&pic, fixture.root_id, member_operation).phase,
+        RootComponentAllocationPhase::Committed
+    );
     let delivered: Result<Vec<u8>, Error> = ic_testkit::pic::query_wire(
         &pic,
         target,
@@ -258,14 +262,10 @@ fn restart_root_during_installation(
             phases.push(phase);
         }
         if phase == RootComponentAllocationPhase::InstallIntent {
-            // The IC quiesces pending callbacks before upgrade. This proves an
-            // actual restart during installation, not a dropped management reply.
+            // Recovery resumes asynchronously after synchronous restoration.
+            // The caller's bounded provisioning wait proves terminal commitment.
             pic.upgrade_canister(root, root_wasm, crate::pic::upgrade_args(), None)
                 .unwrap();
-            assert_eq!(
-                allocation(pic, root, operation_id).phase,
-                RootComponentAllocationPhase::Committed
-            );
             return;
         }
         pic.advance_time(Duration::from_secs(1));

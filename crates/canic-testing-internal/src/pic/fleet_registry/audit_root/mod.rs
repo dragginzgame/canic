@@ -1,10 +1,8 @@
 //! Build the local balance-control audit Root directly for a disposable test release.
 //! Production Root generation and release artifacts are unaffected.
 
-use super::literal_zero_role_artifact_path;
-use crate::pic::{
-    CanicWasmBuildProfile, artifacts::build_internal_test_wasm_canisters_with_features,
-};
+use crate::pic::CanicWasmBuildProfile;
+mod package;
 use canic_contracts::ids::{BuildNetwork, CanisterRole};
 use canic_host::{
     canister_build::{CanisterArtifactBuildOutput, CanisterBuildProfile, WorkspaceBuildContext},
@@ -19,7 +17,6 @@ pub fn uses_audit_root(config: &Path) -> bool {
 }
 
 pub fn build_audit_root(context: &WorkspaceBuildContext) -> CanisterArtifactBuildOutput {
-    assert!(uses_audit_root(&context.config_path));
     assert_eq!(context.profile, CanisterBuildProfile::Fast);
     assert_eq!(context.build_network, BuildNetwork::Local);
     let target = context
@@ -27,8 +24,10 @@ pub fn build_audit_root(context: &WorkspaceBuildContext) -> CanisterArtifactBuil
         .join("target/pic-wasm/native-child-recovery");
     let config = context.config_path.to_str().unwrap();
     let release = context.release_build_id.unwrap().to_string();
+    canic_host::canister_build::prepare_workspace_infrastructure_packages(context).unwrap();
     let snapshot = AppConfigSnapshot::load(&context.config_path).unwrap();
     let evidence = admitted_root_package(context, &snapshot);
+    let package = package::prepare(context, &evidence);
     let canic_core::role_contract::RoleContractResolution::Resolved { contract } =
         canic_host::role_contract::resolve_declared_role_package_contract(
             snapshot.model(),
@@ -54,19 +53,14 @@ pub fn build_audit_root(context: &WorkspaceBuildContext) -> CanisterArtifactBuil
     ];
     let mut declaration = base_env.to_vec();
     declaration.push((canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV, "1"));
-    let declaration_wasms = build_internal_test_wasm_canisters_with_features(
-        &context.workspace_root,
-        &target,
-        &["root_probe"],
-        CanicWasmBuildProfile::Fast,
-        &declaration,
-        &features,
-    );
-    let raw = declaration_wasms.path("root_probe");
+    let declaration_wasms = build_audit_wasm(context, &package, &target, &declaration, &features);
+    let [raw] = declaration_wasms.artifacts() else {
+        panic!("one audit Root artifact")
+    };
     let candid = extract_declaration(raw);
     let wire_schema = canic_host::canister_build::build_native_wire_contract(
         context,
-        audit_schema_recipe(context, &base_env, &features),
+        audit_schema_recipe(&package, &base_env, &features),
     )
     .expect("produce audit Root native contract");
     let profile = canic_core::role_contract::derive_protocol_profile_hashes(
@@ -81,21 +75,14 @@ pub fn build_audit_root(context: &WorkspaceBuildContext) -> CanisterArtifactBuil
         canic_core::role_contract::PROTOCOL_PROFILE_DIGEST_ENV,
         digest.as_str(),
     ));
-    let runtime_wasms = build_internal_test_wasm_canisters_with_features(
-        &context.workspace_root,
-        &target,
-        &["root_probe"],
-        CanicWasmBuildProfile::Fast,
-        &runtime,
-        &features,
-    );
+    let runtime_wasms = build_audit_wasm(context, &package, &target, &runtime, &features);
     let role_path = |extension| {
-        literal_zero_role_artifact_path(
-            &context.icp_root,
-            context.release_build_id.unwrap(),
-            "root",
-            extension,
-        )
+        context
+            .icp_root
+            .join(".canic/release-builds")
+            .join(context.release_build_id.unwrap().to_string())
+            .join("artifacts/root")
+            .join(format!("root.{extension}"))
     };
     let wasm_path = role_path("wasm");
     let output = CanisterArtifactBuildOutput {
@@ -115,8 +102,11 @@ pub fn build_audit_root(context: &WorkspaceBuildContext) -> CanisterArtifactBuil
         protocol_profile_digest: profile.protocol_profile_digest,
         transforms: Vec::new(),
     };
-    finalize_audit_root(&output, runtime_wasms.path("root_probe"), &candid);
-    build_audit_schema(context, &output, &runtime, &features);
+    let [runtime_wasm] = runtime_wasms.artifacts() else {
+        panic!("one audit Root artifact")
+    };
+    finalize_audit_root(&output, runtime_wasm, &candid);
+    build_audit_schema(context, &package, &output, &runtime, &features);
     output
 }
 
@@ -184,13 +174,14 @@ fn finalize_audit_root(output: &CanisterArtifactBuildOutput, runtime: &Path, can
 /// Reuse the exact audit runtime selection, not the canonical Root package recipe.
 fn build_audit_schema(
     context: &WorkspaceBuildContext,
+    package: &Path,
     output: &CanisterArtifactBuildOutput,
     runtime: &[(&str, &str)],
     features: &[String],
 ) {
     let retained = canic_host::canister_build::build_native_wire_schema(
         context,
-        audit_schema_recipe(context, runtime, features),
+        audit_schema_recipe(package, runtime, features),
         &output.wasm_path,
         &output.wasm_path.with_extension("wire.json"),
     )
@@ -199,15 +190,13 @@ fn build_audit_schema(
 }
 
 fn audit_schema_recipe(
-    context: &WorkspaceBuildContext,
+    package: &Path,
     runtime: &[(&str, &str)],
     features: &[String],
 ) -> canic_host::canister_build::NativeSchemaBuildRecipe {
     use canic_host::canister_build::NativeSchemaBuildRecipe;
     use ic_build::cargo::execution::{CargoInvocation, CargoRecipe};
-    let manifest = context
-        .workspace_root
-        .join("canisters/audit/root_probe/Cargo.toml");
+    let manifest = package.join("Cargo.toml");
     let mut selection = CanicWasmBuildProfile::Fast.cargo_selection();
     selection.features.features = features.iter().cloned().collect();
     let mut environment =
@@ -230,7 +219,7 @@ fn audit_schema_recipe(
         .or_insert_with(|| "rustc".into());
     let invocation = CargoInvocation {
         cargo_program: std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()),
-        working_directory: context.workspace_root.clone(),
+        working_directory: package.to_path_buf(),
         environment,
         target: "wasm32-unknown-unknown".into(),
         selection,
@@ -243,8 +232,39 @@ fn audit_schema_recipe(
     };
     NativeSchemaBuildRecipe {
         manifest,
-        workspace: context.workspace_root.clone(),
+        workspace: package.to_path_buf(),
         package: "root_probe".to_owned(),
         invocation,
     }
+}
+
+fn build_audit_wasm(
+    context: &WorkspaceBuildContext,
+    package: &Path,
+    target: &Path,
+    environment: &[(&str, &str)],
+    features: &[String],
+) -> ic_build::artifacts::WasmBuildRecord {
+    let recipe = audit_schema_recipe(package, environment, features);
+    let spec = ic_build::artifacts::WasmBuildSpec::new(
+        package,
+        target,
+        &["root_probe"],
+        recipe.invocation.environment,
+        canic_host::canister_build::CARGO_CONFIGURATION_LIMITS,
+    )
+    .with_cargo_selection(recipe.invocation.selection)
+    .with_additional_inputs([&context.config_path])
+    .with_shared_incremental_target(
+        context
+            .workspace_root
+            .join("target/test-artifacts/cargo-audit-root"),
+    );
+    ic_build::artifacts::build_wasm_canisters_cached(
+        &spec,
+        ic_host_process::child::OwnedChild::spawn_direct,
+    )
+    .expect("build selected App audit Root")
+    .record()
+    .clone()
 }

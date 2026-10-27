@@ -172,7 +172,7 @@ impl CanicPicExt for PocketIc {
     ) {
         for _ in 0..tick_limit {
             self.tick();
-            match fetch_ready(self, canister_id) {
+            match fetch_ready(self, canister_id, diagnostic_sender) {
                 Ok(true) => return,
                 Ok(false) => {}
                 Err(error) => {
@@ -195,7 +195,7 @@ impl CanicPicExt for PocketIc {
     ) {
         for _ in 0..tick_limit {
             self.tick();
-            match fetch_ready(self, canister_id) {
+            match fetch_ready(self, canister_id, diagnostic_sender) {
                 Ok(true) => return,
                 Ok(false) => {}
                 Err(error) => {
@@ -219,8 +219,8 @@ impl CanicPicExt for PocketIc {
             self.tick();
             let mut all_ready = true;
             let mut failures = Vec::new();
-            for (canister_id, _) in &targets {
-                match fetch_ready(self, *canister_id) {
+            for (canister_id, caller) in &targets {
+                match fetch_ready(self, *canister_id, *caller) {
                     Ok(ready) => all_ready &= ready,
                     Err(error) => failures.push(format!("{canister_id}: {error:?}")),
                 }
@@ -369,7 +369,9 @@ fn root_store_adoption_operation_id(install_operation_id: [u8; 32]) -> [u8; 32] 
 /// if querying readiness traps.
 pub fn wait_until_ready(pic: &PocketIc, canister_id: Principal, tick_limit: usize) {
     for _ in 0..tick_limit {
-        if fetch_ready(pic, canister_id).unwrap_or(false) {
+        if fetch_ready(pic, canister_id, Principal::anonymous())
+            .expect("controller readiness query")
+        {
             return;
         }
         pic.tick();
@@ -467,12 +469,13 @@ pub fn install_standalone_canister_on_pic(
 fn fetch_ready(
     pic: &PocketIc,
     canister_id: Principal,
+    caller: Principal,
 ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
     let response: Result<canic::dto::runtime_observation::CanicReadinessStatus, Error> =
         ic_testkit::pic::query_wire(
             pic,
             canister_id,
-            Principal::anonymous(),
+            caller,
             ic_testkit::pic::WireCallSpec {
                 method: canic::protocol::protected_readiness::METHOD,
                 method_id: canic::protocol::protected_readiness::METHOD_ID,
@@ -481,7 +484,9 @@ fn fetch_ready(
             },
             &(),
         )?;
-    Ok(response.is_ok_and(|value| value.status == ReadinessStatus::Ready))
+    response
+        .map(|value| value.status == ReadinessStatus::Ready)
+        .map_err(|error| std::io::Error::other(format!("{error:?}")).into())
 }
 
 #[cfg(any(not(test), feature = "governed-pocketic-tests"))]

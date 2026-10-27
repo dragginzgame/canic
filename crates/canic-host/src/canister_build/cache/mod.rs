@@ -214,7 +214,13 @@ pub fn canister_build_target_root(workspace_root: &Path) -> PathBuf {
 
 /// Lock the complete shared Cargo-target build and artifact-materialization boundary.
 pub fn lock_canister_build_target(workspace_root: &Path) -> io::Result<fs::File> {
-    let path = workspace_root.join(CANISTER_BUILD_LOCK_RELATIVE);
+    // Different consumer workspaces may share CARGO_TARGET_DIR, including the
+    // unqualified native example executable Cargo publishes there.
+    lock_artifact_target(&canister_build_target_root(workspace_root))
+}
+
+fn lock_artifact_target(target: &Path) -> io::Result<fs::File> {
+    let path = target.join(CANISTER_BUILD_LOCK_RELATIVE);
     let lock = open_regular_lock_file_with_parents(&path).map_err(io::Error::from)?;
     lock_exclusive(&lock)?;
     Ok(lock)

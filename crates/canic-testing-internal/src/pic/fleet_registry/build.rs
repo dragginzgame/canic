@@ -141,19 +141,20 @@ pub(super) fn build_child_reserve_root_wasm() -> Vec<u8> {
     let _serial_guard = CANISTER_BUILD_SERIAL
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let target_dir = test_target_dir(&workspace_root).join("child-reserve");
-    let config_path = initial_shard_root_canister_config_path(&workspace_root);
-    let wasms = build_internal_test_wasm_canisters_with_env(
-        &workspace_root,
-        &target_dir,
-        &["root_probe"],
-        CanicWasmBuildProfile::Fast,
-        &[(
-            canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
-            config_path.to_str().expect("config path UTF-8"),
-        )],
-    );
-    wasms.wasm("root_probe")
+    let context = canic_host::canister_build::WorkspaceBuildContext {
+        role: "root".into(),
+        profile: canic_host::canister_build::CanisterBuildProfile::Fast,
+        environment: "local".into(),
+        build_network: canic_contracts::ids::BuildNetwork::Local,
+        workspace_root: workspace_root.clone(),
+        icp_root: workspace_root.clone(),
+        config_path: initial_shard_root_canister_config_path(&workspace_root),
+        local_replica: None,
+        refresh_canonical_infrastructure_did: false,
+        release_build_id: Some(INTERNAL_TEST_RELEASE_BUILD_ID.1.parse().unwrap()),
+    };
+    let artifact = super::audit_root::build_audit_root(&context);
+    fs::read(artifact.wasm_path).expect("selected child recovery audit Root")
 }
 
 /// Build the exact local Root whose only top-level Hub requires one initial Shard.

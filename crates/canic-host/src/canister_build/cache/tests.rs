@@ -227,16 +227,15 @@ fn cargo_keeps_explicit_wrapper_and_returns_its_failure_without_retry() {
 fn artifact_materialization_lock_excludes_a_second_builder() {
     let root = temp_dir("canic-artifact-build-lock");
     let _ = fs::remove_dir_all(&root);
-    let lock_path = root.join(CANISTER_BUILD_LOCK_RELATIVE);
-    assert!(lock_path.starts_with(root.join(".canic")));
-    assert!(!lock_path.starts_with(root.join("target")));
-    let first = lock_canister_build_target(&root).expect("acquire first build lock");
-    let contender_root = root.clone();
+    let target = root.join("shared-target");
+    let first_target = resolve_canister_build_target_root(&root.join("one"), Some(target.clone()));
+    let contender_target = resolve_canister_build_target_root(&root.join("two"), Some(target));
+    let first = lock_artifact_target(&first_target).expect("acquire first build lock");
     let (attempted_tx, attempted_rx) = mpsc::channel();
     let (acquired_tx, acquired_rx) = mpsc::channel();
     let contender = thread::spawn(move || {
         attempted_tx.send(()).expect("report lock attempt");
-        let acquired = lock_canister_build_target(&contender_root).is_ok();
+        let acquired = lock_artifact_target(&contender_target).is_ok();
         acquired_tx.send(acquired).expect("report lock result");
     });
 

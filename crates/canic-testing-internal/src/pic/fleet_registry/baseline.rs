@@ -14199,6 +14199,7 @@ cycles = "80T"
             bytes: payload.to_vec(),
         };
         // Discard the byte-lane result, then recover using only exact Store state.
+        let publish_started = pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000;
         pic.update_call(
             fixture.response.wasm_store,
             retained_installation_controller,
@@ -14217,13 +14218,14 @@ cycles = "80T"
             retained.expected_chunk_hashes,
             controller_prepare.chunk_hashes
         );
-        assert_eq!(
-            retained.manifest,
-            controller_prepare
-                .manifest
-                .as_ref()
-                .map(current_manifest_response)
-        );
+        let manifest = retained.manifest.as_ref().expect("retained Store manifest");
+        let publish_finished = pic.get_time().as_nanos_since_unix_epoch() / 1_000_000_000;
+        assert!((publish_started..=publish_finished).contains(&manifest.created_at));
+        assert_eq!(manifest.approved_at, Some(manifest.created_at));
+        let mut expected = current_manifest_response(controller_prepare.manifest.as_ref().unwrap());
+        expected.created_at = manifest.created_at;
+        expected.approved_at = manifest.approved_at;
+        assert_eq!(manifest, &expected);
         assert!(retained.complete);
         assert_eq!(retained.stored_chunk_hashes, vec![Some(wasm_hash(payload))]);
         let replay = publish_template_chunk_as(
@@ -15129,15 +15131,20 @@ cycles = "80T"
     ) {
         let child_before = fixture.pic().cycle_balance(fixture.issuer.canister_id);
         let root_before = fixture.pic().cycle_balance(fixture.root);
-        let response = root_capability_as(
-            fixture.pic(),
-            fixture.root,
-            fixture.issuer.canister_id,
-            request,
-        );
+        let call = canic_contracts::ops::root_capability::encode_request(request)
+            .expect("encode sealed funding request");
+        let rejection = fixture
+            .pic()
+            .update_call(
+                fixture.root,
+                fixture.issuer.canister_id,
+                call.method,
+                call.bytes,
+            )
+            .expect_err("sealed Root must reject funding before handler dispatch");
         assert_eq!(
-            application_rejection(response, "sealed Root must reject child funding").code(),
-            canic_contracts::diagnostics::codes::AUTHORITY_INACTIVE.raw_code(),
+            rejection.reject_code,
+            ic_platform::pocket_ic::RejectCode::CanisterError,
         );
         assert!(fixture.pic().cycle_balance(fixture.issuer.canister_id) <= child_before);
         assert!(

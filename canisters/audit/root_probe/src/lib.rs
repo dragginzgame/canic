@@ -24,7 +24,7 @@ fn audit_recovery_balance(retain: u128) -> u128 {
     ic_platform::cdk::api::cycles_burn(excess)
 }
 
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "audit_recovery_balance",
     Update,
     protocol::BALANCE,

@@ -363,7 +363,7 @@ async fn create_canister() -> Result<Principal, Error> {
 
 canic::finish!();
 
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "testing_component_child_allocations",
     Query,
     protocol::ALLOCATIONS,
@@ -372,7 +372,7 @@ canic::__canic_register_wire_schema!(
     protocol::LIMITS,
     protocol::LIMITS
 );
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "testing_component_child_is_settled",
     Query,
     protocol::IS_SETTLED,
@@ -381,9 +381,9 @@ canic::__canic_register_wire_schema!(
     protocol::LIMITS,
     protocol::LIMITS
 );
-canic::__canic_register_wire_schema!("testing_settle_component_child", Update, protocol::SETTLE, [u8; 32], Result<(), Error>, protocol::LIMITS, protocol::LIMITS);
-canic::__canic_register_wire_schema!("canic_root_capability_acknowledge", Update, canic::protocol::root_capability::acknowledge::METHOD_ID, canic::dto::root_capability::CapabilityRequest<canic::dto::rpc::AcknowledgePlacementReceiptRequest>, Result<(), Error>, canic::protocol::root_capability::REQUEST_LIMITS, canic::protocol::root_capability::RESPONSE_LIMITS);
-canic::__canic_register_wire_schema!("canic_root_capability_allocate", Update, canic::protocol::root_capability::allocate::METHOD_ID, canic::dto::root_capability::CapabilityRequest<canic::dto::root_capability::CreateCanisterRequest>, Result<canic::dto::root_capability::CreateCanisterResponse, Error>, canic::protocol::root_capability::REQUEST_LIMITS, canic::protocol::root_capability::RESPONSE_LIMITS);
-canic::__canic_register_wire_schema!("canic_root_capability_create", Update, canic::protocol::root_capability::create::METHOD_ID, canic::dto::root_capability::CapabilityRequest<canic::dto::root_capability::CreateCanisterRequest>, Result<canic::dto::root_capability::CreateCanisterResponse, Error>, canic::protocol::root_capability::REQUEST_LIMITS, canic::protocol::root_capability::RESPONSE_LIMITS);
-canic::__canic_register_wire_schema!("canic_root_capability_recycle", Update, canic::protocol::root_capability::recycle::METHOD_ID, canic::dto::root_capability::CapabilityRequest<canic::dto::root_capability::RecycleCanisterRequest>, Result<(), Error>, canic::protocol::root_capability::REQUEST_LIMITS, canic::protocol::root_capability::RESPONSE_LIMITS);
-canic::__canic_register_wire_schema!("canic_root_capability_cycles", Update, canic::protocol::root_capability::cycles::METHOD_ID, canic::dto::root_capability::CapabilityRequest<canic::dto::rpc::CyclesRequest>, Result<canic::dto::rpc::CyclesResponse, Error>, canic::protocol::root_capability::REQUEST_LIMITS, canic::protocol::root_capability::RESPONSE_LIMITS);
+canic::__canic_register_raw_wire_schema!("testing_settle_component_child", Update, protocol::SETTLE, [u8; 32], Result<(), Error>, protocol::LIMITS, protocol::LIMITS);
+canic::__canic_register_raw_wire_schema!("canic_root_capability_acknowledge", Update, canic::protocol::root_capability::acknowledge::METHOD_ID, canic::dto::root_capability::CapabilityRequest<canic::dto::rpc::AcknowledgePlacementReceiptRequest>, Result<(), Error>, canic::protocol::root_capability::REQUEST_LIMITS, canic::protocol::root_capability::RESPONSE_LIMITS);
+canic::__canic_register_raw_wire_schema!("canic_root_capability_allocate", Update, canic::protocol::root_capability::allocate::METHOD_ID, canic::dto::root_capability::CapabilityRequest<canic::dto::root_capability::CreateCanisterRequest>, Result<canic::dto::root_capability::CreateCanisterResponse, Error>, canic::protocol::root_capability::REQUEST_LIMITS, canic::protocol::root_capability::RESPONSE_LIMITS);
+canic::__canic_register_raw_wire_schema!("canic_root_capability_create", Update, canic::protocol::root_capability::create::METHOD_ID, canic::dto::root_capability::CapabilityRequest<canic::dto::root_capability::CreateCanisterRequest>, Result<canic::dto::root_capability::CreateCanisterResponse, Error>, canic::protocol::root_capability::REQUEST_LIMITS, canic::protocol::root_capability::RESPONSE_LIMITS);
+canic::__canic_register_raw_wire_schema!("canic_root_capability_recycle", Update, canic::protocol::root_capability::recycle::METHOD_ID, canic::dto::root_capability::CapabilityRequest<canic::dto::root_capability::RecycleCanisterRequest>, Result<(), Error>, canic::protocol::root_capability::REQUEST_LIMITS, canic::protocol::root_capability::RESPONSE_LIMITS);
+canic::__canic_register_raw_wire_schema!("canic_root_capability_cycles", Update, canic::protocol::root_capability::cycles::METHOD_ID, canic::dto::root_capability::CapabilityRequest<canic::dto::rpc::CyclesRequest>, Result<canic::dto::rpc::CyclesResponse, Error>, canic::protocol::root_capability::REQUEST_LIMITS, canic::protocol::root_capability::RESPONSE_LIMITS);

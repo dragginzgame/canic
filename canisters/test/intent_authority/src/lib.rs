@@ -131,7 +131,7 @@ fn post_upgrade() {
     ic_platform::cdk::println!("intent_authority: post_upgrade memory initialized");
 }
 
-canic::__canic_register_wire_schema!("begin_receipt", Update, protocol::BEGIN, protocol::BeginRequest, Result<ReceiptBeginView, String>, protocol::LIMITS, protocol::LIMITS);
+canic::__canic_register_raw_wire_schema!("begin_receipt", Update, protocol::BEGIN, protocol::BeginRequest, Result<ReceiptBeginView, String>, protocol::LIMITS, protocol::LIMITS);
 #[ic_platform::cdk::update(
     decode_with = "codec::begin::decode",
     encode_with = "codec::begin::encode"
@@ -209,7 +209,7 @@ fn begin_receipt(request: protocol::BeginRequest) -> Result<ReceiptBeginView, St
     Ok(ReceiptBeginView { status, intent })
 }
 
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "load_receipt",
     Query,
     protocol::LOAD,
@@ -226,7 +226,7 @@ fn load_receipt(operation_seed: u8) -> Result<Option<ReceiptIntentView>, String>
     load_receipt_view(operation_id(operation_seed))
 }
 
-canic::__canic_register_wire_schema!("settle_receipt", Update, protocol::SETTLE, protocol::SettleRequest, Result<ReceiptSettlementView, String>, protocol::LIMITS, protocol::LIMITS);
+canic::__canic_register_raw_wire_schema!("settle_receipt", Update, protocol::SETTLE, protocol::SettleRequest, Result<ReceiptSettlementView, String>, protocol::LIMITS, protocol::LIMITS);
 #[ic_platform::cdk::update(
     decode_with = "codec::settle::decode",
     encode_with = "codec::settle::encode"

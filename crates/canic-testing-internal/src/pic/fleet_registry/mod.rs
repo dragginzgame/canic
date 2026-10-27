@@ -1,5 +1,7 @@
 //! Prepared-root Registry lifecycle coverage.
 
+#[cfg(test)]
+mod audit_root;
 mod baseline;
 mod build;
 mod fixture;

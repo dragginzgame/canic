@@ -85,7 +85,7 @@ async fn await_controlled_response(which: u8) {
     .expect("controlled simulator HTTP reply");
 }
 
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "perf_context_entered",
     Query,
     crate::timer_wire::PERF_ENTERED,
@@ -103,7 +103,7 @@ fn perf_context_entered() -> Vec<bool> {
     ENTERED.with_borrow(|entered| entered.to_vec())
 }
 
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "perf_context_completed",
     Query,
     crate::timer_wire::PERF_COMPLETED,
@@ -164,7 +164,7 @@ async fn perf_context_probe(which: u8) -> Result<PerfProbeObservation, canic::Er
     Ok(observed)
 }
 
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "perf_context_metrics",
     Query,
     crate::timer_wire::PERF_METRICS,

@@ -13,10 +13,9 @@ use login::{PreparedLogin, prepare_login};
 use logout::commit_logout;
 
 use super::*;
-use ic_auth::portable::LoginRevocationChange;
+use ic_auth::portable::{LoginRecordState, LoginRevocationChange};
 use ic_auth::session::{
-    Replay, Session, SessionError, SessionLimits, SessionOccupancy, SessionStore,
-    SessionTransaction,
+    Replay, Session, SessionError, SessionLimits, SessionOccupancy, SessionReader, SessionStore,
 };
 
 /// Target-bound durable backend; no asynchronous work may enter its transaction.
@@ -41,47 +40,53 @@ struct PairAuthority {
     fingerprint: [u8; 32],
 }
 
-struct Transaction {
+struct Reader {
     generation: u64,
-    staged: Option<(LocalApplicationSessionRecord, LocalApplicationReplayRecord)>,
-    removed: Option<Principal>,
 }
 
 impl SessionStore for ApplicationSessionStore {
-    fn transaction<T>(
+    fn read<T>(
         &mut self,
-        login_change: Option<&LoginRevocationChange>,
-        operation: impl FnOnce(&mut dyn SessionTransaction) -> Result<T, SessionError>,
+        operation: impl FnOnce(&dyn SessionReader) -> Result<T, SessionError>,
     ) -> Result<T, SessionError> {
-        let mut tx = Transaction {
+        operation(&Reader {
             generation: LocalApplicationAuthorizationStateOps::application_authority_generation(),
-            staged: None,
-            removed: None,
-        };
-        let result = operation(&mut tx)?;
-        match (tx.staged.take(), tx.removed, login_change) {
-            (None, None, None) => {}
-            (Some((session, replay)), None, Some(change)) if !change.revoked() => {
-                Session::decode(&session.shared_session)?.check_login_change(change)?;
-                let login = prepare_login(self, change)?;
-                commit_pair(session, replay, tx.generation, login)?;
-            }
-            (None, Some(caller), Some(change))
-                if change.revoked() && change.caller() == caller.into() =>
-            {
-                if let Some(session) = tx.session(caller.into())? {
-                    session.check_login_change(change)?;
-                }
-                let login = prepare_login(self, change)?;
-                commit_logout(caller, login)?;
-            }
-            _ => return Err(SessionError::InvalidPolicyOrRecord),
+        })
+    }
+
+    fn admit(
+        &mut self,
+        session: &Session,
+        replay: &Replay,
+        change: &LoginRevocationChange,
+    ) -> Result<bool, SessionError> {
+        if !matches!(change.state(), LoginRecordState::Reserved(_)) {
+            return Err(SessionError::InvalidPolicyOrRecord);
         }
-        Ok(result)
+        session.check_login_change(change)?;
+        let reader = Reader {
+            generation: LocalApplicationAuthorizationStateOps::application_authority_generation(),
+        };
+        let (record, replay_record) = reader.prepare_pair(session, replay)?;
+        let replacing = reader.session(session.caller())?.is_some();
+        let login = prepare_login(self, change)?;
+        commit_pair(record, replay_record, reader.generation, login)?;
+        Ok(replacing)
+    }
+
+    fn logout(&mut self, change: &LoginRevocationChange) -> Result<(), SessionError> {
+        if !matches!(change.state(), LoginRecordState::Revoked(_)) {
+            return Err(SessionError::InvalidPolicyOrRecord);
+        }
+        if let Some(session) = self.read(|reader| reader.session(change.caller()))? {
+            session.check_login_change(change)?;
+        }
+        let login = prepare_login(self, change)?;
+        commit_logout(change.caller().into(), login)
     }
 }
 
-impl SessionTransaction for Transaction {
+impl SessionReader for Reader {
     fn generation(&self) -> u64 {
         self.generation
     }
@@ -129,7 +134,14 @@ impl SessionTransaction for Transaction {
             })
             .map_err(|_| SessionError::StorageFailure)
     }
-    fn stage(&mut self, session: Session, replay: Replay) -> Result<(), SessionError> {
+}
+
+impl Reader {
+    fn prepare_pair(
+        &self,
+        session: &Session,
+        replay: &Replay,
+    ) -> Result<(LocalApplicationSessionRecord, LocalApplicationReplayRecord), SessionError> {
         let session_binding = PairAuthority {
             generation: session.generation(),
             caller: session.caller().into(),
@@ -140,18 +152,13 @@ impl SessionTransaction for Transaction {
             caller: replay.caller().into(),
             fingerprint: replay.fingerprint(),
         };
-        if self.staged.is_some()
-            || self.removed.is_some()
-            || session_binding != replay_binding
-            || session.generation() != self.generation
-        {
+        if session_binding != replay_binding || session.generation() != self.generation {
             return Err(SessionError::InvalidPolicyOrRecord);
         }
         if self.replay_exists(replay.fingerprint())? {
             return Err(SessionError::ReplayConflict);
         }
-        let record =
-            session_to_record(&session).map_err(|_| SessionError::InvalidPolicyOrRecord)?;
+        let record = session_to_record(session).map_err(|_| SessionError::InvalidPolicyOrRecord)?;
         if encoded_len(&record).map_err(|_| SessionError::StorageFailure)?
             > MAX_APPLICATION_SESSION_RECORD_BYTES
         {
@@ -163,17 +170,7 @@ impl SessionTransaction for Transaction {
             authority_generation: replay.generation(),
             remove_at_ns: replay.remove_at_ns(),
         };
-        self.staged = Some((record, replay));
-        Ok(())
-    }
-
-    fn remove(&mut self, caller: ic_auth_protocol_types::Principal) -> Result<(), SessionError> {
-        let caller: Principal = caller.into();
-        if self.staged.is_some() || self.removed.is_some() {
-            return Err(SessionError::InvalidPolicyOrRecord);
-        }
-        self.removed = Some(caller);
-        Ok(())
+        Ok((record, replay))
     }
 }
 

@@ -3,7 +3,7 @@
 //! Responsibility: build, seal and retain exact fixture release artifacts.
 //! Boundary: cache build helpers and Cargo inputs independently of journey assertions.
 
-mod audit_root;
+use crate::pic::fleet_registry::audit_root;
 mod host_inputs;
 
 #[cfg(test)]
@@ -48,10 +48,11 @@ use std::{
     time::Instant,
 };
 
-const BUILD_HELPERS: [&str; 4] = [
+const BUILD_HELPERS: [&str; 5] = [
     "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/release_artifacts/host_inputs/mod.rs",
     "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/release_artifacts/mod.rs",
-    "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/release_artifacts/audit_root/mod.rs",
+    "crates/canic-testing-internal/src/pic/fleet_registry/audit_root/mod.rs",
+    "crates/canic-testing-internal/src/pic/fleet_registry/audit_root/package/mod.rs",
     "crates/canic-testing-internal/src/pic/artifacts.rs",
 ];
 

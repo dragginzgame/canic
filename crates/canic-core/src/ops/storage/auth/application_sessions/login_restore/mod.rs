@@ -4,7 +4,10 @@ use super::*;
 use crate::model::auth::application_authorization::{
     MAX_APPLICATION_ADMITTED_LOGINS, MAX_APPLICATION_UNKNOWN_LOGOUTS,
 };
-use ic_auth::{portable::LoginRevocationChange, session::Session};
+use ic_auth::{
+    portable::{LoginRecordState, LoginRevocationChange},
+    session::Session,
+};
 use ic_auth_protocol_types::{AudienceId, CanonicalId};
 
 pub(super) fn validate_login_records(
@@ -49,14 +52,14 @@ pub(super) fn validate_login_records(
             return Err(invalid);
         }
         if let Some(record) = sessions.get(caller) {
-            if login.revoked() {
+            if matches!(login.state(), LoginRecordState::Revoked(_)) {
                 return Err(invalid);
             }
             record
                 .check_login_change(&login)
                 .map_err(|_| invalid.clone())?;
         }
-        admitted += usize::from(login.admitted_pool());
+        admitted += usize::from(!matches!(login.state(), LoginRecordState::Revoked(None)));
     }
     if admitted != state.login_totals.admitted
         || sessions.keys().any(|caller| !callers.contains(caller))

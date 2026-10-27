@@ -1,5 +1,5 @@
 //! Owned probe schemas; installation and external provider schemas are separate.
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "root_funding_probe_prepare",
     Update,
     crate::protocol::PREPARE,
@@ -8,7 +8,7 @@ canic::__canic_register_wire_schema!(
     crate::protocol::LIMITS,
     crate::protocol::LIMITS
 );
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "root_funding_probe_handle_request",
     Update,
     crate::protocol::HANDLE_REQUEST,
@@ -17,7 +17,7 @@ canic::__canic_register_wire_schema!(
     crate::protocol::LIMITS,
     crate::protocol::LIMITS
 );
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "root_funding_probe_request",
     Update,
     crate::protocol::REQUEST,
@@ -26,7 +26,7 @@ canic::__canic_register_wire_schema!(
     crate::protocol::LIMITS,
     crate::protocol::LIMITS
 );
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "root_funding_probe_emergency_refill",
     Update,
     crate::protocol::EMERGENCY_REFILL,
@@ -35,7 +35,7 @@ canic::__canic_register_wire_schema!(
     crate::protocol::LIMITS,
     crate::protocol::LIMITS
 );
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "root_funding_probe_emergency_refill_transfer_then_trap",
     Update,
     crate::protocol::EMERGENCY_REFILL_TRANSFER_THEN_TRAP,
@@ -44,7 +44,7 @@ canic::__canic_register_wire_schema!(
     crate::protocol::LIMITS,
     crate::protocol::LIMITS
 );
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "root_funding_probe_emergency_refill_notify_then_trap",
     Update,
     crate::protocol::EMERGENCY_REFILL_NOTIFY_THEN_TRAP,
@@ -53,7 +53,7 @@ canic::__canic_register_wire_schema!(
     crate::protocol::LIMITS,
     crate::protocol::LIMITS
 );
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "root_funding_probe_emergency_operation",
     Query,
     crate::protocol::EMERGENCY_OPERATION,
@@ -62,7 +62,7 @@ canic::__canic_register_wire_schema!(
     crate::protocol::LIMITS,
     crate::protocol::LIMITS
 );
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "root_funding_probe_issue",
     Update,
     crate::protocol::ISSUE,
@@ -71,7 +71,7 @@ canic::__canic_register_wire_schema!(
     crate::protocol::LIMITS,
     crate::protocol::LIMITS
 );
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "root_funding_probe_issue_root_accept_then_trap",
     Update,
     crate::protocol::ISSUE_ROOT_ACCEPT_THEN_TRAP,
@@ -80,7 +80,7 @@ canic::__canic_register_wire_schema!(
     crate::protocol::LIMITS,
     crate::protocol::LIMITS
 );
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "root_funding_probe_issue_then_trap",
     Update,
     crate::protocol::ISSUE_THEN_TRAP,
@@ -89,7 +89,7 @@ canic::__canic_register_wire_schema!(
     crate::protocol::LIMITS,
     crate::protocol::LIMITS
 );
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "root_funding_probe_intent",
     Query,
     crate::protocol::INTENT,
@@ -98,7 +98,7 @@ canic::__canic_register_wire_schema!(
     crate::protocol::LIMITS,
     crate::protocol::LIMITS
 );
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "root_funding_probe_receipt",
     Query,
     crate::protocol::RECEIPT,
@@ -107,7 +107,7 @@ canic::__canic_register_wire_schema!(
     crate::protocol::LIMITS,
     crate::protocol::LIMITS
 );
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "root_funding_probe_acceptance_observation",
     Query,
     crate::protocol::ACCEPTANCE_OBSERVATION,
@@ -116,7 +116,7 @@ canic::__canic_register_wire_schema!(
     crate::protocol::LIMITS,
     crate::protocol::LIMITS
 );
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "root_funding_probe_accept",
     Update,
     crate::protocol::ACCEPT,
@@ -125,7 +125,7 @@ canic::__canic_register_wire_schema!(
     crate::protocol::LIMITS,
     crate::protocol::LIMITS
 );
-canic::__canic_register_wire_schema!(
+canic::__canic_register_raw_wire_schema!(
     "root_funding_probe_accept_then_trap",
     Update,
     crate::protocol::ACCEPT_THEN_TRAP,

@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### 📝 Summary
 
+- Serialize artifact/schema production across workspaces sharing a Cargo target,
+  and carry raw fixture endpoint declarations into compiled Wire metadata.
+
 - Admit maximum native admission policies within the existing 16 KiB frame cap,
   and align extraction guards and fixtures with current Wire/schema ownership.
 
@@ -23,9 +26,9 @@ owners, and strengthens release-bound observations and interruption recovery.
 ### ⚠️ Breaking
 
 - **Supplier refresh:** adopt Platform 0.7.0, Blob Storage/Contracts 0.51.0,
-  Auth/protocol types 0.18.0, Tooling/Host/Testkit 0.69.0, Query 0.75.0 and
+  Auth/protocol types 0.19.0, Tooling/Host/Testkit 0.69.0, Query 0.75.0 and
   Backup 0.45.1 with matching public type identities. Select Memory/Storage
-  0.51.10 and Timers 0.31.10 across the applicable consumer graphs. Blob-owned
+  0.51.10 and Timers 0.31.11 across the applicable consumer graphs. Blob-owned
   records use its bounded Wire storage contract; preserve existing installation
   obligations. Refresh the canonical Shared Tooling snapshot to 0.26.23.
 
@@ -120,7 +123,7 @@ owners, and strengthens release-bound observations and interruption recovery.
 - Validate final endpoint exports against their declared codecs before replacing
   build artifacts; canonical infrastructure DIDs describe lifecycle arguments and
   required external Candid methods.
-- Adopt Auth 0.18.0 and matching protocol types, preserving existing proof,
+- Adopt Auth 0.19.0 and matching protocol types, preserving existing proof,
   session-storage and production activation boundaries.
 
 - Seal native schemas, generated browser runtimes and bindings with final Wasm;

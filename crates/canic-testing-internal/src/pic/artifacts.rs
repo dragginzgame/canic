@@ -237,17 +237,23 @@ pub(super) fn internal_test_artifact_build_target(workspace_root: &Path) -> Path
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
 pub(super) fn preflight_governed_shared_artifacts() {
     let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    // Parallel journeys generate packages beneath this audit source root. Freeze
+    // Parallel journeys generate packages beneath these source roots. Freeze
     // every maintained configuration before either worker hashes that source.
-    let mut configs = fs::read_dir(workspace_root.join("canisters/audit/root_probe"))
-        .expect("read audit Root configurations")
-        .map(|entry| entry.expect("read audit Root configuration entry").path())
-        .filter(|path| {
-            path.extension()
-                .is_some_and(|extension| extension == "toml")
-        })
-        .filter(|path| path.file_name().is_some_and(|name| name != "Cargo.toml"))
-        .collect::<Vec<_>>();
+    let mut configs = [
+        "canisters/audit/root_probe",
+        "canisters/test/managed_lifecycle_probe",
+    ]
+    .into_iter()
+    .flat_map(|relative| {
+        fs::read_dir(workspace_root.join(relative)).expect("read managed fixture configurations")
+    })
+    .map(|entry| entry.expect("read audit Root configuration entry").path())
+    .filter(|path| {
+        path.extension()
+            .is_some_and(|extension| extension == "toml")
+    })
+    .filter(|path| path.file_name().is_some_and(|name| name != "Cargo.toml"))
+    .collect::<Vec<_>>();
     configs.sort();
     assert!(
         !configs.is_empty(),

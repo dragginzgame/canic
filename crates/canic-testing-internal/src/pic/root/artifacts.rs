@@ -121,6 +121,27 @@ fn root_release_artifact_cache_spec(
         .expect("root build config path UTF-8");
     let mut environment = vec![("ICP_ENVIRONMENT", spec.build_network.as_str())];
     environment.extend_from_slice(build_env);
+    // These generated packages may live inside a selected application package.
+    // Resolve the complete infrastructure set before capturing that directory.
+    canic_host::canister_build::prepare_workspace_infrastructure_packages(
+        &canic_host::canister_build::WorkspaceBuildContext {
+            role: "root".into(),
+            profile: spec
+                .build_profile
+                .target_dir_name()
+                .parse()
+                .expect("build profile"),
+            environment: spec.build_network.as_str().into(),
+            build_network: spec.build_network,
+            workspace_root: spec.workspace_root.clone(),
+            icp_root: spec.workspace_root.clone(),
+            config_path: spec.build_config_path.clone(),
+            local_replica: None,
+            refresh_canonical_infrastructure_did: false,
+            release_build_id: None,
+        },
+    )
+    .expect("prepare complete Root fixture infrastructure before input capture");
     let cargo_build = root_release_cargo_build_spec(spec, &environment);
     let mut cache = ArtifactCacheSpec::new(
         &spec
