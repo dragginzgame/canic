@@ -401,26 +401,45 @@ placement.minimum_distinct_roots = 2
             .code(),
             canic_contracts::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
         );
-        let ordinary_mutation = crate::pic::registry_discovery::activate(
-            pic,
-            coordinator,
-            Principal::anonymous(),
-            FleetRegistryActivationRequest {
-                expected_registry: registry_version(pic, coordinator),
-            },
-        );
-        assert!(
-            ordinary_mutation.is_err(),
-            "restored authority must reject ordinary mutation before handler dispatch"
-        );
+        assert_restored_coordinator_rejects_activation(pic, coordinator);
     }
 
-    fn registry_version(
-        pic: &PocketIc,
-        coordinator: Principal,
-    ) -> canic_contracts::dto::fleet_registry::FleetRegistryVersion {
-        crate::pic::registry_discovery::version(pic, coordinator)
-            .expect("restored Registry version")
+    fn assert_restored_coordinator_rejects_activation(pic: &PocketIc, coordinator: Principal) {
+        use canic::{dto::registry_control, protocol::registry_control as wire};
+
+        let before =
+            crate::pic::registry_discovery::snapshot(pic, coordinator, Principal::anonymous())
+                .expect("restored Registry snapshot");
+        let request = registry_control::ActivateRequest::from(FleetRegistryActivationRequest {
+            expected_registry: crate::pic::registry_discovery::version(pic, coordinator)
+                .expect("restored Registry version"),
+        });
+        let bytes = ic_wire::native::encode_request(
+            wire::activate::METHOD_ID,
+            &request,
+            wire::REQUEST_LIMITS,
+        )
+        .expect("encode activation request");
+        let rejection = pic
+            .update_call(
+                coordinator,
+                Principal::anonymous(),
+                wire::activate::METHOD,
+                bytes,
+            )
+            .expect_err("restored authority must reject activation before handler dispatch");
+        assert_eq!(
+            rejection.reject_code,
+            ic_platform::pocket_ic::RejectCode::CanisterError
+        );
+        assert_eq!(
+            rejection.error_code,
+            ic_platform::pocket_ic::ErrorCode::CanisterCalledTrap
+        );
+        let after =
+            crate::pic::registry_discovery::snapshot(pic, coordinator, Principal::anonymous())
+                .expect("unchanged restored Registry");
+        assert_eq!(after, before);
     }
 
     fn assert_registry_discovery(

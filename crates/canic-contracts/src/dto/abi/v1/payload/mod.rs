@@ -129,6 +129,7 @@ mod tests {
             .expect("encode managed non-root init payload");
         let decoded: CanisterInitPayload = crate::protocol::authority::decode(&bytes)
             .expect("decode managed non-root init payload");
+        assert_maximum_application_initialization(&payload);
 
         assert_eq!(decoded.install_id, [11; 32]);
         assert_eq!(decoded.release_build_id, release_build_id);
@@ -144,5 +145,21 @@ mod tests {
                 binding,
             }
         );
+    }
+
+    fn assert_maximum_application_initialization(payload: &CanisterInitPayload) {
+        let initialization = (
+            payload.clone(),
+            Some(vec![
+                255;
+                crate::dto::component_registry::MAX_COMPONENT_APPLICATION_INIT_BYTES
+            ]),
+        );
+        let bytes = crate::protocol::initialization::encode(&initialization)
+            .expect("maximum application bytes plus managed authority must fit installation");
+        let decoded: (CanisterInitPayload, Option<Vec<u8>>) =
+            crate::protocol::initialization::decode(&bytes)
+                .expect("decode maximum application bytes plus managed authority");
+        assert_eq!(decoded, initialization);
     }
 }

@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### 📝 Summary
 
+- Admit maximum application initialization bytes together with managed authority
+  in the bounded Wire installation envelope; retain the wire-size, depth and
+  application byte caps. Coordinator snapshot tests assert the exact transport
+  fence rejection and unchanged registry after attempted activation.
+
 - Make preparation and qualification select the same managed compiler-cache
   environment without manual exports. Pin sccache 0.19.0 with its upstream archive
   checksum, isolate its runtime by version, and reject mismatched explicit cache

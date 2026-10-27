@@ -18,11 +18,36 @@ pub const RESPONSE_LIMITS: ic_wire::Limits = ic_wire::Limits {
     nodes: 4096,
     depth: 32,
 };
-/// The retained initialization payload can occupy the entire 64 KiB input budget.
-/// Include framing and result/vector overhead in its observation budget.
+/// Observe maximum application bytes with bounded framing and visitor overhead.
 pub const INITIALIZATION_RESPONSE_LIMITS: ic_wire::Limits = ic_wire::Limits {
     bytes: 131_072,
-    allocation: 524_288,
+    allocation: 4_194_304,
     nodes: 131_072,
     depth: 32,
 };
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn maximum_initialization_response_roundtrips() {
+        let response: Result<Vec<u8>, canic::Error> = Ok(vec![
+            255;
+            canic::dto::component_registry::MAX_COMPONENT_APPLICATION_INIT_BYTES
+        ]);
+        let bytes = ic_wire::native::encode_response(
+            INITIALIZATION,
+            &response,
+            INITIALIZATION_RESPONSE_LIMITS,
+        )
+        .expect("maximum initialized application bytes fit the probe response");
+        let decoded: Result<Vec<u8>, canic::Error> = ic_wire::native::decode_response(
+            INITIALIZATION,
+            &bytes,
+            INITIALIZATION_RESPONSE_LIMITS,
+        )
+        .expect("decode maximum initialized application bytes");
+        assert_eq!(decoded, response);
+    }
+}

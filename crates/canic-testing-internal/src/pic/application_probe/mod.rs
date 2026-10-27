@@ -64,7 +64,7 @@ pub const MANAGED_PARITY: WireCallSpec =
 pub const MANAGED_INITIALIZATION: WireCallSpec = WireCallSpec {
     response_limits: ic_wire::Limits {
         bytes: 131_072,
-        allocation: 524_288,
+        allocation: 4_194_304,
         nodes: 131_072,
         depth: 32,
     },

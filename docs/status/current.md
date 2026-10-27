@@ -229,3 +229,47 @@ unchanged. Focused evidence on this correction:
 The scoped correction and operational notes are ready for the authorized local
 commit and fresh `make release-verify`. Fresh hosted setup and native macOS remain
 unverified. This local preparation/qualification work does not publish or deploy.
+
+The fifth complete qualification at `f2f88e1c89c38629aaff0a299f9e32c373dea1b0`
+finished in 71m51.587s, exit 2. All four generated-source lookup failures passed,
+as did the exact snapshot restore (4m09s), source-bound activation reset (3m04s),
+and mixed-topology recovery (12m55s). Two later internal cases failed: maximum
+application initialization exhausted Wire installation admission (E81), and the
+Coordinator snapshot fixture unwrapped the expected pre-dispatch E25 transport
+rejection. All other executed groups passed, including Host and public runtime
+PocketIC suites. Nested test-runner wall time was 4046s; its internal PocketIC
+stage was 3226s, Host proofs 38s, runtime proofs 456s and payload-limit proofs 10s.
+These are nested breakdowns, not additional time to add to the complete run.
+
+The initialization native reproduction failed with `ic_wire::Error::Limit`.
+The maximum supported 16,384 application bytes plus real managed authority encode
+to 18,397 bytes. Four serialization-node charges per byte alone exhausted the old
+65,536-node allowance; visitor allocation also exceeded 1 MiB and 2 MiB. The
+installation owner now admits 131,072 nodes and 4 MiB visitor allocation, retaining
+the 64 KiB byte cap, depth 64, exact wire representation and the application byte
+limit. This repairs the existing maximum payload contract; it does not enlarge
+application input or paid-effect authority. Native allocation accounting is not a
+measurement of actual heap use. The first installed retry passed installation and
+commitment, then exposed the probe query's insufficient response allowance. The
+fixture and its expected caller contract now admit that same maximum response,
+with a native round-trip regression. Production fences and lifecycle logic are
+unchanged. Coordinator snapshot qualification directly checks CanisterError plus
+CanisterCalledTrap and an unchanged full registry after rejected activation.
+
+| Targeted check on final correction | Result | Remaining uncertainty |
+| --- | --- | --- |
+| Contracts managed initialization native round-trip | Passed with maximum application bytes and actual authority; original allowance reproduced Limit | Full run pending |
+| Lifecycle probe maximum response round-trip | Passed; actual framed native codec, exact result equality | Installed path separately checked below |
+| Contracts all-target/all-feature Clippy | Passed, 19.07s | Only affected package |
+| Internal-testing governed-feature Clippy | Passed, 49.23s initially; final caller correction 3.13s | Only affected package |
+| Lifecycle probe all-target/all-feature Clippy | Passed, 0.67s after correcting an unnecessary test unwrap | Only affected fixture |
+| Exact production initialization PocketIC case | 1 passed; 50s stage, 75s runner including 13s preflight | Fresh complete qualification still required |
+| Exact Coordinator joining-root replay PocketIC case | 1 passed; 11s stage, 24s runner including 1s preflight | Fresh complete qualification still required |
+
+Commands and full logs are retained in `target/session-qualification/`; the exact
+PocketIC selectors are `pic::fleet_registry::baseline::tests::application_initialization::production_initialization_recovers_exact_target_bytes`
+and `pic::fleet_coordinator::tests::coordinator_commits_joining_roots_and_replays_original_receipts`,
+each invoked through `CARGO_NET_OFFLINE=true make test-pocketic-case CASE=...`.
+The corrections are ready for the authorized local commit and fresh canonical
+`make release-verify`. Fresh hosted setup and historical activation-conflict
+causation remain unresolved. No version bump, push, publication or deployment occurred.
