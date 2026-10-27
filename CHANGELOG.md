@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - Serialize artifact/schema production across workspaces sharing a Cargo target,
   and carry raw fixture endpoint declarations into compiled Wire metadata.
+  Align test canister auth features with all three qualification profiles.
 
 - Admit maximum native admission policies within the existing 16 KiB frame cap,
   and align extraction guards and fixtures with current Wire/schema ownership.
