@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### 📝 Summary
 
+- Architecture guards refuse missing, empty or unreadable required source sets
+  instead of reporting an incomplete scan as clean.
+
 Canic 0.112 moves owned application protocols and generated clients to native
 Wire, consolidates shared runtime and host mechanisms under their upstream
 owners, and strengthens release-bound observations and interruption recovery.

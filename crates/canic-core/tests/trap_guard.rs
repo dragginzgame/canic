@@ -1,9 +1,8 @@
 // Category C - System-level artifact test (no embedded config).
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+mod source_scan;
+
+use std::path::{Path, PathBuf};
 
 #[test]
 fn trap_usage_is_confined_to_approved_platform_boundaries() {
@@ -36,38 +35,20 @@ fn trap_usage_is_confined_to_approved_platform_boundaries() {
 }
 
 fn scan_dir(root: &Path, lifecycle: &Path, ic_ops: &Path, violations: &mut Vec<PathBuf>) {
-    let Ok(entries) = fs::read_dir(root) else {
-        return;
-    };
-
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path
-            .file_name()
-            .is_some_and(|name| name == "target" || name == ".git" || name == "tests")
-        {
-            continue;
-        }
-
-        if path.is_dir() {
-            scan_dir(&path, lifecycle, ic_ops, violations);
-            continue;
-        }
-
-        if path.extension().is_some_and(|ext| ext == "rs") {
-            if path.starts_with(lifecycle) || path == ic_ops {
-                continue;
-            }
-
-            let Ok(contents) = fs::read_to_string(&path) else {
-                continue;
-            };
-
+    source_scan::visit(
+        root,
+        &|path| {
+            path.file_name()
+                .is_some_and(|name| name == "target" || name == ".git" || name == "tests")
+                || path.starts_with(lifecycle)
+                || path == ic_ops
+        },
+        &mut |path, contents| {
             if contents.contains("cdk::api::trap") {
-                violations.push(path);
+                violations.push(path.to_owned());
             }
-        }
-    }
+        },
+    );
 }
 
 fn workspace_root() -> PathBuf {

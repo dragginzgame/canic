@@ -1,9 +1,8 @@
 // Category C - System-level artifact test (no embedded config).
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+mod source_scan;
+
+use std::path::{Path, PathBuf};
 
 #[test]
 fn non_error_dtos_do_not_import_internal_behavior_layers() {
@@ -11,10 +10,6 @@ fn non_error_dtos_do_not_import_internal_behavior_layers() {
 
     for dto_root in dto_roots() {
         scan_rust_files(&dto_root, &mut |path, contents| {
-            if is_public_error_boundary_adapter(path) {
-                return;
-            }
-
             for (line_number, line) in code_lines(contents) {
                 for forbidden in FORBIDDEN_LAYER_FRAGMENTS {
                     if line.contains(forbidden) {
@@ -40,10 +35,6 @@ fn non_error_dtos_do_not_perform_side_effects() {
 
     for dto_root in dto_roots() {
         scan_rust_files(&dto_root, &mut |path, contents| {
-            if is_public_error_boundary_adapter(path) {
-                return;
-            }
-
             for (line_number, line) in code_lines(contents) {
                 for forbidden in FORBIDDEN_EFFECT_FRAGMENTS {
                     if line.contains(forbidden) {
@@ -90,15 +81,7 @@ const FORBIDDEN_EFFECT_FRAGMENTS: &[&str] = &[
 
 fn dto_roots() -> Vec<PathBuf> {
     let workspace = workspace_root();
-    vec![
-        workspace.join("crates/canic-core/src/dto"),
-        workspace.join("crates/canic-control-plane/src/dto"),
-    ]
-}
-
-fn is_public_error_boundary_adapter(path: &Path) -> bool {
-    path.to_string_lossy()
-        .ends_with("/crates/canic-core/src/dto/error.rs")
+    vec![workspace.join("crates/canic-contracts/src/dto")]
 }
 
 fn code_lines(contents: &str) -> impl Iterator<Item = (usize, &str)> {
@@ -109,26 +92,7 @@ fn code_lines(contents: &str) -> impl Iterator<Item = (usize, &str)> {
 }
 
 fn scan_rust_files(root: &Path, visitor: &mut impl FnMut(&Path, &str)) {
-    let Ok(entries) = fs::read_dir(root) else {
-        return;
-    };
-
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            scan_rust_files(&path, visitor);
-            continue;
-        }
-
-        if path.extension().is_none_or(|ext| ext != "rs") {
-            continue;
-        }
-
-        let Ok(contents) = fs::read_to_string(&path) else {
-            continue;
-        };
-        visitor(&path, &contents);
-    }
+    source_scan::visit(root, &|_| false, visitor);
 }
 
 fn workspace_root() -> PathBuf {

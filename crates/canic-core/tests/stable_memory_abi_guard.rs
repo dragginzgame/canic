@@ -1,9 +1,8 @@
 // Category C - System-level artifact test (no embedded config).
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+mod source_scan;
+
+use std::path::{Path, PathBuf};
 
 const CANIC_MANAGED_RUNTIME_CRATES: &[&str] =
     &["canic", "canic-core", "canic-control-plane", "canic-macros"];
@@ -27,37 +26,15 @@ fn canic_managed_runtime_code_uses_managed_explicit_stable_keys() {
 }
 
 fn scan_dir(root: &Path, violations: &mut Vec<PathBuf>) {
-    let Ok(entries) = fs::read_dir(root) else {
-        return;
-    };
-
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            scan_dir(&path, violations);
-            continue;
-        }
-
-        if path.extension().is_none_or(|ext| ext != "rs") {
-            continue;
-        }
-
-        if is_managed_memory_runtime_boundary(&path) {
-            continue;
-        }
-
-        let Ok(contents) = fs::read_to_string(&path) else {
-            continue;
-        };
-
-        if contents.starts_with("#![cfg(test)]") {
-            continue;
-        }
-
-        if has_forbidden_memory_pattern(&contents) {
-            violations.push(path);
-        }
-    }
+    source_scan::visit(
+        root,
+        &is_managed_memory_runtime_boundary,
+        &mut |path, contents| {
+            if !contents.starts_with("#![cfg(test)]") && has_forbidden_memory_pattern(contents) {
+                violations.push(path.to_owned());
+            }
+        },
+    );
 }
 
 fn has_forbidden_memory_pattern(contents: &str) -> bool {
