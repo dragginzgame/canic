@@ -1,7 +1,9 @@
 //! Fixed admission methods, bounded independently from provisioning commands.
 pub const REQUEST_LIMITS: ic_wire::Limits = ic_wire::Limits {
     bytes: crate::protocol::limits::DEFAULT_UPDATE_INGRESS_MAX_BYTES,
-    allocation: 262_144,
+    // Maximum policies contain hundreds of principals and nested authority values;
+    // native visitor accounting exceeds 256 KiB even within the 16 KiB frame.
+    allocation: 1_048_576,
     nodes: 16_384,
     depth: 32,
 };

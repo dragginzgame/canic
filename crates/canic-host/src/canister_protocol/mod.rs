@@ -233,18 +233,19 @@ exit "$(cat exit-code)"
         fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
         let icp = IcpCli::new(executable.to_str().unwrap(), None).with_cwd(&root);
         let reply: Result<u64, canic_contracts::dto::error::Error> = Ok(42);
-        let response = serde_json::json!({
-            "response_bytes": hex_bytes(ic_wire::native::encode_response(wire::METHOD_ID, &reply, wire::RESPONSE_LIMITS).unwrap()),
-        });
+        let response = hex_bytes(
+            ic_wire::native::encode_response(wire::METHOD_ID, &reply, wire::RESPONSE_LIMITS)
+                .unwrap(),
+        );
         for update in [true, false] {
             for outcome in 0..3 {
                 fs::write(root.join("exit-code"), if outcome == 1 { "1" } else { "0" }).unwrap();
                 fs::write(
                     root.join("response"),
                     if outcome == 2 {
-                        "{}".to_string()
+                        "{}"
                     } else {
-                        response.to_string()
+                        response.as_str()
                     },
                 )
                 .unwrap();
@@ -350,9 +351,15 @@ exit "$(cat exit-code)"
 
     #[test]
     fn typed_arguments_are_written_to_private_binary_files() {
+        let limits = ic_wire::Limits {
+            bytes: 128,
+            allocation: 2048,
+            nodes: 32,
+            depth: 8,
+        };
         let argument = EmptyVectorArgument { values: Vec::new() };
         let path = write_binary_argument_file(
-            &ic_wire::native::encode_request(wire::METHOD_ID, &argument, wire::REQUEST_LIMITS)
+            &ic_wire::native::encode_request(wire::METHOD_ID, &argument, limits)
                 .expect("encode argument"),
         )
         .expect("write argument file");
@@ -360,7 +367,7 @@ exit "$(cat exit-code)"
         let decoded: EmptyVectorArgument = ic_wire::native::decode_request(
             wire::METHOD_ID,
             &fs::read(&path).expect("read argument file"),
-            wire::REQUEST_LIMITS,
+            limits,
         )
         .expect("decode argument");
         assert_eq!(decoded, argument);

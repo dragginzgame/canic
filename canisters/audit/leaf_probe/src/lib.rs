@@ -161,15 +161,18 @@ generic_cohort_page!(generic_cohort_page_5, GenericCohortSlot5);
 fn audit_page_generic_cohort(
     request: protocol::CohortRequest,
 ) -> Result<GenericPageCohortResponse, Error> {
+    Ok(cohort_response(request))
+}
+
+fn cohort_response(request: protocol::CohortRequest) -> GenericPageCohortResponse {
     let protocol::CohortRequest { slot, value } = request;
-    let response = match slot {
+    match slot {
         2 => GenericPageCohortResponse::Slot2(generic_cohort_page_2(value)),
         3 => GenericPageCohortResponse::Slot3(generic_cohort_page_3(value)),
         4 => GenericPageCohortResponse::Slot4(generic_cohort_page_4(value)),
         5 => GenericPageCohortResponse::Slot5(generic_cohort_page_5(value)),
         _ => GenericPageCohortResponse::Slot1(generic_cohort_page_1(value)),
-    };
-    Ok(response)
+    }
 }
 
 /// Spend fixture cycles before reviewing a later release's recovery funding.

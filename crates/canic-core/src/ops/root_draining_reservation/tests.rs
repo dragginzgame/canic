@@ -16,10 +16,19 @@ fn reservation_hash_is_domain_separated_and_excludes_only_its_hash_field() {
     let mut response = fixture();
     let hash = FleetSubnetRootDrainingReservationOps::content_hash(&response)
         .expect("hash draining reservation");
-    // Current Candid authority includes the recovery-controller vector even when empty.
+    // Current native Wire authority includes the recovery-controller vector even when empty.
     assert_eq!(
         crate::cdk::utils::hash::hex_bytes(hash),
-        "250c5cc099056db3407a1c9e015aac7606a52621c562d0ff12c2c0c12f111199"
+        "5d06dbfe11702e3bdcb97dce8136f41bd36255cb5e8e64e8dfb864937d4fdf80"
+    );
+    let mut authority = response.clone();
+    authority.reservation_hash = [0; 32];
+    let payload = canic_contracts::protocol::authority::encode(authority).unwrap();
+    let mut domain_and_payload = b"canic/fleet-subnet-root/draining-reservation/v1".to_vec();
+    domain_and_payload.extend_from_slice(&payload);
+    assert_eq!(
+        hash,
+        <[u8; 32]>::from(<sha2::Sha256 as sha2::Digest>::digest(&domain_and_payload))
     );
     response.reservation_hash = [99; 32];
     assert_eq!(

@@ -40,7 +40,7 @@ fn cohort_native_frames_preserve_each_selected_slot_and_value() {
         let decoded =
             ic_wire::native::decode_request(protocol::COHORT, &bytes, protocol::REQUEST_LIMITS)
                 .unwrap();
-        let response = audit_page_generic_cohort(decoded);
+        let response: Result<GenericPageCohortResponse, Error> = Ok(cohort_response(decoded));
         let bytes = ic_wire::native::encode_response(
             protocol::COHORT,
             &response,

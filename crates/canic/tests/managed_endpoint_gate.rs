@@ -182,7 +182,7 @@ fn application_startup_is_owned_by_the_release_bound_lifecycle_adapter() {
     let nonroot_endpoints = fs::read_to_string(&nonroot_path)
         .unwrap_or_else(|error| panic!("read {}: {error}", nonroot_path.display()));
     assert!(
-        nonroot_endpoints.contains("ApplicationStartupApi::release(publication)?")
+        nonroot_endpoints.contains("ApplicationStartupApi::release(publication.into())?")
             && nonroot_endpoints.contains("__canic_schedule_application_startup();"),
         "managed startup must retain publication authority before requesting its lifecycle callback"
     );

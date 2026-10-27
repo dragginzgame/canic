@@ -1,5 +1,6 @@
 // Category C - System-level artifact test (no embedded config).
 
+use proc_macro2::TokenTree;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -11,7 +12,8 @@ use syn::{
 };
 
 const PRODUCTION_SOURCE_ROOTS: [&str; 3] = ["apps", "canisters", "crates"];
-const NATIVE_REGISTRATION_CAPABILITIES: [&str; 5] = [
+const NATIVE_REGISTRATION_CAPABILITIES: [&str; 6] = [
+    "ensure_owned_once",
     "register_after_completion",
     "register_once",
     "reconcile_after_completion",
@@ -325,7 +327,8 @@ fn timer_semantic_identifier(identifier: &str) -> bool {
 }
 
 fn visit_token_stream(tokens: &proc_macro2::TokenStream, analysis: &mut TimerSyntax) {
-    for token in tokens.clone() {
+    let tokens = tokens.clone().into_iter().collect::<Vec<_>>();
+    for (index, token) in tokens.iter().enumerate() {
         match token {
             proc_macro2::TokenTree::Group(group) => visit_token_stream(&group.stream(), analysis),
             proc_macro2::TokenTree::Ident(identifier) => {
@@ -343,7 +346,9 @@ fn visit_token_stream(tokens: &proc_macro2::TokenStream, analysis: &mut TimerSyn
                         .entry(identifier.clone())
                         .or_default() += 1;
                 }
-                if NATIVE_REGISTRATION_ACTIONS.contains(&identifier.as_str()) {
+                if NATIVE_REGISTRATION_ACTIONS.contains(&identifier.as_str())
+                    && macro_registration_action(&tokens, index)
+                {
                     *analysis
                         .native_registration_actions
                         .entry(identifier.clone())
@@ -359,6 +364,22 @@ fn visit_token_stream(tokens: &proc_macro2::TokenStream, analysis: &mut TimerSyn
             _ => {}
         }
     }
+}
+
+fn macro_registration_action(tokens: &[proc_macro2::TokenTree], index: usize) -> bool {
+    if index > 0 && matches!(&tokens[index - 1], TokenTree::Punct(punct) if punct.as_char() == '.')
+    {
+        return true;
+    }
+    let start = tokens[..index]
+        .iter()
+        .rposition(|token| {
+            !matches!(token, TokenTree::Ident(_))
+                && !matches!(token, TokenTree::Punct(punct) if punct.as_char() == ':')
+        })
+        .map_or(0, |position| position + 1);
+    syn::parse2::<syn::Path>(tokens[start..=index].iter().cloned().collect())
+        .is_ok_and(|path| qualified_native_registration_action(&path))
 }
 
 #[test]
@@ -506,6 +527,27 @@ fn semantic_inventory_counts_macro_generated_native_calls() {
 
     assert!(syntax.has_timer_semantics);
     assert_eq!(syntax.native_registration_calls["register_once"], 1);
+}
+
+#[test]
+fn macro_actions_distinguish_timer_calls_from_protocol_arguments() {
+    let syntax = analyze_timer_syntax(
+        "synthetic.rs",
+        r#"
+        macro_rules! endpoints {
+            (resume = $resume:path) => {
+                callback!(resume = authority::resume);
+                println!("{}", resume);
+                registration.resume();
+                ic_timers::OnceRegistration::cancel(&registration);
+            };
+        }
+    "#,
+    );
+    assert_eq!(
+        syntax.native_registration_actions,
+        BTreeMap::from([("cancel".into(), 1), ("resume".into(), 1),])
+    );
 }
 
 #[test]

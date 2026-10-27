@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### 📝 Summary
 
+- Admit maximum native admission policies within the existing 16 KiB frame cap,
+  and align extraction guards and fixtures with current Wire/schema ownership.
+
 - Architecture guards refuse missing, empty or unreadable required source sets
   instead of reporting an incomplete scan as clean.
 

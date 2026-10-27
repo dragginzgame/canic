@@ -258,7 +258,7 @@ fn uses_generated_standalone_config(
 
 // Records dependency tables that pin versions or local paths in member manifests.
 #[test]
-fn cdylib_members_do_not_emit_rlib_artifacts() {
+fn canister_rlibs_have_a_feature_gated_native_schema_producer() {
     let root = workspace_root();
     let root_manifest_path = root.join("Cargo.toml");
     let root_manifest = read_manifest(&root_manifest_path);
@@ -274,10 +274,29 @@ fn cdylib_members_do_not_emit_rlib_artifacts() {
         let crate_types = lib_crate_types(&manifest);
 
         if crate_types.contains("cdylib") && crate_types.contains("rlib") {
-            failures.push(format!(
-                "{}: [lib] crate-type must not combine `cdylib` canister artifacts with `rlib` Rust library artifacts",
-                relative_display(&root, &manifest_path),
-            ));
+            let producer = manifest
+                .get("example")
+                .and_then(Value::as_array)
+                .is_some_and(|examples| {
+                    examples.iter().any(|example| {
+                        example.get("name").and_then(Value::as_str) == Some("wire_schema")
+                            && example
+                                .get("required-features")
+                                .and_then(Value::as_array)
+                                .is_some_and(|features| {
+                                    features
+                                        .iter()
+                                        .any(|feature| feature.as_str() == Some("wire-schema"))
+                                })
+                    })
+                });
+            let package = manifest_path.parent().expect("package directory");
+            if !producer || !package.join("examples/wire_schema/main.rs").is_file() {
+                failures.push(format!(
+                    "{}: canister rlib requires its feature-gated wire_schema producer",
+                    relative_display(&root, &manifest_path),
+                ));
+            }
         }
     }
 

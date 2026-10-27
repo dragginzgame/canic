@@ -36,7 +36,10 @@ fn generated_wasm_store_wrapper_satisfies_role_package_contract() {
     assert_eq!(manifest["package"]["publish"].as_bool(), Some(false));
     assert_eq!(
         manifest["lib"]["crate-type"].as_array().unwrap(),
-        &[toml::Value::String("cdylib".into())]
+        &[
+            toml::Value::String("cdylib".into()),
+            toml::Value::String("rlib".into())
+        ]
     );
     assert_eq!(
         manifest["dependencies"]["canic"]["default-features"].as_bool(),

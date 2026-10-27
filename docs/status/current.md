@@ -5,7 +5,7 @@
 Continue the accepted 0.112 Blob/Wire hard cut using the
 [closeout plan](../audits/working/0.112-push-readiness/plan.md) and its
 [graph-specific evidence](../audits/working/0.112-push-readiness/owned-candid-cut.json).
-Current base: main at `860721a50`, with local gzip consolidation changes.
+Current inspected base: main at `02123c5da`, with local seven-target test repairs.
 Own package versions remain 0.111.0; the open changelog target is 0.112.0.
 The maintainer is running release validation and reports failures for scoped repair.
 Do not run full gates, commit, push, bump versions or release without instruction.
@@ -15,6 +15,35 @@ hash contracts use Wire; redundant external DTO migration remains intended.
 A zero-Candid checkout is not an acceptance requirement. Production portable
 Auth, live Backup and unrelated unstarted simplifications remain deferred.
 Preserve completed simplifications and issue-batch evidence linked from the plan.
+
+## Seven-target regression repair
+
+The complete retained failure source is
+target/test-runs/20261027T125830Z-396709.bw3IUE/2.log: eleven cases across seven targets.
+Maximum Root/target admission requests exceeded native allocation accounting;
+1 MiB now admits both while preserving the 16 KiB frame, node and depth caps.
+Allocation-only diagnostic expansion passed; node-only and depth-only did not.
+Four read-only Root authority/registry methods now have replay-policy entries.
+The native authority hash golden includes an independent domain/payload check.
+Startup conversion, schema-producing canister rlibs, and native timer custody
+guards follow their current owners. The timer macro scanner distinguishes method
+and qualified provider actions from ordinary resume arguments. Host fixtures use
+raw hex responses and an argument-specific budget. Leaf serialization tests call
+pure response construction; endpoint startup admission remains intact.
+
+Focused passes: Control Plane library 351, Canic integration targets 11+3,
+timer guard 15, replay policy 40, Host protocol 3 and Store 4, admission contract 8,
+leaf 2. Core's initial library run passed 1331 cases with only the subsequently
+fixed replay entry failing. The initial wider Host run was stopped after unrelated
+temporary Cargo-consumer fixture failures while a nested Cargo metadata command
+stalled in the sandbox; those failures were not fully diagnosed and the run is
+not a full Host pass. Final affected Host tests use the governed scratch wrapper.
+Strict all-feature library/test Clippy passes for Canic, Contracts, Core, Host and
+leaf. Direct Cargo Wasm checking correctly refused the missing role-contract
+admission; the governed offline canic build of standalone/app using leaf_probe's
+config passes, including final Wasm/schema qualification. Embedded allocation-peer
+verification passes without refresh. Formatting and diff checks pass.
+Logs: /tmp/canic-seven-*.log. No commit, version change or full release gate.
 
 ## Current gzip repair
 
