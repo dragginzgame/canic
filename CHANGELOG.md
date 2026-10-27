@@ -19,7 +19,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   Isolate copied cache-wrapper fixtures from Make runtime overrides and reject
   missing cleanup directories instead of reporting a false pass. The contamination
   fixture gives output ownership exclusively to its build specification, including
-  when invoked with Make-exported Cargo output.
+  when invoked with Make-exported Cargo output. Resolve retained configuration
+  aliases before deriving generated Root package identity, so recovery finds the
+  same selected source without weakening output or package admission.
 
 - Separate repository compiler output (`target/cargo`) from configuration-keyed
   Fleet source (`target/canic-packages`). Reject overlapping explicit outputs

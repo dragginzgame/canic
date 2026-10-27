@@ -26,11 +26,14 @@ const ENTRYPOINT: &str = "canic::start_fleet_root!();\ncanic::finish!();\n";
 const BUILD_SCRIPT: &str = "fn main() { canic::build!(\"canic.toml\"); }\n";
 
 pub fn manifest_path(config_path: &Path) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let workspace = crate::workspace_discovery::discover_workspace_root_from(config_path)?
+    // Discovery resolves workspace aliases; configuration identity must use the
+    // same physical source path before deriving its workspace-relative key.
+    let config_path = config_path.canonicalize()?;
+    let workspace = crate::workspace_discovery::discover_workspace_root_from(&config_path)?
         .ok_or("configuration has no Cargo workspace")?;
     Ok(fleet_package::manifest_path(
         &workspace,
-        config_path,
+        &config_path,
         PACKAGE,
     ))
 }

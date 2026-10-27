@@ -6,6 +6,37 @@ use crate::role_contract::{
 use canic_core::{bootstrap::parse_config_model, role_contract::RoleContractResolution};
 use std::fs;
 
+#[cfg(unix)]
+#[test]
+fn generated_root_lookup_preserves_configuration_identity_through_source_aliases() {
+    let scratch = crate::test_support::temp_dir("canonical-root-source-alias");
+    let workspace = scratch.join("workspace");
+    fs::create_dir_all(workspace.join("apps/selected")).unwrap();
+    fs::create_dir_all(workspace.join("apps/other")).unwrap();
+    fs::write(workspace.join("Cargo.toml"), "[workspace]\n").unwrap();
+    let config = workspace.join("apps/selected/canic.toml");
+    let other_config = workspace.join("apps/other/canic.toml");
+    fs::write(&config, "").unwrap();
+    fs::write(&other_config, "").unwrap();
+    let selected = manifest_path(&config).unwrap();
+    fs::create_dir_all(selected.parent().unwrap()).unwrap();
+    fs::write(&selected, "[workspace]\n").unwrap();
+
+    // Model the retained source alias used by deployment-recovery fixtures.
+    let alias = scratch.join("app-source");
+    std::os::unix::fs::symlink(&workspace, &alias).unwrap();
+    let retained = manifest_path(&alias.join("apps/selected/canic.toml")).unwrap();
+    assert_eq!(retained, selected);
+    assert!(retained.is_file());
+    assert_ne!(manifest_path(&other_config).unwrap(), selected);
+    assert_eq!(
+        manifest_path(&alias.join("apps/other/canic.toml")).unwrap(),
+        manifest_path(&other_config).unwrap()
+    );
+    assert!(manifest_path(&alias.join("apps/missing/canic.toml")).is_err());
+    fs::remove_dir_all(scratch).unwrap();
+}
+
 fn entrypoint_calls(source: &str) -> Vec<String> {
     let file = syn::parse_file(source).unwrap();
     assert!(file.attrs.iter().all(|attr| attr.path().is_ident("doc")));

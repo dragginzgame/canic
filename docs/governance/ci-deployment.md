@@ -207,8 +207,10 @@ runtime behavior; the Canic wrapper admits runtime overrides through the shared
 launcher. A prepared subprocess never serves as persistent environment setup. Repository Cargo and Make default compiler output to
 `target/cargo/`; Host defaults to `target/canic-wasm/` when no output override is
 provided. `target/canic-packages/` holds configuration-keyed generated source,
-not compiler output. Overrides that enclose or enter that source tree are refused
-before generation, including physical overlap through symlinks. Select a sibling
+not compiler output. Root package lookup resolves configuration aliases before
+deriving its workspace-relative identity; selecting an alias does not create a
+second package or change configuration isolation. Overrides that enclose or enter
+that source tree are refused before generation, including physical overlap through symlinks. Select a sibling
 output directory or a separate external directory instead. `make clean-wasm`
 owns generated-source cleanup; `cargo clean` removes only its selected compiler
 output. These storage-maintenance commands must not race active builds.

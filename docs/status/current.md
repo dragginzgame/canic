@@ -202,3 +202,30 @@ assertion. Its exact Make-environment regression passes (0.09s after 49.33s buil
 and Host all-target/all-feature Clippy passes (17.83s). Production admission is
 unchanged. Other ordinary/internal/local-Fleet/doc groups completed, but the failed
 ordinary barrier correctly prevented all serial PocketIC execution in that attempt.
+
+The fourth attempt at `c5e3cdf9875e74e5788630efcde1f8d5a31abea8` passed all
+pre-test gates and ordinary tests (Host: 1264 passed, 20 ignored), then exposed
+one shared generated Root lookup defect in four installed journeys: generated
+reinstall, completed estate reset, issued-creation funding pause, and two-Workload
+lost-response refill. Workspace discovery canonicalized the source alias while
+configuration hashing retained its lexical alias, selecting a nonexistent package.
+The attempt was deliberately stopped after 59m51s to correct this repeated defect;
+remaining cases are unrun, not passes. Its exit is 2; logs and the exact stopped
+process roster remain in `target/session-qualification/attempt-4*`. No source was
+changed until its workers stopped. The exact snapshot restore case passed in that
+attempt (2m38s), as did source-bound activation reset (6m36s); the historical
+ActivationResetAdoptionConflict cause remains unresolved.
+
+Root package lookup now resolves the configuration before deriving the same
+workspace-relative identity. Output overlap and package authority admission are
+unchanged. Focused evidence on this correction:
+
+| Command | Tested state / result | Remaining uncertainty |
+| --- | --- | --- |
+| Make-environment Host `canonical_root::tests::generated_root_lookup_preserves_configuration_identity_through_source_aliases` | 1 passed; alias identity, configuration isolation, existing selected manifest and missing config refusal; 47.91s compilation | Isolated native fixture |
+| Offline Host all-target/all-feature Clippy | Passed, 19.69s | Not workspace qualification |
+| `CARGO_NET_OFFLINE=true make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::generated_reinstall_recovers_lost_install_and_reaches_working_fleet` | 1 passed, 365.29s test; runner 433s including 54s native preflight | Other affected journeys await fresh complete qualification |
+
+The scoped correction and operational notes are ready for the authorized local
+commit and fresh `make release-verify`. Fresh hosted setup and native macOS remain
+unverified. This local preparation/qualification work does not publish or deploy.
